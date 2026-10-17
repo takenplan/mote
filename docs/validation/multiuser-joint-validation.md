@@ -1320,3 +1320,19 @@ verified and preserved as `/tmp/mote-joint-recovered-dirty.patch` and a separate
 contract copy. Existing8 terminal receipts were read rather than rerun; lsof
 read-only cwd inspection returned no Node process in the Joint checkout. This
 proves preservation/current resources, not the reason the earlier turn failed.
+
+
+Frozen a2cbf3aa bounded policy composition16/16,75.825s0
+(`/tmp/mote-joint-policy-stage-composed.log/.exit`) and distinct legacy ASR/
+diarization/M09/retired-original4/4,23.334s0 (`-stage-legacy-neighbors`) pass.
+Server noEmit, scripts noEmit and boundary checker receipts are respectively
+`-stage-reuse-types`, `-stage-scripts-types`, `-stage-scope`, all0. These are
+limited route/consumer-development evidence, not full affected or recovery proof.
+Parent confirms independent source-only277-vs190ff review without new confirmed
+findings; it did not execute this source or review the later stage-reuse delta.
+The declared limited client checkpoint is a2cb, with exact supported wire shapes
+and remaining OPEN features in `docs/design/multiuser-file-processing-contract.md`.
+Do not trigger repeated whole recovery gates for this partial delivery; final
+same-SHA client/runtime closure remains required. The recovered test owner has
+ended; its116-case/actual recovery receipts remain separately versioned, and
+Joint does not wake it merely for another source review.
