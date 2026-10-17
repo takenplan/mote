@@ -18,7 +18,7 @@ function find(directory:string,name:string):string|undefined{if(!existsSync(dire
 
 // The fixture gate is inside trusted generated plugin code and its own cwd.
 // Every RPC still traverses the production binder and real M03 transactions.
-const code=generatedScopedPluginSource.replace("if(input.method)return host.call(input.method,input.args??[]);",String.raw`
+const code=generatedScopedPluginSource.replace("import {readFile,writeFile} from 'node:fs/promises';","import {readFile,writeFile,rename} from 'node:fs/promises';").replace("if(input.method)return host.call(input.method,input.args??[]);",String.raw`
   if(input.method){
    const key=input.waitForRelease;if(key&&!/^[a-z0-9-]+$/.test(key))throw Error('bad_generated_gate');
    if(key){if(input.partialPid){await writeFile('joint-entered-'+key,'');await new Promise(resolve=>setTimeout(resolve,200));}await writeFile('joint-entered-'+key+'.pending',String(process.pid));await rename('joint-entered-'+key+'.pending','joint-entered-'+key);for(;;){try{await readFile('joint-release-'+key);break;}catch{await new Promise(resolve=>setTimeout(resolve,5));}}}
