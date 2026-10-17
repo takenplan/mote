@@ -4,21 +4,21 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current bounded runtime: Android `da402dd5ba9ecf6e9eccff1398f8dcbfff3f8116`,
-with declared Joint2528/source519, pure M13 Larkd259 and isolated M04 relogin
-fixfda6 (owncf2311ea). Full current Android JVM358/358 across75XML,0failures/
-errors/skips and debug APK pass41s. Fixture app/test APKs and original native
-invitation, Files, Lark, queue/Worker/source/snapshot/SIGKILL, import/export,
-generated capture and Actions representatives actually run as recorded below.
-The prior0c59/357 and earlier failures remain chronological evidence, not the
-latest acceptance boundary.
+Current native runtime includes Agentc706d743 and Files settings ea1b6acd,
+with public Agent245+ddc and limited Jointa2cbf3aa. Latest full Android JVM/debug
+APK is c706:358/358 across75XML,0failure/error/skip,144s. Later ea1b has only
+fixture builds and the configured-graph native acceptance, not a new full JVM.
+Current full original scalar/graph case remains RED: a2 rejects the original
+policy-omitting scalar request with400. Do not auto-persist an unsaved preview
+or treat configured-only GREEN as closure. Exact durable test and owner handoff
+uncertainty are recorded below.
 
-Central build, all-workspace/root types, scope/import boundary,8468-message
-bilingual check and13 related backend cases pass before only fda6. That final
-small server delta separately passes19 configuration/lease/lifecycle cases,
-fresh Server build and the actual original native logout/relogin settings RED→
-GREEN. Independent bounded reviews cover the changed invitation/deletion/Lark
-callers; review is never counted as execution.
+Agent actual backend3/3, strengthened native history1/1 and native held-query/
+relogin/opt-out1/1 pass; c706 independent bounded review has no new confirmed
+finding. Limited policy source15/15, Server/scripts types and scope pass. Older
+full Central/types and other original native journeys retain their exact source
+boundaries. Newly declared shared interfaces are consumed as exact commits;
+no subsequent arbitrary producer WIP is accepted evidence.
 
 This is **not final M15 completion**. The [finite matrix](multiuser-android-final-matrix.md)
 and [remaining original shared-contract map](../design/multiuser-android-open-contracts.md)

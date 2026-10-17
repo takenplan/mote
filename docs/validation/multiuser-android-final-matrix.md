@@ -3,13 +3,14 @@
 This is a current checklist, not a passing gate. Historical RED/fixture errors,
 exact SHAs and logs remain in [the chronological ledger](multiuser-android.md).
 Workspace is task-19/mote, feature codex/mote-multiuser-m15-android. No M15 Draft
-PR or final required check has yet been delivered. Current native runtime da402 includes
-invitation d6da, Files delete a95 and explicit local intent discard. Latest full JVM+debug APK at da402 is358/358 (75 XML, no
-failure/error/skip,61s); earlier a95 full96s is retained separately. Current actual composed M01/M03/M06 source519 native
-representatives cover SourceWorker, expired snapshot, late ACK/network recovery
-and real SIGKILL/restart. Invitation four native cases and original Files delete,
-stop/retry and unknown-consent cases pass; exact logs and limitations are in the
-chronological ledger. This is not final M15 or joint acceptance.
+PR or final required check has yet been delivered. Current production includes
+Agentc706 and Files settings ea1b. Androidc706 full JVM358/358 (75XML,0failure/
+error/skip) and debug APK pass144s. Ea1b has configured-graph native1/1 GREEN,
+but the complete original scalar/graph case is RED400 due to a producer contract
+mismatch; final full Android/required remain pending. Agent startup/history and
+held-query/relogin/opt-out have actual native proof on declared245+ddc; these
+results do not close original model-copy/probe/catalog or all Joint policy OPEN
+items. Exact logs, intermediate failures and source boundaries are in the ledger.
 
 Parent's latest resource instruction permits independent workspaces/AVDs in
 parallel; old serial-slot history below is historical. M15 uses only its own
