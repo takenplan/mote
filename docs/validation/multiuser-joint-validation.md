@@ -1532,3 +1532,17 @@ Exact current terminal log hashes and version/provenance boundaries are also in
 `/tmp/mote-joint-current-evidence.json`. Whole affected is deliberately not called
 successful while the committed instance-change RED still exists and M13/M15
 final candidates remain outstanding.
+
+### Current emitted production entry and actual process recovery
+
+Fresh compiled Server from current runtime (Desktop union239e; later3125 docs
+only) runs original production auth/listener startup, actual credentialed account
+management, natural restart/session persistence and revoke:1/1 EXIT0 in9.082s
+(`/tmp/mote-joint-current-compiled-auth-process.*`, explicit dist/index.js entry).
+Compiled dist/app.js M06 actual SIGKILL + natural shared-M05 lease recovery keeps
+two owners' accepted ASR checkpoints/original model snapshots/private Material,
+with no repeated completed extraction:1/1 EXIT0 in43.887s
+(`/tmp/mote-joint-current-compiled-processing-process.*`). All external media
+calls remain generated localhost fixtures. These are independent emitted process
+checks, not an emitted final Electron/Android/Docker/client union. No whole
+project completion follows while the instance-only observer RED is outstanding.
