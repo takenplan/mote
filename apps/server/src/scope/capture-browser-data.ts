@@ -49,7 +49,7 @@ export class CaptureBrowserData{
   z.string().uuid().parse(id);const filters=captureBrowseSchema.parse(raw),{where,args}=this.scope(filters);
   const row=this.sql.get(`${this.base} SELECT * FROM browser WHERE user_id=$user AND ${where} AND id=?`,...args,id);if(!row)throw missing();
   const record=this.capture(id);
-  if(record.source==='file'&&this.processing&&this.sql.get("SELECT r.id FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id WHERE r.user_id=$user AND f.user_id=$user AND s.user_id=$user AND (f.format='file' OR f.format GLOB 'processor:*') AND r.capture_id=? AND COALESCE(json_extract(s.json,'$.enabled'),1)=1",id))return {...record,fileArchive:{captureId:id}};
+  if(record.source==='file'&&this.processing&&this.sql.get("SELECT r.id FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id WHERE r.user_id=$user AND f.user_id=$user AND s.user_id=$user AND (f.format IN ('file','recording-audio-backup') OR f.format GLOB 'processor:*') AND r.capture_id=? AND COALESCE(json_extract(s.json,'$.enabled'),1)=1",id))return {...record,fileArchive:{captureId:id}};
   if(record.source!=='screen'||!row.extraction_payload)return record;
   const transcript=transcriptSchema.parse(JSON.parse(String(row.extraction_payload)));
   return {...record,ocrText:transcript.segments.map(s=>s.text).join('\n'),ocr:{status:'completed',updatedAt:String(row.extraction_at)}};

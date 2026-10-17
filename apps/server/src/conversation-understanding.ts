@@ -9,7 +9,7 @@ import {materialRequirementsSchema} from './material-readiness.js';
 import type {ModelConfiguration} from './model-configuration.js';
 import type {UsageLedger} from './usage.js';
 import {StoreError} from './store.js';
-import {memoryWorkCoverageFor,memoryWorkCapacitySchema,memoryWorkInstruction,readMemoryWorkCoverage,type MemoryWorkMember} from './memory-work-contract.js';
+import {memoryWorkCoverageFor,memoryWorkCapacitySchema,readMemoryWorkCoverage,type MemoryWorkMember} from './memory-work-contract.js';
 import {claimSchema,MemoryOutputValidationError,type MemoryStore,type EvidenceRange} from './memory.js';
 import {memoryProfile} from './memory-profiles.js';
 import type {MemoryWorkContract} from './memory-strategy-contract.js';
@@ -136,7 +136,8 @@ export function conversationUnderstandingProcessor(options:ConversationUnderstan
     language:input.config.language==='en'?'en':input.config.language==='zh-CN'?'zh-CN':undefined,
     taskContext:work?{turns:[],memoryWork:work}:undefined,
     evidenceIds:scope.records.map(record=>record.id),evidenceRanges:scope.ranges,
-    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+(work?.workContract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)+(work?'\nThe host memoryWork contract supersedes the legacy eight-candidate ceiling. Additionally return coverage'+(work.workContract?'':' and capacity')+' for all supplied members. memoryCandidates is the memories array for this coverage contract. '+memoryWorkInstruction(work.members,work.maxCandidates,work.workContract):''),
+    // The complete package and range contract already travel in memoryWork.
+    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+(work?.workContract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)+(work?'\nApply the complete supplied taskContext.memoryWork package and coverage contract to the listed original ranges. That contract supersedes the legacy eight-candidate ceiling. Additionally return coverage'+(work.workContract?'':' and capacity')+' for all supplied members. memoryCandidates is the memories array for this coverage contract.':''),
     validateOutput:result=>{try{parse(result);}catch(error){const detail=error instanceof MemoryOutputValidationError?error.repairInstruction:error instanceof z.ZodError?error.issues.slice(0,3).map(issue=>issue.path.join('.')+': '+issue.message).join('; '):error instanceof StoreError?error.message:'Invalid JSON object';return {code:'conversation_products',feedback:detail+' Return summary, evidence, workRecords, events, memoryCandidates and actionCues. Absent products use empty arrays; actionCues must be empty. Every claim must preserve attribution, status, basis, sourceTime and uncertainty, with exact cited original quotes inside the supplied ranges.'};}},
     signal:input.signal,onUsage:meter.update});
    input.signal.throwIfAborted();const output=parse(result);
