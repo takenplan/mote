@@ -1,5 +1,12 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "处理附件": "Process attachment",
+  "附件处理方案": "Attachment processing plan",
+  "附件 MIME 类型": "Attachment MIME type",
+  "请选择有效的附件 MIME 类型。": "Choose a valid MIME type for the attachment.",
+  "重试原操作": "Retry original operation",
+  "重试保留原附件和处理方案；不会更换已经准入的处理。": "Retries keep the original attachment and plan; they do not replace processing already admitted.",
+  "附件已登记，可查看实际处理状态。": "Attachment registered. View its actual processing status.",
   "当前范围没有可提取的正式证据。": "No canonical evidence is available for extraction in this range.",
   "所选原始记录的正式证据尚未准备好，请稍后重试。": "Canonical evidence for the selected original is not ready yet. Try again later.",
   "个人任务：执行中 {0}，排队 {1}": "Personal tasks: {0} running, {1} queued",

@@ -927,3 +927,35 @@ assertions. Webbuild0. A first staging command used the Web cwd with root-relati
 paths and did not commit; absolute-path staging corrected that bookkeeping error.
 This is not live service/model quality, a complete file-policy/default/shared
 watch implementation, or a new whole Web/affected result.
+# Explicit retained attachment processing (finite consumer)
+
+Original Library detail reached its real current source parent but had no
+explicit attachment processing control. Test-onlyee386a1b records that actual
+RED (`/tmp/m13-attachment-original-ui-valid-red.log/.exit`,1fail/0skip). The
+earlier caption wait assumed raw intake displayed the source body and stopped
+before the target assertion; it is a fixture observation failure, not this RED.
+
+SourceDocumentDetails now reuses its existing attachment rows for an explicit
+current-profile choice and the declared M03 parent/archive preparation command.
+Only the immutable parent/archive IDs and selected MIME/profile options survive
+reload. Lost ACK, failed status reads and malformed receipts retain the exact
+body for explicit retry; they cannot silently replace an already bound plan.
+No operation ID, task, model lease or scheduler is invented in the browser.
+The accepted child and its exact attachmentOf relation are read before the
+pending metadata is cleared; archive-only is shown as no content processing,
+without claiming OCR/Memory completion. Historical readers expose no action.
+
+Actual original renderer + unchanged archive presentation neighbors16/16,
+0skip, EXIT0 (`/tmp/m13-attachment-original-ui-neighbors.log/.exit`,5.811s).
+The actual case covers explicit archive choice, admitted lost ACK and remount,
+same-body retry with one accepted child, exact child navigation, A held response
+and detached-button retirement under equal-parent B, wrong-parent response and
+wrong attachment-detail transport corruption, then fresh B success. Shared
+build, Web types/build and synchronized8484-message catalog checks are0. The
+initial new ref type errors were corrected and retained in the first types log.
+
+A separate real source/parent reincarnation RED is isolated as410acf78, not
+hidden by renderer response retirement. The common producer owner supplied
+b7946ede with the existing durable counter and post-await transaction fence;
+its bounded review is clean, while M13 composition verification is recorded
+separately. This finite consumer is not whole Files or final M13 acceptance.
