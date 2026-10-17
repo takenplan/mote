@@ -32,9 +32,17 @@ export function documentScope(selection:LarkSelection){return larkHash(JSON.stri
 export function hasDocumentSelection(s:LarkSelection){return s.documents.length>0||Boolean(s.folders?.length)||Boolean(s.wikiRoots?.length)||Boolean(s.documentDiscovery&&(s.documentDiscovery.created||s.documentDiscovery.edited||s.documentDiscovery.opened));}
 export function documentRevision(item:Omit<SourceItem,'revision'>,prior?:SourceItemRecord):SourceItem {
   const {observedAt:_,...content}=item;
-  const old=prior?JSON.stringify({externalId:prior.externalId,title:prior.title,text:prior.text,kind:prior.kind,layer:prior.layer,deleted:prior.deleted,calendar:prior.calendar,document:prior.document,uri:prior.uri,mimeType:prior.mimeType,modifiedAt:prior.modifiedAt}):'';
-  const current=JSON.stringify({externalId:item.externalId,title:item.title,text:item.text,kind:item.kind,layer:item.layer,deleted:item.deleted,calendar:item.calendar,document:item.document,uri:item.uri,mimeType:item.mimeType,modifiedAt:item.modifiedAt});
-  return {...item,revision:old===current?prior!.revision:larkHash(`${JSON.stringify(content)}:${prior?.revision??''}`)};
+  const evidenceDocument=(document:SourceItem['document'])=>{
+    if(document?.originalMetadata?.provider!=='lark')return document;
+    const {revisionId:_,...metadata}=document.originalMetadata;
+    return {...document,originalMetadata:metadata};
+  };
+  const old=prior?JSON.stringify({externalId:prior.externalId,title:prior.title,text:prior.text,kind:prior.kind,layer:prior.layer,deleted:prior.deleted,calendar:prior.calendar,document:evidenceDocument(prior.document),uri:prior.uri,mimeType:prior.mimeType,modifiedAt:prior.modifiedAt}):'';
+  const current=JSON.stringify({externalId:item.externalId,title:item.title,text:item.text,kind:item.kind,layer:item.layer,deleted:item.deleted,calendar:item.calendar,document:evidenceDocument(item.document),uri:item.uri,mimeType:item.mimeType,modifiedAt:item.modifiedAt});
+  // A provider counter is not evidence of a changed exported body. Reuse the
+  // entire immutable document metadata too: changing it under the old revision
+  // would violate SourceStore's content hash and break replay with a 409.
+  return old===current?{...item,document:prior!.document,revision:prior!.revision}:{...item,revision:larkHash(`${JSON.stringify(content)}:${prior?.revision??''}`)};
 }
 const docSchema=z.object({document_id:z.string().min(1).max(1000),revision_id:z.union([z.number(),z.string()]),title:z.string().max(2000).optional(),content:z.string()});
 const wikiNodeSchema=z.object({node_token:z.string().min(1),obj_token:z.string().optional(),obj_type:z.string(),space_id:z.string().optional(),has_child:z.boolean().optional(),title:z.string().optional()});
