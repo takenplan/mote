@@ -23,10 +23,11 @@ const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} 
  });
 });actors=f;
 const agent=process.argv.includes('--agent');
+let holdAgent=false,agentEntered=false,releaseAgent=()=>{},agentGate=Promise.resolve();
 const calls=new Map<string,number>();
 const model=createServer((request,response)=>{void(async()=>{
  let raw='';for await(const part of request)raw+=String(part);const actor=String(request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
- if(agent&&raw.includes('Generated native trace')){const body=JSON.parse(raw),uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);if(!uses.some((u:any)=>u.name==='material_catalog'))return writeMessagesResponse(response,{stage,tool:{name:'material_catalog',args:{limit:12}}});const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];if(!ref)throw Error('Missing actual native Material reference');if(!uses.some((u:any)=>u.name==='material_read'))return writeMessagesResponse(response,{stage,tool:{name:'material_read',args:{ref,length:4000}}});writeMessagesResponse(response,{stage,text:JSON.stringify({answer:'Generated native traced answer',citationIds:[]})});return;}
+ if(agent&&raw.includes('Generated native trace')){if(holdAgent){holdAgent=false;agentEntered=true;await agentGate;}const body=JSON.parse(raw),uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);if(!uses.some((u:any)=>u.name==='material_catalog'))return writeMessagesResponse(response,{stage,tool:{name:'material_catalog',args:{limit:12}}});const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];if(!ref)throw Error('Missing actual native Material reference');if(!uses.some((u:any)=>u.name==='material_read'))return writeMessagesResponse(response,{stage,tool:{name:'material_read',args:{ref,length:4000}}});writeMessagesResponse(response,{stage,text:JSON.stringify({answer:'Generated native traced answer',citationIds:[]})});return;}
  if(stage===1){writeMessagesResponse(response,{stage,tool:{name:'timeline',args:{limit:100}}});return;}
  writeMessagesResponse(response,{stage,text:JSON.stringify({answer:JSON.stringify({summary:'Generated native private import preview',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated deterministic fixture preserves supplied originals.'},preserveAll:true}),citationIds:[]})});
  })().catch(()=>response.destroy());});
@@ -46,10 +47,12 @@ const control=createServer((request,response)=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
  if(request.url==='/generated/drop-import-ack')dropping=true;
  else if(request.url==='/generated/release-import-ack')dropping=false;
- else if(request.url==='/generated/agent-state'){response.setHeader('content-type','application/json');response.end(JSON.stringify({calls:Object.fromEntries(calls),reads:agentReads}));return;}
+ else if(request.url==='/generated/hold-agent-response'){holdAgent=true;agentEntered=false;agentGate=new Promise<void>(resolve=>releaseAgent=resolve);}
+ else if(request.url==='/generated/release-agent-response')releaseAgent();
+ else if(request.url==='/generated/agent-state'){response.setHeader('content-type','application/json');response.end(JSON.stringify({calls:Object.fromEntries(calls),reads:agentReads,agentEntered}));return;}
  else if(request.url!=='/generated/import-commands'){response.statusCode=404;response.end();return;}
  response.setHeader('content-type','application/json');response.end(JSON.stringify({dropping,commands}));
 });await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated import control');
 const address=await f.host.app.listen({host:'127.0.0.1',port:0});process.stdout.write(JSON.stringify({address,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',pid:process.pid})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;control.closeAllConnections();for(const work of cleanup.reverse())await work();model.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>model.close(()=>resolve()))]);process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;releaseAgent();control.closeAllConnections();for(const work of cleanup.reverse())await work();model.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>model.close(()=>resolve()))]);process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

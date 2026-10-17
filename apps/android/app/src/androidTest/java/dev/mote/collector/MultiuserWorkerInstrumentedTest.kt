@@ -918,6 +918,28 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeAgentReloginOptOutStopsDetailedPayloadsOfAnAlreadyAdmittedQuery() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val original=CentralAccess.requireClient(app);val before=settings.read().ownerKey();val directory=app.accountDirectory().absolutePath
+        val view=original.get("/api/configuration");original.put("/api/configuration/agentTrace",JSONObject().put("revision",view.getLong("revision")).put("value",JSONObject().put("traceEnabled",true)))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        control("/generated/hold-agent-response")
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","agentView")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            ready();val run=java.util.UUID.randomUUID().toString();original.post("/api/query-runs",JSONObject().put("id",run).put("input",JSONObject().put("question","Generated native trace before relogin")));waitFor {control("/generated/agent-state").getBoolean("agentEntered")}
+            val earlier=original.get("/api/agent-view/events?runId="+run).getJSONArray("items");assertTrue(earlier.length()>0);val sequence=(0 until earlier.length()).maxOf {earlier.getJSONObject(it).getString("seq").substringAfterLast(':').toLong()}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);original.post("/api/auth/logout")
+            val (status,login)=HttpJson.post(endpoint()+"/api/auth/login",JSONObject().put("username","generated-a").put("password",fixture().getString("password")).put("mode","client"));assertEquals(200,status)
+            RuntimeSettings.replaceAccount(app) {settings.signIn(endpoint(),login!!.getString("token"),2592000000)};assertEquals(before,settings.read().ownerKey());assertEquals(directory,app.accountDirectory().absolutePath)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();press("详细记录设置");ready();scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single();assertTrue(field.isChecked);field.isChecked=false};press("保存设置");ready()
+            val fresh=CentralAccess.requireClient(app);control("/generated/release-agent-response");waitFor {fresh.get("/api/query-runs/"+run).getString("status")!="running"};assertEquals("completed",fresh.get("/api/query-runs/"+run).getString("status"))
+            val result=fresh.get("/api/agent-view/events?runId="+run);assertFalse(result.getJSONObject("recording").getBoolean("enabled"));val events=result.getJSONArray("items");val after=(0 until events.length()).map(events::getJSONObject).filter {it.getString("seq").substringAfterLast(':').toLong()>sequence};assertTrue(after.isNotEmpty());assertTrue("Retired old settings cannot continue collecting private detail after the native user's fresh opt-out",after.all {!it.getJSONObject("trace").has("payload")})
+            assertEquals(401,HttpJson.get(endpoint()+"/api/agent-view/events?runId="+run,token("a")).first);assertEquals(0,CentralClient(endpoint(),token("b")).get("/api/agent-view/runs").getJSONArray("items").length())
+        }} finally {control("/generated/release-agent-response")}
+    }
+
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
