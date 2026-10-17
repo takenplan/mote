@@ -55,29 +55,31 @@ Their local composition ends at `4f1caf4e`. Joint confirmed exact
 `a2cbf3aaf1ae2f2fbfe5f647cf9a4f23dfdc1695` for Files/originals/full export. No later
 arbitrary M13/M15/Joint HEAD is a dependency or an implied freeze.
 
-## Retained history and remaining shared boundary
+## Collection retirement and retained history
 
-Joint froze the minimal disconnect retirement fix at
-`949e66b60a071406e8288f579a62e1d62439e0e9`. Only its two runtime lines were selected
-as local `90493771`: disconnect retires the saved association/selection/epoch
-without withdrawing accepted history, and an absent saved account is rejected
-before a provider account probe. M10 generation, sync authorization and credential
-vault retirement remain unchanged. No later Joint WIP was selected.
+Joint explicitly froze the minimal common changes at
+`949e66b60a071406e8288f579a62e1d62439e0e9` and
+`ab776d50c3d59679a5583c53f8cb1f55cee1b014`. Only their four runtime lines were
+selected, as local runtime `7ee65f42ac9aa0ce9dfc0f2454723950db9efac9`.
+Disconnect retires the saved association/selection/epoch; missing association is
+rejected before a provider account probe. A newly registered recording source is
+readable, while selection changes control intake without rewriting an existing
+source privacy choice. M10's existing registration preserves an existing source.
+M10 generation, sync authorization and credential vault retirement are unchanged.
+No later Joint custom-image/observer WIP was selected.
 
-The composed original Web journey now passes after a real host restart: 24 Files
-page20+4, remain visible after disconnect, and retained cards open their canonical
-capture references. Full FileDetail original WAV bytes/download, current/raw/
-uncorrected101-segment tar and both acoustic clips are independently exercised.
+Both previously confirmed original-UI history regressions are now GREEN on this
+composition: stopped intake retains four history cards; disconnect retains all24
+canonical Files, original20+4 pages and capture navigation. Explicit source privacy
+remains authoritative, including a later enabled selection; Joint's own frozen
+backend cases separately exercise that negative with both providers. The Web
+consumer adds no read bypass, implicit privacy enable, archive projection or task
+store.
 
-A separate actual KEEP regression remains: unchecking the original “启用录音同步”
-and awaiting “保存设置” completion withdraws all four archived Files. The existing
-select path still writes source.enabled=false. This is retained as a failing
-original-UI regression, not hidden by the disconnect fix. Joint remains the sole
-owner of that source retirement boundary. The Web consumer does not bypass source
-privacy, enable a source merely to read history, or create another archive.
-The new evidence notice returned earlier-turn-unconfirmed; no duplicate or proxy
-message was attempted. Parent-readable evidence is
-`/tmp/mote-web-recordings-source-retirement-red.md`.
+The final original-UI tests at
+`fdde4d6305a3c44c2a2a31490ccc141b23402198` pass5/5 with no skips. This is the
+finite recording consumer, not acceptance of the entire prerequisite stack.
+The exact gate and browser boundaries remain in the validation ledger.
 
 Other providers' new capabilities, model/pipeline policies, CLI installation,
 physical playback, live accounts and deployments are outside this finite change.

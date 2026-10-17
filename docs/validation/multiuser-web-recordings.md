@@ -34,7 +34,7 @@ subsequently proved RED. The separate bounded45db follow-up is
 candidate closed in the inspected source path. Neither report ran the owner's
 tests or accepted the shared history boundary.
 
-## Exact disconnect composition and retained stop RED
+## Exact compositions and retained RED evidence
 
 Joint froze source `949e66b60a071406e8288f579a62e1d62439e0e9`; only the two runtime
 lines were composed as local `90493771`. Tests at `17580db6` over that runtime
@@ -63,6 +63,21 @@ archive-page evidence at45db is `/tmp/web-recordings-owned-restart-valid3.log`
 (the original disconnect RED remains) and
 `/tmp/web-recordings-archive-pagination.log/.exit0`1/1,0 skips,61.87s process.
 
+## Final original-UI GREEN
+
+Runtime `7ee65f42ac9aa0ce9dfc0f2454723950db9efac9` adds only the two runtime lines
+from Joint's explicit pause freeze
+`ab776d50c3d59679a5583c53f8cb1f55cee1b014` to the prior949e composition. No Joint
+custom-image or observer WIP is selected. Test commit
+`fdde4d6305a3c44c2a2a31490ccc141b23402198` adds the original stopped-page card
+assertion. `/tmp/web-recordings-ready-narrow.log/.exit0` completes5/5,0 skips,
+0 cancellations,71.32s process: FileDetail5.72s; Feishu recovery3.45s; DingTalk
+recovery3.04s; original stop/save6.74s; full original recording journey50.07s.
+The stopped-intake assertion now observes4 Files and4 original UI cards after
+Save settings completes. The other original restart/page/cancel/owner/lifecycle/
+disconnect and full original-byte/tar outcomes described above remain asserted.
+Ready Server/Web types pass (`/tmp/web-recordings-ready-types.log/.exit0`).
+
 ## Environment and full gates
 
 Node `v24.21.0`, ABI137. Both root and mem0's actual resolved better-sqlite3
@@ -84,8 +99,35 @@ integration6272 in the first tree, which remained unchanged while the second tre
 implemented recovery. It is not a final45db gate. Its Desktop500pass/1fail is an
 actual missing Electron dependency error before the hidden fixture could launch.
 Later phases/terminal outcome must be read from `/tmp/web-recordings-affected.log`
-and `.exit`; no running result is called passed. A second immutable invocation atc5b28a73 is still running; Desktop60files/501tests
-passes after the official locked dependency install. The final composed candidate
-will receive its own affected invocation and Android consumer check. Terminal
-receipts, remaining stop-intake closure and PR delivery are pending at this ledger
-checkpoint; no running gate is called passed.
+and `.exit`; no running result is called passed. The first immutable456bd68a gate is terminal exit1. Server2777 tests:2764 pass,
+11 fail,2 existing skips; Web543 tests:539 pass,4 fail; Desktop500 pass/1 fail due
+the missing Electron dependency. The old recording failure is the then-unfixed
+history boundary. Other failing cases are preserved in
+`/tmp/web-recordings-affected.log/.exit1`; no current source is inferred from that
+older gate. Later workspaces finished, but root follow-on tooling/Android were not
+reached because check:local failed.
+
+Second immutablec5b28a73 gate is still running; Desktop60files/501tests passes.
+Third immutabledd72902e gate is still running; Desktop500pass/1late-ACK timeout.
+The same third candidate's isolated late-ACK case passes6.63s without changing its
+15000ms deadline (`/tmp/web-recordings-composed-desktop-late-ack.log/.exit0`,
+1 pass/35 filtered); this does not erase the full suite failure.
+
+A standalone Android check atdd729 initially inherited system Node26.11.1/ABI147
+because PATH was omitted:352tests/1citation404 failure. That environment result is
+preserved in `/tmp/web-recordings-composed-android.log/.exit1`, its evidence JSON
+and `/tmp/web-recordings-android-node26-results`. Corrected explicit Node24/ABI137
+with fresh root/mem0 smoke and own Gradle rerun passes352/352,0 skips,3m22s,exit0:
+`/tmp/web-recordings-composed-android-node24.log/.exit0` and evidence JSON. No
+Android source fix was needed; these are distinct runtime receipts.
+
+The ready workspace uses an independent copy of this task's identical locked
+Node24 dependencies, including nested workspace modules. Its initial missing
+nested mem0 preflight is preserved as
+`/tmp/web-recordings-ready-native-smoke-missing-mem0.log`. After the copy completed,
+its actual root and mem0 constructors/read/write/close pass under Node24/ABI137,
+resolving only its own ready path (`/tmp/web-recordings-ready-native-smoke.log`,
+exit0); a fresh complete shared build also passes. No peer module or ABI147 binary
+was copied. Final ready same-candidate affected/Android receipts and independent
+Draft PR will be recorded after their terminal results. Running gates remain
+unaccepted; no merge, deployment or CI dispatch is requested.
