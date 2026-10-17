@@ -10,6 +10,7 @@ import type {Config} from '../src/config.js';
 import {materialId} from '../src/materials.js';
 import {defaultLifecycleSettings} from '../src/memory-lifecycle.js';
 import {dingtalkTranscript} from '../src/connectors/dingtalk-recordings.js';
+import {Conversations} from '../src/conversations.js';
 
 const token='generated-history-boundary-owner',headers={authorization:`Bearer ${token}`};
 const config=(dataDir:string):Config=>({dataDir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:50_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});
@@ -75,4 +76,19 @@ test('pagination-only recording reimports preserve old answer and original versi
  const before=node.featureServices.conversations.get(conversationId).turns[0];
  await node.files.transcriptRevision(sourceId,{...metadata,observedAt:'2026-10-02T00:00:00Z'},nextExport.rawText,nextExport.transcript!,()=>{});
  const after=node.featureServices.conversations.get(conversationId).turns[0];assert.equal(after.evidenceDeleted,undefined);assert.deepEqual(after.result,before.result);assert.ok(after.result!.evidenceDependencies!.ids.includes(first.id),'old locators are not retargeted by a transport-only import');
+});
+
+test('legacy history receipt backfill rolls back both the turn and quota metadata on failure',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'mote-history-backfill-')),node=await buildApp(config(dir),{backgroundWorker:false});
+ t.after(async()=>{await node.app.close();await rm(dir,{recursive:true,force:true});});
+ const saved=node.featureServices.conversations.append(undefined,{question:'Generated legacy request'},{answer:'Generated legacy answer.',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[]}}),db=node.store.db;
+ db.prepare("UPDATE conversation_turns SET json=json_remove(json,'$.historyEvidenceDependencies') WHERE conversation_id=?").run(saved.conversationId);
+ db.prepare("UPDATE conversations SET json=json_set(json,'$.bytes',(SELECT sum(length(CAST(json AS BLOB))) FROM conversation_turns WHERE conversation_id=?)) WHERE id=?").run(saved.conversationId,saved.conversationId);
+ const before=db.prepare('SELECT json FROM conversation_turns WHERE id=?').get(saved.turnId)!.json;
+ db.exec("CREATE TRIGGER generated_backfill_failure BEFORE UPDATE OF json ON conversations BEGIN SELECT RAISE(ABORT,'Generated quota write failure'); END");
+ assert.throws(()=>new Conversations(node.store),/Generated quota write failure/);
+ assert.equal(db.prepare('SELECT json FROM conversation_turns WHERE id=?').get(saved.turnId)!.json,before,'failed migration cannot commit a receipt without its quota metadata');
+ db.exec('DROP TRIGGER generated_backfill_failure');new Conversations(node.store);
+ assert.ok(node.featureServices.conversations.get(saved.conversationId).turns[0].historyEvidenceDependencies);
+ assert.equal(db.prepare("SELECT json_extract(json,'$.bytes') n FROM conversations WHERE id=?").get(saved.conversationId)!.n,db.prepare('SELECT sum(length(CAST(json AS BLOB))) n FROM conversation_turns WHERE conversation_id=?').get(saved.conversationId)!.n);
 });

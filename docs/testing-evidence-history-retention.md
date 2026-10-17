@@ -33,6 +33,7 @@ node --import tsx --test apps/server/test/conversation-history-retention.test.ts
 | Existing current/unrelated evidence and conversations | Preserve current behavior and independent history; covered by conversation/lineage suites. |
 | Source declaration changes | Mark stale, preserve historical prose, drop expired declaration authority and fence late results. |
 | Web history and Agent envelope | Render stale answer/citation plus notice; delete removes both; host permission receipts never reach model text. |
+| Legacy receipt migration bookkeeping fails | Roll back both turn metadata and quota bytes, then retry successfully without partial migration. |
 
 The mandatory consumer gate is:
 
@@ -49,7 +50,10 @@ restricted sandbox returns `listen EPERM` and cannot establish a gate pass.
 Independent review followed ordinary and destructive invalidation call sites,
 historical root receipts and backfill, result dependency filtering, Material
 authorization, snapshot fences, compaction, and model-envelope serialization.
-No blocking code defect remained in that review; the added tests target the
+The review found that backfill and quota bookkeeping were separate writes. A
+SQLite failure trigger reproduced partial migration; a savepoint fixed it and the
+regression verifies rollback plus a successful retry. No blocking code defect
+remained after that fix; the added tests target the
 permission and lifecycle boundaries not exercised by the initial handoff.
 
 No live model, physical device, real account revocation, deployed service or user

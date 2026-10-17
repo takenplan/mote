@@ -21,10 +21,18 @@ export class Conversations {
     store.db.exec(`CREATE TABLE IF NOT EXISTS conversation_turns(conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,idx INTEGER NOT NULL,id TEXT NOT NULL UNIQUE,json TEXT NOT NULL,PRIMARY KEY(conversation_id,idx));`);
     // Capture original permission roots before subsequent cache eviction can
     // remove a derived node. Do not reconstruct already-erased answer content.
-    for(const row of store.db.prepare("SELECT id,conversation_id,json FROM conversation_turns WHERE json_extract(json,'$.result') IS NOT NULL AND coalesce(json_extract(json,'$.evidenceDeleted'),0)!=1 AND json_extract(json,'$.historyEvidenceDependencies') IS NULL").all()){
-      const turn=JSON.parse(String(row.json)) as ConversationTurn,receipt=historyEvidenceDependencies(store,resolveDependencies(store,turn.result?.evidenceDependencies));
-      if(receipt){const growth=Buffer.byteLength(JSON.stringify({...turn,historyEvidenceDependencies:receipt}))-Buffer.byteLength(String(row.json));store.reserveMetadata(Math.max(0,growth));store.db.prepare("UPDATE conversation_turns SET json=json_set(json,'$.historyEvidenceDependencies',json(?)) WHERE id=?").run(JSON.stringify(receipt),row.id);store.db.prepare("UPDATE conversations SET json=json_set(json,'$.bytes',coalesce(json_extract(json,'$.bytes'),0)+?) WHERE id=?").run(growth,row.conversation_id);}
-    }
+    store.db.exec('SAVEPOINT conversation_history_receipts');
+    try{
+      for(const row of store.db.prepare("SELECT id,conversation_id,json FROM conversation_turns WHERE json_extract(json,'$.result') IS NOT NULL AND coalesce(json_extract(json,'$.evidenceDeleted'),0)!=1 AND json_extract(json,'$.historyEvidenceDependencies') IS NULL").all()){
+        const turn=JSON.parse(String(row.json)) as ConversationTurn,receipt=historyEvidenceDependencies(store,resolveDependencies(store,turn.result?.evidenceDependencies));
+        if(!receipt)continue;
+        const growth=Buffer.byteLength(JSON.stringify({...turn,historyEvidenceDependencies:receipt}))-Buffer.byteLength(String(row.json));
+        store.reserveMetadata(Math.max(0,growth));
+        store.db.prepare("UPDATE conversation_turns SET json=json_set(json,'$.historyEvidenceDependencies',json(?)) WHERE id=?").run(JSON.stringify(receipt),row.id);
+        store.db.prepare("UPDATE conversations SET json=json_set(json,'$.bytes',coalesce(json_extract(json,'$.bytes'),0)+?) WHERE id=?").run(growth,row.conversation_id);
+      }
+      store.db.exec('RELEASE conversation_history_receipts');
+    }catch(error){store.db.exec('ROLLBACK TO conversation_history_receipts; RELEASE conversation_history_receipts');throw error;}
   }
 
   list({limit=50,cursor}:{limit?:number;cursor?:string}={}) {

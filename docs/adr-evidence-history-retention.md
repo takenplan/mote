@@ -47,7 +47,9 @@ historical roots when their privacy dependencies include earlier dialogue.
 
 Existing, non-erased turns receive root receipts while their graph is still present.
 This metadata uses the existing capacity checks; incomplete/unknown lineage remains
-conservative. Erased prose is never reconstructed. The original result and its full
+conservative. Backfill and conversation quota bookkeeping commit in one savepoint,
+including when called within an existing transaction; a failed migration can retry
+without leaving partially added receipts. Erased prose is never reconstructed. The original result and its full
 privacy lineage are preserved independently of those receipts.
 
 Every historical model context pins the conversation ID and revision. Preparation,
