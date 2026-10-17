@@ -35,7 +35,7 @@ const model=createServer((request,response)=>{void(async()=>{
   const body=raw?JSON.parse(raw):{};modelRequests.push({owner:actor,method:request.method!,hasPrivateArchive:raw.includes('GENERATED_AGENT_'),hasPrivateHeader:request.headers['x-generated-native']==='GENERATED_'+actor.toUpperCase()+'_HEADER',temperature:body.temperature});
   if(request.method==='GET'){if(holdModel&&actor==='a'){holdModel=false;modelEntered=true;await modelGate;}response.setHeader('content-type','application/json');response.end(JSON.stringify({data:[{id:'generated-'+actor+'-'+(request.url!.includes('after_id')?'two':'one')}],...(!request.url!.includes('after_id')?{has_more:true,last_id:'generated-page'}:{})}));return;}
   const uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);modelRequests.at(-1)!.tools=uses.map((use:any)=>use.name);modelRequests.at(-1)!.toolResults=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_result').map((p:any)=>JSON.stringify(p.content).slice(0,500)):[]);const id='7a8f56d1-45de-47b7-90bb-5e84d411c3d6';
-  if(!uses.some((u:any)=>u.name==='search'))return writeMessagesResponse(response,{stage,tool:{name:'search',args:{query:'generated synthetic test'}}});
+  if(!uses.some((u:any)=>u.name==='search_context'))return writeMessagesResponse(response,{stage,tool:{name:'search_context',args:{query:'generated synthetic test'}}});
   if(!uses.some((u:any)=>u.name==='evidence'))return writeMessagesResponse(response,{stage,tool:{name:'evidence',args:{ids:[id]}}});
   writeMessagesResponse(response,{stage,text:JSON.stringify({answer:'GENERATED_NATIVE_PROBE ['+id+']',citationIds:[id]})});return;
  }
