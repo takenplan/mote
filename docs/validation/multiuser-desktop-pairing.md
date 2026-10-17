@@ -16,9 +16,9 @@ was read, attached, stashed or committed.
   `/tmp/mote-desktop-pairing-native-red-authorized.log/.exit`. An earlier
   sandbox startup exit happened before product assertions and is not this RED.
 - Production host narrow tests use real Fastify TCP, Accounts and SQLite, not a
-  helper-only self response. Latest parser 55 + host 28 = **83/83**, exit 0,
+  helper-only self response. Latest parser 55 + host 31 = **86/86**, exit 0,
   with actual ConfigStore session-only save/load and unchanged source hashes:
-  `/tmp/mote-desktop-v2-session-only-green.log/.exit`.
+  `/tmp/mote-desktop-v2-same-invitation-green.log/.exit`.
 - Translation catalog and Desktop noEmit checks passed during implementation.
   The full `check:affected` dry-run correctly selects all TypeScript consumers
   and Android; a dry-run is not a gate pass.
@@ -51,9 +51,9 @@ then passed all 83 parser/host tests. RED:
 `/tmp/mote-desktop-v2-session-only-red.log/.exit`; GREEN:
 `/tmp/mote-desktop-v2-session-only-green.log/.exit`.
 
-## Final bounded native snapshot
+## Prior bounded native snapshot
 
-The final hidden Electron runner passed **19/19**, exit 0:
+Before the additional same-invitation fix, the hidden Electron runner passed **19/19**, exit 0:
 `/tmp/mote-desktop-pairing-native-final.log/.exit`. It exercises actual
 main/preload/renderer and the production host, including URI/JSON/generated QR,
 pre-POST PKCE persistence, real device 403 capability checks, original-device
@@ -73,6 +73,31 @@ checkpoint and hidden recover button, and a visible origin-confirmation preview.
 The earlier actual DOM stale-button RED remains
 `/tmp/mote-desktop-pairing-ui-cleanup.log/.exit`; its focused GREEN is
 `/tmp/mote-desktop-pairing-ui-cleanup-green.log/.exit`.
+
+## Same-invitation retry regression
+
+Review after `cb368d67` found a second P2: reconfirming an already claimed
+invitation with a changed device name could overwrite the only encrypted PKCE
+checkpoint, then fail the immutable server claim. Exact signed-out source
+reconfirmation also failed to reuse that checkpoint. Three real production-host
+regressions failed, exit 1, before the fix:
+`/tmp/mote-desktop-v2-same-invitation-red.log/.exit`. Actual emitted-main Electron
+also reproduced changed journal/verifier/name and a second redeem POST through
+the connection UI, exit 1:
+`/tmp/mote-desktop-pairing-same-invitation-red.log/.exit`.
+
+The fix keeps the original same-invitation claim immutable. Changed metadata
+or a different source connection gets a local conflict without rewriting the
+journal; the exact signed-out source reuses the same verifier. Parser 55 plus
+production-host 31 passed 86/86, exit 0, with unchanged source hashes:
+`/tmp/mote-desktop-v2-same-invitation-green.log/.exit`. The earlier `cb368d67`
+review conclusion is superseded by this finding and repair. The actual Electron single-case GREEN then kept journal/verifier/name unchanged,
+sent only the first redeem POST before explicit recovery, and published the
+original durable device name. Exit 0:
+`/tmp/mote-desktop-pairing-same-invitation-green.log/.exit`. Source, output and
+script manifests stayed identical (SHA-256
+`fea0d745f438f17c4fd63c600402ca37ec73d2327b896bc9ff9f18547caa6c31`). A new
+fixed candidate still requires a complete affected run and all native scenarios.
 
 ## Environment and pending work
 

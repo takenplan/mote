@@ -37,8 +37,12 @@ logout and account switching still retire the captured operation immediately.
 Changing account retires old documents before private stores change, preserving
 M14's original queue, draft, source and calendar algorithms.
 
-Recovery is explicit. It uses the original claim after a lost response and the
-saved grant after a lost ACK. ACK `410 login_expired` can represent a lost
+Recovery is explicit. Reconfirming the same invitation reuses its durable claim;
+a changed device name/platform or different source connection is rejected locally
+without rewriting the encrypted verifier. The user can recover with the original
+claim metadata. The exact signed-out source projection also reuses that claim.
+Recovery uses the original claim after a lost response and the saved grant after
+a lost ACK. ACK `410 login_expired` can represent a lost
 restart-local receipt; it is accepted for recovery only when fresh self still
 confirms the exact independent credential. Other 400/410 errors and revocation
 cannot publish. No successful ACK is claimed for that 410. A failed final local

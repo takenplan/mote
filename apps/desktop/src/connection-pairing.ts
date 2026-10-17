@@ -7,6 +7,7 @@ import type {SecretStorage} from './config';
 import {parseDesktopConnectionInvitation,type DesktopConnectionInvitation} from './connection-invitation';
 import {connectionRequest,ConnectionError,testConnection,type ConnectionIdentity} from './connection';
 import {loginVerifier} from './login-session';
+import {moteText} from '@mote/shared/i18n';
 
 type Device={deviceId:string;deviceName:string;platform:Platform};
 type Grant={ready:true;token:string;credentialId:string;scope:'client';deploymentId:string;userId:string;serverUrl:string;expiresAt:number;purpose:'device';deviceId:string};
@@ -66,8 +67,12 @@ export class DesktopPairing {
   if(this.busy)throw Error('Device pairing is already in progress');
   if(invitation.deviceId&&invitation.deviceId!==config.deviceId)throw new ConnectionError('AUTH','Invitation belongs to a different device');
   const sourceBinding=fingerprint(config),existing=await this.read().catch(()=>undefined);assertCurrent();
-  // Retry exactly the already durably fixed claim; never rotate its verifier.
-  if(existing&&existing.sourceBinding===sourceBinding&&JSON.stringify(existing.invitation)===JSON.stringify(invitation)&&existing.device.deviceId===config.deviceId&&existing.device.deviceName===config.deviceName&&existing.device.platform===platform)return;
+  // The same invitation already names an immutable claim, including uncertain
+  // issued work. Reject changed metadata/source without erasing its verifier.
+  if(existing&&JSON.stringify(existing.invitation)===JSON.stringify(invitation)){
+   if(!sourceMatches(config,existing)||existing.device.deviceId!==config.deviceId||existing.device.deviceName!==config.deviceName||existing.device.platform!==platform)throw new ConnectionError('DEVICE_CONFLICT',moteText('设备已在中央登记，或邀请已使用；请在中央选择此设备重新生成邀请'));
+   return;
+  }
   const epoch=++this.epoch,{verifier}=loginVerifier();
   const sourceSignedOutBinding=fingerprint({...config,token:undefined,authSignedOut:true});
   await this.save({version:1,id:randomUUID(),invitation,device:{deviceId:config.deviceId,deviceName:config.deviceName,platform},verifier,sourceBinding,sourceSignedOutBinding},()=>{assertCurrent();if(epoch!==this.epoch)throw Error('Device pairing changed');});
