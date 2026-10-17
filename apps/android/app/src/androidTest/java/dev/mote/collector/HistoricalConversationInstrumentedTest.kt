@@ -192,6 +192,12 @@ class HistoricalConversationInstrumentedTest {
         reset()
         open(false).use { scenario ->
             login(scenario); conversation(scenario, false); control("stale"); refresh(scenario, false); assertStale(scenario)
+            scenario.onActivity { activity ->
+                assertEquals(AppearancePreference.parse(InstrumentationRegistry.getArguments().getString("appearance", "light")), MoteAppearance.preference())
+                assertEquals("Initial requested appearance must be applied before account replacement",
+                    if (MoteAppearance.dark()) android.content.res.Configuration.UI_MODE_NIGHT_YES else android.content.res.Configuration.UI_MODE_NIGHT_NO,
+                    activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+            }
             control("arm-history-read"); refresh(scenario, false); waitForHeldRead()
             RuntimeSettings.replaceAccount(context) {
                 Settings(context).signIn(fixture.getString("address"), fixture.getJSONObject("b").getString("token"), 2592000000L)
@@ -202,10 +208,15 @@ class HistoricalConversationInstrumentedTest {
             waitFor(scenario, "B own conversation is visible") { labels(it).contains(fixture.getString("bAnswer")) }
             control("release-history-read")
             val deadline = SystemClock.elapsedRealtime() + 20_000
-            while (control("state").getInt("heldReadCompleted") == 0) {
-                check(SystemClock.elapsedRealtime() < deadline) { "Retired A response did not settle" }
-                Thread.sleep(40)
+            var settlement = control("state")
+            while (settlement.getInt("heldReadSettled") == 0) {
+                check(SystemClock.elapsedRealtime() < deadline) { "Retired A request did not complete or cancel" }
+                Thread.sleep(40); settlement = control("state")
             }
+            assertEquals("Only the held A request may settle", 1, settlement.getInt("heldReadSettled"))
+            assertEquals(1, settlement.getInt("heldReadCompleted") + settlement.getInt("heldReadCancelled"))
+            assertTrue("Completion and actual transport cancellation are mutually exclusive",
+                settlement.getInt("heldReadCompleted") in 0..1 && settlement.getInt("heldReadCancelled") in 0..1)
             instrumentation.waitForIdleSync()
             scenario.onActivity { activity ->
                 val text = labels(activity)
