@@ -799,24 +799,32 @@ class MultiuserWorkerInstrumentedTest {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val invite=CentralAccess.requireClient(app).post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated visible invitation"))
         val code=invite.getJSONObject("invitation").getString("code")
-        val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1);val expired=java.util.concurrent.atomic.AtomicBoolean(false)
         fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
         try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java).setData(android.net.Uri.parse(invite.getString("uri")))).use {scenario->
             waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
-            lateinit var dialog:android.app.AlertDialog
+            lateinit var dialog:android.app.AlertDialog;lateinit var shownInput:android.widget.EditText
             scenario.onActivity {activity->
-                val raw=(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString()
+                shownInput=ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText
+                val raw=shownInput.text.toString()
                 assertEquals(code,ConnectionInvitation.parse(raw,true,BuildConfig.DEBUG).code)
                 views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="确认连接此节点"}.performClick()
                 @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
                 dialog=dialogs.mapNotNull {it.get()}.single {it.isShowing}
                 val executor=ConnectionActivity::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(activity) as java.util.concurrent.ExecutorService
-                executor.execute {entered.countDown();check(release.await(20,TimeUnit.SECONDS))}
+                executor.execute {
+                    entered.countDown()
+                    if(!release.await(20,TimeUnit.SECONDS)) {
+                        expired.set(true)
+                        File(app.cacheDir,"m15-invitation-barrier-stall.txt").writeText(Thread.getAllStackTraces().entries.joinToString("\n\n") {(thread,stack)->thread.name+" "+thread.state+"\n"+stack.joinToString("\n")})
+                    }
+                }
             }
             assertTrue(entered.await(10,TimeUnit.SECONDS));scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            assertFalse("Fixture barrier expired before the owner-retirement assertions",expired.get())
             scenario.onActivity {activity->
                 assertFalse("Old invitation dialog must retire synchronously with its page owner",dialog.isShowing)
-                assertNotEquals("The already visible A capability cannot await an asynchronous B resolver",code,runCatching { ConnectionInvitation.parse((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())
+                assertNotEquals("The already visible A capability cannot await an asynchronous B resolver",code,runCatching { ConnectionInvitation.parse(shownInput.text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())
             }
             release.countDown();scenario.recreate();waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
             scenario.onActivity {activity->assertNotEquals("Retired incoming intent must not repopulate A's capability after recreation",code,runCatching { ConnectionInvitation.parse((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())}
