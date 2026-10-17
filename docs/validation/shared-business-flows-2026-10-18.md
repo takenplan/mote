@@ -27,7 +27,8 @@ separate real Codex check below also uses only generated content.
 Focused Agent runtime/context group: 75 passes, zero failures, one existing
 installed-Codex opt-in skip. Agent and Server typechecks pass on the initial
 composed source; the final affected check below supersedes those initial
-typecheck results for the delivered source.
+typecheck results for the delivered source; the exact outcomes and source
+identities are recorded below.
 
 ## Real local Codex validation
 
@@ -55,9 +56,28 @@ the complete Coding product/independent Memory review journey or general recall.
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 
-The dry run selects i18n and `check:central`: Shared/Agent/Server/Web builds,
-their typechecks and tests, Central runner and release-tool regressions. Final
-execution and source identity are recorded here before PR publication.
+The run on `3753e30e70700bab0fd1029f71b632e0e67589be` selected i18n and
+`check:central`: Shared/Agent/Server/Web builds, typechecks and tests, Central
+runner and release-tool regressions. It completed with exit code **1**:
+
+| Component | Passed | Failed | Existing skips |
+| --- | ---: | ---: | ---: |
+| Shared | 192 | 0 | 0 |
+| Agent | 326 | 0 | 1 |
+| Server | 2,946 | 1 | 2 |
+| Web | 576 | 0 | 0 |
+
+The sole failure was the production import boundary: the new shared
+`connectors/recording-flow.ts` had not been explicitly declared. The correction
+adds exactly this module to the import exception list. It accepts already-bound
+ports, constructs no legacy Store, scheduler or default owner, and declares no
+new scope surface. After the correction, `node scripts/check-scope-contracts.mjs`
+and all four `scope-architecture.test.ts` cases passed. The standalone full run
+is retained as a failure, not relabeled as a passing check.
+
+Final combined-candidate affected checks are run by the main integration task,
+including this correction, before PR publication. Their source identity and
+actual results will be recorded here when complete.
 
 ## Preserved unsuccessful attempts
 
