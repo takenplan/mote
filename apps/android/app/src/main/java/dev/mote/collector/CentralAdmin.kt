@@ -230,7 +230,15 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.text(MoteI18n.text("实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"))
     }
     private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
-    fun fileSettings(): Unit = ownedConfiguration(MoteI18n.text("处理设置"), "processing", { screens.refresh() }, { screens.refresh() })
+    fun fileSettings() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
+            val payload = JSONObject().put("revision", value.getString("revision"))
+                .put("settings", JSONObject(value.getJSONObject("settings").toString()))
+            if (value.getBoolean("policyConfigured")) payload.put("policy", JSONObject(value.getJSONObject("policy").toString()))
+            edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
+        }
+    }
     private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { view ->
