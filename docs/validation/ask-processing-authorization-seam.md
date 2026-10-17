@@ -120,9 +120,37 @@ another owner's production or fixture code.
 Joint notification attempts return “An earlier turn submission is not yet
 confirmed”; delivery to the final E2E owner is confirmed. The new tests and exact
 source receipt are ready for the final candidate; fresh full acceptance requires
-the corresponding owners' explicit frozen fixes. No Draft PR is opened while
-these recorded checks are RED. The physical ACK fixture remains Joint's scope
-and is not rerun or changed by this lane.
+the corresponding owners' explicit frozen fixes. The physical ACK fixture remains
+Joint's scope and is not rerun or changed by this lane.
+
+### Test-only Draft publication and missing-consumer check
+
+The owner subsequently explicitly authorized publishing this test patch as a
+Draft despite these baseline failures. The publication branch starts directly
+at integration `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` and contains only this
+test and document; it deliberately does not import the prerequisite production
+ancestry. The test body is byte-identical to locally tested commit
+`b4672adce50ee7739bda65f1e0f67b5e55999e20`. Integration alone is not the tested
+runtime. This Draft is a consumable regression patch, not a merge-ready final
+runtime, and no green check is claimed for the publication branch.
+
+A bounded read-only check establishes that the two missing English entries are
+already delivered by `6376aefa4` in PR151's exact remote head
+`21e97819f275944e39025eadcdd7675e4610782d`, in
+`packages/shared/src/i18n-en.ts`. The frozen 073 composition omitted those
+catalog entries. Reimplementing their translations is unnecessary.
+
+The image consumer's explicitly public frozen checkpoint
+`5563c30ab01da7e1b2a8819278e530fb7c0922ba` also includes the typed image
+projection from `9e8a910b86b5be66a24662d8b5e84683ca3b53d9`: explicit `flatMap`
+result typing and string-normalized named products. Producer
+`dcac72341004e6008ed24c1b1ca48eee625756d2` separately adds the `jobs` result
+type. The later consumer includes other receipt behavior and prerequisites;
+this lane does not select a partial overwrite or claim its runtime was tested
+here. Joint and M13 must compose their exact reviewed dependency closure and
+produce a new frozen candidate. The original type/i18n RED receipts above remain
+unchanged. The precise failures and these source identities were sent to both
+owners; M13 submission is confirmed, Joint submission remains unconfirmed.
 
 The independent clone owns its lockfile installation, all workspace package
 links and its SQLite binary. Node 26.11.1 / ABI 147 root and actual server mem0

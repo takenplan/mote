@@ -1,6 +1,6 @@
 # Exact-C2 recovery driver source archive
 
-These are verbatim text snapshots from the independently executed C2 recovery lane. Their original names and SHA256 values are in `index.json`; `.source` is only an archival suffix. The tested product source is `8ad99089ead559d6656a269fdca7ccb884953c07`, not the later documentation publication head. The actual immutable recovery receipt SHA256 is `f6061ef593fbe773f2afc2ebc12d6b2097326fe6e27eaa39e7f003020326f452`.
+These are text snapshots from the independently executed C2 recovery lane. Their original names and SHA256 values are in `index.json`; `.source` is only an archival suffix. One later path/provenance adaptation is explicitly recorded for `prepare-compiled-http-driver.mjs`: it now reads the retained original HTTP test from the supplied repository checkout instead of another task's directory. The original executed C2 hash remains in the index. The tested original product source is `8ad99089ead559d6656a269fdca7ccb884953c07`, not the later test/document publication head. The actual immutable C2 recovery receipt SHA256 is `f6061ef593fbe773f2afc2ebc12d6b2097326fe6e27eaa39e7f003020326f452`.
 
 No runtime data, database, archive, captured image, credentials or model answers are included. All examples inside driver source are generated fixtures. Do not reuse an existing run's directories, ports, volumes, containers or `active-run.json`.
 
@@ -19,6 +19,8 @@ The direct test uses these explicit inputs:
 - Optional `MOTE_FINAL_RECOVERY_HTTP_RECEIPT`: the new compiled-HTTP receipt, with its matching immutable host driver hash.
 
 Run with the checkout's own Node and `--import <checkout>/node_modules/tsx/dist/loader.mjs --test --test-reporter=tap <staging>/final-c2-complete-recovery.ts`, from that checkout. Scrub inherited `MOTE_*` and external credential variables before supplying only the explicit generated-data inputs, as the captured orchestration source does. This is an opt-in Docker/PG/Hindsight validation, not an automatic unit test.
+
+For the compiled HTTP subset, restore `prepare-compiled-http-driver.mjs`, `compiled-http-host.mjs` and `final-recovery-support.ts` into the owned staging directory, then run `node --import <checkout>/node_modules/tsx/dist/loader.mjs <staging>/prepare-compiled-http-driver.mjs <checkout> <owned-output> <candidate> <manifest> <manifest-sha256>`. The output directory must use `mote-final-recovery7-<UUID>` as checked by the script. It reads `apps/server/test/multiuser-recovery-http-seams.test.ts` from that exact checkout and replaces only its child-host path. Execute the emitted `compiled-recovery-http.test.ts` with the same loader and `--test`. Neither a task-7 checkout nor its working files is required. Record the new preparation/driver/host hashes and actual result; do not relabel the old C2 receipt.
 
 `generation-history-settled.ts` is the actual final C2 helper. The earlier `generation-history.ts` is retained for provenance: its original race assumption was too strong when an external call remained issued/unknown. Do not replace explicit unknown-result consent with automatic settlement to make a fixture green.
 

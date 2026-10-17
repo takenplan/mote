@@ -2,7 +2,7 @@
   "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
   "sourceTree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
   "receiptSha256": "f6061ef593fbe773f2afc2ebc12d6b2097326fe6e27eaa39e7f003020326f452",
-  "purpose": "Verbatim source snapshots of the actually executed external recovery drivers; suffix keeps archival copies out of product/test discovery. No data, model replies, tokens, images or database archives.",
+  "purpose": "Historical executed recovery source snapshots, with one explicitly recorded repo-local test-input adaptation for self-contained repetition. Original C2 executed hash retained; no runtime data.",
   "files": {
     "archive-corruptions.mjs": {
       "storedAs": "archive-corruptions.mjs.source",
@@ -58,7 +58,9 @@
     },
     "prepare-compiled-http-driver.mjs": {
       "storedAs": "prepare-compiled-http-driver.mjs.source",
-      "sha256": "0464257cd06af529498b31dec4137f9f63776b612397941bb6cff2d79fb7919d"
+      "sha256": "5b6ac29109897615974e60233e3c5e097e14ac85533dbbcee3b104b3e5da128a",
+      "originalC2ExecutedSha256": "0464257cd06af529498b31dec4137f9f63776b612397941bb6cff2d79fb7919d",
+      "adaptation": "Resolve the exact original HTTP test body from the supplied clean repository checkout; retain original origin SHA separately from the actual execution candidate."
     },
     "run-c2-complete.mjs": {
       "storedAs": "run-c2-complete.mjs.source",
