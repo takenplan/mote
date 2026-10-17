@@ -63,7 +63,7 @@ archive-page evidence at45db is `/tmp/web-recordings-owned-restart-valid3.log`
 (the original disconnect RED remains) and
 `/tmp/web-recordings-archive-pagination.log/.exit0`1/1,0 skips,61.87s process.
 
-## Final original-UI GREEN
+## Intermediate original-UI GREEN
 
 Runtime `7ee65f42ac9aa0ce9dfc0f2454723950db9efac9` adds only the two runtime lines
 from Joint's explicit pause freeze
@@ -107,11 +107,20 @@ history boundary. Other failing cases are preserved in
 older gate. Later workspaces finished, but root follow-on tooling/Android were not
 reached because check:local failed.
 
-Second immutablec5b28a73 gate is still running; Desktop60files/501tests passes.
-Third immutabledd72902e gate is still running; Desktop500pass/1late-ACK timeout.
-The same third candidate's isolated late-ACK case passes6.63s without changing its
-15000ms deadline (`/tmp/web-recordings-composed-desktop-late-ack.log/.exit0`,
-1 pass/35 filtered); this does not erase the full suite failure.
+All four preceding immutable full gates are terminal exit1, not final-source gates:
+
+| Tested head | Desktop | Server pass/fail/skip | Web pass/fail/skip |
+| --- | --- | --- | --- |
+|456bd68a|500/1 missing runtime|2764/11/2|539/4/0|
+|c5b28a73|501/0|2764/9/2|542/3/0|
+|dd72902e|500/1 late-ACK timeout|2770/5/2|545/1/0|
+|b877919f|501/0|2771/4/2|546/0/0|
+
+The dd729 identical isolated late-ACK case passes6.63s with its original15000ms
+deadline (`/tmp/web-recordings-composed-desktop-late-ack.log/.exit0`,1 pass/35
+filtered); this does not erase its full suite failure. Separate full receipts are
+`/tmp/web-recordings-{affected,final-affected,composed-affected,ready-affected}.log`
+and their `.exit` files. No healthy gate was interrupted or source-mutated.
 
 A standalone Android check atdd729 initially inherited system Node26.11.1/ABI147
 because PATH was omitted:352tests/1citation404 failure. That environment result is
@@ -128,6 +137,69 @@ nested mem0 preflight is preserved as
 its actual root and mem0 constructors/read/write/close pass under Node24/ABI137,
 resolving only its own ready path (`/tmp/web-recordings-ready-native-smoke.log`,
 exit0); a fresh complete shared build also passes. No peer module or ABI147 binary
-was copied. Final ready same-candidate affected/Android receipts and independent
-Draft PR will be recorded after their terminal results. Running gates remain
-unaccepted; no merge, deployment or CI dispatch is requested.
+was copied. The b877 ready full gate is terminal exit1: Desktop501/501, Web546/546,
+Server2771 pass/4 fail/2 existing skips. The four Server failures are two real
+Agent subtask Ask timeouts, a file unknown-outcome retry409, and processing summary
+restart `input_changed`. Agent317 pass/1 existing Codex-fixture skip; shared192/192
+and diagnostics5/5. Root follow-on tooling and Android were not reached because
+check:local returned1. These failures remain unwaived.
+
+The b877 explicit Node24/ABI137 forced Android JVM consumer run is terminal
+exit1:352 tests,351 pass/1 fail/0 skips,2m32s. A bounded identical failed-case
+rerun also fails404. Receipts are `/tmp/web-recordings-ready-android.log/.exit1`,
+`/tmp/web-recordings-ready-android-citation.log/.exit1`, the evidence JSON and
+`/tmp/web-recordings-ready-android-full-results`. The failure is
+`MultiuserIngressTest.native query citations use actual scoped read and cannot
+fall back to raw owner history`, line173: actual note Ingress3 ACK then
+`CentralEvidenceReference.readQuery` POST `/api/context/read` returns404. No
+native/query behavior is changed by this recording consumer. Cause is not
+confirmed; the earlier corrected Node24 pass and current Node24 failure do not
+support attributing this failure to Node version. Native/query remains with its
+existing owners; no raw-history fallback or bypass is introduced.
+
+
+## Final actual App evidence entry
+
+The preceding direct FileDetail harness did not prove the actual App modal entry.
+Supported IAB and valid original-card regression RED at
+`ad96f6a90363deee9894459eb9c513f0cdf650b8` exposed missing original-file controls:
+`/tmp/web-recordings-app-entry-red.log/.exit1`,1 fail/0 skips,54.98s.
+
+Runtime `0304fd66eb5aaa0ea76a83124a8bc342d8541da9` retains the human raw capture read
+and adds only an owned capture-browser file advertisement when that raw file has
+neither declared file reader. This mounts the existing FileDetail without a new
+viewer or backend. M13 explicitly confirmed exclusive ownership and no existing
+frozen fix. Its bounded independent source review at
+`/tmp/mote-m13-review-web-recordings-0304.md` found no new confirmed P0/P1/P2;
+source-only, no independently reproduced tests.
+
+Final test `1764806956ba0e15313d99cd90b29c46c195e204` composes the actual
+RecordingsSettings and EvidenceDialog, and separately tests all archive outcomes
+through EvidenceDialog. `/tmp/web-recordings-entry-all-green.log/.exit0`:5/5,
+0 skips/cancelled,81.55s. Main original journey57.50s; modal full archive6.48s;
+Feishu/DingTalk exact recovery4.94s/5.57s; original stop/save8.54s. All earlier
+recording restart/cursor/cancel/late-owner/history assertions remain. Authenticated
+original WAV load/download bytes,101 complete current/raw/uncorrected segments,
+actual tar manifest/RTTM/CSV/two clips and held-A-export/B-positive isolation are
+now asserted through the original App evidence modal rather than direct FileDetail.
+
+Vite build exit0 at the same final source/test tree:
+`/tmp/web-recordings-entry-web-build.log/.exit0`. Final supported IAB used that
+build, fresh generated accounts and actual scoped host: original login, owned
+instance, source-context version1, Save/start, Disconnect retains2 history cards,
+original audio card opens actual EvidenceDialog, Load original gives audio
+controls=true/blob=true/duration0.5s/readyState4. Production GET Files200 and POST
+playback200 recorded. This browser run enabled synthetic media before Save;
+failed-stage retry and full tar are separate automated evidence. No physical
+sound or real service claim. `/tmp/mote-web-recordings-entry-iab-proof.md` and
+emitted screenshot preserve the proof; created tab/host closed, listener absent.
+
+Final full affected source/test head is17648069, production runtime0304fd66, base
+exact integration6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed. Command:
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`, explicit
+Node24.21.0/ABI137 PATH. Fresh actual root/mem0 constructor/read/write/close smoke
+passes in `/tmp/web-recordings-entry-native-smoke.log`; own Electron41.10.7 locked
+official installer exit0 before the gate. Final terminal results: RUNNING, not accepted: `/tmp/web-recordings-entry-affected.log/.exit` on immutable17648069. Desktop501/501 terminal pass; Server has already reported the proposal-pagination failure and continues. Later phases and the full exit must be read at terminal. No healthy run is interrupted or duplicated. A documentation-only delivery commit does not change the tested source or dependencies..
+
+No merge, deployment or CI dispatch. The recording-specific5/5 is finite
+acceptance; it does not accept the prerequisite stack or waive other failures.

@@ -76,8 +76,15 @@ backend cases separately exercise that negative with both providers. The Web
 consumer adds no read bypass, implicit privacy enable, archive projection or task
 store.
 
-The final original-UI tests at
-`fdde4d6305a3c44c2a2a31490ccc141b23402198` pass5/5 with no skips. This is the
+The actual App evidence modal's human raw read remains independent of its file
+reader. Runtime `0304fd66eb5aaa0ea76a83124a8bc342d8541da9` obtains only the existing
+owned capture-browser file advertisement for raw files with neither declared
+reader, then mounts the original FileDetail. Non-file context and attachments
+retain their existing paths. M13 confirmed this finite shared-shell boundary and
+reviewed its three added lines; no producer or new viewer is introduced.
+
+Final actual original-page/modal tests at
+`1764806956ba0e15313d99cd90b29c46c195e204` pass5/5 with no skips. This is the
 finite recording consumer, not acceptance of the entire prerequisite stack.
 The exact gate and browser boundaries remain in the validation ledger.
 
