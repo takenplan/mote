@@ -73,7 +73,7 @@ Presets include hosted providers, local services such as Ollama and LM Studio, a
 - **You choose what to collect.** Collection starts explicitly on each device. Per-app rules let you collect content, keep activity only, or record nothing. Masks and optional text-based privacy rules apply on the device before upload.
 - **You choose where it lives.** Central stores the archive on your infrastructure. Client content is stored in app-private directories; Central content encryption is optional and off by default. It does not encrypt all SQLite metadata.
 - **You choose the AI service.** Retrieved text is sent to the configured model for AI requests. Original screenshot disclosure requires separate authorization. Optional embeddings send text to the embedding service you configure; self-hosting the archive does not make remote AI requests local.
-- **You control retention and connections.** Set retention, export your archive, make offline backups, and revoke individual connections. Central retains data indefinitely by default, subject to its storage quota.
+- **Export and connection controls.** Export your archive, make offline backups, and revoke individual connections. The current multi-user server does not yet enforce configured retention periods or archive capacity limits. See the [known MVP gaps](docs/audits/business-flow-parity-2026-10-18.md).
 
 See [privacy controls](docs/privacy-and-metadata.md), [content storage](docs/content-storage.md), and [backup and recovery](docs/deployment.md). Sampled activity shows coverage during observations, rather than continuous focus time.
 

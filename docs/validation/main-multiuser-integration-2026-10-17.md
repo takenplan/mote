@@ -217,6 +217,31 @@ acceptance, affected-component gate, GitHub merge readback and release-version
 verification remain pending while the related task finishes. No earlier passing
 fixture, native or container lane establishes those later outcomes.
 
+## Current MVP gaps
+
+The [business-flow audit](../audits/business-flow-parity-2026-10-18.md) records
+current capability gaps separately from the owner's exclusion of old-version
+migration and compatibility. In particular, these findings remain open:
+
+- F02: the first receipt for a model lease does not establish complete accounting
+  for failure/retry, yield/resume or interrupted fragments; Agent/module/skill
+  attribution is incomplete. Totals are not a complete consumed-work ledger.
+- F03: the scoped host does not enforce configured `retentionDays` or
+  `maxStorageBytes`. Explicit original GC and snapshot expiry do not implement
+  retention-date cleanup or the configured archive admission ceiling.
+- F04: current original/Material candidate retrieval is scoped FTS/literal search.
+  A scoped embedding/vector producer and hybrid ranking are not implemented;
+  models still choose tools and interpret the evidence actually retrieved.
+
+The recording tail/empty/unsupported revision fix addresses F10's stale current
+projection subcase. The retained-history/equality integration addresses F12,
+and known in-process decoder settlement addresses F13, within their receipts
+above. These corrections do not close all 13 findings. F10's canonical recording
+product/Memory model and F11's documented restore-only reauthorization decision
+remain separate questions; the audit records other outstanding capabilities and
+their individual scope. This report does not treat a passing regression gate as
+implementation of those missing features or approval of a replacement policy.
+
 ## GitHub acceptance reconciliation
 
 An independent read-only refresh at 2026-10-17 16:18:49 UTC found the same
