@@ -1468,6 +1468,7 @@
       "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/connectors/:id',service:'connectors'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors',service:'connectors'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors/:id',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors/:id/recordings',service:'connectors'",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/'+action,service:'connectors'",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/disconnect',service:'connectors'",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/forget',service:'connectors'",

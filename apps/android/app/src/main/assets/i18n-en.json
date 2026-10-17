@@ -8440,5 +8440,10 @@
   "每来源待传上限 4000 版本 / 32 MiB。路径与待传正文只保存在本机私有来源目录，不进入支持包。同步状态按服务器实例与账号归属；同一账号更换凭据保留原队列，切换账号不会发送原账号待传版本。": "Each source can queue 4,000 versions / 32 MiB. Paths and pending text stay in a private local source directory and are excluded from support bundles. Sync state belongs to the server deployment and account. Credential rotation within an account retains its queue; switching accounts never sends the previous account's pending versions.",
   "连接按中央实例和账号归属。同一账号重新授权会保留原队列；切换账号或实例会停止采集，旧队列保留在原账号，不会改投新账号。": "Connections belong to a Central deployment and account. Reauthorizing the same account keeps its queue. Switching account or deployment stops collection and retains the old queue with its original account.",
   "提交结果待确认；重试会使用原操作，不会重新创建任务。": "The submission is not confirmed. Retry uses the original operation without creating another task.",
-  "移除本机待确认提交": "Remove local pending submission"
+  "移除本机待确认提交": "Remove local pending submission",
+  "当前范围暂无录音检查点。": "There are no recording checkpoints in the current selection.",
+  "当前来源尚无归档文件。": "This source has no archived files yet.",
+  "录音归档分页": "Recording archive pages",
+  "录音来源": "Recording source",
+  "试听": "Listen to sample"
 }

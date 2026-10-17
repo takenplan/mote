@@ -1910,3 +1910,39 @@ cancelled intent, source withdrawal, disabled account, unknown call and already
 complete work; resume checks exact A/B isolation, immutable accepted extraction,
 new grant, old grant refusal and restart idempotence. This does not claim that
 all historical no-plan admissions have been upgraded to a new plan.
+
+### Delivered PR152 recording consumer composition
+
+Selected PR152 runtime0304fd66/test17648069 as a thin original recording UI
+slice, retaining Joint's backend archive-preserving disconnect/pause fixes.
+The declared delivery's prerequisite baseline also required M15 e8ef5d05,
+00044fb5,4f1caf4e checkpoint reads/retry-only resume and M13 original Files
+17fd6617/95718720/1fed4105/9d892272/081d06e1/2081fd7f. These exact source
+pieces are composed with the existing app registrar and scope inventory; no
+whole peer branch or later WIP was merged. Translation union keeps all Joint
+keys and adds only the delivered recording/sample labels. New routes use the
+existing ledger, signed owner/generation/epoch cursor and current activity
+assertions; no provider/task is admitted by the read.
+
+The initial root-invoked run failed (5/5): an archive JSX loader environment
+error plus the deliberately incomplete checkpoint-read prerequisites. The Web
+JSX-configured archive run then exposed absent FileReview prerequisites; these
+failed receipts remain `recordings152-composed` and
+`recordings152-archive-configured`. After adding the declared dependencies,
+original correction/original bytes, both providers' lost-poll/reload and stop
+cases passed; archive and one long disconnect UI wait still failed in
+`recordings152-dependencies-green` (5/7,not aggregate acceptance).
+
+With2081's actual original sample/review controls composed, both remaining
+original journeys passed2/2 EXIT0,110.115s
+(`recordings152-review-prereq-green`):101 segments, complete speaker map,
+explicit clip read, exact original/tar bytes, delayed A export retired for B,
+checkpoint/archive paging, selection ACK loss, retry-only audio resume,
+pause/stop/enable/disconnect and historical archive retention.
+The long scenario additionally records its exact disconnect task ID and waits
+for that real terminal receipt before checking its UI, rather than interpreting
+a transient waiting task as completed. This is fixture ordering only; neither
+M05 grants nor disconnect behavior is loosened. Its final run is separately
+recorded in `recordings152-exact-disconnect-ack` with all original assertions
+and unchanged240s overall timeout. Current Server/Web types and bilingual
+catalog checks are independent receipts. Whole current gate remains pending.
