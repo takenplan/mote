@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import type {DatabaseSync} from 'node:sqlite';
-import {processingProfileSchema} from '@mote/shared';
+import {fileTypePattern,processingProfileSchema} from '@mote/shared';
+import {randomUUID} from 'node:crypto';
 import {DOCUMENT_MIME_TYPES} from '@mote/shared/document-decoder';
 import {validateProcessingProfiles} from '../file-policy-validation.js';
 import type {FileProcessorRuntime} from '../file-processors.js';
@@ -14,6 +15,7 @@ import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import {processingSettingsSchema,type ProcessingSettings} from './processing-schema.js';
 import {scopedFilePolicySchema,selectScopedFilePolicy,type ScopedFilePolicy} from './processing-policy-contract.js';
 import {identityHash} from './originals.js';
+import type {registerProcessingFiles} from './processing-files.js';
 
 const domain='filePolicy',valueSchema=z.object({policy:scopedFilePolicySchema.nullable()}).strict();
 const effectiveValueSchema=valueSchema.extend({connections:z.record(z.string().regex(/^[0-9a-f]{64}$/)).default({})});
@@ -23,6 +25,7 @@ export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string}
 /** Existing M04 YAML transaction and M06 immutable metadata only. Endpoint/key
  * ownership remains exclusively in the complete personal/shared M04 reference. */
 export class ProcessingPolicies {
+ private readonly previews=new Map<string,{userId:string;epoch:number;revision:string;expires:number;items:{id:string;ref:string;proof:string}[]}>();
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly processors:FileProcessorRuntime,private readonly settings:(context:UserContext)=>ProcessingSettings,changed:(context:UserContext)=>void){
   configuration.registerDomain(domain,subject=>({id:domain,schema:effectiveValueSchema.superRefine((next,issues)=>{
    if(!next.policy)return;const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');
@@ -69,4 +72,19 @@ export class ProcessingPolicies {
  async view(context:UserContext){const user=this.configuration.forUser(context),view=await user.view();return {revision:String(view.revision),settings:this.settings(context),policy:await this.previewPolicy(context),policyConfigured:!!this.policy(context),models:await user.models(),execution:'central',runtime:'cordis',processors:this.processors.registry.list(),capabilities:{intake:this.processors.intake.list(),...this.processors.recipes.list(),outputs:this.processors.outputs.list(),image:this.processors.imageRecipes.list()}};}
  async save(context:UserContext,raw:unknown){const input=z.object({revision:z.string().regex(/^(0|[1-9][0-9]*)$/),settings:processingSettingsSchema,policy:scopedFilePolicySchema,models:z.object({profiles:z.array(z.unknown()),selections:z.record(z.unknown())}).strict().optional()}).strict().parse(raw),revision=Number(input.revision);if(!Number.isSafeInteger(revision))throw new PrivateDataError('conflict',409);validateProcessingProfiles(input.policy,(await this.previewPolicy(context)).profiles,this.processors.registry,{error:()=>new PrivateDataError('invalid_data',400)});await this.configuration.forUser(context).replaceViews({processing:input.settings,[domain]:{policy:input.policy},...(input.models?{models:input.models}:{})},revision);return this.view(context);}
  async match(context:UserContext,raw:unknown){const input=z.object({sourceId:z.string().min(1).max(128),mimeType:z.string().max(200)}).strict().parse(raw);await this.configuration.forUser(context).view();return selectScopedFilePolicy(await this.previewPolicy(context),input.sourceId,input.mimeType);}
+ async preview(context:UserContext,raw:unknown,files:ReturnType<ReturnType<typeof registerProcessingFiles>>){
+  const input=z.object({revision:z.string(),sourceId:z.string().max(128).optional(),type:fileTypePattern.default('*/*'),profileId:z.string().max(100).optional()}).strict().parse(raw),view=await this.configuration.forUser(context).view();if(input.revision!==String(view.revision))throw new PrivateDataError('conflict',409);const policy=await this.previewPolicy(context),now=Date.now();
+  for(const [token,preview]of this.previews)if(preview.expires<now)this.previews.delete(token);const owned=[...this.previews].filter(([,preview])=>preview.userId===context.userId);if(owned.length>=20)this.previews.delete(owned[0]![0]);
+  const items:{id:string;ref:string;proof:string;title:string;profileName:string;rule:ReturnType<typeof selectScopedFilePolicy>['rule']}[]=[];let cursor:string|undefined,scanned=0,skipped=0,bounded=false;
+  do{const page=files.list({limit:100,type:input.type,...(input.sourceId?{sourceId:input.sourceId}:{}),...(cursor?{cursor}:{})});for(const file of page.items){if(scanned++>=1000){bounded=true;break;}const mime=file.item.mimeType;if(input.type!=='*/*'&&(input.type.endsWith('/*')?!mime.startsWith(input.type.slice(0,-1)):mime!==input.type))continue;const selected=selectScopedFilePolicy(policy,file.sourceId,mime);if(input.profileId&&selected.profile.id!==input.profileId)continue;
+    if(selected.archiveOnly||!file.hasOriginal||file.job?.state==='running'||file.cancellation.wait==='running'){skipped++;continue;}if(items.length===100){bounded=true;break;}items.push({id:file.captureId,ref:file.originalRef,proof:files.proof(file.captureId),title:file.item.title,profileName:selected.profile.name,rule:selected.rule});
+   }cursor=page.nextCursor??undefined;if(scanned>=1000&&cursor)bounded=true;if(items.length===100)bounded=true;
+  }while(cursor&&!bounded);
+  this.runtime.authority.assert(context);const token=randomUUID();this.previews.set(token,{userId:context.userId,epoch:context.authorizationEpoch,revision:String(view.revision),expires:now+600000,items:items.map(({id,ref,proof})=>({id,ref,proof}))});return {token,revision:String(view.revision),count:items.length,skipped,bounded,items:items.map(({ref,proof,...item})=>item)};
+ }
+ async reprocess(context:UserContext,raw:unknown,files:ReturnType<ReturnType<typeof registerProcessingFiles>>,queue:(token:string,refs:readonly string[],assertPreview:()=>void)=>{queued:number}){
+  const {token}=z.object({token:z.string().uuid()}).strict().parse(raw),preview=this.previews.get(token),view=await this.configuration.forUser(context).view();if(!preview||preview.userId!==context.userId||preview.epoch!==context.authorizationEpoch||preview.expires<Date.now()||preview.revision!==String(view.revision))throw new PrivateDataError('conflict',409);
+  const result=queue(token,preview.items.map(item=>item.ref),()=>{this.runtime.authority.assert(context);if(this.previews.get(token)!==preview)throw new PrivateDataError('conflict',409);for(const item of preview.items){try{if(files.proof(item.id)!==item.proof)throw new PrivateDataError('conflict',409);}catch(error){if(error instanceof PrivateDataError&&error.code==='not_found')throw new PrivateDataError('conflict',409);throw error;}}});this.previews.delete(token);return result;
+ }
+ retire(userId:string){for(const [token,preview]of this.previews)if(preview.userId===userId)this.previews.delete(token);}
 }

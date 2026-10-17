@@ -1213,3 +1213,30 @@ Only the durable generated marker protocol is corrected; no production worker
 code changes. The ignored `.mote/joint-fixture-pid-probe*.test.ts` files preserve
 the deterministic timing instrumentation locally. The independent owner's
 original failed runs still need its own diagnostics/recheck before closure.
+
+
+### Original preview and explicit reprocess entry checkpoint
+
+Durable2e4352d2 records actual missing preview503 RED1/1fail,5.035s
+(`/tmp/mote-joint-policy-preview-red.log/.exit`). The added entry reuses the
+existing Files owner projection and existing M05/M06 file retry body, extracting
+its synchronous core so the batch has one transaction rather than awaiting
+inside a SQL transaction. The first GREEN attempt reached reprocess but its
+fixture waited only for an old indexed publication, then retried while the new
+root was running409; this retained failure is not a product regression. It now
+waits for the actual new job succeeded state before starting another action.
+Owner A/B equal-ID, one-use token, cross-account409, stale-file rejection and
+late second-item SQL admission fault rollback/retry pass2/2,12.541s in
+`/tmp/mote-joint-policy-preview-green3.log/.exit`. Trigger faults are generated
+fixture SQL; no system permissions or real data are changed. Current final
+preview cases plus11 ASR/diarization/extraction-retry/authority/parentless neighbors
+pass13/13,45.713s0 (`/tmp/mote-joint-policy-preview-retry-neighbors.log/.exit`).
+Server+scripts types2 and scope receipts both0. Capacity/expiry/unknown reprocess
+and UI/whole recovery remain unclaimed. Public consumer freeze still2528.
+
+Generated source-plugin original full file, after atomic marker publication,
+passes9/9,30.686s0 (`/tmp/mote-joint-plugin-marker-full.log/.exit`): source reads/
+publication, pause/drain, stop, grant revoke, plugin/ingress delete, account disable
+and restart. These are Joint execution receipts; the independent cross-user
+owner must still confirm its originally failing workspace. No production plugin
+change was made to obtain this result.

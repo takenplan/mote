@@ -395,3 +395,20 @@ existing models domain and stable-ID masked-secret rules; policy services remain
 opaque `{kind,id}` references. Processing, filePolicy and optional models replace
 together at one revision. Shared instance connections remain read-only metadata.
 No client-consumer freeze is declared for this refinement yet.
+
+
+Policy preview/reprocess WIP: original POST `/api/file-processing/preview` uses
+`{revision,sourceId?,type?,profileId?}` and returns the existing token/count/items
+shape. It pages the same owner/current-source/current-attachment Files projection;
+MIME filtering occurs before LIMIT. It retains the original1000 scanned/100
+selected/20 previews per account/10-minute expiry bounds with explicit bounded.
+No second file projection/store is introduced. POST `/reprocess` accepts only
+`{token}` and verifies account epoch, configuration revision and exact file task/
+control/publication proofs. One synchronous existing SQLite transaction validates
+all files, chooses current named plans and uses the existing file retry admission.
+The original explicit reprocess action acknowledges unknown old outcomes, while
+live physical work remains blocked by the existing guard. It never settles old
+external facts. Failed batches roll back all admissions and retain the preview;
+success consumes it. Preview tokens are not portable data and are retired with
+the M06 account domain. Whole preview bounds/expiry/unknown/UI acceptance remains
+to be run; this WIP has not been declared a consumer freeze.
