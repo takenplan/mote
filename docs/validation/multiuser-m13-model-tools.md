@@ -69,20 +69,27 @@ These are saved-reference operations. Unsaved-draft connection testing and
 automatic draft directory discovery are outside this finite interface. This
 does not claim all Models, settings, Memory, Files or Imports parity.
 
-Main fixed `750a7b00` affected checking remains separate from this controls
-branch. Its environment had a Node26 ABI147 native SQLite binary under a Node24
+Main fixed `750a7b00` affected checking ended with EXIT1, separately from this
+controls branch. Desktop 501/501 and Web 538/538 pass; Server has 2,733 pass,
+31 fail and two skips. Trailing root tests and Android were not reached. Its
+environment had a Node26 ABI147 native SQLite binary under a Node24
 ABI137 runner. The exact dependency version 12.10.0 was isolated under the
 server using a verified ABI137 binary; the root Node26 dependency was untouched.
-The unchanged four real mem0 worker tests then pass 4/4. The interrupted stuck
-file and original full log remain recorded, never relabeled as passing.
+The unchanged four real mem0 worker tests then pass 4/4; five dependent files
+separately pass 16/16 without skips after the repair. These actual same-case
+results support the ABI diagnosis for the twenty affected failures. The stopped
+stuck file and original full log remain recorded, never relabeled as passing.
 
 The same fixed run also hit two real Ask delegation observation timeouts. A
 diagnostic with unchanged production and assertions, observing for 60 seconds,
 completes both chains (including the failed-child exact retry counts). That is
 diagnostic evidence, not a replacement full gate or an accepted fixture fix.
-The original full run must reach its actual terminal result and relevant
-follow-up must be completed before an own PR is accepted. No own PR or remote
-delivery is claimed here.
+The other failure rows include import progress observation, Files cancel,
+Coding projection, M06 pipeline assertions and old Web feature metadata. They
+remain unclosed; they are not automatically classified as ABI failures. The
+full failure inventory is `/tmp/m13-750-server-failure-inventory.json`. Necessary
+follow-up and a real final combined gate must be completed before an own PR is
+accepted. No own PR or remote delivery is claimed here.
 
 M15's earlier omitted-policy scalar PUT 400 attribution is superseded by its
 declared client repair: unconfigured scalar settings use the existing M04
