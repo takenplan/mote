@@ -1358,3 +1358,32 @@ Android production is byte-identical to429, so its full358/debug/native evidence
 stays exact rather than mechanically repeating unchanged Kotlin. Earlier all-
 workspace types/Central/scope/i18n/13 backend proofs precede only this small
 server fix; no new final affected or whole-profile/model/Agent completion claim.
+
+## Original native Agent startup and personal recorded history
+
+Declared pure Server245308de is composed as0b17f966; the real generated startup
+and trace suites2/2/no skip pass27.688s (`/tmp/m15-agent-245-composed.log`).
+It is now explicitly held by M13 for a newly reproduced same-user relogin/
+opt-out observer defect. Do not treat this old seam as final; its successor must
+be composed and checked before final acceptance. No native workaround revives
+an old credential subject or writes global diagnostics.
+
+Durable54dd/65cb fixture/native test verifies the actual no-model startup and
+missing explicit personal opt-in: valid RED1/1,1.212s
+(`/tmp/m15-agent-original-valid-red2.log`, backend0). The earlier build omitted
+fixture testBuildType and failed before compilation; a separate first fixture
+registered a Fastify hook after startup and failed before instrumentation. Both
+setup errors are retained and are not product RED. Correct test build20s0.
+
+Minimal native c706d743 restores the original Agent controls using existing M04
+agentTrace whole-document CAS, captured client/navigation fences and actual M08
+records. Opaque nextCursor is returned unchanged by the existing pager; no
+numeric trace sequence conversion, fabricated old tool.completed event, global
+log store or reconstructed historical prompt is introduced. The same actual
+native method passes1/1,6.424s (`/tmp/m15-agent-native-first-green.log`,
+backend0), including default-disabled A/B, no extra preview model call, explicit
+A-only setting, real Harness Material read, continuation and retired A button
+after B. Fixture app/test APK14s0 and bilingual8472/0. Additional precise
+assertions for actual tool/result/source markers and a new explicit B preview
+are subsequent test strengthening, not silently assigned this earlier result.
+Final successor/relogin native proof, review and final affected remain pending.

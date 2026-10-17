@@ -896,7 +896,7 @@ class MultiuserWorkerInstrumentedTest {
         fun trace(client:CentralClient):JSONObject {val rows=client.get("/api/configuration").getJSONArray("domains");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="agentTrace"}.getJSONObject("effective")}
         fun state()=control("/generated/agent-state")
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
-        assertFalse(trace(a).getBoolean("traceEnabled"));assertFalse(trace(b).getBoolean("traceEnabled"));val before=state().getJSONObject("calls").toString()
+        assertFalse(trace(a).getBoolean("traceEnabled"));assertFalse(trace(b).getBoolean("traceEnabled"));assertEquals(0,a.get("/api/agent-view/events?limit=12").getJSONArray("items").length());val before=state().getJSONObject("calls").toString()
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","agentView")).use {scenario->
             fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
             fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
@@ -908,11 +908,13 @@ class MultiuserWorkerInstrumentedTest {
             val run=java.util.UUID.randomUUID().toString();a.post("/api/query-runs",JSONObject().put("id",run).put("input",JSONObject().put("question","Generated native trace A")))
             waitFor {a.get("/api/query-runs/"+run).getString("status")!="running"};assertEquals("completed",a.get("/api/query-runs/"+run).getString("status"))
             val first=a.get("/api/agent-view/events?limit=12");assertTrue(first.getJSONArray("items").length()>0);assertFalse(first.isNull("nextCursor"));val cursor=first.getString("nextCursor")
-            press("实际读取记录");ready();var found=text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");var pages=0;var next:android.widget.Button?=null;var retainedNext:android.widget.Button?=null
-            while(true){scenario.onActivity {activity->next=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()=="下一页"}};if(next==null)break;if(retainedNext==null)retainedNext=next;scenario.onActivity {next!!.performClick()};ready();found=found||text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");pages++;assertTrue(pages<20)}
-            assertTrue("Actual Harness result payload must remain readable without fabricating legacy tool.completed",found);assertTrue(pages>0);assertFalse(text().contains("GENERATED_AGENT_B_VISIBLE_TEXT"))
+            press("实际读取记录");ready();val history=StringBuilder(text());var found=text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");var pages=0;var next:android.widget.Button?=null;var retainedNext:android.widget.Button?=null
+            while(true){scenario.onActivity {activity->next=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()=="下一页"}};if(next==null)break;if(retainedNext==null)retainedNext=next;scenario.onActivity {next!!.performClick()};ready();history.append("\n").append(text());found=found||text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");pages++;assertTrue(pages<20)}
+            assertTrue("Actual Harness result payload must remain readable without fabricating legacy tool.completed",found);assertTrue(pages>0);assertTrue(history.contains("tool/result"));assertTrue(history.contains("untrusted_personal_context"));assertFalse(history.contains("GENERATED_AGENT_B_VISIBLE_TEXT"))
             val reads=state().getJSONArray("reads");assertTrue((0 until reads.length()).map(reads::getJSONObject).any {it.getString("actor")=="a"&&it.optString("cursor")==cursor})
             val old=retainedNext;assertNotNull(old);scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {old?.performClick()};ready();assertFalse(text().contains("Generated native trace A"));assertFalse(text().contains("GENERATED_AGENT_A_VISIBLE_TEXT"));assertFalse(trace(b).getBoolean("traceEnabled"))
+            val afterSwitch=state().getJSONArray("reads");assertFalse((0 until afterSwitch.length()).map(afterSwitch::getJSONObject).any {it.getString("actor")=="b"&&it.optString("cursor")==cursor})
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.contentDescription=="你的问题"}.setText("Generated native startup B")};press("首次上下文");ready();assertTrue(text().contains("Generated native startup B"));assertFalse(text().contains("Generated native startup A"))
         }
     }
 
