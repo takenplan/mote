@@ -17,7 +17,8 @@ import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider
 // A loopback transport gate can hold an original reader before its HTTP request
 // reaches the host. It never constructs answers or bypasses authorization.
 const output=resolve(process.argv[2]??join(tmpdir(),'mote-main-history-fixture.json'));
-const directory=await mkdtemp(join(tmpdir(),'mote-main-history-'));
+const directory=await mkdtemp(join(tmpdir(),'mote-main-history-'+process.pid+'-'));
+await writeFile(output+'.setup.json',JSON.stringify({pid:process.pid,directory,generatedOnly:true}),{mode:0o600});
 const password='Generated-history-Only-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
 let generation=0,modelCalls=0,conversationId='',workId='',closing=false,baseline:Record<string,unknown>={};
 let armRead=false,readHeld=false,heldReadCompleted=0,releaseRead:(()=>void)|undefined;
@@ -36,7 +37,7 @@ const provider=createServer((req,res)=>{void(async()=>{
 })().catch(error=>{process.stderr.write(String(error)+'\n');res.destroy();});});
 await new Promise<void>(done=>provider.listen(0,'127.0.0.1',done));
 const providerBound=provider.address();assert.ok(providerBound&&typeof providerBound!=='string');
-const node=await buildApp({dataDir:directory});await node.accounts.initialize('generated-admin',password);
+const node=await buildApp({dataDir:directory});assert.ok(node.accounts);await node.accounts.initialize('generated-admin',password);
 const upstream=await node.app.listen({host:'127.0.0.1',port:0});
 async function request(token:string|undefined,path:string,method='GET',body?:unknown){
  const response=await fetch(upstream+path,{method,headers:{...protocol,'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
@@ -71,7 +72,7 @@ async function reset(){
   await request(user.token,'/api/conversations','POST',{id:conversationId,title:'Generated '+label+' history '+generation});
   for(let index=1;index<=(label==='A'?21:1);index++){
    const id=randomUUID();await request(user.token,'/api/query-runs','POST',{id,input:{question:'Generated '+label+' history '+generation+' turn '+String(index).padStart(2,'0'),conversationId,turnId:randomUUID()}});
-   const deadline=Date.now()+30_000;for(;;){const run=await request(user.token,'/api/query-runs/'+id);if(run.status!=='running'){assert.equal(run.status,'completed',JSON.stringify({status:run.status,error:run.error}));break;}assert.ok(Date.now()<deadline,'Generated history run timed out');await delay(20);}
+   const deadline=Date.now()+30_000;for(;;){const run=await request(user.token,'/api/query-runs/'+id);if(run.status!=='running'){assert.equal(run.status,'completed',JSON.stringify({status:run.status,error:run.error}));break;}assert.ok(Date.now()<deadline,'Generated history run timed out '+JSON.stringify({owner:label,index,id,status:run.status,error:run.error,modelCalls,events:run.events?.slice(-3)}));await delay(20);}
    if(label==='A'&&index===21)workId='query:'+id;
   }
  }
@@ -99,7 +100,7 @@ const control=createServer((req,res)=>{void(async()=>{
  res.setHeader('content-type','application/json');res.end(JSON.stringify(await metadata()));
 })().catch(error=>{process.stderr.write(String(error.stack??error)+'\n');res.writeHead(500,{'content-type':'application/json'}).end('{"error":"generated_history_fixture_failed"}');});});
 await new Promise<void>(done=>control.listen(0,'127.0.0.1',done));const bound=control.address();assert.ok(bound&&typeof bound!=='string');const controlAddress='http://127.0.0.1:'+bound.port;
-const initial=await reset();
-process.stdout.write(JSON.stringify({address,webAddress:upstream,controlAddress,fixtureFile:output,pid:process.pid,conversationId,workId,turnCount:initial.turnCount,generatedOnly:true,wireVersion:2})+'\n');
-async function close(){if(closing)return;closing=true;releaseRead?.();for(const server of [control,proxy,provider]){server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));}await node.app.close();await rm(directory,{recursive:true,force:true});process.stdout.write('{"generatedOnly":true,"closed":true}\n');process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());
+const initial=await reset().catch(async error=>{process.stderr.write(String(error.stack??error)+'\n');await close(1);throw error;});
+process.stdout.write(JSON.stringify({address,webAddress:upstream,controlAddress,fixtureFile:output,pid:process.pid,conversationId,workId,turnCount:initial.turnCount,generatedOnly:true,wireVersion:2})+'\n');
+async function close(code=0){if(closing)return;closing=true;releaseRead?.();for(const server of [control,proxy,provider]){server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));}await node.app.close();await rm(directory,{recursive:true,force:true});await writeFile(output+'.cleanup.json',JSON.stringify({pid:process.pid,code,directoryRemoved:true,generatedOnly:true}),{mode:0o600});process.stdout.write('{"generatedOnly":true,"closed":true}\n');process.exit(code);}

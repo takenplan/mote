@@ -261,7 +261,15 @@ export async function nativeIdentity(p) {
   return { ...supervisor, record };
 }
 export async function health(p) {
-  try { const response = await fetch(p.url + '/api/status', { headers: { Authorization: `Bearer ${p.env.MOTE_TOKEN}` }, redirect: 'error', signal: AbortSignal.timeout(1500) }); return response.ok; }
+  try {
+    const response = await fetch(p.url + '/api/health', { redirect: 'error', signal: AbortSignal.timeout(1500) });
+    if (!response.ok) return false;
+    const body = await response.json();
+    // Deployment readiness must work before the first account is initialized.
+    // Keep this public contract aligned with the scoped storage/wire baseline.
+    return body.ok === true && body.mode === 'multiuser-auth' && body.authentication === 'username-password'
+      && body.storageEpoch === 5 && body.protocol?.min === 2 && body.protocol?.max === 2;
+  }
   catch { return false; }
 }
 async function ensurePortFree(p) {

@@ -160,7 +160,7 @@ npm run test:e2e
 npm run test:profiles
 ```
 
-`test:profiles` 使用系统临时目录、随机 loopback 端口和生成的 2×2 PNG，实际创建两套 dev/test 中央 Node 子进程。验证跨令牌拒绝、数据库分离、文件导入各自确认、备份 SHA、加密图片恢复、升级回退、原生日志隐私及轮转、监督进程异常结束后的接管；只清理本次创建的进程与目录。不会使用正式 47832，也不调用外部模型。
+`test:profiles` 使用系统临时目录和随机 loopback 端口，实际创建两套当前 Wire-2 dev/test 中央 Node 子进程。验证首次账号初始化前的公开健康检查、隔离存储、启停和重启，以及拒绝占用端口、旧 owner token 和不属于该配置的 PID；只清理本次创建的进程与目录。不会使用正式 47832、前台 UI 或外部模型。运行前先完成 `build:central`。原单用户完整部署 fixture 保留为 `test:profiles:legacy-wire1`，需要匹配的历史二进制；其备份、升级回退、日志和数据断言不能充作当前多用户验收。当前恢复矩阵见 [多用户恢复生命周期](validation/multiuser-recovery-lifecycle-seams.md)，日志与监督器由发布工具回归和 `test-central-runner.mjs` 单独验证。
 
 问答依赖或 Memory 启动/恢复变化需覆盖正式 HTTP 与应用重启顺序：宽依赖续问跨过执行租约、核对中删除、外联中删除、未激活任务重启休眠、显式启动后的恢复，以及取消/撤权拒绝。使用生成原件与 loopback 模型 fixture；测试次数、真实模型计量和部署版本分别记录。当前回归入口与执行证据见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)。
 

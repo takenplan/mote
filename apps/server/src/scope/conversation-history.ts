@@ -1,6 +1,7 @@
 import type {DatabaseSync} from 'node:sqlite';
 import type {EvidencePin,MaterialPin} from './ask-schema.js';
 import type {AskEvidence} from './ask-evidence.js';
+import {exactProofs} from './ask-proof.js';
 import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 
 type Root={kind:'capture'|'material'|'source';id:string;incarnation:string;measurement?:true};
@@ -43,6 +44,9 @@ export function installConversationHistory(db:DatabaseSync){
   ['material_changed','pd_materials','AFTER UPDATE OF revision,min_visible_sequence','new.user_id','material','new.id','WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence',false],
   ['source_changed','pd_sources','AFTER UPDATE OF json','new.user_id','source','new.id',"WHEN json_extract(new.json,'$.enabled') IS NOT json_extract(old.json,'$.enabled') OR json_extract(new.json,'$.retention') IS NOT json_extract(old.json,'$.retention') OR json_extract(new.json,'$.ownerRelation') IS NOT json_extract(old.json,'$.ownerRelation') OR json_extract(new.json,'$.ownerRelationVersion') IS NOT json_extract(old.json,'$.ownerRelationVersion') OR json_extract(new.json,'$.sourceContext') IS NOT json_extract(old.json,'$.sourceContext') OR json_extract(new.json,'$.name') IS NOT json_extract(old.json,'$.name')",false],
  ] as const){db.exec(`DROP TRIGGER IF EXISTS ma_history_${name};CREATE TRIGGER ma_history_${name} ${event} ON ${table} ${when} BEGIN ${change(owner,matching(owner,kind,id),deleted,matchingRuns(owner,kind,id))} END;`);}
+ // M07 anchors are disposable interpretation cache. Withdraw prepared context
+ // and summaries before their lineage disappears, retaining historical prose.
+ db.exec(`DROP TRIGGER IF EXISTS ma_history_cache_removed;CREATE TRIGGER ma_history_cache_removed BEFORE DELETE ON mm_evidence BEGIN ${change('old.user_id',matching('old.user_id','material','old.material_id'),false,matchingRuns('old.user_id','material','old.material_id'))} END;`);
  // Ordinary cache/projection withdrawal may hide a head until rebuilding.
  // Only the explicit owner/privacy retirement event erases historical prose.
  for(const event of ['INSERT','UPDATE OF epoch'] as const){const name=event==='INSERT'?'insert':'update';db.exec(`DROP TRIGGER IF EXISTS ma_history_retire_${name};CREATE TRIGGER ma_history_retire_${name} AFTER ${event} ON pd_material_retirements BEGIN ${change('new.user_id',matching('new.user_id','material','new.material_id'),true,matchingRuns('new.user_id','material','new.material_id'))} UPDATE ma_history_materials SET incarnation=lower(hex(randomblob(16))) WHERE user_id=new.user_id AND id=new.material_id; END;`);}
@@ -67,6 +71,7 @@ export class ConversationHistory{
   for(const row of rows){roots.set('material:'+row.id,{kind:'material',id:String(row.id),incarnation:String(row.incarnation)});const sources=this.sql.all('SELECT source_id FROM pd_material_sources WHERE user_id=$user AND material_id=? AND revision=?',row.id,row.revision);if(!sources.length)throw missing();for(const source of sources)this.source(String(source.source_id),roots);for(const capture of this.sql.all('SELECT capture_id FROM pd_material_captures WHERE user_id=$user AND material_id=? AND revision=?',row.id,row.revision))this.capture(String(capture.capture_id),roots);}
  }
  proof(pins:EvidencePin[],materials:MaterialPin[],inherited:HistoryRoots={version:1,roots:[]}):Proof{
+  pins=exactProofs(pins);materials=exactProofs(materials);
   const roots=new Map(this.combine([inherited]).roots.map(root=>[root.kind+':'+root.id,root]));
   for(const material of materials){if(material.sourceContext)this.source(material.sourceContext.sourceId,roots);else this.material(material.id,material.revision,roots);}
   for(const pin of pins){if(!pin.receipt||this.reader.originalReceipt(pin.id)!==pin.receipt)throw missing();const anchor=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',pin.id);if(anchor)this.material(String(anchor.material_id),String(anchor.material_revision),roots);else this.capture(pin.id,roots,pin.kind==='measurement');if(pin.source){this.source(pin.source.id,roots);if(roots.get('source:'+pin.source.id)?.incarnation!==pin.source.incarnation)throw missing();}}

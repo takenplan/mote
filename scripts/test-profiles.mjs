@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Historical single-owner Wire-1 fixture. The current public test:profiles entry
+// exercises scoped startup; this fixture requires its matching historical binary.
 // Real central subprocesses, encrypted generated pixels, disposable dev/test profiles only.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, readdir, rm, stat, cp } from 'node:fs/promises';

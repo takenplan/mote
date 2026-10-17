@@ -40,6 +40,11 @@ Recreation with the same public ID does not revive an erased answer. SQL trigger
 do not require connection-local JavaScript callbacks and participate in the
 writer's transaction.
 
+Deleting a disposable M07 evidence anchor marks dependent history stale and
+withdraws its persisted summary and prepared conversation revision before the
+anchor lineage disappears. It preserves the answer and retained root receipts;
+cache removal alone does not become privacy deletion.
+
 Before execution starts, M08 backfills unread pre-receipt turns from their
 canonical retained graph, in owner-bound transactions and conversation order.
 It does not mint user contexts or grants. An unavailable graph is not guessed;
@@ -53,6 +58,13 @@ Conversation revisions now represent snapshot changes as well as publications;
 so a delayed older response cannot restore a retired view. Web and Android check
 `evidenceDeleted` before looking for a result, because a deleted wire-2 turn
 intentionally omits its result.
+
+Turn/run evidence tuples use exact JSON set semantics when inheriting prior
+dialogue and when validating existing repeated tuples. Otherwise each turn
+recursively copies all earlier inherited copies and proof work grows
+exponentially. This coalesces only complete identical values; different hashes,
+receipts, source incarnations, read kinds and immutable Material revisions keep
+their independent strict validation. It adds no semantic equivalence rule.
 
 ## Personal export and recovery
 
@@ -82,6 +94,14 @@ Appearance uses main's semantic roles, synchronous first paint and device-local
 preference across the scoped account lifecycle. Theme transport does not grant
 retired documents access to private IPC. Existing navigation and account
 generation guards remain in place.
+
+The profile CLI uses the public scoped `/api/health` contract, without a retired
+owner credential, so native startup works before the first account is created.
+The old `/api/status` owner route cannot establish scoped deployment readiness.
+Current `test:profiles` exercises real scoped profile startup; the old Wire-1
+profile journey remains explicitly named `test:profiles:legacy-wire1`. Recovery,
+upgrade/rollback, logging and private-data journeys are recorded separately in
+the current regression matrix rather than inferred from the old fixture.
 
 Durable regression scenarios live in `multiuser-history-retention.test.ts`,
 `multiuser-history-independent-review.test.ts`, scoped connector tests, native

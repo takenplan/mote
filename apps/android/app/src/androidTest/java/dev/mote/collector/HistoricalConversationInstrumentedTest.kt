@@ -18,6 +18,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URI
 
 /** Actual wire-2 account service; generated originals/provider, no capture or live model. */
 @RunWith(AndroidJUnit4::class)
@@ -39,9 +41,18 @@ class HistoricalConversationInstrumentedTest {
         MoteAppearance.select(context, AppearancePreference.parse(args.getString("appearance", "light")))
     }
     private fun control(action: String): JSONObject {
-        val (status, value) = HttpJson.post(fixture.getString("controlAddress") + "/" + action, JSONObject())
-        assertEquals("Generated $action control", 200, status)
-        return requireNotNull(value)
+        val connection = URI(fixture.getString("controlAddress") + "/" + action).toURL().openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "POST"; connection.doOutput = true
+            connection.connectTimeout = 15_000
+            // Reset generates 22 real query runs; each retains its own 30s guard.
+            // This bound belongs only to the test control, never a product call.
+            connection.readTimeout = if (action == "reset") 22 * 30_000 else 30_000
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.outputStream.use { it.write("{}".toByteArray()) }
+            assertEquals("Generated $action control", 200, connection.responseCode)
+            return JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+        } finally { connection.disconnect() }
     }
     private fun reset() {
         val value = control("reset")

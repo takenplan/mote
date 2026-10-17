@@ -56,13 +56,13 @@ test('an archive after privacy erasure keeps only erased dialogue receipts and r
 });
 
 test('upgrading unread scoped dialogue backfills original roots before Memory cache deletion',async t=>{
- const f=await fixture(t);await f.publish(f.a,'A');await f.publish(f.b,'B');const original=await ask(f,f.a),b=await ask(f,f.b);
+ const f=await fixture(t);await f.publish(f.a,'A');await f.publish(f.b,'B');const original=await ask(f,f.a),b=await ask(f,f.b),compactContext=await f.node.authority.authenticate(f.a.token);await f.node.ask!.bind(compactContext,{assertCurrent:()=>{}}).compact(original.conversationId);
  // Model the previous M08 schema: real published turns and runs predate the
  // host-only history tables. No forged context, grant or evidence is supplied.
  f.read(db=>{db.exec('PRAGMA foreign_keys=ON');db.prepare('DELETE FROM ma_history_turns WHERE user_id=?').run(f.a.userId);db.prepare('DELETE FROM ma_history_runs WHERE user_id=?').run(f.a.userId);});
  await f.restart();assert.ok(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ma_history_dependencies WHERE user_id=?').get(f.a.userId)!.n))>0,'startup, before any history read, must persist the retained canonical closure');
- const context=await f.node.authority.authenticate(f.a.token);await f.node.services.forUser(context).deleteUser('memory',randomUUID());
- const page=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.equal(page.turns[0].evidenceStale,true);assert.deepEqual(page.turns[0].result,original.result);assert.equal(page.turns[0].evidenceDeleted,undefined);
+ const before=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.ok(before.summary);const context=await f.node.authority.authenticate(f.a.token);await f.node.services.forUser(context).deleteUser('memory',randomUUID());
+ const page=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.equal(page.turns[0].evidenceStale,true);assert.deepEqual(page.turns[0].result,original.result);assert.equal(page.turns[0].evidenceDeleted,undefined);assert.ok(page.revision>before.revision,'cache withdrawal must retire prepared conversation snapshots');assert.equal(f.read(db=>db.prepare('SELECT summary FROM ma_conversations WHERE user_id=? AND id=?').get(f.a.userId,original.conversationId)!.summary),null,'cache withdrawal clears the persisted summary');
  await f.restart();assert.deepEqual((await f.checked(f.a.token,'/api/conversations/'+original.conversationId)).turns[0].result,original.result);assert.deepEqual((await f.checked(f.b.token,'/api/conversations/'+b.conversationId)).turns[0].result,b.result);
 });
 
@@ -73,4 +73,17 @@ test('measurement-only answers retain the existing redacted-metadata contract wi
  const original=await ask(f,f.a);await ask(f,f.a,original.conversationId);assert.ok(f.read(db=>db.prepare("SELECT 1 FROM ma_history_dependencies WHERE user_id=? AND kind='capture' AND root_id=?").get(f.a.userId,captureId)));assert.ok(f.requests.every(request=>!request.raw.includes('GENERATED_REDACTED_CONTENT_NOT_DISCLOSED')));
  const context=await f.node.authority.authenticate(f.a.token),service=f.node.services.forUser(context),archive=await service.exportUser('ask'),calls=f.requests.length;await service.deleteUser('ask',randomUUID());await service.restoreUser('ask',archive,randomUUID());await f.restart();assert.equal(f.requests.length,calls);const page=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.equal(page.turns.length,2);assert.deepEqual(page.turns[0].result,original.result);const restored=await f.node.authority.authenticate(f.a.token);await assert.rejects(f.node.ask!.bind(restored,{assertCurrent:()=>{}}).reader().agent.evidence({ids:[captureId]}));
  await f.checked(f.a.token,'/api/captures/'+captureId,'DELETE');assert.ok((await f.checked(f.a.token,'/api/conversations/'+original.conversationId)).turns.every((turn:any)=>turn.evidenceDeleted));
+});
+
+test('repeated real historical followups keep exact evidence proofs bounded without losing distinct revisions',async t=>{
+ const f=await fixture(t);let material=await f.publish(f.a,'A');await f.publish(f.b,'B');let conversationId:string|undefined;
+ for(let index=0;index<12;index++){
+  if(index===6)material=await revise(f,f.a,material);
+  const result=await ask(f,f.a,conversationId,'Generated repeated historical followup '+index);conversationId=result.conversationId;
+  const row=f.read(db=>db.prepare('SELECT json_array_length(pins) pins,json_array_length(materials) materials FROM ma_runs WHERE user_id=? AND id=?').get(f.a.userId,result.id)!);
+  assert.equal(row.pins,1,'identical inherited evidence must not double on each turn');assert.equal(row.materials,1,'identical inherited Material proof must not double on each turn');
+ }
+ const page=await f.checked(f.a.token,'/api/conversations/'+conversationId);assert.equal(page.turnCount,12);assert.ok(page.turns.slice(0,6).every((turn:any)=>turn.evidenceStale));assert.ok(page.turns.slice(6).every((turn:any)=>!turn.evidenceDeleted&&turn.result));
+ const revisions=f.read(db=>db.prepare("SELECT count(DISTINCT json_extract(materials,'$[0].revision')) n FROM ma_turns WHERE user_id=? AND conversation_id=?").get(f.a.userId,conversationId)!);assert.equal(revisions.n,2,'different immutable revisions must retain their own original proof');
+ await f.restart();assert.equal((await f.checked(f.a.token,'/api/conversations/'+conversationId)).turnCount,12);await ask(f,f.b);
 });

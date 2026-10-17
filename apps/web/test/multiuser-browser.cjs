@@ -1,15 +1,17 @@
 require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');
-const {fork}=require('node:child_process');
-const {mkdtempSync,rmSync,mkdirSync,writeFileSync,existsSync}=require('node:fs');
+const {fork,execFileSync}=require('node:child_process');
+const {createHash}=require('node:crypto');
+const {mkdtempSync,rmSync,mkdirSync,writeFileSync,existsSync,readFileSync}=require('node:fs');
 const {tmpdir}=require('node:os');
 const {resolve,join}=require('node:path');
 const assert=require('node:assert/strict');
 const repo=resolve(__dirname,'../../..'),directory=mkdtempSync(join(tmpdir(),'mote-m13-browser-')),output=join(repo,'.mote/m13-renderer');mkdirSync(output,{recursive:true});
 app.setPath('userData',join(directory,'browser'));app.on('window-all-closed',()=>{});
 let host,metadata,nextId=0,main,old;const windows=[],pending=new Map(),events=[],stderr=[],errors=[],checks=[];
-const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms)),candidate=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),sha=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
+let finishing=false;
 async function until(read,label,ms=20000){const end=Date.now()+ms;while(Date.now()<end){if(await read())return;await delay(30);}throw Error('Timed out: '+label);}
 function command(command,extra={}){const id=++nextId;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Error('Fixture command timed out: '+command));},20000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value);},reject});host.send({id,command,...extra});});}
 async function windowAt(url){const window=new BrowserWindow({width:1360,height:1000,show:false,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false}});windows.push(window);window.webContents.on('render-process-gone',(_event,details)=>errors.push(details.reason));window.webContents.on('console-message',event=>{if(event.level==='error'&&/Uncaught|ErrorBoundary|Minified React error/.test(event.message))errors.push(event.message);});await window.loadURL(url);return window;}
@@ -27,6 +29,7 @@ async function login(window,owner,password=metadata.password){
  if(password===metadata.password)await until(()=>js(window,`document.querySelector('[data-session="ready"]')&&document.querySelector('.avatar')?.textContent==='generated-${owner}'`),'authenticated '+owner);
 }
 async function run(){
+ if(process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD)assert.equal(candidate,process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD);
  assert.ok(process.env.MOTE_WEB_FIXTURE_NODE&&existsSync(process.env.MOTE_WEB_FIXTURE_NODE),'Select the matching installed Node runtime with MOTE_WEB_FIXTURE_NODE');
  assert.ok(existsSync(join(repo,'apps/web/dist/index.html')),'Build Web first');
  await app.whenReady();
@@ -60,8 +63,17 @@ async function run(){
  await command('revoke',{owner:'b',credentialId:sessionId});await route(main,'#/library/notes');await until(()=>js(main,`Boolean(document.querySelector('[data-session="signed-out"]'))`),'credential revocation clears private UI');checks.push('actual credential revocation ends renderer session');
  await login(main,'b');await command('disable',{owner:'b',disabled:true});await route(main,'#/library/notes');await until(()=>js(main,`(()=>{if(document.querySelector('[data-session="signed-out"]'))return true;const b=document.querySelector('[aria-label="刷新资料"]');if(!b||b.disabled)return false;b.click();return true;})()`),'explicit refresh after account disable');await until(()=>js(main,`Boolean(document.querySelector('[data-session="signed-out"]'))`),'account disable clears private UI');await command('disable',{owner:'b',disabled:false});checks.push('actual account disable fences current renderer');
  await login(main,'admin');await route(main,'#/preferences');await until(()=>js(main,`document.querySelector('[aria-label="账号管理"]')?.textContent.includes('generated-b')`),'real account metadata administration');assert.doesNotMatch(await text(main),/GENERATED_PRIVATE_[AB]/);checks.push('administrator sees account metadata with no private A/B content');
- assert.deepEqual(errors,[]);writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,hiddenRenderer:true,actualWebMain:true,actualProductionHost:true,generatedOnly:true,checks,composition:'production scoped application',liveExternal:false},null,2));
+ if(process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD)assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),candidate);
+ assert.deepEqual(errors,[]);writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,candidate,fixtureSha256:sha(join(__dirname,'fixtures/multiuser-host.ts')),webIndexSha256:sha(join(repo,'apps/web/dist/index.html')),hostPid:host.pid,origin:metadata.url,hiddenRenderer:true,actualWebMain:true,actualProductionHost:true,generatedOnly:true,checks,composition:'production scoped application',liveExternal:false},null,2));
  console.log('PASS M13 real hidden Web + actual scoped host: '+checks.join('; '));
 }
-async function finish(code){for(const window of windows)if(!window.isDestroyed())window.destroy();if(host?.connected){try{await command('close');}catch(error){console.error(String(error));host.kill('SIGTERM');}}rmSync(directory,{recursive:true,force:true});app.exit(code);}
+async function finish(code){
+ if(finishing)return;finishing=true;for(const window of windows)if(!window.isDestroyed())window.destroy();
+ if(host&&host.exitCode===null){
+  const exited=new Promise(resolve=>host.once('exit',(exitCode,signal)=>resolve({exitCode,signal})));
+  try{if(host.connected)await command('close');else host.kill('SIGTERM');const result=await Promise.race([exited,delay(20000).then(()=>null)]);assert.deepEqual(result,{exitCode:0,signal:null},'generated host natural cleanup');console.log(JSON.stringify({cleanup:{pid:host.pid,exitCode:0,signal:null}}));}
+  catch(error){console.error(String(error));host.kill('SIGKILL');code=1;}
+ }else if(host&&host.exitCode!==0){console.error('Generated host exited before cleanup',host.exitCode);code=1;}
+ rmSync(directory,{recursive:true,force:true});app.exit(code);
+}
 run().then(()=>finish(0)).catch(async error=>{console.error(error.stack);console.error(stderr.join(''));for(const window of windows)if(!window.isDestroyed()){console.error(await text(window));writeFileSync(join(output,'failure-'+window.id+'.png'),(await window.webContents.capturePage()).toPNG());}await finish(1);});
