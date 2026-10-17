@@ -11,6 +11,7 @@ import {ExecutionFailure} from '../execution-engine.js';
 import {ConnectorError} from '../connectors/types.js';
 import type {ConnectorTransports} from './connector-contract.js';
 import {connectorHash as hash} from './connector-vault.js';
+import {RecordingRevisions} from './recording-revisions.js';
 
 type Saved={version:1;epoch:string;account?:RecordingAccount;selection:RecordingSelection};
 type Ledger={get<T>(scope:string,key:string):T|undefined;set(scope:string,key:string,value:unknown):void;drop(scope:string,key:string):void;rows<T>(scope:string,prefix:string,limit?:number,errorOnly?:boolean):{key:string;value:T}[]};
@@ -65,9 +66,10 @@ export class ScopedRecordingAdapter {
  async disconnect(){await this.init();this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
  async sync(automatic=false,retryOnly=false){
   await this.init();await this.fence();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);
-  const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch;
+  const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch,revisions=new RecordingRevisions(this.ctx.sources,source,this.provider.id);
+  const authorize=()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);};
   let imported=0,duplicates=0,failed=0;
-  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex'),prior=this.ctx.sources.getItem(source,item.externalId);item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};item.revision=prior?.document?.originalMetadata?.bodyHash===contentHash&&prior.mimeType===item.mimeType?prior.revision:hash([contentHash,item.mimeType,prior?.revision??'']);const receipt=await this.ctx.publishFile(source,item,bytes,()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);},this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
+  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex');item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};const receipt=await this.ctx.publishFile(source,revisions.revision(item),bytes,authorize,this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
   // A retry resumes existing failed checkpoints. Normal Sync still discovers
   // the selected range, advancing scan receipts only after durable work.
   if(!retryOnly){
@@ -94,11 +96,13 @@ export class ScopedRecordingAdapter {
      const value=await this.provider.transcript(this.saved.account!,metadata,this.signal);await this.fence();
      const original:SourceItem={externalId:work.id+':export',revision:hash(value.rawText),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),text:'',kind:'file',layer:'original',mimeType:this.provider.id==='dingtalk'?'application/json':'text/plain',deleted:false,document:{contentRole:'other',timeBasis:metadata.recordedAt||metadata.createdAt?'recorded':'unknown',...(metadata.recordedAt||metadata.createdAt?{recordedAt:metadata.recordedAt??metadata.createdAt}:{}),originalMetadata:{provider:this.provider.id,recordingId:work.id,durationMs:metadata.durationMs??0,formatError:value.formatError??'',empty:!value.transcript}}};
      await publish(original,Buffer.from(value.rawText),original.mimeType!,`processor:connector.${this.provider.id}-transcript`);
-     if(value.formatError)throw new ConnectorError(value.formatError,502);
+     const segments:SourceItem[]=[];
      for(const [index,segment] of (value.transcript?.segments??[]).entries()){
       const item:SourceItem={externalId:work.id+':segment:'+index,revision:hash([segment,metadata]),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),text:segment.text,kind:'file',layer:'snapshot',mimeType:'text/plain',deleted:false,document:{contentRole:'other',timeBasis:metadata.recordedAt||metadata.createdAt?'recorded':'unknown',...(metadata.recordedAt||metadata.createdAt?{recordedAt:metadata.recordedAt??metadata.createdAt}:{}),originalMetadata:{provider:this.provider.id,recordingId:work.id,segment:index,speaker:segment.speaker??'',startMs:segment.startMs,endMs:segment.endMs,untimed:segment.untimed??false,uncertain:segment.uncertain??false}}};
-      const prior=this.ctx.sources.getItem(source,item.externalId);item.revision=prior?.text===item.text&&JSON.stringify(prior.document)===JSON.stringify(item.document)?prior.revision:hash([item.revision,prior?.revision??'']);await this.ctx.sources.upsert(source,item,()=>this.assert());
+      segments.push(item);
      }
+     await revisions.replaceSegments(work.id,segments,original,authorize,()=>this.fence());
+     if(value.formatError)throw new ConnectorError(value.formatError,502);
      work.transcript=true;work.transcriptAttempts=0;work.transcriptNextAt=0;delete work.error;this.ledger.set(epoch,row.key,work);
     }
    }catch(error){this.assert();if(this.signal.aborted)throw error;work.error=this.failure(error,'recording_transcript_failed');const transient=this.transient(error);work.transcriptBlocked=!transient||(work.transcriptAttempts??0)>=5;work.transcriptNextAt=Date.now()+Math.min(3600000,1000*2**((work.transcriptAttempts??1)-1));failed++;this.ledger.set(epoch,row.key,work);}
