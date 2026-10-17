@@ -8,7 +8,8 @@ export class ModelCatalogError extends StoreError {constructor(){super(moteText(
 const failure=()=>new ModelCatalogError();
 
 /** Read-only JSON-RPC: initializes the local server and calls model/list, never starts a thread. */
-export async function codexModels(launch:typeof spawn=spawn,options:{executable?:string;home?:string}={}):Promise<{items:CatalogModel[]}> {
+export async function codexModels(launch:typeof spawn=spawn,options:{executable?:string;home?:string}={},authorize:()=>void=()=>{}):Promise<{items:CatalogModel[]}> {
+  authorize();
   const child=launch(options.executable??'codex',['app-server'],{cwd:tmpdir(),...(options.home?{env:{...process.env,CODEX_HOME:options.home}}:{}),stdio:['pipe','pipe','pipe']});
   const items:CatalogModel[]=[];
   let buffer='',bytes=0,nextId=1;
@@ -21,7 +22,7 @@ export async function codexModels(launch:typeof spawn=spawn,options:{executable?
       if(error)reject(failure());else resolve({items});
     };
     const deadline=setTimeout(()=>finish(failure()),20000);
-    const send=(method:string,params:unknown,id?:number)=>child.stdin?.write(JSON.stringify({...(id!==undefined?{id}:{}),method,params})+'\n');
+    const send=(method:string,params:unknown,id?:number)=>{if(settled)return;try{authorize();child.stdin?.write(JSON.stringify({...(id!==undefined?{id}:{}),method,params})+'\n');}catch(error){finish(error);}};
     child.on('error',finish);child.on('exit',()=>{if(!settled)finish(failure());});child.stdin?.on('error',finish);
     child.stderr?.on('data',()=>{});
     child.stdout?.setEncoding('utf8');

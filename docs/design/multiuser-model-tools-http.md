@@ -73,6 +73,20 @@ Together with the original probe and effective-snapshot neighbors, 7 tests pass
 without skips. The three original model settings/catalog files pass 34 tests
 without skips. Server typecheck and the scope/import checker pass.
 
+Independent review then confirmed a physical Codex-RPC retirement gap in the
+initial PREP: logout during a held initialize response correctly rejected the
+final HTTP result, but the directory helper still wrote the next RPCs. The
+durable `multiuser-model-codex-retirement.test.ts` uses a generated executable,
+activates its restart-only path and checks that effective path before discovery.
+After logout only `initialize` can have been written; neither `initialized` nor
+`model/list` may follow. A same-resource B positive still reads the directory.
+The helper now accepts an optional authorization callback before launch and
+every stdin RPC write, closing the child on rejection. Existing callers without
+the callback keep the original algorithm. The same-case RED and the fixed
+catalog/copy/probe neighbors pass 8/8 without skips. Consumers of the initial
+`89ec8fbc` PREP must include this follow-up; final-result hiding alone is not a
+transport fence.
+
 Original Web/Android controls must still consume these routes, retain their
 connection/owner retirement checks and get their own UI and final affected
 validation. This document does not declare those consumers or the whole module
