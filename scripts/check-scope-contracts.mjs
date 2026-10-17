@@ -119,7 +119,11 @@ export function checkProductionImports(directory=root){
         const candidates=[specifier.text.replace(/\.mjs$/,'.mts').replace(/\.cjs$/,'.cts').replace(/\.js$/,'.ts'),specifier.text];
         const target=relative(directory,candidates.map(value=>resolve(path,'..',value)).find(value=>existsSync(value))??resolve(path,'..',candidates[0]));
         if(!target.startsWith(sourceRoot+'/'))failures.push(`non-production import: ${relative(directory,path)} -> ${target}`);
-        if(entries.includes(path)&&!target.startsWith(sourceRoot+'/scope/')&&!allowed.has(target))failures.push(`unscoped production import: ${relative(directory,path)} -> ${target}`);
+        // Only M04's reference-fenced manual inspector reuses these two exact
+        // stateless algorithms. The probe has a generated reader and the catalog
+        // only lists the fixed connection; legacy registries/stores stay barred.
+        const modelInspection=relative(directory,path)==='apps/server/src/scope/configuration.ts'&&[sourceRoot+'/model-catalog.ts',sourceRoot+'/model-connection-probe.ts'].includes(target);
+        if(entries.includes(path)&&!target.startsWith(sourceRoot+'/scope/')&&!allowed.has(target)&&!modelInspection)failures.push(`unscoped production import: ${relative(directory,path)} -> ${target}`);
         if(target.startsWith(sourceRoot+'/')&&/\.(?:[cm]?tsx?|[cm]?js)$/.test(target))pending.push(resolve(directory,target));
       }
       ts.forEachChild(node,visit);
