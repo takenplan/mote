@@ -5,13 +5,15 @@ fixture/environment errors, exact SHAs and logs are preserved in
 [the ledger](multiuser-android.md). Workspace task-19/mote; branch
 codex/mote-multiuser-m15-android. No M15 remote DraftPR or final affected exists.
 
-Current native production includes Agentc706d743, Files ea1b6acd and the earlier
-da402 explicit local deletion-intent discard. Public Agent245+ddc and limited
-Jointa2 are composed. At checkpoint0ff4c9d4, full Android JVM358/358 across75XML
-with0failure/error/skip and debug APK pass61s/44tasks8executed; test task really
-executed. Subsequent9509 is only a new native model-control RED test.
-Independent workspaces/AVDs may run in parallel per the parent's superseding
-resource instruction. M15 writes only its own workspace and emulator5562.
+Current native production includes Models9852/cc3 and feature defaults6f4ac791,
+Files3bede3e2/ea1b6acd, Agentc706d743 and da402 explicit local deletion-intent
+discard. Public Models c4e42220 (including physical Codex RPC fence), Agent245+ddc
+and limited Jointa2 are composed. The latest completed full Android JVM/debug
+build is still checkpoint0ff4c9d4:358/358 across75XML,0failure/error/skip,
+61s/44tasks8executed. Subsequent original Models UI changes have actual native
+proof below and await the current full build. Independent workspaces/AVDs may
+run in parallel per the parent's superseding resource instruction. M15 writes
+only its own workspace and emulator5562.
 
 | Original capability | Implemented and actually verified | Remaining boundary |
 | --- | --- | --- |
@@ -23,8 +25,8 @@ resource instruction. M15 writes only its own workspace and emulator5562.
 | Generic Imports/private parts | Declared Jointc45 consumed; actual large multipart/private preview/explicit confirm/lost admission ACK1/1 and original archive checks pass. | Final same-body representative. Explicit image profile/root selection awaits a declared producer, not a guessed parameter after admission. |
 | Files content/original/correction/names/export | Jointa10 and source519 consumed. Actual generated WAV/chunks/exact text/correction/names/authenticated playback and current generations have native proof. | Preserve exact capture/source/artifact/chunk/hash and unchanged B assertions in final combination. |
 | Files stage retry/cancel/delete | Existing native actual stage retry, stop/retry/delete, unresolved-fact explicit consent, stable encrypted op/generation, committed deletion/lost ACK/missing detail pass. Source-reset165 passes on519. Explicit local intent discard da402 actual RED→GREEN3.068s; lost-ACK neighbor1.508s0; independent bounded reviews no new confirmed finding. | Final representative and genuine affected. Local discard neither cancels Central nor restores bytes/rebases an old op. |
-| Original Files processing settings/graph | Limited Jointa2 six source files15/15/no skip0; types/scripts/scope0. Original ea1b GET/PUT graph restored. Configured graph/A old save retirement/B same-ID edit native1/1,2.423s0. | **Confirmed RED:** unconfigured scalar PUT without policy gets400. Durable f8af92f5 actual HTTP RED and original full native RED retained. Joint owns producer repair; never auto-save GET preview or silently switch endpoint. Other declared health/profile/recipe/fingerprint/recovery gaps remain OPEN. |
-| Personal model copy/probe/directory | Original98d controls are in scope. M04 CAS/secret preservation and Ask explicit personal/shared selection are implemented separately. New9509 native test reaches genuine saved personal profile then missing original three controls. | Need declared M04-compatible producer contract, restore original native controls and actual credential include/exclude/probe/directory tests. Shared credentials remain opaque/revocable under M04; never infer or clone them from masked views. |
+| Original Files processing settings/graph | Limited Jointa2 six source files15/15/no skip0; configured graph/A old save retirement/B same-ID edit native1/1,2.423s0. Corrected3bede scalar consumer uses existing M04 processing CAS with the same revision; source1/1,2.462s0 and unchanged full native1/1,2.483s0. Unsaved preview remains unconfigured. | Historical strict PUT400 is superseded by the correct client mapping, not a producer defect. Shared advanced execution/profile/recipe/fingerprint/recovery items remain limited by the declared producer freeze; distinguish original native widgets from Web-only controls. |
+| Personal model copy/probe/directory/defaults | Public c4 composed9/9/no skip0, including same physical Codex retirement RED→GREEN+B positive. Original missing-controls native RED→GREEN2.003s; full real generated reader/copy true-false/directory/A→B/B positive native1/1,5.453s0. Empty Chat bind/clear with unavailable Memory ref preserved native1/1,1.165s0. | Current full Android/build and bounded native review remain pending. Shared secrets/endpoints remain opaque under M04; personal ENV interpolation is disallowed. The optional original defaults control uses authoritative feature metadata and no implicit reassignment. |
 | QR/JSON/scan/device reauthorization | Producer485, native d6da and observer659 composed. Actual visible A dialog/URI retirement, normal lostredeem/ACK/queue, same invitation/verifier/name and held A picker→B explicit selection all pass. Actual server-restart and revoked negative cases are separately recorded. | Current final restart/revocation representative; no physical-camera or system-permission claim. |
 | Personal MCP create/revoke | b603 removes invalid serverUrl from M01 creation but retains explicit write-source allowlist. Original native create/cancelled revoke/revoke/B same-label/detached A control1/1,2.013s0; backend0. | Final combination representative; read/helper tests are not substituted for the actual form. |
 | Agent preview/recorded history | Original no-model startup, canonical material/evidence and M04 personal explicit recording restored on c706. Public245+ddc actual3/3; strengthened history/real tool-result/opaque pages/A→B/B new preview native1/1,7.261s0. Native held query→real relogin→UI opt-out→completed/no later payload1/1,7.310s0; currenta2 neighbor1/1,5.920s0. Independent c706 review no new confirmed finding. | Retained history is partial/truncated; no reconstructed prompts or invented tool.completed. Final required remains pending. |

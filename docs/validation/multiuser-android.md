@@ -1486,3 +1486,51 @@ retry, alternate route, proxy or new conversation was used. This is unconfirmed
 message delivery, not an automatic-approval denial or a runtime-test result.
 Final affected/remote DraftPR and all known original shared-contract gaps remain
 pending; passing core recovery does not close the two actual RED journeys.
+
+
+### Original Models/default controls restored and Files scalar mapping corrected
+
+This section supersedes the earlier scalar-producer blocker and missing Models
+controls labels above; their RED logs remain historical evidence.
+
+Files3bede3e2 selects the existing M04 processing CAS for an unconfigured graph,
+using the same full revision as file-processing. Configured graph edits retain
+the original full graph endpoint. The unchanged original native complete case
+passes1/1 in2.483s (`/tmp/m15-policy-canonical-native-full-green.log`, backend0).
+The source case passes1/1 in2.462s and adds stale scalar409 after concurrent graph
+creation (`/tmp/m15-native-scalar-canonical-green.log`). No preview is auto-saved.
+
+Pure Models c4e42220 is composed as0edf6032, including71fa physical Codex RPC
+fence. Own valid generated CLI logout regression reproduced89's physical send
+following final401; the same durable case and fresh B positive now pass in the
+combined9/9/no-skip source suite (`/tmp/m15-model-c4-composed.log`,10.629s).
+Earlier wrong admin route/restart-only executable fixture errors remain distinct;
+no default CLI is used in the valid isolated RED or GREEN.
+
+Native9852/cc3 restores original personal copy/probe/directory. The original
+missing-control RED1.118s passes samecase2.003s. Complete actual generated
+provider/native copy true/false, three secret components, read-only tool-result
+and citation probe, two directory pages, no defaults/Ask/tasks, held A→B retired
+button and B positive pass1/1 in5.453s (`/tmp/m15-model-full-native-current-tool-green.log`,
+backend0). Its first full fixture used retired `search`; only the fixture was
+corrected to actual `search_context`, with unchanged success assertions. One
+permission-review timeout was known before execution; the permitted exact once
+retry succeeded, with no remaining approval pending.
+
+Original feature-default control was independently RED1/1 in0.838s when optional
+selections began empty. Public c4 exposes authoritative seven feature choices;
+native6f4ac791 restores explicit bind/clear and keeps unavailable references.
+Same native case passes1/1 in1.165s (`/tmp/m15-model-defaults-native-first-green.log`,
+backend0): Chat bind then clear, withdrawn Memory reference/presets/import default
+preserved, B unchanged, zero physical model requests. Subsequent detached A save
+and explicit B strengthening are not assigned this earlier result. Current full
+Android/build, independent bounded review and final affected still pending.
+
+Strengthened same default-selector native case also passes1/1 in2.109s, backend0
+(`/tmp/m15-model-defaults-native-retirement-green.log`): after binding/clearing A,
+its detached save is invoked following B resume and changes neither account; B
+then explicitly binds its same-ID preset, A remains exact and model requests
+stay zero. Test-only APK build15s/49tasks4executed0. The first attempted build
+used a wrong relative edit path, then lacked sandbox access to the existing
+Gradle lock; neither reached target test. Corrected path and the exact normal
+approved offline build passed. This is not a production RED.

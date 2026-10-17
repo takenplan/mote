@@ -19,16 +19,23 @@
 - `GET /api/model-settings/profiles/:id/models`，使用真实已存预设，原 providerModels/
   codexModels 目录；原系统也有 draft POST 变体。
 
-当前 M15 使用 M04 `/configuration` 及 models 域 CAS/显式 masked-secret 保留。
-复制、探测、目录没有已冻结的等价公共入口，UI 明示缺口；Ask 选模型和临时覆盖
-不是这三项能力。公共实现应复用 M04 的原主配置、事务与完整个人/共享模型引用。
-共享资源仍是不透明、可撤销引用：不能在 Android 将共享密钥克隆成不受原授权
-约束的个人秘密。原 readOnly-copy 的映射需要在共同契约中明确，不能由客户端猜。
+当前已组合 M13 独立公共 `c4e42220`（含 Codex 每次物理 RPC 前的授权复查）。
+准确 DTO 见 [模型接口](multiuser-model-tools-http.md)：个人复制走
+`POST /api/models/profiles/:id/copy`；探测和目录走 `/api/models/probe`、
+`/api/models/catalog`，固定已保存的完整个人/共享引用及 M04 revision。
+`GET /api/models.features` 给出权威功能列表；原“功能默认模型”可显式绑定或清除，
+空配置不预选，失效引用保留为明确的不可用选项。保存仍沿原 M04 域 CAS。
 
-验收保留 A/B 同预设 ID、不同未展开表达式、include true/false、旧 revision409、
-实际 probe/model-directory 的 await 后撤权及 B 正例。只用生成 loopback provider，
-不访问真实模型/账号。契约冻结后恢复原 native 控制，固定 Api/revision/owner，
-原 helper 单独通过不能替代实际按钮链。
+KEEP 个人复制默认包含自己的原始秘密，false 清除 apiKey/headers/extraBody，
+不会从显示掩码重建秘密；目录完整分页，探测使用生成的只读上下文且不准入 Ask/M05。
+CHANGE 个人环境变量表达式不再执行；共享连接仍是不透明、可撤销引用，不能复制
+其端点或秘密成为个人连接。该约束来自已定 M04，不由 Android 发明替代授权。
+
+实际原生9852/cc3已恢复原复制/探测/目录控制，生成 provider 完整用例1/1通过，
+覆盖 include true/false、真实工具/引用探测、两页目录、A 等待→B 退休和 B 新操作。
+原空 Chat 默认选择用例 RED→6f4ac791 GREEN，保留已失效 Memory 引用、其他默认值、
+预设及 B 状态，不调用模型。精确版本和日志见账本；最终 JVM/build/独审/affected
+仍独立验收，不能仅据共享 helper 或页面可见性宣布全模块完成。
 
 ## Agent 首次上下文与已记录事件
 
@@ -60,9 +67,17 @@ GET/PUT及预览/显式重处理的准确边界见multiuser-file-processing-cont
 基线98d的 Files→处理设置并非普通 processing 域表单：它读取
 `GET /api/file-processing`，提交 `{revision:string,settings,policy?}`，只在
 policyConfigured 时带原 policy；根设置页另有 `/api/processing/settings`。
-当前 native `fileSettings` 暂沿 processing 域 CAS，不等价于前者的完整方案图。
-冻结后必须恢复这个原 Files 入口及原 advanced JSON 数组编辑，不将普通说话人
-参数表单的测试当作方案/规则通过，也不因保存标量参数而无意启用候选预览生成的图。
+当前 native `fileSettings` 已恢复这个原入口及 advanced JSON 数组编辑。
+已保存 graph 使用 `/api/file-processing` 全图 CAS；未配置 graph 的标量保存使用
+现有 `/api/configuration/processing`，与前者共享同一个 M04 revision。这是发送前
+按 `policyConfigured` 选择的准确域映射，不是400后重试、自动启用候选 graph 或
+另建配置库。实际并发 graph 新建后旧标量 revision409，原完整 native 用例通过。
+之前严格 PUT 缺 policy 的400已保留为历史错误消费证据，不再列作后端阻塞。
+
+精确98d原 Android 没有 test-local、imageProfileId、preview/reprocess 等专用控件；
+这些 Web 页面不能自动扩大为新的 Android UI。原 advanced graph 的参数与 recipe
+执行、恢复和共享配置变动仍必须依照共同 producer 的明确冻结边界，不能由可编辑
+JSON 或本地成功保存推断后台能力完成。
 
 M15 保留原处理设置和 Import 入口；共同 schema/路由及实际执行冻结后，复用
 现有 M04 CAS、M05 task、M03 原件/附件与 M06 发布，不另造后台或返回假成功。
