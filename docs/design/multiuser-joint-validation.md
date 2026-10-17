@@ -370,3 +370,25 @@ physical issuance; it cannot return/publish a retired request result. UNKNOWN
 custom image-recipe execution, instance/shared/component startup observation and
 final consumer/runtime gates remain open. Actual source-entry and account
 physical-deletion evidence is in the validation ledger.
+
+## Shared dependency changes: owner-approved bounded handoff (2026-10-17)
+
+The parent explicitly selected option B: an existing, nonrevoked and unfinished
+M06 processing intent may authorize a new bounded M05 reconcile control task when
+its instance dependency changes, including after Web logout. This is application
+code authority only; it changes no real account privilege or provider credential.
+The Clients ADR retains already authorized Central work after logout; the Privacy
+and Context ADRs forbid administrator impersonation and payload-created contexts.
+
+KEEP the original grant as a checked authorization source, the account and
+instance epoch, current source/original/head proof, per-file cancellation and
+issued/unknown barriers. KEEP completed, cancelled, revoked, withdrawn and deleted
+units retired. CHANGE only the handoff: the new control task receives its own M05
+grant and actual running lease before obtaining its normal TaskRun context. It
+refreshes current M04 dependency resolution and admits fresh M06 work only when
+the relevant dependency changed. REMOVE any temptation to restore a stopped task
+context or offer a generic context-for-userId API. EXCEPTION the control task
+performs no model or provider I/O. Duplicate notifications and restart must dedup;
+unknown external results must not replay. The implementation and actual logout,
+A/B, cancellation/withdrawal/deletion, duplicate, restart and unchanged-dependency
+matrix remain pending until their explicit execution evidence is recorded.
