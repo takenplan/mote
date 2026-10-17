@@ -40,7 +40,7 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
   const root=latest?sql.get("SELECT input FROM user_tasks WHERE user_id=$user AND task_id=?",latest.task_id):undefined;
   const rootInput=root?JSON.parse(String(root.input)):undefined;
   const tasks=rootInput?sql.all("SELECT e.id,json_extract(u.input,'$.mode') mode,json_extract(u.input,'$.imageStep.name') image_step FROM user_tasks u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=$user AND e.user_id=$user AND json_extract(u.input,'$.originalRef')=? AND e.kind LIKE 'processing.%' AND COALESCE(json_extract(u.input,'$.fileGeneration'),0)=? AND COALESCE(json_extract(u.input,'$.originalGeneration'),0)=? AND json_extract(u.input,'$.generation')=? AND json_extract(u.input,'$.policyPlanId') IS ? AND json_extract(u.input,'$.attachmentGeneration') IS ? ORDER BY e.created_at DESC,e.id DESC",ref,Number(rootInput.fileGeneration??0),Number(rootInput.originalGeneration??0),Number(rootInput.generation),rootInput.policyPlanId??null,rootInput.attachmentGeneration??null).map(row=>({...execution.forUser(context).get(String(row.id)),mode:row.mode,imageStep:row.image_step})):[];
-  const jobs=[...(ocrEnabled?['ocr']:[]),...(understandingEnabled?['understanding']:[])].flatMap(name=>{
+  const jobs=[...(ocrEnabled?['ocr']:[]),...(understandingEnabled?['understanding']:[])].flatMap<{name:string;state:string;error?:string}>(name=>{
    const coordinator=tasks.find(task=>task.id===latest?.task_id);
    if(recipeError)return [{name,state:'blocked',error:recipeError}];
    if(recipe){
