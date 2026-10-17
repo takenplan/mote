@@ -59,8 +59,11 @@ function hasEnvironmentReference(value:unknown):boolean {
   return Boolean(value&&typeof value==='object'&&Object.entries(value).some(([key,child])=>key.includes('${')||hasEnvironmentReference(child)));
 }
 
-function configured(settings:ModelSettings):boolean {
-  if(!settings.model.trim())return false;
+function configured(settings:ModelSettings,feature?:ModelFeature):boolean {
+  // Original OCR/ASR services consume bytes without a language-model ID. They
+  // still require the same complete endpoint/credential/locality checks.
+  const media=settings.protocol==='mote-media'&&(feature===undefined||feature==='ocr'||feature==='asr');
+  if(!settings.model.trim()&&!media)return false;
   if(settings.protocol==='codex-app-server')return true;
   if(!settings.baseUrl.trim())return false;
   if(settings.apiKey.trim())return true;
@@ -201,7 +204,7 @@ export class ModelResources {
     if(!selection)throw new ScopeError('scope_unavailable',503);
     const profiles=selection.kind==='shared'?this.reconcile():parsed.profiles;
     const profile=profiles.find(candidate=>candidate.id===selection.id);
-    if(!profile||!configured(profile.settings))throw new ScopeError('scope_unavailable',503);
+    if(!profile||!configured(profile.settings,feature))throw new ScopeError('scope_unavailable',503);
     return {reference:structuredClone(selection),settings:structuredClone(profile.settings)};
   }
 
