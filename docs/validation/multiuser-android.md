@@ -1592,3 +1592,38 @@ the delivered stronger Android Material/source fixture. Bilingual8476/0.
 Existing native Models/defaults samecases are separately being checked against
 the matching Node26 generated host; no result is assigned before completion.
 The full required gate must run again on this final Desktop composition.
+
+### Current combined gate742: actual failure and bounded fixture corrections
+
+The fixed742961553a1eda6a2c5b8d2e1ca315935545fb23 required command naturally
+ended EXIT1 under installed Node26.11.1/ABI147. All workspace types passed;
+Desktop586/587, Server2762pass/13fail/2cancel/2skip of2779, Web516/518.
+Agent317+1 existing opt-in skip, Diagnostics5/5 and Shared192/192 passed.
+Root extra/CLI and the required Android stage were not reached. Separate actual
+current Android358/358 does not turn this gate green. Full log, exit and unchanged
+SHA receipts are `/tmp/m15-required-affected-desktop-final.*`.
+
+Four test-only proposals were independently read by M13 before application.
+The snapshot publication observation uses the adjacent finite10s instead of
+generic1s; exact original scanner/spool/backend/main assertions pass1/1
+(`/tmp/m15-reviewed-desktop-snapshot.log/.exit`,14.19s total;35 unselected cases
+are not acceptance skips). Three delegated Ask cases use the existing adjacent
+finite60s, preserving all terminal/privacy/start-count/checkpoint assertions;
+same three pass3/3,no skip,87.04s (`/tmp/m15-reviewed-ask-three.*`). The cancel
+fixture now finds the exact original/parent ASR child and requires409 for its
+cancelled parent, preserving physical-occupancy rejection and later fresh
+file-level recovery. It and both canonical UTF16 SDK neighbors pass3/3,no skip,
+19.74s (`/tmp/m15-reviewed-cancel-mcp.*`). Only the newly added redundant raw
+prepublication race case is removed; formal canonical anchors, exact UTF16
+windows/Material spans, raw UUID rejection and owner boundaries remain. No
+production task/model deadlines, thousand-original budgets/corpora or privacy
+assertions changed. These narrow results do not replace a final required pass.
+
+The other full failures remain open for exact diagnosis, including processing
+task-count expectations, malformed-original404, retired physical pin completion,
+summary unknown-result retry, image-stage observation, thousand-record and
+shutdown deadlines and two Web Actions proposal observations. Temporary metadata-
+only six-case diagnostics preserve original assertions and yield1pass/5fail,
+39.10s (`/tmp/m15-processing-original-six-diagnostic.*`); no blanket classification
+as fixture latency or runtime defect is made. The prepared diagnostic copy was
+removed after execution; only the authoritative logs remain.
