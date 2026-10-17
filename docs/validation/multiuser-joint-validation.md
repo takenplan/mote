@@ -1354,3 +1354,25 @@ Same root/ACK/unknown/B-positive case1/1,8.086s0 is
 `/tmp/mote-joint-profile-root-green1.log/.exit`; Server noEmit0.
 This checkpoint supports saved named graphs only; unsaved defaults, Imports and
 attachment overrides remain OPEN and are not added to the a2cb client freeze.
+
+
+### Saved profile overrides: Imports image-only publication
+
+Root and confirmed generic media imports now use the same M06 saved-profile
+preflight and bind before ordinary acceptance listeners. The imageProfileId
+override is passed only for image/* file originals, with account/task admission
+rechecked after the asynchronous M04 preflight. It is included in the existing
+intake receipt digest when present; unprofiled receipt hashes stay unchanged.
+Archive-only media projects processing.required=false and skipped/archive,
+without claiming successful OCR, searchable text or Memory.
+
+Actual root + distinct A/B same-ID PNG/ticket byte checks: 2/2 EXIT0 in12.038s
+(`/tmp/mote-joint-profile-import-image-green4.*`). Additional mixed PNG/WAV
+confirmation proves image archive selection leaves audio on its own saved rule,
+with a genuine M05 coordinator: all3 cases EXIT0 in12.118s
+(`/tmp/mote-joint-profile-import-mixed-green2.*`). First mixed fixture wrongly
+expected confirm200 instead of the existing202 ACK; retained as a fixture failure.
+Server/scripts noEmit, fresh shared build and scope checker EXIT0. This is a
+limited saved-graph increment, not a replacement client freeze or full gate.
+Attachment overrides, unsaved default graph, health probe and custom recipes
+remain OPEN.
