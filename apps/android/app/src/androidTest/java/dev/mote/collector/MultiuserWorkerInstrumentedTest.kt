@@ -33,6 +33,13 @@ class MultiuserWorkerInstrumentedTest {
     private fun control(path: String): JSONObject {
         val (code,value)=HttpJson.post(fixture().getString("androidControlAddress")+path,JSONObject());check(code==200);return value!!
     }
+    /** AndroidX 1.6.1 matches lifecycle events by Intent.data. This changes only
+     * the fixture observer, so real retirement may clear the capability URI. */
+    private fun expectPairingIntentData(scenario:androidx.test.core.app.ActivityScenario<ConnectionActivity>,uri:android.net.Uri?) {
+        val field=androidx.test.core.app.ActivityScenario::class.java.getDeclaredField("startActivityIntent").apply {isAccessible=true}
+        val observer=android.content.Intent(field.get(scenario) as android.content.Intent).setData(uri)
+        field.set(scenario,observer)
+    }
     @Test fun actualNativeVaultExportsVerifiedPersonalBytesThroughTheDocumentResultAndRetiresOnSwitch() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -649,6 +656,7 @@ class MultiuserWorkerInstrumentedTest {
         try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java).setData(android.net.Uri.parse(issued.getString("uri")))).use {scenario->
             fun ready(){waitFor {var value=false;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}&&!(ConnectionActivity::class.java.getDeclaredField("working").apply {isAccessible=true}.get(activity) as Boolean)};value}}
             fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun recreate(){scenario.onActivity {expectPairingIntentData(scenario,it.intent.data)};scenario.recreate();ready()}
             fun confirm(){scenario.onActivity {
                 @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
                 dialogs.mapNotNull {it.get()}.single {it.isShowing}.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
@@ -661,10 +669,10 @@ class MultiuserWorkerInstrumentedTest {
             confirm();assertNull(settings.read().account());assertEquals(1,app.queue().pendingSync().count)
             assertEquals("The PKCE intent must survive even when the first real redeem reply is lost",endpoint(),ConnectionClient(app).pendingServer())
             val first=control("/generated/pairing-state").getJSONArray("claims");assertEquals(1,first.length());val claim=first.getJSONObject(0)
-            scenario.recreate();ready();control("/generated/drop-ack");press("恢复中断的连接确认");ready();confirm()
+            recreate();control("/generated/drop-ack");press("恢复中断的连接确认");ready();confirm()
             val paired=settings.read();assertEquals(invitation.getString("userId"),paired.account()!!.userId);assertEquals(invitation.getString("deploymentId"),paired.account()!!.deploymentId);assertTrue(paired.deviceBoundCredential);assertFalse(settings.enabled)
             assertEquals(endpoint(),ConnectionClient(app).pendingServer());assertEquals(403,HttpJson.get(endpoint()+"/api/captures",paired.connectionToken()).first)
-            val recovery=control("/generated/release-pairing");scenario.recreate();ready();press("恢复中断的连接确认");ready();confirm()
+            val recovery=control("/generated/release-pairing");recreate();press("恢复中断的连接确认");ready();confirm()
             if(recovery.optBoolean("revokedAfterRestart")) {
                 assertEquals(endpoint(),ConnectionClient(app).pendingServer());assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",paired.token).first)
                 assertEquals(1,app.queue().pendingSync().count);assertEquals(404,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first);assertEquals(0,browser.hits)
@@ -803,8 +811,9 @@ class MultiuserWorkerInstrumentedTest {
         fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
         try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java).setData(android.net.Uri.parse(invite.getString("uri")))).use {scenario->
             waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
-            lateinit var dialog:android.app.AlertDialog;lateinit var shownInput:android.widget.EditText
+            lateinit var dialog:android.app.AlertDialog;lateinit var shownInput:android.widget.EditText;lateinit var shownActivity:ConnectionActivity
             scenario.onActivity {activity->
+                shownActivity=activity
                 shownInput=ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText
                 val raw=shownInput.text.toString()
                 assertEquals(code,ConnectionInvitation.parse(raw,true,BuildConfig.DEBUG).code)
@@ -820,10 +829,11 @@ class MultiuserWorkerInstrumentedTest {
                     }
                 }
             }
-            assertTrue(entered.await(10,TimeUnit.SECONDS));scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            assertTrue(entered.await(10,TimeUnit.SECONDS));scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");InstrumentationRegistry.getInstrumentation().runOnMainSync {expectPairingIntentData(scenario,null);assertNotNull("Fixture observer must not clear the real incoming capability",shownActivity.intent.data)};scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             assertFalse("Fixture barrier expired before the owner-retirement assertions",expired.get())
             scenario.onActivity {activity->
                 assertFalse("Old invitation dialog must retire synchronously with its page owner",dialog.isShowing)
+                assertNull("The activity itself must retire its incoming capability before recreation",shownActivity.intent.data)
                 assertNotEquals("The already visible A capability cannot await an asynchronous B resolver",code,runCatching { ConnectionInvitation.parse(shownInput.text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())
             }
             release.countDown();scenario.recreate();waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
