@@ -34,21 +34,27 @@
 
 原 native `CentralAdmin.agent` 仍有两个真实入口：
 `POST /api/agent-view/startup {question,timeZone}` 与
-`GET /api/agent-view/events?afterSeq=0`。当前真实 scoped 路由探测对 member/admin 均为
-503；已有 catalog/material-read/context canonical expansion 通过不能替代它们。
+`GET /api/agent-view/events?afterSeq=0`。旧探测对 member/admin 均为503；当前已组合 M13独立245308de及
+后继ddc64fe9，原生c706d743已恢复个人记录开关和不透明游标历史。实际
+startup/traces/relogin三项后端与两项原生都通过；精确证据见账本。此前
+catalog/material-read/context canonical expansion 通过不曾替代缺失入口。
 
 KEEP 首次上下文是预览，不进行模型调用；历史只显示真实已记录 trace，不能重建
 提示词冒充历史。公共实现应复用 M08/M07 真实上下文、记录和依赖复查，不能借
 旧全局 trace bus 或用普通 raw capture fallback。每个 await 后以及返回前保留
-原 owner/来源/版本授权；新会话不得接收旧 A 的提示词或记录。准确 DTO/入口由
-公共 owner 冻结后，M15 沿原问题输入、首次上下文和实际读取记录控件做薄适配。
+原 owner/来源/版本授权；新会话不得接收旧 A 的提示词或记录。准确 DTO/入口见 multiuser-agent-http.md。M15现沿原问题输入、首次上下文和
+实际读取记录控件薄适配；默认关闭，显式本人M04 CAS，关闭不伪造或删除已保留
+历史。实际旧查询等待→logout/relogin→原生关闭记录→继续完成但不再带payload
+已验证。最终门禁和任意深度payload呈现不由该有限证据代替。
 
 ## Files/Imports 处理方案
 
 Joint 唯一负责原 named profiles、source/MIME/default 规则、original-only archive、
 processor 参数/recipe、已保存服务检测、未完成 fingerprint reconciliation、
 显式 preview/reprocess 与 import imageProfileId。有限公共2528/source519已消费；
-其 policy WIP 不是可用合同。原件保存、正文处理、索引及 Memory 就绪仍分别呈现。
+其后明示有限检查点a2cbf3aa已组合供原Files设置消费者实现；当前
+GET/PUT及预览/显式重处理的准确边界见multiuser-file-processing-contract.md，
+未冻结的健康探测/root/import指定方案等仍非可用合同。原件保存、正文处理、索引及 Memory 就绪仍分别呈现。
 不能将 profileId 当 modelId，也不能在默认任务已准入后才补写用户选定方案。
 
 基线98d的 Files→处理设置并非普通 processing 域表单：它读取

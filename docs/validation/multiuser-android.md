@@ -1387,3 +1387,59 @@ after B. Fixture app/test APK14s0 and bilingual8472/0. Additional precise
 assertions for actual tool/result/source markers and a new explicit B preview
 are subsequent test strengthening, not silently assigned this earlier result.
 Final successor/relogin native proof, review and final affected remain pending.
+
+### Agent successor and bounded original Files settings consumption
+
+M13 declared successor ddc64fe9 is composed as3bd471a7 and closes the earlier
+245 HOLD only when included. Current actual startup/traces/relogin source suites
+3/3/no skip pass27.894s (`/tmp/m15-agent-ddc-composed.log`). The strengthened
+original native history/opaque cursor/tool-result markers/A→B retirement/B new
+preview case passes1/1 in7.261s (`/tmp/m15-agent-ddc-native-strengthened-green.log`,
+backend0). An additional native held-provider query→real logout/login→same owner
+and directory→original settings explicit opt-out→query completed case passes1/1
+in7.310s (`/tmp/m15-agent-ddc-native-relogin-green.log`, backend0), with no later
+payloads, old credential401 and B empty. These are M15 execution facts, separate
+from independent c706 source review with no new confirmed P0/P1/P2 in
+`/tmp/mote-desktop-review-m15-admin-agent-c706.md`. Its then-pending stronger
+execution/observer statements are superseded only by these actual later results.
+
+At Android c706, full JVM/debug APK passes144s,44tasks/10executed,358/358 across
+75XML with0failure/error/skip (`/tmp/m15-c706-ddc-full-android.log` and countsJSON).
+It started at1076b27c; the concurrent a2 backend/docs composition has zero Android
+delta, verified Android tree fba4369595cebef1f83e8c12b0368b2354849396 before/after.
+Do not assign that full build to the later ea1b Files code change.
+
+Declared limited Joint policy checkpoint a2cbf3aa is composed by b18c2ee3. The
+auth binary-route merge now uses its production parser assertion rather than
+M15's older synthetic parser replacement; no unbound global parser or skip is
+introduced. The other conflict was documentation-only union. M13 Agent observer
+and fda relogin fixes are retained. Six actual policy source files15/15/no skip
+pass52.993s (`/tmp/m15-policy-a2-composed.log`); Server/scripts types and scope
+checker pass (`/tmp/m15-a2-ddc-{server-types,script-types,scope}.log`). This is a
+limited UI-consumer checkpoint, not full policy execution/backup acceptance.
+
+Original Files→processing settings valid native RED at bb5b987a/oldc706 reaches
+missing saved named-graph controls,1/1 in2.518s
+(`/tmp/m15-policy-native-valid-red.log`, backend0). Minimal ea1b6acd restores the
+original GET/PUT settings payload, keeping decimal revision and including saved
+policy only when policyConfigured. Its configured-only independent native case
+passes1/1 in2.423s (`/tmp/m15-policy-configured-native-green.log`, backend0): A
+graph edit persists; retired A save does not change B; B edits its same-ID graph
+without modifying A. App/test APK build19s0 and later test APK15s0. Actual original
+SourceWorker equal-ID/spool/context/permission neighbor passes1/1 in2.383s at this
+composition (`/tmp/m15-ea1-a2-source-worker-neighbor.log`, backend0).
+
+**Confirmed OPEN producer mismatch:** the complete original native scalar/graph
+case is still RED because a2 PUT schema requires policy even when GET reports
+policyConfigured=false. First GREEN attempt1/1 fails1.265s with unchanged null
+speakerCount (`/tmp/m15-policy-native-first-green.log`, backend0). Durable
+source-only consumer test f8af92f5 confirms actual400 invalid_request !=200 in
+4.960s (`/tmp/m15-native-scalar-contract-red.log`). Original98d intentionally
+omits unsaved preview policy; M15 does not automatically persist that candidate
+or hide the failure by routing back to a different endpoint. Joint remains the
+unique producer owner; its exact fix is required before this full native case
+can pass. Direct peer handoff returned earlier-turn-submission unconfirmed; no
+delivery claim, proxy or new thread was used. Exact handoff is preserved at
+`/tmp/mote-m15-joint-policy-scalar-blocker.md`. Configured-only GREEN does not close
+this gap. Model copy/probe/catalog, other declared policy OPEN items, final
+required and DraftPR remain pending.

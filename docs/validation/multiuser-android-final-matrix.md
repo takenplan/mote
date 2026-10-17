@@ -299,3 +299,10 @@ still pending. Joint owns the separate source-delete/recreate reset165 RED;
 no shared producer fix or whole Android/final affected result is claimed here.
 
 Latest da402 samecase local discard GREEN1/1 (3.068s) and committed-delete lost-ACK neighbor GREEN1/1 (1.508s), both backend0; independent bounded review has no new confirmed finding. New Agent245308de is declared but not yet consumed/accepted. Final affected and DraftPR remain pending.
+
+Current later checkpoint: nativeAgentc706 + public245/ddc actualbackend3/3 and
+two actualnative cases0; Androidc706 full358/358/debugAPK144s0. LimitedJointa2
+policy15/15/types/scope0 is composed; ea1b restores original configured graph and
+its native1/1 passes2.423s. Complete default-scalar case is still RED400 because
+a2 wrongly requires a policy absent from the original request. See the ledger;
+no auto-save of an unsaved preview and no finalaffected/PR claim.
