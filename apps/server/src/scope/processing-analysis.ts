@@ -61,3 +61,20 @@ export async function analyzeProcessing(run:TaskRun,input:AnalysisInput,context:
  }catch(error){if(error instanceof ProviderFailure||error instanceof ExecutionFailure)throw error;throw context.failure(error);}});
  context.assert();const tokens=context.usage();if(called||tokens)run.model.recordUsage({status:'completed',durationMs:Date.now()-started,...(tokens?{tokens}:{})});return {artifactId:result.artifactId};
 }
+
+/** Custom image recipes use the original interpretation algorithm without
+ * requiring a fabricated successful OCR publication. The host supplies only
+ * this original's accepted optional OCR and current original-image capability. */
+export async function analyzeRecipeImage(run:TaskRun,context:Omit<AnalysisContext,'transcript'|'stage'>&{transcript?:Transcript;stage:(key:string,work:()=>Promise<import('./processing-image-products.js').ImageProduct>,usage:()=>TokenUsage|undefined)=>Promise<{artifactId:string;payload:import('./processing-image-products.js').ImageProduct}>}){
+ if(!run.model||run.model.lease.feature!=='file')throw new ExecutionFailure('blocked','file_model_unavailable');const started=Date.now();let called=false,usage:TokenUsage|undefined;
+ const result=await run.model.withModel(async model=>{try{
+  if(model.protocol==='mote-media')throw new ExecutionFailure('blocked','language_protocol_required');const key=identityHash(['mote-image-recipe-understanding-v1',context.original.hash,context.record,context.transcript,model]);
+  return await context.stage(key,async()=>context.workspace(workspace=>workspace.withDirectory(async temporaryRoot=>{
+   let dimensions:{width:number;height:number}|undefined;const record={...context.record,id:context.original.captureId,appName:context.record.appName??'Image',source:'screen'};
+   const understanding=imageUnderstanding({selection:()=>({fingerprint:key,configured:true,receipt:{},settings:{...model}}),factory:async(settings,reader)=>{called=true;return createAgent({...settings,requestTimeoutMs:settings.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert});},usage:{start:()=>({update:value=>{usage=value;},finish:status=>({id:run.model!.lease.id,createdAt:new Date().toISOString(),provider:model.provider,model:model.model,operation:'file',status,durationMs:Date.now()-started,estimatedCost:null,currency:'USD',...(usage?{tokens:usage}:{})})})}});
+   const interpretation=await understanding.run({record,original:{hash:context.original.hash,mimeType:context.original.mime,sizeBytes:context.original.bytes,read:async function*(){yield await context.readOriginal();}},ocr:context.transcript,signal:run.signal,operationId:run.task.operationId,readImage:async(args:ImageReadInput)=>{context.assert();if(args.id!==context.original.captureId||args.attachmentId)throw new ExecutionFailure('stale','image_scope_changed');const output=await imageOutput(await context.readOriginal(),context.original.mime,args,()=>{context.assert();return true;});dimensions=output.imageView?.original;context.assert();return output;}});
+   if(!dimensions)throw new ExecutionFailure('permanent','invalid_image_regions');return {format:'mote-image-product-v1' as const,interpretation,original:{sha256:context.original.hash,width:dimensions.width,height:dimensions.height,mime:context.original.mime}};
+  })),()=>usage);
+ }catch(error){if(error instanceof ProviderFailure||error instanceof ExecutionFailure)throw error;throw context.failure(error);}});
+ context.assert();if(called||usage)run.model.recordUsage({status:'completed',durationMs:Date.now()-started,...(usage?{tokens:usage}:{})});return {artifactId:result.artifactId};
+}

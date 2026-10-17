@@ -1503,3 +1503,125 @@ undeclared lineage and forget/allow-again/upgrade neighbors10/10,29.991s EXIT0
 (`mote-joint-attachment-incarnation-adjacent`). Generated records and transports
 only. Server and strict producer-test types pass on the composed source; final
 union/backup compiled acceptance is still pending.
+
+Parent-required same-runtime constructor smoke found copied better-sqlite3 ABI147
+under Node24.21.0/ABI137 in this checkout (both server and actual mem0 resolver):
+`/tmp/mote-joint-final-native-db-smoke.*` EXIT1. Rebuilt only own locked12.10.0
+source using existing official Node24 headers and installed node-gyp, offline;
+`/tmp/mote-joint-node24-sqlite-offline-rebuild2.*` EXIT0. First launcher had a
+wrong relative working-directory path and never started compilation; retained.
+No dependency manifest/lock or peer binary changed. Same Node actual constructor,
+write/read/close smoke2 EXIT0, resolving mem0 to apps/server/node_modules/mem0ai/
+dist/oss/index.js and its native DB to own root better-sqlite3. This is required
+preflight evidence, not a complete Memory/model gate.
+
+### Confirmed remaining instance-only observation gap
+
+At503, a real admin shared-resource replacement does not resume the current
+unfinished A pipeline while B's equal-ID personal pipeline succeeds. Actual
+1/1fail11.495s `/tmp/mote-joint-processing-instance-change-red.*`; no physical
+shared retry after the replacement. Current-owner personal model saves are a
+separate passing path. Technical boundary/proposal is
+`/tmp/mote-joint-shared-observer-decision.md`: derived M04 refresh plus a genuinely
+M05-authorized continuation, never fabricated user contexts or revived old
+session/grant. This RED remains a whole-gate blocker until resolved.
+
+### Desktop final PR149 selected into current Joint feature
+
+Delivered Desktop f319513a / owner tested0a32aeeb was selected through its five
+Desktop production/test commits, ending Joint239e2428. Existing Joint M01/QR
+sources already exactly match that final; unrelated owner inherited triage patches
+were not imported. `git diff HEAD f319513a -- apps/desktop` is empty. The sole
+catalog conflict retained all8439 prior Android values and added the one Desktop
+message from the merged shared source; checker now8440 messages/EXIT0.
+Official final module validation document copied from deliveredf319, keeping
+its26m34 full gate and cached-versus-actual Android provenance as owner evidence.
+
+Own composed consumers3files109/109 EXIT0 in64.83s
+(`/tmp/mote-joint-desktop-final-consumer.*`), fresh Shared/Server builds and Desktop
+noEmit0, i18n0. This is source consumer verification, not another emitted Electron
+20-case run or whole final union. Completed Desktop owner was not awakened.
+Runtime/output final-CI acceptance remains the later same-SHA combined step.
+
+Exact current terminal log hashes and version/provenance boundaries are also in
+`/tmp/mote-joint-current-evidence.json`. Whole affected is deliberately not called
+successful while the committed instance-change RED still exists and M13/M15
+final candidates remain outstanding.
+
+### Current emitted production entry and actual process recovery
+
+Fresh compiled Server from current runtime (Desktop union239e; later3125 docs
+only) runs original production auth/listener startup, actual credentialed account
+management, natural restart/session persistence and revoke:1/1 EXIT0 in9.082s
+(`/tmp/mote-joint-current-compiled-auth-process.*`, explicit dist/index.js entry).
+Compiled dist/app.js M06 actual SIGKILL + natural shared-M05 lease recovery keeps
+two owners' accepted ASR checkpoints/original model snapshots/private Material,
+with no repeated completed extraction:1/1 EXIT0 in43.887s
+(`/tmp/mote-joint-current-compiled-processing-process.*`). All external media
+calls remain generated localhost fixtures. These are independent emitted process
+checks, not an emitted final Electron/Android/Docker/client union. No whole
+project completion follows while the instance-only observer RED is outstanding.
+
+### Recording disconnect preserves accepted archive authority
+
+Actual original routes for both feishu-recordings and dingtalk-recordings:
+M10 fixed provider/CLI transports→M03 originals→M04/M05/M06 ASR/Material→
+disconnect→old original ticket returned404. Durablecd6942c0,2/2fail
+`/tmp/mote-joint-recording-disconnect-history-red.*`. Removing the adapter's
+source.enabled=false restores history without retaining connector credentials.
+The next assertion then exposed a second real transport gap: a disconnected
+manual sync called provider status before checking missing saved account.
+Actual fixed-history Feishu32!=31 calls RED is
+`/tmp/mote-joint-recording-disconnect-transport-red.*` (not inferred from code).
+A pre-provider saved-account guard now rejects that attempt as not connected.
+
+Both same original scenarios2/2 EXIT0,0skip,85.521s
+`/tmp/mote-joint-recording-disconnect-history-green2.*`: exact audio original bytes,
+Files presence/export200, six accepted Material products, independent B rows,
+disconnected sync0 provider calls, real host restart, B sync positive and explicit
+source disable still fences original reads. Export contents/native Web UI are
+separate existing/consumer checks; the nonempty200 here is not expanded into
+whole archive-tar byte verification. Account replacement in an existing recording
+connection is not covered by this disconnect-only result. New custom image recipe
+fixture separately actual1/1RED image_recipe_unavailable remains WIP.
+
+### Recording collection pause versus source privacy (2026-10-17)
+
+The parent's new actual renderer pause4→0 report was independently reproduced
+through the existing generated Feishu M10→M03→M04/M05/M06 journey: unchecking
+collection and completing the real select task hid accepted archived files
+(`/tmp/mote-joint-recording-pause-history-red.log/.exit`,31.80s,EXIT1).
+The adapter now registers new recording archives readable and never rewrites
+Source.enabled from collection selection. The existing registration path preserves
+an existing source's privacy choice. This does not migrate or alter real data.
+Both Feishu/Dingtalk exact backend journeys pass2/2,0skip,64.71s
+(`/tmp/mote-joint-recording-pause-history-green.log/.exit`): pause/resume and
+saved enabled selection preserve history, explicit source withdrawal remains
+false through selection saves, disconnect preserves audio bytes/Files/Material/
+export, B remains unchanged, restart and explicit final read withdrawal are valid.
+Full renderer/export contents remain the recording consumer owner's evidence.
+
+### Non-default installed image recipe closure, narrow evidence
+
+The original M06 rejection `image_recipe_unavailable` was actual RED. The first
+implementation exposed a Material artifact-name schema error; mapping its public
+name to the existing path syntax fixes only that publication boundary. A later
+no-OCR actual RED found Memory's unconditional Material-parent assumption; only
+original-image anchors are now admitted for that case. Explicit recipe replacement
+also reproduced a stale current primary OCR Material; the no-OCR recipe retires
+that current publication while preserving actual accepted raw history.
+
+`/tmp/mote-joint-custom-image-final-narrow.log/.exit` is4/4,0skip,36.124s EXIT0:
+A/B literal same ID OCR+derived and restart/cache; no-OCR interpretation with empty
+region description, exact navigation-only Memory evidence, corrupt-hash refusal
+and data restore/restart; M04 file-model lease plus real Messages read_image of
+generated PNG pixels without OCR; held custom step/source withdrawal with B
+positive. The first journey also exercises real preview/explicit reprocess,
+removed output withdrawal and OCR→interpretation-only replacement. Server noEmit
+and scope checks are0 (`custom-image-types4`, `custom-image-scope3`). The Messages
+and OCR networks are loopback generated transports, not live models. One sandbox
+EPERM before listen and an intermediate syntax typo are retained in their own
+failed receipts; neither is overwritten or counted as runtime acceptance.
+Final union/consumer/compiled/backup acceptance remains pending. Optional disabled
+recipe dependency behavior and all legacy custom packs are not inferred from this
+finite matrix.

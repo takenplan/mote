@@ -153,3 +153,32 @@ change invalidation and explicit full reprocessing. Those execution receipts
 are separate from27706804 and do not close all remaining recipe/lifecycle rows.
 Current bounded evidence and historical failures are recorded in
 [the joint validation ledger](../validation/multiuser-joint-validation.md).
+
+## Custom image recipe products (narrow candidate, not final union)
+
+Installed non-default image recipes use the existing versioned ImageRecipeRegistry
+and the same M05/M06 executor. Each named step pins its exact recipe fingerprint,
+owned original, accepted dependency artifact hashes and current file/configuration
+fences. OCR stages keep actual transcript artifacts. Understanding/derived stages
+retain a typed `mote-image-product-v1` artifact with the exact original digest,
+encoded pixel dimensions and complete interpretation/regions; they publish
+separate `image-interpretation` Material, never fabricated OCR text. Empty region
+descriptions remain in the typed product. A recipe may legitimately have no OCR.
+
+`processing.derivations` exposes named outputs (`image:<name>` or
+`image-ocr:<name>`). `processing.indexed`/`index.material` can be true from such a
+visible product while primary extraction `artifactId`/`materialId` are absent;
+consumers must use that derivation's explicit Material/artifact identity. An
+original that never ran OCR has no `rawArtifactId`. Previously accepted exact OCR
+can remain retained raw history after explicit recipe replacement, even when its
+current primary Material is retired. Removed named outputs are withdrawn from
+current reads without erasing accepted versions. Existing source/original privacy
+withdrawal still fences every output.
+
+An interpretation without an OCR Material parent supplies Memory only the
+existing authorized-original-image navigation anchor: the interpretation's text
+is not original Memory evidence. The existing `read_image` capability must inspect
+actual pixels. Data-only recovery validates typed body hashes, original hashes,
+plan ownership and accepted Material dependencies; it restores no old task grant.
+This candidate still requires bounded independent review, affected consumer
+checks and the final composed gate before whole capability acceptance.

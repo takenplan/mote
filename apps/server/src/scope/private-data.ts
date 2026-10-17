@@ -418,6 +418,9 @@ export class PrivateData{
     for(const id of all)this.sql.run('DELETE FROM pd_material_inputs WHERE user_id=$user AND material_id=?',id);
     for(const id of all)this.sql.run('DELETE FROM pd_materials WHERE user_id=$user AND id=?',id);
   }
+  /** Retire a derived current projection while preserving accepted versions.
+   * Host domains use this when a selected output is removed from a recipe. */
+  retireMaterial(id:string){return this.sql.transaction(()=>{const key=ref(id).id;if(!this.sql.get('SELECT id FROM pd_materials WHERE user_id=$user AND id=?',key))throw missing();this.hideMaterials([key]);return {retired:true};});}
   deleteMaterial(id:string){return this.sql.transaction(()=>{const key=ref(id).id;if(!this.sql.get('SELECT id FROM pd_materials WHERE user_id=$user AND id=?',key))throw missing();this.removeMaterials([key]);return {deleted:true};});}
   deleteCapture(id:string){return this.sql.transaction(()=>{this.capture(id);this.removeCaptureMaterials(id);this.sql.run('DELETE FROM pd_captures WHERE user_id=$user AND id=?',id);return {deleted:true};});}
   deleteSource(id:string){return this.sql.transaction(()=>{
