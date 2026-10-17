@@ -10,7 +10,7 @@ import {z} from 'zod';
 import sharp from 'sharp';
 import {ComposedImageDisclosure} from './composed-image-disclosure.js';
 import type {UsageReceipt} from '@mote/shared';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {sha256} from '../apps/server/src/store.js';
@@ -47,7 +47,7 @@ const sourceDb=new DatabaseSync(sourceDatabase,{readOnly:true});try{assert.equal
 const dataDir=join(directory,'vault'),token=randomBytes(32).toString('hex');
 const config:Config={dataKey:undefined,dataDir,token,tokenPath:join(dataDir,'token'),host:'127.0.0.1',port:0,maxStorageBytes:500_000_000,maxExportBytes:20_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'gpt-6-sol',modelReasoningEffort:'max',modelProvider:'codex',modelProtocol:'codex-app-server',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'warn',diagnosticsEnabled:true,agentTraceEnabled:true,agentTimeoutMs:manifest.queryTimeoutMs,codexBin:mode==='live'?process.env.MOTE_CODEX_BIN:'/nonexistent-offline-image-provider',codexHome:mode==='live'?process.env.MOTE_CODEX_HOME:join(directory,'unused-codex-home')};
 const report:Record<string,any>={status:'running',mode,startedAt:new Date().toISOString(),personalDataUsed:manifest.personalDataUsed,heldOut:false,model:'gpt-6-sol',reasoningEffort:'max',modelCalls:0,stubModelCalls:0,processorCalls:0,externalFetchAttempts:0,blockedLoopbackFetchAttempts:0,queryTimeoutMs:manifest.queryTimeoutMs,maximumQueries:1,imageDisclosureProtocol:manifest.imageDisclosureProtocol,maximumUniqueImagePayloads:manifest.imageDisclosureProtocol==='bounded-views'?4:1,automaticOuterRetries:0,semanticQualityAccepted:false,memoryGenerated:false,mediaProcessingTested:false,browserTested:false,physicalDeviceTested:false,sourceReportSha256:sha256(seedBytes),sourceDatabaseSha256,manifestSha256:sha256(manifestBytes),head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()};
-report.codeHashes=Object.fromEntries(await Promise.all(['scripts/test-image-context-live.ts','scripts/composed-image-disclosure.ts','apps/server/src/evidence-image.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-scope-record.ts','apps/server/src/file-raw-reader.ts','apps/server/src/app.ts','packages/agent/dist/bridge.js','packages/agent/dist/context-tools.js','packages/agent/dist/codex-agent.js','packages/agent/dist/codex-session.js'].map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));
+report.codeHashes=Object.fromEntries(await Promise.all(['scripts/test-image-context-live.ts','scripts/composed-image-disclosure.ts','apps/server/src/evidence-image.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-scope-record.ts','apps/server/src/file-raw-reader.ts','apps/server/test/fixtures/legacy-app.ts','packages/agent/dist/bridge.js','packages/agent/dist/context-tools.js','packages/agent/dist/codex-agent.js','packages/agent/dist/codex-session.js'].map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));
 let node:Awaited<ReturnType<typeof buildApp>>|undefined;
 const priorUsageIds=new Set<string>();
 const save=()=>writeFile(join(directory,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});

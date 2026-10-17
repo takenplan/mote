@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {SourceStore} from '../src/sources.js';
 

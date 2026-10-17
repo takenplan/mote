@@ -10,7 +10,7 @@ export const importReviewDecisionSchema=z.object({confidence:z.enum(['high','low
 export type ImportReviewDecision=z.infer<typeof importReviewDecisionSchema>;
 export type ImportReviewGate={decision:'automatic'|'confirmation';reason:string};
 export type ImportMediaItem={fileId:string;format:{id:string;version:string;mimeType:string;reason:string};captureId?:string;
-  processing?:{state:string;stage:string;error?:string};searchable?:boolean;
+  processing?:{state:string;stage:string;error?:string;required?:boolean};searchable?:boolean;
   memory?:{state:string;jobIds:string[]}};
 /** Counts original records, aggregating all receipt-selected recipes for each record. */
 export type ImportMemoryProgress={total:number;receipts:number;completed:number;pending:number;running:number;failed:number;waitingForModel:number;paused:number;cancelled:number;disabled:number;unavailable:number;jobIds:string[]};

@@ -4,7 +4,7 @@ import {readFile,mkdir,writeFile,chmod} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 const args=process.argv.slice(2),get=(name:string)=>args[args.indexOf(name)+1];
 if(!args.includes('--key-file')||!args.includes('--out'))throw Error('Usage: node --import tsx scripts/test-live-sources.ts --key-file PRIVATE --out .mote/PRIVATE [--model deepseek-v4-pro]');

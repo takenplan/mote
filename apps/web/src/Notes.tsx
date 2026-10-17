@@ -1,3 +1,4 @@
+import {readWebNotes,submitWebNote} from './web-notes';
 import { formatEvidenceRef } from '@mote/shared';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -36,10 +37,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
         setLoadingMore(Boolean(next));
         setListError('');
         try {
-            const response = await api.request<{
-                items: Capture[];
-                nextCursor: string | null;
-            }>(`/api/notes?limit=30${next ? `&cursor=${encodeURIComponent(next)}` : ''}`);
+            const response = await readWebNotes(api,next);
             if (!mounted.current || generation.current !== current)
                 return;
             setRecords(old => next ? [...old, ...response.items.filter(item => !old.some(p => p.id === item.id))] : response.items);
@@ -76,11 +74,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
                 if (item.blocked && !manual)
                     continue;
                 try {
-                    const response = await api.request<{
-                        id: string;
-                    }>('/api/notes', {
-                        method: 'POST', body: JSON.stringify(item.note), signal: AbortSignal.timeout(20000),
-                    });
+                    const response = await submitWebNote(api,item.note);
                     outbox.acknowledge(item.note.id, response);
                     saved = true;
                 }
@@ -223,7 +217,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
       <p className="fine-print note-attachment-boundary">{moteText("已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。")}</p>
       <div className="note-composer-actions"><span>{draftSaved && <><Check size={14}/> {' '}{moteText("草稿已保存在本机 ·")}{' '}</>} {draft.text.length.toLocaleString(getLocale())}{' '}{moteText("字")}</span><button className="button primary" disabled={uploading || (!draft.text.trim() && !draft.attachments?.length)}><CloudUpload size={16}/>{moteText("保存并同步")}</button></div>
       <details className="note-attachment-help"><summary>{moteText("附件与处理说明")}</summary><p>{moteText("文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。")}</p></details>
-      <p className="note-storage-hint">{moteText("草稿和待同步内容保存在此应用的本机存储中，清除应用数据会移除它们。打开随手记时自动续传；按中央节点地址分别保存。")}</p>
+      <p className="note-storage-hint">{moteText("草稿和待同步内容按当前部署和账号保存在本机，重新登录同一账号后可继续；清除本机数据会移除它们。")}</p>
     </form>
     {error && <div className="notice error" role="alert">{error}</div>}
     {notice && <div className="notice" role="status"><Check size={16}/>{notice}</div>}

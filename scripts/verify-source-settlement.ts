@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {DirectoryCatalog} from '../apps/desktop/src/directory-catalog.js';
 import {SourceSync,sourceHash} from '../apps/desktop/src/source-sync.js';
 import {sourceWork} from '../apps/desktop/src/background.js';

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {ProviderFailure,type QueryResult} from '@mote/shared';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 const answer=(insight:boolean):QueryResult=>({answer:insight?JSON.stringify({title:'Generated review',markdown:'Generated review.',html:'<p>Generated review.</p>'}):'Generated answer.',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[]}});

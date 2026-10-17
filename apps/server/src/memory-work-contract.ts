@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {hasMemoryImageProof,memoryImageReadReceipts} from './memory-image-proof.js';
 import {AgentResponseError} from '@mote/agent';
 import type {MemoryWorkContract} from './memory-strategy-contract.js';
-import {MemoryOutputValidationError} from './memory.js';
+import {MemoryOutputValidationError} from './memory-errors.js';
 import {validationLocation,validationProblem} from './memory-validation.js';
 import type {AttributionContext,QueryResult} from '@mote/shared';
 

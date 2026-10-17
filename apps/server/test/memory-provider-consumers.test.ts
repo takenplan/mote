@@ -28,7 +28,7 @@ import {exportBoundMemories} from '../src/memory-provider-backup.js';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 async function fixture(t:any){
  const directory=await mkdtemp(join(tmpdir(),'mote-provider-consumer-')),store=new Store(join(directory,'vault')),sources=new SourceStore(store),reader=new EvidenceReader(store,sources);
- const executor=new ExecutionEngine(store),plugins=new PluginCenter(store,executor,new GitHubPluginReleases(join(directory,'plugins'))),bindings=new MemoryBindings(store,reader.memories,new MemoryAutomation(store),plugins,executor);reader.memoryBindings=bindings;
+ const executor=new ExecutionEngine(store),plugins=new PluginCenter(store,executor,new GitHubPluginReleases(join(directory,'plugins')),{ownerId:'mote-owner'}),bindings=new MemoryBindings(store,reader.memories,new MemoryAutomation(store),plugins,executor);reader.memoryBindings=bindings;
  // Constant embeddings verify real SDK/worker transport and host fences. A
  // separate opt-in run uses the pinned real MiniLM endpoint for retrieval.
  const endpoint=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw),input=Array.isArray(body.input)?body.input:[body.input];res.setHeader('content-type','application/json');res.end(JSON.stringify({object:'list',data:input.map((_:unknown,index:number)=>({object:'embedding',index,embedding:[1,0,0]})),model:'transport-fixture'}));});

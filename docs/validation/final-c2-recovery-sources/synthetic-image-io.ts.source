@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import {createServer,type ServerResponse} from 'node:http';
+import {once} from 'node:events';
+
+type Owner='A'|'B';
+type Writer=(response:ServerResponse,value:{stage:number;tool?:{name:string;args:unknown};text?:string})=>void;
+
+// This replaces only external OCR/model HTTP. Built-in image stages, agent
+// tools, pixels, publication, plans and storage remain the compiled product.
+export async function syntheticImageIO(writeMessagesResponse:Writer,png:Buffer){
+ const state=Object.fromEntries((['A','B'] as const).map(owner=>{
+  let ready!:(id:string)=>void;const capture=new Promise<string>(resolve=>ready=resolve);
+  return [owner,{ocr:0,messages:0,pixelsObserved:false,capture,ready,id:''}];
+ })) as Record<Owner,{ocr:number;messages:number;pixelsObserved:boolean;capture:Promise<string>;ready:(id:string)=>void;id:string}>;
+ const errors:string[]=[];let closing=false;
+ const server=createServer(async(request,response)=>{
+  try{
+   assert.equal(request.method,'POST');
+   const credential=String(request.headers['x-api-key']||request.headers.authorization||'').replace(/^Bearer /,'');
+   const match=/^GENERATED_RECOVERY_(OCR|MODEL)_([AB])$/.exec(credential);
+   if(!match){response.writeHead(401);response.end();return;}
+   const owner=match[2] as Owner,entry=state[owner];let body='';
+   for await(const chunk of request){body+=chunk;assert.ok(Buffer.byteLength(body)<=8*1024*1024,'Generated request exceeded fixture budget');}
+   if(match[1]==='OCR'){
+    assert.equal(request.url,'/ocr');entry.ocr++;
+    response.setHeader('X-Mote-Execution','local');response.setHeader('Content-Type','application/json');
+    response.end(JSON.stringify({durationMs:0,engine:'generated-recovery-ocr',segments:[{startMs:0,endMs:0,text:'HANDWRITTEN_GENERATED_'+owner+'_OCR'}]}));return;
+   }
+   assert.match(request.url||'',/\/messages(?:\?.*)?$/);entry.messages++;
+   const id=await entry.capture;
+   if(closing){response.writeHead(503);response.end();return;}
+   assert.ok(id);
+   if(entry.messages===1){writeMessagesResponse(response,{stage:1,tool:{name:'read_image',args:{id,view:'image'}}});return;}
+   assert.equal(entry.messages,2,'A restored accepted product must not silently rerun the model');
+   assert.ok(body.includes(png.toString('base64')),'Production read_image must send the actual generated original pixels');entry.pixelsObserved=true;
+   writeMessagesResponse(response,{stage:2,text:JSON.stringify({answer:JSON.stringify({text:'HANDWRITTEN_GENERATED_'+owner+'_INTERPRETATION',regions:[{x:0,y:0,width:1,height:1,description:''}]}),citationIds:[id]})});
+  }catch(error){errors.push(String(error));if(!response.headersSent)response.writeHead(500);response.end('Generated transport assertion failed');}
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');const address=server.address();assert.ok(address&&typeof address!=='string');
+ return {
+  baseUrl:'http://127.0.0.1:'+address.port,
+  assign(owner:Owner,id:string){assert.ok(id);assert.equal(state[owner].id,'');state[owner].id=id;state[owner].ready(id);},
+  snapshot(){return Object.fromEntries((['A','B'] as const).map(owner=>[owner,{ocr:state[owner].ocr,messages:state[owner].messages,pixelsObserved:state[owner].pixelsObserved}]));},
+  assertNoErrors(){assert.deepEqual(errors,[]);},
+  async close(){closing=true;for(const entry of Object.values(state))entry.ready('');server.closeAllConnections();await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));},
+ };
+}

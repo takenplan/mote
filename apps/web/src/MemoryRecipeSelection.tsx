@@ -8,31 +8,32 @@ import {memoryRecipeLabel} from './memory-recipes';
 
 type Ref={id:string;version:string};
 type Choice=Ref&{available:boolean};
-type View={sourceId:string|null;inherited:boolean;items:{binding:{recipe:Ref};available:boolean}[]};
+type View={revision?:number;sourceId:string|null;inherited:boolean;items:{binding:{recipe:Ref};available:boolean}[]};
 type Draft={refs:Ref[];inherited:boolean};
 const key=(ref:Ref)=>ref.id+'@'+ref.version;
 export function MemoryRecipeSelection({api}:{api:Api}){
+  const scoped=api.connection?.mode==='web';
   const [source,setSource]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
   const request=useRef<AbortController|null>(null);
   const sourceId=source.startsWith('source:')?source.slice(7):undefined,scope=source==='capture'||source==='lark-docs'?source:undefined;
-  const path='/api/memory-recipe-settings'+(scope?'?scope='+scope:sourceId?'?sourceId='+encodeURIComponent(sourceId):'');
-  const read=useResource<View>(api,path),catalog=useResource<{items:Choice[]}>(api,'/api/memory-recipes'),sources=useResource<{items:{id:string;name:string}[]}>(api,'/api/sources');
-  const [editor,setEditor]=useState<{api:Api;path:string;draft:Draft;baseline:Draft}>();
+  const basePath=scoped?'/api/memory/recipe-settings':'/api/memory-recipe-settings',path=basePath+(scope?'?scope='+scope:sourceId?'?sourceId='+encodeURIComponent(sourceId):'');
+  const read=useResource<View>(api,path),catalog=useResource<{items:Choice[]}>(api,scoped?'/api/memory/recipes':'/api/memory-recipes'),sources=useResource<{items:{id:string;name:string}[]}>(api,'/api/sources');
+  const [editor,setEditor]=useState<{api:Api;path:string;draft:Draft;baseline:Draft;revision?:number}>();
   const active=editor?.api===api&&editor.path===path?editor:undefined,draft=active?.draft,dirty=!!active&&JSON.stringify(active.draft)!==JSON.stringify(active.baseline);
   useUnsavedChanges(dirty);
   useEffect(()=>{setError('');setSaved(false);setBusy(false);return()=>request.current?.abort();},[api,path]);
   useEffect(()=>{
-    if(read.data&&!dirty){const next={refs:read.data.items.map(i=>({id:i.binding.recipe.id,version:i.binding.recipe.version})),inherited:read.data.inherited};setEditor({api,path,draft:next,baseline:next});}
+    if(read.data&&!dirty){const next={refs:read.data.items.map(i=>({id:i.binding.recipe.id,version:i.binding.recipe.version})),inherited:read.data.inherited};setEditor({api,path,draft:next,baseline:next,revision:read.data.revision});}
     if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status))setEditor(undefined);
   },[api,path,read.data,read.error]);
   const choices=new Map((catalog.data?.items??[]).map(c=>[key(c),c]));
   for(const item of read.data?.items??[])choices.set(key(item.binding.recipe),{...item.binding.recipe,available:item.available});
   function edit(value:Draft){setSaved(false);setEditor(current=>current?.api===api&&current.path===path?{...current,draft:value}:current);}
   async function save(){if(!draft||busy)return;if(!draft.inherited&&!draft.refs.length)return;const controller=new AbortController();request.current=controller;setBusy(true);setSaved(false);setError('');try{
-    const result=await api.request<View>('/api/memory-recipe-settings',{method:'PUT',signal:controller.signal,body:JSON.stringify({...(sourceId?{sourceId}:scope?{scope}:{}),recipes:sourceId&&draft.inherited?null:draft.refs})});
+    const result=await api.request<View>(basePath,{method:'PUT',signal:controller.signal,body:JSON.stringify({...(scoped?{revision:active!.revision}:{}),...(sourceId?{sourceId}:scope?{scope}:{}),recipes:sourceId&&draft.inherited?null:draft.refs})});
     if(controller.signal.aborted)return;
     const next={refs:result.items.map(i=>({id:i.binding.recipe.id,version:i.binding.recipe.version})),inherited:result.inherited};
-    setEditor({api,path,draft:next,baseline:next});setSaved(true);resources(api).invalidate(k=>k.startsWith('/api/memory-recipe-settings'));
+    setEditor({api,path,draft:next,baseline:next,revision:result.revision});setSaved(true);resources(api).invalidate(k=>k.startsWith(basePath)||scoped&&k==='/api/configuration');
   }catch(e){if(!controller.signal.aborted)setError(errorMessage(e));}finally{if(!controller.signal.aborted)setBusy(false);}}
   return <section className="memory-recipe-selection"><h3>{moteText('自动 Memory 组合')}</h3>
     <p>{moteText('为新接收的来源资料选择记忆策略。多个策略可共用处理结果；保存设置不会重算历史资料，已有记忆仍保留。')}</p>

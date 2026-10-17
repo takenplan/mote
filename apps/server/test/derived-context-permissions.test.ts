@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {Conversations} from '../src/conversations.js';
 import {sha256} from '../src/store.js';

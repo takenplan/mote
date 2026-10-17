@@ -5,10 +5,11 @@ import { resolve, join, relative, dirname, basename, isAbsolute, sep } from 'nod
 import { createHash } from 'node:crypto';
 import {pluginMemoryBackup,canonicalNativeExport} from './plugin-memory-backup.mjs';
 import {snapshotHindsight} from './hindsight-backup.mjs';
+import {isScopedVault,backupScopedInstance} from './scoped-backup.mjs';
 
 const args = process.argv.slice(2);
 const usage = 'Stop the central node first. Usage: npm run backup -- --data ./data --out /absolute/new-backup-directory';
-if (args.includes('--help')) { console.info(usage + '\nBacks up storage epoch 4 SQLite, referenced chunked originals, source archive batches, processing layers and checksums. Current .plain and .aes content keeps its stored format. Older vaults require their matching older binary or a stopped full-directory backup. Import scripts/workspaces and tokens/keys are excluded; unfinished imports must be analyzed again after restore. Preserve MOTE_DATA_KEY or the vault content-key file separately when encryption has been used.'); process.exit(0); }
+if (args.includes('--help')) { console.info(usage + '\nEpoch 5: complete private instance backup, preserving deployment/accounts, canonical SQLite, originals, configuration and fixed plugin/provider storage. Supply --config /absolute/instance.yaml when instance configuration is outside --data. This operator archive includes private configuration/key material; it is not a personal portable export. Restore into an empty stopped target with npm run restore:instance -- --from BACKUP --data EMPTY_TARGET --deployment-id EXPECTED_ID. Old login/task/plugin execution grants are revoked; no service is started.\nEpoch 4: legacy SQLite, referenced chunked originals, source archive batches and checksums retain their stored .plain/.aes format. Legacy import workspaces and tokens/keys are excluded. Older vaults need their matching binary; existing data is never migrated or deleted by this command.'); process.exit(0); }
 function argument(name: string, fallback?: string) {
   const index = args.indexOf(name);
   if (index < 0 && fallback !== undefined) return fallback;
@@ -17,6 +18,11 @@ function argument(name: string, fallback?: string) {
 }
 const source = await realpath(resolve(argument('--data', 'data')));
 const requestedOut = resolve(argument('--out'));
+if(await isScopedVault(source)){
+  const configIndex=args.indexOf('--config');
+  const result=await backupScopedInstance({source,out:requestedOut,...(configIndex>=0?{configFile:argument('--config')}:{})});
+  console.info(`Consistent epoch-5 instance backup written to ${result.directory}. Keep it private; restore preserves identities and revokes old execution authority.`);process.exit(0);
+}
 function outsideVault(path: string) {
   const delta = relative(source, path);
   if (!(delta === '..' || delta.startsWith('..' + sep) || isAbsolute(delta))) throw new Error('Backup destination must be outside the active vault');

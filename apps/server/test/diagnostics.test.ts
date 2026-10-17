@@ -9,7 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AgentNotConfiguredError,AgentResponseError,AgentTimeoutError,AgentProviderError } from '@mote/agent';
 import { ServerDiagnostics,safeError,serializeDiagnosticEvent } from '../src/diagnostics.js';
-import { buildApp,type QueryAgent } from '../src/app.js';
+import { buildApp,type QueryAgent } from './fixtures/legacy-app.js';
 import type { Config } from '../src/config.js';
 
 const marker='SYNTHETIC_PRIVATE_BODY_TOKEN_URL_QUERY';

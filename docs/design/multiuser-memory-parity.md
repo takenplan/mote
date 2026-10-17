@@ -1,0 +1,61 @@
+# M07 existing-capability parity ledger
+
+This capability ledger compares the existing
+`features/memory.ts`, `memory-routes.ts`, `material-organizers.ts`,
+`memory-owner-questions.ts`, `memory-feedback-planner.ts`, `memory-lifecycle.ts`,
+and the daily-event / owner-clarification ADRs with the scoped production host.
+No new product capability is proposed. A changed wire route is acceptable for
+the MVP; an absent underlying capability is not counted as restored.
+
+| Existing responsibility | Disposition and production implementation | Evidence / remaining work |
+| --- | --- | --- |
+| Extraction, independent review, exact quotes, selected candidates, one publisher | KEEP: MemoryHost, existing Agent and pure validators, M04 forks, M05 tasks | Core freeze `1536d4850626cc55c9d1639de88f9462717af72e`, combined `3b9bdf6471872d9a9cbf0cf18a383968575c4d25`: 298/298; final source combination 424/424 and required affected exit 0; see final receipts. |
+| Attribution, uploader versus semantic subject, original semantic time, source narration | KEEP: exact Material / source declarations and immutable evidence hashes | Core A/B, narration, named partial, image and scope cases passed; owner-reply addition independently reviewed; final receipts are linked below. |
+| Raw capture / source-item / coding / page / screen / authored Material organizers | KEEP pure builders, CHANGE reader and execution to scoped M03/M06/M05 | Shared pure organizer definitions extracted. Structured-page ordinary + daily actual production test passed. Actual A/B screenshot OCR + enabled pixel understanding, pending→ready daily products, ordinary/daily single consumption and restart passed. Scoped coding A/B with identical upstream source/project/session/event identities passes; the actual UI reader selects newest originals before the existing 4,000,000-character budget and marks retained coverage partial (64 valid transport observations, bounded member/text pages). OCR failure/restart/explicit reprocess passes. Grouping uses the existing fixed observation key and text budget. No claim that arbitrary M06 Material is daily-ready. |
+| Daily observations separate from selected long-term Memory | KEEP capture-event@1 and daily-events artifact; real existing recipe | Structured-page A/B test passed. A/B screenshot readiness and no duplicate ordinary/daily consumption passed. Daily-only source override, actual OCR422→restart without replay→explicit M06 original reprocess→ready→one daily extract/review passes; unchanged-policy reload no longer revokes a selected immutable recipe. Real withdrawals remain durable. |
+| Automatic intake grants, recipe overrides, stop / drain and restart | KEEP windows and existing lifecycle policy; CHANGE durable grant begins at M03 intake | Core M06 handoff/windows passed. New capture ledger rejects old paused/rebuilt history; structured page restart/no-regrant passed. Core stop/late writes, new per-capture recipe withdrawal, raw image completion and admission/binding drain regressions cover these transitions; the final combined candidate passed; see final receipts. |
+| Feedback regrouping and specific newly authorized context | KEEP existing feedback validation, Agent control channel and M05 execution | Positive real controls → fixed-model worker → independent review → restart, plus unchanged-context stop: 2/2 passed on WIP. Reviewed terminal children now close exact parent leaves; cancellation cascades descendants and binding drains proposal tasks. Two real HTTP host processes now SIGKILL after complete proposal units are durable: original succeeded task IDs/attempts, B and planner stay unchanged; only the unfinished A exact target/context child performs models. The proposal has only a frozen metadata catalog and no archive authority. |
+| Generic Owner Questions / exact choices / free text / unknown / defer | KEEP shared old reply CAS/state protocol; scoped host registry and HTTP | Generic A/B/CAS/choice/followup/cursor fixture passed. Operation-list/state filters, canonical statement restore without execution, post-await dependency deletion and generic CAS passed. Shared choice/free text/followup/unknown/defer CAS is retained. Actual owner-reply SIGKILL after durable interpreter success and before reply CAS resumes the same UUID without another interpretation, declaration or continuation. Ordinary Ask text never becomes a declaration. |
+| One-Material declaration and continuation; supported siblings can publish | KEEP existing semantics and original recipe/model snapshot; M05 continuation | Actual extraction/review question → explicit reply → same-Material re-extraction/review, unaffected other Material and owner cancellation fixture passed. Explicit answer and unknown after automatic stop passed; old automatic grants stay revoked. Statement restore and owner cancellation passed. Supported siblings, exact original-model continuation, root cancel and original deletion across interpreter await, automatic stop then explicit answer/unknown, and reply crash/recovery have scoped regressions and independent subset review. |
+| Builtin / Mem0 / Hindsight storage and retrieval modes | KEEP supported existing literal/native modes and provider namespaces; explicit unsupported visual/native modes | Core real SDK/engine/worker fixtures passed; no SQL body fallback. New parity paths must be composed and checked against the same providers. |
+| List/search/opening filters, full transitive scope before sorting/LIMIT/provider keys | KEEP | Read freezes through `dbc5ae46b69e010d1610c0b8414fd755e348be0e` restore exact/history/app/source/default-content filters and opaque target-version pins; literal builtin/external 4/4 and types passed. M08/M11 independent 4/4 and actual SDK 2/2 passed. The confirmed default-content P2 is closed. CHANGE wire: query capabilities accept only independently reviewed published valid Memory. The real old opening consumer queried proposed; it is superseded by extraction→independent review→publication. Human review is restored at GET /api/memory/audit?kind=proposed and /api/memory/jobs/:id/review. Invalidated/historical owner reads use /api/memory/audit?kind=stale and /api/memory/audit/:id?version=N, with exact retained original checks and actual external provider bodies. Every audit response is usableAsMemory:false; none enters bindRead. Hidden/deleted originals deny. Four real builtin/external proposal/history/import cases pass; no manual publication bypass. |
+| Per-job pause / resume / retry, account automation pause / drain / immediate stop | KEEP capability, CHANGE wire ownership and operation IDs | Per-account automation control and exact M05 retry remain. New per-job pause drains its extractor, preserves checkpoints across restart and resumes without blocking B (actual HTTP regression passed). Actual failed model transport→explicit owner retry reuses immutable model and task IDs, applies the existing M05 attempt-budget reset, and publishes once. Foreign retries and cursor reuse across owners/page sizes reject. |
+| Manual extraction/integration, automatic consolidation, durable task progress/retry | KEEP algorithms and publication; CHANGE old aliases to scoped jobs / configuration / M05 operations | Core actual integration/manual admission recovery passed. Scoped job listing and recipe discovery now use real M05 projections. Owner jobs/recipes/control endpoints, actual retry and owner-bound pagination are restored; wire aliases are intentionally changed for the MVP. No second scheduler. |
+| Owner correction, deletion rejection history, provider cleanup, late writes | KEEP actual owner note and existing publication/cleanup framework | Core real provider/current-history correction/delete/late-write tests passed. New descendant proposal/reply jobs participate in root cancellation, binding drain and domain cleanup regressions. |
+| Binding prepare/drain/migrate current+history/verify/activate/cancel | KEEP | Two independent P1 fixes closed before core freeze. New capture/feedback/question tasks join the existing drain and generation fences; held child admission, cancellation and feedback regressions pass. |
+| Export/delete/restore and account disable | KEEP per-domain purpose-limited lifecycle; restore grants no execution | Core coherent provider export/history and stale restore passed. Generic Owner Questions and canonical Material declarations now participate; actual export/delete/restore and tamper/no-regrant passed. Repeated deletion after private input scrubbing was found in the 62-test run (61 passed, 1 failed), fixed and independently rerun with the held provider lifecycle regression; the 6d whole Memory suite subsequently passed65/65. Final same-c53 A/B/C and owning M07 affected passed. M16 remains the cross-domain coordinator. |
+| Import-scoped owner prose | KEEP semantic restriction: exact explicit import scope only | The actual old imports.ts freeze/bind contract is retained in M03 receive/upload: explicit owner importDeclaration {id,version,instruction}, immutable source-local pin before receipt, bind only nonduplicate fresh captures in that receipt transaction. Full owner web/client only; task/device/source-bound/plugin/MCP capabilities cannot author it. Host canonical Material/block projections open only their exact transitive originals. Real M03→M06→Material→Memory A/B, duplicate no-replacement, tampered portable data, delete/restore and no-regrant pass. No owner selector, source-global prose or ordinary Ask interpretation. |
+| Working context, insight/chat/agent delegation consumers and UI | Other owning modules; consume genuine scoped Memory | M08 owns Ask/Insight/chat; M11 owns MCP; M13 later owns UI. M07 supplies real bounded reads and lifecycle. Consumer acceptance cannot be replaced with a fake Memory service. |
+| Old single-owner composition / manual publication bypass / legacy storage epoch | REMOVE legacy entry, KEEP the existing reviewed automatic publication capability | M00 explicitly rejected old storage before writes. No old data is cleared, silently assigned an owner, or migrated by this module. |
+
+Independent parity review, actual source combination, two-process recovery,
+fresh compiled smoke and final required affected/Android receipts are recorded in
+[Final feature receipts](../validation/multiuser-m07-memory.md#final-feature-receipts).
+CI remains disabled and unrun; integration/main merge approval is separate.
+All fixtures are synthetic. Live credentials, external model production calls,
+real user data and deployment remain outside authorization.
+
+### Retained Coding projection compatibility correction
+
+The scoped migration introduced an unfiltered `source.original-v1` projection;
+this is a new implementation defect. A real pre-fix host followed by the corrected
+host reproduced one retained tool-body search hit after restart. Cache key v2
+prevents reuse during extraction but does not retire a previously published head.
+The failing probe and a durable retained-shape regression are preserved before
+this compatibility correction (`55fd7b332b999042aaf359bc31084cef94d38830`).
+
+The correction uses the existing PrivateData visibility watermark and dependent
+Material traversal. Coding session and canonical processed-Coding heads require
+the host's versioned `coding-dialogue` artifact marker. Older unfiltered heads
+are withdrawn before candidate selection/body reads, including their dependent
+heads. Retained original bytes, artifact payloads and immutable versions remain
+stored; query, stale audit and decoded-artifact reads cannot reactivate them.
+This changes no ownership and mints no execution context or task. A new explicit
+admission/current intake can construct the supported projection through the
+existing producer; a read or restore cannot authorize rebuilding it. An old
+completed v1 extraction cannot resume by publishing its obsolete body. This is
+within the current scoped epoch, not an ownership backfill of old vaults.
+
+No new generic isolation framework is introduced. The public-contract and
+repetition audit is handed off separately before final acceptance. The old
+visibility watermark/traversal remains the sole retirement mechanism.

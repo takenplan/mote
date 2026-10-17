@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
 import type {Config} from '../src/config.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {importMemoryProgress} from '../src/import-memory-progress.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 

@@ -19,7 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 
-/** Main wire-1 owner service only; generated fixture, no capture or live model. */
+/** Actual wire-2 account service; generated originals/provider, no capture or live model. */
 @RunWith(AndroidJUnit4::class)
 class HistoricalConversationInstrumentedTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
@@ -46,14 +46,16 @@ class HistoricalConversationInstrumentedTest {
     private fun reset() {
         val value = control("reset")
         for (key in value.keys()) fixture.put(key, value.get(key))
-        File(context.noBackupFilesDir, "central-native").deleteRecursively()
+        File(context.accountDirectory(), "central-native").deleteRecursively()
         CentralSession.get(context).select("")
         val settings = Settings(context)
-        settings.save(settings.read().copy(server = fixture.getString("address"), token = "", debugHttp = true,
-            authSignedOut = false, authExpiresAt = 0, authProcess = "", syncMode = "manual"), confirmCentralEndpoint = true)
-        val self = CentralClient(fixture.getString("address"), fixture.getString("token")).get("/api/connections/self")
-        assertEquals("owner", self.getJSONObject("credential").getString("scope"))
-        assertEquals(ProtocolRange(1, 1), ProtocolCompatibility.requireCompatible(self.getJSONObject("node").get("protocol")))
+        RuntimeSettings.replaceAccount(context) {
+            settings.save(settings.read().copy(server = fixture.getString("address"), token = "", accountBinding = "", debugHttp = true,
+                authSignedOut = true, authExpiresAt = 0, authProcess = "", syncMode = "manual", metadataEnabled = false), confirmCentralEndpoint = true)
+        }
+        val self = CentralClient(fixture.getString("address"), fixture.getJSONObject("a").getString("token")).get("/api/connections/self")
+        assertEquals(fixture.getJSONObject("a").getString("userId"), self.getJSONObject("account").getString("userId"))
+        assertEquals(ProtocolRange(2, 2), ProtocolCompatibility.requireCompatible(self.get("protocol")))
     }
     private fun views(root: View): List<View> = buildList {
         add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) }
@@ -78,10 +80,13 @@ class HistoricalConversationInstrumentedTest {
         }.performClick()) }
     }
     private fun login(scenario: ActivityScenario<MainActivity>) {
-        waitFor(scenario, "Original owner login") { activity -> shown(activity).any { it.contentDescription == MoteI18n.text("中央管理令牌") } }
-        scenario.onActivity { activity -> shown(activity).filterIsInstance<EditText>().single { it.contentDescription == MoteI18n.text("中央管理令牌") }.setText(fixture.getString("token")) }
+        waitFor(scenario, "Original account login") { activity -> shown(activity).any { it.contentDescription == MoteI18n.text("用户名") } }
+        scenario.onActivity { activity ->
+            shown(activity).filterIsInstance<EditText>().single { it.contentDescription == MoteI18n.text("用户名") }.setText("generated-a")
+            shown(activity).filterIsInstance<EditText>().single { it.contentDescription == MoteI18n.text("密码") }.setText(fixture.getString("password"))
+        }
         click(scenario, MoteI18n.text("登录并继续"))
-        waitFor(scenario, "Owner session ready") { activity -> labels(activity).none { it == MoteI18n.text("登录并继续") } }
+        waitFor(scenario, "Owned account session ready") { activity -> labels(activity).none { it == MoteI18n.text("登录并继续") } }
     }
     private fun open(work: Boolean) = ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)
         .putExtra("page", if (work) "ACTIVITY" else "ASK")).awaitMainUi()
@@ -136,6 +141,13 @@ class HistoricalConversationInstrumentedTest {
             click(scenario, MoteI18n.text("查看成果"))
         }
     }
+    private fun waitForHeldRead() {
+        val deadline = SystemClock.elapsedRealtime() + 20_000
+        while (!control("state").getBoolean("readHeld")) {
+            check(SystemClock.elapsedRealtime() < deadline) { "Original history HTTP read was not held" }
+            Thread.sleep(40)
+        }
+    }
     private fun journey(work: Boolean) {
         reset()
         open(work).use { scenario ->
@@ -145,11 +157,12 @@ class HistoricalConversationInstrumentedTest {
             scenario.recreate(); scenario.awaitMainUi()
             if (work) click(scenario, MoteI18n.text("查看成果"))
             assertStale(scenario)
-            control("deleted")
             if (work) {
-                // Explicit deletion withdraws the work result link. An already-open reader
-                // can still follow its original older-page control to read the erased turn.
-                click(scenario, MoteI18n.text("加载更早的对话")); assertDeleted(scenario)
+                scenario.onActivity { activity -> assertTrue(shown(activity).single { it.contentDescription == MoteI18n.text("返回上级") }.performClick()) }
+                control("arm-history-read")
+                click(scenario, MoteI18n.text("查看成果"))
+                waitForHeldRead()
+                control("deleted"); control("release-history-read"); assertDeleted(scenario)
                 scenario.onActivity { activity -> assertTrue(shown(activity).single { it.contentDescription == MoteI18n.text("返回上级") }.performClick()) }
                 waitFor(scenario, "Deleted work results withdraw their conversation link") { activity ->
                     shown(activity).filterIsInstance<Spinner>().any { it.contentDescription == MoteI18n.text("工作详情") } &&
@@ -157,13 +170,42 @@ class HistoricalConversationInstrumentedTest {
                 }
                 scenario.onActivity { assertFalse(labels(it).contains(MoteI18n.text("查看成果"))) }
             } else {
-                refresh(scenario, false); assertDeleted(scenario)
+                control("deleted"); refresh(scenario, false); assertDeleted(scenario)
                 click(scenario, MoteI18n.text("加载更早的对话")); assertDeleted(scenario)
             }
         }
     }
     @Test fun originalAskKeepsHistoricalNoticeAcrossPagingRecreationAndDeletion() = journey(false)
     @Test fun originalWorkResultKeepsHistoricalNoticeAcrossPagingRecreationAndDeletion() = journey(true)
+    @Test fun heldHistoricalAReaderCannotPublishAcrossBThemeAndAccountRecreation() {
+        reset()
+        open(false).use { scenario ->
+            login(scenario); conversation(scenario, false); control("stale"); refresh(scenario, false); assertStale(scenario)
+            control("arm-history-read"); refresh(scenario, false); waitForHeldRead()
+            RuntimeSettings.replaceAccount(context) {
+                Settings(context).signIn(fixture.getString("address"), fixture.getJSONObject("b").getString("token"), 2592000000L)
+            }
+            MoteAppearance.select(context, AppearancePreference.DARK)
+            scenario.recreate(); scenario.awaitMainUi()
+            click(scenario, fixture.getString("bTitle") + "\n", prefix = true)
+            waitFor(scenario, "B own conversation is visible") { labels(it).contains(fixture.getString("bAnswer")) }
+            control("release-history-read")
+            val deadline = SystemClock.elapsedRealtime() + 20_000
+            while (control("state").getInt("heldReadCompleted") == 0) {
+                check(SystemClock.elapsedRealtime() < deadline) { "Retired A response did not settle" }
+                Thread.sleep(40)
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                val text = labels(activity)
+                assertTrue(text.contains(fixture.getString("bAnswer")))
+                assertFalse(text.contains(fixture.getString("answer"))); assertFalse(text.contains(fixture.getString("excerpt")))
+                assertFalse(text.contains(stale)); assertFalse(text.contains(deleted))
+                assertEquals(android.content.res.Configuration.UI_MODE_NIGHT_YES,
+                    activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+            }
+        }
+    }
     @Test fun newProcessPhaseOneRetainsOriginalOwnerHistory() {
         reset()
         open(false).use { scenario ->

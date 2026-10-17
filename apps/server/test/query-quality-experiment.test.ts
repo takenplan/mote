@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AgentYieldError,type QueryInput} from '@mote/agent';
 import {runQueryQualityExperiment,type QueryQualityStrategy} from '../src/query-quality-experiment.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {Store} from '../src/store.js';
 

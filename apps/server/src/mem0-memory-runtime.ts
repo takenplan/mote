@@ -13,7 +13,7 @@ type SdkMemory=import('mem0ai/oss').Memory;
 type SdkItem=import('mem0ai/oss').MemoryItem;
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const nsKey=(ns:MemoryProviderNamespace)=>JSON.stringify(memoryProviderNamespaceSchema.parse(ns));
-const scope=(ns:MemoryProviderNamespace)=>({user_id:`mote-owner-${digest(ns.ownerId)}`,agent_id:`mote-instance-${digest(ns.instanceId)}`,run_id:`mote-binding-${digest(memoryProviderNamespaceSchema.parse(ns))}`});
+const scope=(ns:MemoryProviderNamespace)=>({user_id:`mote-user-${digest(ns.ownerId)}`,agent_id:`mote-instance-${digest(ns.instanceId)}`,run_id:`mote-binding-${digest(memoryProviderNamespaceSchema.parse(ns))}`});
 const unavailable=()=>new MemoryProviderError('unavailable','Memory provider is unavailable');
 const stamp=()=>new Date().toISOString();
 

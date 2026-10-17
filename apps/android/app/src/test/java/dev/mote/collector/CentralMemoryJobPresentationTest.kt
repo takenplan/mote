@@ -8,6 +8,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CentralMemoryJobPresentationTest {
+    @Test fun committedOwnerCorrectionKeepsItsActualResultAfterItReplacesTheOriginalInput() {
+        val id = java.util.UUID.randomUUID().toString()
+        val job = JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("state", "committed").put("current", false)
+            .put("batches", org.json.JSONArray()).put("tasks", JSONObject().put("correct", JSONObject().put("id", java.util.UUID.randomUUID().toString())
+                .put("state", "succeeded").put("result", JSONObject().put("memoryIds", org.json.JSONArray().put(id)))))
+        assertEquals("记忆提取完成", CentralMemoryJobPresentation.status(job))
+        assertTrue(CentralMemoryJobPresentation.controls(job).isEmpty())
+        assertTrue(CentralMemoryJobPresentation.notice(job) != null)
+    }
+    @Test fun changedUncommittedInputsDoNotOfferAnotherRetryOrInventAResult() {
+        val job = JSONObject("""{"id":"generated","state":"ready","current":false,"batches":[],"tasks":{"publish":{"state":"waiting","result":{"memoryIds":["generated"]}}}}""")
+        assertEquals("资料已更新，本次结果失效", CentralMemoryJobPresentation.status(job))
+        assertTrue(CentralMemoryJobPresentation.controls(job).isEmpty())
+    }
+    @Test fun aPausedScopedReceiptOffersOnlyTheActualResumeAndCancelCommands() {
+        val job = JSONObject("""{"id":"generated","state":"paused","current":true,"batches":[],"tasks":{}}""")
+        assertEquals(listOf("resume", "cancel"), CentralMemoryJobPresentation.controls(job).map { it.first })
+    }
+
     @Test fun sourceRevisionMakesTheHistoricalTaskReadableWithoutRetryControls() {
         val job = JSONObject("""{"status":"failed","outcome":"input_invalidated","failedBatches":0,"invalidatedBatches":1,"errorCode":"evidence_changed"}""")
         assertEquals("资料已更新，本次结果失效", CentralMemoryJobPresentation.status(job))

@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {QueryInput} from '@mote/agent';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {Conversations} from '../src/conversations.js';
 import {WorkingMemory} from '../src/working-memory.js';

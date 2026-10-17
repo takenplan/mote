@@ -1,5 +1,7 @@
 require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
+// Historical wire-1 UI coverage is retained for its storage-3 source only.
+if(require('../dist/storage-format').DESKTOP_STORAGE_VERSION!==3){process.stderr.write('Legacy wire-1/storage-3 fixture: use its historical source. Current UI validation is npm run test:ui.\n');process.exit(1);}
 const { app, dialog, Menu, ipcMain, shell, nativeImage } = require('electron');
 const { randomUUID } = require('node:crypto');
 const { imageHash } = require('../dist/queue');

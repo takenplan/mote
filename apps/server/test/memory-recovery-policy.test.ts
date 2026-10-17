@@ -11,7 +11,7 @@ import {SourceStore} from '../src/sources.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryProviderError} from '../src/memory-provider-contract.js';
 import {fixtureMemoryPipeline} from './fixtures/memory-result.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 const empty=()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:randomUUID()});

@@ -4,7 +4,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {basename,join,relative,resolve} from 'node:path';
 import {parseArgs} from 'node:util';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {sha256} from '../apps/server/src/store.js';
 import type {ImportJob} from '@mote/shared';

@@ -40,7 +40,7 @@ MOTE_HELDOUT_MODE=duplicate-probe MOTE_HELDOUT_OUTPUT=/new/external/duplicate no
 node --import tsx --test apps/server/test/source-pipeline-execution.test.ts apps/server/test/coding-append.test.ts apps/server/test/material-inputs.test.ts apps/server/test/materials.test.ts
 ```
 
-External metadata lives under `/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27/`; source data and logs are not copied here.
+External metadata lives under `<redacted-personal-path>`; source data and logs are not copied here.
 
 | Artifact | SHA-256 |
 |---|---|

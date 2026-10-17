@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Wire compatibility is independent of every product's release version. */
-export const MOTE_PROTOCOL_RANGE = Object.freeze({ min: 1, max: 1 });
+export const MOTE_PROTOCOL_RANGE = Object.freeze({ min: 2, max: 2 });
 export const MOTE_PROTOCOL_HEADER = 'X-Mote-Protocol-Version';
 export const MOTE_PROTOCOL_HEADERS = Object.freeze({ [MOTE_PROTOCOL_HEADER]: String(MOTE_PROTOCOL_RANGE.max) });
 export const protocolRangeSchema = z.object({
