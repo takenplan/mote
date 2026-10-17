@@ -787,21 +787,21 @@
   },
   "Web": {
     "owner": "01a14920-04fa-73ae-9308-af49d021c008",
-    "actualC2": "RESUMED_PARTIAL_CORE_CONFIRMED_FINAL_EXPANDED_RECEIPT_PENDING",
+    "actualC2": "RETRY_BOUNDED_TERMINAL_PARTIAL_EXTENSION_UI_BLOCKED_AGAIN",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
     "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
-    "threadReadState": "Direct owner reports supported-tool resumption; old bounded run and its cleanup remain preserved",
+    "threadReadState": "Direct retry receipt confirms repeated extension-UI block and host close0; remaining consumers unchanged UNRUN",
     "approvalD588": "No approval ID returned for the known C1 tool failure; no evidence links d588 to that failure or the current extension-UI block",
     "overallJourneyAcceptance": "NOT_CLAIMED",
     "actualC2Source": "/tmp/mote-final-web-task19-c2-8ad990/source",
     "actualC2Evidence": "/tmp/mote-final-web-task19-c2-8ad990/evidence",
     "actualC2Scope": "Fresh libs/server/web build0; Chrome original A login/Note/draft reload/two pages; canonical handoff200; held A GET released after A-to-B switch remains isolated; B-only Note save/sync; normal storage notification retires old handoff page",
     "currentBlock": {
-      "action": "goto C2 preferences; click switch; A re-login; later wrong B password (batch aborted)",
-      "target": "Owned Chrome tab2046608609 at synthetic C2 origin",
-      "reason": "Chrome reports another extension UI open and requires human dismissal before automation continues",
-      "outcome": "First navigation uncertain; no later success evidence",
-      "state": "HISTORICAL_BOUNDED_STOP_SUPPORTED_TOOL_NEW_TAB_NOW_SUCCESSFUL",
+      "action": "Supported Chrome batch: getAXState; save AX+screenshot; goto preferences; click switch; getAXState",
+      "target": "Owned C2 tab2046608616",
+      "reason": "Chrome again requires human dismissal of another extension UI; extension name/title not provided",
+      "outcome": "AX and screenshot saved; subsequent goto/click uncertain; no successful account-switch evidence",
+      "state": "BLOCKED_AGAIN_AFTER_USER_AUTHORIZED_RETRY_HOST_CLOSED",
       "alternateToolOrRetry": false
     },
     "priorToolOutcome": {
@@ -986,11 +986,48 @@
       "authorization": "User directly asked the Web owner to try again",
       "tool": "Same supported Chrome tool",
       "newOwnedTab": "2046608616",
-      "outcome": "New blank tab opened successfully; owner reports old owned tabs automatically cleaned",
+      "outcome": "Fresh supported tab and A login/Note/draft succeeded; next navigation/switch blocked again by extension UI",
       "source": "8ad99089ead559d6656a269fdca7ccb884953c07",
       "host": "Restoring own clean exact-C2 host using existing matching build",
       "productScope": "No additional cases accepted until new actual receipt",
       "preserved": "Old bounded receipt remains historical; no CDP injection retry or uncertain old batch replay"
+    },
+    "retryReceipt": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/resume-evidence/retry-receipt.json",
+      "sha256": "2e10047ca108b92c94638ed4886ae4382b35e148cddde16e5609c41c32d37134",
+      "contents": {
+        "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
+        "userAuthorization": "再试试？",
+        "browser": "Chrome extension",
+        "tab": "2046608616",
+        "origin": "http://mote-e2e6-92f3ed7d.localhost:51482",
+        "passed": [
+          "fresh supported Chrome tab opens original Preferences",
+          "original generated-a username/password login succeeds",
+          "original Note page displays GENERATED_PRIVATE_A",
+          "GENERATED_C2_RESUME_DRAFT_A entered and own screenshot saved"
+        ],
+        "blocker": {
+          "tool": "mcp__cua_repl.js",
+          "batch": "getAXState; saveResume AX+screenshot; goto preferences; click switch; getAXState",
+          "status": "blocked again by another extension UI",
+          "boundary": "AX and screenshot files both exist; subsequent goto/click not confirmed; no successful account-switch evidence",
+          "message": "Google Chrome is blocking automation because another extension UI is open on this page. Complete or dismiss that extension UI in Google Chrome, then ask me to continue.",
+          "extensionNameOrTitle": "not provided"
+        },
+        "cleanup": {
+          "ownedHostSession": 92808,
+          "closeCommandExit": 0,
+          "noFurtherBrowserAction": true
+        },
+        "remainingConsumerCases": "unchanged, UNRUN"
+      }
+    },
+    "retryEvidenceIndex": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/resume-evidence/sha256.json",
+      "sha256": "fe8ba364a5a52ae7455b9b8c933d876175d0fb6c84ab4dacbbfe35cf5f5e0083",
+      "files": 5,
+      "independentHashMismatches": 0
     }
   },
   "priorC1": {
