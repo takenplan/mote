@@ -11,7 +11,7 @@ const workState=(work:readonly {state:string;failure?:{code?:string}|null}[]):St
 const priority:State[]=['unavailable','failed','waitingForModel','running','pending','paused','cancelled','disabled','completed'];
 /** Read-only projection of the existing M06/M08 receipt graph. A successful
  * import/Material is never treated as successful Memory or fresh permission. */
-export function projectImportProgress(sql:PrivateSql,job:ImportJob,tasks:ReturnType<TaskExecution['forUser']>,memory:ReturnType<MemoryHost['forUser']>,processing:(ref:string)=>{indexed:boolean;current:boolean}){
+export function projectImportProgress(sql:PrivateSql,job:ImportJob,tasks:ReturnType<TaskExecution['forUser']>,memory:ReturnType<MemoryHost['forUser']>,processing:(ref:string)=>{indexed:boolean;current:boolean;processingRequired?:boolean}){
  const ids=[...new Set([...job.captureIds,...(job.media??[]).flatMap(item=>item.captureId?[item.captureId]:[])])],states=new Map<string,State>(),jobs=new Set<string>();
  const progress:ImportMemoryProgress={total:ids.length,receipts:0,completed:0,pending:0,running:0,failed:0,waitingForModel:0,paused:0,cancelled:0,disabled:0,unavailable:0,jobIds:[]};
  for(const captureId of ids){
@@ -35,9 +35,10 @@ export function projectImportProgress(sql:PrivateSql,job:ImportJob,tasks:ReturnT
  progress.jobIds=[...jobs];
  const media=job.media?.map(item=>{
   if(!item.captureId)return item;const row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND capture_id=?',item.captureId);if(!row)return {...item,processing:{state:'blocked',stage:'intake',error:'original_missing'},searchable:false};
-  const ref='original:'+row.id;let status:{indexed:boolean;current:boolean};try{status=processing(ref);}catch(error){if(!(error instanceof PrivateDataError||error instanceof ScopeError))throw error;return {...item,processing:{state:'blocked',stage:'intake',error:'original_unavailable'},searchable:false,memory:{state:'unavailable',jobIds:[]}};}
+  const ref='original:'+row.id;let status:{indexed:boolean;current:boolean;processingRequired?:boolean};try{status=processing(ref);}catch(error){if(!(error instanceof PrivateDataError||error instanceof ScopeError))throw error;return {...item,processing:{state:'blocked',stage:'intake',error:'original_unavailable'},searchable:false,memory:{state:'unavailable',jobIds:[]}};}
   const latest=sql.get('SELECT a.task_id FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id WHERE a.user_id=$user AND e.user_id=$user AND a.original_id=? ORDER BY e.updated_at DESC,e.id LIMIT 1',String(row.id)),task=latest?tasks.get(String(latest.task_id)):undefined,state=states.get(item.captureId),jobIds=sql.all('WITH RECURSIVE descendants(id,revision) AS(SELECT material_id,revision FROM pd_material_captures WHERE user_id=$user AND capture_id=? UNION SELECT p.material_id,p.revision FROM pd_material_inputs p JOIN descendants d ON p.input_material_id=d.id AND p.input_revision=d.revision WHERE p.user_id=$user) SELECT DISTINCT i.job_id FROM mm_intakes i JOIN mm_jobs j ON j.user_id=i.user_id AND j.id=i.job_id JOIN descendants d ON d.id=i.material_id AND d.revision=i.revision JOIN pd_materials h ON h.user_id=i.user_id AND h.id=i.material_id AND h.revision=i.revision AND h.sequence>=h.min_visible_sequence WHERE i.user_id=$user AND h.user_id=$user AND i.job_id IS NOT NULL',item.captureId).map(row=>String(row.job_id));
-  return {...item,processing:{state:!status.current?'blocked':task?.state??'blocked',stage:task?.kind??'intake',...(task?.failure?{error:task.failure.code}:{})},searchable:status.current&&status.indexed,memory:{state:state==='waitingForModel'?'waiting_for_model':state==='pending'?'waiting':state??'unavailable',jobIds}};
+  const archiveOnly=status.processingRequired===false,error=task?.failure?.code??task?.error;
+  return {...item,processing:{state:!status.current?'blocked':archiveOnly?'skipped':task?.state??'blocked',stage:archiveOnly?'archive':task?.kind??'intake',...(status.processingRequired===undefined?{}:{required:status.processingRequired}),...(!archiveOnly&&error?{error}:{})},searchable:status.current&&status.indexed,memory:{state:state==='waitingForModel'?'waiting_for_model':state==='pending'?'waiting':state??'unavailable',jobIds}};
  });
  return {...(media?{media}:{}),...(ids.length?{memoryProgress:progress}:{})};
 }

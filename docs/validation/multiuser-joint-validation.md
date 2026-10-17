@@ -1320,3 +1320,169 @@ verified and preserved as `/tmp/mote-joint-recovered-dirty.patch` and a separate
 contract copy. Existing8 terminal receipts were read rather than rerun; lsof
 read-only cwd inspection returned no Node process in the Joint checkout. This
 proves preservation/current resources, not the reason the earlier turn failed.
+
+
+Frozen a2cbf3aa bounded policy composition16/16,75.825s0
+(`/tmp/mote-joint-policy-stage-composed.log/.exit`) and distinct legacy ASR/
+diarization/M09/retired-original4/4,23.334s0 (`-stage-legacy-neighbors`) pass.
+Server noEmit, scripts noEmit and boundary checker receipts are respectively
+`-stage-reuse-types`, `-stage-scripts-types`, `-stage-scope`, all0. These are
+limited route/consumer-development evidence, not full affected or recovery proof.
+Parent confirms independent source-only277-vs190ff review without new confirmed
+findings; it did not execute this source or review the later stage-reuse delta.
+The declared limited client checkpoint is a2cb, with exact supported wire shapes
+and remaining OPEN features in `docs/design/multiuser-file-processing-contract.md`.
+Do not trigger repeated whole recovery gates for this partial delivery; final
+same-SHA client/runtime closure remains required. The recovered test owner has
+ended; its116-case/actual recovery receipts remain separately versioned, and
+Joint does not wake it merely for another source review.
+
+
+### Explicit root profile: narrow implementation checkpoint
+
+The first fixture used a text processor as the universal fallback and correctly
+failed original policy validation400; that setup failure is retained. Valid
+text/* plus archive fallback produces durable9efd3eb6 RED: a root upload's
+existing processingProfileId=archive was ignored and bound the text rule
+(1/1fail5.310s `/tmp/mote-joint-profile-root-red2.*`). The M03 commit now awaits
+the trusted M06 profile preflight outside its SQLite transaction, then binds
+that same current owner's profile metadata after original attachment and before
+ordinary acceptance listeners/admission. Rechecks follow the awaited preflight;
+no endpoint/key or context is supplied by the request. An unknown profile rejects
+without publishing captures, and a cached commit receipt is replayed first.
+Same root/ACK/unknown/B-positive case1/1,8.086s0 is
+`/tmp/mote-joint-profile-root-green1.log/.exit`; Server noEmit0.
+This checkpoint supports saved named graphs only; unsaved defaults, Imports and
+attachment overrides remain OPEN and are not added to the a2cb client freeze.
+
+
+### Saved profile overrides: Imports image-only publication
+
+Root and confirmed generic media imports now use the same M06 saved-profile
+preflight and bind before ordinary acceptance listeners. The imageProfileId
+override is passed only for image/* file originals, with account/task admission
+rechecked after the asynchronous M04 preflight. It is included in the existing
+intake receipt digest when present; unprofiled receipt hashes stay unchanged.
+Archive-only media projects processing.required=false and skipped/archive,
+without claiming successful OCR, searchable text or Memory.
+
+Actual root + distinct A/B same-ID PNG/ticket byte checks: 2/2 EXIT0 in12.038s
+(`/tmp/mote-joint-profile-import-image-green4.*`). Additional mixed PNG/WAV
+confirmation proves image archive selection leaves audio on its own saved rule,
+with a genuine M05 coordinator: all3 cases EXIT0 in12.118s
+(`/tmp/mote-joint-profile-import-mixed-green2.*`). First mixed fixture wrongly
+expected confirm200 instead of the existing202 ACK; retained as a fixture failure.
+Server/scripts noEmit, fresh shared build and scope checker EXIT0. This is a
+limited saved-graph increment, not a replacement client freeze or full gate.
+Attachment overrides, unsaved default graph, health probe and custom recipes
+remain OPEN.
+
+### Saved attachment profile: lineage rechecked after preflight
+
+Durable b103822e reproduces original attachment processingProfileId503 instead
+of200 (1/1fail1.540s `/tmp/mote-joint-profile-attachment-red.*`). The existing
+attachment entry now preflights its saved M06 profile before opening the SQLite
+transaction. It re-resolves the owned parent/head, archive link, MIME and retained
+object after that await; binding publication still occurs in the existing intake
+transaction after the exact attachment relation and before admission listeners.
+An existing attachment ACK wins over a later profile body, preserving the old
+plan until explicit reprocessing. No new original or permission store is added.
+
+The same case GREEN plus held-preflight parent deletion/B positive and the root,
+image-only and mixed-media cases all4/4 EXIT0 in13.573s
+(`/tmp/mote-joint-profile-all-entry-green.*`). Existing real generated OCR
+attachment lineage/cache/recreation/late completion/data restore suite6/6 EXIT0
+in12.629s (`/tmp/mote-joint-profile-attachment-neighbors.*`). Original media,
+inline idempotency and partial publication/restart consumers3/3 EXIT0 in9.960s
+(`/tmp/mote-joint-profile-import-neighbors.*`). Server/scripts noEmit and scope
+checker EXIT0. First scope launcher used a nonexistent filename and exited1;
+correct existing check-scope-contracts.mjs exited0, both logs retained. No new
+full gate, compiled client or provider acceptance is assigned to this increment.
+
+### Independent applied-plan archive final77 composed
+
+Joint bounded read-only review of owner77a2818e is recorded in
+`/tmp/mote-joint-review-policy-archive-77a2818e.md`: no new confirmed P0/P1/P2.
+Only five declared module commits were selected on top of Joint's saved-profile
+entry fixes, ending at716bec5d. Production helper and lifecycle hunk match the
+owner final; no earlier recovery lane or peer WIP was included. Existing target
+policy/binding/control wins, missing controls receive a fresh generation fence,
+and corrupt local plan parents reject rather than reactivating old input. Old
+processor contracts are not fabricated from incomplete historical metadata.
+
+Own composed personal-plan archive suite27 plus current profile-entry4 cases:
+31/31 EXIT0,0skip,63.227s `/tmp/mote-joint-policy-archive-composed.log/.exit`.
+Server noEmit EXIT0. Initial composed scope checker EXIT1: the conservative
+AST check treats the archive helper `.prepare` call as raw SQL. This is a
+composition check failure, not a passing boundary check. Owner final27/related9/minimal-a2-5 remain
+separate peer evidence. This does not move the earlier failed owner full gates
+or claim final client/container/native union acceptance.
+
+The archive preflight helper was mechanically renamed prepare→preflight in its
+export and single M06 caller. Existing boundary checker now EXIT0
+(`/tmp/mote-joint-policy-archive-scope2.*`), Server noEmit0, selected actual
+merge/restart and corrupt-local-parent cases2/2 EXIT0 in5.602s
+(`/tmp/mote-joint-policy-archive-preflight-rename.*`). No checker exemption,
+execution or data semantics changed. Initial scope failure stays retained.
+
+### Unsaved default profile selection
+
+Durable cbfc27a5 demonstrates the advertised default archive profile returning503
+unless the user first saves a named graph:1/1fail (`/tmp/mote-joint-profile-default-red.*`).
+The existing M04 effective file-policy mirror now derives the displayed default
+reference graph from current personal/shared selections, retaining references and
+fingerprints only. Explicit overrides may bind it without saving a raw policy.
+The finite original default IDs remain explicit aliases to their original
+processor choices, without duplicating editor profile rows or borrowing instance
+credentials. Automatic legacy files still keep their original no-plan path.
+Own six entry cases6/6 EXIT0 in25.610s include legacy profile.audio.http through
+actual generated A/B ASR using equal capture IDs/different private keys, plus
+unsaved default archive/restart and saved root/import/attachment cases
+(`/tmp/mote-joint-profile-default-composed.*`). Existing named policy editor,
+service change/settings/preview/reprocess seven cases7/7 EXIT0 in28.710s;
+Server types and scope checker0. Default missing-connection reconciliation is
+separately being characterized; this increment is not yet a consumer freeze.
+
+Default connection recovery characterization first stalled before the M04 save:
+the original missing-service coordinator can already be stale, so accepting only
+blocked/failed was a fixture error (all initial red/green1/green2 logs retained,
+not used as post-save proof). With the actual retired state admitted as the
+initial observation, original017e production still remains unindexed after the
+real M04 save: `/tmp/mote-joint-profile-default-resume-valid-red.*` EXIT1.
+The repair uses the same effective-M04 completion callback and reconciliation:
+explicit default bindings retain their chosen profile when reselected, changed
+default reference graphs trigger fresh reconciliation, and stale unfinished work
+is eligible only after rechecking current original/head/source and cancellation.
+Completed and manually cancelled work remain outside that path. No old grant is
+retried or resurrected. Same case now confirms a different actual M05 admission
+ID, new plan and one generated OCR call, B unchanged, no saved policy:
+1/1 EXIT0 in5.592s `/tmp/mote-joint-profile-default-resume-valid-green2.*`.
+The preceding runtime reached indexing but an assertion used job.id on the
+public state-only job projection (undefined); it is retained as a fixture error.
+
+### Saved local worker health through the shared authority ledger
+
+Original POST /api/file-processing/test-local returned503 at6e87b1bc's durable
+case (`/tmp/mote-joint-processing-health-red.*`). It now resolves only a saved
+ASR service's complete current M04 reference (or the current ASR selection when
+no serviceId is supplied), checks mote-media plus loopback, and sends the old
+bounded GET /health:10s/4096bytes/schema unchanged. Caller endpoint/key fields
+reject before transport. The existing executor runs one processing.health control
+step, with existing M04 lease and M05 external issuance/M06 physical activity.
+No model inference, file processing artifact, separate runtime or new table is
+introduced. Late exact completion can settle its issuance without publishing an
+old health result; the old request remains retired.
+
+Own first same-case1/1 EXIT0 in3.048s; current18 bounded profile/default/health
+and direct policy consumers18/18 EXIT0 in65.381s
+(`/tmp/mote-joint-profile-health-composed.*`). Extended same original route proves
+A logout response refusal while its transport is still held, independent B
+positive, fresh A login, actual M16 account deletion result_unknown with one
+active transport, late exact settlement then retry/physical cleanup of A's
+policy/task/external rows, B positive, and nonloopback refusal with no request:
+1/1 EXIT0 in3.013s `/tmp/mote-joint-processing-health-account-delete.*`.
+Server/scripts/scope0. Strict targeted new-test noEmit initially exposed the
+existing shared fixture unknown-payload/Fastify overload error; the owner's
+already reviewed type-only InjectOptions payload cast was selected, and strict
+new-test noEmit2 EXIT0. No runtime fixture behavior changed. Whole affected,
+compiled client/native/UI and final same-SHA production/backup remain pending.

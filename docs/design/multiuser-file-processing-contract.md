@@ -1,8 +1,10 @@
 # Scoped file-processing page: limited interface checkpoint
 
-This document freezes only the interfaces below for client implementation at
-`277068047bae5e21c533f528ea3d512d4f098e74`. It is not a whole M06 or final joint
-runtime freeze. The previous Files/Imports consumer candidate remains2528;
+Declared limited client-implementation checkpoint:
+`a2cbf3aaf1ae2f2fbfe5f647cf9a4f23dfdc1695`. Wire shapes were first pinned at
+`277068047bae5e21c533f528ea3d512d4f098e74`; a2cb adds stage reuse without
+changing them. This is PREP for the explicitly listed routes, not a whole M06 or
+final joint runtime freeze. The prior Files/Imports checkpoint was2528;
 configuration relogin fix fda6 and parser producer692→caf are independently
 composable. Do not use a later arbitrary HEAD as a final test dependency.
 
@@ -29,7 +31,9 @@ There is no second endpoint/key store or per-account runtime.
 
 `policy.services` contains only
 `{id,name,kind:'asr'|'image'|'file'|'model',reference:{kind:'personal'|'shared',id}}`.
-A service never contains endpoint/key/model copies. Profiles retain the existing
+A service never contains endpoint/key/model copies. An omitted analysis
+modelServiceId retains the original explicitly configured account file-model
+selection; a declared missing reference never substitutes another connection. Profiles retain the existing
 processing-profile schema: id/name/processorId/parameters, optional serviceId and
 modelServiceId, diarizationProcessor/summarize and optional imageRecipe. Rule
 shape is `{sourceId?,type,profileId}`; a source-independent `*/*` fallback is
@@ -94,7 +98,8 @@ These retained capabilities are still OPEN and must not be represented as ready:
 - Whole affected gate, current three-client UI/native journeys, compiled final
   chain, final same-SHA backup/Hindsight and final joint PR.
 
-The source later develops stage-specific reuse without changing these wire
-shapes. Its separate execution receipts must not be attributed to27706804.
+a2cb verifies raw-stage reuse for downstream-only speaker changes, connection
+change invalidation and explicit full reprocessing. Those execution receipts
+are separate from27706804 and do not close all remaining recipe/lifecycle rows.
 Current bounded evidence and historical failures are recorded in
 [the joint validation ledger](../validation/multiuser-joint-validation.md).
