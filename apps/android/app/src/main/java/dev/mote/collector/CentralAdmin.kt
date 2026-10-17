@@ -234,6 +234,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to CentralModels.inventory(api) }) { (view, inventory) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
             ui.text(MoteI18n.text("请先保存修改，再检查已保存的连接。"))
+            ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(api, view, inventory) }
             val domains = view.getJSONArray("domains")
             val configuration = (0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved")
             val collect = form(configuration, ui.card(), emptySet()); val revision = view.getLong("revision")
@@ -275,6 +276,35 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
                 override fun onItemSelected(parent: AdapterView<*>?, field: android.view.View?, position: Int, id: Long) { render(position) }
             }
+        }
+    }
+    private fun modelDefaults(api: CentralClient, view: JSONObject, inventory: JSONObject) {
+        val domains = view.getJSONArray("domains")
+        val configuration = JSONObject((0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved").toString())
+        val selections = configuration.getJSONObject("selections")
+        val raw = inventory.getJSONArray("features"); val features = (0 until raw.length()).map(raw::getString)
+        require(features.isNotEmpty() && features.distinct().size == features.size && features.all(String::isNotBlank))
+        body.removeAllViews(); screens.setBack { models() }; ui.text(MoteI18n.text("功能默认模型"), NativeFontRole.TITLE_MOBILE)
+        val rows = inventory.getJSONArray("profiles"); val fields = linkedMapOf<String, Pair<Spinner, List<JSONObject?>>>()
+        for (feature in features) {
+            val choices = mutableListOf<Pair<String, JSONObject?>>(MoteI18n.text("未配置") to null)
+            for (index in 0 until rows.length()) { val row = rows.getJSONObject(index); choices.add(row.getString("name") to CentralModels.reference(row.getString("id"))) }
+            val current = selections.optJSONObject(feature)
+            fun same(reference: JSONObject?) = if (current == null) reference == null else reference != null && current.getString("kind") == reference.getString("kind") && current.getString("id") == reference.getString("id")
+            var selected = choices.indexOfFirst { same(it.second) }
+            if (selected < 0) { choices.add(MoteI18n.text("不可用") + " · " + current!!.getString("kind") + ":" + current.getString("id") to JSONObject(current.toString())); selected = choices.lastIndex }
+            ui.text(label(feature), NativeFontRole.ROW)
+            val spinner = Spinner(ui).apply {
+                contentDescription = MoteI18n.text("功能默认模型") + " · " + feature
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, choices.map { it.first }); setSelection(selected)
+            }; body.addView(spinner); fields[feature] = spinner to choices.map { it.second }
+        }
+        ui.button(MoteI18n.text("保存设置"), true) {
+            val next = JSONObject(selections.toString())
+            for ((feature, field) in fields) { val reference = field.second[field.first.selectedItemPosition]; if (reference == null) next.remove(feature) else next.put(feature, JSONObject(reference.toString())) }
+            configuration.put("selections", next)
+            val payload = JSONObject().put("revision", view.getLong("revision")).put("value", configuration).put("preserveRedactedSecrets", true)
+            ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
         }
     }
     private fun modelCatalogPage(result: JSONObject, target: LinearLayout, offset: Int = 0) {
@@ -1102,7 +1132,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "automatic" to "自动处理", "understandingEnabled" to "内容理解", "summarize" to "生成摘要", "semanticTurns" to "语义分段",
             "audioProcessor" to "转写处理器", "diarizationProcessor" to "说话人分离处理器", "speakerCount" to "说话人数",
             "speakerMin" to "说话人数下限", "speakerMax" to "说话人数上限", "maxAudioMinutes" to "最长录音时长（分钟）", "timeoutMs" to "处理超时（毫秒）",
-            "title" to "标题", "name" to "名称", "includeCredentials" to "包含凭据", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
+            "chat" to "问一问", "memory" to "记忆", "insight" to "洞察", "import" to "导入", "file" to "文件", "ocr" to "文字识别", "asr" to "转写", "title" to "标题", "name" to "名称", "includeCredentials" to "包含凭据", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
             "provider" to "服务商", "protocol" to "协议", "baseUrl" to "服务地址", "model" to "模型", "reasoningEffort" to "推理强度",
             "serviceTier" to "速度模式",
             "maxTokens" to "最大生成 token", "apiKey" to "API Key（留空保留）", "modelRequestTimeoutMs" to "模型请求超时（毫秒）",
