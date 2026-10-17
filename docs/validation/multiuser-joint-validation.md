@@ -1124,3 +1124,20 @@ or full runtime-fingerprint acceptance. Current types and boundary receipts are
 `/tmp/mote-joint-policy-reconcile-types2.log/.exit` and
 `/tmp/mote-joint-policy-reconcile-scope.log/.exit`; final result is checked before
 this implementation checkpoint is committed. Public consumer freeze stays2528.
+
+
+### Configuration relogin admission subject
+
+Actual generated HTTP logout → same-account fresh login → processing settings
+save failed503/config_prepare_failed on the unchanged M04 cached-entry code
+(durable RED80ac30ee; `/tmp/mote-joint-configuration-relogin-red.log/.exit`,
+1/1fail,1.162s). Domain factories capture their admission subject; an entry
+keyed only by account epoch still held the logged-out credential. A current new
+caller now drains and closes that retired entry before opening domain handlers
+with its own immutable subject. The old subject is never rebound to new authority.
+Same regression passes1/1,1.096s in
+`/tmp/mote-joint-configuration-relogin-green.log/.exit`, including old-token401
+and unchanged sibling configuration. Three existing M04 suites pass18/18,8.282s
+(`/tmp/mote-joint-configuration-relogin-neighbors.log/.exit`), including admitted
+work after logout, pinned leases, reset/deletion, restore and credential fencing.
+This is a narrow source correction, not whole client/recovery acceptance.
