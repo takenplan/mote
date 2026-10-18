@@ -104,6 +104,17 @@ receive fresh task identities and advance past the backup input frontier; old
 pending windows, OAuth flows and unknown external requests are never requeued.
 Successful canonical cursors and last-success times survive.
 
+`lifecycle_future_scopes` records per-restoration scope outcomes and any current
+verification task identity. Checks for separate plugins proceed independently
+within the existing execution concurrency setting; configuration writes use
+current revisions in a serialized queue. A successful connector plugin can admit
+its own future timer while another verifier is still held. Failed scopes remain
+visible through bounded task progress, and a later trusted password login
+retries the failed fresh scope without repeating completed scopes. Stopped
+restore clears these operational outcomes before recording a new restoration
+identity. The exact Extensions asynchronous-check composition remains a separate
+integration check.
+
 Processing and Memory retain their automatic/desired settings and admit new
 input through their ordinary generation-fenced intake. Outbound MCP retains
 its enabled policy but needs a current explicit discover/import request for a

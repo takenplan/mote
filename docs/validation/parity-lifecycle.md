@@ -4,8 +4,10 @@ Module: LIFE-L01–L06. Integration base:
 `2c78ca8d52a7d17fae20962cf68d09a717ffc73a`. Independent worktree:
 `/Users/utopiafar/.codex/worktrees/parity-lifecycle/mote`; branch:
 `codex/parity-lifecycle-20261018`. The [parity ADR](../adr-lifecycle-parity.md)
-records the owner decisions and supersession boundary. This file is an implementation ledger; a Draft PR and affected-check result
-are still pending.
+records the owner decisions and supersession boundary. This file retains the
+initial implementation evidence. The full affected gate on `c0bf80d6` failed;
+[the revision ledger](parity-lifecycle-revision.md) records that failure and the
+subsequent repair. A new affected gate and Draft PR remain pending.
 
 All accounts, content, screenshots/image bytes, model replies and connector
 replies used here are generated. Tests open disposable vaults, generated local

@@ -34,9 +34,19 @@ test('an unsent file delete cannot target an identical file after its source is 
  assert.equal((await f.request(f.b.token,'/api/files/'+b.id)).statusCode,200);
 });
 
-test('direct Capture retirement and source retirement preserve a monotonic owned file incarnation',async t=>{
+test('explicit capture deletion rejects a real new upload commit for the same owned file ID',async t=>{
  const f=await scopedFilesFixture(t),bytes=Buffer.from('GENERATED_CAPTURE_REPLACEMENT'),externalId='same-capture-replacement',a=await f.upload(f.a.token,externalId,bytes.toString()),path='/api/files/'+a.id,old=await f.checked(f.a.token,path),intent={operationId:randomUUID(),originalGeneration:old.originalGeneration};
  await f.checked(f.a.token,'/api/captures/'+a.id,'DELETE');
+ // A new upload batch exercises actual intake; replaying an old batch is only
+ // its fixed receipt and cannot prove that the canonical record was restored.
+ const checksum=createHash('sha256').update(bytes).digest('hex'),upload=await f.checked(f.a.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:randomUUID(),revision:{sourceId:'same-source',previousRevision:null,sizeBytes:bytes.length,sha256:checksum,relativePath:externalId+'.txt',item:{externalId,revision:'same-r1',observedAt:'2026-10-16T00:00:00Z',title:externalId,text:'',kind:'file',layer:'original',mimeType:'text/plain'}}});
+ await f.checked(f.a.token,'/api/ingress/uploads/'+upload.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum});const rejected=await f.request(f.a.token,'/api/ingress/uploads/'+upload.id+'/commit','POST',{});assert.equal(rejected.statusCode,410,rejected.body);assert.equal(rejected.json().error,'capture_deleted');assert.equal((await f.request(f.a.token,path)).statusCode,404);const other=await f.upload(f.b.token,externalId,bytes.toString());assert.equal(other.id,a.id);assert.equal((await f.request(f.b.token,'/api/files/'+other.id)).statusCode,200);
+});
+
+
+test('legal source and Files forget/allow-again retain same-ID same-text ABA and monotonic generations',async t=>{
+ const f=await scopedFilesFixture(t),bytes=Buffer.from('GENERATED_CAPTURE_REPLACEMENT'),externalId='same-capture-replacement',a=await f.upload(f.a.token,externalId,bytes.toString()),path='/api/files/'+a.id,old=await f.checked(f.a.token,path),intent={operationId:randomUUID(),originalGeneration:old.originalGeneration};
+ await f.checked(f.a.token,'/api/sources/same-source','DELETE');await newSource(f);
  // A new upload batch exercises actual intake; replaying an old batch is only
  // its fixed receipt and cannot prove that the canonical record was restored.
  const checksum=createHash('sha256').update(bytes).digest('hex'),upload=await f.checked(f.a.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:randomUUID(),revision:{sourceId:'same-source',previousRevision:null,sizeBytes:bytes.length,sha256:checksum,relativePath:externalId+'.txt',item:{externalId,revision:'same-r1',observedAt:'2026-10-16T00:00:00Z',title:externalId,text:'',kind:'file',layer:'original',mimeType:'text/plain'}}});

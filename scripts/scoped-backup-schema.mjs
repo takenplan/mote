@@ -68,6 +68,7 @@ export const scopedBackupSchema = Object.freeze({
  "scoped_storage_capacity":["singleton","max_bytes"],
  "scoped_storage_evictions":["user_id","hash","bytes"],
  "scoped_storage_prepared_imports":["user_id","upload_id","hash"],
+ "lifecycle_future_scopes":["user_id","restoration_id","scope_key","state","error","probe_task_id"],
  "lifecycle_future":["user_id","restoration_id","epoch","payload","task_id","state"],
  "lifecycle_domains":["operation_id","domain","state","grant_id"],
  "lifecycle_exports":["operation_id","content"],

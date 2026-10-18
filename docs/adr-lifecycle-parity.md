@@ -51,6 +51,11 @@ ledger counts logical payloads and resident originals/staging; indexes, WAL and
 encryption overhead keep their existing separate boundary. Staging promotion
 and same-owner hash deduplication do not reserve the same bytes twice. Physical
 snapshot eviction releases capacity while keeping unavailable original metadata.
+The proven pre-scope admission boundaries also apply to Todo creation, positive
+Todo growth and processing artifact publication. Artifact reservation runs after
+the provider await, in the publication transaction, against all owners. Reaching
+the ceiling does not prevent revocation, deletion or external-call settlement;
+it does not introduce a blanket write block for every ledger table.
 
 Stopped restore creates no live authority or runtime. It records a restoration
 identity and policy intent per account, advances account/domain epochs, and
@@ -59,6 +64,14 @@ coordinator. Plugins undergo actual current configure/check/enable; connector
 timers honor current auto-sync policy and provider cursors; Actions and Ask use
 fresh generations and skip the backup frontier. This coordinator cannot issue
 an old native effect, retry an old unknown request or grant device/target rights.
+Each future scope records its own completion, wait or failure. A held or failed
+plugin check does not delay unrelated successful scopes or their connector
+timers. Configuration mutations serialize, while actual verification proceeds
+independently within the existing execution concurrency setting. Failed scopes
+remain visible in task progress; another trusted password login retries only
+those fresh recovery scopes. Completed scopes are not readmitted. A concurrent
+configuration publication preserves a newly obtained check only when its live
+generation and current signature still match.
 The [current design](design/multiuser-lifecycle.md) and
 [validation ledger](validation/parity-lifecycle.md) record implementation and
 journey coverage separately from this decision.

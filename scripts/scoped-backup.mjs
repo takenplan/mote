@@ -174,6 +174,7 @@ export async function stageScopedRestore(checked,stage,target){
  // in both its YAML source and SQL mirrors. No task is admitted by restore.
  for(const name of checked.names.filter(name=>/^configuration\/users\/[^/]+\/mote.yaml$/.test(name))){const path=join(stage,name),{savedDocument}=parseConfigDocument(await readFile(path,'utf8'),{});if(savedDocument.pluginInstances?.instances)savedDocument.pluginInstances.instances=savedDocument.pluginInstances.instances.map(instance=>({...instance,desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}));savedDocument.revision++;await writeFile(path,serializeConfigDocument(savedDocument),{mode:0o600});}
  const db=new DatabaseSync(join(stage,'mote.sqlite'));try{db.exec('PRAGMA foreign_keys=ON; BEGIN IMMEDIATE');const now=Date.now(),restorationId=randomUUID();
+  if(has(db,'lifecycle_future_scopes'))db.exec('DELETE FROM lifecycle_future_scopes');
   // Retain declarative future scopes separately from revoked runtime grants.
   // Only a subsequent password login may admit the current-epoch coordinator.
   db.exec("CREATE TABLE IF NOT EXISTS lifecycle_future(user_id TEXT PRIMARY KEY,restoration_id TEXT NOT NULL,epoch INTEGER NOT NULL,payload TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL DEFAULT 'pending')");

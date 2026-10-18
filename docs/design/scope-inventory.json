@@ -2577,6 +2577,7 @@
     "status": "implemented",
     "surfaces": [
       "table:lifecycle_future",
+      "table:lifecycle_future_scopes",
       "task:execution.register:{kind,pool:kind,concurrency:()=>configuration.instance.current<{agentConcurrency:number}>('execution').agentConcurrency,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>input.parse(raw),resources:()=>[{scope:'user',key:kind}],authorizeInput:(context,raw)=>{const row=this.sql(context).get('SELECT restoration_id,epoch FROM lifecycle_future WHERE user_id=$user');if(!row||row.restoration_id!==raw.restorationId||row.epoch!==context.authorizationEpoch)throw new PrivateDataError('conflict',409);},execute:run=>this.resume(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','restore_future_requires_attention')}"
     ]
   }
