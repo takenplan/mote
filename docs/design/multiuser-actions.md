@@ -16,7 +16,7 @@ M12 最终运行候选 `10748005a5d007695ecc9401d0d57dc9dea94919` 已由 M12/M16
 | --- | --- |
 | `todos.ts` → Web `features/actions.tsx`：人工任务、无默认截止日期、创建幂等、CAS 状态、分页和备份 | KEEP 原字段及算法；CHANGE 为 M02 PrivateSql、签名用户/筛选游标及本域 lifecycle。`GET/POST /api/todos`、`PATCH /api/todos/:id`。 |
 | `actions.ts` → Web、Desktop `calendar-actions.ts`、Android `CalendarActions.kt`：创建/更新/取消/完成建议、语义 sameAs、quote/current/version 校验 | KEEP 模型判断、calendar-extraction Skill、shared 日期/时区/标记算法和原生客户端；CHANGE 为 M08 真实 reader、M04 固定模型配置快照、M05 单执行器。 |
-| 原 `sharedCues` 在完整语义 artifact 中原子消费跨 observation 的约定 | CHANGE 为当前 query-visible formal Material 的原文单位；保留同一 Material 的多原文证据及其完整依赖围栏。REMOVE 旧全局 context_artifacts/action_semantic_checkpoints 的读写与独立语义任务。不得用关键字判断约定。 |
+| 原 `sharedCues` 在完整语义 artifact 中原子消费跨 observation 的约定 | KEEP 完整片段的统一语义 producer、actionCues 与 ID/revision 消费检查点及原直接原文分支。CHANGE 为账号绑定的共享分段/提示/解析合同、原件、模型快照和 M05 任务；移除旧全局存储依赖。原 raw-only 替代决定已由 [Actions 对标 ADR](../adr-actions-business-parity.md) 取代。不得用关键字判断约定。 |
 | `action_catalog` 和 calendar-extraction Skill：只读比较目录、字面搜索和分页 | KEEP 每页 20 项、24KB、前四条证据预览和旧引用预算；先校验完整来源闭包，再应用 LIMIT。模型读取无隐含批准或原生日历工具。 |
 | Actions 设置 UI：默认关闭、显式时区、设备长期 review grants、配置失败先撤权 | KEEP M04 配置交易与领域授权；长期发现授权和一次批准分开。`PUT /api/actions/settings`；撤权先提交，后续配置失败仍返回撤权结果。 |
 | `registerActions` → Web/设备：targets、confirm、dismiss、deliveries、claim、receipt | CHANGE 为可信 M01 身份、精确设备/日历/外部账户/目标 incarnation、不可变批准、OwnerQuestions 回复与 CAS。不另建审批引擎。 |

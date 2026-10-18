@@ -11,7 +11,7 @@ export function fencedUsage(start:TaskModelRun['startUsage'],commit:<T>(work:()=
 }
 
 const reasons=new Set(['invalid_response','invalid_json','invalid_shape','response_too_large','unretrieved_citation','truncated_citation','undeclared_citation','output_limit','tools_unverified','host_validation','tool_failure','image_disclosure_disabled']);
-const validationCodes=new Set([...Object.keys(validationFeedback),'owner_reply','memory_feedback_plan','summary_length','summary_too_long','invalid_summary_citations','invalid_semantic_grouping','invalid_import_manifest','calendar_shape','calendar_relation','calendar_quote']);
+const validationCodes=new Set([...Object.keys(validationFeedback),'owner_reply','memory_feedback_plan','summary_length','summary_too_long','invalid_summary_citations','invalid_semantic_grouping','invalid_import_manifest','semantic_products','calendar_shape','calendar_relation','calendar_quote']);
 /** Only concrete host types and fixed reason codes cross the credential boundary.
  * Arbitrary messages, stacks and structural lookalikes never become diagnostics. */
 export function safeAgentFailure(error:unknown,context:FailureContext={}){

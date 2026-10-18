@@ -98,7 +98,7 @@ export function checkProductionImports(directory=root){
   // type. Neither constructs a legacy Store or connector service.
   for(const path of ['connectors/network.ts','connectors/types.ts'])allowed.add(sourceRoot+'/'+path);
   // M12 moves existing pure field/output contracts out of the retired Store hosts.
-  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts','exact-segments.ts','semantic-products.ts','memory-profiles.ts'])allowed.add(sourceRoot+'/'+path);
   // M16 reuses the bounded diagnostics implementation behind a metadata-only
   // projection, and the read-only signed-release checker. Neither opens a
   // private Store or executes updater commands; owner route registration is unused.

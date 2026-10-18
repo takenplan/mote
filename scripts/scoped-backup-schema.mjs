@@ -3,6 +3,9 @@
 // Extra extension tables/columns are preserved by SQLite and remain allowed.
 export const scopedBackupSchema = Object.freeze({
  "ac_dependencies":["user_id","action_id","kind","id"],
+ "ac_discovery_state":["user_id","captures","materials"],
+ "ac_semantic_products":["user_id","id","revision","input","proof","task_id","json","consumed"],
+ "ac_semantic_dependencies":["user_id","id","revision","kind","root_id"],
  "ac_jobs":["user_id","id","input","proof","task_id","state"],
  "ac_meta":["id","cursor_key","installation_epoch"],
  "ac_operations":["user_id","id","action_id","approval_hash","target_epoch","authorization_revision","account_epoch","native_external_id","task_id","issuance_id","claimed","ack","revoked","published"],
