@@ -62,6 +62,42 @@ test('check-selection infrastructure runs its own regressions without app builds
 const checks = (...paths) => affectedChecks(paths, graph);
 const allWorkspaces = graph.map(workspace => workspace.name).sort();
 
+const backupInputs = ['scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs'];
+test('reviewed instance backup inputs retain Server, Web and root backup obligations', () => {
+  for (const path of backupInputs) {
+    assert.deepEqual(checks(path), {
+      workspaces: ['@mote/server', '@mote/web'], android: false, i18n: true, tooling: true, all: false,
+      rootTests: path === 'scripts/backup.ts' ? ['backup', 'scripts-types'] : ['backup'],
+    }, path);
+    assert.deepEqual(groups(changed(path)), ['central'], path);
+  }
+  for (const path of ['scripts/backup-new.ts', 'scripts/scoped-backup-new.mjs', 'scripts/restore-instance.mjs',
+    'scripts/profile-lib.mjs', 'new-location/scoped-backup.mjs', 'scripts/scoped-backup-schema.json', 'new-input.png']) {
+    assert.deepEqual(checks(path).workspaces, allWorkspaces, path);
+    assert.equal(checks(path).android, true, path);
+    assert.equal(checks(path).all, true, path);
+  }
+});
+
+test('backup ownership unions independent Kotlin, Desktop, shared and unknown inputs', () => {
+  for (const helper of backupInputs) {
+    const android = checks(helper, 'apps/android/app/src/main/java/Collector.kt');
+    assert.equal(android.android, true);
+    assert.deepEqual(android.workspaces, ['@mote/server', '@mote/web']);
+    assert.equal(android.all, false);
+    const desktop = checks(helper, 'apps/desktop/src/main.ts');
+    assert.deepEqual(desktop.workspaces, ['@mote/desktop', '@mote/server', '@mote/web']);
+    assert.equal(desktop.android, false);
+    for (const path of ['packages/shared/src/connection.ts', 'protocol/contract.json', 'unknown-root.mjs']) {
+      const mixed = checks(helper, path);
+      assert.deepEqual(mixed.workspaces, allWorkspaces, `${helper}: ${path}`);
+      assert.equal(mixed.android, true, path);
+      assert.equal(mixed.all, true, path);
+      assert.ok(mixed.rootTests.includes('backup'));
+    }
+  }
+});
+
 test('check workspaces follow npm consumers and the Server HTTP consumer without grouping unrelated Central code', () => {
   assert.deepEqual(checks('apps/web/src/App.tsx').workspaces, ['@mote/web']);
   assert.deepEqual(checks('apps/server/src/index.ts').workspaces, ['@mote/server', '@mote/web']);
