@@ -13,7 +13,7 @@
 
 ## 当前本机格式（2026-10-18）
 
-本机设置、队列与内容采用格式 4，中央为 epoch 5 多用户基线。新安装写入当前格式和明确的账号/节点归属；格式 3 或更早数据、缺少当前标记或格式不匹配时明确拒绝，提示“本机数据格式已退役，请清除应用存储后重新设置。”MVP 不自动迁移、补写旧配置或删除旧数据。清除应用存储会丢失尚未归档的本机内容，须先保留所需旧数据，并由用户明确操作；当前格式 4 的正常同代更新无需清空。跨代个人导出不能直接导入当前 version 3 便携归档，见[升级边界](updating.md)。
+本机设置、队列与内容采用格式 4，中央为 epoch 5 多用户基线。新安装写入当前格式和明确的账号/节点归属；格式 3 或更早数据、缺少当前标记或格式不匹配时明确拒绝，提示“本机数据格式已退役，请清除应用存储后重新设置。”MVP 不自动迁移、补写旧配置或删除旧数据。清除应用存储会丢失尚未归档的本机内容，须先保留所需旧数据，并由用户明确操作；当前格式 4 的正常同代更新无需清空；本次旧 Dev 加密凭据切换为文件密钥是明确例外，按下文“开发环境与日常版本隔离”处理。跨代个人导出不能直接导入当前 version 3 便携归档，见[升级边界](updating.md)。
 
 截图、事件、缩略图、来源、文件暂存、本机随手记草稿、扫描报告和待决定区使用原始 JSON/图片/文件字节，没有可选内容加密或批量解密工具。Prod / Test 的连接令牌、连接恢复文件、中央私有草稿和操作 ledger 使用 Keystore `SecretBox`；Dev 的 token 使用同一原子 MODE_PRIVATE 设置快照中的 JSON，SecretBox 的随机 AES 密钥保存到应用私有 JSON，恢复状态、私有草稿和 ledger 继续使用原有 AES-GCM 加密与认证，不初始化或访问 Keystore。文件扩展名不改变这两类存储的边界。本机延迟 OCR 与 OCR 补上传已移除；本机原生 OCR 仍可用于当前隐私文字规则，完整截图 OCR 由中央生成。
 
@@ -47,11 +47,11 @@ sdk.dir=/absolute/path/to/Android/sdk
 
 ```sh
 cd apps/android
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDevelopment :app:testDebugUnitTest :app:lintDevelopment
+adb install -r app/build/outputs/apk/development/app-development.apk
 ```
 
-APK 位置：`apps/android/app/build/outputs/apk/debug/app-debug.apk`。Debug APK 可直接侧载；release 需注入签名配置，覆盖现有安装必须保持同一证书，详见下方更新说明。中国大陆小米设备不依赖 Google Play 下载 OCR 模型：中英 OCR 模型随 APK 打包，但仍需实机验证设备上的 ML Kit 运行兼容性。
+上述 Dev APK 位于 `apps/android/app/build/outputs/apk/development/app-development.apk`，可直接侧载。`assembleDebug` 仅生成隔离 Test 包，位于 `apps/android/app/build/outputs/apk/debug/app-debug.apk`，不作日常安装；release 需注入签名配置，覆盖现有安装必须保持同一证书，详见下方更新说明。中国大陆小米设备不依赖 Google Play 下载 OCR 模型：中英 OCR 模型随 APK 打包，但仍需实机验证设备上的 ML Kit 运行兼容性。
 
 ## 开发环境与日常版本隔离
 
