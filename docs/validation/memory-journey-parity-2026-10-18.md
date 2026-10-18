@@ -118,3 +118,38 @@ unchanged. The seven-test process follow-up covers that regression, actual index
 restart, unknown external outcome, admission, review, feedback and Owner reply.
 The broad failed receipt remains in the evidence manifest; a fresh full affected
 gate is still required on the final candidate.
+
+## Full-gate consumer and backup follow-up
+
+The fresh exact-`855b89a0` affected run
+`a77215a6-274c-4d30-a031-59d3a125307c` failed: 14 steps passed, the Server step
+reported 3,169 passed, 52 failed and two skipped, and the following seven steps
+were UNRUN. That failed receipt remains authoritative for that source; later
+focused results do not replace it.
+
+The final stacks identify shared consumer prerequisites before many security
+assertions were reached. The Ask reader and MCP Memory helpers still required
+three successful stage tasks although the actual job was committed and its one
+continuous `memory.batch` succeeded. The real live-limit journey reached its old
+completion predicate after exercising the physical gates. Those consumers now
+wait for committed jobs with successful current tasks. Cross-user late-output
+and import capacity checks use the actual batch identity. Import pause checks
+retain the admitted batch's extraction, independent review and saved checkpoint,
+then require restart/resume without replay. Manual selected-card integration
+first waits for the actual asynchronous correction to retire the old version,
+then retains its 409 and zero-new-model-call assertions. The separate model-lease
+await race continues to require transaction-time revalidation.
+
+The backup failure also exposed a production accounting defect: clearing the
+snapshot fence prevented recovery from matching the current attempt charge.
+A new real-claim→backup-command→restore regression failed with four attempts
+instead of three before the fix. The snapshot now expires the lease but retains
+the accounting correlation until fenced recovery, without restoring authority,
+weakening current schema requirements or introducing a compatibility path. See
+[the backup journey](../combined-backup-recovery.md).
+
+Every original failure is classified and bound to its complete final stack in
+the Q006-R1 external manifest. Focused consumer checks must run through their
+original final privacy, unknown-outcome and late-result assertions. Full affected,
+qualified combined concurrency, native, physical-device and live-model evidence
+remain separate obligations on the newly frozen source.

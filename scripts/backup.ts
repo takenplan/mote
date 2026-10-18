@@ -108,9 +108,11 @@ try {
         if(hasTable('file_jobs'))snapshot.exec("UPDATE file_jobs SET state='waiting' WHERE state='running'; UPDATE file_jobs SET summary_state='waiting' WHERE summary_state='running'");
         if(hasTable('file_steps'))snapshot.exec("UPDATE file_steps SET state='waiting' WHERE state='running'");
         // A lease belongs to the original running host, never to the restored vault.
-        // Keep attempts/deadlines and completed steps; domain recovery decides whether
-        // interrupted work can resume. Interactive model calls are never replayed.
-        if(hasTable('execution_steps'))snapshot.exec("UPDATE execution_steps SET lease_until=0,fence=NULL WHERE state='running'");
+        // Keep the fence only as the current attempt-charge correlation. A zero
+        // lease grants no authority; recovery refunds that exact charged attempt,
+        // clears its fence and lets the domain decide whether work can resume.
+        // Interactive model calls are never replayed.
+        if(hasTable('execution_steps'))snapshot.exec("UPDATE execution_steps SET lease_until=0 WHERE state='running'");
         if(hasTable('run_execution_owners'))snapshot.exec('DELETE FROM run_execution_owners');
         if(hasTable('import_jobs')){
           const jobs = snapshot.prepare('SELECT id,json FROM import_jobs').all() as {id:string;json:string}[];
