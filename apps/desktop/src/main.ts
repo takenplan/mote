@@ -28,7 +28,8 @@ import { openCentralBrowser,validateCentralWorkId } from './central-browser';
 import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { resolveProfile, profileDefaults } from './profile';
+import { resolveProfile, profileDefaults, isDevelopmentProfile } from './profile';
+import { desktopSecretStorage } from './secret-storage';
 import { EventJournal, buildSupportBundle, failureCode, type EventStage } from './support';
 import { pathToFileURL } from 'node:url';
 import { readFile, realpath, stat, writeFile, open, mkdir } from 'node:fs/promises';
@@ -50,6 +51,7 @@ import type { Config, ConfigUpdate, Status } from './contracts';
 const defaultDataDirectory = app.getPath('userData');
 const developmentBuild=Boolean((require('../package.json') as {moteDevelopment?:boolean}).moteDevelopment);
 const profile = resolveProfile(process.argv, developmentBuild?{...process.env,MOTE_PROFILE:process.env.MOTE_PROFILE??'dev'}:process.env, defaultDataDirectory);
+const developmentProfile = isDevelopmentProfile(profile, developmentBuild);
 if (!profile.defaultProfile) {
   mkdirSync(profile.dataDirectory, { recursive: true, mode: 0o700 });
   const sessionDirectory = join(profile.dataDirectory, 'session');
@@ -81,7 +83,7 @@ function refreshApplicationMenu() {
         { label: moteText("随手记"), accelerator: 'CmdOrCtrl+2', click: () => showClientPage('notes') },
         { label: moteText("来源"), accelerator: 'CmdOrCtrl+3', click: () => showClientPage('sources') },
       ] },
-      { label: moteText("显示"), submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(!app.isPackaged || developmentBuild ? [{role:'toggleDevTools' as const}] : [])] },
+      { label: moteText("显示"), submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(developmentProfile ? [{role:'toggleDevTools' as const}] : [])] },
       { role: 'windowMenu', label: moteText("窗口") },
     ]));
 }
@@ -109,7 +111,7 @@ const events = new EventJournal(join(profile.dataDirectory, 'diagnostics'), () =
 let pendingNoteStatus = () => ({ count: 0, unbound: true, baseRecords: undefined as number | undefined });
 function includePreparedNote(status: Status): Status { const note = pendingNoteStatus(); return { ...status, sync: { ...status.sync, pendingRecords: (note.baseRecords ?? status.sync.pendingRecords) + note.count, localBacklogUnbound: (note.baseRecords ?? status.sync.pendingRecords) + note.count > 0 && note.unbound } }; }
 let storageStatus: () => Status['storage'] = () => undefined;
-function clientStatus(): Status { return { ...includePreparedNote(collector.status()), authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
+function clientStatus(): Status { return { ...includePreparedNote(collector.status()), credentialStorage: developmentProfile ? 'json' : 'system', authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
 const backgroundJobs = new BackgroundJobs();
 let controlChain: Promise<unknown> = Promise.resolve();
 
@@ -120,6 +122,7 @@ function serialize<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 function encryptedStorageAvailable(): boolean {
+  if (developmentProfile) return false;
   return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
 }
 let browserLogin: ((page?:string,evidenceId?:string,durationMs?:number,workId?:string)=>Promise<void>)|undefined;
@@ -147,7 +150,7 @@ function trayIcon(): Electron.NativeImage {
 }
 function updateUi(status: Status): void {
   if(accountTransition)return;
-  status = { ...includePreparedNote(status), authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
+  status = { ...includePreparedNote(status), credentialStorage: developmentProfile ? 'json' : 'system', authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
   if (window && !window.isDestroyed()) window.webContents.send('mote:status', status);
   tray?.setToolTip(moteText("Mote [{0}] · {1} · 待上传 {2}", profile.name, status.running ? moteText("采集中") : moteText("已停止"), status.queueDepth));
   tray?.setContextMenu(Menu.buildFromTemplate([
@@ -180,12 +183,9 @@ else {
     await mkdir(profile.dataDirectory, { recursive: true, mode: 0o700 });
     const dataDirectory = await realpath(profile.dataDirectory);
     await ensureStorageFormat(dataDirectory,['config.json','queue','notes','local-sources','content-key.json']);
-    const secrets = {
-      available: encryptedStorageAvailable,
-      encrypt: (value: string) => safeStorage.encryptString(value),
-      decrypt: (value: Buffer) => safeStorage.decryptString(value),
-    };
-    const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
+    const secrets = desktopSecretStorage(profile, developmentBuild, safeStorage);
+    const defaults = () => profileDefaults(profile, {}, developmentBuild);
+    const store = new ConfigStore(dataDirectory, secrets, defaults, () => profileDefaults(profile, process.env, developmentBuild));
     const pairing=new DesktopPairing(dataDirectory,secrets);
     settings = await store.load();
     if(connectionToken(settings)&&!accountKey(settings)){
@@ -196,7 +196,7 @@ else {
     }
     await store.save(settings); // Persist stable device identity before the first observation.
     void events.record('APP', 'STARTED');
-    const accounts=new DesktopAccountStorage(dataDirectory,secrets);
+    const accounts=new DesktopAccountStorage(dataDirectory,secrets,defaults);
     let accountDirectory=await accounts.open(settings);
     let noteDrafts = new NoteDraftStore(join(accountDirectory, 'notes'),connectionToken(settings)?accountKey(settings):undefined); await noteDrafts.initialize();
     let storage = new QueueStorage(accountDirectory, profile.name, settings.deviceId, [dataDirectory, ...await Promise.all([defaultDataDirectory, `${defaultDataDirectory}-profiles`].map(path => realpath(path).catch(() => resolve(path))))]);
@@ -240,7 +240,7 @@ else {
     const loadAccountDocument=async()=>{activePageUrl=pageUrl+'?document='+randomUUID();await window!.loadURL(activePageUrl);};
     window = new BrowserWindow({
       width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: appearanceBackground(),
-      webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: !app.isPackaged || developmentBuild },
+      webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: developmentProfile },
     });
     const broadcastAppearance=()=>{window?.setBackgroundColor(appearanceBackground());window?.webContents.send('mote:appearance',appearanceState());};
     nativeTheme.on('updated',broadcastAppearance);
@@ -431,7 +431,7 @@ else {
       let named=requested;
       if(confirmation)await serialize(async()=>{
         assertCurrent();
-        if(!encryptedStorageAvailable())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
+        if(!secrets.available())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
         if(typeof confirmation.deviceName!=='string')throw Error('Invalid device name');
         named=updateConfig(requested,{...requested,deviceName:confirmation.deviceName});
         await pairing.begin(onboarding.confirm(confirmation.id,confirmation.origin),named,currentPlatform,assertCurrent);
@@ -487,7 +487,8 @@ else {
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
     handle('mote:installed-applications', () => process.platform === 'darwin' ? readInstalledApplications(helperPath).catch(() => []) : []);
-    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:'https://github.com/utopiafar/mote/releases', message:moteText('开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。'), installReason:''});
+    const developmentBuildsUrl = 'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml';
+    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:developmentBuildsUrl, message:moteText('Dev 构建产物按 commit 保存在 GitHub Actions；请选择对应运行的 Artifact 下载并手动安装。'), installReason:''});
     handle('mote:update-status', () => developmentBuild ? devUpdateStatus() : updater!.status());
     handle('mote:update-channel', channel => updater!.setChannel(channel));
     handle('mote:update-check', () => developmentBuild ? devUpdateStatus() : updater!.check());
@@ -495,7 +496,7 @@ else {
     handle('mote:update-cancel', () => updater!.cancel());
     handle('mote:update-install', () => serialize(() => updater!.install(async () => { collector.stop(); await collector.settleCapture(); await settleNoteWork(); }, () => app.quit())));
     handle('mote:update-reveal', () => { const archive = updater!.archivePath(); if (archive) shell.showItemInFolder(archive); });
-    handle('mote:update-notes', async () => { const url = developmentBuild ? 'https://github.com/utopiafar/mote/releases' : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
+    handle('mote:update-notes', async () => { const url = developmentBuild ? developmentBuildsUrl : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
     handle('mote:feedback', () => shell.openExternal(githubFeedbackUrl({
       version: app.getVersion(),
       platform: `${process.platform === 'darwin' ? 'macOS' : currentPlatform} ${process.getSystemVersion()} · ${process.arch}`,

@@ -42,6 +42,15 @@ export function commonFailureMessage(code:string,status?:number):string|undefine
     case 'scope_unavailable': return status===403?httpStatusMessage(status):moteText('所需服务暂不可用，请检查中央节点状态后重试。');
     case 'config_unavailable': case 'authentication_closed': case 'processing_closed': case 'actions_settings_unavailable':
       return moteText('所需服务暂不可用，请检查中央节点状态后重试。');
+    case 'processor_capacity': return moteText('处理资源正在使用中，任务会排队并在资源可用后自动继续。');
+    case 'processor_still_running': return moteText('处理服务仍在执行上一次请求，任务会等待并核对执行状态。');
+    case 'processor_result_unavailable': return moteText('处理服务已完成，但结果正文未能取回。请查看任务回执后重新处理。');
+    case 'processor_execution_failed': return moteText('处理服务已确认执行失败，请查看任务状态。');
+    case 'agent_invalid_json': case 'agent_invalid_shape': case 'agent_host_validation':
+      return moteText('模型输出未通过校验，请查看任务中的原因码。');
+    case 'agent_tool_failure': return moteText('本次模型工具调用未完成，请查看任务诊断。');
+    case 'agent_request_timeout': return moteText('本次模型请求超时，请查看任务状态。');
+    case 'model_execution_failed': case 'agent_internal_error': return moteText('执行未完成，请查看任务诊断。');
   }
 }
 

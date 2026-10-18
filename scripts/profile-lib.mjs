@@ -65,7 +65,7 @@ export async function initialize(paths, options = {}) {
       allowedOrigins: (paths.profile === 'test' ? ['http://localhost:5174', 'http://127.0.0.1:5174'] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
       tls: { enabled: false, domain: '', httpPort: 80, httpsPort: 443 } },
     storage: { dataDir: docker ? '/data' : options['data-dir'] ? dataDir : './data', kind: docker ? 'docker-volume' : 'local-directory', source: docker ? volume : dataDir, mount: docker ? '/data' : '' },
-    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', traceEnabled: paths.profile === 'dev' },
+    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', debug: paths.profile === 'dev', traceEnabled: false },
     models: { deployment: { provider: 'codex', protocol: 'codex-app-server', model: 'gpt-6.1-sol', reasoningEffort: 'high', serviceTier: 'fast' } },
     connectors: {}, plugins: {}, updates: {},
     media: { modelDirectory: docker ? '/models' : './models', python: docker ? '/opt/mote-media-venv/bin/python' : './media-venv/bin/python', asrPort, ocrPort,
@@ -95,7 +95,7 @@ function dockerModelDirectory(document) {
   const value = document.media?.modelDirectory || '/models';
   if (typeof value !== 'string' || !isAbsolute(value) || /[\r\n\0,:]/.test(value)) throw Error('Docker media.modelDirectory must be an absolute container path without comma or colon');
   const target = resolve(value);
-  if (target === '/' || ['/config', '/data', '/app'].some(path => target === path || target.startsWith(path + '/') || path.startsWith(target + '/'))) throw Error('Docker media.modelDirectory would hide the configuration, archive or application mount');
+  if (target === '/' || ['/config', '/data', '/app', '/worker-facts'].some(path => target === path || target.startsWith(path + '/') || path.startsWith(target + '/'))) throw Error('Docker media.modelDirectory would hide the configuration, archive or application mount');
   return target;
 }
 export async function loadProfile(paths) {
@@ -388,7 +388,7 @@ export async function migrateStorageOwner(p, dependencies = {}) {
     const running = await run('docker', ['ps', '--filter', `volume=${volume}`, '--format', '{{.ID}}'], { capture: true });
     if (running.trim()) throw Error('Stop every container using this profile data or model volume before migrating storage ownership');
   }
-  await composeRun(p, ['run', '--rm', '--no-deps', 'storage-init', 'node', 'scripts/storage-owner-entry.mjs', '--migrate', p.configUser, '/data', p.modelDirectory], { capture: true });
+  await composeRun(p, ['run', '--rm', '--no-deps', 'storage-init', 'node', 'scripts/storage-owner-entry.mjs', '--migrate', p.configUser, '/data', p.modelDirectory, '/worker-facts'], { capture: true });
   return { migrated: true, profile: p.profile, owner: p.configUser, started: false };
 }
 export async function dockerContainer(p) {

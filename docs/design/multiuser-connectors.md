@@ -76,10 +76,11 @@ usable reference. Trusted connector definitions declare operation schemas too.
 
 The administrator installs bundled definitions through
 `POST /api/admin/connectors/:provider/install` and M09's catalog revision/idempotency
-contract. The server distribution supplies these adapter implementations. Native
-CLI dependencies must be installed by the deployment administrator at the pinned
-versions (Lark 1.0.85 / DWS 1.0.62); the private runner verifies the actual version
-before account commands. User routes never run package installation. Lark's app
+contract. The server distribution supplies these adapter implementations. Deployment prepares official Lark 1.0.98 / DWS 1.0.64 binaries in its
+private `.mote/connectors` runtime, using pinned official archive checksums. Docker
+builds and signed source updates prepare them; native initial deployment uses
+`mote connectors-prepare`. Runners never select an executable from host PATH and
+verify the actual pinned version before account commands. User routes never run package installation. Lark's app
 setup/configure and device login, and both recording providers' device logins,
 remain real task-backed production operations. Device links are projected only
 into the admitting user's M05 progress; device codes and raw CLI output are not.
@@ -161,8 +162,8 @@ task history, source evidence or originals were erased by deleting connector sta
 Portable restore stages only credential-free settings and applies them through
 M04 once; no token, OAuth state, CLI home or polling authorization is restored.
 
-Pinned backend review: [DWS v1.0.62 source](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.62/internal/keychain)
-and [Lark v1.0.85 source](https://github.com/larksuite/cli/tree/v1.0.85/internal/keychain).
+Pinned backend review: [DWS v1.0.64 source](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.64/internal/keychain)
+and [Lark v1.0.98 source](https://github.com/larksuite/cli/tree/v1.0.98/internal/keychain).
 The read-only scopes come from the pinned Lark recording commands. Native account
 authorization, live refresh, physical devices and real provider data remain unrun.
 
@@ -207,9 +208,17 @@ await. Failed tasks retain their M05 failure; a status read supplies the current
 persisted document errors for explicit per-document retry. There is no implicit
 new model/provider job or permission.
 
-This increment does not add ordinary CLI installation, new vendor aliases,
-oversized-calendar result storage or a second connector runtime. Broader
-recording/Lark capabilities and current final validation remain open.
+The 2026-10-18 authorization change adds deployment preparation and page-backed
+recording authorization without a second executor or user-route installation.
+The existing recording connection detail contains Check, Feishu application
+setup/configure, and authorize/reauthorize controls. Application secrets use the
+existing encrypted operation payload and stdin; browser recovery stores only
+operation metadata and an admitted task ID for configuration. Waiting login/setup
+receipts survive page reload through the same task; links/QRs disappear on
+completion, cancellation or expiry. DWS full authorization links retain their
+opaque bytes and cannot be overwritten by its subsequent manual-code URL. No
+global credentials are adopted or migrated. Real vendor authorization/download
+behavior remains a separate owner check.
 
 ### Lark calendar inventory beyond task metadata
 

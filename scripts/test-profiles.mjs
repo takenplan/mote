@@ -36,7 +36,8 @@ try {
   assert.equal(devMedia.MOTE_MEDIA_ASR_ENDPOINT, `http://127.0.0.1:${devMedia.MOTE_MEDIA_ASR_PORT}/transcribe`);
   assert.equal(devMedia.MOTE_MEDIA_OCR_ENDPOINT, `http://127.0.0.1:${devMedia.MOTE_MEDIA_OCR_PORT}/ocr`);
   assert.equal((await stat(dev.envFile)).mode & 0o777, 0o600);
-  assert.equal(dev.env.MOTE_LOG_DIR, './logs'); assert.equal(dev.env.MOTE_LOG_MAX_ENTRIES, '2000'); assert.equal(dev.env.MOTE_AGENT_TRACE_ENABLED, '1'); assert.equal(test.env.MOTE_AGENT_TRACE_ENABLED, '0');
+  assert.equal(dev.env.MOTE_LOG_DIR, './logs'); assert.equal(dev.env.MOTE_LOG_MAX_ENTRIES, '2000'); assert.equal(dev.env.MOTE_AGENT_TRACE_ENABLED, '0'); assert.equal(test.env.MOTE_AGENT_TRACE_ENABLED, '0');
+  assert.equal(dev.document.diagnostics.debug, true); assert.equal(test.document.diagnostics.debug, false);
   assert.equal(dev.env.MOTE_LOG_MAX_MB, '100'); assert.equal(Object.hasOwn(dev.savedDocument.diagnostics, 'maxBytes'), false); assert.equal(test.env.MOTE_LOG_MAX_MB, '2');
   assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiB, 100);
   assert.equal(JSON.parse((await cli(home, 'test', 'config')).stdout).diagnostics.logMaxMiB, 2);

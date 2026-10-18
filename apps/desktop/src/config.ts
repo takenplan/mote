@@ -116,6 +116,8 @@ export function publicConfig(config: Config): PublicConfig {
 }
 
 export interface SecretStorage {
+  /** Omitted by existing system-store adapters. JSON is an explicit dev policy. */
+  readonly mode?: 'system' | 'json';
   available(): boolean;
   encrypt(value: string): Buffer;
   decrypt(value: Buffer): string;
@@ -125,13 +127,17 @@ export class ConfigStore {
   constructor(private readonly directory: string, private readonly secrets: SecretStorage, private readonly defaults: () => Config = defaultConfig, private readonly bootstrap: () => Config = defaults) {}
   async load(): Promise<Config> {
     try {
-      const stored = JSON.parse(await readFile(join(this.directory, 'config.json'), 'utf8')) as { version:number; config: Config; encryptedToken?: string };
+      const stored = JSON.parse(await readFile(join(this.directory, 'config.json'), 'utf8')) as { version:number; config: Config; encryptedToken?: string; developmentToken?: string };
       if(stored.version!==DESKTOP_STORAGE_VERSION)throw Error(RESET_REQUIRED);
       if (!stored.config || typeof stored.config.deviceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(stored.config.deviceId)) throw new Error(moteText("设备标识无效"));
-      // Never accept a plaintext token from a tampered or legacy configuration.
+      // Storage policy changes require a new profile; never consult Keychain to
+      // adopt old credentials or accept development plaintext in production.
+      if ((this.secrets.mode === 'json' && stored.encryptedToken !== undefined) || (this.secrets.mode !== 'json' && stored.developmentToken !== undefined)) throw new CredentialStorageMismatch();
+      if (stored.developmentToken !== undefined && (typeof stored.developmentToken !== 'string' || !stored.developmentToken)) throw new CredentialStorageMismatch();
       const required=Object.keys(defaultConfig()).filter(key=>key!=='syncPaused');
       if(required.some(key=>!Object.hasOwn(stored.config,key))||['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>Object.hasOwn(stored.config,key)))throw Error(RESET_REQUIRED);
       const current: Config = { ...Object.fromEntries(Object.entries(stored.config).filter(([key]) => !retiredModelKeys.includes(key))), token: undefined } as Config;
+      if (this.secrets.mode === 'json') current.token = stored.developmentToken;
       if (stored.encryptedToken) {
         if (!this.secrets.available()) throw new Error(moteText("系统密钥存储不可用，无法解密令牌"));
         current.token = this.secrets.decrypt(Buffer.from(stored.encryptedToken, 'base64'));
@@ -141,7 +147,7 @@ export class ConfigStore {
       return normalized;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return this.bootstrap();
-      if(error instanceof Error&&error.message===RESET_REQUIRED)throw error;
+      if(error instanceof CredentialStorageMismatch || error instanceof Error&&error.message===RESET_REQUIRED)throw error;
       throw new Error(moteText("无法读取配置：请检查系统密钥存储或备份后修复配置文件"));
     }
   }
@@ -149,7 +155,10 @@ export class ConfigStore {
     if(config.credentialScope!==undefined&&!['owner','client'].includes(config.credentialScope))throw Error(RESET_REQUIRED);
     const { token, ...rest } = config;
     if (token && !this.secrets.available()) throw new Error(moteText("系统加密存储不可用，拒绝保存明文令牌"));
-    const contents = JSON.stringify({ version: DESKTOP_STORAGE_VERSION, config: {...rest,authSourceBinding:config.authSessionOnly?sourceConnectionBinding(config):config.authSourceBinding}, encryptedToken: token && !config.authSessionOnly ? this.secrets.encrypt(token).toString('base64') : undefined }, null, 2);
+    const persistentToken = token && !config.authSessionOnly ? token : undefined;
+    const contents = JSON.stringify({ version: DESKTOP_STORAGE_VERSION, config: {...rest,authSourceBinding:config.authSessionOnly?sourceConnectionBinding(config):config.authSourceBinding},
+      ...(this.secrets.mode === 'json' ? { developmentToken: persistentToken } : { encryptedToken: persistentToken ? this.secrets.encrypt(persistentToken).toString('base64') : undefined }),
+    }, null, 2);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     await chmod(this.directory, 0o700);
     const temporary = join(this.directory, `config.${randomUUID()}.tmp`);
@@ -161,4 +170,8 @@ export class ConfigStore {
       try { await directory.sync(); } finally { await directory.close(); }
     }
   }
+}
+
+export class CredentialStorageMismatch extends Error {
+  constructor() { super(moteText("凭据存储方式与当前 Profile 不匹配；请保留原目录并使用新的 Profile 重新登录。")); }
 }

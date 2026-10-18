@@ -1,9 +1,10 @@
 import { appendFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { verifyComponent } from './components.mjs';
+import { verifyComponent, buildProfile } from './components.mjs';
 const [component, ...extra] = process.argv.slice(2);
 if (extra.length) throw Error('Usage: node scripts/release/verify-version.mjs <central|desktop|android>');
-const release = verifyComponent(component, { ref: process.env.GITHUB_REF, repository: process.env.GITHUB_REPOSITORY });
+const release = verifyComponent(component, { ref: process.env.GITHUB_REF, repository: process.env.GITHUB_REPOSITORY, profile: buildProfile() });
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `component=${component}\nversion=${release.version}\ntag=${release.tag}\ncommit=${commit}\nchannel=${release.channel}\n`);
-console.log(JSON.stringify({ component, version: release.version, tag: release.tag, commit }));
+const buildId = release.profile === 'dev' ? `${component}-dev-${commit}` : release.tag;
+if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `component=${component}\nversion=${release.version}\ntag=${release.profile === 'dev' ? '' : release.tag}\ncommit=${commit}\nchannel=${release.channel}\nprofile=${release.profile}\nbuild_id=${buildId}\n`);
+console.log(JSON.stringify({ component, version: release.version, profile: release.profile, channel: release.channel, buildId, commit }));

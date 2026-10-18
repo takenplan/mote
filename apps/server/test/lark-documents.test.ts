@@ -21,7 +21,7 @@ async function fixture(t:any){
  const runner:LarkRunner=async command=>{
   calls.push(command);
   switch(command.kind){
-   case 'version':return 'lark-cli version 1.0.85';
+   case 'version':return 'lark-cli version 1.0.98';
    case 'status':return json({appId:'cli_fixture',identities:{user:{available:true,openId:state.account,scope:[...LARK_SCOPES,'drive:drive:readonly','calendar:calendar:readonly'].join(' ')}}});
    case 'login':return json({verification_url:'https://accounts.feishu.cn/authorize?fixture',device_code:'fixture-private-code',expires_in:600});
    case 'complete':return '{}';

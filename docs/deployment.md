@@ -29,7 +29,10 @@ npm ci
 npm run build:libs
 npm run build -w @mote/server -w @mote/web
 node scripts/mote.mjs init --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
+node scripts/mote.mjs connectors-prepare --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
 ```
+
+`connectors-prepare` 为所选 release 下载固定官方 Lark CLI 1.0.98 与 DWS 1.0.64，按仓库锁定的官方 SHA256 校验后原子放入该 release 的 `.mote/connectors/`；不运行供应方安装脚本、不安装 Agent skills、不修改全局 CLI 或宿主登录态。支持 macOS/Linux amd64/arm64。相同已校验产物可离线复用，两个并发准备不会发布半成品。网络、权限、校验或只读目录错误会明确失败，不退回宿主 PATH。Docker 在构建镜像时准备，签名源码更新在构建新 release 时准备。直接从当前检出目录开发或 `npm start` 的环境可执行 `npm run connectors:prepare`。首次准备需要 GitHub 网络及 `tar`；缺少依赖不阻止中央其他功能，连接详情会保留重新检测和配置指引。
 
 编辑该环境的 `mote.yaml` 设置部署参数。在仓库外准备权限为 0600 的私有 JSON 文件，内容为 `{"username":"admin","password":"replace-with-a-strong-password"}`，将示例密码替换为至少 12 字符的密码。中央保持停止，通过 stdin 初始化首个管理员；已有账号时该入口拒绝再次初始化，不重置账号或密码：
 
@@ -51,7 +54,7 @@ node scripts/mote.mjs stop --profile prod --home "$HOME/Library/Application Supp
 
 启动环境保留原有绕过规则并补齐 IPv4/IPv6 loopback，统一大小写代理变量。本机语音、图像处理和 worker 健康探测另使用强制直连传输，即使直接启动中央并遗漏 `NO_PROXY`，也不会通过环境代理发送本机处理原件或授权头。
 
-原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `central.log`。DEV 默认每份 100 MiB、总共 3 份，其它 profile 默认每份 2 MiB、3 份；包括单次大输出与反复重启。中央结构化诊断独立写入 `diagnostics.directory`，使用同样的容量配置，并默认限制 2000 条记录。两组日志各自轮转，所以 DEV 默认合计最多 600 MiB；容量不保证固定保留时长。`diagnostics.debug: false` 默认关闭调试级别；开关、级别与 trace 经校验热应用，目录与日志容量修改需重启。
+原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `central.log`。DEV 默认每份 100 MiB、总共 3 份，其它 profile 默认每份 2 MiB、3 份；包括单次大输出与反复重启。中央结构化诊断独立写入 `diagnostics.directory`，使用同样的容量配置，并默认限制 2000 条记录。两组日志各自轮转，所以 DEV 默认合计最多 600 MiB；容量不保证固定保留时长。省略 `diagnostics.debug` 时 Dev 默认开启调试级别，其它 Profile 默认关闭；显式 `false` 或 `silent` 保留。开关、级别与 trace 经校验热应用，目录与日志容量修改需重启。
 
 <a id="dev-log-retention"></a>
 
@@ -151,7 +154,7 @@ TLS overlay 使用固定 Caddy 2.11.4 Alpine 镜像；与中央在独立 Compose
 
 ### 签名清单更新通道
 
-当前 Central DEV 发布提供中央源码包，但不提供签名清单或 GHCR 镜像；本节说明当前签名更新契约，不能用于获取当前 DEV 版本。清单必须声明组件，并使用该组件的 `central-vX.Y.Z` / `desktop-vX.Y.Z` / `android-vX.Y.Z` 标签；旧统一 `vX.Y.Z` 标签不受支持。当前升级请使用下节的手动源码构建或自行构建 Docker 镜像，再运行 `upgrade`。
+当前 Central 的 Dev Artifact 与 Beta / 正式发布提供中央源码包，但不提供签名更新清单或 GHCR 镜像；本节说明当前签名更新契约，不能用于获取当前发布版本。清单必须声明组件，并使用该组件的 `central-vX.Y.Z` / `desktop-vX.Y.Z` / `android-vX.Y.Z` 标签；旧统一 `vX.Y.Z` 标签不受支持。当前升级请使用下节的手动源码构建或自行构建 Docker 镜像，再运行 `upgrade`。
 
 已初始化的独立 profile 可以检查并安装符合当前契约的可信签名 Release。中央「服务端配置」页面也可检查最新版本并给出当前环境的操作命令；HTTP 接口不会启动 shell、选择本机路径或直接安装。检查是手动触发，同一分钟内共享同一次结果，不在中央启动时自动联网。非 CLI 托管进程需先由管理员建立明确的独立部署；检查接口不会自动认领根目录安装。
 

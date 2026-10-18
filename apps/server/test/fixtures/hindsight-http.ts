@@ -22,7 +22,7 @@ export async function hindsightHttpFixture(){
    if(req.method==='PUT'&&!path){if(!banks.has(id))banks.set(id,{facts:[],operations:new Map(),documents:new Set()});respond({});return;}
    if(req.method==='DELETE'&&!path){banks.delete(id);respond({});return;}
    const bank=banks.get(id);if(!bank){respond({},404);return;}
-   const semantic=async()=>{if(!scope)throw Error('Native worker has no host bank grant');await scope.assertModelAuthority?.({requestId:randomUUID(),purpose:'operation'});scope.onUsage?.({requests:1,reportedRequests:1,inputTokens:10,outputTokens:5,totalTokens:15,cacheReadTokens:0,cacheWriteTokens:0},{requestId:randomUUID(),purpose:'operation'});};
+   const semantic=async()=>{if(!scope)throw Error('Native worker has no host bank grant');const request={requestId:randomUUID(),purpose:'operation' as const};scope.onRequestStarted?.(request);await scope.assertModelAuthority?.(request);scope.onUsage?.({requests:1,reportedRequests:1,inputTokens:10,outputTokens:5,totalTokens:15,cacheReadTokens:0,cacheWriteTokens:0},request);scope.onRequestFinished?.({...request,status:'completed'});};
    events.push({userId:scope?.userId,bank:id,path,body,facts:structuredClone(bank.facts)});
    if(req.method==='PATCH'&&path==='/config'){respond({});return;}
    if(req.method==='GET'&&path==='/memories/list'){const offset=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??100);respond({items:bank.facts.slice(offset,offset+limit),total:bank.facts.length});return;}

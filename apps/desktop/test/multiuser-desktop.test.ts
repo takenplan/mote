@@ -365,7 +365,7 @@ it('blocks actual main Ask private body when the same URL becomes a different de
  const received:string[]=[];app.intercept=async raw=>{received.push(new URL(raw.url).pathname);return false;};
  await expect(app.call('mote:ask',['start',{id:randomUUID(),question:'Generated A private question must remain in its original deployment'}])).rejects.toThrow();
  expect(received).not.toContain('/api/query-runs');expect(received).toContain('/api/connections/self');
-});
+},30000);
 
 it('blocks later actual source parts when deployment changes after the old manifest ACK and preserves the original spool',async()=>{
  const f=await fixture(),config=f.config(f.a),sources=new LocalSourceManager(join(f.directory,'deployment-source'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());

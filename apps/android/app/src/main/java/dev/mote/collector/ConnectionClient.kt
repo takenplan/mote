@@ -48,7 +48,7 @@ class ConnectionClient(private val context: Context) {
     fun pendingServer(): String? = pendingInvitation(settings.read().debugHttp)?.serverUrl
     private fun readPending(debugHttp: Boolean): JSONObject {
         if (!pending.exists() || pending.length() > 32768) throw ConnectionFailure("no_pending")
-        val intent = JSONObject(AppReleaseVerifier.utf8(SecretBox().open(pending.readBytes())))
+        val intent = JSONObject(AppReleaseVerifier.utf8(context.secretBox().open(pending.readBytes())))
         require(intent.opt("version") == 2 && intent.getString("deviceId") == settings.deviceId)
         val invitation = ConnectionInvitation.restore(intent.getJSONObject("invitation").toString(), debugHttp, BuildConfig.DEBUG)
         require(invitation.deviceId == null || invitation.deviceId == settings.deviceId)
@@ -59,7 +59,7 @@ class ConnectionClient(private val context: Context) {
     private fun writePending(intent: JSONObject) {
         val temp = File(pending.parentFile, "connection-pending.tmp")
         try {
-            FileOutputStream(temp).use { it.write(SecretBox().seal(intent.toString().toByteArray(Charsets.UTF_8))); it.fd.sync() }
+            FileOutputStream(temp).use { it.write(context.secretBox().seal(intent.toString().toByteArray(Charsets.UTF_8))); it.fd.sync() }
             if (!temp.renameTo(pending)) throw SettingsWriteFailure()
         } finally { temp.delete() }
     }

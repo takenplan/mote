@@ -7,7 +7,7 @@ import {configureLocale} from '@mote/shared/i18n';
 import {recordingFixture} from './fixtures/recordings.js';
 import {createApi,type Api} from '../src/api.js';
 import {resources} from '../src/resource-cache.js';
-import {RecordingsSettings} from '../src/RecordingsSettings.js';
+import {RecordingConnection,RecordingsSettings} from '../src/RecordingsSettings.js';
 import {EvidenceDialog} from '../src/shell-components.js';
 configureLocale(()=> 'zh-CN');
 
@@ -46,4 +46,26 @@ test('original recording settings use the owned instance, preserve text on expli
  assert.equal((await f.request(f.b.token,'/api/files')).json().items.length,4,'disconnect A leaves B unchanged');
  assert.equal((await f.request(f.a.token,'/api/files?sourceId='+savedSource)).json().items.length,24,'disconnect retains human-readable recording archives');await wait(()=>d.querySelectorAll('[aria-label="最近归档的录音列表"] .source-item').length===20,'disconnected original page retains historical cards');const entryRequests=requests.length;await act(async()=>{d.querySelector<HTMLButtonElement>('[aria-label="最近归档的录音列表"] .source-item button')!.click();await delay(10);});await wait(()=>!!button('加载原件 / 回听'),'recording archive card reaches original FileDetail controls through the actual App evidence dialog');assert.ok(requests.slice(entryRequests).some(request=>beforeDisconnect.some((file:{captureId:string})=>request.path==='/api/files/'+file.captureId)),'original recording entry reads its owned canonical FileDetail');
 
+});
+
+
+test('an owned disconnect keeps waiting for its receipt when status retires the source first, while an account change cancels it',async t=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),saved=new Map<string,PropertyDescriptor|undefined>();
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),d=dom.window.document;
+ t.after(async()=>{await act(async()=>root.unmount());dom.window.close();for(const [key,value]of saved){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}});
+ const path='/api/connectors/feishu-recordings',selection={enabled:false,start:'2026-09-30T00:00:00Z',autoSync:false,backupAudio:true as const},status=(connected:boolean)=>({provider:'feishu',connected,...(connected?{sourceId:'generated-owned-source'}:{}),selection,steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}});
+ let connected=true,finish:((value:ReturnType<typeof status>)=>void)|undefined,commandSignal:AbortSignal|undefined,writes=0;
+ const api={request:async(url:string,init:RequestInit={})=>{
+  if(url==='/api/sources/generated-owned-source/context')return {sourceId:'generated-owned-source',version:0,description:''};
+  assert.equal(url,path);if((init.method??'GET')==='GET')return status(connected);
+  assert.equal(init.method,'DELETE');writes++;commandSignal=init.signal as AbortSignal;return new Promise((resolve,reject)=>{finish=resolve;commandSignal!.addEventListener('abort',()=>reject(commandSignal!.reason),{once:true});});
+ }} as Api;
+ const render=async(owner:Api)=>act(async()=>{root.render(React.createElement(React.StrictMode,null,React.createElement(RecordingConnection,{api:owner,provider:'feishu',onOpen:()=>{},owned:true})));await delay(10);});
+ const button=(label:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(value=>value.textContent===label),wait=async(read:()=>boolean,label:string)=>{for(let i=0;i<500&&!read();i++)await act(async()=>delay(10));assert.ok(read(),label+' '+d.body.textContent);};
+ await render(api);await wait(()=>!!button('断开连接'),'connected original');await act(async()=>{button('断开连接')!.click();await delay(10);});assert.ok(commandSignal);assert.equal(writes,1);
+ await act(async()=>{connected=false;resources(api).get(path).refresh();await delay(20);});await wait(()=>!!button('连接已授权账号'),'status retires source before command settles');assert.equal(commandSignal!.aborted,false,'owned source retirement cannot abort its own admitted disconnect');assert.equal(button('连接已授权账号')!.disabled,true,'the command still owns the original control');
+ await act(async()=>{finish!(status(false));await delay(20);});await wait(()=>button('连接已授权账号')?.disabled===false,'terminal receipt releases command');
+ await act(async()=>{connected=true;resources(api).get(path).refresh();await delay(20);});await wait(()=>!!button('断开连接'),'second owned command');const oldDisconnect=button('断开连接')!;await act(async()=>{oldDisconnect.click();await delay(10);});const retiredSignal=commandSignal!;assert.equal(writes,2);
+ const other={request:async()=>status(false)} as unknown as Api;await render(other);assert.equal(retiredSignal.aborted,true,'account Api change still retires the command');await act(async()=>{oldDisconnect.click();finish!(status(false));await delay(20);});assert.equal(writes,2,'retired owner node cannot write after an account change');
 });

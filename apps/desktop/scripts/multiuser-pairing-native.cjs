@@ -13,7 +13,8 @@ for (const [name, path] of [['userData', profile], ['sessionData', join(profile,
   mkdirSync(path, {recursive: true, mode: 0o700});
   electron.app.setPath(name, path);
 }
-process.env.MOTE_PROFILE = 'default';
+const developmentStorage = process.env.MOTE_FIXTURE_DEV_STORAGE;
+process.env.MOTE_PROFILE = developmentStorage === 'profile' ? 'dev' : 'default';
 for (const key of ['MOTE_TOKEN', 'MOTE_URL', 'MOTE_ENV_FILE']) delete process.env[key];
 let mainWindow, sequence = 0, selectedImport;
 const pending = new Map();
@@ -33,7 +34,7 @@ const native = {
 const io = {
   ...electron, Tray: GeneratedTray,
   powerMonitor: Object.assign(new EventEmitter(), {getSystemIdleTime: () => 0, getSystemIdleState: () => 'active'}),
-  safeStorage: {isEncryptionAvailable: () => true, encryptString: value => Buffer.from(value).map(v => v ^ 90), decryptString: value => Buffer.from(value.map(v => v ^ 90)).toString()},
+  safeStorage: developmentStorage ? new Proxy({}, {get:()=>()=>{throw Error('Development must never access Keychain');}}) : {isEncryptionAvailable: () => true, encryptString: value => Buffer.from(value).map(v => v ^ 90), decryptString: value => Buffer.from(value.map(v => v ^ 90)).toString()},
   systemPreferences: {getMediaAccessStatus: () => 'denied', isTrustedAccessibilityClient: () => false},
   desktopCapturer: {getSources: async () => {throw Error('Real screenshots disabled');}},
   net: {request: () => {throw Error('External network disabled');}},
@@ -44,6 +45,7 @@ io.dialog.showOpenDialog = async () => {
 };
 const load = Module._load;
 Module._load = function(request, parent, ...rest) {
+  if (request === '../package.json' && parent?.filename.endsWith('/desktop/dist/main.js') && developmentStorage === 'build') return {...load.call(this, request, parent, ...rest), moteDevelopment: true};
   if (request === 'electron' || request === 'electron/main') return io;
   if (request === './native' && parent?.filename.includes('/desktop/dist/')) return native;
   if (request === 'node:os' && parent?.filename.endsWith('/desktop/dist/config.js')) return {...load.call(this, request, parent, ...rest), hostname: () => 'Generated pairing Desktop'};

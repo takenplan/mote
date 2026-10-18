@@ -23,6 +23,12 @@ workers receive request bytes and the fixed connection's key, never a caller key
 Text and document extraction require no model selection. M04 snapshot hydration,
 usage attribution and M05 typed failure handling remain authoritative.
 
+M06's `installProcessing` schema entry owns `mp_media_calls` and
+`mp_worker_cleanup`. Both retain exact user-bound execution/cleanup metadata,
+with no original, prompt or result body. The resource-admission helper and the
+authenticated execution-fact reader are registered only for their specific
+M05/M06 host consumers; they expose no legacy private Store or owner selector.
+
 M03 receipts continue to attest saved originals only. New originals admit a
 durable, no-model M05 pipeline coordinator in the intake transaction. The child
 processing task has its own original model lease and checkpoint. Explicit

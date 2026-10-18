@@ -16,7 +16,7 @@
     "start": "npm run start -w @mote/server",
     "desktop": "npm run start -w @mote/desktop",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "check:local": "npm run check:i18n && npm run build:libs && npm run typecheck && npm test",
+    "check:local": "node scripts/release/check-affected.mjs --component typescript",
     "check:affected": "node scripts/release/check-affected.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.scripts.json",
     "test": "npm run test --workspaces --if-present && node --test scripts/release/*.test.mjs scripts/media-workers.test.mjs scripts/security-tests.mjs scripts/reset-mvp-vault.test.mjs scripts/journey-network-proxy.test.mjs && node --import tsx --test scripts/client.test.ts && node scripts/test-central-runner.mjs",
@@ -34,6 +34,7 @@
     "privacy": "node --import tsx scripts/privacy-gateway.ts",
     "test:privacy": "node --import tsx scripts/test-privacy.ts",
     "mote": "node scripts/mote.mjs",
+    "connectors:prepare": "node scripts/connector-runtime.mjs",
     "up": "node scripts/mote.mjs run-all --profile dev",
     "dev:workspace": "concurrently -k -n server,web \"npm run dev -w @mote/server\" \"npm run dev -w @mote/web\"",
     "test:profiles": "node --test scripts/validation/profile-scoped-startup.test.mjs",
@@ -44,8 +45,8 @@
     "release:version": "node scripts/release/version.mjs",
     "release:verify": "node scripts/release/verify-version.mjs",
     "build:central": "npm run build -w @mote/shared && npm run build -w @mote/agent && npm run build -w @mote/server && npm run build -w @mote/web",
-    "check:central": "npm run build:central && npm run typecheck -w @mote/shared -w @mote/agent -w @mote/server -w @mote/web && npm run test -w @mote/shared -w @mote/agent -w @mote/server -w @mote/web && node scripts/test-central-runner.mjs && node --test scripts/release/*.test.mjs",
-    "check:desktop": "npm run build -w @mote/shared -w @mote/diagnostics && npm run typecheck -w @mote/shared -w @mote/diagnostics -w @mote/desktop && npm run test -w @mote/shared -w @mote/diagnostics -w @mote/desktop && node --test scripts/release/*.test.mjs",
+    "check:central": "node scripts/release/check-affected.mjs --component central",
+    "check:desktop": "node scripts/release/check-affected.mjs --component desktop",
     "auth:initialize-admin": "npm run auth:initialize-admin -w @mote/server"
   },
   "devDependencies": {

@@ -9,6 +9,53 @@ recorded separately from this decision.
 
 ## Decision
 
+### Cross-client resource waiting (accepted 2026-10-18)
+
+The owner reaffirmed this rule for every client and processing entry point:
+when OCR, ASR, a language model or another finite execution resource is busy,
+retain the task in a fair queue and resume automatically when capacity becomes
+available. Failing to acquire capacity is not a processing failure. Waiting does
+not consume execution time or failure attempts, has no generic terminal age,
+and remains visible and cancellable. Independent resources may execute in
+parallel. Recheck authority and current input before dispatch.
+
+Central remains the sole workflow scheduler. Scoped media processing must share
+the physical worker's admission identity, rather than creating separate capacity
+for each user or original. A structured worker busy response is an internal
+known-not-started fallback: release the claim and return the task to resource
+waiting. Do not expose that response as a terminal parent or child failure.
+
+Keep prepared/waiting work distinct from an issued external request. Restarting
+while waiting must not invent an unknown external outcome. Execution ownership
+leases and physical execution are separate: lease expiry cannot prove that an
+issued call stopped, and a late response cannot restore publication authority.
+
+The owner also approved minimal persistent execution-fact receipts: trusted
+request identity, worker incarnation, execution state/times and fixed outcome
+codes, with authenticated read-only reconciliation. They do not contain original
+content, prompts or result bodies, and do not introduce a worker scheduling
+queue. A duplicate request identity must not start concurrent duplicate work.
+Unsupported remote-provider reconciliation remains explicitly unknown; neither
+receipt absence nor a disconnect proves non-execution. Result-body staging is
+outside this decision.
+
+KEEP central scheduling, fairness, checkpoints, cancellation, authorization and
+late-result fences. CHANGE scoped physical-resource admission and execution-fact
+reconciliation. REMOVE busy-as-failure handling and queue time charged as work.
+EXCEPTION: invalid input, missing configuration, revoked authority, actual
+execution failures and issued unknown outcomes retain their distinct contracts.
+UNKNOWN: remote outcomes without provider evidence and the incident's exact
+lease-renewal interruption; neither is inferred from worker health.
+
+This implementation targets the current wire/storage contracts only. It does
+not repair, backfill or rerun historical data and adds no version compatibility
+paths. Separate retention/capacity, Memory admission/context/retrieval, migration
+cancellation, modular-composition and document-polling proposals remain outside
+this work. The related current-entry-point decisions are recorded in
+[scoped processing reliability](adr-scoped-processing-reliability.md).
+
+### Task-type budgets
+
 A durable task must not inherit a universal short processing deadline, such as
 600 seconds. Each task type declares its own suitably generous default execution
 or timeout policy when its workflow is designed and registered. This does not

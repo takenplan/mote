@@ -81,8 +81,39 @@ shared resource withdrawal fence publication and usage. Shared generations are
 monotonic and durable, including identical republication. Web logout alone does
 not revoke already admitted account work.
 
-`recordUsage(lease, result)` derives user, model and operation from the genuine
-lease, uses a user-qualified receipt key and reuses existing cost/totals functions.
+`startUsage(lease, options)` derives user, model, operation and frozen price from
+the genuine lease and creates an independent user-qualified fragment ID. A
+prepared fragment is metadata only. The adapter marks it issued at the actual
+model-send boundary after resource admission, replaces its latest cumulative
+sample on `onUsage`, and finalizes the same fragment on success or failure.
+After cancellation or authorization revocation, the existing meter can only
+interrupt its own retained fragment, preserving earlier samples. This narrow
+finalizer cannot add usage, authorize a request or recreate a deleted row.
+The scope inventory assigns this numeric fragment ledger and its host-owner
+recovery rows to M04; the meter handle is not a business or model-access grant.
+The scoped query finalizer runs local result acceptance before marking success;
+image JSON, schema and pixel-read rejection preserve a failed fragment and its
+reported consumption without starting model repair or another request.
+Repeated samples and finalization do not add consumption. Independent queries
+or reexecution use distinct fragments even under one retained lease; successful
+checkpoint reuse creates none. The host-only `recordUsage` convenience method
+records one independent, already measured consumption and does not deduplicate
+by lease. All views reuse the existing cost/totals functions.
+
+Prepared fragments and confirmed nonexecuted busy responses remain in the
+private ledger but are absent from the usage API and execution totals. A later
+busy turn cannot erase earlier reported consumption in the same query. Provider
+request counts remain provider facts; a Codex thread keeps cumulative/complete
+semantics and an unknown underlying request count. Missing prices remain
+unknown. Fragment durations start at issuance, excluding queue time. Startup
+interrupts unfinished fragments only after their owning host is known stopped;
+opening another live host does not finalize its measurements. Interrupted
+cumulative samples retain their numbers with `complete:false`, and no downtime
+is added to their last measured duration. Account deletion clears both receipts
+and their owner metadata. No historical receipt reconstruction is performed.
+Portable exports copy an unfinished measurement as interrupted/incomplete without
+closing its live owner; restoring that observation cannot revive accounting or
+model execution.
 M05 owns durable task authorization and recovers a current host UserContext. It
 stores only the snapshot ID and public receipt, never plaintext model credentials.
 On restart it calls `configuration.restoreLease(context, snapshotId,
@@ -93,8 +124,20 @@ substitute. User/deployment, account epoch, configuration deletion generation,
 operation and durable resource/credential generations must match. Key/ciphertext
 damage returns explicit unavailable; account reset, credential withdrawal or
 resource withdrawal cannot be undone by republishing identical settings. The
-recovered ID is also the usage receipt ID, so restart does not double count an
-already delivered result.
+recovered snapshot ID remains a configuration identity. Durable fragment IDs
+deduplicate repeated accounting updates; completed execution checkpoints avoid
+issuing another query after restart. Receipts never restore model authority.
+
+M16 has a separate `eraseWorkerReceipt` capability for an exact persisted M06
+cleanup intent after processing retirement. Only a genuine processing/delete
+lifecycle subject may use it, including after account disable. It decrypts the
+same account's retained OCR/ASR media snapshot solely to DELETE that loopback
+worker receipt with its fixed scope and credentials. It returns only
+deleted/pending, never credentials, a transport function or a restored business
+lease. Wrong ownership/purpose, an active processing domain and a mismatched
+intent cannot dispatch. Unsupported cleanup, network failures, active workers
+and malformed acknowledgements remain pending. M16 clears processing intents
+before configuration snapshots and keys are removed.
 
 Personal nonempty credential replacement preserves admitted live work, as in the
 original next-request contract; it prevents rehydrating an old credential

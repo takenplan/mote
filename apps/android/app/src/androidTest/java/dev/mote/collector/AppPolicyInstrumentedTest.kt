@@ -137,7 +137,7 @@ class AppPolicyInstrumentedTest {
             val source = LocalSource(name = "Android 合成文件元数据", kind = "local-files", uri = "content://$authority/tree/root", tree = true)
             val temporary = File(context.noBackupFilesDir, "policy-source-fixture")
             try {
-                val local = LocalSourceStore(temporary, SecretBox()); local.save(source); local.selectTarget(source.id, "fixture")
+                val local = LocalSourceStore(temporary, context.secretBox()); local.save(source); local.selectTarget(source.id, "fixture")
                 local.scan(source, SourceProviders(context.contentResolver).scan(source))
                 assertTrue(HttpJson.post("$server/api/sources", source.registration(settings.deviceId), token).first in 200..299)
                 val item = local.next(source.id, "fixture")!!; val reply = HttpJson.request("PUT", "$server/api/sources/${source.id}/items", item, token)

@@ -1,10 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { verifyComponent } from './components.mjs';
+import { verifyComponent, buildProfile } from './components.mjs';
 import { verifySourceArchive } from './source-validation.mjs';
 
-const release = verifyComponent('central', { ref: process.env.GITHUB_REF, repository: process.env.GITHUB_REPOSITORY });
+const release = verifyComponent('central', { ref: process.env.GITHUB_REF, repository: process.env.GITHUB_REPOSITORY, profile: buildProfile() });
 // Archive the committed monorepo so npm workspaces and shared dependencies remain reproducible.
 for (const path of release.packages) {
   const committed = JSON.parse(execFileSync('git', ['show', `HEAD:${path}`], { encoding: 'utf8' }));

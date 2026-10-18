@@ -45,6 +45,9 @@ OCR Worker 使用 PaddleX 的 OCR pipeline，显式指定两个本地 PP-OCRv5 m
 
 明确的 worker busy 进入共享容量等待，不消耗处理失败次数，也不受通用六小时恢复窗口终止。实际可安全重放的暂时性错误按注册策略退避，本地处理最多四次实际尝试；无效输出、输入损坏和超过资源上限按永久失败处理。达到上限后需显式重试或调整当前处理配置，Worker 就绪不会自动重置失败。`auto_eligible` 是当前任务的处理授权字段，当前入库和用户操作明确写入；不再运行旧任务资格迁移。OCR 设置保留每批最多 100 张手动资格截图的预览与确认，文件设置保留范围预览和重处理入口；显式单条重试仍可处理当前归档中的历史原件。旧库格式拒绝及首次就绪恢复旧失败任务的删除见 [兼容性清理记录](audits/compatibility-cleanup-2026-10-04.md)。
 
+2026-10-18 当前多用户路径：中央按冻结模型配置生成不含凭据的物理 listener 资源键，不同用户、不同原件在同一 OCR/ASR worker 前排队；独立 worker 可并行。调用发送前才记录 issued，排队和共享 busy 退避不消耗执行时限或失败次数。worker 以认证的 requestId/scope 接受请求，并持久化仅含执行身份、启动实例、阶段、状态、时间和固定结果码的元数据；重复 requestId 不重复执行。只读状态核对不包含原件或结果正文，worker 重启后的未结束请求保持 unknown，不能据此假定已停止。已完成但正文未形成当前持久产物时提示 `processor_result_unavailable`，由显式普通重试继续。元数据随既有用户/处理域删除清理；清理能力只删除绑定收据，不恢复已撤销的模型权限。Native 使用 profile 的 `media-executions`，Docker 使用 profile 私有 worker-facts 卷；没有新增 TTL 或结果正文暂存。
+
+
 ## 部署操作
 
 Native profile 的正式启动和 `scripts/dev-server.mjs` 开发启动都会在后台自动准备独立 Python 运行时并启动 Worker；首次安装需要网络，失败后每 30 秒重试。系统需提供 Python 3.9+，音频处理另需 FFmpeg。模型可以在启动后从网页安装，无需重启。也可先停止 profile，手工预装运行时：

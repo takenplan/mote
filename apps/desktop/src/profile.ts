@@ -4,6 +4,9 @@ import { defaultConfig, isLoopback, updateConfig, validateServerUrl } from './co
 import type { Config } from './contracts';
 
 export interface DesktopProfile { name: string; defaultProfile: boolean; dataDirectory: string; defaultServerUrl: string }
+export function isDevelopmentProfile(profile: DesktopProfile, developmentBuild = false): boolean {
+  return developmentBuild || profile.name === 'dev';
+}
 /** Resolve before Electron acquires its instance lock or creates a browser session. */
 export function resolveProfile(argv: readonly string[], env: NodeJS.ProcessEnv, defaultDirectory: string): DesktopProfile {
   const selected: string[] = [];
@@ -22,8 +25,9 @@ export function resolveProfile(argv: readonly string[], env: NodeJS.ProcessEnv, 
     defaultServerUrl: `http://127.0.0.1:${defaultProfile || name === 'prod' ? 47832 : name === 'test' ? 47852 : 47842}` };
 }
 /** Environment is a bootstrap for a new profile. Saved node credentials always stay together. */
-export function profileDefaults(profile: DesktopProfile, env: NodeJS.ProcessEnv): Config {
+export function profileDefaults(profile: DesktopProfile, env: NodeJS.ProcessEnv, developmentBuild = false): Config {
   const config = defaultConfig();
+  config.diagnosticsEnabled = isDevelopmentProfile(profile, developmentBuild);
   const sameProfile = env.MOTE_PROFILE === profile.name || (profile.defaultProfile && !env.MOTE_PROFILE);
   config.serverUrl = validateServerUrl((sameProfile && env.MOTE_URL) || profile.defaultServerUrl);
   const origin = new URL(config.serverUrl);

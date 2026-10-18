@@ -72,11 +72,15 @@ export function RecordingConnection({ api, provider, onOpen, owned=false, inacti
     };
     const dirty = useRef(false), running = useRef(false), scope = useRef(new AbortController());
     const context = useSourceContextDraft(api, read.data?.connected ? read.data.sourceId : undefined);
+    // An owned adapter is already keyed by account, instance and generation.
+    // Its source changes as connect/disconnect runs, before the task receipt
+    // necessarily settles; that result must not cancel its own command.
+    const sourceScope = owned ? undefined : read.data?.sourceId;
     useEffect(() => {
         const controller = new AbortController(); scope.current = controller;
         dirty.current = false; running.current = false; setBusy(false); setError(''); setSaved(false); acceptSelection(read.data?.selection);
         return () => controller.abort();
-    }, [api, provider, read.data?.sourceId]);
+    }, [api, provider, sourceScope]);
     useEffect(() => { if (read.data && !dirty.current)
         acceptSelection(read.data.selection); }, [read.data]);
     const update = (patch: Partial<RecordingSelection>) => { dirty.current = true; setSaved(false); setSelection(v => v ? { ...v, ...patch } : v); };
@@ -131,9 +135,9 @@ export function RecordingConnection({ api, provider, onOpen, owned=false, inacti
     const status = read.data;
     return <section className="panel lark-step"><div className="section-heading"><h2>{names[provider]?moteText(names[provider]):status?.label ?? provider}</h2><span className={`badge ${status?.connected ? 'green' : 'muted'}`}>{status?.connected ? moteText('已连接') : moteText('尚未授权')}</span></div>
  {Boolean(error || read.error) && <p role="alert" className="notice error">{error || errorMessage(read.error)}</p>}
- {status?.accountName && <p>{status.accountName}</p>}{!status?.connected && <div className="discovery-inline-guidance"><p>{moteText("先在中央节点授权厂商账号，确认所需读取权限，再选择历史范围并启用同步。飞书文档与日历的授权另在自己的页面管理。")}</p></div>}
- {!status?.connected && <><p>{moteText('连接中央节点已经授权的厂商账号，然后选择首次导入时间。')}</p><button className="button" disabled={inactive || busy || !status} onClick={() => void run('POST', '/connect')}>{moteText('连接已授权账号')}</button>
- {(provider === 'feishu' || provider === 'dingtalk') && <details><summary>{moteText('首次授权帮助')}</summary>{provider === 'feishu' ? <><p>{moteText('在中央节点安装并登录官方 Lark CLI。需要妙记搜索、基础信息、产物读取和媒体导出权限。')}</p><code>lark-cli auth login</code><p><a href="https://github.com/larksuite/cli" target="_blank" rel="noreferrer">Lark CLI</a></p></> : <><p>{moteText('在中央节点安装并登录官方 DWS CLI；所在组织需开启 CLI 接入。钉钉适配器尚未完成真实账号验证。')}</p><code>dws auth login</code><p><a href="https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli" target="_blank" rel="noreferrer">DWS CLI</a></p></>}</details>}{status?.setup && <details><summary>{moteText('首次授权帮助')}</summary><p>{status.setup.description}</p>{status.setup.command && <code>{status.setup.command}</code>}{status.setup.documentationUrl?.startsWith('https://') && <p><a href={status.setup.documentationUrl} target="_blank" rel="noreferrer">{status.label ?? provider}</a></p>}</details>}</>}
+ {status?.accountName && <p>{status.accountName}</p>}{!status?.connected && !owned && <div className="discovery-inline-guidance"><p>{moteText("先在中央节点授权厂商账号，确认所需读取权限，再选择历史范围并启用同步。飞书文档与日历的授权另在自己的页面管理。")}</p></div>}
+ {!status?.connected && <>{!owned&&<p>{moteText('连接中央节点已经授权的厂商账号，然后选择首次导入时间。')}</p>}<button className="button" disabled={inactive || busy || !status} onClick={() => void run('POST', '/connect')}>{moteText('连接已授权账号')}</button>
+ {!owned && (provider === 'feishu' || provider === 'dingtalk') && <details><summary>{moteText('首次授权帮助')}</summary>{provider === 'feishu' ? <><p>{moteText('在中央节点安装并登录官方 Lark CLI。需要妙记搜索、基础信息、产物读取和媒体导出权限。')}</p><code>lark-cli auth login</code><p><a href="https://github.com/larksuite/cli" target="_blank" rel="noreferrer">Lark CLI</a></p></> : <><p>{moteText('在中央节点安装并登录官方 DWS CLI；所在组织需开启 CLI 接入。钉钉适配器尚未完成真实账号验证。')}</p><code>dws auth login</code><p><a href="https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli" target="_blank" rel="noreferrer">DWS CLI</a></p></>}</details>}{status?.setup && <details><summary>{moteText('首次授权帮助')}</summary><p>{status.setup.description}</p>{status.setup.command && <code>{status.setup.command}</code>}{status.setup.documentationUrl?.startsWith('https://') && <p><a href={status.setup.documentationUrl} target="_blank" rel="noreferrer">{status.label ?? provider}</a></p>}</details>}</>}
  {status?.connected && selection && <form className="recording-scope-form" onSubmit={e => {
      e.preventDefault();
      void save();
