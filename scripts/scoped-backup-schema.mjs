@@ -95,6 +95,7 @@ export const scopedBackupSchema = Object.freeze({
  "mc_source_epochs":["user_id","source_id","epoch","revision"],
  "mc_source_status":["user_id","source_id","source_epoch","connection_id","fingerprint","json"],
  "mc_state":["user_id","deleted","generation","fingerprint"],
+ "mm_batch_artifacts":["user_id","job_id","batch_id","kind","json"],
  "mm_binding_locks":["user_id","operation_id"],
  "mm_binding_preparations":["user_id","id","source","target","catalog_hash","json","state","task_id"],
  "mm_capture_intakes":["user_id","capture_id","source_id","json","revoked"],
