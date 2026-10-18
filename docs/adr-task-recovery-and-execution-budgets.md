@@ -49,8 +49,10 @@ lease-renewal interruption; neither is inferred from worker health.
 
 This implementation targets the current wire/storage contracts only. It does
 not repair, backfill or rerun historical data and adds no version compatibility
-paths. The owner's separate ADR-audit batches and policy/delivery choices
-(sections 5 and 6 of the preceding discussion) remain outside this work.
+paths. Separate retention/capacity, Memory admission/context/retrieval, migration
+cancellation, modular-composition and document-polling proposals remain outside
+this work. The related current-entry-point decisions are recorded in
+[scoped processing reliability](adr-scoped-processing-reliability.md).
 
 ### Task-type budgets
 

@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {join} from 'node:path';
+import {connectorAuthorizationFixture} from './fixtures/scoped-connector-auth.js';
+
+for(const provider of ['feishu-recordings','dingtalk-recordings'] as const)test(provider+' authorizes only its instance, preserves opaque links, cancels/expires and can explicitly reauthorize',async t=>{
+ const x=await connectorAuthorizationFixture(t,provider),{f}=x;const initial=await f.request(f.a.token,'/api/connectors/same-recorder');assert.equal(initial.json().connected,false);assert.equal(x.calls.length,0,'reading settings never probes an external account');
+ if(provider==='feishu-recordings'){
+  const setup=await x.operation(f.a.token,'setup'),pending=await x.entered(f.a.userId,'setup');let task=await x.task(f.a.token,setup.id,false);for(let i=0;i<100&&!task.progress?.authorizationUrl;i++){await new Promise(r=>setTimeout(r,10));task=await x.task(f.a.token,setup.id,false);}assert.equal(task.progress.authorizationUrl,pending.url);pending.finish();assert.equal((await x.task(f.a.token,setup.id)).state,'succeeded');
+  const secret='GENERATED_PRIVATE_APP_SECRET';const configured=await x.operation(f.a.token,'configure',{appId:'cli_generated',secret,brand:'feishu'});assert.equal((await x.task(f.a.token,configured.id)).state,'succeeded');const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{for(const table of ['user_tasks','execution_steps','connector_ledger']){const columns=db.prepare('SELECT * FROM '+table).all();assert.equal(JSON.stringify(columns).includes(secret),false,'secret does not enter task or public ledger');}}finally{db.close();}
+ }
+ const check=await x.operation(f.a.token,'check'),checked=await x.task(f.a.token,check.id);assert.equal(checked.state,'succeeded');assert.equal(checked.result.environment.version,provider==='feishu-recordings'?'1.0.98':'1.0.64');
+ const login=await x.operation(f.a.token,'login'),first=await x.entered(f.a.userId,'login');let task=await x.task(f.a.token,login.id,false);for(let i=0;i<100&&!task.progress?.authorizationUrl;i++){await new Promise(r=>setTimeout(r,10));task=await x.task(f.a.token,login.id,false);}assert.equal(task.progress.authorizationUrl,first.url);assert.equal(JSON.stringify(task).includes('GENERATED_PRIVATE_DEVICE_CODE'),false);assert.equal((await f.request(f.b.token,'/api/tasks/'+login.id)).statusCode,404);
+ await f.request(f.a.token,'/api/tasks/'+login.id+'/cancel','POST',{});assert.equal((await x.task(f.a.token,login.id)).state,'cancelled');assert.equal((await f.request(f.a.token,'/api/connectors/same-recorder')).json().connected,false);
+ let after=x.authorizations.length;const expired=await x.operation(f.a.token,'login');(await x.entered(f.a.userId,'login',after)).expire();const failed=await x.task(f.a.token,expired.id);assert.equal(failed.state,'blocked');assert.equal(failed.failure.code,provider==='feishu-recordings'?'lark_authorization_expired':'dingtalk_authorization_expired');
+ after=x.authorizations.length;const fresh=await x.operation(f.a.token,'login');(await x.entered(f.a.userId,'login',after)).finish();const connected=await x.task(f.a.token,fresh.id);assert.equal(connected.state,'succeeded');assert.equal(connected.result.connected,true);assert.equal(connected.result.selection.enabled,false,'authorization alone does not begin collection');assert.equal((await f.request(f.b.token,'/api/connectors/same-recorder')).json().connected,false);assert.equal(x.calls.filter(call=>['search','minutes-search'].includes(call.kind)).length,0);
+ after=x.authorizations.length;x.session(f.a.userId,'same-recorder').account='generated-second-account';const replacement=await x.operation(f.a.token,'login');(await x.entered(f.a.userId,'login',after)).finish();assert.equal((await x.task(f.a.token,replacement.id)).state,'succeeded');assert.equal((await f.request(f.a.token,'/api/connectors/same-recorder')).json().selection.enabled,false);
+ await f.restart();assert.equal((await f.request(f.a.token,'/api/connectors/same-recorder')).json().connected,true,'explicit connection survives host restart');
+});

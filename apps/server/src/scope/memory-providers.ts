@@ -5,7 +5,7 @@ import type {ModelSettings} from '@mote/shared/models';
 import {modelSettingsSchema} from '../model-settings.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import type {TokenUsage} from '@mote/shared';
+import type {ModelUsageMeter} from './model-usage.js';
 import {Mem0MemoryProvider} from '../mem0-memory-provider.js';
 import {createHindsightEngine,HindsightEngine,type HindsightPrepare} from '../hindsight-engine.js';
 import {hindsightModelFingerprint,type HindsightRuntime} from '../hindsight-runtime.js';
@@ -23,7 +23,7 @@ export type HindsightRuntimeFactory=(options:Parameters<typeof createHindsightEn
 export type MemoryProviderOptions={hindsightRuntimeFactory?:HindsightRuntimeFactory};
 type Binding=Extract<ScopedMemoryBinding,{kind:'plugin'}>;
 type ProviderConfig={snapshot_id:string;operation_id:string;configuration_hash:string};
-type Entry={provider:MemoryProvider;tail:Promise<unknown>;active?:{assert:()=>void;lease?:ModelLease;tokens?:TokenUsage;started:number;modelStarted:boolean};base:ProviderConfig};
+type Entry={provider:MemoryProvider;tail:Promise<unknown>;active?:{assert:()=>void;lease?:ModelLease;opaque?:ModelUsageMeter;meters:Map<string,ModelUsageMeter>};base:ProviderConfig};
 const referenceSchema=z.string().regex(/^(personal|shared):.+$/).transform(value=>{const at=value.indexOf(':');return {kind:value.slice(0,at) as 'personal'|'shared',id:value.slice(at+1)};});
 const unavailable=()=>new MemoryProviderError('unavailable','The retained scoped Memory provider is unavailable');
 
@@ -66,10 +66,10 @@ export class ScopedMemoryProviders {
   const directory=join(descriptor.directory,'memory-'+tag);if(restored.status!=='restored'&&descriptor.adapter==='mote.mem0@1'&&!['operations.db','vectors.db','history.db'].every(file=>existsSync(join(directory,file))))throw unavailable();
   const entry:Entry={provider:undefined as unknown as MemoryProvider,tail:Promise.resolve(),base};
   const create=async(settings:Readonly<ModelSettings>)=>{
-   const assert=()=>{const active=entry.active;if(!active?.lease)throw unavailable();active.modelStarted=true;active.assert();this.configuration.assertLease(active.lease);};
-   if(descriptor.adapter==='mote.mem0@1')return new Mem0MemoryProvider({directory:join(descriptor.directory,'memory-'+tag),embedding:{baseUrl:settings.baseUrl,model:settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:settings.apiKey||'unused-local-literal-reader'}},{assertEmbeddingAuthority:assert,...(restored.status!=='restored'?{embeddingUnavailable:unavailable()}:{})});
+   const assert=()=>{const active=entry.active;if(!active?.lease)throw unavailable();active.assert();this.configuration.assertLease(active.lease);};
+   if(descriptor.adapter==='mote.mem0@1')return new Mem0MemoryProvider({directory:join(descriptor.directory,'memory-'+tag),embedding:{baseUrl:settings.baseUrl,model:settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:settings.apiKey||'unused-local-literal-reader'}},{assertEmbeddingAuthority:()=>{assert();const active=entry.active!;active.opaque??=this.configuration.startUsage(active.lease!,{attribution:{agentId:'memory-provider',moduleId:'memories',skillId:null}});active.opaque.issued();},...(restored.status!=='restored'?{embeddingUnavailable:unavailable()}:{})});
    if(descriptor.adapter==='mote.hindsight@1'){
-    const options:Parameters<typeof createHindsightEngine>[0]={directory:join(descriptor.directory,'memory-'+tag),instanceId:binding.instanceId,configurationIdentity:memoryHash([context.deploymentId,descriptor.namespace,base.configuration_hash]),modelFingerprint:literal?.modelFingerprint??hindsightModelFingerprint(settings),settings:{...settings},assertModelAuthority:assert,runModel:async work=>{assert();const result=await work();assert();return result;},onUsage:tokens=>{assert();const prior=entry.active!.tokens;if(!prior){entry.active!.tokens=tokens;return;}const fields=['requests','reportedRequests','inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens'] as const;entry.active!.tokens={...tokens,...Object.fromEntries(fields.flatMap(field=>prior[field]!==undefined||tokens[field]!==undefined?[[field,(prior[field]??0)+(tokens[field]??0)]]:[]))};}};
+    const options:Parameters<typeof createHindsightEngine>[0]={directory:join(descriptor.directory,'memory-'+tag),instanceId:binding.instanceId,configurationIdentity:memoryHash([context.deploymentId,descriptor.namespace,base.configuration_hash]),modelFingerprint:literal?.modelFingerprint??hindsightModelFingerprint(settings),settings:{...settings},onRequestStarted:request=>{assert();const active=entry.active!;if(!active.meters.has(request.requestId))active.meters.set(request.requestId,this.configuration.startUsage(active.lease!,{attribution:{requestId:request.requestId,agentId:'memory-provider',moduleId:'memories',skillId:null}}));},assertModelAuthority:request=>{assert();const meter=entry.active!.meters.get(request.requestId);if(!meter)throw unavailable();meter.issued();},runModel:async work=>{assert();const result=await work();assert();return result;},onUsage:(tokens,request)=>{assert();const meter=entry.active!.meters.get(request.requestId);if(!meter)throw unavailable();meter.update(tokens);},onRequestFinished:request=>{try{assert();entry.active!.meters.get(request.requestId)?.finish(request.status);}catch{/* Revocation fences late accounting as well as late publication. */}}};
     return this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(options.directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:context.userId}),model:settings.model}):createHindsightEngine(options);
    }
    throw unavailable();
@@ -82,10 +82,10 @@ export class ScopedMemoryProviders {
   const assert=()=>{this.authority.assert(context);descriptor.assertCurrent();assertCurrent();if(this.closed)throw unavailable();};
   const execute=async()=>{
    assert();let lease:ModelLease|undefined;if(entry.base.snapshot_id){const current=await this.configuration.restoreLease(context,entry.base.snapshot_id,entry.base.operation_id);assert();if(current.status==='restored')lease=await this.configuration.forkLease(context,entry.base.snapshot_id,entry.base.operation_id,'memory-call:'+randomUUID());else if(!literalRead||!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(current.reason))throw unavailable();}assert();
-   entry.active={assert,lease,started:Date.now(),modelStarted:false};
-   try{const result=await work(entry.provider);assert();if(lease&&entry.active?.modelStarted)this.configuration.recordUsage(lease,{status:'completed',durationMs:Date.now()-entry.active!.started,...(entry.active!.tokens?{tokens:entry.active!.tokens}:{})});return result;}
-   catch(error){assert();if(lease&&entry.active?.modelStarted)this.configuration.recordUsage(lease,{status:'failed',durationMs:Date.now()-entry.active!.started,...(entry.active!.tokens?{tokens:entry.active!.tokens}:{})});throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='unsupported_input'?'memory_provider_unsupported_input':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
-   finally{entry.active=undefined;}
+   entry.active={assert,lease,meters:new Map()};let status:'completed'|'failed'='failed';
+   try{const result=await work(entry.provider);assert();status='completed';return result;}
+   catch(error){assert();throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='unsupported_input'?'memory_provider_unsupported_input':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
+   finally{try{assert();entry.active?.opaque?.finish(status);for(const meter of entry.active?.meters.values()??[])meter.finish(status);}finally{entry.active=undefined;}}
   };
   const result=entry.tail.then(execute);entry.tail=result.then(()=>{},()=>{});return result;
  }

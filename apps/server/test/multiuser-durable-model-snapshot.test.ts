@@ -84,11 +84,11 @@ test('real app restart restores the original effective model/configuration/price
     assert.deepEqual(configuration.fixtureOptions,{label:'synthetic-original-options',restartLimit:1});
     assert.deepEqual(configuration.modelPrices,{items:[price]});
   });
-  assert.deepEqual(f.node.configuration.recordUsage(recovered,{...usage,durationMs:999}),original);
+  assert.deepEqual(f.node.configuration.startUsage(recovered,{id:original.id}).finish('completed'),original);
   const recoveredPricing=await f.restored(f.a,priceLease.snapshotId,priceLease.operationId);
   assert.equal(f.node.configuration.recordUsage(recoveredPricing,usage).estimatedCost,0.00024);
   const again=await (await f.service(f.a)).restoreLease(lease.snapshotId,lease.operationId);
-  assert.ok(again.status==='restored');f.node.configuration.recordUsage(again.lease,usage);
+  assert.ok(again.status==='restored');f.node.configuration.startUsage(again.lease,{id:original.id}).finish('completed');
   assert.equal((await f.service(f.a)).usage().total.runs,2);assert.equal((await f.service(f.b)).usage().total.runs,0);
   for(const suffix of ['','-wal'])if(existsSync(join(f.directory,'mote.sqlite'+suffix))){
     const bytes=readFileSync(join(f.directory,'mote.sqlite'+suffix));
@@ -189,7 +189,7 @@ test('corrupt ciphertext or a lost key is an unavailable durable snapshot withou
 test('portable export omits encrypted snapshots and keys; deleting A leaves B recovery and usage intact',async t=>{
   const f=await fixture(t);await f.save(f.a,aKey);await f.save(f.b,bKey);
   const aContext=await f.context(f.a),a=await (await f.service(f.a)).lease('chat','synthetic-delete-A'),b=await (await f.service(f.b)).lease('chat','synthetic-keep-B');
-  f.node.configuration.recordUsage(a,usage);f.node.configuration.recordUsage(b,usage);
+  f.node.configuration.recordUsage(a,usage);const bReceipt=f.node.configuration.recordUsage(b,usage);
   const archive=await f.node.services.forUser(aContext).exportUser('configuration'),encoded=JSON.stringify(archive);
   for(const key of [aKey,bKey,'synthetic-durable-header-key','synthetic-durable-body-key'])assert.ok(!encoded.includes(key));
   assert.doesNotMatch(encoded,/ciphertext|nonce|authTag|snapshot-key|encryptedSnapshots/);
@@ -207,5 +207,5 @@ test('portable export omits encrypted snapshots and keys; deleting A leaves B re
   assert.ok(denied.status==='unavailable');assert.ok(['configuration_deleted','snapshot_unavailable'].includes(denied.reason));
   const recoveredB=await f.restored(f.b,b.snapshotId,b.operationId);
   assert.equal(await f.node.configuration.withModel(recoveredB,async model=>model.apiKey),bKey);
-  f.node.configuration.recordUsage(recoveredB,usage);assert.equal((await f.service(f.b)).usage().total.runs,1);
+  f.node.configuration.startUsage(recoveredB,{id:bReceipt.id}).finish('completed');assert.equal((await f.service(f.b)).usage().total.runs,1);
 });

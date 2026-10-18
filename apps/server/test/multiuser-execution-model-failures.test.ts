@@ -52,7 +52,7 @@ for(const kind of ['provider','execution'] as const)test(`real M04 preserves gen
 test('real M04 transient failures may heal within the same admitted model snapshot',async t=>{
  const f=await fixture(t);let calls=0,snapshotId:string|undefined;
  f.execution.register(handler(async run=>run.model!.withModel(async()=>{calls++;snapshotId??=run.model!.lease.snapshotId;assert.equal(run.model!.lease.snapshotId,snapshotId);if(calls<3)throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0},secret);run.model!.recordUsage(usage);return {done:true};})));
- const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'succeeded');assert.equal(task.attempts,3);assert.equal(calls,3);const receipt=(await f.request(f.a.token,'/api/usage')).json().items[0];assert.equal(receipt.id,snapshotId);assert.equal(receipt.attribution.operationId,job.operationId);
+ const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'succeeded');assert.equal(task.attempts,3);assert.equal(calls,3);const receipt=(await f.request(f.a.token,'/api/usage')).json().items[0];assert.notEqual(receipt.id,snapshotId);assert.equal(receipt.issuance.leaseId,snapshotId);assert.equal(receipt.attribution.operationId,job.operationId);
 });
 
 for(const kind of ['provider','execution'] as const)test(`real M04 preserves genuine ${kind} blocked failures without automatic retries`,async t=>{
@@ -71,13 +71,13 @@ test('real M04 provider capacity facts retain a durable wait without spending a 
 for(const kind of ['error','lookalike'] as const)test(`real M04 continues to clean ${kind} exceptions instead of accepting forged failure facts`,async t=>{
  const f=await fixture(t);let calls=0;
  f.execution.register(handler(async run=>run.model!.withModel(async()=>{calls++;const details={category:'transient',code:'provider_network',retryAfterMs:0,executionStarted:false,admissionWaiting:true};throw kind==='error'?Object.assign(Error(secret),{details,facts:{executionStarted:false},credential:secret}):{name:'ProviderFailure',message:secret,details,facts:{executionStarted:false},credential:secret};})));
- const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'failed');assert.equal(task.attempts,1);assert.equal(task.failure.category,'permanent');assert.equal(task.failure.code,'task_failed');assert.equal(task.failure.executionStarted,undefined);assert.equal(task.failure.admissionWaiting,undefined);assert.equal(calls,1);
+ const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'failed');assert.equal(task.attempts,1);assert.equal(task.failure.category,'permanent');assert.equal(task.failure.code,'model_execution_failed');assert.equal(task.failure.executionStarted,undefined);assert.equal(task.failure.admissionWaiting,undefined);assert.equal(calls,1);
 });
 
 for(const kind of ['provider-code','execution-code','provider-delay'] as const)test(`invalid genuine ${kind} control facts remain cleaned and cannot reach durable errors`,async t=>{
  const f=await fixture(t);let calls=0;
  f.execution.register(handler(async run=>run.model!.withModel(async()=>{calls++;throw kind==='execution-code'?new ExecutionFailure('transient',secret,0):new ProviderFailure({category:'transient',code:kind==='provider-code'?secret:'provider_network',retryAfterMs:kind==='provider-delay'?-1:0},secret);})));
- const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'failed');assert.equal(task.attempts,1);assert.equal(task.error,'task_failed');assert.equal(task.failure.category,'permanent');assert.equal(task.failure.code,'task_failed');assert.equal(calls,1);
+ const job=await f.submit(f.a.token);await f.execution.engine.drain([job.id]);const task=await f.task(f.a.token,job.id);assert.equal(task.state,'failed');assert.equal(task.attempts,1);assert.equal(task.error,'model_execution_failed');assert.equal(task.failure.category,'permanent');assert.equal(task.failure.code,'model_execution_failed');assert.equal(calls,1);
 });
 
 test('genuine model retry delays follow the existing seven-day transport ceiling',async t=>{

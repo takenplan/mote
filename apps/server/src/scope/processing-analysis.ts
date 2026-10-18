@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {createAgent,type ContextRecord,type ContextReader,type QueryInput} from '@mote/agent';
+import {type ContextRecord,type ContextReader,type QueryInput} from '@mote/agent';
 import {transcriptSchema,ProviderFailure,type Transcript,type TokenUsage,type ImageReadInput} from '@mote/shared';
 import {imageUnderstanding} from '../image-understanding.js';
 import {imageOutput} from '../evidence-image.js';
@@ -8,6 +8,7 @@ import {ExecutionFailure} from '../execution-engine.js';
 import type {TaskRun} from './task-execution.js';
 import {identityHash,type Original,type OriginalWorkspace} from './originals.js';
 import {processingInputSchema} from './processing-schema.js';
+import {queryWithUsage} from './model-query.js';
 
 export const derivationMode=z.enum(['summary','turns','image']);
 export const analysisInputSchema=processingInputSchema.extend({artifactId:z.string().regex(/^[a-f0-9]{64}$/),mode:derivationMode,materialId:z.string().regex(/^mat_[a-f0-9]{64}$/),materialRevision:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
@@ -19,22 +20,21 @@ export type AnalysisContext={original:Original;record:any;transcript:Transcript;
  workspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>Promise<T>;
  readOriginal:()=>Promise<Buffer>;
  stage:(key:string,work:()=>Promise<Transcript>,usage:()=>TokenUsage|undefined)=>Promise<{artifactId:string;payload:Transcript}>;
- usage:()=>TokenUsage|undefined;
 };
 
 /** Existing read-only agent and file/image algorithms, restricted to this one
  * original's accepted extraction. No archive-wide reader or user selector. */
 export async function analyzeProcessing(run:TaskRun,input:AnalysisInput,context:AnalysisContext){
  if(!run.model||run.model.lease.feature!=='file')throw new ExecutionFailure('blocked','file_model_unavailable');
- const started=Date.now();let called=false;
  const result=await run.model.withModel(async model=>{try{
   if(model.protocol==='mote-media')throw new ExecutionFailure('blocked','language_protocol_required');
   const records=context.transcript.segments.map(({words,...segment},index):ContextRecord=>({id:evidenceId(run.context.userId,input.artifactId,index),capturedAt:context.record.capturedAt,appName:context.record.appName??'File',...(context.record.attributionContext?{attributionContext:context.record.attributionContext}:{}),ocrText:input.mode==='turns'?JSON.stringify({turnIndex:index,...segment}):segment.text,metadata:{captureId:context.original.captureId,sourceId:context.original.sourceId,originalHash:context.original.hash,artifactId:input.artifactId,...(segment.documentLocation?{documentLocation:segment.documentLocation}:{}),...(segment.speaker?{speaker:segment.speaker,uncertain:segment.uncertain,overlap:segment.overlap}:{})}}));
   const query=async(page:ContextRecord[],question:string,validateOutput?:QueryInput['validateOutput'])=>context.workspace(workspace=>workspace.withDirectory(async temporaryRoot=>{
    context.assert();const current=()=>{context.assert();return structuredClone(page);};
    const reader:ContextReader={search:async()=>current(),timeline:async args=>{const cursor=Number(args.cursor??0),limit=args.limit??8;if(!Number.isSafeInteger(cursor)||cursor<0||cursor>page.length)throw new ExecutionFailure('permanent','invalid_processing_cursor');const items=current().slice(cursor,cursor+Math.min(100,Math.max(1,limit)));return {items,nextCursor:cursor+items.length<page.length?String(cursor+items.length):null};},evidence:async args=>current().filter(record=>args.ids.includes(record.id)),activity:async()=>{context.assert();return {};},devices:async()=>{context.assert();return [];}};
-   const agent=createAgent({...model,requestTimeoutMs:model.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert});let usage:TokenUsage|undefined;
-   try{called=true;const result=await agent.query({question,signal:run.signal,evidenceIds:page.map(record=>record.id),evidenceRanges:page.map(record=>({id:record.id,offset:0,length:record.ocrText.length})),assertContextAuthority:context.assert,validateOutput,onUsage:value=>{usage=value;}});context.assert();return {result,usage};}finally{await agent.close();}
+   let usage:TokenUsage|undefined;
+   const result=await queryWithUsage(run.model!,{...model,requestTimeoutMs:model.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert},{question,signal:run.signal,evidenceIds:page.map(record=>record.id),evidenceRanges:page.map(record=>({id:record.id,offset:0,length:record.ocrText.length})),assertContextAuthority:context.assert,validateOutput,onUsage:value=>{usage=value;}});
+   context.assert();return {result,usage};
   }));
   const key=identityHash(['mote-file-analysis-v1',input.mode,input.artifactId,input.materialRevision,model]);
   if(input.mode==='turns'){
@@ -54,27 +54,27 @@ export async function analyzeProcessing(run:TaskRun,input:AnalysisInput,context:
   let usage:TokenUsage|undefined;
   return await context.stage(key,async()=>context.workspace(workspace=>workspace.withDirectory(async temporaryRoot=>{
    let dimensions:{width:number;height:number}|undefined;const record={...context.record,id:context.original.captureId,appName:context.record.appName??'Image',source:'screen'};
-   const understanding=imageUnderstanding({selection:()=>({fingerprint:key,configured:true,receipt:{},settings:{...model}}),factory:async(settings,reader)=>{called=true;return createAgent({...settings,requestTimeoutMs:settings.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert});},usage:{start:()=>({update:value=>{usage=value;},finish:status=>({id:run.model!.lease.id,createdAt:new Date().toISOString(),provider:model.provider,model:model.model,operation:'file',status,durationMs:Date.now()-started,estimatedCost:null,currency:'USD',...(usage?{tokens:usage}:{})})})}});
+   const understanding=imageUnderstanding({selection:()=>({fingerprint:key,configured:true,receipt:{},settings:{...model}}),meteredQuery:(settings,reader,input)=>queryWithUsage(run.model!,{...settings,requestTimeoutMs:settings.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert},{...input,onUsage:value=>{usage=value;input.onUsage?.(value);}},{agentId:'image-understanding',moduleId:'images',skillId:null})});
    const result=await understanding.run({record,original:{hash:context.original.hash,mimeType:context.original.mime,sizeBytes:context.original.bytes,read:async function*(){yield await context.readOriginal();}},ocr:context.transcript,signal:run.signal,operationId:run.task.operationId,readImage:async(args:ImageReadInput)=>{context.assert();if(args.id!==context.original.captureId||args.attachmentId)throw new ExecutionFailure('stale','image_scope_changed');const output=await imageOutput(await context.readOriginal(),context.original.mime,args,()=>{context.assert();return true;});dimensions=output.imageView?.original;context.assert();return output;}});
    if(!dimensions||result.regions.some(region=>region.x+region.width>dimensions!.width||region.y+region.height>dimensions!.height))throw new ExecutionFailure('permanent','invalid_image_regions');const segments:Transcript['segments']=[];for(let offset=0;offset<result.text.length;){let end=Math.min(result.text.length,offset+4000);if(end<result.text.length&&/[\uD800-\uDBFF]/.test(result.text[end-1]))end--;segments.push({startMs:0,endMs:0,text:result.text.slice(offset,end)});offset=end;}for(const region of result.regions)if(region.description)segments.push({startMs:0,endMs:0,text:region.description,imageLocation:{width:dimensions.width,height:dimensions.height,polygon:[[region.x,region.y],[region.x+region.width,region.y],[region.x+region.width,region.y+region.height],[region.x,region.y+region.height]]}});return transcriptSchema.parse({durationMs:0,segments,engine:'mote-image-understanding-v1',coverage:'full'});
   })),()=>usage);
  }catch(error){if(error instanceof ProviderFailure||error instanceof ExecutionFailure)throw error;throw context.failure(error);}});
- context.assert();const tokens=context.usage();if(called||tokens)run.model.recordUsage({status:'completed',durationMs:Date.now()-started,...(tokens?{tokens}:{})});return {artifactId:result.artifactId};
+ context.assert();return {artifactId:result.artifactId};
 }
 
 /** Custom image recipes use the original interpretation algorithm without
  * requiring a fabricated successful OCR publication. The host supplies only
  * this original's accepted optional OCR and current original-image capability. */
 export async function analyzeRecipeImage(run:TaskRun,context:Omit<AnalysisContext,'transcript'|'stage'>&{transcript?:Transcript;stage:(key:string,work:()=>Promise<import('./processing-image-products.js').ImageProduct>,usage:()=>TokenUsage|undefined)=>Promise<{artifactId:string;payload:import('./processing-image-products.js').ImageProduct}>}){
- if(!run.model||run.model.lease.feature!=='file')throw new ExecutionFailure('blocked','file_model_unavailable');const started=Date.now();let called=false,usage:TokenUsage|undefined;
+ if(!run.model||run.model.lease.feature!=='file')throw new ExecutionFailure('blocked','file_model_unavailable');let usage:TokenUsage|undefined;
  const result=await run.model.withModel(async model=>{try{
   if(model.protocol==='mote-media')throw new ExecutionFailure('blocked','language_protocol_required');const key=identityHash(['mote-image-recipe-understanding-v1',context.original.hash,context.record,context.transcript,model]);
   return await context.stage(key,async()=>context.workspace(workspace=>workspace.withDirectory(async temporaryRoot=>{
    let dimensions:{width:number;height:number}|undefined;const record={...context.record,id:context.original.captureId,appName:context.record.appName??'Image',source:'screen'};
-   const understanding=imageUnderstanding({selection:()=>({fingerprint:key,configured:true,receipt:{},settings:{...model}}),factory:async(settings,reader)=>{called=true;return createAgent({...settings,requestTimeoutMs:settings.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert});},usage:{start:()=>({update:value=>{usage=value;},finish:status=>({id:run.model!.lease.id,createdAt:new Date().toISOString(),provider:model.provider,model:model.model,operation:'file',status,durationMs:Date.now()-started,estimatedCost:null,currency:'USD',...(usage?{tokens:usage}:{})})})}});
+   const understanding=imageUnderstanding({selection:()=>({fingerprint:key,configured:true,receipt:{},settings:{...model}}),meteredQuery:(settings,reader,input)=>queryWithUsage(run.model!,{...settings,requestTimeoutMs:settings.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:context.assert},{...input,onUsage:value=>{usage=value;input.onUsage?.(value);}},{agentId:'image-understanding',moduleId:'images',skillId:null})});
    const interpretation=await understanding.run({record,original:{hash:context.original.hash,mimeType:context.original.mime,sizeBytes:context.original.bytes,read:async function*(){yield await context.readOriginal();}},ocr:context.transcript,signal:run.signal,operationId:run.task.operationId,readImage:async(args:ImageReadInput)=>{context.assert();if(args.id!==context.original.captureId||args.attachmentId)throw new ExecutionFailure('stale','image_scope_changed');const output=await imageOutput(await context.readOriginal(),context.original.mime,args,()=>{context.assert();return true;});dimensions=output.imageView?.original;context.assert();return output;}});
    if(!dimensions)throw new ExecutionFailure('permanent','invalid_image_regions');return {format:'mote-image-product-v1' as const,interpretation,original:{sha256:context.original.hash,width:dimensions.width,height:dimensions.height,mime:context.original.mime}};
   })),()=>usage);
  }catch(error){if(error instanceof ProviderFailure||error instanceof ExecutionFailure)throw error;throw context.failure(error);}});
- context.assert();if(called||usage)run.model.recordUsage({status:'completed',durationMs:Date.now()-started,...(usage?{tokens:usage}:{})});return {artifactId:result.artifactId};
+ context.assert();return {artifactId:result.artifactId};
 }

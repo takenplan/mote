@@ -116,6 +116,7 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | --- | --- |
 | [系统改造 ADR](adr-system-refactor.md) | 已确认的统一查询、滚动 Memory 合批、审核恢复与前后台隔离决定 |
 | [任务恢复与执行预算 ADR](adr-task-recovery-and-execution-budgets.md) | 按任务类型注册宽松期限、资源等待、模型反馈修正和失败分类原则 |
+| [作用域处理可靠性 ADR](adr-scoped-processing-reliability.md) | 跨端资源排队、Memory 阶段公平性、安全诊断、独立用量片段与实例重新授权；[本次验证](validation/scoped-processing-reliability-2026-10-18.md) 单独记录 |
 | [范围评估与模型选取 Memory ADR](adr-memory-range-evaluation.md) | 完整原件、逐范围评估、独立审核、模型选取、资源恢复与旧任务契约边界 |
 | [范围评估回归矩阵](memory-range-evaluation-validation.md) | 新旧入口、选取与未完成状态、实际资源恢复、授权和重启场景；执行结果单独记录 |
 | [系统改造方案（2026-10-10，已确认）](design/system-refactor-2026-10-10.md) | 14模块变更、5组选型、旅程、supersession和发布路线；拟议收益不是实测结果 |

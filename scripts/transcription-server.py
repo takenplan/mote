@@ -14,6 +14,7 @@ import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from tempfile import TemporaryDirectory
+from mote_execution_facts import ExecutionFacts, execution_status, erase_execution
 
 
 def recognize(path, stage, settings, budget, speakers, sender):
@@ -58,8 +59,14 @@ def main():
     secret = os.environ.get('MOTE_MEDIA_WORKER_TOKEN') or os.environ.get('MOTE_TRANSCRIPTION_TOKEN', '')
     mp = multiprocessing.get_context('spawn')
     busy = threading.BoundedSemaphore(1)
+    facts = ExecutionFacts(os.environ.get('MOTE_MEDIA_RECEIPT_DIRECTORY', str(Path(args.model).parent / 'execution-facts')), 'asr')
 
     class Handler(BaseHTTPRequestHandler):
+        def end_headers(self):
+            if getattr(self, 'receipt_id', None):
+                self.send_header('X-Mote-Receipt-Id', self.receipt_id)
+            super().end_headers()
+
         def log_message(self, *_):
             pass
 
@@ -97,6 +104,10 @@ def main():
         def do_GET(self):
             if not self.authorized():
                 self.send_error(401)
+            elif self.path.startswith('/executions/') and not secret:
+                self.send_error(401)
+            elif execution_status(self, facts):
+                pass
             elif self.path == '/health':
                 dependencies = self.dependencies()
                 runtime = dependencies['ffmpeg'] and dependencies['faster_whisper']
@@ -113,6 +124,10 @@ def main():
                 return
             if not self.authorized():
                 self.send_error(401)
+                return
+            request_id, scope = self.headers.get('X-Mote-Request-Id', ''), self.headers.get('X-Mote-Request-Scope', '')
+            if request_id and (not secret or not facts.identity(request_id, scope)):
+                self.reject_before_execution(400, 'Invalid execution identity')
                 return
             if not Path(args.model, 'model.bin').is_file() or not shutil.which('ffmpeg') or importlib.util.find_spec('faster_whisper') is None:
                 self.reject_before_execution(503, 'Local ASR model or runtime unavailable')
@@ -131,7 +146,15 @@ def main():
                 return
             worker = None
             released = False
+            receipt_owned = False
             try:
+                if request_id and not facts.begin(request_id, scope, self.path[1:]):
+                    self.send_response(409)
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                    return
+                receipt_owned = bool(request_id)
+                self.receipt_id = request_id
                 requested_timeout = self.headers.get('X-Mote-Processing-Timeout-Ms')
                 if requested_timeout is not None and (len(requested_timeout) > 7 or not requested_timeout.isascii() or not requested_timeout.isdecimal() or not 1000 <= int(requested_timeout) <= 3600000):
                     self.send_error(400, 'Invalid processing timeout')
@@ -167,6 +190,8 @@ def main():
                             remaining -= len(block)
                     receiver, sender = mp.Pipe(duplex=False)
                     worker = mp.Process(target=recognize, args=(str(audio), self.path[1:], {**settings, 'timeout': timeout, 'speaker_model': selected_model, 'embedding': embedding, 'speaker_range': speaker_range}, budget, speakers, sender))
+                    if request_id:
+                        facts.started(request_id)
                     worker.start()
                     sender.close()
                     try:
@@ -184,6 +209,8 @@ def main():
                         raise TimeoutError('Worker did not finish')
                     busy.release()
                     released = True
+                    if request_id:
+                        facts.finish(request_id, True)
                     self.json_response(response['body'])
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -206,6 +233,14 @@ def main():
                             worker.join()
                 if not released:
                     busy.release()
+                if receipt_owned:
+                    facts.finish(request_id, False)
+
+        def do_DELETE(self):
+            if not secret or not self.authorized():
+                self.send_error(401)
+            else:
+                erase_execution(self, facts)
 
     ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
 

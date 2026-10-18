@@ -119,14 +119,22 @@ types alias the actual M04 types. A trusted handler declares `modelFeature`;
 admission obtains a genuine lease with
 `services.forUser(context).get('configuration').lease(feature,operationId)`.
 `TaskRun.model.withModel` checks the execution grant before and after every
-callback, including errors; `recordUsage` runs within its fenced transaction.
+callback, including errors; `startUsage` and its meter methods run within fenced
+transactions. Queries share `queryWithUsage` so failed calls retain their latest
+reported usage, independent queries get independent IDs, and issuance follows
+actual model authorization after resource waiting. A model lease is not a usage
+fragment or a supplier request count.
 Cached private service handles inherit the same input/resource grant, including
 shared withdrawal, local abort and shutdown.
 The wrapper carries genuine structured `ProviderFailure`/`ExecutionFailure` control
 facts through a private callback outcome and rethrows after M04 post-validation,
 preserving finite retries and capacity-wait semantics. Other callback exceptions
-remain redacted by M04; an error message or structural lookalike grants no retry
-authority. Withdrawal or cancellation overrides an earlier transport failure.
+remain redacted as `model_execution_failed` by M04 rather than being labeled a
+configuration problem. Concrete Agent failures are translated into fixed safe
+codes before this boundary; host validation codes and job/batch/run/phase
+identities accompany the existing safe failure receipt. An error message or
+structural lookalike grants no retry authority. Withdrawal or cancellation
+overrides an earlier transport failure.
 
 The credential-free task receipt persists M04's opaque `snapshotId` and fixed
 metadata. M04 owns the encrypted snapshot, original effective configuration,

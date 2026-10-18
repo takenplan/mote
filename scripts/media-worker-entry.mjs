@@ -11,7 +11,7 @@ else {
   const modelDirectory = resolve(loaded.baseDir, media.modelDirectory), python = /[\\/]/.test(media.python ?? '') ? resolve(loaded.baseDir, media.python) : media.python || 'python3';
   const args = role === 'ocr' ? ['scripts/ocr-server.py', '--model-root', join(modelDirectory, 'ocr'), '--port', String(media.ocrPort)]
     : ['scripts/transcription-server.py', '--model', join(modelDirectory, 'dialogue'), '--segmentation-model', join(modelDirectory, 'dialogue/segmentation.onnx'), '--speaker-model', join(modelDirectory, 'dialogue/speaker.onnx'), '--wespeaker-model', join(modelDirectory, 'speaker-wespeaker/speaker.onnx'), '--timeout', '3600', '--port', String(media.asrPort)];
-  const child = spawn(python, args, { env: { ...mediaEnvironment(process.env), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: media.workerToken }, stdio: 'ignore' });
+  const child = spawn(python, args, { env: { ...mediaEnvironment(process.env), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: media.workerToken, MOTE_MEDIA_RECEIPT_DIRECTORY: '/worker-facts' }, stdio: 'ignore' });
   child.once('error', () => { process.exitCode = 1; });
   child.once('close', (code, signal) => { process.exitCode = code || (signal ? 1 : 0); });
   for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));

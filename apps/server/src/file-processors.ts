@@ -17,7 +17,7 @@ import {ImageInputRegistry} from './image-inputs.js';
 import {ImageRecipeRegistry,installImageRecipes} from './image-recipes.js';
 
 export interface TranscriptionProvider {
-  transcribe(input:{body:AsyncIterable<Buffer>;sizeBytes:number;mimeType:string;settings:FileProcessingSettings;localOnly?:boolean;maxAudioMs:number;signal:AbortSignal;requestScope?:string}):Promise<Transcript>;
+  transcribe(input:{body:AsyncIterable<Buffer>;sizeBytes:number;mimeType:string;settings:FileProcessingSettings;localOnly?:boolean;maxAudioMs:number;signal:AbortSignal;requestScope?:string;requestId?:string;onRequest?:()=>void;onExecutionFacts?:(supported:boolean)=>void}):Promise<Transcript>;
 }
 export {isLoopback} from './local-http.js';
 export async function readProcessorJson(response:Response,limit=32*1024*1024){
@@ -28,13 +28,14 @@ export async function readProcessorJson(response:Response,limit=32*1024*1024){
   finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
 }
-const postLocalProcessor=(endpoint:string,headers:Record<string,string>,body:AsyncIterable<Buffer>,signal:AbortSignal,requireOfflineExecution=true)=>requestLocalJson(endpoint,{method:'POST',headers,body,signal,requireOfflineExecution});
+const postLocalProcessor=(endpoint:string,headers:Record<string,string>,body:AsyncIterable<Buffer>,signal:AbortSignal,requireOfflineExecution=true,onRequest?:()=>void,onExecutionFacts?:(supported:boolean)=>void)=>requestLocalJson(endpoint,{method:'POST',headers,body,signal,requireOfflineExecution,onRequest,onExecutionFacts});
 export class HttpTranscriptionProvider implements TranscriptionProvider {
   async transcribe(input:Parameters<TranscriptionProvider['transcribe']>[0]){
     const {settings,signal,localOnly=false}=input;
     if(localOnly&&!isLoopback(settings.endpoint))throw new StoreError('Local dialogue requires a loopback worker',409);
-    const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.sizeBytes),'X-Mote-Max-Audio-Ms':String(input.maxAudioMs),...(isLoopback(settings.endpoint)?{'X-Mote-Processing-Timeout-Ms':String(settings.timeoutMs)}:{}),...(localOnly?{'X-Mote-Offline':'1'}:{}),...(settings.apiKey?{Authorization:`Bearer ${settings.apiKey}`}:{})};
-    if(localOnly||isLoopback(settings.endpoint))return transcriptSchema.parse(await postLocalProcessor(settings.endpoint,headers,input.body,signal,localOnly));
+    const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(input.requestId?{'X-Mote-Request-Id':input.requestId}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.sizeBytes),'X-Mote-Max-Audio-Ms':String(input.maxAudioMs),...(isLoopback(settings.endpoint)?{'X-Mote-Processing-Timeout-Ms':String(settings.timeoutMs)}:{}),...(localOnly?{'X-Mote-Offline':'1'}:{}),...(settings.apiKey?{Authorization:`Bearer ${settings.apiKey}`}:{})};
+    if(localOnly||isLoopback(settings.endpoint))return transcriptSchema.parse(await postLocalProcessor(settings.endpoint,headers,input.body,signal,localOnly,input.onRequest,input.onExecutionFacts));
+    input.signal.throwIfAborted();input.onRequest?.();
     const response=await fetch(settings.endpoint,{method:'POST',headers,body:input.body as unknown as BodyInit,duplex:'half',redirect:'error',signal} as RequestInit);
     return transcriptSchema.parse(await readProcessorJson(response));
   }
@@ -46,6 +47,10 @@ export interface ProcessorInput {
   /** Scoped hosts provide their grant-owned decoder workspace. */
   decodeOriginal?(mimeType:string):Promise<Transcript>;
   requestScope?:string;
+  requestId?:string;
+  /** Trusted synchronous journal/usage fence immediately before transport. */
+  onRequest?:()=>void;
+  onExecutionFacts?:(supported:boolean)=>void;
   /** Exact original-bound canonical identity; never a newly selected head. */
   sourceItem?:Readonly<SourceItem>;
 }
@@ -118,7 +123,7 @@ export class FileProcessorRuntime {
     const audio=(id:string,localOnly=false)=>builtin({id,version:localOnly?'4':'3',name:localOnly?"本地多人录音":"转写接口",stage:'extract',mediaTypes:['audio/'],localOnly,serviceKind:'asr',awaitResponseOnCancel:true,
       ...(localOnly?{dialogue:true,managedModel:'dialogue' as const}:{}),dependencies:{settings:['endpoint','apiKey','allowRemote'],parameters:[]},
       parameters:localOnly?[{key:'speakerCount',label:"预期说话人数",type:'number',nullable:true,default:null,min:1,max:16,integer:true,description:"留空由模型自动识别"},{key:'speakerMin',label:'说话人数下限',type:'number',nullable:true,default:null,min:1,max:16,integer:true,description:'仅在已知范围时填写；与准确人数互斥'},{key:'speakerMax',label:'说话人数上限',type:'number',nullable:true,default:null,min:1,max:16,integer:true},{key:'semanticTurns',label:"使用所选语言模型合并自然发言轮次",type:'boolean',default:false}]:[],
-      process:input=>provider.transcribe({body:input.readOriginal(),sizeBytes:input.file.sizeBytes,mimeType:input.file.mimeType,settings:input.settings,localOnly,maxAudioMs:input.maxAudioMs,signal:input.signal,requestScope:input.requestScope})});
+      process:input=>provider.transcribe({body:input.readOriginal(),sizeBytes:input.file.sizeBytes,mimeType:input.file.mimeType,settings:input.settings,localOnly,maxAudioMs:input.maxAudioMs,signal:input.signal,requestScope:input.requestScope,requestId:input.requestId,onRequest:input.onRequest,onExecutionFacts:input.onExecutionFacts})});
     const pluginScope=this.pluginScope;
     this.ready=(async()=>{
       try{
@@ -129,8 +134,8 @@ export class FileProcessorRuntime {
         await pluginScope.install(builtin({id:'document.generic',version:'1',name:"文档文字提取",stage:'extract',mediaTypes:[...DOCUMENT_MIME_TYPES],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal(input.file.mimeType):extractDocument(input.readOriginal(),input.file.sizeBytes,input.file.mimeType,input.signal)}));
         await pluginScope.install(builtin({id:'image.http',version:'2',name:"图片文字提取接口",stage:'extract',mediaTypes:['image/'],serviceKind:'image',awaitResponseOnCancel:true,reuseByContent:true,dependencies:{settings:['imageEndpoint','apiKey','allowRemote']},async process(input){
           if(!input.settings.imageEndpoint)throw new StoreError('Image processing service is not configured',409);
-          const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Media-Type':input.file.mimeType,...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
-          const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false):await readProcessorJson(await fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit));
+          const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(input.requestId?{'X-Mote-Request-Id':input.requestId}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Media-Type':input.file.mimeType,...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
+          const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false,input.onRequest,input.onExecutionFacts):await readProcessorJson(await (async()=>{input.signal.throwIfAborted();input.onRequest?.();return fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit);})());
           const transcript=transcriptSchema.parse(value);if(transcript.durationMs!==0)throw new StoreError('Image text cannot have audio duration',502);return transcript;
         }}));
         for(const alternative of [false,true])await pluginScope.install(builtin({id:alternative?'audio.diarize-wespeaker':'audio.diarize',version:alternative?'1':'3',name:alternative?'本地说话人分离 · WeSpeaker 中文':'本地说话人分离',stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:alternative?'speaker-wespeaker':'dialogue',awaitResponseOnCancel:true,dependencies:alternative?{settings:['endpoint','apiKey','speakerCount','speakerMin','speakerMax'],parameters:['speakerCount','speakerMin','speakerMax']}:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){
@@ -138,8 +143,8 @@ export class FileProcessorRuntime {
           const endpoint=new URL(input.settings.endpoint);endpoint.pathname=endpoint.pathname.replace(/\/transcribe\/?$/,'/diarize');
           if(!endpoint.pathname.endsWith('/diarize'))throw new StoreError('Local worker URL must end with /transcribe',409);
           if(!alternative&&input.settings.speakerMin!==null)throw new StoreError('Speaker range requires the WeSpeaker plugin',409);
-          const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
-          return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal));
+          const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(input.requestId?{'X-Mote-Request-Id':input.requestId}:{}),...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
+          return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal,true,input.onRequest,input.onExecutionFacts));
         }}));
         for(const plugin of plugins)await pluginScope.install(plugin);
         for(const specifier of modules){

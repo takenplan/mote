@@ -86,10 +86,10 @@ test('two users pin different in-flight configurations; usage and host leases ca
  assert.equal(await f.node.configuration.withModel(bLease,async s=>s.apiKey),'synthetic-B-key');
  assert.equal((await a.lease('chat','next-operation')).model,'new-A-model');
  const input={status:'completed' as const,durationMs:12,tokens:{requests:1,reportedRequests:1,inputTokens:10,outputTokens:4,totalTokens:14,cacheReadTokens:0,cacheWriteTokens:0}};
- f.node.configuration.recordUsage(aLease,input);f.node.configuration.recordUsage(aLease,input);f.node.configuration.recordUsage(bLease,{...input,tokens:{...input.tokens,inputTokens:5,totalTokens:9}});
+ const meter=f.node.configuration.startUsage(aLease);meter.issued();meter.update(input.tokens);meter.update(input.tokens);meter.finish('completed');meter.finish('completed');f.node.configuration.recordUsage(bLease,{...input,tokens:{...input.tokens,inputTokens:5,totalTokens:9}});
  const usageA=await f.request(f.a,'GET','/api/usage'),usageB=await f.request(f.b,'GET','/api/usage');assert.equal(usageA.json().total.runs,1);assert.equal(usageA.json().total.inputTokens,10);assert.equal(usageB.json().total.inputTokens,5);assert.doesNotMatch(usageA.body,/synthetic-.*key/);
  assert.throws(()=>f.node.configuration.recordUsage({...aLease,userId:f.b.userId} as ModelLease,input),{code:'invalid_identity'});
- await assert.rejects(f.node.configuration.withModel(aLease,async()=>{throw Error('synthetic-A-key provider-response');}),{code:'config_unavailable'});
+ await assert.rejects(f.node.configuration.withModel(aLease,async()=>{throw Error('synthetic-A-key provider-response');}),{code:'model_execution_failed'});
  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.ok(!JSON.stringify(db.prepare('SELECT * FROM user_model_usage').all()).includes('synthetic-A-key'));}finally{db.close();}
 });
 

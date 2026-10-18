@@ -13,6 +13,33 @@ async function fixture(t:any){
 }
 const base:ExecutionHandler={kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
+test('ready Memory stages rotate within each user despite arriving extraction backlog and cancelled work',async t=>{
+ const {engine}=await fixture(t),started:string[]=[],ids:string[]=[];let release!:()=>void,enter!:()=>void,arrivals=0;
+ const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
+ const add=(user:string,kind:string,n:number)=>{const id=engine.enqueue(user+':'+kind+':'+n,kind,{n},{ownership:{userId:user,authorizationEpoch:1}});ids.push(id);return id;};
+ for(const kind of ['extract','review','publish'])engine.register({...base,kind,fairnessGroup:step=>step.kind,execute:async step=>{started.push(step.ownership!.userId+':'+kind);if(started.length===1){enter();await held;}if(kind==='extract'&&arrivals++<8)add(step.ownership!.userId,'extract',100+arrivals);return null;}});
+ add('A','extract',0);const running=engine.drain(ids);await entered;
+ for(let n=1;n<12;n++)add('A','extract',n);add('B','extract',0);add('A','review',0);add('B','review',0);add('A','publish',0);add('B','publish',0);const cancelled=add('A','review',999);engine.cancel(cancelled);release();await running;await engine.drain(ids);
+ assert.deepEqual(started.slice(0,6),['A:extract','B:extract','A:review','B:review','A:publish','B:publish']);assert.equal(engine.get(cancelled)!.state,'cancelled');assert.equal(started.filter(v=>v==='A:review').length,1);assert.ok(ids.filter(id=>id!==cancelled).every(id=>engine.get(id)!.state==='succeeded'));
+});
+
+test('stage service history survives reconstruction and gives a ready review its next turn',async t=>{
+ const {engine,store,dir}=await fixture(t),started:string[]=[];let paused=false;
+ for(const kind of ['extract','review'])engine.register({...base,kind,fairnessGroup:step=>step.kind,admit:()=>paused?new ExecutionFailure('waiting','processor_capacity',60000):undefined,execute:async()=>{started.push(kind);paused=true;return null;}});
+ const ownership={userId:'A',authorizationEpoch:1},first=engine.enqueue('first','extract',{n:0},{ownership});await engine.drain([first]);
+ const extract=engine.enqueue('older-extract','extract',{n:1},{ownership}),review=engine.enqueue('ready-review','review',{n:0},{ownership});await engine.close();
+ const reopenedStore=new Store(dir),reopened=new ExecutionEngine(reopenedStore);t.after(async()=>{await reopened.close();reopenedStore.close();});
+ for(const kind of ['extract','review'])reopened.register({...base,kind,fairnessGroup:step=>step.kind,execute:async()=>{started.push(kind);return null;}});
+ store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE state=\'waiting\'').run();await reopened.drain([extract,review]);assert.deepEqual(started,['extract','review','extract']);
+});
+
+test('settled physical stages release their resource before local continuation',async t=>{
+ const {engine}=await fixture(t),calls:string[]=[];let release!:()=>void,enter!:()=>void;
+ const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
+ engine.register({...base,concurrency:()=>2,resourceKeys:()=>['physical-worker'],execute:async(step,_signal,grant)=>{calls.push(step.operationId);if(step.operationId==='alignment'){grant.releaseResource('physical-worker');enter();await held;}return null;}});
+ const first=engine.enqueue('alignment','fixture',{}),run=engine.drain([first]);await entered;const second=engine.enqueue('another-original','fixture',{});await engine.drain([second]);assert.equal(engine.get(second)!.state,'succeeded');assert.equal(engine.get(first)!.state,'running');release();await run;assert.deepEqual(calls,['alignment','another-original']);
+});
+
 test('one engine fills slots, fairly interleaves operations and keeps one step per immutable input',async t=>{
  const {engine}=await fixture(t),started:string[]=[],committed:string[]=[];let release!:()=>void,enter!:()=>void;
  const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);

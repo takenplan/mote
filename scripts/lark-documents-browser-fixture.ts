@@ -11,7 +11,7 @@ let meetingFails=true;
 const runner:LarkRunner=async command=>{
  calls.push(command);
  switch(command.kind){
-  case 'version':return 'lark-cli version 1.0.85';
+  case 'version':return 'lark-cli version 1.0.98';
   case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated-document-owner',userName:'Generated document owner',scope:[...LARK_SCOPES,'drive:drive:readonly','calendar:calendar:readonly'].join(' ')}}});
   case 'login':return JSON.stringify({verification_url:'https://accounts.feishu.cn/authorize?generated-only',device_code:'generated-private-code',expires_in:600});
   case 'complete':return '{}';
