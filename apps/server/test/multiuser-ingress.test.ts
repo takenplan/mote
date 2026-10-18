@@ -88,6 +88,7 @@ test('ordinary retry after more than a day replaces only the expired uncommitted
  const f=await fixture(t);for(const token of [f.alice.token,f.bob.token])await f.register(token);
  const bytes=Buffer.alloc(FILE_PART_BYTES+137,11),a=await f.begin(f.alice.token,bytes),b=await f.begin(f.bob.token,bytes);await f.part(f.alice.token,a.id,bytes.subarray(0,FILE_PART_BYTES));await f.part(f.bob.token,b.id,bytes.subarray(0,FILE_PART_BYTES));
  const db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());const expired=Date.now()-25*3600000;db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(expired,f.a.userId,a.id);
+ const expiredPart=await f.request(f.alice.token,'/api/ingress/uploads/'+a.id+'/parts/1','PUT',{bytes:bytes.subarray(FILE_PART_BYTES).toString('base64'),checksum:bytesHash(bytes.subarray(FILE_PART_BYTES))});assert.equal(expiredPart.statusCode,409);assert.deepEqual(expiredPart.json(),{error:'upload_expired'},'ordinary transport expiry is retryable rather than an immutable revision rejection');
  await f.restart();
  assert.equal((await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'same-key',revision:revision('same-source',Buffer.from('Generated conflicting expired revision'))})).statusCode,409);
  const resumed=await f.begin(f.alice.token,bytes);assert.notEqual(resumed.id,a.id);assert.deepEqual(resumed.parts,[]);assert.equal(resumed.userId,f.a.userId);assert.equal(resumed.sourceId,'same-source');
