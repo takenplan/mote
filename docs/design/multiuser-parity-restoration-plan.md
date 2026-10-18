@@ -56,12 +56,12 @@
 
 | 模块键 / 编号 | Owner chat | Branch / PR | 独立验收 chat | 候选 SHA | 状态 / 阻塞 |
 | --- | --- | --- | --- | --- | --- |
-| MEM / MEM-M01..M08 | [MEM开发](codex://threads/01a14e8f-6977-7fa3-8145-0b3696ae413c) | `codex/parity-memory-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收 |
+| MEM / MEM-M01..M08 | [MEM开发](codex://threads/01a14e8f-6977-7fa3-8145-0b3696ae413c) | `codex/parity-memory-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `8b7bcc16650ea84092df8b730703f85a3a43e181` | CANDIDATE；clean/source冻结，精确定向复跑进行中；Q006待槽，非PASS |
 | FILE / FILE-01..06；FILE-07旧缺陷观察 | [FILE开发](codex://threads/01a14e8f-6b10-7001-b7d6-84ba844a5604) | `codex/parity-files-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | 部分head `67b28439cac04942911eacd4cf3118a4fbe51586` | WAIT_FEATURE；完整FILE-PERCEPTION OPEN，非最终冻结；FILE-07非阻塞 |
 | ASK / ASK-A01..A05 | [ASK开发](codex://threads/01a14e8f-6d35-77d1-ad5f-531013c4ea08) | `codex/parity-ask-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | 部分core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | WAIT_DEPENDENCY；core已提交/clean，allowQueryImages依赖待闭合，非最终冻结 |
 | CONN / CONN-C01..C07 | [CONN开发](codex://threads/01a14e8f-6edd-7772-b552-f0ce79bb7c61) | `codex/parity-connectors-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2` | CANDIDATE；clean且冻结定向25项/类型作者PASS；Q009等槽，affected/独验UNRUN |
-| CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
+| CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `79bf961020782661c701cb0d3af47d1e5f48a0e3` | CANDIDATE；clean，WAIT_PRODUCER/DRIVER_SLOT，非完整恢复 |
 | DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `73c1115287fe07e1824526861ebc2e8ed3cf39fc` | CANDIDATE；affected/独验UNRUN，待槽 |
 | AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收；D01偏好按账号独立已定 |
 | WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；作者检查进行中，独验UNRUN |
@@ -131,10 +131,11 @@
 | Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_GLOBAL_SLOT；R001已释放，WEB仍idle不得提前唤醒 | 完整gate未运行；非独立PASS |
 | Q007 | DESKTOP / `73c1115287fe07e1824526861ebc2e8ed3cf39fc` / 起点2c78ca8d | Desktop+Server+Web；Android=false，D2另跨端联调 | WAIT_GLOBAL_SLOT；作者83项及29+1/类型/预检报告通过 | `/tmp/mote-parity-desktop-affected-plan-final.json`；完整gate/独验UNRUN |
 | R002 | CONN / C07 Kotlin/helper/JVM/instrumentation | 专用`dev.mote.collector.RecordingParityInstrumentedTest`；生成scoped后端smoke作者报告通过 | WAIT_INPUT_AND_SLOT；Gradle/emulator UNRUN | 精确完整输入/SHA与环境待回报，无当前运行授权 |
-| R003 / Q008 | CONFIG / 必要Kotlin+模型instrumentation及central/Android/scope-tooling | 待精确候选/输入hash/最终dry-run；本树Gradle JVM+debug/testAPK及headless模型方法，再完整affected | WAIT_CANDIDATE_AND_GLOBAL_SLOT；尚无运行授权 | FILE/LIFE producer依赖另列UNRUN；不得用定向结果跳过完整gate所选步骤 |
+| R003 / Q008 | CONFIG / `79bf961020782661c701cb0d3af47d1e5f48a0e3`，base2c78ca8d | server/Web+Android/i18n/tooling/root scope，all=false；frozen-check-plan.log | WAIT_PRODUCER_AND_GLOBAL_SLOT；完整gate/Gradle/emulator未授权 | native变体修正：`-Pmote.testBuildType=multiuserFixture :app:testDebugUnitTest :app:assembleMultiuserFixture :app:assembleMultiuserFixtureAndroidTest`，四方法见manifest |
 | P009 / R004 | FILE / 后续环境与native消费者 | Electron补当前lock执行文件；既有JAVA_HOME；JVM+FilesCatalogParityInstrumentedTest无窗口 | WAIT_INPUT_AND_GLOBAL_SLOT；未授权运行 | Java现有`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`，SDK`/Users/utopiafar/Library/Android/sdk`；不视为需要新装JDK |
 | Q001 | FILE / 部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 当前计划ALL6 TS+Android/root scope；`/tmp/mote-files-final-check-plan.json` | WAIT_FEATURE；完整Perception/managed MediaAssets未完成，不开完整gate | 扩大预检Electron/Java缺项，SQLite PASS；native消费者UNRUN |
-| Q004 / Q006 | LIFE / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 最终输入重选 |
+| Q004 | LIFE | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 最终输入重选 |
+| Q006 | MEM / `8b7bcc16650ea84092df8b730703f85a3a43e181`，base2c78ca8d | server/Web+tooling contracts及shared/Agent前置，无Android/Desktop native；frozen-affected-plan.json | WAIT_FINAL_FOCUSED_AND_GLOBAL_SLOT | Node26 ABI147 native ready；完整gate须固定该SHA，不沿用迭代结果，>2配置并发需EXEC整候选联合 |
 | Q003 | EXT / `d347b4647aa0c66a42bc3f7adf5129466b16aa16` / base2c78ca8d | ALL6 TS+Android，22 checks；frozen-candidate.json/frozen-affected-plan.txt | WAIT_GLOBAL_SLOT；未push/PR/独验 | Node26 ABI147/Java21/SDK/native/Electron作者预检PASS；Android JVM与完整gateUNRUN |
 | Q005 | ASK / core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | 6TS+Android/i18n/tooling/all，22 checks；`/tmp/mote-ask-f2b44331-check-plan.json` | WAIT_DEPENDENCY；Files port67b284需验证，最终allowQueryImages候选未冻 | core定向作者报告通过，非最终独验；完整gate未开 |
 | Q009 | EXEC / `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | server/Web+shared test+Android JVM/scope/tooling；`/tmp/mote-execution-affected-plan-final.json` | WAIT_GLOBAL_SLOT；未授权完整gate | frozen-receipt.json已报：25/25、类型、scope/Android环境及dry-run作者EXIT0；完整gate/独验UNRUN |
@@ -145,13 +146,13 @@
 
 后续同时执行对话目标5、上限6，PM和driver也计入。当前已运行任务继续，不中断/取消；现有子代理继续完成，完成后不补位。不再创建chat或spawn子代理，不因FYI唤醒idle/notLoaded的开发或验收chat。重启须先由PM/driver检查总active并登记槽位，超额存续自然收敛，不新增占用。等待检查/前置/验收的模块留下精确待办后结束回合，不空转。
 
-2026-10-18最新只读list_threads快照：8 active（driver及MEM/ASK/CONN/CONFIG/AND/ACTION/LIFE），10 idle（PM、FILE/EXEC/DESKTOP/WEB/EXT及四独立验收）。已有运行自然收敛中，仍高于6，不唤醒闲置等待者；driver结束本回合可再释放一槽。此为快照，每次分配前重新读取；独立验收仍无PASS。
+2026-10-18最新只读list_threads快照：7 active（driver及MEM/ASK/CONN/AND/ACTION/LIFE），11 idle（PM、CONFIG/FILE/EXEC/DESKTOP/WEB/EXT及四独立验收）。仍高于6，不唤醒闲置等待者；driver结束本回合后可释放一槽。快照不是实时保证，每次分配前重读；独立验收仍无PASS。
 
 | 槽位对象 | 快照状态 | 当前工作 / 释放条件 |
 | --- | --- | --- |
 | driver / PM | active / idle | driver文档排队结束后释放；PM不因FYI唤醒，两者执行时都计入总量 |
-| MEM / ASK / CONN / CONFIG / AND / ACTION / LIFE | 7 active存续 | 实现及定向收尾，等待前置/检查时留待办结束；不补子代理 |
-| FILE / EXEC / DESKTOP / WEB / EXT | 5 idle | FILE等完整Perception后续开发槽；其余冻结候选等完整gate；不自行唤醒 |
+| MEM / ASK / CONN / AND / ACTION / LIFE | 6 active存续 | 实现及定向收尾，等待前置/检查时留待办结束；不补子代理 |
+| CONFIG / FILE / EXEC / DESKTOP / WEB / EXT | 6 idle | FILE等完整Perception后续开发槽；CONFIG待producer/native/完整gate，其余已冻等gate；不自行唤醒 |
 | 领域 / 控制 / 客户端 / 最终验收chat | 4 idle，准备已完成 | 禁止为政策FYI唤醒；精确候选通知先排队，等总active<6再逐个释放 |
 
 | 待办号 | 待通知/执行对象 | 具体条件与范围 | 当前状态 |
