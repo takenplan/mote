@@ -72,11 +72,15 @@ export function RecordingConnection({ api, provider, onOpen, owned=false, inacti
     };
     const dirty = useRef(false), running = useRef(false), scope = useRef(new AbortController());
     const context = useSourceContextDraft(api, read.data?.connected ? read.data.sourceId : undefined);
+    // An owned adapter is already keyed by account, instance and generation.
+    // Its source changes as connect/disconnect runs, before the task receipt
+    // necessarily settles; that result must not cancel its own command.
+    const sourceScope = owned ? undefined : read.data?.sourceId;
     useEffect(() => {
         const controller = new AbortController(); scope.current = controller;
         dirty.current = false; running.current = false; setBusy(false); setError(''); setSaved(false); acceptSelection(read.data?.selection);
         return () => controller.abort();
-    }, [api, provider, read.data?.sourceId]);
+    }, [api, provider, sourceScope]);
     useEffect(() => { if (read.data && !dirty.current)
         acceptSelection(read.data.selection); }, [read.data]);
     const update = (patch: Partial<RecordingSelection>) => { dirty.current = true; setSaved(false); setSelection(v => v ? { ...v, ...patch } : v); };
