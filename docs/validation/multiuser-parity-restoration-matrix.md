@@ -347,7 +347,7 @@ Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6
 | CONN a562 / Draft178 | fresh四build1544输出dfb5b256后批准6 PASS166.674991s，Web604/JVM376 fresh79XML，binding92e13e19 | 原fdd FAILED/3159P1F2skip不洗；不是新full14/Server，native实际另验 |
 | MEM6f44 / Draft177 | full18 PASS1351.864914s，Server3222P2skip/Web602/JVM374 fresh78XML，binding0d0ef7c9 | 旧855失败保持，新组合/退款零重放/实际全journey另验 |
 | LIFE b30 / Draft174 | 批准13 PASS191.836518s/Web603/JVM372 fresh78XML，bindingc44810da | 原6cbd FAILED/Server3168P2skip仅baseline；非新22/全部UI；523容量原case红保留，PM已按双意图因果批准R3单意图前置修订 |
-| EXT5a / Draft175 | freshServerbuild1505输出+批准5项PASS428.868812s（整file80/38/26/16），bindingbcfb9d59/native20另列 | 原544 FAILED保持，不拼新22；523相关C组UNRUN |
+| EXT5a / Draft175 | freshServerbuild1505输出+批准5项PASS428.868812s（整file80/38/26/16），bindingbcfb9d59/native20另列 | 原544 FAILED保持，不拼新22；523 C10 Ext9与R3独立Ext9另已验 |
 | 原24a / 2bccae89源批准 | 431basepaths/217delta/44冲突20files/schema216/310工件，本树build/tsc/ABI | 首动态bd81 NOT_QUALIFIED39P3F；唯一SDK诊断110.583s2P仅NONREPRO，无开销baseline；原2044各失败也保留 |
 | 新source523 / a88ee206 | 三新祖先/9delta路径/1prod/3188其余对象/68+8工件；本树正常安装build/语义tsc/SQLite-Sharp，1625outputs root核齐 | source接受不等runtime；没有cross-tree deps/dist或ignored install scripts；原24a物理树不改 |
 | 523原B/C及补C10 | 首次HOT2/Web6/File3均P；原C76=73P3F、总87=84P3F保持。后独立C10十组新增215P0F/0skip/cancel，review9b2b6c09/33工件root核齐67133e99 | 523原整体NOT_QUALIFIED/原未达断言不洗；新增十组无UNRUN，均exact523 scope；原HOT/Web/File/部分C10只按PM d78e有限baseline资格，不称R3新执行或full |
