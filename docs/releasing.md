@@ -62,7 +62,7 @@ gh variable set MOTE_PRE_RELEASE_CHECKS --repo utopiafar/mote --body true
 | `SHA256SUMS` | 供人工核对下载；自动更新仍须验证签名清单 |
 | `ghcr.io/utopiafar/mote:X.Y.Z` | Linux amd64/arm64 中央镜像；更新实际按签名中的不可变 digest 拉取 |
 
-模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包仅从 Git 标签归档，忽略目录、个人配置和签名材料不在其中。
+模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包从已提交快照归档；Prod 对应精确 Tag，Dev 对应提交。忽略目录、个人配置和签名材料不在其中。
 
 ## 签名配置与历史清单密钥
 
