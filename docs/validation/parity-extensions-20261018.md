@@ -277,3 +277,61 @@ affected plan remains for the driver after a new clean freeze; Q003 stays on
 hold until that handoff. Native/JVM/UI, real suppliers/models, physical devices
 and deployment are **UNRUN**. No push or PR update is performed before the new
 complete gate, and no earlier passing phase is credited to the new candidate.
+
+## Native completion observation and shared provider lifecycle (2026-10-19)
+
+The driver ran all 22 required steps on clean
+`544bcd73b81db41d3366b6ee225ff068235486b2`. Twenty-one passed; `android-unit`
+failed. Server reported 3,161 passing and two skipped tests; fresh Android JVM
+results were 372 passing, one failing and zero skipped across 78 suites. All
+25 Gradle tasks executed without cache. The full run remains **FAILED**, with
+no unrun steps. Its final binding is
+`extensions-544bcd73-required-gate-failed.json` (external integration evidence).
+
+The failed Native case was `MultiuserIngressTest`'s owned plugin edit/check/CAS
+and Memory preparation journey. Line 96 asserted `checked` immediately after
+the check command returned. Secret-preserving edit and stale-CAS rejection had
+already run; enable, disable and Memory preparation assertions had not yet run.
+The driver reproduced that same assertion in a separate unchanged-source,
+fresh, one-test JVM run: one failure, zero skips, 25 tasks executed without cache.
+Neither failed result is replaced by earlier author Node/static passes.
+
+A real public-command trace through the Native fixture recorded one check POST:
+`checking` admission, immediate `checked=false`, then that same owned task moved
+through waiting/running/succeeded and A became checked while B stayed unchecked.
+The native product already displays checking and refreshes it automatically.
+The regression now holds the actual generated worker before registration,
+verifies that visible pending projection and unavailable enable action, and
+requires B's access to A's task to fail. It releases the worker and observes the
+same task's terminal result before the original `checked` assertions. All
+original secret, A/B, stale-CAS, enable/disable and Memory binding/cancellation/
+404 assertions remain. The fixture also requires exactly one A check POST and
+zero B check POSTs. No production client command is made blocking, and no new
+manual check, session or source step is introduced.
+
+The specified shared dependency is only File thin commit
+`2643859732e71320bef8901d6705979327ddfdce`, ported as `e0d88d4a`. Its native
+provider base blob is `7ea8a44330214d4344c2e8726c7d9cb2d9f0e774`; Extensions
+544 instead has `fa3a08f418316d9a8a7b40370d059059c4e842a1`, including the
+durable check probe. Comparing their common Entry/maintenance paths confirmed
+the same cache-eviction race. The unchanged Hindsight journey did not reproduce
+it in the local observation. Its generated cleanup barrier then reproduced A
+opening a read bank before its cleanup handle closed while B remained readable.
+That controlled RED is separate from the Native JVM failure.
+
+The five-file thin dependency retains native namespace/configuration ownership
+through maintenance open-to-close and shutdown. The port preserves Extensions'
+probe body byte-for-byte, the existing plugin host, and its `releaseProbe` close
+hook. The common native provider tail equals the thin target after accounting
+for that hook; no File/OCR business changes were copied. The controlled barrier
+passes after the port. Its original final assertions, independent review,
+cross-owner checks, restart, literal read after model revocation and fixed native
+volume identity remain in the same real-engine journey.
+
+Exact old/new source hashes, the adapted barrier hunk, thin-source mapping,
+Node consumer checks and driver-owned fresh Native receipts are recorded under
+external `extensions-validation/native-544-repair/`. The new candidate needs a
+new complete required run selected by the driver; no 544 passing phase is reused.
+Real device UI journeys and actual LLM checks through local Codex Server remain
+**PENDING** for their scheduled candidate window. No emulator, UI window, actual
+model, full affected run, push or PR update is started by this repair.

@@ -233,6 +233,10 @@ consumers such as connector enable await that exact check's completion before
 publishing their configuration; admission alone is not verification. Waiting
 retains the original account/declaration fence and the caller's configuration
 revision, so a concurrent pause or configuration edit cannot be overwritten.
+The native client keeps this same single-check journey: the pending state is
+visible and automatically refreshed before enable becomes available. Its command
+receipt is admission; consumer tests follow that receipt's owned task to its
+terminal result before asserting completed verification.
 The attempt ID, package and creation time are stored in M05 checkpoints before
 provider dispatch. Capability owners call the host issuance port after local
 preflight. Generic canary identities derive from the saved attempt; native

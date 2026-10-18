@@ -45,6 +45,16 @@ class MultiuserIngressTest {
     private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
         request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
     })
+    private fun awaitState(read: () -> JSONObject, pending: (JSONObject) -> Boolean): JSONObject {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+        var value = read()
+        while (pending(value)) {
+            assertTrue(value.toString(), System.nanoTime() < deadline)
+            Thread.sleep(10)
+            value = read()
+        }
+        return value
+    }
     @Test fun `native Vault export starts a real owner portable task instead of the retired global bundle`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token")
         val id=UUID.randomUUID().toString();val receipt=CentralPortable(central(server,token)).start(id)
@@ -82,7 +92,7 @@ class MultiuserIngressTest {
         assertFalse(inventory.installation.getBoolean("supported"))
     }
     @Test fun `actual native owned plugin edit check CAS and memory preparation use original public commands`() = fixture(true) { f ->
-        val server=f.getString("address");val a=PluginControlClient(central(server,f.getJSONObject("a").getString("token")));val b=PluginControlClient(central(server,f.getJSONObject("b").getString("token")))
+        val server=f.getString("address");val aConnection=central(server,f.getJSONObject("a").getString("token"));val bConnection=central(server,f.getJSONObject("b").getString("token"));val a=PluginControlClient(aConnection);val b=PluginControlClient(bConnection)
         val grants=JSONObject().put("capabilities",JSONArray().put("processor")).put("sourceIds",JSONArray()).put("history",false)
         for ((control,label) in listOf(a to "A",b to "B")) {
             val before=control.inventory();val pkg=before.packages.single();assertTrue(pkg.fields.any {it.id=="credential"})
@@ -93,7 +103,16 @@ class MultiuserIngressTest {
         val edit=PluginControlClient.configureOwned(instance.packageId,instance.definition,original.revision,"A edited",JSONObject().put("label","A edited"),grants)
         a.execute(edit);assertTrue(a.inventory().instances.single().secretStatus.getBoolean("credential"));assertEquals("B",b.inventory().instances.single().name)
         assertEquals(409,assertThrows(CentralFailure::class.java){a.execute(edit)}.status)
-        a.execute(PluginControlClient.ownedInstanceAction(instance.id,"check",a.inventory().revision));assertTrue(a.inventory().instances.single().checked);assertFalse(b.inventory().instances.single().checked)
+        val fixtureControl=f.getString("controlAddress");URL(fixtureControl+"/plugin-check/hold").readText()
+        val check=a.execute(PluginControlClient.ownedInstanceAction(instance.id,"check",a.inventory().revision))
+        assertEquals("checking",check.getString("observed"));assertFalse(check.getBoolean("checked"))
+        awaitState({JSONObject(URL(fixtureControl+"/state").readText())},{!it.getBoolean("pluginCheckEntered")})
+        val pending=a.inventory().instances.single();assertEquals("checking",pending.observed);assertFalse(pending.checked);assertTrue(pending.allowedActions.isEmpty());assertFalse(b.inventory().instances.single().checked)
+        val taskPath="/api/tasks/"+CentralScreens.encode(check.getString("taskId"));assertEquals("running",aConnection.get(taskPath).getString("state"));assertEquals(404,assertThrows(CentralFailure::class.java){bConnection.get(taskPath)}.status)
+        URL(fixtureControl+"/plugin-check/release").readText()
+        val checked=awaitState({aConnection.get(taskPath)},{it.getString("state") in setOf("waiting","running")});assertEquals(checked.toString(),"succeeded",checked.getString("state"))
+        assertTrue(a.inventory().instances.single().checked);assertFalse(b.inventory().instances.single().checked)
+        val posts=JSONObject(URL(fixtureControl+"/state").readText()).getJSONObject("pluginChecks");assertEquals(1,posts.getInt("a"));assertEquals(0,posts.getInt("b"))
         a.execute(PluginControlClient.ownedInstanceAction(instance.id,"enable",a.inventory().revision));assertTrue(a.inventory().instances.single().desired)
         a.execute(PluginControlClient.ownedInstanceAction(instance.id,"disable",a.inventory().revision));assertFalse(a.inventory().instances.single().desired)
         val memory=a.memory();a.execute(PluginControlClient.memoryControl("pause",memory.getLong("revision")));assertFalse(a.memory().getBoolean("desired"))

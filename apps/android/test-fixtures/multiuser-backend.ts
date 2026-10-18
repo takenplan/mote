@@ -1,4 +1,4 @@
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createServer} from 'node:http';
@@ -7,13 +7,19 @@ import {randomUUID} from 'node:crypto';
 import {buildApp} from '../../server/src/app.js';
 import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
-import {generatedScopedPluginRelease} from '../../server/test/fixtures/scoped-plugin-release.js';
+import {generatedScopedPluginRelease,generatedScopedPluginSource} from '../../server/test/fixtures/scoped-plugin-release.js';
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
-const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease():undefined;
+const pluginHold=join(directory,'generated-plugin-check-hold'),pluginEntered=join(directory,'generated-plugin-check-entered'),pluginChecks={a:0,b:0,other:0};
+const gatedPlugin=generatedScopedPluginSource.replace('export async function createMotePlugin(configuration){',`export async function createMotePlugin(configuration){
+ const fixtureHeld=()=>readFile(${JSON.stringify(pluginHold)}).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
+ if(await fixtureHeld()){await writeFile(${JSON.stringify(pluginEntered)},'generated worker entered');while(await fixtureHeld())await new Promise(resolve=>setTimeout(resolve,10));}
+`);
+const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease('1',gatedPlugin):undefined;
 const node=await buildApp({dataDir:directory},releaseFixture?{pluginReleaseTransport:releaseFixture.transport}:undefined);
 const archiveReads:{owner:string;path:string;status:number}[]=[];
 let holdNext=false,entered=false,release:(()=>void)|undefined;
 node.app.addHook('onSend',async(request,reply,payload)=>{
+ if(request.method==='POST'&&/^\/api\/plugin-instances\/[^/]+\/check$/.test(request.url))pluginChecks[request.headers.authorization==='Bearer '+a.token?'a':request.headers.authorization==='Bearer '+b.token?'b':'other']++;
  if(request.method==='GET'&&request.url.startsWith('/api/capture-browser'))archiveReads.push({owner:request.headers.authorization==='Bearer '+a.token?'a':request.headers.authorization==='Bearer '+b.token?'b':'other',path:request.url,status:reply.statusCode});
  if(reply.statusCode>=400)process.stderr.write(JSON.stringify({method:request.method,path:request.url,status:reply.statusCode,response:payload})+'\n');
  if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
@@ -63,6 +69,8 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/archive-reads'){}
  else if(request.url==='/hold-next'){entered=false;holdNext=true;}
  else if(request.url==='/release'){release?.();release=undefined;}
+ else if(request.url==='/plugin-check/hold'){rmSync(pluginEntered,{force:true});writeFileSync(pluginHold,'generated fixture hold');}
+ else if(request.url==='/plugin-check/release'){rmSync(pluginHold,{force:true});}
  else if(request.url==='/network/off'){node.app.server.closeAllConnections();await new Promise<void>((resolve,reject)=>node.app.server.close(error=>error?reject(error):resolve()));}
  else if(request.url==='/network/on'){await new Promise<void>((resolve,reject)=>{node.app.server.once('error',reject);node.app.server.listen(port,'127.0.0.1',()=>{node.app.server.removeListener('error',reject);resolve();});});}
  else if(request.url?.startsWith('/ocr/')&&ocr){
@@ -72,10 +80,10 @@ const control=createServer((request,response)=>{void(async()=>{
  }
  else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
- response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads}));
+ response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads,pluginCheckEntered:existsSync(pluginEntered),pluginChecks}));
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;
 process.stdout.write(JSON.stringify({address,controlAddress,admin,a,b,password,pid:process.pid,pluginPackageId,retiredTokenStatus})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;release?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;release?.();rmSync(pluginHold,{force:true});control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());
