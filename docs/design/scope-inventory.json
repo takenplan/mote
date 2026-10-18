@@ -1213,6 +1213,7 @@
       "table:execution_projection_meta",
       "table:operation_changes",
       "table:operation_generations",
+      "table:operation_parent_generations",
       "table:operation_parents",
       "table:operation_progress",
       "table:operation_user_sequences"
@@ -1815,7 +1816,7 @@
       "table:task_model_resources",
       "table:task_restore_journal",
       "table:user_tasks",
-      "task:this.engine.enqueue:'task:'+hash([grant.userId,operation])",
+      "task:this.engine.enqueue:privateOperationId(grant.userId,operation)",
       "task:this.engine.enqueue:operationId",
       "task:this.engine.register:kind:handler.kind"
     ],

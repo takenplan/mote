@@ -63,20 +63,26 @@ export function linkOperation(store:ExecutionStorage,operationId:string,stepId:s
  * child admission, generation changes and deletion reach the parent atomically. */
 function installOperationHierarchy(store:ExecutionStorage){
  const db=store.db;
+ // Membership propagation must reach every ancestor on this connection,
+ // including scoped production storage which does not open EvidenceArchive.
+ db.exec('PRAGMA recursive_triggers=ON');
+ // These are current projection definitions, not historical data repair.
+ db.exec('DROP TRIGGER IF EXISTS operation_child_added; DROP TRIGGER IF EXISTS operation_child_changed; DROP TRIGGER IF EXISTS operation_child_removed');
  db.exec(`CREATE TABLE IF NOT EXISTS operation_parents(parent_id TEXT NOT NULL,child_id TEXT NOT NULL,PRIMARY KEY(parent_id,child_id));
+ CREATE TABLE IF NOT EXISTS operation_parent_generations(parent_id TEXT NOT NULL,child_id TEXT NOT NULL,slot TEXT NOT NULL,version TEXT NOT NULL,PRIMARY KEY(parent_id,child_id),FOREIGN KEY(parent_id,child_id) REFERENCES operation_parents(parent_id,child_id) ON DELETE CASCADE);
  CREATE INDEX IF NOT EXISTS operation_parent_children ON operation_parents(child_id,parent_id);
  CREATE TRIGGER IF NOT EXISTS operation_child_added AFTER INSERT ON execution_operation_steps BEGIN
   INSERT OR IGNORE INTO execution_operation_steps(operation_id,step_id,slot,generation,active,optional)
-   SELECT parent_id,new.step_id,new.operation_id||':'||new.slot,new.generation,new.active,new.optional FROM operation_parents WHERE child_id=new.operation_id;
+   SELECT p.parent_id,new.step_id,coalesce(g.slot,new.operation_id||':'||new.slot),coalesce(g.version,new.generation),new.active,new.optional FROM operation_parents p LEFT JOIN operation_parent_generations g ON g.parent_id=p.parent_id AND g.child_id=p.child_id WHERE p.child_id=new.operation_id;
  END;
  CREATE TRIGGER IF NOT EXISTS operation_child_changed AFTER UPDATE OF active,optional,generation ON execution_operation_steps BEGIN
-  UPDATE execution_operation_steps SET active=new.active,optional=new.optional,generation=new.generation WHERE step_id=new.step_id AND operation_id IN (SELECT parent_id FROM operation_parents WHERE child_id=new.operation_id);
+  UPDATE execution_operation_steps SET active=new.active,optional=new.optional,generation=coalesce((SELECT version FROM operation_parent_generations WHERE parent_id=execution_operation_steps.operation_id AND child_id=new.operation_id),new.generation) WHERE step_id=new.step_id AND operation_id IN (SELECT parent_id FROM operation_parents WHERE child_id=new.operation_id);
  END;
  CREATE TRIGGER IF NOT EXISTS operation_child_removed AFTER DELETE ON execution_operation_steps BEGIN
   DELETE FROM execution_operation_steps WHERE step_id=old.step_id AND operation_id IN (SELECT parent_id FROM operation_parents WHERE child_id=old.operation_id);
  END;`);
 }
-export function linkOperationParent(store:ExecutionStorage,parentId:string,childId:string){
+export function linkOperationParent(store:ExecutionStorage,parentId:string,childId:string,membership:Pick<OperationMembership,'generation'>={}){
  const db=store.db;
  const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
  try{
@@ -84,10 +90,23 @@ export function linkOperationParent(store:ExecutionStorage,parentId:string,child
  if(owners.length>1)throw new StoreError('Execution operation ownership conflict',409);
  if(parentId===childId)throw Error('An operation cannot contain itself');
  if(db.prepare('WITH RECURSIVE descendants(id) AS (SELECT child_id FROM operation_parents WHERE parent_id=? UNION SELECT p.child_id FROM operation_parents p JOIN descendants d ON p.parent_id=d.id) SELECT 1 FROM descendants WHERE id=? LIMIT 1').get(childId,parentId))throw Error('Operation ancestry cycle');
- if(db.prepare('SELECT 1 FROM operation_parents WHERE parent_id=? AND child_id=?').get(parentId,childId)){if(own)db.exec('COMMIT');return;}
+ const generation=membership.generation;
+ if(generation){
+  const prior=db.prepare('SELECT version FROM operation_generations WHERE operation_id=? AND slot=?').get(parentId,generation.slot);
+  if(prior?.version!==generation.version){
+   // Detach obsolete edges first. Their late updates may remain in their own
+   // histories, but can no longer reactivate the parent's retired generation.
+   db.prepare('DELETE FROM operation_parents WHERE parent_id=? AND child_id IN (SELECT child_id FROM operation_parent_generations WHERE parent_id=? AND slot=? AND version!=?)').run(parentId,parentId,generation.slot,generation.version);
+   db.prepare('INSERT INTO operation_generations VALUES(?,?,?) ON CONFLICT(operation_id,slot) DO UPDATE SET version=excluded.version').run(parentId,generation.slot,generation.version);
+   db.prepare('UPDATE execution_operation_steps SET active=0 WHERE operation_id=? AND slot=? AND generation!=? AND active=1').run(parentId,generation.slot,generation.version);
+  }
+ }
+ const existing=db.prepare('SELECT 1 FROM operation_parents WHERE parent_id=? AND child_id=?').get(parentId,childId);
+ if(existing&&!generation){if(own)db.exec('COMMIT');return;}
   store.reserveMetadata(Buffer.byteLength(parentId)+Buffer.byteLength(childId)+256);
-  db.prepare('INSERT INTO operation_parents VALUES(?,?)').run(parentId,childId);
-  db.prepare("INSERT OR IGNORE INTO execution_operation_steps(operation_id,step_id,slot,generation,active,optional) SELECT ?,step_id,operation_id||':'||slot,generation,active,optional FROM execution_operation_steps WHERE operation_id=?").run(parentId,childId);
+  db.prepare('INSERT OR IGNORE INTO operation_parents VALUES(?,?)').run(parentId,childId);
+  if(generation)db.prepare('INSERT INTO operation_parent_generations VALUES(?,?,?,?) ON CONFLICT(parent_id,child_id) DO UPDATE SET slot=excluded.slot,version=excluded.version').run(parentId,childId,generation.slot,generation.version);
+  db.prepare("INSERT INTO execution_operation_steps(operation_id,step_id,slot,generation,active,optional) SELECT ?,step_id,coalesce(?,operation_id||':'||slot),coalesce(?,generation),active,optional FROM execution_operation_steps WHERE operation_id=? ON CONFLICT(operation_id,step_id) DO UPDATE SET slot=excluded.slot,generation=excluded.generation,active=excluded.active,optional=excluded.optional WHERE slot!=excluded.slot OR generation!=excluded.generation OR active!=excluded.active OR optional!=excluded.optional").run(parentId,generation?.slot??null,generation?.version??null,childId);
   if(own)db.exec('COMMIT');
  }catch(error){if(own)db.exec('ROLLBACK');throw error;}
 }
