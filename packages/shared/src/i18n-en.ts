@@ -8643,5 +8643,6 @@ export const english: Readonly<Record<string, string>> = {
   "本次模型请求超时，请查看任务状态。": "This model request timed out. Check the task status.",
   "执行未完成，请查看任务诊断。": "Execution did not complete. Check the task diagnostics.",
   "仅管理员可安装本机模型。": "Only administrators can install models on the Central node.",
-  "图片处理并发": "Concurrent image processing"
+  "图片处理并发": "Concurrent image processing",
+  "正在核验": "Checking capabilities"
 };

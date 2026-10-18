@@ -125,6 +125,14 @@ export function checkProductionImports(directory=root){
     // Recording recipe definitions import pure prompt contracts, never a legacy host.
     [sourceRoot+'/scope/memory.ts',new Set([sourceRoot+'/connectors/recording-memory.ts'])],
     [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
+    // The generated provider canary receives only the Memory host's fenced
+    // provider/restart ports, without an account context or legacy Store.
+    [sourceRoot+'/scope/memory-providers.ts',new Set([sourceRoot+'/memory-provider-probe.ts'])],
+  ]);
+  // Keep this allowance bounded if the shared canary changes: direct file/SQL
+  // access, provider construction and legacy hosts must remain in its caller.
+  const portHelperImports=new Map([
+    [sourceRoot+'/memory-provider-probe.ts',new Set(['node:crypto','./memory-schema.js','./memory-provider-contract.js'])],
   ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
@@ -141,6 +149,8 @@ export function checkProductionImports(directory=root){
       // expression is the sole retained exception, pending M06/M09 adaptation.
       const processorLoader=relative(directory,path)==='apps/server/src/file-processors.ts'&&node.getText(tree)==='import(isAbsolute(specifier)?pathToFileURL(specifier).href:specifier)';
       if(dynamic&&(!specifier||!ts.isStringLiteralLike(specifier))&&!processorLoader)failures.push(`computed production import: ${relative(directory,path)}`);
+      const portImports=portHelperImports.get(relative(directory,path));
+      if(portImports&&specifier&&ts.isStringLiteralLike(specifier)&&!portImports.has(specifier.text))failures.push(`unreviewed capability probe import: ${relative(directory,path)} -> ${specifier.text}`);
       if(specifier&&ts.isStringLiteralLike(specifier)&&specifier.text.startsWith('.')){
         const candidates=[specifier.text.replace(/\.mjs$/,'.mts').replace(/\.cjs$/,'.cts').replace(/\.js$/,'.ts'),specifier.text];
         const target=relative(directory,candidates.map(value=>resolve(path,'..',value)).find(value=>existsSync(value))??resolve(path,'..',candidates[0]));

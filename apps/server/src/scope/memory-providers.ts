@@ -10,6 +10,8 @@ import type {ModelUsageMeter} from './model-usage.js';
 import {Mem0MemoryProvider} from '../mem0-memory-provider.js';
 import {createHindsightEngine,HindsightEngine,type HindsightPrepare} from '../hindsight-engine.js';
 import {hindsightModelFingerprint,type HindsightRuntime} from '../hindsight-runtime.js';
+import {probeMemoryProvider} from '../memory-provider-probe.js';
+import type {PluginCapabilityProbe} from './plugin-contract.js';
 import {WorkerMemoryProvider} from '../worker-memory-provider.js';
 import {MemoryProviderError,memoryProviderNamespaceSchema,memoryBodyDigest,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
 import {PrivateSql} from './private-data-sql.js';
@@ -36,10 +38,43 @@ export class ScopedMemoryProviders {
  private readonly entries=new Map<string,Promise<Entry>>();
  private readonly turns=new Map<string,Promise<void>>();
  private closed=false;
+ private readonly releaseProbe:()=>void;
  private readonly releaseFactories:Array<()=>Promise<void>>=[];
  constructor(private readonly db:DatabaseSync,private readonly authority:UserContextAuthority,private readonly configuration:Configurations,private readonly plugins:ScopedPluginHost,private readonly options:MemoryProviderOptions={}){
+  this.releaseProbe=plugins.registerCapabilityProbe(['repository','retrieval','engine'],input=>this.probe(input));
   for(const [adapter,id,version,capabilities] of [['mote.mem0@1','mote.mem0','3.3.1',['repository','retrieval']],['mote.hindsight@1','mote.hindsight','0.10.2',['engine']]] as const)this.releaseFactories.push(plugins.registerRuntimeFactory(adapter,()=>({call:async method=>{if(method==='describe')return {components:capabilities.map(capability=>({id:id+'.'+capability,version,surface:capability==='engine'?'agent':'data',capability}))};throw new MemoryProviderError('unsupported_input','Use the scoped Memory domain for this native provider operation');},close:async()=>{}})));
  }
+ private async probe(input:Parameters<PluginCapabilityProbe>[0]){
+  const {context,instance,adapter,directory,namespace,signal}=input,assert=()=>{this.authority.assert(context);input.assertCurrent();signal.throwIfAborted();if(this.closed)throw unavailable();};assert();
+  let provider:MemoryProvider|undefined,lease:ModelLease|undefined;const meters=new Map<string,ModelUsageMeter>();let opaque:ModelUsageMeter|undefined,status:'completed'|'failed'='failed';
+  const close=async()=>{await provider?.close();};input.onClose(close);signal.addEventListener('abort',()=>{void close().catch(()=>{});},{once:true});
+  try{
+   if(adapter){
+    const reference=referenceSchema.parse(instance.configuration[adapter==='mote.mem0@1'?'embeddingSecretReference':'modelProfileId']);lease=await this.configuration.leaseReference(context,'memory','plugin-probe:'+randomUUID(),reference);assert();
+    const modelAssert=()=>{assert();this.configuration.assertLease(lease!);};
+    provider=await this.configuration.withModel(lease,async settings=>{
+     modelAssert();if(adapter==='mote.mem0@1'){
+      if(instance.configuration.embeddingBaseUrl!==settings.baseUrl||instance.configuration.embeddingModel!==settings.model)throw new ConfigServiceError('config_invalid');
+      return provider=new Mem0MemoryProvider({directory:join(directory,'native'),embedding:{baseUrl:settings.baseUrl,model:settings.model,dimension:z.number().int().positive().parse(instance.configuration.embeddingDimension),apiKey:settings.apiKey}},{assertEmbeddingAuthority:()=>{modelAssert();opaque??=this.configuration.startUsage(lease!,{attribution:{agentId:'plugin-capability-probe',moduleId:'plugins',skillId:null}});opaque.issued();}});
+     }
+     if(adapter==='mote.hindsight@1'){
+      const options:Parameters<typeof createHindsightEngine>[0]={directory:join(directory,'native'),instanceId:instance.id,configurationIdentity:memoryHash([context.deploymentId,namespace,instance.configuration,directory]),modelFingerprint:hindsightModelFingerprint(settings),settings:{...settings},codex:this.configuration.codex(),onRequestStarted:request=>{modelAssert();meters.set(request.requestId,this.configuration.startUsage(lease!,{attribution:{requestId:request.requestId,agentId:'plugin-capability-probe',moduleId:'plugins',skillId:null}}));},assertModelAuthority:request=>{modelAssert();const meter=meters.get(request.requestId);if(!meter)throw unavailable();meter.issued();},runModel:async work=>{modelAssert();const value=await work();modelAssert();return value;},onUsage:(tokens,request)=>{modelAssert();const meter=meters.get(request.requestId);if(!meter)throw unavailable();meter.update(tokens);},onRequestFinished:request=>{const meter=meters.get(request.requestId);try{modelAssert();meter?.finish(request.status);}catch{try{meter?.interrupt();}catch{}}}};
+      return provider=this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(options.directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:context.userId}),model:settings.model}):createHindsightEngine(options);
+     }throw unavailable();
+    });
+   }else provider=new WorkerMemoryProvider(this.probeRuntime(input.runtime(),assert));
+   assert();input.beginExternal();const health=provider instanceof HindsightEngine?await provider.probe(signal):adapter?await provider.recover({namespace}):await probeMemoryProvider({provider,restart:async()=>{assert();provider=new WorkerMemoryProvider(this.probeRuntime(await input.restart(),assert));return provider;},namespace,providerId:input.packageId,version:'current',signal,attempt:input.attempt});assert();
+   const capabilities=instance.grants.capabilities.filter(capability=>['repository','retrieval','engine'].includes(capability)).flatMap(capability=>{
+    const unsupported=capability==='engine'&&adapter!=='mote.hindsight@1',verified=!unsupported&&health.ready&&(capability==='repository'?health.verified.persistentCrud&&health.verified.immutableRecords&&health.verified.idempotentReplay:capability==='retrieval'?health.verified.scopedRetrieval:health.verified.persistentCrud&&health.verified.scopedRetrieval&&health.verified.immutableRecords&&health.verified.idempotentReplay);
+    return [{capability,state:unsupported?'unsupported' as const:verified?'verified' as const:'unknown' as const,...(!verified?{reason:unsupported?'The third-party worker ABI supports repository and retrieval; engine execution is not implemented':'The actual provider probe did not complete'}:{})}];
+   });
+   // Component identities come from the pinned declaration, never provider text.
+   status=health.ready?'completed':'failed';return {capabilities:input.components.flatMap(component=>{const capability=capabilities.find(value=>value.capability===component.capability);return capability?[{id:component.id,state:capability.state,...(capability.reason?{reason:capability.reason}:{})}]:[];}),issues:health.problems};
+  }finally{
+   await close();for(const meter of [...meters.values(),...(opaque?[opaque]:[])]){try{assert();if(lease)this.configuration.assertLease(lease);meter.finish(status);}catch{try{meter.interrupt();}catch{}}}
+  }
+ }
+ private probeRuntime(runtime:ReturnType<Parameters<PluginCapabilityProbe>[0]['runtime']>,assert:()=>void){return {call:async(...args:Parameters<typeof runtime.call>)=>{assert();const value=await runtime.call(...args);assert();return value;},close:()=>runtime.close()};}
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>{this.authority.assert(context);if(this.closed)throw unavailable();});}
  /** A lifecycle handle can evict an Entry but still owns the same native
   * directory. Keep its whole open-to-close lifetime in the namespace turn. */
@@ -137,7 +172,7 @@ export class ScopedMemoryProviders {
     if(!['operations.db','vectors.db','history.db'].every(file=>existsSync(join(directory,file))))throw unavailable();
     provider=new Mem0MemoryProvider({directory,embedding:{baseUrl:literal.settings.baseUrl,model:literal.settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:'unused-local-maintenance'}},{embeddingUnavailable:unavailable(),assertEmbeddingAuthority:()=>{throw unavailable();}});
    }else if(descriptor.adapter==='mote.hindsight@1'){
-    const options:Parameters<typeof createHindsightEngine>[0]={directory,instanceId:binding.instanceId,configurationIdentity:memoryHash([subject.deploymentId,namespace,base.configuration_hash]),modelFingerprint:literal.modelFingerprint,settings:literal.settings,assertModelAuthority:()=>{throw unavailable();},runModel:async()=>{throw unavailable();}};
+    const options:Parameters<typeof createHindsightEngine>[0]={directory,instanceId:binding.instanceId,configurationIdentity:memoryHash([subject.deploymentId,namespace,base.configuration_hash]),modelFingerprint:literal.modelFingerprint,settings:literal.settings,codex:this.configuration.codex(),assertModelAuthority:()=>{throw unavailable();},runModel:async()=>{throw unavailable();}};
     provider=this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:subject.userId}),model:literal.settings.model}):createHindsightEngine(options);
    }else throw unavailable();
   }
@@ -146,5 +181,5 @@ export class ScopedMemoryProviders {
   }catch(error){release();throw error;}
  }
  async discardPrepared(context:UserContext,binding:Binding,input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'},assertCurrent:()=>void){return this.call(context,binding,assertCurrent,provider=>provider instanceof HindsightEngine?provider.discardPrepared(input):Promise.resolve(),true);}
- async close(){if(this.closed)return;this.closed=true;await Promise.all(this.turns.values());for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();for(const release of this.releaseFactories.reverse())await release();}
+ async close(){if(this.closed)return;this.closed=true;await Promise.all(this.turns.values());for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();this.releaseProbe();for(const release of this.releaseFactories.reverse())await release();}
 }

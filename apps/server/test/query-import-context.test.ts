@@ -4,7 +4,6 @@ import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {setTimeout} from 'node:timers/promises';
 import {parseAnswer} from '@mote/agent';
 import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';

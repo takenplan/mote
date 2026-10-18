@@ -208,3 +208,64 @@ and whole-instance recovery await their domain acceptance.
 
 Executed checks and review findings are recorded in
 [M09 validation](../validation/multiuser-m09-plugins.md).
+
+## Restored control journeys
+
+The [extension parity ADR](../adr-extension-journey-parity.md) restores actual
+provider capability checks, observed status and issues at the original check step.
+Exact descriptor validation remains necessary and is followed by the trusted
+domain probe; a matching `describe` result alone is not a verified provider.
+Administrators can disable their own unreferenced instance and directly uninstall
+the package. Retirement uses the same configuration authority and preserves all
+foreign declarations and retained task/history readers. No manual configuration
+removal step is required.
+
+The scope ledger registers `plugin_user_checks`, `plugin.check`, and the private
+probe/attempt directories under M09. Each check is keyed by user and instance,
+then fenced by account authorization, configuration signature, generation and
+its M05 task grant. Probe directories are inside the existing deployment/user
+instance directory; failed or interrupted attempts retain their local receipts.
+Execution also requires the check row's admitted task ID. The original command
+remains idempotent; a new task operation using the same owned check ID is stale
+and cannot acquire a provider, issue a canary or publish into the old receipt.
+The HTTP check route returns the pending durable receipt immediately. Internal
+consumers such as connector enable await that exact check's completion before
+publishing their configuration; admission alone is not verification. Waiting
+retains the original account/declaration fence and the caller's configuration
+revision, so a concurrent pause or configuration edit cannot be overwritten.
+The native client keeps this same single-check journey: the pending state is
+visible and automatically refreshed before enable becomes available. Its command
+receipt is admission; consumer tests follow that receipt's owned task to its
+terminal result before asserting completed verification.
+The attempt ID, package and creation time are stored in M05 checkpoints before
+provider dispatch. Capability owners call the host issuance port after local
+preflight. Generic canary identities derive from the saved attempt; native
+provider control files stay in that same attempt directory. The existing M05
+external ledger retains uncertain results across lease recovery and orderly
+shutdown. A new check or confirmed retry cannot overwrite an unresolved attempt,
+including one whose instance declaration was removed. Its fixed package remains
+pinned, and plugin deletion returns `result_unknown` with local evidence retained.
+Hydrating an already enabled declaration preserves its saved intent and leaves
+the blocked check visible, so status reads and pause remain available. A new
+enable/resume transition cannot bypass the unresolved check.
+
+Only a result saved after joined provider/worker cleanup may be reused on
+recovery. Its checkpoint is written before the final external ACK; recovery of
+that ACK finishes the original check without opening a provider or creating
+another canary. An unfinished issuance or uncertain generic canary cleanup has
+no such result and remains blocked. This repair retains unknown outcomes; it
+does not add a supplier-specific remote reconciler or an erasure claim.
+The existing confirmed retry can also finish a lost local ACK when this complete
+proof exists. Recovery validates the original attempt and issuance key before
+using M05's late-completion port; an unfinished result cannot use that exception.
+The shared canary accepts only fenced provider/restart ports from
+`ScopedMemoryProviders`. Its exact import edge and contract-only dependencies
+are guarded; unrelated scoped hosts, legacy Store imports and direct file/SQL
+imports are rejected.
+
+Capability-check rows are operational state, excluded from personal instance
+exports and removed only for the deleted account. Stopped whole-instance
+backups include the table with its seven current columns and validate its owner
+against the account catalog. Restore preserves receipt data but the existing
+instance-generation change, cleared verification and revoked task grants prevent
+old checks from restoring execution authority. No older-schema migration is added.
