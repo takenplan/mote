@@ -26,7 +26,7 @@ export type HindsightRuntimeFactory=(options:Parameters<typeof createHindsightEn
 export type MemoryProviderOptions={hindsightRuntimeFactory?:HindsightRuntimeFactory};
 type Binding=Extract<ScopedMemoryBinding,{kind:'plugin'}>;
 type ProviderConfig={snapshot_id:string;operation_id:string;configuration_hash:string};
-type Entry={provider:MemoryProvider;tail:Promise<unknown>;active?:{assert:()=>void;lease?:ModelLease;opaque?:ModelUsageMeter;meters:Map<string,ModelUsageMeter>};base:ProviderConfig};
+type Entry={provider:MemoryProvider;active?:{assert:()=>void;lease?:ModelLease;opaque?:ModelUsageMeter;meters:Map<string,ModelUsageMeter>};base:ProviderConfig};
 const referenceSchema=z.string().regex(/^(personal|shared):.+$/).transform(value=>{const at=value.indexOf(':');return {kind:value.slice(0,at) as 'personal'|'shared',id:value.slice(at+1)};});
 const unavailable=()=>new MemoryProviderError('unavailable','The retained scoped Memory provider is unavailable');
 
@@ -35,6 +35,7 @@ const unavailable=()=>new MemoryProviderError('unavailable','The retained scoped
  * it creates no alternate data store, model selector or publication path. */
 export class ScopedMemoryProviders {
  private readonly entries=new Map<string,Promise<Entry>>();
+ private readonly turns=new Map<string,Promise<void>>();
  private closed=false;
  private readonly releaseProbe:()=>void;
  private readonly releaseFactories:Array<()=>Promise<void>>=[];
@@ -74,6 +75,12 @@ export class ScopedMemoryProviders {
  }
  private probeRuntime(runtime:ReturnType<Parameters<PluginCapabilityProbe>[0]['runtime']>,assert:()=>void){return {call:async(...args:Parameters<typeof runtime.call>)=>{assert();const value=await runtime.call(...args);assert();return value;},close:()=>runtime.close()};}
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>{this.authority.assert(context);if(this.closed)throw unavailable();});}
+ /** A lifecycle handle can evict an Entry but still owns the same native
+  * directory. Keep its whole open-to-close lifetime in the namespace turn. */
+ private async acquire(key:string){
+  const prior=this.turns.get(key)??Promise.resolve();let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve),tail=prior.then(()=>held);this.turns.set(key,tail);await prior;
+  return ()=>{release();if(this.turns.get(key)===tail)this.turns.delete(key);};
+ }
  async descriptor(context:UserContext,binding:Binding){
   this.authority.assert(context);const value=await this.plugins.domainProvider(context,binding.snapshotId,['repository','engine']);this.authority.assert(context);
   if(value.instanceId!==binding.instanceId||value.namespace.ownerId!==context.userId||value.namespace.bindingRevision!==binding.revision)throw unavailable();return value;
@@ -94,13 +101,13 @@ export class ScopedMemoryProviders {
  }
  private async open(context:UserContext,binding:Binding):Promise<Entry>{
   const descriptor=await this.descriptor(context,binding),namespace=descriptor.namespace,tag=memoryHash(namespace),sql=this.sql(context),base=sql.get('SELECT * FROM mm_provider_config WHERE user_id=$user AND namespace_hash=?',tag) as ProviderConfig|undefined;
-  if(!descriptor.adapter)return {provider:new WorkerMemoryProvider(await descriptor.runtime()),tail:Promise.resolve(),base:{snapshot_id:'',operation_id:'',configuration_hash:memoryHash(descriptor.configuration)}};
+  if(!descriptor.adapter)return {provider:new WorkerMemoryProvider(await descriptor.runtime()),base:{snapshot_id:'',operation_id:'',configuration_hash:memoryHash(descriptor.configuration)}};
   if(!base||base.configuration_hash!==memoryHash([descriptor.adapter,descriptor.configuration]))throw unavailable();
   const restored=await this.configuration.restoreLease(context,base.snapshot_id,base.operation_id);descriptor.assertCurrent();const saved=sql.get('SELECT json FROM mm_provider_descriptors WHERE user_id=$user AND namespace_hash=?',tag);
   const literal=saved?z.object({settings:modelSettingsSchema,modelFingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(String(saved.json))):undefined;
   if(restored.status!=='restored'&&(!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(restored.reason)||!literal))throw unavailable();
   const directory=join(descriptor.directory,'memory-'+tag);if(restored.status!=='restored'&&descriptor.adapter==='mote.mem0@1'&&!['operations.db','vectors.db','history.db'].every(file=>existsSync(join(directory,file))))throw unavailable();
-  const entry:Entry={provider:undefined as unknown as MemoryProvider,tail:Promise.resolve(),base};
+  const entry:Entry={provider:undefined as unknown as MemoryProvider,base};
   const create=async(settings:Readonly<ModelSettings>)=>{
    const assert=()=>{const active=entry.active;if(!active?.lease)throw unavailable();active.assert();this.configuration.assertLease(active.lease);};
    if(descriptor.adapter==='mote.mem0@1')return new Mem0MemoryProvider({directory:join(descriptor.directory,'memory-'+tag),embedding:{baseUrl:settings.baseUrl,model:settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:settings.apiKey||'unused-local-literal-reader'}},{assertEmbeddingAuthority:()=>{assert();const active=entry.active!;active.opaque??=this.configuration.startUsage(active.lease!,{attribution:{agentId:'memory-provider',moduleId:'memories',skillId:null}});active.opaque.issued();},...(restored.status!=='restored'?{embeddingUnavailable:unavailable()}:{})});
@@ -114,7 +121,9 @@ export class ScopedMemoryProviders {
  }
  private async entry(context:UserContext,binding:Binding){const descriptor=await this.descriptor(context,binding);if(!descriptor.adapter)return this.open(context,binding);const key=memoryHash([descriptor.namespace,descriptor.configuration]),existing=this.entries.get(key);if(existing)return existing;const created=this.open(context,binding);this.entries.set(key,created);void created.catch(()=>{if(this.entries.get(key)===created)this.entries.delete(key);});return created;}
  private async call<T>(context:UserContext,binding:Binding,assertCurrent:()=>void,work:(provider:MemoryProvider)=>Promise<T>,literalRead=false):Promise<T>{
-  assertCurrent();const descriptor=await this.descriptor(context,binding),entry=await this.entry(context,binding);assertCurrent();
+  assertCurrent();const descriptor=await this.descriptor(context,binding),release=descriptor.adapter?await this.acquire(memoryHash([descriptor.namespace,descriptor.configuration])):()=>{};
+  try{
+  assertCurrent();if(this.closed)throw unavailable();const entry=await this.entry(context,binding);assertCurrent();
   const assert=()=>{this.authority.assert(context);descriptor.assertCurrent();assertCurrent();if(this.closed)throw unavailable();};
   const execute=async()=>{
    assert();let lease:ModelLease|undefined;if(entry.base.snapshot_id){const current=await this.configuration.restoreLease(context,entry.base.snapshot_id,entry.base.operation_id);assert();if(current.status==='restored')lease=await this.configuration.forkLease(context,entry.base.snapshot_id,entry.base.operation_id,'memory-call:'+randomUUID());else if(!literalRead||!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(current.reason))throw unavailable();}assert();
@@ -123,7 +132,8 @@ export class ScopedMemoryProviders {
    catch(error){failed=true;assert();throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='unsupported_input'?'memory_provider_unsupported_input':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
    finally{const meters=[...(entry.active?.opaque?[entry.active.opaque]:[]),...entry.active?.meters.values()??[]];try{assert();for(const meter of meters)meter.finish(status);}catch(error){for(const meter of meters){try{meter.interrupt();}catch{/* Only retire this existing observation; never mask the provider failure. */}}if(!failed)throw error;}finally{entry.active=undefined;}}
   };
-  const result=entry.tail.then(execute);entry.tail=result.then(()=>{},()=>{});return result;
+  return await execute();
+  }finally{release();}
  }
  async provider(context:UserContext,binding:Binding,assertCurrent:()=>void):Promise<MemoryProvider>{
   const descriptor=await this.descriptor(context,binding),namespace=descriptor.namespace,check=(actual:MemoryProviderNamespace)=>{memoryProviderNamespaceSchema.parse(actual);if(memoryHash(actual)!==memoryHash(namespace))throw new MemoryProviderError('invalid_record','Memory namespace does not match its host binding');};
@@ -148,7 +158,9 @@ export class ScopedMemoryProviders {
   * carries no model lease and cannot authorize semantic provider operations. */
  async maintenance(subject:UserDataSubject,binding:Binding,purpose:'export'|'delete'){
   const descriptor=this.plugins.memoryMaintenance(subject,binding.snapshotId,purpose),namespace=descriptor.namespace;if(namespace.ownerId!==subject.userId||namespace.instanceId!==binding.instanceId||namespace.bindingRevision!==binding.revision)throw unavailable();
-  const cacheKey=memoryHash([descriptor.namespace,descriptor.configuration]),retained=this.entries.get(cacheKey);if(retained){this.entries.delete(cacheKey);const entry=await retained;await entry.tail;await entry.provider.close();descriptor.assertCurrent();}
+  const cacheKey=memoryHash([descriptor.namespace,descriptor.configuration]),release=descriptor.adapter?await this.acquire(cacheKey):()=>{};
+  try{
+  descriptor.assertCurrent();if(this.closed)throw unavailable();const retained=this.entries.get(cacheKey);if(retained){this.entries.delete(cacheKey);const entry=await retained;await entry.provider.close();descriptor.assertCurrent();}
   let provider:MemoryProvider;
   if(!descriptor.adapter)provider=new WorkerMemoryProvider(await descriptor.runtime());
   else{
@@ -163,9 +175,10 @@ export class ScopedMemoryProviders {
     provider=this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:subject.userId}),model:literal.settings.model}):createHindsightEngine(options);
    }else throw unavailable();
   }
-  const assert=descriptor.assertCurrent,check=(actual:MemoryProviderNamespace)=>{assert();if(memoryHash(actual)!==memoryHash(namespace))throw unavailable();};
-  return Object.freeze({observe:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.read(input);assert();return {present:value!==null,...(value?{bodyDigest:memoryBodyDigest(value)}:{})};},discardPrepared:async(input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'})=>{check(input.namespace);if(purpose!=='delete')throw unavailable();if(provider instanceof HindsightEngine)await provider.discardPrepared(input);assert();},read:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='export')throw unavailable();const value=await provider.read(input);assert();return value;},remove:async(input:Parameters<MemoryProvider['remove']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.remove(input);assert();return value;},close:()=>provider.close()});
+  let closing:Promise<void>|undefined;const assert=descriptor.assertCurrent,check=(actual:MemoryProviderNamespace)=>{assert();if(memoryHash(actual)!==memoryHash(namespace))throw unavailable();};
+  return Object.freeze({observe:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.read(input);assert();return {present:value!==null,...(value?{bodyDigest:memoryBodyDigest(value)}:{})};},discardPrepared:async(input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'})=>{check(input.namespace);if(purpose!=='delete')throw unavailable();if(provider instanceof HindsightEngine)await provider.discardPrepared(input);assert();},read:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='export')throw unavailable();const value=await provider.read(input);assert();return value;},remove:async(input:Parameters<MemoryProvider['remove']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.remove(input);assert();return value;},close:()=>closing??=(async()=>{try{await provider.close();}finally{release();}})()});
+  }catch(error){release();throw error;}
  }
  async discardPrepared(context:UserContext,binding:Binding,input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'},assertCurrent:()=>void){return this.call(context,binding,assertCurrent,provider=>provider instanceof HindsightEngine?provider.discardPrepared(input):Promise.resolve(),true);}
- async close(){if(this.closed)return;this.closed=true;for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();this.releaseProbe();for(const release of this.releaseFactories.reverse())await release();}
+ async close(){if(this.closed)return;this.closed=true;await Promise.all(this.turns.values());for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();this.releaseProbe();for(const release of this.releaseFactories.reverse())await release();}
 }
