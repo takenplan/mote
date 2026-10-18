@@ -5,7 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {AgentResponseError,AgentTimeoutError} from '@mote/agent';
 import {ModelUsageLedger,portableUsageReceipt} from '../src/scope/model-usage.js';
 import {usageTotals} from '../src/usage-metrics.js';
-import {safeAgentFailure} from '../src/scope/model-query.js';
+import {safeAgentFailure,queryWithUsage} from '../src/scope/model-query.js';
+import {defaultModelSettings} from '../src/model-settings.js';
 import {failureContext} from '../src/execution-failures.js';
 
 const cumulative={requests:0,reportedRequests:0,inputTokens:400,outputTokens:200,totalTokens:600,cacheReadTokens:0,cacheWriteTokens:0,measurement:'thread_cumulative' as const,complete:true};
@@ -49,4 +50,11 @@ test('an existing meter can interrupt only its retained fragment after revocatio
  const f=fixture(t),model=binding();let revoked=false;const meter=f.ledger.start(model,()=>{if(revoked)throw Error('generated revoked grant');});meter.issued();meter.update(cumulative);revoked=true;
  assert.throws(()=>meter.finish('completed'));assert.throws(()=>meter.update({...cumulative,inputTokens:800,outputTokens:400,totalTokens:1200}));const interrupted=meter.interrupt()!;assert.equal(interrupted.status,'failed');assert.equal(interrupted.tokens!.totalTokens,600);assert.equal(interrupted.tokens!.complete,false);assert.equal(interrupted.estimatedCost,null);assert.deepEqual(meter.interrupt(),interrupted);
  f.db.prepare('DELETE FROM user_model_usage WHERE user_id=? AND id=?').run(model.userId,meter.id);assert.equal(meter.interrupt(),undefined);assert.equal(f.rows().length,0);
+});
+
+
+test('a failed finalizer cannot replace the query failure and interrupt remains best effort',async()=>{
+ let interrupted=0;const secret='GENERATED_ACCOUNTING_CLEANUP_SECRET',reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],activity:async()=>({}),devices:async()=>[]};
+ const model={startUsage:()=>({id:randomUUID(),issued:()=>{},update:()=>{},finish:()=>{throw Error(secret);},interrupt:()=>{interrupted++;throw Error(secret);}})};
+ await assert.rejects(queryWithUsage(model,{...defaultModelSettings(),reader},{question:'Generated request with no configured model'}),(error:any)=>error.code==='agent_not_configured'&&!String(error).includes(secret));assert.equal(interrupted,1);
 });

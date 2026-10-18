@@ -81,9 +81,11 @@ not claim live permission, download, token refresh, vendor timing or real conten
 validation. New document/calendar consumer commands passed offline contracts and
 fixtures; no new live tenant document/calendar validation occurred.
 
-Linux amd64/arm64 archives are pinned but were not executed here. A full Docker
-image build/run was not performed; Docker preparation and non-root traversal are
-covered by deployment source fixtures. Windows remains explicitly unsupported by
-the scoped native credential backend. Missing dependencies remain visible in
+The parent change also built the production `linux/arm64` Docker image and ran
+both fixed CLIs as UID 1000 with networking disabled. Production entrypoint,
+health, bundled Web, generated-account login and same-volume restart passed;
+see the parent [validation record](scoped-processing-reliability-2026-10-18.md).
+Linux amd64 archives remain pinned but were not executed here. Windows remains
+explicitly unsupported by the scoped native credential backend. Missing dependencies remain visible in
 connection checks; operators prepare the selected deployment, with no global
 executable or credential fallback.

@@ -1,4 +1,5 @@
-import type {ContextReader,QueryInput} from '@mote/agent';
+import {AgentResponseError,type ContextReader,type QueryInput} from '@mote/agent';
+import {z} from 'zod';
 import type {QueryAgent} from './app.js';
 import type {ProcessingService,QueryResult} from '@mote/shared';
 import type {ModelSettings} from '@mote/shared/models';
@@ -11,7 +12,7 @@ import type {UsageLedger} from './usage.js';
  * verifies an actual pixel read; a model's unsupported vision claim is not a
  * successful visual product. The same harness/model configuration is reused. */
 type ImageUnderstandingOptions={selection:(service?:ProcessingService)=>{fingerprint:string;configured:boolean;receipt:Record<string,unknown>;settings:ModelSettings}}&(
- {meteredQuery:(settings:ModelSettings,reader:ContextReader,input:QueryInput)=>Promise<QueryResult>;factory?:never;usage?:never}|
+ {meteredQuery:(settings:ModelSettings,reader:ContextReader,input:QueryInput,accept:(response:QueryResult)=>ImageInterpretation)=>Promise<ImageInterpretation>;factory?:never;usage?:never}|
  {factory:(settings:ModelSettings,reader:ContextReader)=>Promise<QueryAgent>;usage:Pick<UsageLedger,'start'>;meteredQuery?:never}
 );
 export function imageUnderstanding(options:ImageUnderstandingOptions):ImageUnderstanding {
@@ -30,7 +31,7 @@ export function imageUnderstanding(options:ImageUnderstandingOptions):ImageUnder
   };
   // A scoped executor owns durable issuance, busy facts, safe failures and
   // streaming samples. It must not be layered over a second synthetic meter.
-  if(options.meteredQuery)return parse(await options.meteredQuery(selected.settings,reader,request));
+  if(options.meteredQuery)return options.meteredQuery(selected.settings,reader,request,response=>{try{return parse(response);}catch(error){if(error instanceof StoreError&&error.statusCode===422)throw new AgentResponseError('The selected model did not inspect image pixels','tools_unverified');if(error instanceof SyntaxError)throw new AgentResponseError('Image interpretation is not valid JSON','invalid_json');if(error instanceof z.ZodError)throw new AgentResponseError('Image interpretation has an invalid shape','invalid_shape');throw error;}});
   const meter=options.usage.start(selected.settings.provider,selected.settings.model,'image-understanding',{agentId:'image-understanding',moduleId:'images',skillId:null,operationId:input.operationId,jobId:record.id});
   let agent:QueryAgent|undefined;
   try{
