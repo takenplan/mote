@@ -1735,7 +1735,8 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports/:id'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports'",
-      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action"
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action",
+      "extension:registerPerceptionRoutes:runtime"
     ]
   },
   "apps/server/src/scope/processing-schema.ts": {
@@ -1760,11 +1761,13 @@
       "table:mp_file_review_inputs",
       "table:mp_file_reviews",
       "table:mp_file_steps",
+      "table:mp_image_backfills",
       "table:mp_import_files",
       "table:mp_import_jobs",
       "table:mp_import_records",
       "table:mp_media_calls",
       "table:mp_original_formats",
+      "table:mp_perception_state",
       "table:mp_publications",
       "table:mp_restore",
       "table:mp_state",
@@ -2555,5 +2558,32 @@
     "surfaces": [
       "table:user_model_usage_owners"
     ]
+  },
+  "apps/server/src/scope/media-assets.ts": {
+    "scope": "mixed",
+    "module": "M06",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/import'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/install'",
+      "directory:root",
+      "extension:assets.install:role",
+      "extension:runtime.services.registerInstance:'managed-media'"
+    ],
+    "notes": "Instance-only assets and fixed managed worker credentials; mutations require an administrator, while model selection and processing remain user bound."
+  },
+  "apps/server/src/scope/processing-perception.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:'processing',method:'GET',url:'/api/perception'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/:id/retry'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/ocr/historical-preview'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/ocr/historical-process'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'PUT',url:'/api/perception'",
+      "task:execution.register:kind:'processing.image-backfill'"
+    ],
+    "notes": "Independent image settings and explicitly confirmed, owner/epoch-bound historical cursors adapt the existing M04/M05/M06 services."
   }
 }

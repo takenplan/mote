@@ -1,3 +1,6 @@
+import {registerManagedMedia,type ManagedMedia} from './media-assets.js';
+import type {MediaConfiguration} from '../media-configuration.js';
+import type {MediaAssetsOptions} from '../media-assets.js';
 import {registerFileExport} from './file-export.js';
 import {registerIndexMaintenance} from './index-maintenance.js';
 import {registerInstanceControls} from './instance-controls.js';
@@ -55,8 +58,9 @@ export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
  * is complete. Account administration never mounts the retired owner services. */
-export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
+export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;media?:Partial<MediaConfiguration>;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{mediaAssets?:MediaAssetsOptions;verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
   const storage=openScopeStorage(config.dataDir);
+  let managedMedia:ManagedMedia|undefined;
   let configuration:Configurations|undefined;
   let contentStorage:ScopedContentStorage|undefined;
   let plugins:ScopedPluginHost|undefined;
@@ -85,6 +89,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
     app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory','ask']:[]),...(actions?['actions','todos']:[]),...(mcp?['mcp-sources']:[]),...(mcp&&memory?['mcp-memory']:[])]}));
+    managedMedia=registerManagedMedia(runtime,config,options.mediaAssets);
     const privateCursorKey=registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -100,7 +105,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey,config.importPythonPacks);await processing.ready();}
+    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey,config.importPythonPacks,managedMedia);await processing.ready();}
     registerCaptureBrowserReads(runtime,ingress,processing,(context,id)=>{if(!ask)throw new ScopeError('scope_unavailable',503);return ask.originalReadReceipt(context,id);});
     if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
@@ -114,7 +119,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&ask&&memory&&processing&&lifecycle)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing,lifecycle});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
-  }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await configuration?.close();await management?.close();storage.close();throw error;}
+    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
+    return {...runtime,managedMedia,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
+  }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }

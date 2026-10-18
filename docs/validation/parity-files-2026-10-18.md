@@ -79,11 +79,28 @@ Gradle and emulator execution remain **UNRUN pending the driver window**.
 
 The later FILE-PERCEPTION assignment adds independent image automatic processing,
 policy selection, external-OCR permission, original-query permission and historical
-complete/recompute preview/confirmation. That full adapter and managed media
-health/administrator installation are still **OPEN**. A small account configuration
-and asynchronous `processing.perceptionSettings()` port is prepared for Ask's
-original-query gate. It uses the existing private Configurations registry, schema
-and YAML; it does not duplicate endpoint or profile authority. Its focused generic
-configuration HTTP/host-port test is `multiuser-perception-configuration-port.test.ts`.
-This narrow port does not establish that the image controls or history workflow
-have been restored.
+complete/recompute preview/confirmation. The shared-host adapter now uses the
+existing configuration registry, policy graph, processing executor and image
+receipt proofs. It does not mount a legacy image host. The asynchronous
+`processing.perceptionSettings()` port remains the contract for Ask's independent
+original-query gate. Endpoint/processor/profile metadata has a single authority
+in the selected file-policy/M04 resource. See the
+[image/media responsibility decision](../adr-scoped-image-and-managed-media.md).
+
+Generated real HTTP regressions cover:
+
+| Journey | Source |
+| --- | --- |
+| Independent image admission while file automatic is off; disabled admission; enabling retains the old applied profile; new images use the changed profile; provider revision retains completed receipts until explicit recompute; account concurrency and query disclosure updates retain active work; external OCR permission blocks before physical issuance; complete reuses accepted products; recompute is explicit; restart does not replay completed work. | `multiuser-perception-history.test.ts` |
+| Source/date bounds, inclusive/exclusive times, foreign/consumed/restarted preview tokens and fixed watermark; durable scheduling across the 200-item page boundary. | `multiuser-perception-history.test.ts` |
+| Administrator-only install/cancel/import, role mutex across two installer hosts, range resume after cancellation/restart, pinned checksum failure and recovery, local bundles without network downloads, no restart-triggered downloads. | `multiuser-managed-media.test.ts` |
+| Installed weights versus authenticated worker readiness; model-missing OCR automatically resumes its genuine old processing intent; actual selected OCR/ASR calls receive the fixed worker credential; another account cannot read the result. | `multiuser-managed-media.test.ts` |
+| Existing supervisor starts before weights, observes later installation, restarts a stopped worker and stops children with the parent. | Targeted `workers start before model files` case in `scripts/media-workers.test.mjs` |
+
+The fixture generates tiny pinned archives, valid PNG/WAV inputs and authenticated
+HTTP processors. It downloads no real models and captures no personal screens.
+The actual supervisor test uses generated worker programs; it does not establish
+real Python dependency or model inference readiness. Full affected checks,
+Android JVM/emulator execution and combined Config/Ask client checks remain
+pending the driver window. Real weights, physical devices and live models remain
+unperformed. The existing FILE-07 and old deleted-head data boundary above remain.

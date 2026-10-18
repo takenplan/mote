@@ -477,3 +477,30 @@ must not guess that identity from rowid, UUID or timestamp ordering. Its known
 capture IDs remain directly readable and live heads remain exact. This change
 performs no historical scan or backfill; fresh writes and new portable archives
 carry the authoritative retained head.
+
+## Image controls and instance media restoration candidate
+
+The [image/media adaptation decision](../adr-scoped-image-and-managed-media.md)
+restores the original `GET/PUT /api/perception` and explicit
+`POST /api/perception/ocr/historical-preview` / `historical-process` flows.
+The settings DTO derives `profileId`, `ocrProcessorId` and `ocrEndpoint` from the
+actual global image policy and M04 reference. Image execution flags are account
+configuration; query-image permission is consumed through the existing asynchronous
+read port. Profile changes affect future images, while unfinished images retain
+their applied plan. Historical completion/recomputation is explicit and uses
+existing M05/M06 admission, receipt reuse and current-evidence checks.
+
+`GET /api/media-models` and `/api/perception/media-models` expose authenticated
+instance health. Original `/api/media-models/:role/{install,cancel,import}` and
+`/api/admin/media-models/:role/...` mutations require an administrator. Supported
+roles and pinned downloads remain those of MEDIA_CATALOG. Installation, local
+bundles, cancellation and restart share one installer with per-role filesystem
+exclusion and atomic verified publication. The existing managed-worker supervisor
+is retained. A selected exact managed binding receives the private instance worker
+credential at actual processing, without copying it into account configuration.
+The existing genuine recheck handoff resumes model-missing unfinished work after
+installation; it creates no account selection or historical replay.
+
+Source tests and adapter implementation are separate from the pending combined
+Config/Ask/native/full affected validation. No live model or physical-device
+acceptance follows from the generated transports.

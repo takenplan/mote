@@ -122,6 +122,8 @@ export const scopedBackupSchema = Object.freeze({
  "mm_versions":["user_id","id","version","fingerprint","json"],
  "model_resource_generations":["id","generation","fingerprint"],
  "model_resource_revision":["singleton","revision"],
+ "mp_perception_state":["user_id","json"],
+ "mp_image_backfills":["user_id","id","json"],
  "mp_activity":["user_id","id","state"],
  "mp_admissions":["user_id","original_id","request_key","task_id","state"],
  "mp_artifact_usage":["user_id","artifact_id","task_id","json"],
