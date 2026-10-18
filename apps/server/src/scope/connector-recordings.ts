@@ -5,7 +5,7 @@ import {recordingSelectionSchema,type RecordingSelection,type SourceItem} from '
 import {createFeishuRecordings} from '../connectors/lark-recordings.js';
 import {createDingtalkRecordings,createDwsRunner,DWS_VERSION,type DwsRunner} from '../connectors/dingtalk-recordings.js';
 import {createLarkRunner,larkJson,authorizationUrl,LARK_VERSION,type LarkRunner} from '../connectors/lark-cli.js';
-import {RecordingFlow,recordingScan,recordingWindows,recordingStage,recordingStageFailure,retryRecordingStage,recordingMetadataAllowed,type RecordingAccount,type RecordingProvider,type RecordingMetadata,type RecordingStageReceipt,type RecordingJob,type RecordingOutcome} from '../connectors/recording-flow.js';
+import {RecordingFlow,recordingScan,recordingStage,type RecordingAccount,type RecordingProvider,type RecordingMetadata,type RecordingStageReceipt,type RecordingJob,type RecordingOutcome,type RecordingPhase} from '../connectors/recording-flow.js';
 import type {LarkContext,ConnectorState} from '../connectors/ports.js';
 import {ExecutionFailure} from '../execution-engine.js';
 import {ConnectorError} from '../connectors/types.js';
@@ -15,14 +15,18 @@ import type {ConnectorTransports} from './connector-contract.js';
 import {connectorHash as hash} from './connector-vault.js';
 import {RecordingRevisions} from './recording-revisions.js';
 import type {IngressOriginalFormat} from './ingress.js';
+import type {RecordingTaskPorts} from './recording-task-ports.js';
 
 type Saved={version:1;epoch:string;account?:RecordingAccount;selection:RecordingSelection};
 type Ledger={get<T>(scope:string,key:string):T|undefined;set(scope:string,key:string,value:unknown):void;drop(scope:string,key:string):void;rows<T>(scope:string,prefix:string,limit?:number,errorOnly?:boolean):{key:string;value:T}[]};
 type ItemPhase='metadata'|'transcript'|'media';
-type Work={id:string;scanId?:string;metadata?:RecordingMetadata;stages:Record<ItemPhase,RecordingStageReceipt>};
-const newWork=(id:string):Work=>({id,stages:{metadata:recordingStage(),transcript:recordingStage(),media:recordingStage()}});
+type StageReceipt=Omit<RecordingStageReceipt,'state'>&{state:RecordingStageReceipt['state']|'cancelled'};
+type Work={id:string;scanId?:string;metadata?:RecordingMetadata;stages:Record<ItemPhase,StageReceipt>;jobs:Partial<Record<ItemPhase,string>>};
+type PhaseJob={epoch:string;scanId:string;job:RecordingJob;requests:string[];taskId?:string;outcome?:RecordingOutcome};
+type Scan={id:string;epoch:string;parentId:string;start:number;end:number;full:boolean;at:number;jobs:string[]};
+const newWork=(id:string):Work=>({id,stages:{metadata:recordingStage(),transcript:recordingStage(),media:recordingStage()},jobs:{}});
 function aggregateError(work:Work,backupAudio:boolean){const current=work.stages;return [current.metadata,current.transcript,...(backupAudio?[current.media]:[])].find(stage=>stage.error)?.error;}
-function phaseStatus(receipt:RecordingStageReceipt){return {state:receipt.state,archived:receipt.state==='succeeded',blocked:['blocked','failed','stale'].includes(receipt.state),attempts:receipt.attempts,...(receipt.availableAt&&receipt.state==='waiting'?{nextAttemptAt:receipt.availableAt}:{}),...(receipt.error?{error:receipt.error}:{})};}
+function phaseStatus(receipt:StageReceipt){return {state:receipt.state,archived:receipt.state==='succeeded',blocked:['blocked','failed','stale'].includes(receipt.state),attempts:receipt.attempts,...(receipt.availableAt&&receipt.state==='waiting'?{nextAttemptAt:receipt.availableAt}:{}),...(receipt.error?{error:receipt.error}:{})};}
 /** Reuses real fixed-command providers and decoding; M05 owns the sole executor.
  * The per-instance ledger retains discovery pages and independent transcript /
  * media checkpoints, so a failed audio fetch never discards collected text. */
@@ -35,7 +39,7 @@ export class ScopedRecordingAdapter {
  private larkRunner?:LarkRunner;
  private dwsRunner?:DwsRunner;
  private authorize?:(progress:(value:unknown)=>void)=>Promise<void>;
- constructor(private ctx:LarkContext,provider:'feishu-recordings'|'dingtalk-recordings',scope:{userId:string;instanceId:string;directory:string},transports:ConnectorTransports|undefined,private assert:()=>void,private signal:AbortSignal,private ledger:Ledger){
+ constructor(private ctx:LarkContext,provider:'feishu-recordings'|'dingtalk-recordings',scope:{userId:string;instanceId:string;directory:string},transports:ConnectorTransports|undefined,private assert:()=>void,private signal:AbortSignal,private ledger:Ledger,private tasks?:RecordingTaskPorts){
   this.file=ctx.state!<Saved>('recordings.json');
   if(provider==='feishu-recordings'){
    const runner=transports?.lark?.(scope)??createLarkRunner(scope.directory,{isolatedHome:true});this.provider=createFeishuRecordings(scope.directory,runner);this.larkRunner=runner;
@@ -45,12 +49,12 @@ export class ScopedRecordingAdapter {
    this.authorize=async progress=>{await runner({kind:'login'},undefined,signal,authorizationOutput('dingtalk',url=>{this.assert();progress({authorizationUrl:url});}));this.assert();};
   }
   const providerInstance=this.provider,track=<T>(work:()=>Promise<T>)=>{const promise=Promise.resolve().then(work);this.pending.add(promise);void promise.then(()=>this.pending.delete(promise),()=>this.pending.delete(promise));return promise;};
-  this.provider={...providerInstance,account:signal=>track(()=>providerInstance.account(signal)),discover:(account,range,signal)=>track(()=>providerInstance.discover(account,range,signal)),metadata:(account,id,signal)=>track(()=>providerInstance.metadata(account,id,signal)),transcript:(account,metadata,signal)=>track(()=>providerInstance.transcript(account,metadata,signal)),media:(account,metadata,signal)=>track(()=>providerInstance.media(account,metadata,signal))};
+  this.provider={...providerInstance,account:signal=>track(()=>providerInstance.account(signal)),discover:(account,range,signal)=>track(()=>providerInstance.discover(account,range,signal)),metadata:(account,id,signal)=>track(()=>providerInstance.metadata(account,id,signal)),transcript:(account,metadata,signal,authorize)=>track(()=>providerInstance.transcript(account,metadata,signal,authorize)),media:(account,metadata,signal,authorize)=>track(()=>providerInstance.media(account,metadata,signal,authorize))};
  }
  private async init(){await(this.initialized??=this.file.read().then(saved=>{if(saved){if(saved.version!==1||!z.string().uuid().safeParse(saved.epoch).success)throw new ConnectorError('recording_state_invalid',503);recordingSelectionSchema.parse(saved.selection);this.saved=saved;}}));this.assert();}
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
  private async fence(){this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(this.signal.aborted)throw new ConnectorError('recording_cancelled',409);const current=await this.provider.account(this.signal);this.assert();if(current.id!==this.saved.account.id)throw new ConnectorError('recording_account_changed',409);}
- async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=row.value.stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),...(this.saved.account?.name?{accountName:this.saved.account.name}:{}),environment:this.ledger.get('environment','status'),selection:this.saved.selection,counts:{...(this.saved.account?this.ctx.recordingArchiveCounts?.(this.sourceId()):{transcripts:0,audio:0,empty:0}),pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
+ async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=this.currentWork(row.value).stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),...(this.saved.account?.name?{accountName:this.saved.account.name}:{}),environment:this.ledger.get('environment','status'),selection:this.saved.selection,counts:{...(this.saved.account?this.ctx.recordingArchiveCounts?.(this.sourceId()):{transcripts:0,audio:0,empty:0}),pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
  /** Read the existing current-selection journal; no provider probe or task is
   * admitted. Archived files outside this selection remain in canonical M03. */
  async recordingPage(limit:number,position:(epoch:string)=>string|undefined){
@@ -58,7 +62,7 @@ export class ScopedRecordingAdapter {
   const index=after===undefined?-1:rows.findIndex(row=>row.key===after);if(after!==undefined&&index<0)throw new ConnectorError('invalid_cursor',400);
   const page=rows.slice(index+1,index+limit+2),visible=page.slice(0,limit),sourceId=this.saved.account?this.sourceId():undefined;
   const items=visible.map(({value:raw})=>{
-   const work=raw,current=work.stages,error=aggregateError(work,this.saved.selection.backupAudio);
+   const work=this.currentWork(raw),current=work.stages,error=aggregateError(work,this.saved.selection.backupAudio);
    const transcript=sourceId?this.ctx.sources.getItem(sourceId,work.id+':export'):undefined,audio=sourceId?this.ctx.sources.getItem(sourceId,work.id+':audio'):undefined,metadata=transcript?.document?.originalMetadata;
    const corpusTime=work.metadata?.recordedAt??work.metadata?.createdAt;
    return {id:work.id,...(work.metadata?{title:work.metadata.title.slice(0,2000),...(corpusTime?{recordedAt:corpusTime}:{})}:{}),
@@ -105,21 +109,46 @@ export class ScopedRecordingAdapter {
   await this.memoryDefault(sourceId);
   return this.status();
  }
- async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
+ async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);await this.memoryDefault(this.sourceId());if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
  async disconnect(){await this.init();this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
- async sync(automatic=false,retryOnly=false){
-  await this.init();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);
-  const selectedEpoch=this.saved.epoch;
-  const assertCollection=()=>{this.assert();this.signal.throwIfAborted();this.ctx.recordingEpochCurrent?.(selectedEpoch);if(!this.ctx.sources.getSource(this.sourceId()).enabled)throw new ExecutionFailure('blocked','recording_paused');};
-  assertCollection();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);await this.fence();
-  const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch,revisions=new RecordingRevisions(this.ctx.sources,source);
-  // A successful source registration can precede a failed default transaction.
-  // Any first sync finishes that same intent before freezing Memory intake.
-  await this.memoryDefault(source);assertCollection();
-  let imported=0,duplicates=0;
-  const publish=async(item:SourceItem,bytes:Buffer,format?:Extract<IngressOriginalFormat,`processor:${string}`|'recording-audio-backup'>)=>{assertCollection();this.ctx.assertFileAllowed?.(source,item.externalId);await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex');item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};const receipt=await this.ctx.publishFile(source,revisions.revision(item),bytes,assertCollection,this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
-  const flow=new RecordingFlow(this.provider,this.saved.account!,selection,{signal:this.signal,assertCurrent:assertCollection,
-   seenCursor:(job,cursor)=>(this.ledger.get<string[]>(epoch,'seen:'+hash([Date.parse(String(job.input.start)),Date.parse(String(job.input.end))]))??[]).includes(cursor),
+ private assertCollection(epoch:string){this.assert();this.signal.throwIfAborted();this.ctx.recordingEpochCurrent?.(epoch);if(!this.saved.selection.enabled)throw new ExecutionFailure('stale','recording_selection_required');if(!this.ctx.sources.getSource(this.sourceId()).enabled)throw new ExecutionFailure('blocked','recording_paused');}
+ private job(key:string){const job=this.ledger.get<PhaseJob>('recording-jobs',key);if(!job)throw new ConnectorError('recording_job_missing',404);return job;}
+ private currentWork(work:Work):Work{
+  const stages={...work.stages};for(const phase of ['metadata','transcript','media'] as const){const key=work.jobs[phase];if(!key)continue;const job=this.job(key);if(job.taskId&&this.tasks){const task=this.tasks.get(job.taskId);stages[phase]={state:task.state,attempts:task.attempts,availableAt:task.availableAt,...(task.error?{error:task.error}:{})};}}
+  return {...work,stages};
+ }
+ private updateWork(id:string,update:(work:Work)=>void){const work=this.ledger.get<Work>(this.saved.epoch,'work:'+id)??newWork(id);update(work);this.ledger.set(this.saved.epoch,'work:'+id,work);return work;}
+ private scan(id:string){const scan=this.ledger.get<Scan>(this.saved.epoch,'scan:'+id);if(!scan)throw new ConnectorError('recording_scan_missing',404);return scan;}
+ private async admit(key:string){const record=this.job(key);this.assertCollection(record.epoch);if(!this.tasks?.submit)throw new ConnectorError('recording_scheduler_unavailable',503);const task=await this.tasks.submit(record.job.phase,key,id=>{this.assertCollection(record.epoch);this.ledger.set('recording-jobs',key,{...this.job(key),taskId:id});});this.assertCollection(record.epoch);return task;}
+ private async enqueue(scanId:string,job:RecordingJob){
+  this.assertCollection(this.saved.epoch);const id=String(job.input.id??'');let reuse:string|undefined;
+  if(job.phase!=='discover'){
+   this.updateWork(id,work=>{
+    const current=this.currentWork(work),phase=job.phase as ItemPhase;
+    if(phase==='metadata'&&work.scanId!==scanId&&current.stages.metadata.state==='succeeded'){
+     work.stages.metadata=recordingStage();delete work.jobs.metadata;
+     if(['succeeded','skipped'].includes(current.stages.transcript.state)){work.stages.transcript=recordingStage();delete work.jobs.transcript;}
+     if(current.stages.media.state==='skipped'){work.stages.media=recordingStage();delete work.jobs.media;}
+    }
+    if(phase==='metadata')work.scanId=scanId;
+    reuse=work.jobs[phase];
+   });
+  }
+  const key=reuse??hash([this.saved.epoch,scanId,job]);
+  const parent=this.scan(scanId).parentId,existing=this.ledger.get<PhaseJob>('recording-jobs',key);
+  if(!existing)this.ledger.set('recording-jobs',key,{epoch:this.saved.epoch,scanId,job,requests:[parent]} satisfies PhaseJob);
+  else if(!existing.requests.includes(parent))this.ledger.set('recording-jobs',key,{...existing,requests:[...existing.requests,parent]});
+  if(job.phase!=='discover')this.updateWork(id,work=>{work.jobs[job.phase as ItemPhase]=key;});
+  const scan=this.scan(scanId);if(!scan.jobs.includes(key)){scan.jobs.push(key);this.ledger.set(this.saved.epoch,'scan:'+scanId,scan);}
+  await this.admit(key);
+  return key;
+ }
+ private flow(epoch:string,scanId:string){
+  const source=this.sourceId(),selection=this.saved.selection,revisions=new RecordingRevisions(this.ctx.sources,source),assertCollection=()=>this.assertCollection(epoch);
+  const publish=async(item:SourceItem,bytes:Buffer,format?:Extract<IngressOriginalFormat,`processor:${string}`|'recording-audio-backup'>)=>{const authorize=()=>{assertCollection();this.ctx.assertFileAllowed?.(source,item.externalId);};authorize();await this.fence();authorize();const contentHash=createHash('sha256').update(bytes).digest('hex');item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};const receipt=await this.ctx.publishFile(source,revisions.revision(item),bytes,authorize,this.signal,format);return receipt;};
+  return new RecordingFlow(this.provider,this.saved.account!,selection,{signal:this.signal,assertCurrent:assertCollection,
+   beforeAcquire:(phase,id)=>{assertCollection();if(phase==='transcript'||phase==='media')this.ctx.assertFileAllowed?.(source,id+(phase==='transcript'?':export':':audio'));},
+   seenCursor:(job,cursor)=>(this.ledger.get<string[]>(epoch,'seen:'+scanId+':'+hash([Date.parse(String(job.input.start)),Date.parse(String(job.input.end))]))??[]).includes(cursor),
    archive:{
     transcript:async(value,authorize)=>{
      const {metadata,rawText}=value,corpusTime=metadata.recordedAt??metadata.createdAt;authorize();
@@ -141,64 +170,52 @@ export class ScopedRecordingAdapter {
     media:async(metadata,media,authorize)=>{authorize();return publish({externalId:metadata.id+':audio',revision:createHash('sha256').update(media.bytes).digest('hex'),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),text:'',kind:'file',layer:'original',mimeType:media.mimeType,deleted:false,document:{contentRole:'other',timeBasis:'unknown',originalMetadata:{provider:this.provider.id,recordingId:metadata.id,role:'original-audio'}}},media.bytes,'recording-audio-backup');},
    },
   });
-  const save=(key:string,work:Work)=>{this.assert();this.ledger.set(epoch,key,work);};
-  const run=async(key:string,work:Work,job:RecordingJob):Promise<RecordingOutcome|undefined>=>{
-   const phase=job.phase as ItemPhase,current=work.stages,receipt=current[phase];
-   // Read-only acquisitions may resume after an interrupted host. Preserve every
-   // completed sibling and charge only actual failed attempts, like M05 recovery.
-   if(receipt.state==='running')current[phase]={...receipt,state:'waiting',attempts:Math.max(0,receipt.attempts-1),availableAt:0};
-   const ready=current[phase];if(ready.state!=='waiting'||ready.availableAt>Date.now())return;
-   current[phase]={...ready,state:'running',attempts:ready.attempts+1};delete current[phase].error;save(key,work);
-   try{
-    if(phase!=='metadata')this.ctx.assertFileAllowed?.(source,work.id+(phase==='transcript'?':export':':audio'));
-    const result=await flow.execute(job);this.assert();
-    if(result.phase==='metadata')work.metadata=result.metadata;
-    current[phase]={state:'succeeded',attempts:current[phase].attempts,availableAt:0};save(key,work);return result;
-   }catch(error){this.assert();if(this.signal.aborted)throw error;current[phase]=recordingStageFailure(current[phase],error,Date.now());save(key,work);}
-  };
-  const process=async(row:{key:string;value:Work})=>{
-   const work=row.value,current=work.stages,metadataJob:RecordingJob={phase:'metadata',input:{id:work.id}};
-   const result=await run(row.key,work,metadataJob)??(current.metadata.state==='succeeded'&&work.metadata?{phase:'metadata' as const,metadata:work.metadata,accepted:recordingMetadataAllowed(selection,work.metadata)}:undefined);
-   if(!result)return;
-   const next=flow.next(metadataJob,result);
-   if(!next.length){for(const phase of ['transcript','media'] as const)if(current[phase].state!=='succeeded')current[phase]={state:'skipped',attempts:current[phase].attempts,availableAt:0};save(row.key,work);return;}
-   // Transcript acquisition cannot hold up the independent original backup.
-   await Promise.all(next.map(job=>run(row.key,work,job)));
-  };
-  // Discovery and its successors are the same domain plan used by the legacy
-  // phase executor. This host only translates that plan into its scoped journal.
-  if(!retryOnly){
-   const previous=this.ledger.get<{until:number;fullAt:number}>(epoch,'scan-complete'),at=Date.now(),plan=recordingScan(selection,automatic,previous,at);
-   let scan=this.ledger.get<{start:number;end:number;from:number;full:boolean;id?:string}>(epoch,'scan-active');
-   if(!scan)scan={start:plan.start,end:plan.end,from:plan.start,full:plan.full};if(!scan.id)scan.id=randomUUID();this.ledger.set(epoch,'scan-active',scan);
-   for(const range of recordingWindows(scan.from,scan.end)){
-    const window=hash([Date.parse(range.start),Date.parse(range.end)]),cursor=this.ledger.get<string>(epoch,'cursor:'+window),seen=this.ledger.get<string[]>(epoch,'seen:'+window)??[];
-    let job:RecordingJob={phase:'discover',input:{...range,...(cursor?{cursor}:{}),page:seen.length}};
-    for(;;){
-     const result=await flow.execute(job);this.assert();
-     const next=flow.next(job,result),discovered:{key:string;value:Work}[]=[];let continuation:RecordingJob|undefined;
-     for(const successor of next){
-      if(successor.phase==='discover'){continuation=successor;continue;}
-      const id=String(successor.input.id),key='work:'+id,work=this.ledger.get<Work>(epoch,key)??newWork(id),current=work.stages;
-      if(work.scanId!==scan.id&&current.metadata.state==='succeeded'){
-       // Ordinary Sync checks for revised vendor exports. Explicit retry never
-       // reaches this branch and cannot replay a successful checkpoint.
-       current.metadata=recordingStage();if(['succeeded','skipped'].includes(current.transcript.state))current.transcript=recordingStage();if(current.media.state==='skipped')current.media=recordingStage();delete work.metadata;
-      }
-      work.scanId=scan.id;save(key,work);discovered.push({key,value:work});
-     }
-     // Consume this durable page before requesting the next one. A slow or failed
-     // later discovery page cannot delay already admitted recordings.
-     for(const row of discovered)await process(row);
-     if(!continuation){this.ledger.drop(epoch,'cursor:'+window);this.ledger.drop(epoch,'seen:'+window);scan.from=Date.parse(range.end);this.ledger.set(epoch,'scan-active',scan);break;}
-     seen.push(String(continuation.input.cursor));this.ledger.set(epoch,'seen:'+window,seen);this.ledger.set(epoch,'cursor:'+window,continuation.input.cursor);job=continuation;
-    }
-   }
-   this.ledger.set(epoch,'scan-complete',{until:scan.end,fullAt:scan.full?at:previous?.fullAt??0});this.ledger.drop(epoch,'scan-active');
-  }
-  for(const row of this.ledger.rows<Work>(epoch,'work:'))await process(row);
-  this.assert();const failed=this.ledger.rows<Work>(epoch,'work:').reduce((count,row)=>count+Object.values(row.value.stages).filter(stage=>Boolean(stage.error)||['blocked','failed','stale'].includes(stage.state)).length,0);return {imported,duplicates,failed};
  }
- async retry(){await this.init();for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:')){const work=row.value,current=work.stages;for(const phase of ['metadata','transcript','media'] as const)current[phase]=retryRecordingStage(current[phase]);this.ledger.set(this.saved.epoch,row.key,work);}return this.status();}
+ async sync(automatic=false,retryOnly=false,requestId?:string){
+  await this.init();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);this.assertCollection(this.saved.epoch);await this.memoryDefault(this.sourceId());
+  if(!this.tasks?.parentId)throw new ConnectorError('recording_scheduler_unavailable',503);
+  const epoch=this.saved.epoch,parent=requestId??this.tasks.parentId;
+  let scanId=this.ledger.get<string>(epoch,'request:'+parent);
+  if(!scanId){
+   if(retryOnly)return this.status();
+   const active=this.ledger.get<string>(epoch,'active-scan');
+   if(active&&this.scan(active).jobs.some(key=>{const job=this.job(key);return job.job.phase==='discover'&&(!job.taskId||['waiting','running'].includes(this.tasks!.get(job.taskId).state));}))scanId=active;
+   else {const previous=this.ledger.get<{until:number;fullAt:number}>(epoch,'scan-complete'),at=Date.now(),plan=recordingScan(this.saved.selection,automatic,previous,at);scanId=randomUUID();this.ledger.set(epoch,'scan:'+scanId,{id:scanId,epoch,parentId:parent,start:plan.start,end:plan.end,full:plan.full,at,jobs:[]} satisfies Scan);this.ledger.set(epoch,'active-scan',scanId);for(const range of plan.windows)await this.enqueue(scanId,{phase:'discover',input:{...range,page:0}});}
+   this.ledger.set(epoch,'request:'+parent,scanId);
+  }
+  const scan=this.scan(scanId);for(const key of scan.jobs){const record=this.job(key);if(!record.requests.includes(parent))this.ledger.set('recording-jobs',key,{...record,requests:[...record.requests,parent]});if(!record.taskId)await this.admit(key);}
+  // A second scan can reference metadata already admitted by an earlier one.
+  // Observe and link its real successors too, so neither a parent completion
+  // nor restart recovery can mistake a metadata receipt for completed archive.
+  for(const key of scan.jobs){const record=this.job(key);if(record.scanId!==scanId&&record.outcome)for(const successor of this.flow(epoch,scanId).next(record.job,record.outcome))await this.enqueue(scanId,successor);}
+  const tasks=this.scan(scanId).jobs.map(key=>({job:this.job(key),task:this.tasks!.get(this.job(key).taskId!)}));
+  if(tasks.some(({task})=>['waiting','running'].includes(task.state)))throw new ExecutionFailure('waiting','recording_stages_pending',1000,{executionStarted:false});
+  const failedDiscovery=tasks.find(({job,task})=>job.job.phase==='discover'&&task.state!=='succeeded');
+  if(failedDiscovery){if(this.ledger.get<string>(epoch,'active-scan')===scanId)this.ledger.drop(epoch,'active-scan');throw new ExecutionFailure(failedDiscovery.task.state==='blocked'?'blocked':'permanent',failedDiscovery.task.failure?.code??failedDiscovery.task.error??'recording_discovery_failed');}
+  const outcomes=tasks.flatMap(({job})=>job.outcome&&'archive' in job.outcome?[job.outcome.archive as {duplicate?:boolean}]:[]);
+  return {imported:outcomes.filter(value=>value.duplicate===false).length,duplicates:outcomes.filter(value=>value.duplicate===true).length,failed:tasks.filter(({task})=>['blocked','failed','stale','cancelled'].includes(task.state)).length};
+ }
+ async executeStage(key:string,phase:RecordingPhase,taskId:string){
+  await this.init();const record=this.job(key);if(record.job.phase!==phase||record.taskId!==taskId)throw new ConnectorError('recording_job_binding_invalid',409);this.assertCollection(record.epoch);
+  const flow=this.flow(record.epoch,record.scanId),result=record.outcome??await flow.execute(record.job);this.assertCollection(record.epoch);
+  this.ledger.set('recording-jobs',key,{...this.job(key),outcome:result});
+  if(result.phase==='metadata'){
+   this.updateWork(result.metadata.id,work=>{work.metadata=result.metadata;});
+   if(!result.accepted)this.updateWork(result.metadata.id,work=>{for(const child of ['transcript','media'] as const)if(!work.jobs[child])work.stages[child]={state:'skipped',attempts:0,availableAt:0};});
+  }
+  const next=flow.next(record.job,result);
+  if(result.phase==='discover'&&result.next){const window=record.scanId+':'+hash([Date.parse(String(record.job.input.start)),Date.parse(String(record.job.input.end))]),seen=this.ledger.get<string[]>(record.epoch,'seen:'+window)??[];if(!seen.includes(result.next))this.ledger.set(record.epoch,'seen:'+window,[...seen,result.next]);}
+  for(const successor of next)await this.enqueue(record.scanId,successor);
+  const scan=this.scan(record.scanId),discoveries=scan.jobs.map(id=>this.job(id)).filter(job=>job.job.phase==='discover');
+  if(result.phase==='discover'&&discoveries.every(job=>job.outcome)){
+   const previous=this.ledger.get<{until:number;fullAt:number}>(record.epoch,'scan-complete');this.ledger.set(record.epoch,'scan-complete',{until:Math.max(scan.end,previous?.until??scan.end),fullAt:Math.max(scan.full?scan.at:0,previous?.fullAt??0)});if(this.ledger.get<string>(record.epoch,'active-scan')===scan.id)this.ledger.drop(record.epoch,'active-scan');
+  }
+  return result;
+ }
+ async retry(){
+  await this.init();this.assertCollection(this.saved.epoch);if(!this.tasks?.retry)throw new ConnectorError('recording_scheduler_unavailable',503);
+  for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:'))for(const phase of ['metadata','transcript','media'] as const){const key=row.value.jobs[phase];if(!key)continue;const job=this.job(key);if(job.taskId&&['failed','blocked'].includes(this.tasks.get(job.taskId).state)){if(this.tasks.parentId&&!job.requests.includes(this.tasks.parentId))this.ledger.set('recording-jobs',key,{...job,requests:[...job.requests,this.tasks.parentId]});this.tasks.retry(job.taskId);}}
+  return this.status();
+ }
  async close(){await this.provider.close?.();await Promise.allSettled([...this.pending]);await this.file.flush();}
 }

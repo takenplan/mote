@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,chmodSync,rmSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,chmodSync,rmSync,realpathSync,existsSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createLarkRunner} from '../src/connectors/lark-cli.js';
 import {createDwsRunner} from '../src/connectors/dingtalk-recordings.js';
+
+for(const kind of ['lark','dingtalk']as const)test('real '+kind+' runner rechecks current acquisition authority after asynchronous version/home preparation and before spawn',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'mote-recording-final-guard-')),log=join(root,'issued.jsonl'),binary=join(root,'generated-cli');t.after(()=>rmSync(root,{recursive:true,force:true}));
+ writeFileSync(binary,`#!${process.execPath}\nconst fs=require('node:fs');fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(process.argv.slice(2))+'\\n');process.stdout.write(process.argv.includes('--version')?'lark-cli 1.0.98':JSON.stringify(process.argv[2]==='version'?{version:'v1.0.64'}:{}));\n`);chmodSync(binary,0o700);
+ const authorize=()=>{if(existsSync(log))throw Error('generated_revoked_after_version');};
+ const result=kind==='lark'?createLarkRunner(root,{isolatedHome:true,binary})({kind:'status'},{assertCurrent:authorize}):createDwsRunner(root,{isolatedHome:true,binary})({kind:'status'},undefined,undefined,undefined,authorize);
+ await assert.rejects(result,/generated_revoked_after_version/);const issued=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.equal(issued.length,1,'Only the version probe may have been physically issued');assert.equal(issued[0][0],kind==='lark'?'--version':'version');
+});
 
 test('actual CLI child processes receive isolated HOME, config, data, cache, temp and no inherited provider identity',async t=>{
  const root=mkdtempSync(join(tmpdir(),'mote-m10-cli-')),bin=join(root,'bin');mkdirSync(bin);t.after(()=>rmSync(root,{recursive:true,force:true}));

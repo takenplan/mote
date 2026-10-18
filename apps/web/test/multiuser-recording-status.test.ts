@@ -24,7 +24,7 @@ for(const [provider,locale]of [['feishu-recordings','zh-CN'],['dingtalk-recordin
  const path='/api/connectors/same-recorder';
  await command(path+'/operations',{operationId:crypto.randomUUID(),operation:'connect',payload:{}});
  await command(path+'/operations',{operationId:crypto.randomUUID(),operation:'select',payload:{enabled:true,start:'2026-09-01T00:00:00Z',autoSync:false,backupAudio:true}});
- await command(path+'/sync',{operationId:crypto.randomUUID()});
+ for(let n=0;n<1000;n++){const items=(await f.request(f.a.token,path+'/recordings?limit=20')).json().items;if(items.length===3&&items.find((item:any)=>item.id==='recording-01')?.audio.attempts===1&&items.find((item:any)=>item.id==='recording-02')?.transcript.state==='succeeded'&&items.find((item:any)=>item.id==='recording-02')?.audio.state==='failed')break;assert.ok(n<999,'The real admitted phases must execute before restart');await delay(10);}
  const checkpoints=(await f.request(f.a.token,path+'/recordings?limit=20')).json().items;
  assert.equal(checkpoints.length,3);
  const status=(await f.request(f.a.token,path)).json();assert.deepEqual(status.counts,{transcripts:1,audio:0,empty:0,pending:2,failed:2});

@@ -34,6 +34,7 @@ async function pollingFixture(t:TestContext,transports:ConnectorTransports){
    await f.host.execution!.tick();task=await checked(token,'/api/tasks/'+id);
    if(task.state===state)return task;
    if(!['waiting','running'].includes(task.state))assert.fail(JSON.stringify(task));
+   if(task.failure?.code==='recording_stages_pending')try{t.mock.timers.tick(Math.max(1,task.availableAt-Date.now()));}catch(error){if((error as any).code!=='ERR_INVALID_STATE')throw error;}
    await delay(5);
   }
   assert.fail('Generated connector task did not settle: '+JSON.stringify(task));
@@ -147,9 +148,10 @@ test('recording discovery exhausting all five transient attempts leaves an indep
  }}),{f}=p;
  await p.install('dingtalk-recordings');await p.configure(f.a.token,'dingtalk-recordings');await p.operation(f.a.token,'connect');await p.operation(f.a.token,'select',recordingSelection);await p.run(f.a.token,'sync');
  const cycle=p.timer(f.a.userId);fail=true;t.mock.timers.tick(300001);let last:any;
+ let discoveryTask='';
  for(let attempt=1;attempt<=5;attempt++){
   for(let spin=0;spin<1000;spin++){
-   await f.host.execution!.tick();last=await p.checked(f.a.token,'/api/tasks/'+cycle.id);
+   await f.host.execution!.tick();if(discoveryFailures&&!discoveryTask)discoveryTask=f.read(db=>String(db.prepare("SELECT task_id FROM user_tasks WHERE user_id=? AND json_extract(input,'$.recordingPhase')='discover' ORDER BY rowid DESC LIMIT 1").get(f.a.userId)!.task_id));if(!discoveryTask){await delay(5);continue;}last=await p.checked(f.a.token,'/api/tasks/'+discoveryTask);
    if(last.attempts===attempt&&last.state===(attempt===5?'failed':'waiting'))break;
    await delay(5);
   }
@@ -157,6 +159,7 @@ test('recording discovery exhausting all five transient attempts leaves an indep
   if(attempt<5)t.mock.timers.tick(20000);
  }
  assert.equal(discoveryFailures,5,'The failed discovery cycle owns the existing five-call budget');
+ await p.wait(f.a.token,cycle.id,'failed');assert.equal((await p.checked(f.a.token,'/api/tasks/'+cycle.id)).attempts,1,'Coordinator waits do not consume the provider phase budget');
  const successor=p.timer(f.a.userId);assert.notEqual(successor.id,cycle.id);assert.equal(successor.state,'waiting');assert.ok(successor.input.due>Date.now());
  fail=false;recover=true;await f.restart();assert.equal(p.timer(f.a.userId).id,successor.id);t.mock.timers.tick(300001);await p.wait(f.a.token,successor.id);
  assert.equal(discoveryFailures,5,'A new periodic scan must not mutate the terminal previous cycle');
@@ -215,14 +218,15 @@ test('recording selection persists promptly while an old provider read ignores a
   throw Error('Unexpected generated held recording operation '+command.kind);
  }}),{f}=p;
  await p.install('dingtalk-recordings');
- for(const actor of [f.a,f.b]){await p.configure(actor.token,'dingtalk-recordings');await p.operation(actor.token,'connect');await p.operation(actor.token,'select',recordingSelection);}
+ for(const actor of [f.a,f.b]){await p.configure(actor.token,'dingtalk-recordings');await p.operation(actor.token,'connect');await p.operation(actor.token,'select',{...recordingSelection,enabled:false});}
  heldUser=f.a.userId;hold=true;
+ await p.operation(f.a.token,'select',recordingSelection);
  const old=await p.checked(f.a.token,'/api/connectors/'+connectionId+'/sync','POST',{operationId:randomUUID()});await entry;
  const next={...recordingSelection,enabled:false,autoSync:false,start:'2026-10-17T00:00:00Z',end:'2026-10-18T00:00:00Z'};
  const saved=await Promise.race([p.operation(f.a.token,'select',next),delay(3000).then(()=>{throw Error('Saving selection waited for the held external scan');})]);
  assert.deepEqual(saved.result.selection,next);assert.deepEqual((await p.status(f.a.token)).selection,next,'The current durable epoch is visible before the old provider returns');
  assert.equal((await p.checked(f.a.token,'/api/tasks/'+old.id)).state,'cancelled');
- await p.run(f.b.token,'sync');assert.equal((await p.checked(f.b.token,'/api/connectors/'+connectionId+'/recordings?limit=10')).items[0].transcript.state,'succeeded','B with the same external IDs remains independent');
+ await p.operation(f.b.token,'select',recordingSelection);await p.run(f.b.token,'sync');assert.equal((await p.checked(f.b.token,'/api/connectors/'+connectionId+'/recordings?limit=10')).items[0].transcript.state,'succeeded','B with the same external IDs remains independent');
  release();
  for(let spin=0;spin<1000;spin++){if(f.read(db=>Number(db.prepare('SELECT count(*) n FROM connector_activity WHERE user_id=?').get(f.a.userId)!.n))===0)break;await delay(5);}
  const source=(await p.checked(f.a.token,'/api/sources')).items.find((item:any)=>item.kind==='dingtalk.recordings');assert.ok(source);
@@ -235,6 +239,6 @@ test('recording polling retains the original five-minute wake ceiling for a long
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-18T00:00:00Z')});
  const calls:ProviderCall[]=[],p=await pollingFixture(t,{dingtalk:dingtalkTransport(calls)}),{f}=p;
  await p.install('dingtalk-recordings');await p.configure(f.a.token,'dingtalk-recordings',900000);await p.operation(f.a.token,'connect');await p.operation(f.a.token,'select',recordingSelection);await p.run(f.a.token,'sync');
- const cycle=p.timer(f.a.userId);assert.equal(cycle.input.due,Date.now()+300000);
+ const cycle=p.timer(f.a.userId);assert.ok(cycle.input.due<=Date.now()+300000&&cycle.input.due>=Date.now()+298000,'Only local coordinator acknowledgements advance the generated clock after scheduling');
  calls.length=0;t.mock.timers.tick(300001);await p.wait(f.a.token,cycle.id);assert.ok(calls.some(call=>call.kind==='search'),'The old recording tick directly starts the next discovery at the five-minute ceiling');
 });

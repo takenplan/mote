@@ -160,11 +160,18 @@ not discard collected transcripts. Repeated discovery rereads transcript revisio
 and retains an already confirmed audio backup. Failed transcript/media work keeps
 its finite five-attempt transient budget and backoff across polls and restarts;
 blocked or exhausted work requires the owner's explicit `retry` operation.
+Discovery, metadata, transcript and media are separately admitted durable M05
+tasks. Their original shared pools retain concurrency 2/2/2/1. A discovery page
+enqueues its metadata and next page independently; accepted metadata enqueues
+transcript and media independently through `RecordingFlow.next`. A held audio
+request cannot gate another transcript or page. M05 owns each phase's actual
+attempt count and `availableAt`; turning off automatic discovery does not stop
+an already admitted phase retry. A later held or failed scan cannot gate it.
 Reference-retention sources reject supplied original bytes before any write.
 
 Recording selection is a local control step in the same M05 executor. It does
 not wait for an old physical provider read to finish: admission cancels the old
-due sync, and the local `connector.select` handler persists the new saved epoch
+due sync and old phase tasks, and the local `connector.select` handler persists the new saved epoch
 under its own selection resource. Every old recording acquisition/publication
 checks that current persisted epoch as well as its task, source and file-forget
 authority. Physical provider joins and erasure journals remain independent of
@@ -173,6 +180,14 @@ cannot publish against the retired epoch. No old task is automatically retried
 as a new selection. The original recording tick ceiling remains five minutes;
 the original tick directly requested discovery rather than maintaining a
 separate slower discovery deadline.
+Saving an enabled selection also admits exactly one background sync and returns
+its task identity. Both original Web and Android forms return after the local
+save and observe acquisition independently; neither submits a second sync.
+Replaying the same command returns its saved receipt without repeating the
+selection cancellation. Cancellation of a sync request fences its late child
+publication; independently admitted future polling and other owners continue.
+File-forget authority is checked again after asynchronous account/staging work,
+immediately before the real provider command, and at archive publication.
 
 OAuth exchanges and CLI authorization have M05 external issuance journals. A lost
 outcome is not replayed automatically. Connector deletion returns `result_unknown`
@@ -300,10 +315,10 @@ their actual entry tests pass. Existing archived bytes stay under M03 and all
 original/file reads still require their normal current authority and receipts.
 
 For the original “retry failed steps” user action, the existing recording
-`retry` operation accepts optional `{resume:true}`. Its single existing M05 task
-resets the existing failed checkpoint budget and continues only unfinished
-transcript/media stages, without rediscovering the range or fetching completed
-text. It continues when the client closes. The default empty payload retains
-its previous budget-reset-only behavior. Source/account/device authorization,
-original publication, five-attempt budget and normal explicit Sync's discovery
-algorithm remain unchanged; this adds no second job coordinator.
+`retry` operation accepts optional `{resume:true}`. It explicitly retries the
+existing failed or blocked M05 phase tasks and their original identities, without
+rediscovering the range or fetching completed text. Metadata failure can also be
+retried; its accepted successors then use the same shared flow. Retry admission
+returns before external work completes and work continues when the client closes.
+Source/account/device authority, original publication and the existing five-call
+network budget remain in force. M05 remains the sole execution authority.

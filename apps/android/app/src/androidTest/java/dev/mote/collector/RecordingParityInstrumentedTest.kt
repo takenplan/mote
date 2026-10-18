@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -84,7 +85,7 @@ class RecordingParityInstrumentedTest {
             press("重试失败步骤"); ready()
             waitFor {
                 val rows = a.get(path + "/recordings?limit=20").getJSONArray("items")
-                (0 until rows.length()).map(rows::getJSONObject).single { it.getString("id") == "recording-02" }.getJSONObject("audio").getBoolean("archived")
+                (0 until rows.length()).map(rows::getJSONObject).single { it.getString("id") == "recording-02" }.getJSONObject("audio").getString("state") == "succeeded"
             }
             val retried = a.get(path + "/recordings?limit=20").getJSONArray("items").let { rows -> (0 until rows.length()).map(rows::getJSONObject).single { it.getString("id") == "recording-02" } }
             assertEquals("Retrying audio cannot replace its already archived transcript", completedTranscript, retried.getString("transcriptCaptureId"))
@@ -96,6 +97,46 @@ class RecordingParityInstrumentedTest {
             scenario.onActivity { it.navigate("settings") }; recordings(); press("同步步骤与状态"); ready()
             assertTrue(phase("recording-00", "metadata").contains("读取信息 · 已完成")); assertFalse(phase("recording-00", "metadata").contains("generated_metadata_blocked"))
             scenario.onActivity { activity -> assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains(fixture().getJSONObject("a").getString("userId")) }) }
+        }
+    }
+
+    @Test fun firstEnabledNativeSaveStartsExactlyOnceWithAutomaticDiscoveryOffAndOn() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        require(app.packageName == "dev.mote.collector.m15fixture")
+        require(Build.FINGERPRINT.contains("sdk_gphone") || Build.FINGERPRINT.contains("emu64"))
+        waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null }
+        WorkManager.getInstance(app).cancelAllWork().result.get(15, TimeUnit.SECONDS)
+        waitFor { !ConnectionGuard.changing() && ConnectionGuard.processing.get() == 0 }
+        Settings(app).let { settings -> settings.save(settings.read().copy(server = "", token = "", debugHttp = true, wifiOnly = false, syncMode = "manual", metadataEnabled = false)) }
+        login(app, "c"); MoteI18n.select(app, "zh-CN")
+        val api = CentralAccess.requireClient(app)
+        ActivityScenario.launch<CentralActivity>(Intent(app, CentralActivity::class.java).putExtra("page", "settings")).use { scenario ->
+            fun ready() = waitFor { var value = false; scenario.onActivity { value = it.client != null && !it.isWorking }; value }
+            fun press(label: String, id: String? = null) { scenario.onActivity { activity ->
+                val root = if (id == null) activity.window.decorView else views(activity.window.decorView).single { it.tag == "recording-connection:$id" }
+                views(root).filterIsInstance<Button>().single { it.text.toString() == label }.performClick()
+            }; ready() }
+            ready(); press("来源与外部应用"); press("录音归档")
+            for (automatic in listOf(false, true)) {
+                val id = if (automatic) "first-save-on" else "first-save-off"; val path = "/api/connectors/$id"
+                assertFalse("The first native save has no prior selection or manual sync", api.get(path).getJSONObject("selection").getBoolean("enabled"))
+                assertEquals(0, api.get(path + "/recordings?limit=20").getJSONArray("items").length())
+                press("同步范围", id)
+                scenario.onActivity { activity ->
+                    val all = views(activity.window.decorView)
+                    all.filterIsInstance<CheckBox>().single { it.text.toString() == "启用" }.isChecked = true
+                    all.filterIsInstance<CheckBox>().single { it.text.toString() == "自动同步" }.isChecked = automatic
+                    val dates = all.filterIsInstance<EditText>(); assertEquals(2, dates.size)
+                    dates[0].setText("2026-09-30T00:00:00Z"); dates[1].setText("2026-10-02T00:00:00Z")
+                }
+                press("保存设置")
+                waitFor { val rows = api.get(path + "/recordings?limit=20").getJSONArray("items"); rows.length() == 1 && rows.getJSONObject(0).getJSONObject("transcript").getString("state") == "succeeded" && rows.getJSONObject(0).getJSONObject("audio").getString("state") == "succeeded" }
+                assertEquals(automatic, api.get(path).getJSONObject("selection").getBoolean("autoSync"))
+                val (code, control) = HttpJson.post(fixture().getString("androidControlAddress") + "/generated/recording-calls", JSONObject()); assertEquals(200, code)
+                val calls = control!!.getJSONArray("calls")
+                assertEquals("One saved range admits one scan without a second native sync", 1, (0 until calls.length()).map(calls::getJSONObject).count { it.getString("instance") == id && it.getString("kind") == "minutes-search" })
+                val syncs = control.getJSONArray("syncRequests"); assertFalse((0 until syncs.length()).any { syncs.getString(it) == path + "/sync" })
+            }
         }
     }
 }

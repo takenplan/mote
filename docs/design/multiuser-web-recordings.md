@@ -17,9 +17,12 @@ identities without opening an adapter, creating a source or probing a provider.
 The thin original-form adapter sends connect/select/retry to existing M10
 operations and sync/disconnect to their existing routes. It reads the actual M05
 task ID and checks the original signal after every await. Original Save and start
-acknowledges the source context and selection before submitting sync. The sync
-sub-operation uses the explicit command ID plus `:sync`; transport recovery never
-rediscovers an operation by inventing another ID.
+acknowledges the source context and selection. The server admits one sync as part
+of the saved enabled selection and returns its authentic M05 task identity. The
+form becomes editable after that local acknowledgement while task/status reads
+observe external work independently. It does not submit a redundant `/sync` or
+hold the save button until a provider completes. An explicit Sync button likewise
+returns on admission. Transport recovery retains the original command identity.
 
 A small browser recovery receipt holds only the original command options and
 operation ID. Its key pins origin, deployment, owner, credential, instance and
@@ -33,7 +36,8 @@ release the receipt for a later explicit action.
 
 Failed-stage retry sends `operation:'retry', payload:{resume:true}` to M15's frozen
 seam. It skips discovery and already archived transcript/media checkpoints. The
-empty retry payload's existing reset-only behavior is unchanged.
+empty retry payload is the same explicit failed-phase retry; acquisition remains
+independent of the form acknowledgement.
 
 Current-selection checkpoints use M15's signed opaque cursor and display the
 separate metadata/transcript/audio facts, including each phase's error and next

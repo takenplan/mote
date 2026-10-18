@@ -44,11 +44,12 @@ async function fixture(t:TestContext,withAsk=false,withIntake=false){
  const checked=async(token:string,path:string,method='GET',payload?:unknown)=>{
   const response=await request(token,path,method,payload),body=await response.text();assert.equal(response.status,200,path+' '+body);return JSON.parse(body);
  };
- const run=async(token:string,suffix:string,payload:Record<string,unknown>={})=>{
-  const admitted=await checked(token,'/api/connectors/same-recordings/'+suffix,'POST',{operationId:randomUUID(),...payload});let task:any;
-  await waitForScopedState(async()=>{task=await checked(token,'/api/tasks/'+admitted.id);return !['waiting','running'].includes(task.state);},()=>JSON.stringify(task));
+ const waitTask=async(token:string,id:string)=>{
+  let task:any;
+  await waitForScopedState(async()=>{task=await checked(token,'/api/tasks/'+id);return !['waiting','running'].includes(task.state);},()=>JSON.stringify(task));
   assert.equal(task.state,'succeeded',JSON.stringify(task));return task;
  };
+ const run=async(token:string,suffix:string,payload:Record<string,unknown>={})=>{const admitted=await checked(token,'/api/connectors/same-recordings/'+suffix,'POST',{operationId:randomUUID(),...payload});return waitTask(token,admitted.id);};
  const configure=async(token:string,domain:string,value:unknown)=>checked(token,'/api/configuration/'+domain,'PUT',{revision:(await checked(token,'/api/configuration')).revision,value});
  const page=(token:string)=>checked(token,'/api/connectors/same-recordings/recordings?limit=10');
  const heads=async(token:string)=>{
@@ -87,8 +88,8 @@ async function fixture(t:TestContext,withAsk=false,withIntake=false){
   await checked(actor.token,'/api/connectors/same-recordings','PUT',{expectedRevision:(await checked(actor.token,'/api/connectors')).revision,connection:{provider:'dingtalk-recordings',autoSync:false}});
   await checked(actor.token,'/api/connectors/same-recordings/enable','POST',{expectedRevision:(await checked(actor.token,'/api/plugins')).revision});
   await run(actor.token,'operations',{operation:'connect'});
-  await run(actor.token,'operations',{operation:'select',payload:{enabled:true,start:'2026-10-16T00:00:00Z',end:'2026-10-17T00:00:00Z',autoSync:false,backupAudio:true}});
-  assert.equal((await run(actor.token,'sync')).result.failed,0);
+  const saved=await run(actor.token,'operations',{operation:'select',payload:{enabled:true,start:'2026-10-16T00:00:00Z',end:'2026-10-17T00:00:00Z',autoSync:false,backupAudio:true}});
+  assert.equal((await waitTask(actor.token,saved.result.syncTask.id)).result.failed,0);
   await projection(actor.token);
  }
  return {f,states,checked,request,run,page,heads,materials,projection,originals,bytes,calls,ask,modelRequests};

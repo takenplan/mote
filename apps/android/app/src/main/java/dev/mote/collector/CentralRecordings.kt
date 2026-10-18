@@ -48,13 +48,13 @@ internal class CentralRecordings(private val screens: CentralScreens) {
             if (connections.isEmpty()) ui.text(MoteI18n.text("暂无记录"))
             for (connection in connections) {
                 val id = connection.getString("id"); val generation = connection.getLong("generation"); val value = statuses.getValue(id)
-                val card = ui.card()
+                val card = ui.card().apply { tag = "recording-connection:" + id }
                 ui.text(id + " · " + connection.getString("provider"), NativeFontRole.SECTION, card)
                 ui.text(MoteI18n.text(if (value.getBoolean("connected")) "已连接" else "尚未授权"), parent = card)
                 val counts = value.getJSONObject("counts")
                 ui.text(MoteI18n.text("已归档转写 {0} 条，音频 {1} 条；等待 {2} 步，需处理 {3} 步。", counts.getInt("transcripts"), counts.getInt("audio"), counts.getInt("pending"), counts.getInt("failed")), parent = card)
                 if (counts.getInt("empty") > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", counts.getInt("empty")), parent = card)
-                value.optJSONObject("counts")?.let { CentralAdmin(screens).values(it, card) }
+                if (counts.getInt("pending") > 0) schedule()
                 val previous = work.optJSONObject(id)
                 val task = previous?.optString("taskId")?.takeIf(String::isNotBlank)
                 if (task != null) {
@@ -62,6 +62,12 @@ internal class CentralRecordings(private val screens: CentralScreens) {
                         if (!active()) return@work
                         require(result.getString("id") == task)
                         ui.text(result.getString("state"), parent = card)
+                        result.optJSONObject("result")?.optJSONObject("syncTask")?.let { sync ->
+                            val syncTask = sync.getString("id")
+                            require(Regex("[a-f0-9]{64}").matches(syncTask) && syncTask != task)
+                            screens.rememberConnectorTask(id, generation, syncTask)
+                            schedule()
+                        }
                         result.optJSONObject("failure")?.optString("code")?.takeIf(String::isNotBlank)?.let { ui.text(it, parent = card) }
                         val progress = result.optJSONObject("progress")?.optJSONObject("connector")
                         progress?.optString("authorizationUrl")?.takeIf(String::isNotBlank)?.let { address ->

@@ -5,22 +5,22 @@ import {join} from 'node:path';
 import {scopedCaptureFixture} from '../../../server/test/fixtures/scoped-capture-host.js';
 import {ExecutionFailure} from '../../../server/src/execution-engine.js';
 export async function recordingFixture(t:TestContext,beforeTranscript?:()=>Promise<void>|undefined,provider:'feishu-recordings'|'dingtalk-recordings'='feishu-recordings'){
- const calls:{user:string;kind:string}[]=[],state={audioFails:true,count:2,phaseFailures:{} as Record<string,Partial<Record<'metadata'|'transcript'|'media',{category:'transient'|'permanent'|'blocked';code:string;retryAfterMs?:number}>>>};
+ const calls:{user:string;instance:string;kind:string}[]=[],state={audioFails:true,count:2,mediaWait:undefined as Promise<void>|undefined,phaseFailures:{} as Record<string,Partial<Record<'metadata'|'transcript'|'media',{category:'transient'|'permanent'|'blocked';code:string;retryAfterMs?:number}>>>};
  function fail(id:string,phase:'metadata'|'transcript'|'media'){const failure=state.phaseFailures[id]?.[phase];if(failure)throw new ExecutionFailure(failure.category,failure.code,failure.retryAfterMs);}
  const media=Buffer.alloc(8044);media.write('RIFF');media.writeUInt32LE(media.length-8,4);media.write('WAVEfmt ',8);media.writeUInt32LE(16,16);media.writeUInt16LE(1,20);media.writeUInt16LE(1,22);media.writeUInt32LE(8000,24);media.writeUInt32LE(16000,28);media.writeUInt16LE(2,32);media.writeUInt16LE(16,34);media.write('data',36);media.writeUInt32LE(8000,40);
- const f=await scopedCaptureFixture(t,{connectorTransports:{lark:scope=>async(command)=>{calls.push({user:scope.userId,kind:command.kind});const root=join(scope.directory,'lark-runtime');switch(command.kind){
+ const f=await scopedCaptureFixture(t,{connectorTransports:{lark:scope=>async(command)=>{calls.push({user:scope.userId,instance:scope.instanceId,kind:command.kind});const root=join(scope.directory,'lark-runtime');switch(command.kind){
   case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'same-account'}}});
   case 'minutes-search':return JSON.stringify({data:{items:Array.from({length:state.count},(_,i)=>({token:'recording-'+String(i).padStart(2,'0')})),has_more:false}});
   case 'minutes-metadata':fail(command.id,'metadata');return JSON.stringify({data:{minute:{token:command.id,title:'GENERATED_'+scope.userId+'_'+command.id,create_time:'1790812800000',duration:'500'}}});
   case 'minutes-transcript':{fail(command.id,'transcript');await beforeTranscript?.();const dir=join(root,command.outputDir);mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'transcript.txt'),'Generated export\n\nSpeaker 00:00:00.000\nGENERATED_TEXT_'+scope.userId+'_'+command.id+'\n');return JSON.stringify({data:{minutes:[{minute_token:command.id,artifacts:{transcript_file:command.outputDir+'/transcript.txt'}}]}});}
-  case 'minutes-media':fail(command.id,'media');if(state.audioFails)throw Error('generated media unavailable');mkdirSync(join(root,command.output.split('/').slice(0,-1).join('/')),{recursive:true});writeFileSync(join(root,command.output),media);return '{}';
+  case 'minutes-media':await state.mediaWait;fail(command.id,'media');if(state.audioFails)throw Error('generated media unavailable');mkdirSync(join(root,command.output.split('/').slice(0,-1).join('/')),{recursive:true});writeFileSync(join(root,command.output),media);return '{}';
   default:throw Error('Unexpected generated CLI '+command.kind);
- }},dingtalk:scope=>async(command,_profile,_signal)=>{calls.push({user:scope.userId,kind:command.kind});switch(command.kind){
+ }},dingtalk:scope=>async(command,_profile,_signal)=>{calls.push({user:scope.userId,instance:scope.instanceId,kind:command.kind});switch(command.kind){
   case 'status':return {authenticated:true,corp_id:'same-corp',user_id:'same-user'};
   case 'search':return {data:{minutes:Array.from({length:state.count},(_,i)=>({taskUuid:'recording-'+String(i).padStart(2,'0')})),complete:true}};
   case 'metadata':fail(command.id,'metadata');return {basic:{taskUuid:command.id,title:'GENERATED_'+scope.userId+'_'+command.id,startTime:1790812800000,duration:500}};
   case 'transcript':fail(command.id,'transcript');await beforeTranscript?.();return {taskUuid:command.id,complete:true,paragraphList:[{paragraph:'GENERATED_TEXT_'+scope.userId+'_'+command.id,nickName:'Speaker'}]};
-  case 'media':fail(command.id,'media');if(state.audioFails)throw Error('generated media unavailable');{const root=join(scope.directory,'dws-runtime');mkdirSync(join(root,command.output.split('/').slice(0,-1).join('/')),{recursive:true});writeFileSync(join(root,command.output),media);return {ok:true,succeeded:1,results:[{taskUuid:command.id}]};}
+  case 'media':await state.mediaWait;fail(command.id,'media');if(state.audioFails)throw Error('generated media unavailable');{const root=join(scope.directory,'dws-runtime');mkdirSync(join(root,command.output.split('/').slice(0,-1).join('/')),{recursive:true});writeFileSync(join(root,command.output),media);return {ok:true,succeeded:1,results:[{taskUuid:command.id}]};}
   default:throw Error('Unexpected generated DWS '+command.kind);
  }}}});
  const installed=await f.request(f.admin.token,'/api/admin/connectors/'+provider+'/install','POST',{expectedRevision:f.host.plugins!.catalog.revision(),operationId:crypto.randomUUID()});assert.equal(installed.statusCode,200,installed.body);
