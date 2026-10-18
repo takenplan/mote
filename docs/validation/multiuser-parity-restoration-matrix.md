@@ -319,6 +319,10 @@ Control独立审查当前f22 report=`/Users/utopiafar/.codex/visualizations/2026
 
 Android新标准AVD环境对照已运行：`mote_android262_stock_api37_20261018t160309z`/serial5582/API37，同已装image、SDK标准新AVD，18.292s达到真实device、sys.boot_completed=1与package service可用。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/android-2622844e-stock-avd-environment.json` SHA25634cde0dd2be506c6055c808427ed1fca4d7de4d068b9bed46d7658d781c25f2d，BOOT_ENVIRONMENT_PASS_APP_UNRUN；Mote从未安装/运行、无UI/模型调用。原wrapper run3ae894be-da4c-4de2-bca4-1d0c754f5f08 exit1保留：emulator leader退出时即时group仍存在，result记录cleanupGroupGone=false/lease保留，没有重写成PASS；随后独立ps group71340空、killpg ESRCH、5582/5583无listener，按原token退lease，写cleanup-followup并绑定。没有额外signal或共享ADB重启。标准AVD磁盘保留供下一独立App验收窗口，本次去除的是先前disk/feature参数组，不证明单个flag根因。设备资源清理后File374于16:05:22.481Z开始新完整22，run9233d0f2-e07b-4397-807e-04da9d7efe58/Node26 ABI147/JDK21/Gradle1/hidden，source clean、plan/env已核，当前唯一heavy窗口；结果仍RUNNING。
 
+Web独立物理Mac可见Chrome子范围R007完成：exactf8/tree9ef0c14368bbcace3e98247b4b1e278b4660a6a0，Node24.22.0 ABI137，已装Chrome155.0.8059.84/headless=false，实际鼠标键盘/滚轮输入；正常产品init→offline admin→账号HTTP→src/index.ts启动，独立49170/HOME/profile/DB/Chrome profile，只生成Notes、text-only屏幕形状Ingress记录和心跳。report=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-08cc-7631-b1bb-fe8b691c3e27/web-visible-f8-20261018/acceptance-report.json` SHA25628450a083897b6caebc26f01d411bac6ba0ff0102d319a536b53a3bdbb581810，PASS_EXECUTED_SUBSCOPE_ONLY。26步骤/11最终图：Home层级/入口、真实Notes输入保存、记录详情与关闭/原侧栏返回、真实A HTTP200在transport-held后原UI切B再释放仍B正控无A、B→A、同deviceId owner隔离通过；设备实际刷新29895ms/queue7→0清错/capturing，离开31501ms无device GET，重进刷新通过。usage与trigger均0。模型root无可见parent按钮但原settings/Home侧栏可返回，仅观察UNKNOWN；Notes实际出现在Home，不按旧空态文案推排除。
+
+R007 driver核report/manifest768dc2d7全部48文件hash、234个既有dist和6个startup source/runtime hash，查看Home A/Device after/B late后三张关键图；driver verification=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/web-f8f684b6-visible-driver-verification.json` SHA25642e58fc4281ff071e1fffb0b55c9f21fafd2f45efe1deb6212319a11692344e2。manifest有20PNG但只有11为最终成功图，其余历史诊断不得冒final20；旧失败图路径覆盖限制/选择器计数修正/末尾33498ms并非离页独立窗口已在报告披露，正式离页断言31501ms。R006仅用于samehead234artifact字节provenance，不继承actualUI通过。driver另核backend67439/child67440消失、49170关闭、physicalMac锁释放。Draft170已仅改metadata并核f8/Draft/Open/unmerged；source未改不重跑required。模型latestInsight/扩展安装卸载-source动态/producer-semantic完整性/OS隐藏可见/MacCollector-TCC-native-background/Android/最终Exec组合仍未验，生成Ingress不充当原生采集证明，不给整体READY/正式汇总。客户端已交接并释放；下一具体Android262+Exec070生成后端前置单独派发，无build/native/model且不抢File374重窗。
+
 ## 跨模块最终冻结旅程
 
 这些旅程与逐行验收互补；只在单一最终集成 SHA 执行并记录结果。依赖模块尚未释放，不启动完整套件。
@@ -361,7 +365,7 @@ R006正式报告：`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-0
 - 文档回执/HTML/截图：`/tmp/mote-parity-doc-review-20261018/`，回执`document-check.json`。这些只证明文档，不是产品UI验收。
 - `npm run check:affected -- --base 2c78ca8d52a7d17fae20962cf68d09a717ffc73a --dry-run` EXIT0：所有affected=false，workspaces=[]，checks=[]。暂存检查首次提示EOF空行，清理后`git diff --cached --check`通过；无应用构建/测试。
 
-本集成chat未运行产品HTTP/应用测试、原生/模拟器/产品UI、真实模型/供应商/物理设备或部署。模块作者通过消息报告的WIP定向结果与独立验收UNRUN分开；无正式模块集成或最终完整gate。
+上述首阶段本集成chat未运行产品HTTP/应用测试、原生/模拟器/产品UI、真实模型/供应商/物理设备或部署。模块作者通过消息报告的WIP定向结果与独立验收UNRUN分开；无正式模块集成或最终完整gate。
 
 政策/并发增量核查：已记录L06重新登录按原开关继续、AND-D01偏好按账号及设备权限边界；只读全局快照13 active/5 idle，WEB候选等待Q002。新FILE-PERCEPTION调查独立编号，不变更66主行。格式/链接/编号与headless渲染再次核对；原文档回执保留为`document-check-3a9a9a15.json`，增量为`document-check-policy-slots.json`，同文档核查临时目录。文档-only dry-run与暂存diff检查通过；未运行任何应用检查。
 
