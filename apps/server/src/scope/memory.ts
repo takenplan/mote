@@ -49,6 +49,7 @@ import {memoryRangeChunks} from '../memory-range-chunks.js';
 import {ScopedMemoryData,memoryPageSchema,memoryReadFiltersSchema,type MemoryReadFilters,memoryUUID,memoryHash,type MemoryRow,type MemoryState} from './memory-data.js';
 import {installScopedMemory,ScopedMemoryError,MEMORY_DOMAIN,memoryRequestModelSchema,scopedMemoryTaskSchema,memoryBindingSchema,memorySettingsSchema,defaultMemorySettings,type ScopedMemoryTask,type ScopedMemoryBinding} from './memory-schema.js';
 
+export type MemoryMaterialPublication=Readonly<{id:string;revision:string}>;
 export type MemoryPublication=Readonly<{jobId:string;automatic:boolean;memoryIds:readonly string[];materialIds:readonly string[]}>;
 export type MemoryReadScope={sourceIds?:readonly string[];recordPins?:readonly {id:string;version:number;fingerprint:string}[];assertCurrent:()=>void};
 type Job={input:string;draft:string|null;review:string|null;prepared:string|null;state:string;tasks:string};
@@ -70,6 +71,9 @@ export class MemoryHost {
  readonly bindings:ScopedMemoryBindings;
  private readonly disposers:Array<()=>void|Promise<void>>=[];
  private closed=false;
+ private readonly materialPublications=new Set<(run:TaskRun,material:MemoryMaterialPublication)=>void>();
+ onMaterialPublished(receive:(run:TaskRun,material:MemoryMaterialPublication)=>void){this.materialPublications.add(receive);return ()=>{this.materialPublications.delete(receive);};}
+ private notifyMaterialPublished(run:TaskRun,material:MemoryMaterialPublication){run.grant.assert();for(const receive of this.materialPublications){receive(run,Object.freeze({...material}));run.grant.assert();}}
  private readonly publications=new Set<(run:TaskRun,event:MemoryPublication)=>void>();
  /** Host-only same-transaction notification. It conveys exact publication
   * identity, never a whole-account policy/read/execution grant. Subscribers
@@ -101,7 +105,7 @@ export class MemoryHost {
  private captureMaterials?:MemoryCaptureMaterials;
  bindIngress(ingress:IngressHost){this.ingress=ingress;this.intake.bindIngress(ingress);}
 
- bindProcessing(processing:ProcessingHost){this.intake.bind(processing);if(this.ingress){this.captureMaterials=new MemoryCaptureMaterials(context=>this.data(context),this.execution,(run,material)=>this.intake.accept(run,material));this.captureMaterials.bind(this.ingress,processing);this.disposers.push(()=>this.captureMaterials!.close());}}
+ bindProcessing(processing:ProcessingHost){this.intake.bind(processing);if(this.ingress){this.captureMaterials=new MemoryCaptureMaterials(context=>this.data(context),this.execution,(run,material)=>{this.intake.accept(run,material);this.notifyMaterialPublished(run,material);});this.captureMaterials.bind(this.ingress,processing);this.disposers.push(()=>this.captureMaterials!.close());}}
  private data(context:UserContext,assertCurrent:()=>void=()=>{}){assertCurrent();this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);return new ScopedMemoryData(new PrivateSql(this.db,context.userId,()=>{assertCurrent();this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);}),this.runtime.services.forUser(context).get<PrivateData>('private-data'),new PrivateCursor(this.cursorKey,context.deploymentId,context.userId));}
  private pausedAdmission(step:ExecutionStep){
   const userId=step.ownership?.userId;if(!userId)throw missing();const sql=new PrivateSql(this.db,userId,()=>{}),raw=step.input as Record<string,unknown>;
