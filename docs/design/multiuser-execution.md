@@ -205,9 +205,11 @@ an iterative acyclic graph before writes. It restores history with revoked grant
 and the original epoch. Nonterminal entries become
 `blocked/restore_authorization_required`; neither history nor an old model receipt
 mints fresh authority. Same-operation replay is idempotent and a different payload
-conflicts. Whole-instance offline recovery preserves the original complete SQLite
-state and durable task grants; M16 owns its orchestration and supported archive
-format. Portable task-history restore does not promise automatic resumption or
+conflicts. Whole-instance offline recovery preserves complete SQLite task history and
+parent-generation metadata while retiring old login and task execution authority.
+The current archive schema requires the parent-edge generation table and its four
+columns; missing mappings are rejected rather than recreated. M16 owns the
+recovery orchestration and supported archive format. Portable task-history restore does not promise automatic resumption or
 single-user historical recovery.
 
 ## Supersession and verification

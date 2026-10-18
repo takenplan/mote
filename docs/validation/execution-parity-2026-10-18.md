@@ -65,3 +65,40 @@ family and owner hash as the producer. Its previous hard-coded generic `task:`
 prefix is superseded together with the server change. Android compilation/unit
 checks and native UI/device checks remain separately reported. No translation
 keys or user-facing configuration limits are added.
+
+## Current instance-backup schema completeness (EXEC-PRE-F01)
+
+The required epoch-5 backup schema includes `operation_parent_generations` and
+its `parent_id`, `child_id`, `slot` and `version` columns. A valid outer checksum
+does not make an archive with missing canonical generation metadata complete.
+Normal complete SQLite backups already retain this table; this correction does
+not reconstruct missing mappings or migrate an older archive.
+
+| Disposition | Backup boundary |
+| --- | --- |
+| KEEP | Current storage epoch 5 and instance manifest version 2, complete SQLite copying, extension tables/columns, existing credential/task-grant revocation and external-outcome boundaries. |
+| CHANGE | Backup admission and all existing archive verification/restore consumers require the parent-edge generation table and all four columns. |
+| REMOVE | Treating this core table as an optional extension merely because the prior schema inventory omitted it. |
+| EXCEPTION | A complete native SQLite snapshot already preserves the mappings; the failure is accepting incomplete current archives. |
+| UNKNOWN | Future Memory admission and Files progress ports, actual native UI, physical devices, live models and their combined candidate remain outside this correction. |
+
+`apps/server/test/multiuser-execution-backup-generation.test.ts` uses the real
+stopped-backup helper, `restore-instance.mjs` child-process CLI and production
+startup. Generated two-account history survives a complete round trip, including
+inactive historical membership. Freshly authorized late descendants inherit the
+restored parent slot/version, and a replacement generation retires them without
+changing the other account. Restored login/task grants remain revoked.
+
+The same fixture recomputes the SQLite checksum after removing the table or
+renaming each required column. Every malformed archive must fail via the real CLI
+before creating an absent target parent, and must leave an existing empty target,
+archive bytes and staging-directory inventory unchanged. Shared direct/profile
+verification also refuses each case; stopped backup creation refuses a missing
+table or column before publishing output. These are validation failures, with no
+startup repair or real-history reprocessing.
+
+The corrected-fixture RED run on `1e9ec7ab` passed the complete round trip but
+incorrectly accepted all five malformed archives. New focused receipts and the
+new required affected-check plan are reported against the correction's frozen
+SHA. The earlier driver-run 14-step gate for `1e9ec7ab` is historical evidence and
+does not validate this new input.

@@ -146,6 +146,7 @@ export const scopedBackupSchema = Object.freeze({
  "mp_state":["user_id","deleted","generation","settings"],
  "operation_changes":["seq","operation_id","user_id","user_seq"],
  "operation_generations":["operation_id","slot","version"],
+ "operation_parent_generations":["parent_id","child_id","slot","version"],
  "operation_parents":["parent_id","child_id"],
  "operation_progress":["id","user_id","user_position","created_at","updated_at","total","not_scheduled","waiting","running","blocked","succeeded","failed","cancelled","stale"],
  "operation_user_sequences":["user_id","next_position","next_change"],
