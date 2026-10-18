@@ -198,6 +198,7 @@
 | INV-EXEC-02 / EXEC-X01 | EXEC / AND、DESKTOP | 原生Android operation receipt仍硬编码task前缀；family恢复后与connector前缀保持精确账号hash/回执校验，待producer与consumer双SHA联调；Desktop并行核对。 | UNRUN；待EXEC/AND候选 |
 | FILE-PERCEPTION / FILE-02关联 | FILE领域/ports/API与历史preview-confirm；CONFIG专用Web/必要Kotlin；ASK查询消费 | PM确认静态能力缺口，待生产入口复现：旧图片独立auto/profile、外部OCR、allowQueryImages、日期/来源complete/recompute preview确认未接scope；通用processing页不等价。与自定义image/caption/readiness联合，不能挂global legacy或另造业务流。 | 调查；三owner已active接收，独验通知等G004槽 |
 | ASK-INTAKE-01 / ASK-A02 × MEM | ASK / MEM publication port | 作者新增真实生产fixture先红：noteCapture经MemoryHost captureMaterials→PrivateData直接publish，Ingress/M06 hooks未收到，canonical embedding为0。双方协调最小Material publication通知port，Ask订阅新发布输出；不改Memory语义、不做查询时历史扫描/backfill。作者报既有A01 16/A04 8/A05 HTTP4+MCP4/A02 24项定向通过，均在途、未附冻结SHA，不能覆盖新缺链。 | 作者生产fixture失败已报；修复后真实intake→发布通知→scoped embedding/检索及双用户/修订删除/重启待验，独立UNRUN |
+| CONFIG-EXT-HINDSIGHT / CONFIG-C02 × EXT-E02 | EXT / CONFIG、MEM | EXT报告新Hindsight实际probe构造与原provider执行构造并存；固定Codex executable/home必须同时进入二者。只合原执行构造一行不能关闭C02或E02。冻结组合后验证生成runtime路径、probe及正常执行、撤权与账号隔离；冲突解决请两owner复核。 | 在途结构依赖；无候选SHA/组合运行证据；独验UNRUN |
 
 独立验收准备工件（不代表通过）：领域组v1.1.0，`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/acceptance-checklist-v1.1.json`，SHA256 `9ffd1c49834ca086c55a579b830b65fcb652c6b1b266f6e95701a170625bd1c2`；23主条目+13额外项，独立应用运行全部UNRUN。其Todo回执为owner实跑/验收chat审回执，非独立运行。
 
