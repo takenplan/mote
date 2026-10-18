@@ -441,6 +441,14 @@ settings generation and non-cancelled file; execution still requires enabled
 settings. Enabling processing uses a fresh coordinator/grant for unfinished work,
 while completed results and explicit per-file cancellation remain intact. This
 uses the existing executor/journal, with no synthetic task state or new queue.
+
+Automatic intake records that current incarnation's coordinator even when a
+retired incarnation still has live or unknown physical I/O. This does not grant
+another physical request: the enabled coordinator waits for live I/O and blocks
+on an unconfirmed unknown result before admitting a child. Public/manual
+submissions retain their existing physical-call and confirmation checks, and
+another transport batch cannot renew the same incarnation's retired intent.
+
 Files now preserves M05's actual admission error when no attempt failure exists.
 
 
