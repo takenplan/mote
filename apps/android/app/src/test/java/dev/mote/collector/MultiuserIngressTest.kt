@@ -228,4 +228,39 @@ class MultiuserIngressTest {
             val original=ack.getJSONArray("captures").getJSONObject(0).getJSONObject("original");assertEquals(Ingress3Client.hash(bytes),original.getString("hash"));assertEquals(bytes.size.toLong(),original.getLong("bytes"))
         } finally {directory.deleteRecursively()}
     }
+    @Test fun `actual capture conflict settles good records and isolates only the rejected id under its owner`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=client(server,token)
+        val conflict=event(UUID.randomUUID().toString(),"Central immutable bytes").put("privacy",JSONObject().put("excluded",false))
+        api.captures(listOf(conflict))
+        val records=listOf(event(UUID.randomUUID().toString(),"Generated before conflict"),JSONObject(conflict.toString()).put("ocrText","Different local bytes"),event(UUID.randomUUID().toString(),"Generated after conflict"))
+        val directory=kotlin.io.path.createTempDirectory("android-parity-outbox-").toFile()
+        val cipher=object:ByteCipher {override fun seal(value:ByteArray)=value;override fun open(value:ByteArray)=value}
+        try {
+            val queue=DurableQueue(directory,cipher)
+            records.forEach {queue.enqueue(it.put("privacy",JSONObject().put("excluded",false)),null,1024*1024)}
+            val settled=mutableListOf<Pair<String,Int>>()
+            api.settleCaptures(queue.peekBatch()) {record,status->
+                val id=record.getString("id");settled.add(id to status)
+                when(status) {200->queue.acknowledge(id,0,0);409->queue.uploadConflict(id);410->queue.archiveMissing(id)}
+            }
+            assertEquals(records.map {it.getString("id")}.toSet(),settled.map {it.first}.toSet())
+            assertEquals(listOf(200,409,200),records.map {record->settled.single {it.first==record.getString("id")}.second})
+            assertEquals(0,DurableQueue(directory,cipher).peekBatch().size)
+            assertEquals(1,queue.syncIssues().size)
+            for(record in records) assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/captures/"+record.getString("id"),null).first)
+            assertEquals("Central immutable bytes",request(server,token,"GET","/api/captures/"+conflict.getString("id"),null).second!!.getString("ocrText"))
+        } finally {directory.deleteRecursively()}
+    }
+    @Test fun `actual narrow source registration preserves central pause and exposes typed outcome`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=client(server,token)
+        val source=LocalSource(id="generated-paused-source",name="Generated source",kind="local-files",uri="content://generated/source",retention="archive",syncContinuously=false)
+        api.register(source.registration("same-device"))
+        assertEquals(200,request(server,token,"PATCH","/api/sources/${source.id}",JSONObject().put("enabled",false)).first)
+        assertTrue(api.sourcePaused(source))
+        val paused=assertThrows(FileIngressRejection::class.java){api.register(source.registration("same-device"))}
+        assertEquals(409,paused.httpStatus);assertTrue(paused.paused)
+        assertFalse(request(server,token,"GET","/api/sources/${source.id}",null).second!!.getBoolean("enabled"))
+        assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/sources/${source.id}",null).first)
+    }
+
 }

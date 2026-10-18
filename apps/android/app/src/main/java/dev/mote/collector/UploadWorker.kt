@@ -154,29 +154,14 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                     return Result.success()
                 }
                 stage = EventStage.UPLOAD
-                var sent = if (config.packedUpload) events else events.take(1)
+                val sent = if (config.packedUpload) events else events.take(1)
                 pendingRecordId = sent.first().getString("id")
-                var wireBytes = 0L
                 val individual = !config.packedUpload
-                wireBytes = sent.sumOf { it.toString().toByteArray(Charsets.UTF_8).size.toLong() }
+                val wireBytes = sent.sumOf { it.toString().toByteArray(Charsets.UTF_8).size.toLong() }
                 val client = applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }
-                val result = UploadNegotiation.sendShrinking(sent) { selected ->
-                    try { 200 to client.captures(selected) }
-                    catch (error: FileTransportFailure) { if (error.httpStatus == 413) 413 to null else throw error }
-                }
-                sent = result.first
-                if (result.second.first != 200) return failed(MoteI18n.text("批量上传未确认（HTTP {0}）", result.second.first), false)
-                slice.record(wireBytes)
-                liveBytes = if (preferNew) liveBytes + wireBytes else 0L
-                retainTurn()
-                Diagnostics(applicationContext).add("uploadBytes", wireBytes)
-                val receipts = sent.associate { it.getString("id") to 200 }
-                var retry = false
-                var permanent = false
                 var acknowledged = 0
-                for (event in sent) {
+                client.settleCaptures(sent) { event, code ->
                     val id = event.getString("id")
-                    val code = receipts[id]
                     when (code) {
                         200, 201 -> {
                             val bytes = event.toString().toByteArray(Charsets.UTF_8).size.toLong()
@@ -187,13 +172,15 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                         }
                         409 -> queue.uploadConflict(id)
                         410 -> queue.archiveMissing(id)
-                        else -> { retry = true; if (code in setOf(400, 401, 403, 413, 426)) permanent = true }
                     }
                 }
+                slice.record(wireBytes)
+                liveBytes = if (preferNew) liveBytes + wireBytes else 0L
+                retainTurn()
+                Diagnostics(applicationContext).add("uploadBytes", wireBytes)
                 if (!individual && acknowledged > 0) SupportEvents.record(applicationContext, EventStage.UPLOAD, EventCode.OK, httpStatus = 200)
                 pendingRecordId = null
                 remaining -= sent.size
-                if (retry) return failed(MoteI18n.text("部分记录未确认"), !permanent)
 
             }
             retainTurn()
@@ -207,6 +194,12 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
         } catch (error: SyncConditionsUnavailable) {
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
+        } catch (error: FileTransportFailure) {
+            SupportEvents.record(applicationContext, stage, EventJournal.httpFailure(error.httpStatus), httpStatus = error.httpStatus)
+            if (error is FileIngressRejection && error.paused) {
+                settings.syncStatus("paused", MoteI18n.text("中央来源已暂停，请在中央来源页恢复"))
+                Result.success()
+            } else failed(MoteI18n.text("批量上传未确认（HTTP {0}）", error.httpStatus), error.httpStatus !in setOf(400, 401, 403, 413, 426))
         } catch (error: Exception) {
             SupportEvents.record(applicationContext, stage, EventJournal.failure(error, stage))
             if (error !is RecordedHeartbeatFailure) Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)

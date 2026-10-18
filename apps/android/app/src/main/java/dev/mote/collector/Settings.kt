@@ -78,6 +78,23 @@ class Settings(private val context: Context) {
         CaptureAccessibilityService.instance?.refreshSchedule()
         runCatching { HeartbeatWorker.stateChanged(context, read()) }
     }
+    private fun preferenceKey(account: AccountBinding?) = "collectorPreferences.${account?.preferenceKey ?: "local"}"
+    private fun write(items: Map<String, Any?>): Boolean {
+        val edit = prefs.edit()
+        items.forEach { (key, value) -> when (value) {
+            null -> edit.remove(key); is String -> edit.putString(key, value); is Int -> edit.putInt(key, value)
+            is Long -> edit.putLong(key, value); is Boolean -> edit.putBoolean(key, value)
+            else -> error("Unsupported configuration value")
+        } }
+        return edit.commit()
+    }
+    private fun preferences(account: AccountBinding?): org.json.JSONObject {
+        val saved = prefs.getString(preferenceKey(account), null)
+        val selected = if (saved == null) org.json.JSONObject(configurationValues(CollectorConfig(), "").filterKeys { it in accountPreferenceKeys })
+            .put("capturePreviewSeen", false) else org.json.JSONObject(saved)
+        check(accountPreferenceKeys.all(selected::has)) { MoteI18n.text(LocalDataFormat.RESET_MESSAGE) }
+        return selected
+    }
     fun read(): CollectorConfig = synchronized(Settings::class.java) {
         if (!prefs.contains("configurationFormat")) check(prefs.all.isEmpty()) { MoteI18n.text(LocalDataFormat.RESET_MESSAGE) }
         if (prefs.contains("configurationFormat")) {
@@ -85,41 +102,44 @@ class Settings(private val context: Context) {
         }
         // SharedPreferences already keeps values in memory. Compare only configuration keys,
         // so status/counter writes never rebuild a snapshot or decrypt credentials.
-        val values = prefs.all.filterKeys { it in configurationKeys || it == "syncPaused" }
+        val binding = prefs.getString("accountBinding", "").orEmpty().takeIf { it.isNotEmpty() }?.let(AccountBinding::parse)
+        val selectedKey = preferenceKey(binding)
+        val missingPreferences = !prefs.contains(selectedKey)
+        val selected = preferences(binding)
+        val values = prefs.all.filterKeys { it in configurationKeys && it !in accountPreferenceKeys } + (selectedKey to selected.toString())
         if (cachedPrefs === prefs && cachedValues == values) return@synchronized requireNotNull(cachedConfig)
         val config = CollectorConfig(
-        uiPageMode = prefs.getString("uiPageMode", "ui_preferred")!!, uiPageRules = prefs.getString("uiPageRules", "[]")!!,
-        uploadGate = UploadGateConfig(prefs.getBoolean("uploadGateEnabled", true), prefs.getString("uploadGateText", "")!!, prefs.getString("uploadGateFailure", "hold")!!),
+        uiPageMode = selected.optString("uiPageMode", "ui_preferred")!!, uiPageRules = selected.optString("uiPageRules", "[]")!!,
+        uploadGate = UploadGateConfig(selected.optBoolean("uploadGateEnabled", true), selected.optString("uploadGateText", "")!!, selected.optString("uploadGateFailure", "hold")!!),
         authSignedOut = prefs.getBoolean("authSignedOut", false), authExpiresAt = prefs.getLong("authExpiresAt", 0), authProcess = prefs.getString("authProcess", "")!!,
         server = prefs.getString("server", BuildConfig.DEFAULT_SERVER)!!, accountBinding = prefs.getString("accountBinding", "")!!, deviceBoundCredential = prefs.getBoolean("deviceBoundCredential", false),
         token = credentials(prefs.getString("token", null)),
         deviceName = prefs.getString("deviceName", Build.MODEL)!!,
-        intervalSeconds = prefs.getInt("interval", 30), maxQueueMiB = prefs.getInt("maxQueue", 256),
-        wifiOnly = prefs.getBoolean("wifiOnly", true), excludedPackages = prefs.getString("excluded", "")!!,
-        masks = prefs.getString("masks", "")!!,
-        debugHttp = prefs.getBoolean("debugHttp", RuntimeProfile.current.developerTools), mode = prefs.getString("mode", "accessibility")!!,
-        jpegQuality = prefs.getInt("jpegQuality", 75), captureMaxSide = prefs.getInt("captureMaxSide", 1280),
-        chargingOnly = prefs.getBoolean("chargingOnly", false), batteryPauseBelowPct = prefs.getInt("batteryPauseBelowPct", 0),
+        intervalSeconds = selected.optInt("interval", 30), maxQueueMiB = prefs.getInt("maxQueue", 256),
+        wifiOnly = selected.optBoolean("wifiOnly", true), excludedPackages = selected.optString("excluded", "")!!,
+        masks = selected.optString("masks", "")!!,
+        debugHttp = prefs.getBoolean("debugHttp", RuntimeProfile.current.developerTools), mode = selected.optString("mode", "accessibility")!!,
+        jpegQuality = selected.optInt("jpegQuality", 75), captureMaxSide = selected.optInt("captureMaxSide", 1280),
+        chargingOnly = selected.optBoolean("chargingOnly", false), batteryPauseBelowPct = selected.optInt("batteryPauseBelowPct", 0),
         diagnosticsEnabled = prefs.getBoolean("diagnosticsEnabled", RuntimeProfile.current.detailedDiagnostics), diagnosticsIntervalSeconds = prefs.getInt("diagnosticsIntervalSeconds", 60),
-        appCollectionRules = prefs.getString("appCollectionRules", AppCollectionRules.DEFAULT)!!,
-        metadataEnabled = prefs.getBoolean("metadataEnabled", true),
-        syncPaused = prefs.getBoolean("syncPaused", false), syncMode = prefs.getString("syncMode", "batch")!!,
-        packedUpload = prefs.getBoolean("packedUpload", true), syncIntervalMinutes = prefs.getInt("syncIntervalMinutes", 1), syncBatchSize = prefs.getInt("syncBatchSize", 100), jsonlWindowMinutes = prefs.getInt("jsonlWindowMinutes", 10),
-        mediaCollectionEnabled = prefs.getBoolean("mediaCollectionEnabled", false), screenCollectionEnabled = prefs.getBoolean("screenCollectionEnabled", true),
-        notificationCollectionEnabled = prefs.getBoolean("notificationCollectionEnabled", false), deviceEventCollectionEnabled = prefs.getBoolean("deviceEventCollectionEnabled", false),
-        syncChargingOnly = prefs.getBoolean("syncChargingOnly", false), syncBatteryNotLow = prefs.getBoolean("syncBatteryNotLow", false), imageDedupeMode = prefs.getString("imageDedupeMode", "off")!!,
+        appCollectionRules = selected.optString("appCollectionRules", AppCollectionRules.DEFAULT)!!,
+        metadataEnabled = selected.optBoolean("metadataEnabled", true),
+        syncPaused = selected.optBoolean("syncPaused", false), syncMode = selected.optString("syncMode", "batch")!!,
+        packedUpload = selected.optBoolean("packedUpload", true), syncIntervalMinutes = selected.optInt("syncIntervalMinutes", 1), syncBatchSize = selected.optInt("syncBatchSize", 100), jsonlWindowMinutes = selected.optInt("jsonlWindowMinutes", 10),
+        mediaCollectionEnabled = selected.optBoolean("mediaCollectionEnabled", false), screenCollectionEnabled = selected.optBoolean("screenCollectionEnabled", true),
+        notificationCollectionEnabled = selected.optBoolean("notificationCollectionEnabled", false), deviceEventCollectionEnabled = selected.optBoolean("deviceEventCollectionEnabled", false),
+        syncChargingOnly = selected.optBoolean("syncChargingOnly", false), syncBatteryNotLow = selected.optBoolean("syncBatteryNotLow", false), imageDedupeMode = selected.optString("imageDedupeMode", "off")!!,
         imageDedupeDiagnosticsEnabled = prefs.getBoolean("imageDedupeDiagnosticsEnabled", false),
-        uploadedRetentionDays = prefs.getInt("uploadedRetentionDays", 7),
-        ocrMode = prefs.getString("ocrMode", "chinese")!!, ocrAppModes = prefs.getString("ocrAppModes", "{}")!!
+        uploadedRetentionDays = selected.optInt("uploadedRetentionDays", 7),
+        ocrMode = selected.optString("ocrMode", "chinese")!!, ocrAppModes = selected.optString("ocrAppModes", "{}")!!
     )
-        if (!prefs.contains("configurationFormat")) {
-            val editor = prefs.edit().putBoolean("enabled", prefs.getBoolean("enabled", false))
-            configurationValues(config, "").forEach { (key, value) -> when (value) {
-                is String -> editor.putString(key, value); is Int -> editor.putInt(key, value)
-                is Long -> editor.putLong(key, value); is Boolean -> editor.putBoolean(key, value)
-                else -> error("Unsupported configuration value")
-            } }
-            if (!editor.commit()) throw SettingsWriteFailure()
+        if (!prefs.contains("configurationFormat") || missingPreferences) {
+            // A missing identity snapshot never adopts historical global private
+            // values. Default it and stop running collection in the same atomic
+            // preference commit; the ordinary preview/start path remains required.
+            val initial = if (!prefs.contains("configurationFormat")) configurationValues(config, "") else emptyMap()
+            val personal = if (missingPreferences) mapOf(selectedKey to selected.toString(), "enabled" to false) else emptyMap()
+            if (!write(initial + personal)) throw SettingsWriteFailure()
         }
         cachedPrefs = prefs; cachedValues = values; cachedConfig = config
         config
@@ -166,20 +186,19 @@ class Settings(private val context: Context) {
         val origin = originAfterChange(verified)
         val adopting = previousConfig.account() == null && verified.account() != null && hasPendingData()
         if (adopting && !ConnectionGuard.permitsLocalBinding()) throw ConnectionFailure("local_confirmation")
-        val values = configurationValues(verified, origin) + if (adopting) mapOf("localOwnerKey" to verified.ownerKey()) else emptyMap()
-
-        val selected = if (read().ownerKey() != verified.ownerKey()) values + ("enabled" to false) else values
+        val values = configurationValues(verified, origin)
+        val personal = preferences(verified.account())
+        val switchingPreferences = previousConfig.account()?.preferenceKey != verified.account()?.preferenceKey
+        // Identity replacement carries credentials and device metadata only.
+        // Existing personal values (or defaults for a new identity) win over
+        // the old account fields present in the caller's connection draft.
+        if (!switchingPreferences) values.filterKeys { it in accountPreferenceKeys }.forEach { (key, value) -> personal.put(key, value) }
+        val deviceValues = values.filterKeys { it !in accountPreferenceKeys } +
+            (preferenceKey(verified.account()) to personal.toString()) +
+            if (adopting) mapOf("localOwnerKey" to verified.ownerKey()) else emptyMap()
+        val selected = if (previousConfig.ownerKey() != verified.ownerKey()) deviceValues + ("enabled" to false) else deviceValues
         val committedValues = if (confirmCentralEndpoint) selected + ("centralEndpoint" to verified.server.trim().trimEnd('/')) else selected
         val previous = committedValues.keys.associateWith { prefs.all[it] }
-        fun write(items: Map<String, Any?>): Boolean {
-            val edit = prefs.edit()
-            items.forEach { (key, value) -> when (value) {
-                null -> edit.remove(key); is String -> edit.putString(key, value); is Int -> edit.putInt(key, value)
-                is Long -> edit.putLong(key, value); is Boolean -> edit.putBoolean(key, value)
-                else -> error("Unsupported configuration value")
-            } }
-            return edit.commit()
-        }
         if (!write(committedValues)) {
             if (!write(previous)) { enabled = false; status("error", MoteI18n.text("设置保存与恢复均未持久完成，采集已停止；请检查存储空间并重试")) }
             throw SettingsWriteFailure()
@@ -237,6 +256,7 @@ class Settings(private val context: Context) {
         private var cachedConfig: CollectorConfig? = null
         private var cachedCiphertext: String? = null
         private var cachedToken = ""
+        private val accountPreferenceKeys = setOf("appCollectionRules", "batteryPauseBelowPct", "captureMaxSide", "chargingOnly", "deviceEventCollectionEnabled", "excluded", "imageDedupeMode", "interval", "jpegQuality", "jsonlWindowMinutes", "masks", "mediaCollectionEnabled", "metadataEnabled", "mode", "notificationCollectionEnabled", "ocrAppModes", "ocrMode", "packedUpload", "screenCollectionEnabled", "syncBatchSize", "syncBatteryNotLow", "syncChargingOnly", "syncIntervalMinutes", "syncMode", "syncPaused", "uiPageMode", "uiPageRules", "uploadGateEnabled", "uploadGateFailure", "uploadGateText", "uploadedRetentionDays", "wifiOnly")
         private val configurationKeys = setOf("deviceBoundCredential", "accountBinding", "configurationFormat", "dataOrigin", "authSignedOut", "authExpiresAt", "authProcess", "uiPageMode", "uiPageRules", "packedUpload", "uploadGateEnabled", "uploadGateText", "uploadGateFailure", "uploadedRetentionDays", "appCollectionRules", "batteryPauseBelowPct", "captureMaxSide", "chargingOnly", "debugHttp", "deviceEventCollectionEnabled", "deviceName", "diagnosticsEnabled", "diagnosticsIntervalSeconds", "enabled", "excluded", "imageDedupeDiagnosticsEnabled", "imageDedupeMode", "interval", "jpegQuality", "jsonlWindowMinutes", "masks", "maxQueue", "mediaCollectionEnabled", "metadataEnabled", "mode", "notificationCollectionEnabled", "ocrAppModes", "ocrMode", "screenCollectionEnabled", "server", "syncBatchSize", "syncBatteryNotLow", "syncChargingOnly", "syncIntervalMinutes", "syncMode", "token", "wifiOnly")
 
     }
@@ -251,8 +271,13 @@ class Settings(private val context: Context) {
     fun statusAt(): Long = prefs.getLong("statusAt", 0)
     fun captured(at: String) { accountState().edit().putString("lastCapture", at).apply() }
     fun lastCapture(): String? = accountState().getString("lastCapture", null)
-    fun capturePreviewSeen(): Boolean = prefs.getBoolean("capturePreviewSeen", false)
-    fun capturePreviewAccepted() { if (!prefs.edit().putBoolean("capturePreviewSeen", true).commit()) throw SettingsWriteFailure() }
+    fun capturePreviewSeen(): Boolean = synchronized(Settings::class.java) { preferences(read().account()).optBoolean("capturePreviewSeen", false) }
+    fun capturePreviewAccepted(expected: CollectorConfig? = null) = synchronized(Settings::class.java) {
+        val current = read()
+        if (expected != null && expected != current) throw SettingsChangedFailure()
+        val selected = preferences(current.account()).put("capturePreviewSeen", true)
+        if (!write(mapOf(preferenceKey(current.account()) to selected.toString()))) throw SettingsWriteFailure()
+    }
     fun screenStatus(message: String) { if (accountState().getString("screenMessage", null) != message) accountState().edit().putString("screenMessage", message).apply() }
     fun screenStatus(): String = accountState().getString("screenMessage", MoteI18n.text("尚未开始采集"))!!
     fun uploadStatus(message: String) { accountState().edit().putString("uploadStatus", message).apply() }

@@ -18,9 +18,17 @@ class CalendarActionWorker(context: Context, params: WorkerParameters) : Worker(
         return try { actions.deliver(); Result.success() } catch (_: Exception) { Result.retry() }
     }
     companion object {
-        fun schedule(context: Context) {
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("mote-calendar-delivery", ExistingPeriodicWorkPolicy.UPDATE,
-                PeriodicWorkRequestBuilder<CalendarActionWorker>(15, TimeUnit.MINUTES).setInputData(workDataOf("owner" to Settings(context).read().ownerKey())).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
+        fun schedule(context: Context) = ConnectionGuard.sync {
+            val config = Settings(context).read()
+            val manager = WorkManager.getInstance(context)
+            if (!config.hasSyncConnection() || !context.accountPreferences("calendar-actions").getBoolean("connected", false)) {
+                manager.cancelUniqueWork("mote-calendar-delivery")
+                return@sync
+            }
+            manager.enqueueUniquePeriodicWork("mote-calendar-delivery", ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<CalendarActionWorker>(15, TimeUnit.MINUTES)
+                    .setInputData(workDataOf("owner" to config.ownerKey()))
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
         }
     }
 }

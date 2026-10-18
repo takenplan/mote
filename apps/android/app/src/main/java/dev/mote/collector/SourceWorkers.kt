@@ -76,6 +76,11 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                 if (isStopped) return Result.retry()
                 SyncSchedule.waitingReason(applicationContext, config)?.let { settings.syncStatus("waiting", it); return Result.retry() }
                 if (source.kind == "local-files" && source.retention == "snapshot" && !source.centralProcessingConsent) { store.status(source.id, "consent"); blocked = true; continue }
+                if (!explicit && source.binaryFiles() && applicationContext.fileArchives().next(source.id)?.optJSONObject("syncFailure")?.optBoolean("blocked") == true) {
+                    // A permanent refusal is durable. Future timer/continuation
+                    // jobs must wait for the existing explicit retry control.
+                    blocked = true; continue
+                }
                 if (!(source.binaryFiles() && !source.syncContinuously && applicationContext.fileArchives().configure(source).optBoolean("importCaptured")) && !SourceAccess.available(applicationContext, source)) { store.status(source.id, "permission"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.CONFIGURATION); continue }
                 try {
                     fun stillSelected(): Boolean = !isStopped && !ConnectionGuard.reconfiguring() && store.sources().any { it == source && it.enabled } && settings.read().let { it.ownerKey() == target }
@@ -89,7 +94,10 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     }
                     val confirmed = SourceContextSync.sync(applicationContext, store, source, config, target, slice, ::stillSelected)
                     if (confirmed == null) {
-                        if (store.state(source.id).optString("status") == "context-conflict") blocked = true else failed = true
+                        // Context CAS also uses 409. Resolve an actual source
+                        // pause through the credential's narrow registration port.
+                        if (applicationContext.ingress3(config, ::stillSelected).sourcePaused(source)) store.status(source.id, "paused")
+                        else if (store.state(source.id).optString("status") == "context-conflict") blocked = true else failed = true
                         continue
                     }
                     source = confirmed
@@ -121,6 +129,10 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                         if (isStopped || !stillSelected()) return Result.retry()
                         SyncSchedule.waitingReason(applicationContext, config)?.let { settings.syncStatus("waiting", it); return Result.retry() }
                         val body = store.next(source.id, target) ?: break
+                        val rejection = store.state(source.id).optJSONObject("uploadRejection")
+                        if (!explicit && rejection != null && rejection.optString("externalId") == body.getString("externalId") && rejection.optString("revision") == body.getString("revision")) {
+                            blocked = true; break
+                        }
                         if (!slice.admit(body.toString().toByteArray(Charsets.UTF_8).size)) break
                         SyncSchedule.requireConditions(applicationContext, config)
                         applicationContext.ingress3(config, ::stillSelected).item(source, body)
@@ -136,13 +148,15 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     throw error
                 } catch (error: FileIngressRejection) {
                     Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.HTTP, httpStatus = error.httpStatus)
-                    val paused = error.httpStatus == 409 && runCatching {
+                    val paused = error.paused || (error.httpStatus == 409 && runCatching {
                         SyncSchedule.requireConditions(applicationContext, config)
-                        val (lookupCode, listing) = CollectorHttp(applicationContext).get("${config.server}/api/sources", config.connectionToken())
-                        lookupCode == 200 && IngressV2Protocol.sourcePaused(source.id, listing)
-                    }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false }
+                        applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }.sourcePaused(source)
+                    }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false })
                     store.status(source.id, if (paused) "paused" else "ack")
-                    if (!paused) blocked = true
+                    if (!paused) {
+                        blocked = true
+                        if (!source.binaryFiles()) store.next(source.id, target)?.let { store.rejectUpload(source.id, target, it) }
+                    }
                 } catch (_: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK); failed = true }
                 finally { dispatch.record(slice.bytes, slice.requests) }
             }
