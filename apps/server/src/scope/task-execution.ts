@@ -181,6 +181,11 @@ export class TaskExecution {
   }finally{if(this.modelRecovery.get(step.id)===fence)this.modelRecovery.delete(step.id);}
   grant.assert();this.authority.assert(context);return context;
  }
+ /** Host-only physical admission metadata, already pinned by a real M04 task
+  * lease. This exposes no model settings, rows, owner selector or new grant. */
+ processingResourceKeys(step:ExecutionStep){
+  this.assertTask(step);return this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>JSON.parse(String(row.resource_key)) as unknown).flatMap(value=>Array.isArray(value)&&value.length===2&&value[0]==='shared'&&typeof value[1]==='string'&&/^processor:[a-f0-9]{64}$/.test(value[1])?[value[1]]:[]);
+ }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
