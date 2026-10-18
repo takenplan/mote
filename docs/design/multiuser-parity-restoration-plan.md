@@ -21,7 +21,8 @@
 | REMOVE | 为隔离另写而漏业务的替代流程、隐式默认 owner、全局私人访问、无依据的新固定上限/全量扫描/用户手工步骤/静默降级；对应模块查清实际生产消费者后删除陈旧假设。 |
 | EXCEPTION | 当前 wire/storage，拒绝旧格式、不做迁移/兼容/旧记录修补；已取消的内部 Agent 字符限制继续取消，外部响应合同保留；录音备份不自动 ASR，显式处理与普通音频原行为保留；Dev 私有文件凭据、Prod 系统保护和第三方 CLI 凭据政策保留。 |
 | KEEP 安全边界 | 独立审核、撤权/停用/删除/取消、跨 await 与迟到响应校验、真实外部结果未知、数据恢复不铸造执行权限；修复体验不降低这些边界。 |
-| UNKNOWN | AND-D01账号/设备规则与LIFE-L06未来可信授权点待用户答复；L06保留策略意图并撤旧执行权方向已确定。MCP结构必要性/协议及真实模型、供应商、设备/CI仍需证据，缺证据保持安全边界。 |
+| CHANGE 已决 | 用户已选L06重新登录后按原开关继续未来任务，保留策略意图/撤旧执行权/已完成与未知外部事实；AND-D01采集/隐私/同步偏好按账号独立保存，OS权限与硬件仍设备级。无旧版迁移。 |
+| UNKNOWN | MCP结构必要性/协议、既有无head删除记录的未修边界及真实模型、供应商、设备/CI仍需独立证据；缺证据保持安全边界。 |
 
 每个模块候选须列出 KEEP/CHANGE/REMOVE/EXCEPTION/UNKNOWN，并检查代码、测试、UI、配置、后台任务、文档、ADR、prompt、agent 指令中的旧假设。旧 legacy builder 仅作行为对照，不能替代当前 production composition；不恢复旧生产旁路。
 
@@ -62,11 +63,11 @@
 | EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收 |
-| AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收；D01规则待用户 |
+| AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收；D01偏好按账号独立已定 |
 | WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；作者检查进行中，独验UNRUN |
 | EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收 |
 | ACTION / ACTION-A01..A04 | [ACTION开发](codex://threads/01a14e8f-7b96-7d00-9b68-d9d30aea97dd) | `codex/parity-actions-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收 |
-| LIFE / LIFE-L01..L06 | [LIFE开发](codex://threads/01a14e8f-7dc6-7fb3-a058-cb39df965cb9) | `codex/parity-lifecycle-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收；L06授权点待用户 |
+| LIFE / LIFE-L01..L06 | [LIFE开发](codex://threads/01a14e8f-7dc6-7fb3-a058-cb39df965cb9) | `codex/parity-lifecycle-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收；L06重新登录按原开关继续已定 |
 
 建议依赖顺序不构成新范围：先修用户控制/凭据/数据生命周期，再补持续推进与完整产物，随后恢复发现/配置/UI，最后收敛结构及恢复未知项。重点接缝为 FILE→ASK/MEM、CONN→FILE/MEM、EXEC→所有 Operation 消费者与 MEM 发布、CONFIG→所有模型入口、ACTION→Android 日历、LIFE→各域。共享文件修改由 PM 明确 owner；冲突由涉及 owner 复核。
 
@@ -82,12 +83,12 @@
 | `scope/ask.ts` | ASK / EXEC | ASK业务与EXEC注册lane/Operation片段先协调，不能整文件覆盖。 |
 | 录音recipe与Memory host port | MEM / CONN | MEM安装recording配方与ensureRecordingRecipe；CONN负责canonical/locator/媒体/周期及app参数接线，待SHA。 |
 | 通用segment语义 / Coding理解 | ACTION / MEM | ACTION恢复旧bounded screen/完整segment producer→semantic actionCues→消费闭环及触发/提示/checkpoint；MEM仅Coding理解/workRecords/events，actionCues仍空。不只修consumer，不扩大所有非录音资料范围。 |
-| 配置/model-resources/model-query、配置及Usage UI | CONFIG / FILE、ASK、MEM、EXT | CONFIG主秘密/快照/runtime/草稿/统计/控件；FILE attribution由双方协调。 |
+| 配置/model-resources/model-query、配置及Usage UI | CONFIG / FILE、ASK、MEM、EXT | CONFIG主秘密/快照/runtime/草稿/统计/控件及必要CentralAdmin/CentralModels Kotlin消费者；FILE attribution双方协调；storage专用控件依赖LIFE最小API精确SHA。 |
 | shared ModelFeature/embedding | ASK / CONFIG及exhaustive消费者 | 双方协调可选embedding功能，未选无chat fallback；共享消费者补编译/回归，不自动收费回填。 |
 | ScopedSummary、system/devices功能页 | WEB / CONFIG、CONN、EXT | WEB首页/设备；CONFIG专用配置；CONN负责Web与原生CentralRecordings阶段/独立错误/重试及原备份状态/回听/显式处理入口必要Kotlin消费者；EXT插件/MCP。相同文件按具体片段协调。 |
 | Android日历target/delivery | AND / ACTION | 不改原native合同；AND修真实WorkManager注册，ACTION修建议producer/批准。 |
 
-已确认工作树均在`/Users/utopiafar/.codex/worktrees/`：MEM `parity-memory-20261018/mote`，ASK `parity-ask-20261018/mote`，CONN `parity-connectors-20261018/mote`，EXEC `parity-execution/mote`，CONFIG `parity-configuration/mote`，DESKTOP `parity-desktop-20261018/mote`，AND `parity-android-20261018/mote`，WEB `parity-web-20261018/mote`，EXT `parity-extensions-20261018/mote`，LIFE `parity-lifecycle/mote`。FILE `parity-files-20261018/mote`；ACTION路径待owner回报，不按名称猜测。本集成负责人不在这些工作树操作。
+已确认工作树均在`/Users/utopiafar/.codex/worktrees/`：MEM `parity-memory-20261018/mote`，ASK `parity-ask-20261018/mote`，CONN `parity-connectors-20261018/mote`，EXEC `parity-execution/mote`，CONFIG `parity-configuration/mote`，DESKTOP `parity-desktop-20261018/mote`，AND `parity-android-20261018/mote`，WEB `parity-web-20261018/mote`，EXT `parity-extensions-20261018/mote`，LIFE `parity-lifecycle/mote`。FILE `parity-files-20261018/mote`；ACTION `parity-actions/mote`，不按名称猜测。本集成负责人不在这些工作树操作。
 
 ## 候选、独立验收与集成
 
@@ -125,8 +126,33 @@
 | P005 | EXEC | native及两处SQLite probe EXIT0 | 已完成释放 | Node26.11.1 ABI147 |
 | P006 | FILE | native及两处SQLite预检EXIT0 | 已完成释放 | Node26.11.1 ABI147 |
 | P007 | DESKTOP | native/Electron及两处SQLite预检EXIT0 | 已完成释放 | Node26.11.1 ABI147；无UI/lock更改 |
-| Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_SLOT；作者冻结定向/浏览器待完成 | 完整gate未运行；非独立PASS |
+| P008 | ACTION | native/Electron及两处SQLite probe EXIT0 | 已完成释放 | Node26.11.1 ABI147；非业务PASS |
+| Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_SLOT；作者冻结定向/浏览器已报告完成 | 完整gate未运行；非独立PASS |
 | Q001 / Q003 / Q004 / Q005 / Q006 | FILE / EXT / LIFE / ASK / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 新增Android/shared影响按最终输入重选 |
+
+## 全局对话槽位与待办（用户最新约束）
+
+后续同时执行对话目标5、上限6，PM和driver也计入。当前已运行任务继续，不中断/取消；现有子代理继续完成，完成后不补位。不再创建chat或spawn子代理，不因FYI唤醒idle/notLoaded的开发或验收chat。重启须先由PM/driver检查总active并登记槽位，超额存续自然收敛，不新增占用。等待检查/前置/验收的模块留下精确待办后结束回合，不空转。
+
+2026-10-18只读list_threads快照：本轮13 active（PM、driver、11开发），4独立验收及WEB均idle；独立验收为PREPARATION_READY；它们没有运行PASS。此为快照，不保证后续实时状态；每次释放前重新读取。当前超6来自已有运行，不主动打断。
+
+| 槽位对象 | 快照状态 | 当前工作 / 释放条件 |
+| --- | --- | --- |
+| PM / driver | active / active | 范围监督 / 首阶段文档checkpoint与排队；两者计入总量 |
+| MEM / FILE / ASK / CONN / EXEC / CONFIG | 6 active存续 | 代码与定向收尾；需等前置/检查时登记后结束，不补子代理 |
+| DESKTOP / AND / EXT / ACTION / LIFE | 5 active存续 | R001 Android进行中；其余收尾/前置，等候时结束回合 |
+| WEB | idle，CANDIDATE等待Q002 | 冻结定向12项及真实main隐藏浏览器作者报告EXIT0；不唤醒，gate/PR/独验均未完成 |
+| 领域 / 控制 / 客户端 / 最终验收chat | 4 idle，准备已完成 | 禁止为政策FYI唤醒；精确候选通知先排队，等总active<6再逐个释放 |
+
+| 待办号 | 待通知/执行对象 | 具体条件与范围 | 当前状态 |
+| --- | --- | --- | --- |
+| G001 | WEB Q002 | 冻结f8f684b6定向/浏览器完成，R001释放重资源，且新执行回合有全局槽；运行affected后才PR/独验 | WAIT；不提前唤醒 |
+| G002 | CONN native C07 | 精确Kotlin/helper/JVM/instrumentation候选就绪，R001后单独资源窗，槽位允许；原backup固定true不增toggle | WAIT_CANDIDATE |
+| G003 | AND D2及Ask组合 | D2新part/commit upload_expired生产commit、Android与Ask消费者精确SHA冻结；临时组合而非PR夹带/正式合入 | WAIT_DEPENDENCY |
+| G004 | 四独立验收chat | 排队传达已决L06/D01、精确PR/head/base/依赖与新消费者清单，闲置不唤醒；一次一项 | WAIT_GLOBAL_SLOT |
+| G005 | 所有完整affected请求 | Q001 FILE/Q003 EXT/Q004 LIFE/Q005 ASK/Q006 MEM及后续EXEC/ACTION/DESKTOP/CONFIG；最终dry-run+clean SHA齐备，资源/全局槽双重满足 | WAIT_CANDIDATE_OR_SLOT |
+
+已决政策立即适用于活跃owner；未运行验证仍UNRUN。任何新产品分歧仍送PM，政策已答项不再重复提问。
 
 ## 最终验收与持续记录
 
