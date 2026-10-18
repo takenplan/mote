@@ -132,6 +132,18 @@ Ordinary import must not regain shell/host-path authority. Administrator-only
 host import stays separate. Model interpretation uses existing M04 leases/M05
 tasks and generated external transports in validation; no semantic keyword rules.
 
+An explicitly selected, configured SHA-pinned Python Source Pack receives every
+supplied analysis input: original containers and their expanded members, including
+media and metadata. The fixed pack accounts for these originals in its validated
+dispositions and attachment indexes. Container expansion remains host-owned, but
+the host does not also classify those pack inputs as independent media or append
+duplicate container dispositions. Imports without a fixed pack retain the
+existing host media/metadata partition. The fixed pack retains its script pin.
+Both paths use bounded workspaces, manifest validation, owner/current-generation
+checks and exact preview confirmation. Attachment processing still requires the
+current parent's declaration and real retained archive link; a declaration alone
+grants no bytes.
+
 The joint thread owns this shared backend adaptation. M13/M14/M15 own their
 original thin UI/native consumers and final acceptance. They were notified to
 avoid a second backend projection. Until a tested shared freeze is published,
