@@ -77,7 +77,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         require(receipt.getBoolean("queued") && Regex("[a-f0-9]{64}").matches(receipt.getString("taskId")))
         val task = api.get("/api/tasks/" + receipt.getString("taskId"))
         val operation = "file-retry:" + SourceRules.hash(JSONArray().put(intent.getString("originalRef")).put(operationId).toString())
-        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "task:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
+        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "file-retry:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
         require(task.getString("kind") == if (request.getString("stage") == "summary") "processing.derivatives" else "processing.pipeline")
         check(ownsSelectedAccount() && ui.client === api)
         clearFileRetry(id, operationId)

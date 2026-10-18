@@ -47,3 +47,11 @@ The Context DAG uses the same engine. Domain code validates input fingerprints, 
 ## Trusted delegated lanes (2026-10-10)
 
 The existing delegated-agents pool derives lanes from host-registered coordinator profiles; children inherit their parent lane. Background effective capacity is min(agentConcurrency,32), interactive capacity is interactiveConcurrency, with no borrowing/preemption. Claims count leases by lane inside the same SQLite transaction, including other connections. Durable query recovery preserves successful child artifacts and a bounded workspace; citation permission still requires fresh delivery. Capacity cooldowns do not consume failed-processing attempts; typed actual failures retain their registered finite policy. See [ADR](adr-system-refactor.md).
+
+
+The scoped production composition binds the existing `ask.models` pool to trusted
+interactive/background lanes and binds `memory.models` to the live instance
+Memory concurrency setting. A settings publication wakes durable queued work;
+a reduction leaves running work to settle normally. Physical harness gates,
+account fairness, resource locks and commit fences remain in place. See the
+[scoped parity supersession and regression matrix](validation/execution-parity-2026-10-18.md).
