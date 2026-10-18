@@ -34,6 +34,7 @@
     "privacy": "node --import tsx scripts/privacy-gateway.ts",
     "test:privacy": "node --import tsx scripts/test-privacy.ts",
     "mote": "node scripts/mote.mjs",
+    "connectors:prepare": "node scripts/connector-runtime.mjs",
     "up": "node scripts/mote.mjs run-all --profile dev",
     "dev:workspace": "concurrently -k -n server,web \"npm run dev -w @mote/server\" \"npm run dev -w @mote/web\"",
     "test:profiles": "node --test scripts/validation/profile-scoped-startup.test.mjs",

@@ -5,7 +5,7 @@
 ## 接入与首次同步
 
 1. 从中央「新增数据源 → 飞书文档」进入；Mac「添加 → 连接飞书文档」打开同一中央页面，Android 提供原生连接与范围表单。云同步由中央执行，不依赖页面或采集客户端保持打开。
-2. 完成专用账号的用户身份只读授权。缺少服务端 CLI 时可安装固定官方 `@larksuite/cli@1.0.85` 到当前资料库 `connectors/lark-runtime/package`，不全局安装或使用 sudo。首次创建应用或填入 App ID / Secret 是必要时展开的设置步骤。
+2. 在本人连接内完成用户身份只读授权。部署阶段准备固定官方 Lark CLI 1.0.98，页面只重新检测、配置应用和授权；不安装软件或借用宿主 CLI 登录态。缺失或版本不符时，管理员运行当前 release 的 `connectors-prepare`。首次创建应用或填入 App ID / Secret 是必要时展开的设置步骤。
 3. 选择自动发现“我创建的、我编辑过的、平台打开筛选命中的”文档，首次默认最近 30 天。也可固定跟踪指定 docx / wiki 文档、文件夹和知识库分支，或明确排除某些文档。旧选择没有发现配置时继续只读取原先明确的范围。
 4. 保存范围并预览。预览只读取发现元信息，显示实际发现结果，不读取正文、不发布活动、不启动 Memory。确认后才进行首次正文同步；扩展或修改范围后重新预览与确认。
 5. 来源详情显示本轮发现、正文和活动状态、待处理及失败项。可仅重试失败文档，已成功部分继续可用。设置的保存、手动立即同步、暂停来源及断开分别生效。
@@ -31,32 +31,28 @@
 
 失败保留已归档部分和上次成功时间。来源暂停、取消或权限变化在远端读取和发布阶段复核；重新授权、保存说明和保存范围不恢复用户手动暂停。换账号后暂停旧来源并清空范围，新账号不继承旧选择。
 
-空结果、权限丢失、未完成扫描或窗口外消失均不推断为上游删除。取消选择和断开停止后续读取，保留已有归档；彻底删除使用既有 owner 删除操作。断开不等于飞书撤权，也不删除可能与其他配置共享的 CLI 凭据。
+空结果、权限丢失、未完成扫描或窗口外消失均不推断为上游删除。取消选择和断开停止后续读取，保留已有归档；彻底删除使用既有 owner 删除操作。断开不等于飞书撤权；当前多用户连接会清理本实例的隔离凭据并递增 storage generation，保留已归档资料。
 
 ## 配置与凭据
 
-`connectors/lark.json` 保存范围、账号指纹和确认状态，目录 0700、文件 0600、原子写入；发现与待处理状态位于中央 SQLite。普通归档导出不包含连接器配置或外部凭据，迁移服务需重新配置和授权。
+当前连接设置、范围、账号指纹与确认状态属于本人实例，配置和 CLI 凭据进入部署、用户、实例、storage generation 与账号 epoch 共同限定的私有 vault/目录。普通个人归档不带外部凭据；本次不迁移、修复或兼容旧登录态。
 
-`LARKSUITE_CLI_CONFIG_DIR` 指向当前资料库专用配置，子进程清理继承的其他 Agent / Lark 身份环境变量。CLI 配置隔离不等于操作系统钥匙串隔离：macOS 官方 CLI 仍按系统账号、appId 和 userOpenId 存储凭据；Linux 使用指定数据目录。建议使用专用应用及服务系统账号。录音 Provider 仍保留其原有中央登录策略，本次不静默迁移凭据。
+CLI 使用隔离 HOME、config/data/cache/log/temp 目录，并清除继承的 Agent/供应方身份环境变量。macOS 在隔离 HOME 的 `Library/Application Support/lark-cli` 预置独立 `master.key.file`；新版 DPoP 签名密钥使用同一受隔离存储根。Linux 使用隔离数据目录。Windows 仍因上游 HKCU 凭据后端无法满足此隔离契约而显式拒绝。录音和文档连接各自配置及授权，不借用另一实例的账号。
 
-管理 API 仅接受节点 owner 身份，设备与 MCP 凭据不能安装、登录或改范围。所有响应禁止缓存，CLI 使用固定参数和 `shell:false`。日志只保存固定错误码和数值，不记录正文、原始 CLI 输出、Secret、设备码或 token。远端部署继续要求 TLS 与强访问令牌。
+仅本人会话可登录、配置和改范围，设备 ingress/MCP 凭据不能获得这些权限。CLI 使用固定参数和 `shell:false`；日志只保存固定错误码和数值，不记录正文、原始 CLI 输出、Secret、设备码或 token。
 
 ## 管理接口
 
+当前多用户接口统一按实际连接 ID：
+
 | 方法与路径 | 用途 |
 | --- | --- |
-| GET /api/connectors/lark | 安全状态、当前任务及文档发现/失败状态，不执行 CLI |
-| POST /api/connectors/lark/check | 检测版本、应用及登录 |
-| POST /api/connectors/lark/install | 安装固定官方版本 |
-| POST /api/connectors/lark/setup | 创建应用 |
-| POST /api/connectors/lark/configure | 保存已有应用，Secret 经 stdin |
-| POST /api/connectors/lark/login | 按能力发起用户只读授权；`{calendar:true}` 明确申请首次加载可选日历所需权限 |
-| POST /api/connectors/lark/cancel | 取消任务 |
-| GET /api/connectors/lark/calendars | 列出可读日历 |
-| PUT /api/connectors/lark/selection | 保存明确的发现、固定范围、排除和周期选择 |
-| POST /api/connectors/lark/preview | 只发现元信息，返回本次预览 |
-| POST /api/connectors/lark/sync | 首次确认并同步；可用 `{document}` 重试已选失败文档 |
-| DELETE /api/connectors/lark | 断开并暂停，保留历史及凭据 |
+| GET /api/connectors/:id | 本人连接的安全状态、范围与文档 journal，不执行 CLI |
+| POST /api/connectors/:id/operations | 固定 `check/setup/configure/login/calendars/select/preview/sync-document` 操作，返回 M05 task |
+| POST /api/connectors/:id/sync | 通过同一任务执行器同步 |
+| POST /api/tasks/:taskId/cancel | 取消本人任务 |
+| GET /api/tasks/:taskId | 查看本人任务状态及授权进度 |
+| POST /api/connectors/:id/disconnect | 断开并清理本实例凭据，保留历史归档 |
 
 日历仍保留原生 instance_view、详情权限过滤、30 天分窗、全天时区及明确取消状态，不从缺失推断取消。
 

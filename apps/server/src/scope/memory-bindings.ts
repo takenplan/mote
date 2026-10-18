@@ -4,6 +4,7 @@ import {memoryProviderKey,memoryBodyDigest} from '../memory-provider-contract.js
 import {stageVerifiedMemoryWrite} from '../memory-provider-publication.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
 import {ExecutionFailure} from '../execution-engine.js';
+import {ConfigServiceError} from '../config-service.js';
 import {PrivateDataError,missing} from './private-data-sql.js';
 import type {UserContext} from './context.js';
 import type {TaskExecution,TaskRun} from './task-execution.js';
@@ -25,7 +26,7 @@ export class ScopedMemoryBindings {
   this.dispose=execution.register({kind:'memory.binding',pool:'memory.publication',concurrency:()=>4,policy:EXECUTION_POLICIES.control,parseInput:value=>taskSchema.parse(value),authorizeInput:(context,input)=>{this.owned(context,String(input.id));},resources:()=>[{scope:'user',key:'memory-publication'}],execute:run=>this.execute(run),commit:run=>{
    const {id}=taskSchema.parse(run.task.input),data=this.data(run.context),preparation=this.owned(run.context,id);this.assert(run.context,preparation);
    if(preparation.catalog_hash!==this.catalog(data))throw new PrivateDataError('conflict',409);data.sql.run("UPDATE mm_binding_preparations SET state='verified' WHERE user_id=$user AND id=?",id);
-  },classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','memory_binding_requires_attention')});
+  },classify:error=>error instanceof ExecutionFailure?error:error instanceof ConfigServiceError?new ExecutionFailure('blocked',error.code):new ExecutionFailure('blocked','memory_binding_requires_attention')});
  }
  private owned(context:UserContext,id:string){const data=this.data(context);data.state();const row=data.sql.get('SELECT * FROM mm_binding_preparations WHERE user_id=$user AND id=?',id) as Preparation|undefined;if(!row)throw missing();return row;}
  private assert(context:UserContext,preparation:Preparation){const data=this.data(context),lock=data.sql.get('SELECT operation_id FROM mm_binding_locks WHERE user_id=$user');if(lock?.operation_id!==preparation.id||memoryHash(data.binding())!==memoryHash(JSON.parse(preparation.source))||['cancelled','activated'].includes(preparation.state))throw new PrivateDataError('conflict',409);}

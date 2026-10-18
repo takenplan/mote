@@ -7,7 +7,7 @@ async function fixture(t:TestContext){
  const state={calendarCount:20},calls:{user:string;kind:string}[]=[];
  const f=await scopedCaptureFixture(t,{connectorTransports:{lark:scope=>async command=>{
   calls.push({user:scope.userId,kind:command.kind});
-  if(command.kind==='version')return 'lark-cli 1.0.85';
+  if(command.kind==='version')return 'lark-cli 1.0.98';
   if(command.kind==='status')return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'same-open-id',scope:'docx:document:readonly wiki:wiki:readonly search:docs:read space:document:retrieve calendar:calendar:readonly'}}});
   if(command.kind==='login')return JSON.stringify({verification_url:'https://accounts.feishu.cn/generated',device_code:'GENERATED_CODE',expires_in:600});
   if(command.kind==='complete')return '{}';

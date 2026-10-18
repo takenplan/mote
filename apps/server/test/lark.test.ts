@@ -41,7 +41,7 @@ async function connected(f:Awaited<ReturnType<typeof fixture>>){await f.connecto
 const selection={documents:[documentUrl],calendarIds:['cal-1'],pastDays:30,futureDays:90,timeZone:'Asia/Shanghai',autoSync:false};
 
 test('only fixed read operations reach CLI and input references cannot become commands or arbitrary URLs',()=>{
- assert.deepEqual(larkArguments({kind:'document',document:'--help'}).slice(0,7),['docs','+fetch','--api-version','v2','--as','user','--doc']);
+ assert.deepEqual(larkArguments({kind:'document',document:'--help'}).slice(0,5),['docs','+fetch','--as','user','--doc']);
  for(const v of ['--help','https://evil.invalid/docx/abcdefgh','https://feishu.cn.evil.invalid/docx/abcdefgh','https://user:secret@fixture.feishu.cn/docx/abcdefgh','file:///etc/passwd','https://fixture.feishu.cn/docx/abcdefgh/extra'])assert.throws(()=>documentReference(v));
  assert.equal(documentReference(documentUrl+'?share=private#anchor'),documentUrl);
  assert.equal(authorizationUrl('javascript:alert(1)'),undefined);

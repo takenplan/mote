@@ -106,6 +106,18 @@ export function checkProductionImports(directory=root){
   // M13's owner trace sink reuses only the existing event-size constant. This
   // module is pure configuration validation and opens no log or legacy store.
   allowed.add(sourceRoot+'/log-retention-config.mjs');
+  // M05/M06 share only physical-resource identity and typed busy metadata;
+  // the executor/ProcessingHost supply their own existing storage and grants.
+  // M06's execution-fact reader returns authenticated metadata, never a body.
+  // M04's query wrapper reads M07's fixed validation-code catalog, while M10
+  // projects vendor authorization URLs. These exact imports grant no runtime
+  // access to legacy stores and are not allowances for other scoped callers.
+  const hostHelpers=new Map([
+    [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
+    [sourceRoot+'/scope/processing.ts',new Set([sourceRoot+'/processor-admission.ts',sourceRoot+'/media-execution-facts.ts'])],
+    [sourceRoot+'/scope/model-query.ts',new Set([sourceRoot+'/memory-validation.ts'])],
+    [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
+  ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
@@ -129,7 +141,8 @@ export function checkProductionImports(directory=root){
         // stateless algorithms. The probe has a generated reader and the catalog
         // only lists the fixed connection; legacy registries/stores stay barred.
         const modelInspection=relative(directory,path)==='apps/server/src/scope/configuration.ts'&&[sourceRoot+'/model-catalog.ts',sourceRoot+'/model-connection-probe.ts'].includes(target);
-        if(entries.includes(path)&&!target.startsWith(sourceRoot+'/scope/')&&!allowed.has(target)&&!modelInspection)failures.push(`unscoped production import: ${relative(directory,path)} -> ${target}`);
+        const hostHelper=hostHelpers.get(relative(directory,path))?.has(target);
+        if(entries.includes(path)&&!target.startsWith(sourceRoot+'/scope/')&&!allowed.has(target)&&!modelInspection&&!hostHelper)failures.push(`unscoped production import: ${relative(directory,path)} -> ${target}`);
         if(target.startsWith(sourceRoot+'/')&&/\.(?:[cm]?tsx?|[cm]?js)$/.test(target))pending.push(resolve(directory,target));
       }
       ts.forEachChild(node,visit);

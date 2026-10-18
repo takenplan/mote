@@ -19,11 +19,13 @@ import {modelSettingsSchema,modelTestMessage,type ModelDomain} from '../model-se
 import {providerModels,codexModels} from '../model-catalog.js';
 import {testModelConnection} from '../model-connection-probe.js';
 import {createAgent} from '@mote/agent';
+import {ExecutionFailure} from '../execution-engine.js';
+import {isLoopback,requestLocalJson} from '../local-http.js';
+import {ModelUsageLedger,modelTokensSchema,modelUsageReceiptSchema,portableUsageReceipt,type ModelUsageStart} from './model-usage.js';
 
 const priceDomain=z.object({items:z.array(priceSchema).max(500).default([])}).strict();
 const nonnegative=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const tokensSchema=z.object({measurement:z.literal('thread_cumulative').optional(),complete:z.boolean().optional(),requests:nonnegative,reportedRequests:nonnegative,inputTokens:nonnegative,outputTokens:nonnegative,totalTokens:nonnegative,cacheReadTokens:nonnegative.optional(),cacheWriteTokens:nonnegative.optional(),reasoningTokens:nonnegative.optional()}).strict();
-const usageInput=z.object({status:z.enum(['completed','failed']),durationMs:nonnegative,tokens:tokensSchema.optional()}).strict();
+const usageInput=z.object({status:z.enum(['completed','failed']),durationMs:nonnegative,tokens:modelTokensSchema.optional()}).strict();
 const clone=<T>(v:T):T=>structuredClone(v);
 const safeView=(service:ConfigService):ConfigServiceView=>({...service.view(),configFile:'user-config:mote.yaml'});
 type State={generation:number;deleted:number;restore_operation:string|null};
@@ -84,6 +86,7 @@ export class Configurations {
   private readonly opening=new Map<string,Promise<Entry>>();
   private readonly lifecycleQueue=new Map<string,Promise<void>>();
   private readonly leases=new WeakMap<ModelLease,PrivateLease>();
+  private readonly usageLedger:ModelUsageLedger;
   private readonly domains=new Map<string,(context:UserDataSubject)=>ConfigDomainRegistration>();
   private closed=false;
   private constructor(private readonly options:{directory:string;db:DatabaseSync;authority:UserContextAuthority;accounts?:Accounts;lifecycleAuthority?:LifecycleAuthority},readonly instance:ConfigService){
@@ -94,6 +97,7 @@ export class Configurations {
       CREATE TABLE IF NOT EXISTS model_resource_revision(singleton INTEGER PRIMARY KEY CHECK(singleton=1),revision INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS user_model_credential_generations(user_id TEXT NOT NULL,profile_id TEXT NOT NULL,generation INTEGER NOT NULL,recovery_generation INTEGER NOT NULL,present INTEGER NOT NULL,has_credentials INTEGER NOT NULL,fingerprint TEXT,components TEXT NOT NULL,PRIMARY KEY(user_id,profile_id));
       CREATE TABLE IF NOT EXISTS user_model_snapshot_revision(user_id TEXT PRIMARY KEY,revision INTEGER NOT NULL);`);
+    this.usageLedger=new ModelUsageLedger(options.db);
     this.resources=new ModelResources(instance,{
       load:()=>options.db.prepare('SELECT id,generation,fingerprint FROM model_resource_generations').all().map(r=>({id:String(r.id),generation:Number(r.generation),...(r.fingerprint?{fingerprint:String(r.fingerprint)}:{})})),
       save:(id,state)=>{options.db.prepare('INSERT INTO model_resource_generations VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET generation=excluded.generation,fingerprint=excluded.fingerprint').run(id,state.generation,state.fingerprint??null);},
@@ -245,7 +249,7 @@ export class Configurations {
     });
   }
   private usage(userId:string){
-    const items=(this.options.db.prepare('SELECT json FROM user_model_usage WHERE user_id=? ORDER BY id').all(userId) as {json:string}[]).map(r=>JSON.parse(r.json) as UsageReceipt);
+    const items=(this.options.db.prepare("SELECT json FROM user_model_usage WHERE user_id=? AND json_extract(json,'$.issuance.issuedAt') IS NOT NULL AND json_extract(json,'$.issuance.executionStarted') IS NOT 0 ORDER BY id").all(userId) as {json:string}[]).map(r=>JSON.parse(r.json) as UsageReceipt);
     return {items,total:usageTotals(items)};
   }
   async lease(context:UserContext,feature:ModelFeature,operationId:string):Promise<ModelLease>{return this.leaseReference(context,feature,operationId);}
@@ -300,7 +304,7 @@ export class Configurations {
     this.assertLease(lease);return {status:'restored',lease};
   }
   /** A domain operation inherits a retained immutable model connection and
-   * configuration while receiving its own durable usage identity. No current
+   * configuration. Accounting fragments have their own durable identity. No current
    * selection or caller-supplied endpoint/key is consulted as a replacement. */
   async forkLease(context:UserContext,snapshotId:string,expectedOperationId:string,operationId:string):Promise<ModelLease>{
     this.options.authority.assert(context);if(!validScopeId(operationId))throw new ConfigServiceError('config_invalid');
@@ -331,15 +335,39 @@ export class Configurations {
   async withModel<T>(lease:ModelLease,work:(settings:Readonly<ModelSettings>,configuration:Readonly<ConfigDocument>)=>Promise<T>):Promise<T>{
     const value=this.assertLease(lease);let result:T;
     try{result=await work(clone(value.settings),clone(value.configuration));}
-    catch{this.assertLease(lease);throw new ConfigServiceError('config_unavailable');}
+    catch(error){this.assertLease(lease);if(error instanceof ConfigServiceError||error instanceof ScopeError)throw error;throw new ExecutionFailure('permanent','model_execution_failed');}
     this.assertLease(lease);return result;
   }
+  startUsage(lease:ModelLease,options:ModelUsageStart={}){
+    const value=this.assertLease(lease);
+    return this.usageLedger.start({userId:lease.userId,leaseId:lease.id,provider:lease.provider,model:lease.model,operation:lease.feature,operationId:lease.operationId,price:value.price},()=>{this.assertLease(lease);},options);
+  }
+  /** M16 may erase only an exact persisted worker receipt after M06 retirement.
+   * This uses the retained transport for deletion, never restores a model lease,
+   * and exposes neither credentials nor a general-purpose request capability. */
+  async eraseWorkerReceipt(subject:UserDataSubject,input:{snapshotId:string;requestId:string;scope:string}):Promise<'deleted'|'pending'>{
+    const request=z.object({snapshotId:z.string().uuid(),requestId:z.string().uuid(),scope:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(input);
+    const assert=()=>{
+      if(this.closed||'credentialId' in subject||subject.deploymentId!==this.options.authority.deploymentId||!this.options.lifecycleAuthority)throw new ScopeError('invalid_identity',403);
+      this.options.lifecycleAuthority.assert(subject);
+      if(subject.domain!=='processing'||subject.purpose!=='delete'||this.options.db.prepare('SELECT deleted FROM mp_state WHERE user_id=?').get(subject.userId)?.deleted!==1||!this.options.db.prepare('SELECT 1 FROM mp_worker_cleanup WHERE user_id=? AND request_id=? AND scope=? AND snapshot_id=?').get(subject.userId,request.requestId,request.scope,request.snapshotId))throw new ScopeError('invalid_identity',403);
+    };
+    assert();
+    try{
+      const snapshot=z.object({version:z.literal(1),deploymentId:z.literal(subject.deploymentId),userId:z.literal(subject.userId),feature:z.enum(['ocr','asr']),settings:modelSettingsSchema}).passthrough().parse(this.snapshots.read(subject.userId,request.snapshotId)),settings=snapshot.settings;
+      const endpoint=new URL(settings.baseUrl);if(settings.protocol!=='mote-media'||!isLoopback(settings.baseUrl)||!settings.apiKey||endpoint.username||endpoint.password)return 'pending';
+      endpoint.pathname='/executions/'+request.requestId;endpoint.search='';endpoint.hash='';assert();
+      const result=z.object({version:z.literal(1),requestId:z.literal(request.requestId),deleted:z.literal(true)}).strict().parse(await requestLocalJson(endpoint,{method:'DELETE',headers:{Authorization:'Bearer '+settings.apiKey,'X-Mote-Request-Scope':request.scope},signal:AbortSignal.timeout(10000),limit:4096}));
+      assert();return result.deleted?'deleted':'pending';
+    }catch{assert();return 'pending';}
+  }
+  /** One completed host measurement. Repeated independent consumptions must
+   * remain separate even when they share a lease; stream adapters use a meter. */
   recordUsage(lease:ModelLease,input:{status:'completed'|'failed';durationMs:number;tokens?:TokenUsage}){
-    const value=this.assertLease(lease),usage=usageInput.parse(input);
-    const receipt:UsageReceipt={id:lease.id,provider:lease.provider,model:lease.model,operation:lease.feature,attribution:{operationId:lease.operationId,agentId:'__unknown__',moduleId:'__unknown__',skillId:null},createdAt:new Date().toISOString(),...usage,estimatedCost:estimateCost(usage.tokens,value.price),currency:value.price?.currency??'USD',...(value.price?{price:value.price}:{})};
-    const old=this.options.db.prepare('SELECT json FROM user_model_usage WHERE user_id=? AND id=?').get(lease.userId,lease.id);
-    if(old)return JSON.parse(String(old.json)) as UsageReceipt;
-    this.options.db.prepare('INSERT INTO user_model_usage VALUES(?,?,?)').run(lease.userId,lease.id,JSON.stringify(receipt));return clone(receipt);
+    const usage=usageInput.parse(input),meter=this.startUsage(lease);meter.issued();if(usage.tokens)meter.update(usage.tokens);
+    const receipt=meter.finish(usage.status);receipt.durationMs=usage.durationMs;
+    receipt.createdAt=new Date(Date.parse(receipt.createdAt)-usage.durationMs).toISOString();receipt.issuance!.issuedAt=receipt.createdAt;
+    this.options.db.prepare('UPDATE user_model_usage SET json=? WHERE user_id=? AND id=?').run(JSON.stringify(receipt),lease.userId,receipt.id);return receipt;
   }
   private async forget(userId:string){const pending=this.opening.get(userId);if(pending)await pending.catch(()=>{});const old=this.entries.get(userId);this.entries.delete(userId);if(old)await old.service.close();}
   private async serializeLifecycle<T>(userId:string,work:()=>Promise<T>):Promise<T>{
@@ -360,7 +388,7 @@ export class Configurations {
       for(const domain of entry.service.view().domains)if(!['models','modelPrices'].includes(domain.id)){
         if(domain.fields.some(f=>f.sensitive))delete document[domain.id];
       }
-      return {domain:'configuration',version:1,deploymentId:context.deploymentId,userId:context.userId,payload:{document,usage:this.usage(context.userId).items,credentialsIncluded:false,omittedDomains:entry.service.view().domains.filter(d=>!Object.hasOwn(document,d.id)).map(d=>d.id)}};
+      return {domain:'configuration',version:1,deploymentId:context.deploymentId,userId:context.userId,payload:{document,usage:this.usage(context.userId).items.map(portableUsageReceipt),credentialsIncluded:false,omittedDomains:entry.service.view().domains.filter(d=>!Object.hasOwn(document,d.id)).map(d=>d.id)}};
       }finally{if(!('credentialId' in context)){if(this.entries.get(context.userId)===entry)this.entries.delete(context.userId);await entry.service.close();}}
     },
     deleteUser:async(context,operationId)=>this.serializeLifecycle(context.userId,async()=>{
@@ -402,7 +430,7 @@ export class Configurations {
       // Portable user exports are not historical single-account backups. Until
       // M16's whole-instance coordinator supplies a mapped target, restoring
       // usage accepts only this module's validated credential-free receipts.
-      const receipts=payload.usage.map(item=>z.object({id:z.string().uuid(),provider:z.string().max(128),model:z.string().max(512),operation:z.enum(MODEL_FEATURES),attribution:z.object({operationId:z.string().refine(validScopeId),agentId:z.literal('__unknown__'),moduleId:z.literal('__unknown__'),skillId:z.null()}).strict(),createdAt:z.string().datetime(),durationMs:nonnegative,status:z.enum(['completed','failed']),tokens:tokensSchema.optional(),estimatedCost:z.number().finite().nonnegative().nullable(),currency:z.enum(['USD','CNY']),price:priceSchema.optional()}).strict().parse(item));
+      const receipts=payload.usage.map(item=>modelUsageReceiptSchema.extend({operation:z.enum(MODEL_FEATURES),status:z.enum(['completed','failed'])}).parse(item));
       if(new Set(receipts.map(r=>r.id)).size!==receipts.length)throw new ConfigServiceError('config_invalid');
       const payloadHash=restoreHash({domain:archive.domain,version:archive.version,deploymentId:archive.deploymentId,userId:archive.userId,payload:{...payload,usage:receipts}});
       const readJournal=()=>this.options.db.prepare('SELECT operation_id,payload_hash,generation,target_hash,staging_id FROM user_configuration_restore_journal WHERE user_id=?').get(context.userId) as RestoreJournal|undefined;
@@ -459,5 +487,5 @@ export class Configurations {
       }finally{rmSync(staging,{force:true});}
     }),
   };
-  async close(){this.closed=true;await Promise.allSettled([...this.opening.values(),...this.lifecycleQueue.values()]);await Promise.all([...this.entries.values()].map(e=>e.service.close()));this.snapshots.close();this.resources.close();await this.instance.close();}
+  async close(){this.closed=true;await Promise.allSettled([...this.opening.values(),...this.lifecycleQueue.values()]);await Promise.all([...this.entries.values()].map(e=>e.service.close()));this.usageLedger.close();this.snapshots.close();this.resources.close();await this.instance.close();}
 }

@@ -1,8 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import {createAgent,type ContextReader,type ContextRecord} from '@mote/agent';
-import {transcriptSchema,calendarSchema,sourceItemSchema,type Transcript,type TokenUsage} from '@mote/shared';
+import {type ContextReader,type ContextRecord} from '@mote/agent';
+import {transcriptSchema,calendarSchema,sourceItemSchema,type Transcript} from '@mote/shared';
 import {proposalInput,correction,matchSchema,structured,reviewPrompt} from '../file-review-contract.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
 import {ExecutionFailure} from '../execution-engine.js';
@@ -16,6 +16,7 @@ import type {UserContext} from './context.js';
 import type {PrivateData} from './private-data.js';
 import type {UserIngress} from './ingress.js';
 import {TaskError,type TaskExecution,type TaskRun} from './task-execution.js';
+import {queryWithUsage} from './model-query.js';
 
 type Snapshot={input:ProcessingInput;artifactId:string;materialId:string;materialRevision:string;original:Original;record:any;transcript:Transcript};
 type Host={snapshot(context:UserContext,ref:string):Snapshot;read(context:UserContext,ref:string):void;current(userId:string,input:ProcessingInput):boolean;io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>):Promise<T>;publish(context:UserContext,ref:string,artifactId:string,transcript:Transcript,key:unknown):{status:string;artifactId:string}};
@@ -58,14 +59,12 @@ export function processingReviews(runtime:ScopedRuntime,db:DatabaseSync,executio
   run.grant.commit(()=>{bound(run.context,input);sql.run('DELETE FROM mp_file_review_inputs WHERE user_id=$user AND review_id=?',input.reviewId);for(const [id,hash] of calendarPins)sql.run('INSERT INTO mp_file_review_inputs VALUES($user,?,?,?)',input.reviewId,id,hash);});
   const inputs:Inputs={contexts:[...contexts.values()],calendar:[...calendarPins].map(([id,hash])=>({id,hash}))},assert=()=>{run.grant.assert();try{bound(run.context,input);inputsCurrent(run.context,inputs);}catch(error){if(error instanceof PrivateDataError)throw new ExecutionFailure('stale','processing_input_changed');throw error;}};
   const selected=()=>{assert();return structuredClone(records);},reader:ContextReader={search:async()=>selected(),timeline:async args=>{const cursor=Number(args.cursor??0);if(!Number.isSafeInteger(cursor)||cursor<0||cursor>records.length)throw new PrivateDataError('invalid_cursor');const items=selected().slice(cursor,cursor+Math.min(100,Math.max(1,args.limit??8)));return {items,nextCursor:cursor+items.length<records.length?String(cursor+items.length):null};},evidence:async args=>selected().filter(record=>args.ids.includes(record.id)),activity:async()=>{assert();return {};},devices:async()=>{assert();return [];}};
-  const started=Date.now();let tokens:TokenUsage|undefined;
   const result=await host.io(run,base(input),()=>run.model!.withModel(async model=>{
    if(model.protocol==='mote-media')throw new ExecutionFailure('blocked','language_protocol_required');return run.services.get<UserIngress>('ingress').withWorkspace(workspace=>workspace.withDirectory(async temporaryRoot=>{
-    assert();const agent=createAgent({...model,requestTimeoutMs:model.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:assert});
-    try{return await agent.query({question:reviewPrompt(input.review.kind),signal:run.signal,evidenceIds:records.map(record=>record.id),evidenceRanges:records.map(record=>({id:record.id,offset:0,length:record.ocrText.length})),assertContextAuthority:assert,onUsage:value=>{tokens=value;}});}finally{await agent.close();}
+    assert();return queryWithUsage(run.model!,{...model,requestTimeoutMs:model.modelRequestTimeoutMs,reader,temporaryRoot,authorizeModelRequest:assert},{question:reviewPrompt(input.review.kind),signal:run.signal,evidenceIds:records.map(record=>record.id),evidenceRanges:records.map(record=>({id:record.id,offset:0,length:record.ocrText.length})),assertContextAuthority:assert});
    }));
   }));
-  assert();run.model.recordUsage({status:'completed',durationMs:Date.now()-started,...(tokens?{tokens}:{})});
+  assert();
   const allowed=new Set(records.map(record=>record.id)),cited=new Set(result.citations.map(citation=>citation.id));if([...cited].some(id=>!allowed.has(id)))throw new StoreError('Review cites unavailable evidence',502);
   let payload:any;
   if(input.review.kind==='calendar'){

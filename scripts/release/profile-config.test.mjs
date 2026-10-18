@@ -60,6 +60,6 @@ test('Docker model paths share the YAML mount target and reject collisions with 
  const p=await loadProfile(paths),config=JSON.parse(await compose(p,['config','--format','json'],{capture:true}));
  assert.equal(p.modelDirectory,raw.media.modelDirectory);
  for (const service of ['mote','ocr-worker','asr-worker','storage-init']) assert.equal(config.services[service].volumes.find(volume=>volume.source==='mote-models').target,raw.media.modelDirectory);
- assert.equal(config.services['storage-init'].command.at(-1),raw.media.modelDirectory);
- for (const path of ['/','/config','/config/models','/data','/data/models','/app','/app/models','relative-models']) {raw.media.modelDirectory=path;await writeFile(paths.configFile,serializeConfigDocument(raw));await assert.rejects(loadProfile(paths),/media.modelDirectory/);}
+ assert.equal(config.services['storage-init'].command.at(-2),raw.media.modelDirectory);assert.equal(config.services['storage-init'].command.at(-1),'/worker-facts');
+ for (const path of ['/','/config','/config/models','/data','/data/models','/app','/app/models','/worker-facts','/worker-facts/models','relative-models']) {raw.media.modelDirectory=path;await writeFile(paths.configFile,serializeConfigDocument(raw));await assert.rejects(loadProfile(paths),/media.modelDirectory/);}
 });

@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, writeFile, readFile, rm, chmod} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {randomUUID} from 'node:crypto';
 import {ensureMediaRuntime, probeMediaCommands, mediaEnvironment, startMediaWorkers} from './media-workers.mjs';
+const workerCleanups=new Map();
+const stopWorkerBeforeFiles=(root,close)=>workerCleanups.set(root,[...(workerCleanups.get(root)??[]),close]);
 
 const fixture = async t => {
   const root=await mkdtemp(join(tmpdir(),'mote-workers-'));
-  t.after(()=>rm(root,{recursive:true,force:true}));
+  t.after(async()=>{for(const close of (workerCleanups.get(root)??[]).reverse())await close();workerCleanups.delete(root);await rm(root,{recursive:true,force:true,maxRetries:3,retryDelay:50});});
   await mkdir(join(root,'scripts'));
   for(const name of ['audio','ocr'])await writeFile(join(root,'scripts',`requirements-${name}.txt`),'generated fixture');
   return root;
@@ -62,11 +65,12 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   await writeFile(join(root,'delay'),'1.35');
   await mkdir(join(root,'bin'));await writeFile(join(root,'bin/ffmpeg'),'#!/bin/sh\nexit 0\n');await chmod(join(root,'bin/ffmpeg'),0o755);
   await writeFile(join(root,'worker.py'),await readFile(new URL('./transcription-server.py',import.meta.url)));
+  await writeFile(join(root,'mote_execution_facts.py'),await readFile(new URL('./mote_execution_facts.py',import.meta.url)));
   const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
   const python=execFileSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim();
   const child=spawn(python,[join(root,'worker.py'),'--model',model,'--segmentation-model',segmentation,'--speaker-model',embedding,'--wespeaker-model',optional,'--port',String(port),'--timeout','2'],{cwd:root,env:{PATH:join(root,'bin'),LANG:process.env.LANG,PYTHONPATH:root,MOTE_TRANSCRIPTION_TOKEN:'generated-token'},stdio:['ignore','ignore','pipe']});
   let stderr='';child.stderr.on('data',b=>stderr+=b);let exited=false;const closed=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',()=>{exited=true;resolve();});});
-  t.after(async()=>{if(!exited)child.kill('SIGTERM');await closed;});
+  stopWorkerBeforeFiles(root,async()=>{if(!exited)child.kill('SIGTERM');await closed;});
   const url=`http://127.0.0.1:${port}`,headers={Authorization:'Bearer generated-token','Content-Type':'application/octet-stream','X-Mote-Request-Scope':'a'.repeat(64)};
   const until=Date.now()+10000;for(;;){try{if((await fetch(url+'/health',{headers,signal:AbortSignal.timeout(1000)})).ok)break;}catch{}assert.ok(!exited&&Date.now()<until,stderr);await new Promise(r=>setTimeout(r,25));}
   const post=async(timeout,authorization=headers.Authorization)=>{const response=await fetch(url+'/transcribe',{method:'POST',headers:{...headers,Authorization:authorization,...(timeout===undefined?{}:{'X-Mote-Processing-Timeout-Ms':String(timeout)})},body:'generated',signal:AbortSignal.timeout(5000)});await response.arrayBuffer();return response.status;};
@@ -98,6 +102,8 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   assert.equal(await post(3600000),504,'a caller cannot exceed an independently configured worker host cap');
   await new Promise(r=>setTimeout(r,300));await writeFile(join(root,'delay'),'0.01');
   assert.equal(await post(undefined),200,'legacy calls retain the worker default and the slot remains reusable');
+  const requestId=randomUUID(),identified={...headers,'X-Mote-Request-Id':requestId};const executed=await fetch(url+'/transcribe',{method:'POST',headers:identified,body:'GENERATED_IDENTIFIED_AUDIO'});assert.equal(executed.status,200);await executed.arrayBuffer();
+  const fact=await(await fetch(url+'/executions/'+requestId,{headers})).json();assert.equal(fact.state,'succeeded');assert.equal(fact.stage,'transcribe');assert.equal(fact.requestId,requestId);assert.ok(!JSON.stringify(fact).includes('Generated speech'));const duplicate=await fetch(url+'/transcribe',{method:'POST',headers:identified,body:'GENERATED_DUPLICATE_AUDIO'});assert.equal(duplicate.status,409);await duplicate.arrayBuffer();
 });
 
 test('system command preflight reports missing ffmpeg without claiming model corruption or reinstalling Python',async()=>{
@@ -119,14 +125,31 @@ test('OCR HTTP worker certifies capacity rejection before execution with the sam
  await writeFile(join(root,'paddlex/inference/pipelines.py'),`def load_pipeline_config(name): return {'SubModules':{'TextDetection':{},'TextRecognition':{}}}\nclass Pipeline:\n    def predict(self, image): pass\ndef create_pipeline(**kwargs): return Pipeline()\n`);
  await writeFile(join(root,'mote_ocr.py'),`from pathlib import Path\nimport time\nclass UnsupportedImage(Exception): pass\ndef recognize_image(image, predict):\n    Path(__file__).with_name('recognition-started').write_text('generated')\n    time.sleep(0.5)\n    return {'durationMs':0,'segments':[{'startMs':0,'endMs':0,'text':'Generated OCR'}]}\n`);
  await writeFile(join(root,'worker.py'),await readFile(new URL('./ocr-server.py',import.meta.url)));
+ await writeFile(join(root,'mote_execution_facts.py'),await readFile(new URL('./mote_execution_facts.py',import.meta.url)));
  const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
  const python=execFileSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim();
  const child=spawn(python,[join(root,'worker.py'),'--model-root',models,'--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,PYTHONPATH:root,MOTE_MEDIA_WORKER_TOKEN:'generated-token'},stdio:'ignore'}),closed=new Promise(resolve=>child.once('close',resolve));
- t.after(async()=>{child.kill('SIGTERM');await closed;});const endpoint=`http://127.0.0.1:${port}`,headers={Authorization:'Bearer generated-token'};
+ stopWorkerBeforeFiles(root,async()=>{child.kill('SIGTERM');await closed;});const endpoint=`http://127.0.0.1:${port}`,headers={Authorization:'Bearer generated-token'};
  for(let i=0;;i++){try{if((await fetch(endpoint+'/health',{headers,signal:AbortSignal.timeout(500)})).ok)break;}catch{}assert.ok(i<200,'generated OCR worker did not start');await new Promise(r=>setTimeout(r,10));}
  const call=()=>fetch(endpoint+'/ocr',{method:'POST',headers,body:'generated image'}),held=call();
  for(let i=0;!await readFile(join(root,'recognition-started'),'utf8').catch(()=>false);i++){assert.ok(i<200);await new Promise(r=>setTimeout(r,10));}
  const busy=await call();assert.equal(busy.status,429);assert.equal(busy.headers.get('retry-after'),'5');assert.equal(busy.headers.get('x-mote-execution-started'),'false');assert.equal((await busy.json()).executionStarted,false);
  const result=await held;assert.equal(result.status,200);await result.arrayBuffer();
+ const requestId=randomUUID(),scope='b'.repeat(64),identified={...headers,'X-Mote-Request-Id':requestId,'X-Mote-Request-Scope':scope};
+ const executed=await fetch(endpoint+'/ocr',{method:'POST',headers:identified,body:'GENERATED_PRIVATE_PIXELS'});assert.equal(executed.status,200);await executed.arrayBuffer();
+ const statusUrl=endpoint+'/executions/'+requestId,status=await fetch(statusUrl,{headers:identified});assert.equal(status.status,200);const fact=await status.json();assert.equal(fact.state,'succeeded');assert.equal(fact.requestId,requestId);assert.equal(fact.stage,'ocr');assert.ok(fact.finishedAt>=fact.startedAt);assert.ok(!JSON.stringify(fact).includes('Generated OCR'));
+ assert.equal((await fetch(statusUrl)).status,401);assert.equal((await(await fetch(statusUrl,{headers:{...identified,'X-Mote-Request-Scope':'c'.repeat(64)}})).json()).state,'unknown');
+ assert.equal((await fetch(statusUrl,{method:'DELETE'})).status,401);const foreignErase=await fetch(statusUrl,{method:'DELETE',headers:{...identified,'X-Mote-Request-Scope':'c'.repeat(64)}});assert.equal(foreignErase.status,200);await foreignErase.arrayBuffer();assert.deepEqual(await(await fetch(statusUrl,{headers:identified})).json(),fact);
+ const duplicate=await fetch(endpoint+'/ocr',{method:'POST',headers:identified,body:'GENERATED_DUPLICATE'});assert.equal(duplicate.status,409);await duplicate.arrayBuffer();assert.deepEqual(await(await fetch(statusUrl,{headers:identified})).json(),fact,'duplicate identity must not mutate the completed fact or execute again');
+ // Real process death preserves only execution facts. The next incarnation
+ // must not call a formerly running request idle, or run its identity again.
+ await rm(join(root,'recognition-started'));const interruptedId=randomUUID(),interruptedHeaders={...identified,'X-Mote-Request-Id':interruptedId};const interrupted=fetch(endpoint+'/ocr',{method:'POST',headers:interruptedHeaders,body:'GENERATED_INTERRUPTED'}).then(response=>response.arrayBuffer()).catch(()=>{});
+ for(let i=0;!await readFile(join(root,'recognition-started'),'utf8').catch(()=>false);i++){assert.ok(i<200);await new Promise(r=>setTimeout(r,10));}
+ child.kill('SIGKILL');await closed;await interrupted;
+ const reopened=spawn(python,[join(root,'worker.py'),'--model-root',models,'--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,PYTHONPATH:root,MOTE_MEDIA_WORKER_TOKEN:'generated-token'},stdio:'ignore'}),reopenedClosed=new Promise(resolve=>reopened.once('close',resolve));stopWorkerBeforeFiles(root,async()=>{reopened.kill('SIGTERM');await reopenedClosed;});
+ for(let i=0;;i++){try{if((await fetch(endpoint+'/health',{headers,signal:AbortSignal.timeout(500)})).ok)break;}catch{}assert.ok(i<200);await new Promise(r=>setTimeout(r,10));}
+ const old=await(await fetch(endpoint+'/executions/'+interruptedId,{headers:interruptedHeaders})).json();assert.equal(old.state,'unknown');assert.equal(old.outcome,'worker_restarted');assert.equal(old.incarnation,fact.incarnation);assert.deepEqual(await(await fetch(statusUrl,{headers:identified})).json(),fact);
+ const replay=await fetch(endpoint+'/ocr',{method:'POST',headers:interruptedHeaders,body:'GENERATED_REPLAY'});assert.equal(replay.status,409);await replay.arrayBuffer();
+ const erased=await fetch(statusUrl,{method:'DELETE',headers:identified});assert.deepEqual(await erased.json(),{version:1,requestId,deleted:true});assert.equal((await(await fetch(statusUrl,{headers:identified})).json()).state,'unknown');
  await rm(join(models,'complete.json'));const missing=await call();assert.equal(missing.status,503);assert.equal(missing.headers.get('x-mote-execution-started'),'false');assert.equal((await missing.json()).executionStarted,false);
 });

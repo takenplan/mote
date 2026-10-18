@@ -44,13 +44,36 @@ workflow and completed children. Normal shutdown and expired ownership leases
 represent interruption, not a confirmed processing failure. Unknown issued file
 calls still prevent automatic duplicate requests under the existing guard.
 
-That guard is conservative across process loss: a file stage may have entered
-its call-protection region while still waiting in an in-memory model gate. A
-crash loses that queue state, so the saved guard can become `unknown` even if no
-model request was sent. Without durable proof of non-execution it follows the
-existing explicit unknown-outcome recovery path. Live gate waiting and a saved
-explicit not-started busy response retain automatic resource recovery; this does
-not promise transparent restart recovery for every in-memory queue position.
+Scoped media resolves a physical listener identity from its frozen M04 snapshot
+before task admission. Different users and originals share that listener's
+capacity; independent listeners remain independent. A durable queued task has no
+issued-call receipt. Model-task protection starts after its physical model gate
+opens. OCR/ASR transport issuance is recorded immediately before sending, rather
+than before preparation or capacity waiting. Restarting queued work therefore
+does not manufacture an unknown external outcome. Structured known-not-started
+busy responses retain a `not_executed` call fact and return the task to waiting.
+
+An actual issued request remains a separate fact from the renewable execution
+lease. The authenticated local workers accept a trusted request identity and
+keep content-free metadata in a private SQLite journal: worker incarnation,
+stage, execution state, times and fixed outcome codes. An identical request ID
+cannot start a second execution. Authenticated scoped status reads can establish
+that the first call is still running, failed or completed. A missing fact, an
+unsupported provider or a former incarnation's unfinished fact remains unknown.
+There is no worker scheduling queue, provider-message classifier or result-body
+cache. A completed call without a durably accepted artifact requires an explicit
+ordinary retry (`processor_result_unavailable`); it cannot publish a missing or
+late body. Explicit unknown-outcome replay confirmations remain separate from
+evidence of completion and do not erase the old unknown fact.
+
+Worker metadata cleanup follows the existing account/processing deletion
+operation. Exact request/scope/snapshot cleanup intents survive execution-task
+deletion. A purpose-limited configuration capability can erase those receipts
+using their frozen transport without restoring a model lease or business
+execution authority. A running receipt or unavailable erasure remains pending.
+Native receipt files also follow the profile directory lifecycle; Docker uses
+the profile's private worker-facts volume. No new time-based retention rule is
+introduced.
 
 Resource waiting does not expire under a generic six-hour window. Actual typed
 failures have the registered finite attempt bound; explicitly task-specific
@@ -69,6 +92,14 @@ The persisted next-eligible time drives API and structured waiting diagnostics.
 Model gates recheck cooldown after admission. Web requests do not translate a
 model execution budget into a second wall-clock deadline that includes waiting;
 explicit cancellation remains available.
+
+Memory model work first rotates between users, then between ready host-declared
+stages, then between operations. Continued extraction arrivals therefore cannot
+indefinitely precede an already ready review. Stage service history survives
+restart; cancelling a waiting stage does not consume a turn. Concurrency limits
+and running work are unchanged. Local ASR alignment releases its settled physical
+worker resource before continuing; resource release is bound to the current
+execution fence, so a later claim must acquire capacity again.
 
 ## Existing work and validation
 

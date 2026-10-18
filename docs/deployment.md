@@ -29,7 +29,10 @@ npm ci
 npm run build:libs
 npm run build -w @mote/server -w @mote/web
 node scripts/mote.mjs init --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
+node scripts/mote.mjs connectors-prepare --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
 ```
+
+`connectors-prepare` 为所选 release 下载固定官方 Lark CLI 1.0.98 与 DWS 1.0.64，按仓库锁定的官方 SHA256 校验后原子放入该 release 的 `.mote/connectors/`；不运行供应方安装脚本、不安装 Agent skills、不修改全局 CLI 或宿主登录态。支持 macOS/Linux amd64/arm64。相同已校验产物可离线复用，两个并发准备不会发布半成品。网络、权限、校验或只读目录错误会明确失败，不退回宿主 PATH。Docker 在构建镜像时准备，签名源码更新在构建新 release 时准备。直接从当前检出目录开发或 `npm start` 的环境可执行 `npm run connectors:prepare`。首次准备需要 GitHub 网络及 `tar`；缺少依赖不阻止中央其他功能，连接详情会保留重新检测和配置指引。
 
 编辑该环境的 `mote.yaml` 设置部署参数。在仓库外准备权限为 0600 的私有 JSON 文件，内容为 `{"username":"admin","password":"replace-with-a-strong-password"}`，将示例密码替换为至少 12 字符的密码。中央保持停止，通过 stdin 初始化首个管理员；已有账号时该入口拒绝再次初始化，不重置账号或密码：
 

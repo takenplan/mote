@@ -10,6 +10,7 @@ export function estimateCost(tokens:TokenUsage|undefined,price:ModelPrice|undefi
 }
 /** All views fold the same receipts; changing the grouping never duplicates costs. */
 export function usageTotals(items:UsageReceipt[]):UsageTotals {
+  items=items.filter(item=>!item.issuance||item.issuance.issuedAt!==undefined&&item.issuance.executionStarted!==false);
   const tokens=items.flatMap(r=>r.tokens?[r.tokens]:[]);
   const inputTokens=tokens.reduce((n,t)=>n+t.inputTokens,0),outputTokens=tokens.reduce((n,t)=>n+t.outputTokens,0);
   const eligible=tokens.filter(t=>t.cacheReadTokens!==undefined);

@@ -11,7 +11,7 @@ const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'http://loc
 Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true});
 const {createRoot}=await import('react-dom/client');
 const {LarkSettings,LarkJobStatus}=await import('../src/LarkSettings.js');
-const base=():LarkStatus=>({installed:true,configured:true,connected:true,version:'1.0.85',missingScopes:[],documentSync:{confirmed:true,documents:0,activities:0,failed:0,pending:0,errors:[]},lastSyncAt:'2026-10-14T01:00:00.000Z',selection:{documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'Asia/Shanghai',autoSync:false}});
+const base=():LarkStatus=>({installed:true,configured:true,connected:true,version:'1.0.98',missingScopes:[],documentSync:{confirmed:true,documents:0,activities:0,failed:0,pending:0,errors:[]},lastSyncAt:'2026-10-14T01:00:00.000Z',selection:{documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'Asia/Shanghai',autoSync:false}});
 const tick=()=>new Promise(r=>setTimeout(r,20));
 const button=(name:string)=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent===name);assert.ok(b,`button ${name}`);return b;};
 async function click(name:string){await act(async()=>{button(name).click();await tick();});}
@@ -38,10 +38,10 @@ async function mount(t:any,status:LarkStatus,fail=false){
  return {calls,container,get sources(){return sources;}};
 }
 
-test('setup page offers install, locks read scope before login and keeps navigation working',async t=>{
+test('setup page keeps dependency installation in deployment and locks read scope before login',async t=>{
  const f=await mount(t,{...base(),installed:false,configured:false,connected:false});
- assert.equal(button('安装 Lark CLI').disabled,false);assert.equal(button('扫码登录并授权只读权限').disabled,true);assert.equal(document.querySelector('fieldset')?.disabled,true);
- await click('安装 Lark CLI');assert.ok(f.calls.some(c=>c.path.endsWith('/install')));assert.match(f.container.textContent!,/安装 CLI · 正在处理/);
+ assert.equal([...document.querySelectorAll('button')].some(button=>button.textContent==='安装 Lark CLI'),false);assert.equal(button('扫码登录并授权只读权限').disabled,true);assert.equal(document.querySelector('fieldset')?.disabled,true);
+ assert.ok(!f.calls.some(c=>c.path.endsWith('/install')));assert.match(f.container.textContent!,/CLI 由当前中央部署准备/);
  await click('查看来源与归档');assert.equal(f.sources,1);
 });
 

@@ -3,12 +3,14 @@ import {join} from 'node:path';
 import {z} from 'zod';
 import {recordingSelectionSchema,type RecordingSelection,type SourceItem} from '@mote/shared';
 import {createFeishuRecordings} from '../connectors/lark-recordings.js';
-import {createDingtalkRecordings,createDwsRunner} from '../connectors/dingtalk-recordings.js';
-import {createLarkRunner,larkJson,authorizationUrl} from '../connectors/lark-cli.js';
+import {createDingtalkRecordings,createDwsRunner,DWS_VERSION,type DwsRunner} from '../connectors/dingtalk-recordings.js';
+import {createLarkRunner,larkJson,authorizationUrl,LARK_VERSION,type LarkRunner} from '../connectors/lark-cli.js';
 import {RecordingFlow,recordingScan,recordingWindows,recordingStage,recordingStageFailure,retryRecordingStage,recordingMetadataAllowed,type RecordingAccount,type RecordingProvider,type RecordingMetadata,type RecordingStageReceipt,type RecordingJob,type RecordingOutcome} from '../connectors/recording-flow.js';
 import type {LarkContext,ConnectorState} from '../connectors/ports.js';
 import {ExecutionFailure} from '../execution-engine.js';
 import {ConnectorError} from '../connectors/types.js';
+import {larkConfigureSchema} from '../connectors/lark-adapter.js';
+import {authorizationOutput} from '../connectors/authorization-output.js';
 import type {ConnectorTransports} from './connector-contract.js';
 import {connectorHash as hash} from './connector-vault.js';
 import {RecordingRevisions} from './recording-revisions.js';
@@ -30,15 +32,17 @@ export class ScopedRecordingAdapter {
  private provider:RecordingProvider;
  private readonly pending=new Set<Promise<unknown>>();
  private initialized?:Promise<void>;
+ private larkRunner?:LarkRunner;
+ private dwsRunner?:DwsRunner;
  private authorize?:(progress:(value:unknown)=>void)=>Promise<void>;
  constructor(private ctx:LarkContext,provider:'feishu-recordings'|'dingtalk-recordings',scope:{userId:string;instanceId:string;directory:string},transports:ConnectorTransports|undefined,private assert:()=>void,private signal:AbortSignal,private ledger:Ledger){
   this.file=ctx.state!<Saved>('recordings.json');
   if(provider==='feishu-recordings'){
-   const runner=transports?.lark?.(scope)??createLarkRunner(scope.directory,{isolatedHome:true});this.provider=createFeishuRecordings(scope.directory,runner);
+   const runner=transports?.lark?.(scope)??createLarkRunner(scope.directory,{isolatedHome:true});this.provider=createFeishuRecordings(scope.directory,runner);this.larkRunner=runner;
    this.authorize=async progress=>{this.assert();const result=larkJson(await runner({kind:'login',scopes:['minutes:minutes.basic:read','minutes:minutes.artifacts:read','minutes:minutes.media:export','minutes:minutes.search:read']},{signal})),value=z.object({verification_url:z.string(),device_code:z.string().min(1),expires_in:z.number().positive().max(600)}).parse(result),url=authorizationUrl(value.verification_url);if(!url)throw new ConnectorError('lark_authorization_url_invalid');this.assert();progress({authorizationUrl:url,expiresAt:new Date(Date.now()+value.expires_in*1000).toISOString()});await runner({kind:'complete',deviceCode:value.device_code},{signal:AbortSignal.any([signal,AbortSignal.timeout(value.expires_in*1000)])});this.assert();};
   }else{
-   const runner=transports?.dingtalk?.(scope)??createDwsRunner(join(scope.directory,'dws-runtime'),{isolatedHome:true});this.provider=createDingtalkRecordings(scope.directory,runner);
-   this.authorize=async progress=>{let buffer='';await runner({kind:'login'},undefined,signal,chunk=>{this.assert();buffer=(buffer+chunk).slice(-16000);for(const line of buffer.split(/\r?\n/).slice(0,-1))try{const url=new URL(line.trim());if(url.protocol==='https:'&&!url.username&&!url.password&&!url.port&&['dingtalk.com','dingtalk.cn','dingtalk.io'].some(domain=>url.hostname===domain||url.hostname.endsWith('.'+domain)))progress({authorizationUrl:url.toString()});}catch{}});this.assert();};
+   const runner=transports?.dingtalk?.(scope)??createDwsRunner(join(scope.directory,'dws-runtime'),{isolatedHome:true});this.provider=createDingtalkRecordings(scope.directory,runner);this.dwsRunner=runner;
+   this.authorize=async progress=>{await runner({kind:'login'},undefined,signal,authorizationOutput('dingtalk',url=>{this.assert();progress({authorizationUrl:url});}));this.assert();};
   }
   const providerInstance=this.provider,track=<T>(work:()=>Promise<T>)=>{const promise=Promise.resolve().then(work);this.pending.add(promise);void promise.then(()=>this.pending.delete(promise),()=>this.pending.delete(promise));return promise;};
   this.provider={...providerInstance,account:signal=>track(()=>providerInstance.account(signal)),discover:(account,range,signal)=>track(()=>providerInstance.discover(account,range,signal)),metadata:(account,id,signal)=>track(()=>providerInstance.metadata(account,id,signal)),transcript:(account,metadata,signal)=>track(()=>providerInstance.transcript(account,metadata,signal)),media:(account,metadata,signal)=>track(()=>providerInstance.media(account,metadata,signal))};
@@ -46,7 +50,7 @@ export class ScopedRecordingAdapter {
  private async init(){await(this.initialized??=this.file.read().then(saved=>{if(saved){if(saved.version!==1||!z.string().uuid().safeParse(saved.epoch).success)throw new ConnectorError('recording_state_invalid',503);recordingSelectionSchema.parse(saved.selection);this.saved=saved;}}));this.assert();}
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
  private async fence(){this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(this.signal.aborted)throw new ConnectorError('recording_cancelled',409);const current=await this.provider.account(this.signal);this.assert();if(current.id!==this.saved.account.id)throw new ConnectorError('recording_account_changed',409);}
- async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=row.value.stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),selection:this.saved.selection,counts:{pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
+ async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=row.value.stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),...(this.saved.account?.name?{accountName:this.saved.account.name}:{}),environment:this.ledger.get('environment','status'),selection:this.saved.selection,counts:{pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
  /** Read the existing current-selection journal; no provider probe or task is
   * admitted. Archived files outside this selection remain in canonical M03. */
  async recordingPage(limit:number,position:(epoch:string)=>string|undefined){
@@ -67,7 +71,26 @@ export class ScopedRecordingAdapter {
   const latest=await this.file.read();this.assert();if(latest?latest.epoch!==epoch:Boolean(this.saved.account))throw new ConnectorError('recording_state_changed',409);
   return {epoch,sourceId,items,nextKey:page.length>limit?visible.at(-1)!.key:undefined};
  }
- async login(progress:(value:unknown)=>void){await this.init();await this.authorize!(progress);return this.connect();}
+ async check(){
+  await this.init();let environment:{installed:boolean;version?:string;configured:boolean;error?:string}={installed:false,configured:false};
+  try{
+   const version=this.larkRunner?(await this.larkRunner({kind:'version'},{signal:this.signal})).match(/\b(\d+\.\d+\.\d+)\b/)?.[1]:String((await this.dwsRunner!({kind:'version'},undefined,this.signal) as any)?.version).replace(/^v/,'');
+   environment={installed:true,version,configured:!this.larkRunner};
+   if(version!==(this.larkRunner?LARK_VERSION:DWS_VERSION))throw new ConnectorError(this.larkRunner?'lark_cli_version_unsupported':'dingtalk_cli_version_unsupported');
+   if(this.larkRunner){const status=larkJson(await this.larkRunner({kind:'status'},{signal:this.signal}));environment.configured=typeof status.appId==='string'&&!!status.appId;}
+  }catch(error){this.assert();environment.error=error instanceof ConnectorError?error.code:'recording_environment_check_failed';}
+  this.assert();this.ledger.set('environment','status',environment);return this.status();
+ }
+ async setup(progress:(value:unknown)=>void){
+  await this.init();if(!this.larkRunner)throw new ConnectorError('connector_operation_invalid',400);
+  await this.larkRunner({kind:'setup'},{signal:this.signal,onOutput:authorizationOutput('lark',url=>{this.assert();progress({authorizationUrl:url,expiresAt:new Date(Date.now()+600000).toISOString()});})});
+  this.assert();return this.check();
+ }
+ async configure(value:unknown){
+  await this.init();if(!this.larkRunner)throw new ConnectorError('connector_operation_invalid',400);
+  await this.larkRunner({kind:'configure',...larkConfigureSchema.parse(value)},{signal:this.signal});this.assert();return this.check();
+ }
+ async login(progress:(value:unknown)=>void){await this.init();await this.authorize!(progress);this.assert();await this.check();return this.connect();}
  async connect(){await this.init();const account=await this.provider.account(this.signal);this.assert();if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}await this.file.write(this.saved);this.ctx.sources.register({id:this.sourceId(),name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:this.sourceId(),platform:'import',retention:'archive',enabled:true});return this.status();}
  async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);await this.fence();if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
  async disconnect(){await this.init();this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
