@@ -3,6 +3,7 @@ import {join} from 'node:path';
 import {existsSync} from 'node:fs';
 import type {ModelSettings} from '@mote/shared/models';
 import {modelSettingsSchema} from '../model-settings.js';
+import {ConfigServiceError} from '../config-service.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import type {ModelUsageMeter} from './model-usage.js';
@@ -11,7 +12,7 @@ import {createHindsightEngine,HindsightEngine,type HindsightPrepare} from '../hi
 import {hindsightModelFingerprint,type HindsightRuntime} from '../hindsight-runtime.js';
 import {WorkerMemoryProvider} from '../worker-memory-provider.js';
 import {MemoryProviderError,memoryProviderNamespaceSchema,memoryBodyDigest,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
-import {PrivateSql,PrivateDataError} from './private-data-sql.js';
+import {PrivateSql} from './private-data-sql.js';
 import type {UserDataSubject} from './lifecycle.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {Configurations,ModelLease} from './configuration.js';
@@ -51,7 +52,7 @@ export class ScopedMemoryProviders {
   const reference=referenceSchema.parse(descriptor.configuration[descriptor.adapter==='mote.mem0@1'?'embeddingSecretReference':'modelProfileId']),operationId='memory-provider:'+randomUUID(),lease=await this.configuration.leaseReference(context,'memory',operationId,reference);descriptor.assertCurrent();
   const literal=await this.configuration.withModel(lease,async settings=>{
    if(descriptor.adapter==='mote.mem0@1'){
-    if(descriptor.configuration.embeddingBaseUrl!==settings.baseUrl||descriptor.configuration.embeddingModel!==settings.model)throw new PrivateDataError('invalid_data');
+    if(descriptor.configuration.embeddingBaseUrl!==settings.baseUrl||descriptor.configuration.embeddingModel!==settings.model)throw new ConfigServiceError('config_invalid');
     z.number().int().positive().parse(descriptor.configuration.embeddingDimension);
    }const endpoint=new URL(settings.baseUrl);endpoint.username='';endpoint.password='';endpoint.search='';endpoint.hash='';return {settings:{...settings,baseUrl:endpoint.toString(),apiKey:'',headers:{},extraBody:{}},modelFingerprint:hindsightModelFingerprint(settings)};
   });descriptor.assertCurrent();sql.transaction(()=>{sql.run('INSERT INTO mm_provider_config VALUES($user,?,?,?,?)',tag,lease.snapshotId,operationId,hash);sql.run('INSERT INTO mm_provider_descriptors VALUES($user,?,?)',tag,JSON.stringify(literal));});

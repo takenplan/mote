@@ -213,7 +213,7 @@ test('new Memory in an activated external provider uses real extraction/review/p
 
 test('native provider configuration cannot combine a scoped model key with a different plugin endpoint',async t=>{
  const f=await fixture(t,generatedMem0Release()),packageId=await f.install();await f.plugin(f.a,packageId,['same-source'],{embeddingBaseUrl:'http://127.0.0.1:9/v1',embeddingModel:'generated-memory',embeddingDimension:3,embeddingSecretReference:'personal:same-model'});
- const prepared=await f.request(f.a.token,'/api/memory/bindings','POST',{operationId:randomUUID(),instanceId:'same-instance'});assert.equal(prepared.statusCode,200,prepared.body);assert.equal(await f.terminal(prepared.json().task.id),'blocked');assert.equal(f.requests.length,0,'no model or unapproved embedding transport may start');assert.equal((await f.request(f.a.token,'/api/memory')).json().binding.kind,'builtin');
+ const prepared=await f.request(f.a.token,'/api/memory/bindings','POST',{operationId:randomUUID(),instanceId:'same-instance'});assert.equal(prepared.statusCode,200,prepared.body);assert.equal(await f.terminal(prepared.json().task.id),'blocked');const task=await f.request(f.a.token,'/api/tasks/'+prepared.json().task.id);assert.equal(task.json().failure.code,'config_invalid');assert.equal(task.json().failure.category,'blocked');assert.equal(task.body.includes('GENERATED_A_KEY'),false);assert.equal(f.requests.length,0,'no model or unapproved embedding transport may start');assert.equal((await f.request(f.a.token,'/api/usage')).json().items.length,0);assert.equal((await f.request(f.a.token,'/api/memory')).json().binding.kind,'builtin');
 });
 
 test('native Hindsight uses the real engine, independent review and exact private read banks across A/B and restart',async t=>{

@@ -36,6 +36,7 @@ import {memoryProviderKey,memoryBodyDigest,withMemoryHostState,type MemoryProvid
 import {stageVerifiedMemoryWrite} from '../memory-provider-publication.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
 import {ExecutionFailure} from '../execution-engine.js';
+import {ConfigServiceError} from '../config-service.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {PrivateData} from './private-data.js';
 import type {ScopedRuntime} from './http.js';
@@ -56,7 +57,7 @@ const manualIntegrationSchema=z.object({operationId:z.string().uuid(),recipe:mem
 type ManualIntegration=z.infer<typeof manualIntegrationSchema>;
 const queryResultSchema=z.object({answer:z.string(),runId:z.string().min(1),citations:z.array(z.object({id:z.string().uuid()}).passthrough()),trace:z.array(z.unknown()).default([])}).passthrough();
 const result=(value:string)=>queryResultSchema.parse(JSON.parse(value)) as QueryResult;
-const failure=(error:unknown)=>error instanceof ExecutionFailure?error:error instanceof ScopedMemoryError?new ExecutionFailure('blocked',error.code):error instanceof PrivateDataError?new ExecutionFailure('stale','memory_input_changed'):error instanceof MemoryOutputValidationError?new ExecutionFailure('permanent','memory_output_'+error.code):new ExecutionFailure('blocked','memory_requires_attention');
+const failure=(error:unknown)=>error instanceof ExecutionFailure?error:error instanceof ConfigServiceError?new ExecutionFailure('blocked',error.code):error instanceof ScopedMemoryError?new ExecutionFailure('blocked',error.code):error instanceof PrivateDataError?new ExecutionFailure('stale','memory_input_changed'):error instanceof MemoryOutputValidationError?new ExecutionFailure('permanent','memory_output_'+error.code):new ExecutionFailure('blocked','memory_requires_attention');
 
 /** The existing M05 executor is the only scheduler. Extraction, independent
  * review, integration and publication use durable grants, M04 model snapshots
