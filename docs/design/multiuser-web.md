@@ -230,3 +230,21 @@ Changing filters withdraws the previous page cursor and selected audit body
 before issuing a new read. Credential replacement retains the existing per-Api
 resource retirement. Original normal Memory reads and their published-only
 capability are unchanged.
+
+## Original Home and device refresh parity
+
+The authenticated Web Home reuses the original `Overview`, including intake
+navigation, recent capture evidence, latest Insight preview and the `FeatureHome`
+host slot. The thin account adapter reads existing private statistics, Ingress
+device inventory, four original capture records in the original time range, Insights and
+the current chat model selection resolver. It does not construct global status
+or another dashboard. Account setup hints use actual selection resolution;
+provider probing remains a separate explicit settings action.
+
+`ScopedDevices` keeps the original `DeviceOverview` and the visible 30-second
+heartbeat refresh cadence. The existing resource subscription owns polling and
+cleanup, so leaving the page releases it. Ordinary heartbeats update queue,
+error and last-capture facts without remounting the selected device details.
+The original immutable Api, credential-keyed tree, per-Api caches and stable
+account draft namespaces remain the account boundary. The parity supersession
+and regression matrix is in [Web background refresh](../testing-web-background-refresh.md#multiuser-home-device-parity).
