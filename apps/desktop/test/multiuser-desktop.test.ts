@@ -307,7 +307,7 @@ it('shows an actual central OCR failure instead of the immutable received pendin
  expect((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode).toBe(404);
 },20000);
 
-it.each(['desktop','named'] as const)('shows actual M06 OCR from a %s source in the Desktop archive list and detail while same-ID B retains its own raw status',async naming=>{
+it.each(['desktop','named'] as const)('shows automatic M06 OCR from a %s source while same-ID B retains its own central and immutable intake states',async naming=>{
  const provider=createServer(async(req,res)=>{for await(const _part of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_A_DESKTOP_CENTRAL_OCR'}],coverage:'full',engine:'generated-http-fixture'}));});
  await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));cleanup.push(async()=>{provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));});
  const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);const deviceId=(await app.call('mote:get-status')).config.deviceId;
@@ -319,11 +319,16 @@ it.each(['desktop','named'] as const)('shows actual M06 OCR from a %s source in 
   const source=await f.request(owner.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated named screenshot source',kind:'local-files',deviceId,platform:'macos',retention:'archive'});expect(source.statusCode,source.body).toBe(200);
   const received=await f.request(owner.token,'/api/ingress/sources/'+sourceId+'/captures','POST',{batchId:randomUUID(),items:[{...record,imageBase64:png.toString('base64')}]});expect(received.statusCode,received.body).toBe(200);
  }
- const input={source:'screen',location:'central',day:'2026-09-13'};expect((await app.call('mote:captures-browse',[input])).items[0].ocr.status).toBe('disabled');expect((await app.call('mote:captures-detail',['central',record.id])).ocr.status).toBe('disabled');expect(await app.call('mote:captures-image',['central',record.id,false])).toMatch(/^data:image\//);
- const original=(await f.request(f.a.token,'/api/ingress/sources/'+sourceId+'/originals')).json().items[0],started=await f.request(f.a.token,'/api/processing','POST',{originalRef:original.ref,operationId:'generated-desktop-list-ocr'});expect(started.statusCode,started.body).toBe(200);
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/tasks/'+started.json().id)).json().state).toBe('succeeded'),{timeout:15000});expect((await f.request(f.a.token,'/api/captures/'+record.id)).json().ocrText).toBe('');expect((await f.request(f.a.token,'/api/capture-browser/'+record.id)).json().ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ // File automatic processing and the collector's immutable OCR flag do not
+ // disable independent central image processing. Keep both owners' defaults.
+ for(const owner of [f.a,f.b]){expect((await f.request(owner.token,'/api/perception')).json().settings.enabled).toBe(true);expect((await f.request(owner.token,'/api/captures/'+record.id)).json()).toMatchObject({ocrText:'',ocr:{status:'disabled'}});}
+ const input={source:'screen',location:'central',day:'2026-09-13'};expect(await app.call('mote:captures-image',['central',record.id,false])).toMatch(/^data:image\//);
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/capture-browser/'+record.id)).json().ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR'),{timeout:15000});expect((await f.request(f.a.token,'/api/captures/'+record.id)).json().ocrText).toBe('');
  const page=await app.call('mote:captures-browse',[input]);expect(page.items[0]).toMatchObject({id:record.id,ocr:{status:'completed'},textPreview:'GENERATED_A_DESKTOP_CENTRAL_OCR'});expect((await app.call('mote:captures-detail',['central',record.id])).ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
- await app.call('mote:ask',['login',{token:f.b.token}]);const b=await app.call('mote:captures-browse',[input]);expect(b.items[0].ocr.status).toBe('disabled');expect(JSON.stringify(b)).not.toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ expect((await f.request(f.b.token,'/api/images/'+record.id)).json().products).toEqual([]);expect((await f.request(f.b.token,'/api/capture-browser/'+record.id)).json().ocrText).toBe('');
+ // B's admitted work can still be pending or already retired at this read;
+ // neither transition can supply A's successful receipt or alter B's intake.
+ await app.call('mote:ask',['login',{token:f.b.token}]);const b=await app.call('mote:captures-browse',[input]),detail=await app.call('mote:captures-detail',['central',record.id]);expect(b.items[0].ocr.status).not.toBe('completed');expect(detail.ocr.status).not.toBe('completed');expect(detail.ocrText).toBe('');expect(JSON.stringify(b)).not.toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');expect((await f.request(f.b.token,'/api/captures/'+record.id)).json()).toMatchObject({ocrText:'',ocr:{status:'disabled'}});
 },30000);
 
 it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{

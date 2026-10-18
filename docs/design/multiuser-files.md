@@ -44,6 +44,10 @@ The current catalog includes reference/Shadow metadata with `hasOriginal:false`,
 `processingRequired:false` and no original capability. Native revision paths and
 sizes are retained in existing document/file metadata before upload staging is
 collected. This supersedes the reference-only catalog gap at this checkpoint.
+Exact snapshot recovery compares the same manifest-derived path and size
+projection used at upload publication. Recovery still requires the current
+owned original, exact bytes, unchanged item metadata and its existing recovery
+identity; canonicalization does not renew a recovery grant.
 
 This read checkpoint does **not** close proposed review,
 acoustic override/sample assets,

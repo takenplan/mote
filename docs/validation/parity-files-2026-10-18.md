@@ -25,7 +25,7 @@ the module PR; evidence is not transferred from an older candidate.
 | FILE-03 | Native archive → extraction → deleted revision → Files list/detail/chunks/playback/export → reference replacement → restart → explicit central forget → old ID/ticket denied; equal-ID B remains available. | `multiuser-file-catalog-parity.test.ts` |
 | FILE-04 | Metadata-only native and source-item reference → catalog/detail with no original capability; same IDs/paths in A/B, owner cursor rejection, restart and central forget. | `multiuser-file-catalog-parity.test.ts` |
 | FILE-05 | Administrator host directory → private archived originals → preview → explicit confirm → publication; duplicate request, same path/request ID in two admins, cancel/delete/restart, source directory disappears after preview; ordinary account/vault/symlink and missing/non-directory rejection. | `scoped-admin-directory.test.ts` |
-| FILE-06 | Native relative path and reference document path → case-insensitive literal directory query under owner filters and pagination. | `multiuser-file-catalog-parity.test.ts` |
+| FILE-06 | Native relative path and reference document path → case-insensitive literal directory query under owner filters and pagination; expired exact snapshot recovery uses the same canonical path/size projection as publication and rejects changed path/title/time/hash/size. | `multiuser-file-catalog-parity.test.ts`, `multiuser-snapshot-recovery.test.ts`, Desktop `multiuser-desktop.test.ts` |
 | C07 consumer | File summary/review and document import preview → actual generated-provider usage receipt with explicit agent/module/skill; A/B isolation and restart without replay. | `multiuser-processing-usage-attribution.test.ts` |
 | Policy consumer | Mixed current/reference/deleted-origin catalog → preview → reprocess admits only current byte-backed file; catalog entries retain cancellation shape. | `multiuser-file-catalog-parity.test.ts` |
 
@@ -104,3 +104,35 @@ real Python dependency or model inference readiness. Full affected checks,
 Android JVM/emulator execution and combined Config/Ask client checks remain
 pending the driver window. Real weights, physical devices and live models remain
 unperformed. The existing FILE-07 and old deleted-head data boundary above remain.
+
+## Desktop consumer regressions after the driver gate
+
+The required driver gate at `8217a0fb` stopped on three Desktop failures; its
+earlier passing steps do not establish acceptance for a later candidate.
+
+The exact snapshot failure was a FILE-06 producer regression. Upload publication
+stored manifest-derived path/size metadata, but recovery compared the earlier
+unprojected item. Publication and recovery now share that canonical projection.
+The real Desktop scanner/spool recovery and the existing server HTTP recovery
+test cover the repair; changed path, title, time, hash and size remain rejected.
+
+The two screenshot cases assumed that file `automatic:false` or the collector's
+immutable `ocr.disabled` flag disabled central images. The comparison baseline's
+independent image settings default to enabled. The revised default/named-source
+fixtures therefore await real automatic OCR for A, retain both owners' image
+preferences, and assert that equal-ID B has no completed OCR, product or text
+from A while its raw intake remains disabled. B's current unconfigured work may
+still be pending or already retired when read; that timing is not an isolation
+failure. No B preference is switched off to satisfy the fixture.
+
+The Desktop transport dependency series `1417e395`, `d77fa9c4`, `5744d6a8` and
+`73c11152` was inspected. Ordinary upload-session expiry/retry and its error type
+declaration do not fix the snapshot metadata mismatch. This repair imports no
+hunk from that series and adds no Config API change. A fresh full driver gate
+is still required before a PR or joint acceptance.
+
+Focused repair-tree validation passed: the complete Desktop multi-user file
+(36 tests), six server regression files (49 tests, including all seven historical
+Perception cases), server TypeScript no-emit and diff checks. The affected plan
+contains 22 checks and was dry-run only here. These generated fixtures do not
+establish native-client, emulator, physical-device or live-model acceptance.
