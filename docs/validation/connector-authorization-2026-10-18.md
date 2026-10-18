@@ -3,7 +3,8 @@
 Scope: current multiuser Feishu/DingTalk recording connections, fixed CLI deployment,
 and the existing Feishu document/calendar CLI consumer. No historical data or
 credential repair, account migration, compatibility path, live provider login,
-real personal content, screenshot capture or model request was performed.
+real personal content, personal screenshot capture or live model request was
+performed.
 
 ## Version and executable evidence
 
