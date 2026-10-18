@@ -186,9 +186,23 @@ test('execution overview shares initial settings read; dirty runtime draft survi
  revoked=true;await act(async()=>resources(api).invalidate(path=>path==='/api/execution-settings'));assert.equal(d.querySelector('form'),null);assert.match(d.body.textContent!,/generated revoked/);
 });
 test('perception refresh retains owner draft and revoked settings never remain editable',async t=>{
- const {root,d}=await fixture(t);let revoked=false;const api=apiWith(path=>{if(revoked)throw new ApiError('generated permission revoked',403);if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/memory-settings')return {settings:{extraction:{enabled:false}}};if(path==='/api/sources')return {items:[]};if(path==='/api/media-models')return {ocr:{state:'missing',bytes:0,totalBytes:0}};return {settings:{providerRevision:'1',enabled:true,ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true},model:null,recent:[],jobs:[],backfills:[]};});
- await act(async()=>root.render(React.createElement(PerceptionSettings,{api})));assert.doesNotMatch(d.body.textContent!,/语义理解 Worker 地址|语义理解时机/);await act(async()=>d.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());await act(async()=>button(d,'刷新').click());assert.equal(d.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,false);
- revoked=true;await act(async()=>button(d,'刷新').click());assert.equal(d.querySelector('form'),null);assert.match(d.body.textContent!,/generated permission revoked/);
+ const {root,d}=await fixture(t);let revoked=false;const reads={perception:0,media:0};
+ const api=apiWith(path=>{
+  if(path==='/api/perception')reads.perception++;if(path==='/api/media-models')reads.media++;
+  if(revoked)throw new ApiError('generated permission revoked',403);
+  if(path==='/api/file-processing')return {policy:{profiles:[{id:'image',name:'Generated archive',processorId:'archive'}]},processors:[]};
+  if(path==='/api/memory-settings')return {settings:{extraction:{enabled:false}}};if(path==='/api/sources')return {items:[]};
+  if(path==='/api/media-models')return {ocr:{state:'not_installed',bytes:0,totalBytes:0,source:'auto',version:'generated',runtimeReady:false}};
+  return {revision:1,settings:{concurrency:1,providerRevision:'1',enabled:true,profileId:'image',ocrProcessorId:'archive',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true},model:null,recent:[],jobs:[],backfills:[]};
+ });
+ const refreshSettings=()=>{const control=d.querySelector<HTMLButtonElement>('.perception-settings > button.button');assert.ok(control,'image processing state has its own refresh control');assert.equal(control.textContent,'刷新');return control;};
+ await act(async()=>root.render(React.createElement(PerceptionSettings,{api})));assert.doesNotMatch(d.body.textContent!,/语义理解 Worker 地址|语义理解时机/);assert.deepEqual(reads,{perception:1,media:1});
+ await act(async()=>d.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+ // The model card refreshes instance health; the page control revalidates the
+ // owned settings. Equal button captions must not select the other resource.
+ await act(async()=>d.querySelector<HTMLButtonElement>('[data-media-role="ocr"] button.text-button')!.click());assert.deepEqual(reads,{perception:1,media:2});
+ await act(async()=>refreshSettings().click());assert.deepEqual(reads,{perception:2,media:2});assert.equal(d.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,false);
+ revoked=true;await act(async()=>refreshSettings().click());assert.deepEqual(reads,{perception:3,media:2});assert.equal(d.querySelector('form')===null,true,'revoked image settings must not remain editable');assert.match(d.body.textContent!,/generated permission revoked/);
 });
 
 test('Memory settings preserve edited policy on refresh, save current draft, and isolate a new session',async t=>{
