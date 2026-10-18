@@ -58,6 +58,10 @@ export function parseArguments(args) {
 
 export async function main(args = process.argv.slice(2), directory = process.cwd()) {
   const { options, component, all, dryRun, typescriptOnly } = parseArguments(args);
+  // Selection and execution must refer to the same input, including the async
+  // interval while acquiring the shared repository lock.
+  const fileDigests = new Map();
+  const plannedIdentity = dryRun ? undefined : sourceIdentity(directory, fileDigests);
   const graph = workspaceGraph(directory);
   const broad = all || /^0{40}$/.test(options.base ?? '');
   const paths = component || broad ? [] : changedPaths({ ...options, directory });
@@ -80,8 +84,8 @@ export async function main(args = process.argv.slice(2), directory = process.cwd
     return 0;
   }
   if (dryRun) return 0;
-  const fileDigests = new Map();
-  return runChecks(plan, { directory, inputIdentity: () => sourceIdentity(directory, fileDigests) });
+  return runChecks(plan, { directory, expectedInputIdentity: plannedIdentity,
+    inputIdentity: () => sourceIdentity(directory, fileDigests) });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

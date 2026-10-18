@@ -48,7 +48,7 @@ async function saveReceipt(path, receipt) {
 }
 
 /** One local repository gate. Receipts contain metadata, never arguments or output. */
-export async function runChecks(plan, { directory = process.cwd(), lock = true, receiptPath, inputIdentity } = {}) {
+export async function runChecks(plan, { directory = process.cwd(), lock = true, receiptPath, inputIdentity, expectedInputIdentity } = {}) {
   directory = resolve(directory);
   if (!plan.length) return 0;
   const started = performance.now(), runId = randomUUID(), startedAt = new Date().toISOString();
@@ -111,7 +111,7 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
     }
     if (receipt.status !== 'blocked') {
       if (inputIdentity) {
-        initialIdentity = inputIdentity();
+        initialIdentity = expectedInputIdentity ?? inputIdentity();
         if (typeof initialIdentity !== 'string' || !initialIdentity) throw Error('Invalid check input identity');
         receipt.inputIdentity = initialIdentity;
       }

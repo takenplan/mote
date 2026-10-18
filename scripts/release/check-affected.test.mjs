@@ -160,6 +160,34 @@ test('actual CLI dependency preflight fails before any selected regression can e
   assert.match(result.stdout, /UNRUN preflight\/release-contracts/);
 });
 
+test('actual CLI refuses an old narrow plan when a Server input changes during lock acquisition', t => {
+  const { directory, write, base } = repository(t);
+  const marker = join(directory, 'ignored/obsolete-plan-ran');
+  const hook = join(directory, 'ignored/lock-race.mjs');
+  write('scripts/release/check-plan.mjs');
+  write('scripts/release/check-plan.test.mjs', `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'obsolete plan');`);
+  write('ignored/lock-race.mjs', `
+    import fsp from 'node:fs/promises';
+    import {mkdirSync,writeFileSync} from 'node:fs';
+    import {syncBuiltinESMExports} from 'node:module';
+    const original=fsp.mkdir;
+    fsp.mkdir=async function(path,...args){
+      const value=await original.call(this,path,...args);
+      if(String(path).endsWith('mote-check-driver.lock')){
+        mkdirSync(${JSON.stringify(join(directory, 'apps/server/src'))},{recursive:true});
+        writeFileSync(${JSON.stringify(join(directory, 'apps/server/src/late.ts'))},'generated late Server input');
+      }
+      return value;
+    };syncBuiltinESMExports();
+  `);
+  const env = { ...process.env, NODE_OPTIONS: `--import=${hook}` }; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, [cli, '--base', base], { cwd: directory, encoding: 'utf8', env });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /check inputs changed/);
+  assert.match(result.stdout, /UNRUN preflight\/environment/);
+  assert.ok(!existsSync(marker));
+});
+
 test('source identity includes staged/unstaged/untracked source and ignores generated outputs', t => {
   const { directory, write, git } = repository(t);
   const first = sourceIdentity(directory);
