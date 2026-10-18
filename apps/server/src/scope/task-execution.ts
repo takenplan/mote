@@ -87,6 +87,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  /** Domain-owned bodies live in its scoped artifact store; task receipts can
   * retain a bounded locator without copying a report into task metadata. */
  publicResult?:(result:unknown)=>unknown;
+ /** Pure public metadata projection, also applied to already persisted progress.
+  * Retirement removes execution, not this read-only privacy boundary. */
+ publicProgress?:(progress:unknown)=>Readonly<Record<string,unknown>>|null;
  classify?:(error:unknown)=>ExecutionFailure;
  /** Portable input must be explicitly credential-free; otherwise export omits
   * the payload and portable recovery stays unavailable for that task kind. */
@@ -109,6 +112,7 @@ export class TaskExecution {
 
  readonly engine:ExecutionEngine;
  private readonly handlers=new Map<string,UserTaskHandler>();
+ private readonly progressViews=new Map<string,NonNullable<UserTaskHandler['publicProgress']>>();
  private readonly storage:ExecutionStorage;
  private readonly processors:ProcessorAdmission;
  private modelHost:TaskModelHost|undefined;
@@ -192,7 +196,7 @@ export class TaskExecution {
  }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
-  this.handlers.set(handler.kind,handler);
+  this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
   const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>[...(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),...this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>String(row.resource_key))],
@@ -324,7 +328,7 @@ export class TaskExecution {
    operations:()=>{assert();const operations=new Operations(this.storage,context.userId);return {page:(args:Parameters<Operations['page']>[0])=>{assert();return operations.page(args);},detail:(taskId:string,cursor?:number,limit?:number)=>{assert();return operations.detail(taskId,cursor,limit);},changes:(since:number)=>{assert();return operations.changes(since);}};},
   });
  }
- private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
+ private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
  /** Host domain's explicit replacement operation may acknowledge old unknown

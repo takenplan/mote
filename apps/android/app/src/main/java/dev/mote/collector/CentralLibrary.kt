@@ -276,7 +276,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         paged("/api/files?limit=30&query=" + enc(query), ui.card()) { row, card ->
             ui.text(row.getJSONObject("item").optString("title"), NativeFontRole.SECTION, card)
-            ui.text(row.optJSONObject("job")?.optString("state").orEmpty(), parent = card)
+            ui.text(if (row.optBoolean("hasOriginal")) row.optJSONObject("job")?.optString("state").orEmpty() else MoteI18n.text("已登记目录"), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { file(row.getString("captureId")) }
         }
         ui.button(MoteI18n.text("处理设置")) { CentralAdmin(screens).fileSettings() }
@@ -295,11 +295,17 @@ internal class CentralLibrary(private val screens: CentralScreens) {
     }
     fun file(id: String, offset: Int = 0) {
         val api = client
-        ui.work(MoteI18n.text("正在读取文件…"), { Triple(api.get("/api/files/" + enc(id)), api.get("/api/files/" + enc(id) + "/chunks?offset=$offset"), screens.pendingFileRetry(id)) }) { (row, chunks, pendingRetry) ->
+        ui.work(MoteI18n.text("正在读取文件…"), {
+            val row = api.get("/api/files/" + enc(id)); check(row.getString("captureId") == id)
+            val view = CentralFileView.read(row)
+            val chunks = if (view.artifactId != null) api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") else JSONObject().put("items", JSONArray()).put("nextOffset", JSONObject.NULL)
+            Triple(row, chunks, screens.pendingFileRetry(id))
+        }) { (row, chunks, pendingRetry) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val navigation = ui.navigationRevision
             fun active() = screens.ownsSelectedAccount() && ui.client === api && ui.navigationRevision == navigation
             val item = row.getJSONObject("item")
+            val view = CentralFileView.read(row)
             ui.text(item.optString("title"), NativeFontRole.TITLE_MOBILE); ui.text(item.optString("mimeType")); ui.text(item.optString("text"))
             val job = row.optJSONObject("job")
             val cancellation = row.optJSONObject("cancellation")
@@ -317,27 +323,27 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
             if (job != null) ui.disclosure(MoteI18n.text("处理详情")) { target -> ui.text(job.toString(2), parent = target) }
             row.optJSONObject("processing")?.let { status ->
-                for ((key, title) in listOf("saved" to "原件已保存", "processed" to "正文已处理", "indexed" to "正文已索引"))
+                for ((key, title) in listOf("saved" to if (view.originalRef == null) "已登记目录" else "原件已保存", "processed" to "正文已处理", "indexed" to "正文已索引"))
                     ui.text(MoteI18n.text(title) + " · " + status.getBoolean(key), parent = processing)
             }
-            val originalRef = row.getString("originalRef"); require(Regex("original:[a-f0-9]{64}").matches(originalRef))
-            val originalPath = "/api/ingress/originals/" + originalRef.removePrefix("original:")
+            val originalRef = view.originalRef
             val mime = item.getString("mimeType")
-            val expected = CentralDownload(row.getLong("sizeBytes"), row.getString("sha256"), if (Regex("(?:audio|video)/[A-Za-z0-9.+-]+").matches(mime)) mime else "application/octet-stream", false)
-            fun withOriginal(mode: String, action: (String) -> Unit) {
-                if (!active()) return
-                ui.work(MoteI18n.text("正在读取…"), { api.post(originalPath + "/tickets", JSONObject().put("mode", mode)) }) { ticket ->
-                    if (active()) action(originalPath + "/content?ticket=" + enc(ticket.getString("ticket")))
+            if (view.hasOriginal) {
+                val originalPath = "/api/ingress/originals/" + requireNotNull(originalRef).removePrefix("original:")
+                val expected = CentralDownload(row.getLong("sizeBytes"), row.getString("sha256"), if (Regex("(?:audio|video)/[A-Za-z0-9.+-]+").matches(mime)) mime else "application/octet-stream", false)
+                fun withOriginal(mode: String, action: (String) -> Unit) {
+                    if (!active()) return
+                    ui.work(MoteI18n.text("正在读取…"), { api.post(originalPath + "/tickets", JSONObject().put("mode", mode)) }) { ticket ->
+                        if (active()) action(originalPath + "/content?ticket=" + enc(ticket.getString("ticket")))
+                    }
                 }
-            }
-            if (row.optBoolean("hasOriginal")) {
                 if (mime.startsWith("image/")) ui.button(MoteI18n.text("查看原图")) { withOriginal("download") { image(it, body, expected) } }
                 if (mime.startsWith("audio/")) ui.button(MoteI18n.text("播放录音")) { withOriginal("play") { screens.playAudio(it, body, expected) } }
                 ui.button(MoteI18n.text("保存原件")) { withOriginal("download") { ui.saveCentral(it, item.optString("title", "mote-file"), mime, expected) } }
             }
-            ui.button(MoteI18n.text("导出")) { if (active()) ui.saveCentral("/api/files/" + enc(id) + "/export", "mote-file.tar.gz", "application/gzip") }
+            if (view.canExport) ui.button(MoteI18n.text("导出")) { if (active()) ui.saveCentral("/api/files/" + enc(id) + "/export", "mote-file.tar.gz", "application/gzip") }
             val items = chunks.optJSONArray("items") ?: JSONArray()
-            if (row.optJSONObject("processing")?.has("artifactId") == true) ui.button(MoteI18n.text("确认说话人")) {
+            if (view.canEdit) ui.button(MoteI18n.text("确认说话人")) {
                 if (!active()) return@button
                 ui.work(MoteI18n.text("正在读取…"), {
                     // Names replace the exact artifact's complete map. Read all pages
@@ -382,7 +388,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                         ui.text(location.toString(2), parent = detail)
                     }
                 }
-                if (fileEvidence != null) ui.button(MoteI18n.text("纠正此段"), parent = card) {
+                if (fileEvidence != null && view.canEdit) ui.button(MoteI18n.text("纠正此段"), parent = card) {
                     if (!active()) return@button
                     val original = chunk.getString("ocrText")
                     val text = ui.field(MoteI18n.text("校正此段文字"), original, multiline = true, parent = card)
@@ -397,19 +403,19 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
             }
             if (!chunks.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { file(id, chunks.getInt("nextOffset")) }
-            if (cancellation?.optBoolean("canCancel") == true) ui.button(MoteI18n.text("停止处理")) {
+            if (view.canProcess && cancellation?.optBoolean("canCancel") == true) ui.button(MoteI18n.text("停止处理")) {
                 ui.work(MoteI18n.text("正在停止处理…"), { api.post("/api/files/" + enc(id) + "/cancel") }) { file(id, offset) }
             }
             if (pendingRetry != null) {
                 ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"))
-                ui.button(MoteI18n.text("重试同一请求")) {
+                if (view.canProcess) ui.button(MoteI18n.text("重试同一请求")) {
                     if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.retryFileAdmission(api, id) }) { if (active()) file(id, offset) }
                 }
             }
-            if (pendingRetry == null && cancellation?.optString("wait") != "running") listOf("transcribe" to "转写", "diarize" to "说话人分离", "summary" to "摘要").forEach { (stage, label) ->
+            if (view.canProcess && pendingRetry == null && cancellation?.optString("wait") != "running") listOf("transcribe" to "转写", "diarize" to "说话人分离", "summary" to "摘要").forEach { (stage, label) ->
                 ui.button(MoteI18n.text("重试") + " · " + MoteI18n.text(label)) {
                     val retry = {
-                        if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.submitFileRetry(api, id, originalRef, JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown")) }) { if (active()) file(id, offset) }
+                        if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.submitFileRetry(api, id, requireNotNull(originalRef), JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown")) }) { if (active()) file(id, offset) }
                     }
                     if (cancellation?.optString("wait") == "unknown") screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
                 }

@@ -1,3 +1,5 @@
+import {registerPerceptionRoutes} from './processing-perception.js';
+import type {ManagedMedia} from './media-assets.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {registerUserRoute,type ScopedRuntime} from './http.js';
@@ -10,15 +12,16 @@ import {registerProcessingImages} from './processing-images.js';
 import {registerProcessingFiles} from './processing-files.js';
 import type {ImportPythonPackConfig} from '../config.js';
 
-export function registerProcessing(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,ingress:IngressHost,plugins:ScopedPluginHost,privateCursorKey:string,sourcePacks:readonly ImportPythonPackConfig[]=[]){
- const host=new ProcessingHost(runtime,db,configuration,execution,ingress,plugins,sourcePacks);
+export function registerProcessing(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,ingress:IngressHost,plugins:ScopedPluginHost,privateCursorKey:string,sourcePacks:readonly ImportPythonPackConfig[]=[],managedMedia?:ManagedMedia){
+ const host=new ProcessingHost(runtime,db,configuration,execution,ingress,plugins,sourcePacks,managedMedia);
  const service=(services:ReturnType<ScopedRuntime['services']['forUser']>)=>services.get<ReturnType<ProcessingHost['forUser']>>(PROCESSING_DOMAIN);
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/processing',service:PROCESSING_DOMAIN,handle:({services})=>service(services).view()});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN,handle:({services,request})=>service(services).derive(request.body)});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/processing',service:PROCESSING_DOMAIN,handle:({services,request})=>service(services).submit(request.body)});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/processing/originals/:id',service:PROCESSING_DOMAIN,handle:({services,request})=>service(services).status('original:'+z.object({id:z.string().regex(/^[a-f0-9]{64}$/)}).parse(request.params).id)});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/processing/artifacts/:id',service:PROCESSING_DOMAIN,handle:({services,request})=>service(services).artifact(z.object({id:z.string().regex(/^[a-f0-9]{64}$/)}).parse(request.params).id)});
- registerProcessingImages(runtime,db,host,execution);
+ host.perception.bindImages(registerProcessingImages(runtime,db,host,execution));
+ registerPerceptionRoutes(runtime,host);
  const files=registerProcessingFiles(runtime,db,host,ingress,execution,privateCursorKey);
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/file-processing',service:PROCESSING_DOMAIN,handle:({context})=>host.policies.view(context)});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/file-processing/test-local',service:PROCESSING_DOMAIN,handle:({services,request})=>service(services).testLocal(request.body)});

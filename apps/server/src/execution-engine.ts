@@ -12,7 +12,11 @@ export type ExecutionState='waiting'|'running'|'blocked'|'succeeded'|'failed'|'c
 export type ExecutionLane='background'|'interactive';
 /** Trusted host configuration. Lane is derived from existing product identity,
  * never from model-authored input or a new persistent authority field. */
-export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane};
+export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane;
+ /** Host-defined capacity shared across pools. A coordinator and its exact
+  * physical child may share one unit; input cannot install this callback. */
+ partition?:(step:ExecutionStep)=>{key:string;unit:string;concurrency:number}|undefined;
+};
 /** Issued and checked by the host task adapter; never accepted from task input.
  * A session credential is deliberately absent: logout does not revoke work. */
 export type ExecutionOwnership=Readonly<{userId:string;authorizationEpoch:number;grantId?:string}>;
@@ -84,7 +88,7 @@ export class ExecutionEngine {
  private programs=new Map<string,Promise<unknown>>();
  private handlers=new Map<string,ExecutionHandler>();
  private admissions=new Map<string,ExecutionPoolAdmission>();
- private active=new Map<string,{controller:AbortController;task:Promise<void>;pool:string;kind:string;lane:ExecutionLane}>();
+ private active=new Map<string,{controller:AbortController;task:Promise<void>;pool:string;kind:string;lane:ExecutionLane;step:ExecutionStep}>();
  private stopping=false;
  private pumping=false;
  private pumpAgain=false;
@@ -132,18 +136,29 @@ export class ExecutionEngine {
  private running(pool:string,lane:ExecutionLane,now=this.now()){
   return (this.store.db.prepare("SELECT * FROM execution_steps WHERE pool=? AND state='running' AND lease_until>?").all(pool,now) as Row[]).filter(row=>this.lane(view(row))===lane).length;
  }
- /** One readiness predicate is shared by admission and static resource peers.
-  * Configured owner/unit partitions extend this predicate, never a second
-  * resource-wait capacity calculation. */
+ private capacity(step:ExecutionStep){
+  const lane=this.lane(step),partition=this.admissions.get(step.pool)?.partition?.(step);
+  if(!partition)return {key:JSON.stringify(['pool',step.pool,lane]),unit:step.id,limit:this.limit(step.pool,lane),partitioned:false};
+  if(!partition.key||partition.key.length>256||!partition.unit||partition.unit.length>256||!Number.isSafeInteger(partition.concurrency)||partition.concurrency<1)throw Error('Invalid host execution capacity');
+  return {key:JSON.stringify(['partition',partition.key]),unit:partition.unit,limit:partition.concurrency,partitioned:true};
+ }
  private capacityAvailable(step:ExecutionStep,now=this.now()){
-  const lane=this.lane(step),limit=this.limit(step.pool,lane);
-  return !this.active.has(step.id)&&[...this.active.values()].filter(active=>active.pool===step.pool&&active.lane===lane).length<limit&&this.running(step.pool,lane,now)<limit;
+  if(this.active.has(step.id))return false;
+  const capacity=this.capacity(step),units=new Set<string>();
+  const pools=capacity.partitioned?[...this.admissions].filter(([,admission])=>admission.partition).map(([pool])=>pool):[step.pool];
+  const count=(current:ExecutionStep)=>{const value=this.capacity(current);if(value.key===capacity.key)units.add(value.unit);};
+  // Durable leases arbitrate other connections; this host also counts local
+  // execution promises that have not yet finished settling.
+  for(const row of this.store.db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until>? AND pool IN(SELECT value FROM json_each(?))").all(now,JSON.stringify(pools)))count(view(row as Row));
+  for(const active of this.active.values())if(pools.includes(active.pool))count(active.step);
+  return units.has(capacity.unit)||units.size<capacity.limit;
  }
  /** Safe resource projection: no goals, evidence, provider credentials or prose. */
  poolSnapshot(pool:string){
   const lanes=this.admissions.has(pool)?['background','interactive'] as const:['background'] as const;
   const waiting=this.store.db.prepare("SELECT * FROM execution_steps WHERE pool=? AND state='waiting'").all(pool) as Row[];
-  return Object.fromEntries(lanes.map(lane=>[lane,{limit:this.limit(pool,lane),running:this.running(pool,lane),waiting:waiting.filter(row=>this.lane(view(row))===lane).length}]));
+  const running=this.store.db.prepare("SELECT * FROM execution_steps WHERE pool=? AND state='running' AND lease_until>?").all(pool,this.now()) as Row[];
+  return Object.fromEntries(lanes.map(lane=>{const limits=new Map<string,number>();limits.set(JSON.stringify(['pool',pool,lane]),this.limit(pool,lane));for(const row of [...waiting,...running])if(this.lane(view(row))===lane){const value=this.capacity(view(row));limits.set(value.key,value.limit);}return [lane,{limit:Math.min(Number.MAX_SAFE_INTEGER,[...limits.values()].reduce((sum,value)=>sum+value,0)),running:this.running(pool,lane),waiting:waiting.filter(row=>this.lane(view(row))===lane).length}];}));
  }
  register(handler:ExecutionHandler){if(this.handlers.has(handler.kind))throw Error('Duplicate execution handler');this.handlers.set(handler.kind,handler);return async()=>{if(this.handlers.get(handler.kind)!==handler)return;this.handlers.delete(handler.kind);const running=[...this.active.values()].filter(value=>value.kind===handler.kind);for(const value of running)value.controller.abort(interrupted);await Promise.allSettled(running.map(value=>value.task));};}
  enqueue(operationId:string,kind:string,input:Record<string,unknown>,options:ExecutionEnqueueOptions={}){
@@ -286,15 +301,14 @@ export class ExecutionEngine {
    const pools=[...new Set([...this.handlers.values()].map(h=>h.pool))];
    for(const pool of pools){
     const handlers=[...this.handlers.values()].filter(h=>h.pool===pool),lanes:ExecutionLane[]=this.admissions.has(pool)?['background','interactive']:['background'];
-    for(const lane of lanes){const limit=this.limit(pool,lane);
-    while([...this.active.values()].filter(a=>a.pool===pool&&a.lane===lane).length<limit){
-     if(this.running(pool,lane)>=limit)break;
+    for(const lane of lanes){
+    for(;;){
      const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_user_fairness u ON u.pool=e.pool AND u.user_id=e.user_id LEFT JOIN execution_stage_groups g ON g.step_id=e.id LEFT JOIN execution_stage_fairness s ON s.pool=e.pool AND s.user_id=e.user_id AND s.group_key=g.group_key LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence)) ORDER BY coalesce(u.last_started,0),coalesce(s.last_started,0),coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
      let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.capacityAvailable(view(candidate as Row))&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
      const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
-     this.active.set(row.id,{controller,task,pool,kind:row.kind,lane});started.push(task);
+     this.active.set(row.id,{controller,task,pool,kind:row.kind,lane,step:view(row)});started.push(task);
     }
     }
    }

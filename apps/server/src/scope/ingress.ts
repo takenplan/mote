@@ -23,6 +23,7 @@ export const INGRESS_DOMAIN='ingress';
 const batchId=z.string().min(1).max(256);
 const conflict=()=>new PrivateDataError('conflict',409);
 export const strictBase64=(value:string)=>{if(value.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(value))throw new PrivateDataError('invalid_data');const bytes=Buffer.from(value,'base64');if(bytes.toString('base64')!==value)throw new PrivateDataError('invalid_data');return bytes;};
+const fileRevisionItem=(manifest:z.infer<typeof fileRevisionSchema>)=>sourceItemSchema.parse({...manifest.item,document:{...manifest.item.document,path:manifest.relativePath},metadata:{...manifest.item.metadata,version:1,file:{...manifest.item.metadata?.file,sizeBytes:manifest.sizeBytes}}});
 const captureId=(sourceId:string,item:SourceItem)=>{const digest=identityHash([sourceId,item.externalId,item.revision]);return `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;};
 export type IngressOriginalFormat='capture'|'source-item'|'file'|'recording-audio-backup'|`processor:${string}`;
 type SuppliedOriginal={bytes:Buffer;mime:string;format?:Exclude<IngressOriginalFormat,'capture'>;processingProfileId?:string};
@@ -182,7 +183,7 @@ export class IngressHost{
    beginSnapshotRecovery:(sourceId:string,captureId:string,value:unknown):any=>sql.transaction(()=>{
     source(sourceId);const input=z.object({batchId,revision:fileRevisionSchema,recoveryId:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(value),row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,captureId);if(!row)throw missing();const descriptor=original('original:'+row.id),record=data().capture(captureId),prior=sql.get('SELECT u.id,u.receipt,r.recovery_id FROM ig_uploads u JOIN ig_upload_recoveries r ON r.user_id=u.user_id AND r.upload_id=u.id WHERE u.user_id=$user AND u.source_id=? AND u.request_key=? AND r.original_id=?',sourceId,input.batchId,String(row.id));
     const {sourceId:canonicalSource,...provenance}=record.provenance!;const canonical=sourceItemSchema.parse({...provenance,observedAt:record.capturedAt,title:record.windowTitle,text:record.ocrText,kind:record.source});
-    if(input.revision.sourceId!==sourceId||input.revision.sha256!==descriptor.hash||input.revision.sizeBytes!==descriptor.bytes||identityHash({...sourceItemSchema.parse(input.revision.item),observedAt:new Date(input.revision.item.observedAt).toISOString()})!==identityHash(canonical))throw conflict();
+    if(input.revision.sourceId!==sourceId||input.revision.sha256!==descriptor.hash||input.revision.sizeBytes!==descriptor.bytes||identityHash({...fileRevisionItem(input.revision),observedAt:new Date(input.revision.item.observedAt).toISOString()})!==identityHash(canonical))throw conflict();
     if(prior&&prior.recovery_id!==input.recoveryId)throw conflict();
     if(!prior?.receipt&&(!needsRecovery(descriptor)||input.recoveryId!==recoveryKey(descriptor.ref)))throw conflict();
     const upload=service.beginUpload(sourceId,{batchId:input.batchId,revision:input.revision});sql.run('INSERT INTO ig_upload_recoveries VALUES($user,?,?,?) ON CONFLICT(user_id,upload_id) DO NOTHING',upload.id,String(row.id),input.recoveryId);return upload;
@@ -231,7 +232,7 @@ export class IngressHost{
      const current=upload(id);if(current.receipt)return checkReceipt(JSON.parse(String(current.receipt)));
      const binding=source(String(current.source_id)),head=data().sourceItem(binding.id,manifest.item.externalId);
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
-     const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
+     const ack=data().receiveSourceItems(binding.id,[fileRevisionItem(manifest)],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      let reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot',manifest.item.layer==='snapshot'):undefined;
      if(reference&&!ack.duplicate&&manifest.processingProfileId)bindProfile(reference.ref,manifest.processingProfileId);
