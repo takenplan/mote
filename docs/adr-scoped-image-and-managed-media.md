@@ -69,7 +69,7 @@ current cursor tables, while native/portable recovery keeps M05's existing grant
 retirement rules. SQLite cursor/watermark positions stay private; only the account's queued count
 and actual M05 task state are exposed. A pure handler-declared M05 public-progress
 projection applies to persisted metadata too and remains after execution handler
-retirement; hiding one route or changing only new writes is insufficient. It
+retirement, service restart and source retirement/forgetting; hiding one route or changing only new writes is insufficient. It
 rewrites no stored data and grants no execution. Global row positions are not account
 progress or evidence of another account's activity. A cursor's displayed task
 state comes from M05, including failure
