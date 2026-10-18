@@ -35,6 +35,7 @@ import {registerPrivateData} from './private-data-routes.js';
 import {PrivateDataError} from './private-data-sql.js';
 import {Configurations} from './configuration.js';
 import {registerConfigurationRoutes} from './configuration-routes.js';
+import {ModelSettingsError} from '../model-settings.js';
 import {ConfigServiceError,type ConfigDocument} from '../config-service.js';
 import type {LifecycleAuthority} from './lifecycle.js';
 import {registerScopedPlugins} from './plugin-routes.js';
@@ -92,7 +93,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     registerWebInventory(runtime);
     app.setErrorHandler((error,_request,reply)=>{
       if(isStorageLimit(error)||error instanceof StoreError&&error.statusCode===507)return reply.code(507).send({error:'storage_limit'});
-      const failure=error instanceof AskError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const failure=error instanceof AskError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ModelSettingsError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl,context=>restoreFuture?.admit(context));

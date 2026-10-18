@@ -78,13 +78,15 @@ export function defaultModelSettings():ModelSettings {
   return {provider:'deepseek',protocol:preset.protocol,baseUrl:preset.baseUrl,model:'',reasoningEffort:'high',maxTokens:DEFAULT_MODEL_MAX_TOKENS,
     modelRequestTimeoutMs:DEFAULT_MODEL_REQUEST_TIMEOUT_MS,agentTimeoutMs:DEFAULT_AGENT_TIMEOUT_MS,allowUnauthenticatedLocal:false,apiKey:'',headers:{},extraBody:{}};
 }
-export const deploymentModelSettingsSchema=z.preprocess(raw=>{
+/** Shared by configuration validation and the page credential-reuse guard. */
+export function normalizeDeploymentModelSettingsInput(raw:unknown):unknown{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))return raw;
   const value=raw as Partial<ModelSettings>,provider=value.provider??'deepseek',preset=modelProvider(provider),protocol=value.protocol??preset?.protocol??'deepseek';
   return {...defaultModelSettings(),baseUrl:preset?.baseUrl??'',reasoningEffort:protocol==='deepseek'?'high':'auto',
     modelRequestTimeoutMs:protocol==='codex-app-server'?null:DEFAULT_MODEL_REQUEST_TIMEOUT_MS,agentTimeoutMs:protocol==='codex-app-server'?null:DEFAULT_AGENT_TIMEOUT_MS,
     ...(protocol==='codex-app-server'?{serviceTier:'default'}:{}),allowUnauthenticatedLocal:preset?.allowUnauthenticatedLocal??false,...value,provider,protocol};
-},settingsSchema);
+}
+export const deploymentModelSettingsSchema=z.preprocess(normalizeDeploymentModelSettingsInput,settingsSchema);
 export const modelDomainSchema = z.object({
   deployment:deploymentModelSettingsSchema.default({}),profiles:z.array(profileSchema).max(30).default([]),defaults:defaultsSchema.default(defaultModelAssignments),defaultModels:defaultModelsSchema.default({}),
   embedding:z.object({model:line(512).default(''),baseUrl:line(4096).default(''),apiKey:apiKey.default('')}).strict().default({}),

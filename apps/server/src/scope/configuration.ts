@@ -16,12 +16,13 @@ import type {Accounts} from './accounts.js';
 import type {DomainLifecycle,LifecycleAuthority,UserDataSubject,UserExport} from './lifecycle.js';
 import {ModelResources,userModelFields,removeCredentials,type UserModelConfiguration,type UserModelReference} from './model-resources.js';
 import {ModelSnapshots} from './model-snapshots.js';
-import {modelSettingsSchema,modelTestMessage,type ModelDomain} from '../model-settings.js';
+import {modelSettingsSchema,modelTestMessage,ModelSettingsError,normalizeDeploymentModelSettingsInput,type ModelDomain} from '../model-settings.js';
 import {providerModels,codexModels} from '../model-catalog.js';
 import {testModelConnection} from '../model-connection-probe.js';
 import {createAgent} from '@mote/agent';
 import {ExecutionFailure} from '../execution-engine.js';
 import {isLoopback,requestLocalJson} from '../local-http.js';
+import {scopedUsageSummary} from './configuration-usage.js';
 import {ModelUsageLedger,modelTokensSchema,modelUsageReceiptSchema,portableUsageReceipt,type ModelUsageStart} from './model-usage.js';
 
 const priceDomain=z.object({items:z.array(priceSchema).max(500).default([])}).strict();
@@ -50,9 +51,9 @@ function restoreFileHash(path:string):string{
   finally{if(handle!==undefined)closeSync(handle);}
 }
 type Entry={service:ConfigService;generation:number;accessKey:string;subject:UserDataSubject;initializing:Promise<void>};
-export type ModelLease=Readonly<{id:string;snapshotId:string;deploymentId:string;userId:string;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:Readonly<{kind:'shared'|'personal';id:string}>;provider:string;model:string}>;
+export type ModelLease=Readonly<{id:string;snapshotId:string;deploymentId:string;userId:string;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:Readonly<UserModelReference>;provider:string;model:string}>;
 type PrivateLease={context:UserContext;generation:number;sharedGeneration?:number;credentialGeneration?:number;credentialRecoveryGeneration?:number;settings:ModelSettings;price?:ModelPrice;configuration:ConfigDocument};
-type DurableSnapshot=Omit<PrivateLease,'context'>&{version:1;deploymentId:string;userId:string;authorizationEpoch:number;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:{kind:'shared'|'personal';id:string};credentialFingerprint?:string};
+type DurableSnapshot=Omit<PrivateLease,'context'>&{version:1;deploymentId:string;userId:string;authorizationEpoch:number;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:UserModelReference;credentialFingerprint?:string};
 export type ModelLeaseRestore={status:'restored';lease:ModelLease}|{status:'unavailable';reason:'snapshot_unavailable'|'authorization_changed'|'configuration_deleted'|'credentials_revoked'|'shared_resource_revoked'|'operation_mismatch'};
 type CredentialState={profile_id:string;generation:number;recovery_generation:number;present:number;has_credentials:number;fingerprint:string|null;components:string};
 const credentialsHash=(settings:ModelSettings)=>restoreHash({apiKey:settings.apiKey,headers:settings.headers,extraBody:settings.extraBody});
@@ -60,6 +61,28 @@ function credentialComponents(settings:ModelSettings){
   const paths:string[]=[];
   const visit=(value:unknown,path:string[])=>{if(value&&typeof value==='object'){for(const [key,child] of Object.entries(value))visit(child,[...path,key]);}else if(value!==null&&value!==undefined&&!(typeof value==='string'&&!value.trim()))paths.push(restoreHash(path));};
   visit({apiKey:settings.apiKey,headers:settings.headers,extraBody:settings.extraBody},[]);return paths.sort();
+}
+const object=(value:unknown):value is Record<string,unknown>=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
+const hasCredential=(value:unknown)=>typeof value==='string'?Boolean(value):Boolean(value&&typeof value==='object'&&Object.keys(value).length);
+/** Page markers retain only this account's same-ID credential at the pinned
+ * revision. A changed target requires the original explicit reuse decision. */
+function assertCredentialReuse(previous:unknown,next:unknown,allow=false,retainMissing=false):void {
+  if(allow||!object(previous)||!object(next))return;
+  const check=(prior:unknown,candidate:unknown,normalizeDeployment=false)=>{
+    if(!object(prior)||!object(candidate))return;
+    // Deployment input has defaults: omitting a target field may itself change
+    // the endpoint. Compare the same normalized target that validation uses.
+    const target=normalizeDeployment?normalizeDeploymentModelSettingsInput(candidate) as Record<string,unknown>:candidate;
+    const changed=['provider','protocol','baseUrl'].some(key=>Object.hasOwn(target,key)&&target[key]!==prior[key]);
+    const retained=['apiKey','headers','extraBody'].some(key=>hasCredential(prior[key])&&(candidate[key]===true||retainMissing&&!Object.hasOwn(candidate,key)));
+    if(changed&&retained)throw new ModelSettingsError('model_settings_credential_reuse');
+  };
+  if(Object.hasOwn(next,'deployment'))check(previous.deployment,next.deployment,true);
+  if(Array.isArray(next.profiles))for(const profile of next.profiles){
+    if(!object(profile)||typeof profile.id!=='string')continue;
+    const prior=Array.isArray(previous.profiles)?previous.profiles.find(value=>object(value)&&value.id===profile.id):undefined;
+    if(object(prior))check(prior.settings,profile.settings);
+  }
 }
 export type UserConfigurationService=ReturnType<Configurations['forUser']>;
 
@@ -218,23 +241,52 @@ export class Configurations {
     const copied=input.includeCredentials?clone(source):removeCredentials({profiles:[source],selections:{}}).profiles[0]!;
     await entry.service.replace('models',{...configuration,profiles:[...configuration.profiles,{...copied,id:input.id,name:input.name}]},input.revision,current);current();return safeView(entry.service);
   }
-  /** Manual connection tools receive only a pinned complete reference. They
-   * never borrow another profile's credentials or a private archive reader. */
+  /** Personal drafts reuse the original no-save inspection journey. Shared
+   * resources accept only an immutable reference, never caller transport fields. */
   private async inspectModel<T>(context:UserContext,raw:unknown,work:(settings:ModelSettings,current:()=>void)=>Promise<T>){
-    const input=z.object({revision:nonnegative,reference:z.object({kind:z.enum(['personal','shared']),id:z.string().min(1).max(80)}).strict()}).strict().parse(raw),entry=await this.entry(context);
-    const settings=()=>{this.assertResources();const configuration=this.resources.schema().parse(entry.service.current('models'));if(input.reference.kind==='shared')return this.resources.resolve({profiles:[],selections:{chat:input.reference}},'chat').settings;const profile=configuration.profiles.find(profile=>profile.id===input.reference.id);if(!profile)throw new ScopeError('scope_unavailable',404);return clone(profile.settings);};
+    const input=z.object({revision:nonnegative,reference:z.object({kind:z.enum(['personal','shared']),id:z.string().min(1).max(80)}).strict(),draft:z.unknown().optional(),allowCredentialReuse:z.boolean().optional()}).strict().parse(raw),entry=await this.entry(context);
+    this.options.authority.assert(context);
+    if(input.draft!==undefined&&entry.service.revision!==input.revision)throw new ConfigServiceError('config_conflict');
+    if(input.draft!==undefined&&input.reference.kind!=='personal')throw new ConfigServiceError('config_invalid','models');
+    const settings=()=>{
+      this.assertResources();const configuration=this.resources.schema().parse(entry.service.current('models'));
+      if(input.reference.kind==='shared')return this.resources.resolve({profiles:[],selections:{chat:{kind:'shared',id:input.reference.id}}},'chat').settings;
+      const profile=configuration.profiles.find(profile=>profile.id===input.reference.id);
+      if(input.draft===undefined){if(!profile)throw new ScopeError('scope_unavailable',404);return clone(profile.settings);}
+      if(!object(input.draft))throw new ConfigServiceError('config_invalid','models');
+      const draft=clone(input.draft),prior=profile?.settings;
+      assertCredentialReuse({profiles:profile?[profile]:[]},{profiles:[{id:input.reference.id,settings:draft}]},input.allowCredentialReuse,true);
+      for(const key of ['apiKey','headers','extraBody'] as const){
+        const empty=key==='apiKey'?'':{};
+        if(!Object.hasOwn(draft,key))draft[key]=clone(prior?.[key]??empty);
+        else if(typeof draft[key]==='boolean'){
+          if(draft[key]!==hasCredential(prior?.[key]))throw new ConfigServiceError('config_invalid','models');
+          draft[key]=clone(prior?.[key]??empty);
+        }else if(draft[key]===null)draft[key]=empty;
+      }
+      return this.resources.schema().parse({profiles:[{id:input.reference.id,name:profile?.name??'Draft',settings:draft}],selections:{}}).profiles[0]!.settings;
+    };
     const selected=settings(),fingerprint=restoreHash(selected),sharedGeneration=input.reference.kind==='shared'?this.resources.generation(input.reference.id):undefined;
     const current=()=>{this.options.authority.assert(context);this.assertGeneration(context.userId,entry.generation);if(this.entries.get(context.userId)!==entry||entry.service.revision!==input.revision||sharedGeneration!==undefined&&sharedGeneration!==this.resources.generation(input.reference.id)||restoreHash(settings())!==fingerprint)throw new ConfigServiceError('config_conflict');};
     current();try{const result=await work(selected,current);current();return result;}catch(error){current();throw error;}
+  }
+  /** Host runtime dependency shared by discovery, probes and business execution. */
+  codex():Readonly<ModelDomain['codex']>{this.assertResources();return Object.freeze(clone(this.instance.current<ModelDomain>('models').codex));}
+  async replaceSharedModels(context:UserContext,value:unknown,revision:number,preserveRedactedSecrets=false,allowCredentialReuse=false){
+    this.options.authority.assertAdministrator(context);
+    if(this.instance.revision!==revision)throw new ConfigServiceError('config_conflict');
+    if(preserveRedactedSecrets)assertCredentialReuse(this.instance.saved('models'),value,allowCredentialReuse);
+    const current=()=>this.options.authority.assertAdministrator(context);
+    return preserveRedactedSecrets?this.instance.replaceView('models',value,revision,current):this.instance.replace('models',value,revision,current);
   }
   forUser(context:UserContext){
     this.options.authority.assert(context);
     const current=()=>this.options.authority.assert(context);
     return Object.freeze({
       view:async()=>{current();const {service}=await this.entry(context);current();return safeView(service);},
-      update:async(patches:Record<string,unknown>,revision:number)=>{current();const {service}=await this.entry(context);await service.updateMany(patches,revision,false,current);current();return safeView(service);},
-      replace:async(domain:string,value:unknown,revision:number,preserveRedactedSecrets=false)=>{current();const {service}=await this.entry(context);await (preserveRedactedSecrets?service.replaceView(domain,value,revision,current):service.replace(domain,value,revision,current));current();return safeView(service);},
-      replaceViews:async(values:Record<string,unknown>,revision:number)=>{current();const {service}=await this.entry(context);await service.updateMany(values,revision,true,current,true);current();return safeView(service);},
+      update:async(patches:Record<string,unknown>,revision:number,allowCredentialReuse=false,preserveRedactedSecrets=false)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(patches.models!==undefined)assertCredentialReuse(service.saved('models'),patches.models,allowCredentialReuse,true);await service.updateMany(patches,revision,false,current,preserveRedactedSecrets);current();return safeView(service);},
+      replace:async(domain:string,value:unknown,revision:number,preserveRedactedSecrets=false,allowCredentialReuse=false)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(domain==='models'&&preserveRedactedSecrets)assertCredentialReuse(service.saved('models'),value,allowCredentialReuse);await (preserveRedactedSecrets?service.replaceView(domain,value,revision,current):service.replace(domain,value,revision,current));current();return safeView(service);},
+      replaceViews:async(values:Record<string,unknown>,revision:number)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(values.models!==undefined)assertCredentialReuse(service.saved('models'),values.models);await service.updateMany(values,revision,true,current,true);current();return safeView(service);},
       reload:async()=>{current();const {service}=await this.entry(context);await service.reload(current);current();return safeView(service);},
       models:async()=>{current();const {service}=await this.entry(context);current();this.assertResources();return {features:[...MODEL_FEATURES],shared:this.resources.listShared(),personal:(safeView(service).domains.find(d=>d.id==='models')!.effective as UserModelConfiguration).profiles,selections:service.current<UserModelConfiguration>('models').selections};},
       copyModel:(id:string,input:unknown)=>this.copyPersonalModel(context,id,input),
@@ -248,6 +300,8 @@ export class Configurations {
       modelDescriptor:async(feature:ModelFeature,explicit?:{kind:'shared'|'personal';id:string})=>{current();const {service}=await this.entry(context);current();this.assertResources();const models=service.current<UserModelConfiguration>('models'),{reference,settings}=this.resources.resolve(explicit?{...models,selections:{...models.selections,[feature]:explicit}}:models,feature);return {reference,provider:settings.provider,model:settings.model,baseUrl:settings.baseUrl};},
       selection:async(feature:ModelFeature)=>{current();const {service}=await this.entry(context);current();this.assertResources();const {reference,settings}=this.resources.resolve(service.current('models'),feature);return {reference,provider:settings.provider,model:settings.model,revision:service.revision,instanceRevision:this.instance.revision};},
       usage:()=>{current();this.assertGeneration(context.userId,this.state(context.userId).generation);return this.usage(context.userId);},
+      usageSummary:async(query:unknown)=>{current();const {service}=await this.entry(context);current();return scopedUsageSummary(this.options.db,context.userId,service.current<{items:ModelPrice[]}>('modelPrices').items,query);},
+      setUsagePrice:async(body:unknown)=>{current();const price=priceSchema.parse(body),{service}=await this.entry(context);current();const items=service.current<{items:ModelPrice[]}>('modelPrices').items.filter(item=>item.provider!==price.provider||item.model!==price.model);await service.replace('modelPrices',{items:[...items,price]},service.revision,current);current();return price;},
     });
   }
   private usage(userId:string){
@@ -263,7 +317,7 @@ export class Configurations {
     const entry=await this.entry(context);this.options.authority.assert(context);
     this.assertResources();if(this.credentialsUnavailable.has(context.userId))throw new ConfigServiceError('config_unavailable');
     const models=entry.service.current<UserModelConfiguration>('models');
-    const explicit=selected?z.object({kind:z.enum(['personal','shared']),id:z.string().min(1).max(256)}).strict().parse(selected):undefined;
+    const explicit=selected?z.discriminatedUnion('kind',[z.object({kind:z.literal('shared'),id:z.string().min(1).max(256)}).strict(),z.object({kind:z.literal('personal'),id:z.string().min(1).max(256),model:z.string().min(1).max(512).optional()}).strict()]).parse(selected):undefined;
     const resolved=this.resources.resolve(explicit?{...models,selections:{...models.selections,[feature]:explicit}}:models,feature),reference=resolved.reference;
     // A personal connection may select a model ID for this request. A shared
     // resource remains the administrator's complete fixed connection.
@@ -286,7 +340,7 @@ export class Configurations {
     if(!z.string().uuid().safeParse(snapshotId).success||!validScopeId(expectedOperationId))return unavailable('snapshot_unavailable');
     let raw:unknown;try{raw=this.snapshots.read(context.userId,snapshotId);}catch{return unavailable('snapshot_unavailable');}
     if(!raw)return unavailable('snapshot_unavailable');
-    const parsed=z.object({version:z.literal(1),deploymentId:z.string(),userId:z.string(),authorizationEpoch:nonnegative,operationId:z.string(),feature:z.enum(MODEL_FEATURES),revision:nonnegative,instanceRevision:nonnegative,reference:z.object({kind:z.enum(['shared','personal']),id:z.string()}).strict(),generation:nonnegative,sharedGeneration:nonnegative.optional(),credentialGeneration:nonnegative.optional(),credentialRecoveryGeneration:nonnegative.optional(),credentialFingerprint:z.string().optional(),settings:modelSettingsSchema,price:priceSchema.optional(),configuration:z.record(z.unknown())}).strict().safeParse(raw);
+    const parsed=z.object({version:z.literal(1),deploymentId:z.string(),userId:z.string(),authorizationEpoch:nonnegative,operationId:z.string(),feature:z.enum(MODEL_FEATURES),revision:nonnegative,instanceRevision:nonnegative,reference:z.discriminatedUnion('kind',[z.object({kind:z.literal('shared'),id:z.string()}).strict(),z.object({kind:z.literal('personal'),id:z.string(),model:z.string().optional()}).strict()]),generation:nonnegative,sharedGeneration:nonnegative.optional(),credentialGeneration:nonnegative.optional(),credentialRecoveryGeneration:nonnegative.optional(),credentialFingerprint:z.string().optional(),settings:modelSettingsSchema,price:priceSchema.optional(),configuration:z.record(z.unknown())}).strict().safeParse(raw);
     if(!parsed.success)return unavailable('snapshot_unavailable');const snapshot=parsed.data;
     if(snapshot.deploymentId!==context.deploymentId||snapshot.userId!==context.userId)return unavailable('snapshot_unavailable');
     if(snapshot.operationId!==expectedOperationId)return unavailable('operation_mismatch');
@@ -296,7 +350,7 @@ export class Configurations {
     let entry:Entry;try{entry=await this.entry(context);}catch(error){this.options.authority.assert(context);return unavailable('snapshot_unavailable');}
     this.options.authority.assert(context);try{this.assertResources();}catch{return unavailable('snapshot_unavailable');}
     if(snapshot.reference.kind==='shared'){
-      try{if(snapshot.sharedGeneration!==this.resources.generation(snapshot.reference.id))return unavailable('shared_resource_revoked');const current=this.resources.resolve({profiles:[],selections:{[snapshot.feature]:snapshot.reference}},snapshot.feature);if(restoreHash(current.settings)!==restoreHash(snapshot.settings))return unavailable('shared_resource_revoked');}catch{return unavailable('shared_resource_revoked');}
+      try{if(snapshot.sharedGeneration!==this.resources.generation(snapshot.reference.id))return unavailable('shared_resource_revoked');this.resources.resolve({profiles:[],selections:{[snapshot.feature]:snapshot.reference}},snapshot.feature);}catch{return unavailable('shared_resource_revoked');}
     }else{
       const credential=this.credentialState(context.userId,snapshot.reference.id);
       if(this.credentialsUnavailable.has(context.userId)||!credential?.present||credential.generation!==snapshot.credentialGeneration||credential.recovery_generation!==snapshot.credentialRecoveryGeneration||credential.fingerprint!==snapshot.credentialFingerprint)return unavailable('credentials_revoked');
@@ -319,15 +373,14 @@ export class Configurations {
   }
   /** M05/M06/M07 hold a genuine lease, not a deserialized receipt. Logout does
    * not cancel admitted work; disable/reset/delete fences all late publications.
-   * Shared catalog removal or a changed resource also revokes its leased access. */
+   * Shared resource withdrawal or changed transport authorization revokes leased access. */
   assertLease(lease:ModelLease){
     const privateLease=this.leases.get(lease);if(!privateLease)throw new ScopeError('invalid_identity',401);
     this.assertGeneration(lease.userId,privateLease.generation);this.accountFence(privateLease.context);
     this.assertResources();if(this.credentialsUnavailable.has(lease.userId))throw new ConfigServiceError('config_unavailable');
     if(lease.reference.kind==='shared'){
       if(privateLease.sharedGeneration!==this.resources.generation(lease.reference.id))throw new ScopeError('invalid_identity',401);
-      const actual=this.resources.resolve({profiles:[],selections:{[lease.feature]:lease.reference}},lease.feature);
-      if(JSON.stringify(actual.settings)!==JSON.stringify(privateLease.settings))throw new ScopeError('invalid_identity',401);
+      this.resources.resolve({profiles:[],selections:{[lease.feature]:lease.reference}},lease.feature);
     }
     else{const credential=this.credentialState(lease.userId,lease.reference.id);if(!credential?.present||credential.generation!==privateLease.credentialGeneration)throw new ScopeError('invalid_identity',401);}
     return privateLease;

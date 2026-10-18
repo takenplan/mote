@@ -210,7 +210,7 @@ export class TaskExecution {
    execute:async(step,signal,grant)=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
-    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
+    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,codex:this.modelHost.codex(),withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
      grant.assert();try{
       // M04 still cleans arbitrary callback exceptions and performs its own
       // post-callback lease assertion before a safe failure reaches the engine.

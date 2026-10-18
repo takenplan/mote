@@ -1,6 +1,6 @@
 # 服务端配置参考
 
-多用户生产路径已在 M04 拆分实例 YAML 与各账号的私人 YAML，真实 API、共享模型只读引用和凭据边界见 [M04 配置合同](design/multiuser-configuration.md)。下文的单所有者页面与各领域运行时说明仅适用于原有隔离算法 fixture；尚未完成的多用户能力继续拒绝，不能据此启用旧全局路由。M13 负责消费新合同的设置 renderer。
+Multi-user production uses instance YAML and one private YAML per account; see the [M04 configuration contract](design/multiuser-configuration.md). Personal model editing preserves draft catalog/probe, explicit credential reuse, saved/effective feedback and per-feature model selection. The Usage page preserves dates, timezones, filters, grouping, drilldown, pagination and prices. See the [configuration journey decision](adr-configuration-journey-parity.md) for restored behavior and shared-resource boundaries. The instance-only fields below do not grant private configuration authority or reopen retired global routes.
 
 中央使用一份私有 `mote.yaml`。网页设置与手改文件更新同一来源，ConfigService 按领域校验、准备资源、原子保存并应用。选型与边界见 [统一配置 ADR](adr-unified-configuration.md)，任务快照和授权见 [配置归属](configuration-ownership.md)。
 

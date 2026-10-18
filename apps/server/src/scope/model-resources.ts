@@ -10,7 +10,7 @@ import {modelSettingsSchema,registerModelSettingsProvider, type ModelDomain} fro
 import {moteText} from '../i18n.js';
 import {ScopeError} from './baseline.js';
 
-export interface UserModelReference {kind:'shared'|'personal';id:string}
+export type UserModelReference={kind:'shared';id:string}|{kind:'personal';id:string;model?:string};
 export interface UserModelConfiguration {
   profiles:ModelProfile[];
   selections:Partial<Record<ModelFeature,UserModelReference>>;
@@ -25,7 +25,7 @@ export interface SharedModelResource {
 export type ModelProviderValidator=(settings:Readonly<ModelSettings>)=>void|boolean;
 export interface ResourceGenerationState {
   generation:number;
-  /** Hash of the complete fixed connection. Omission represents withdrawal. */
+  /** Hash of transport authorization. Request tuning does not revoke admitted snapshots. Omission represents withdrawal. */
   fingerprint?:string;
 }
 export interface ResourceGenerationRecord extends ResourceGenerationState {id:string}
@@ -47,10 +47,10 @@ export const userModelFields:ConfigFieldMetadata[]=[
 
 const invalid=()=>new ConfigServiceError('config_invalid','models');
 const identifier=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/);
-const reference=z.object({
-  kind:z.enum(['shared','personal']),
-  id:z.union([identifier,z.literal(DEPLOYMENT_MODEL_PROFILE_ID)]),
-}).strict();
+const reference=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('shared'),id:z.union([identifier,z.literal(DEPLOYMENT_MODEL_PROFILE_ID)])}).strict(),
+  z.object({kind:z.literal('personal'),id:identifier,model:z.string().min(1).max(512).refine(value=>!/[\u0000-\u001f\u007f]/.test(value)).optional()}).strict(),
+]);
 const line=z.string().min(1).max(100).refine(value=>!/[\u0000-\u001f\u007f]/.test(value));
 
 function hasEnvironmentReference(value:unknown):boolean {
@@ -154,7 +154,10 @@ export class ModelResources {
       this.saveGeneration(id,{generation:state.generation+1});
     }
     for(const profile of profiles){
-      const fingerprint=createHash('sha256').update(JSON.stringify(profile.settings,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value)).digest('hex');
+      // A fixed authorization changes only when its transport target or credentials
+      // change. Model choice and request budgets remain pinned in admitted leases.
+      const {provider,protocol,baseUrl,apiKey,headers,extraBody,allowUnauthenticatedLocal}=profile.settings;
+      const fingerprint=createHash('sha256').update(JSON.stringify({provider,protocol,baseUrl,apiKey,headers,extraBody,allowUnauthenticatedLocal},(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value)).digest('hex');
       const prior=this.generations.get(profile.id);
       if(!prior)this.saveGeneration(profile.id,{generation:1,fingerprint});
       else if(prior.fingerprint!==fingerprint)this.saveGeneration(profile.id,{generation:prior.generation+1,fingerprint});
@@ -195,7 +198,8 @@ export class ModelResources {
   }
 
   /** Missing or retired references explicitly fail. There is no implicit
-   * deployment/default model and no caller-supplied endpoint or model override. */
+   * deployment/default model. Personal features may override only the model ID;
+   * shared connections remain fixed and no caller can override their transport. */
   resolve(configuration:UserModelConfiguration,feature:ModelFeature):{reference:UserModelReference;settings:ModelSettings} {
     this.assertAvailable();
     let parsed:UserModelConfiguration;
@@ -204,8 +208,10 @@ export class ModelResources {
     if(!selection)throw new ScopeError('scope_unavailable',503);
     const profiles=selection.kind==='shared'?this.reconcile():parsed.profiles;
     const profile=profiles.find(candidate=>candidate.id===selection.id);
-    if(!profile||!configured(profile.settings,feature))throw new ScopeError('scope_unavailable',503);
-    return {reference:structuredClone(selection),settings:structuredClone(profile.settings)};
+    if(!profile)throw new ScopeError('scope_unavailable',503);
+    const settings=selection.kind==='personal'&&selection.model!==undefined?modelSettingsSchema.parse({...profile.settings,model:selection.model}):profile.settings;
+    if(!configured(settings,feature))throw new ScopeError('scope_unavailable',503);
+    return {reference:structuredClone(selection),settings:structuredClone(settings)};
   }
 
   close():void {

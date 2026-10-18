@@ -1,8 +1,6 @@
 import {moteText} from '@mote/shared/i18n';
 import {type Api,type Device,errorMessage} from './api';
 import {useResource} from './useResource';
-import {TurnUsage} from './Usage';
-import type {UsageReceipt} from '@mote/shared';
 import type {Page} from './navigation';
 import {heartbeatSchema,type WorkActivityPage} from '@mote/shared';
 import {DeviceOverview} from './DeviceOverview';
@@ -21,8 +19,4 @@ export function ScopedDevices({api,onConnect}:{api:Api;onConnect?:()=>void}){
  for(const row of read.data?.items??[]){const {id,name,lastSeenAt,...input}=row,heartbeat=heartbeatSchema.safeParse(input);if(!heartbeat.success||typeof lastSeenAt!=='string'||!Number.isFinite(Date.parse(lastSeenAt))){registered.push(row);continue;}const {lastCaptureAt,error,...value}=heartbeat.data;reported.push({...value,lastSeenAt,...lastCaptureAt?{lastCaptureAt}:{},...error?{error}:{}});}
  const navigate=(path:string)=>{window.location.hash=path;},connect=()=>onConnect?.();
  return <section>{read.error!==undefined&&<p role="alert">{errorMessage(read.error)}</p>}{read.data&&(reported.length>0||!registered.length)&&<DeviceOverview key={JSON.stringify(api.connection)} devices={reported} onConnect={connect} onAdd={()=>navigate('#/connections/add')} onSources={()=>navigate('#/connections')}/>}{registered.length>0&&<section className="panel panel-pad"><h2>{moteText('已知设备')}</h2><p>{moteText('尚未上报采集与同步状态。')}</p><ul className="connection-list">{registered.map(device=><li key={device.id}><strong>{device.name}</strong><p>{device.platform}</p></li>)}</ul>{onConnect&&<button className="button" onClick={connect}>{moteText('生成设备二维码')}</button>}</section>}</section>;
-}
-export function ScopedUsage({api}:{api:Api}){
- const read=useResource<{items:UsageReceipt[]}>(api,'/api/usage');
- return <section className="panel panel-pad"><h1>{moteText('用量与费用')}</h1>{read.error!==undefined&&<p role="alert">{errorMessage(read.error)}</p>}{read.data?.items.map((item,index)=><TurnUsage key={index} usage={item}/>)}</section>;
 }

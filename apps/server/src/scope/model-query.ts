@@ -6,8 +6,8 @@ import {validationFeedback} from '../memory-validation.js';
 import type {TaskModelRun} from './task-model.js';
 import type {ModelUsageStart} from './model-usage.js';
 
-export function fencedUsage(start:TaskModelRun['startUsage'],commit:<T>(work:()=>T)=>T):Pick<TaskModelRun,'startUsage'>{
- return {startUsage:options=>{const meter=commit(()=>start(options));return {id:meter.id,interrupt:()=>meter.interrupt(),issued:()=>commit(()=>meter.issued()),update:tokens=>commit(()=>meter.update(tokens)),finish:(status,facts)=>{try{return commit(()=>meter.finish(status,facts));}catch(error){try{meter.interrupt();}catch{}throw error;}}};}};
+export function fencedUsage(start:TaskModelRun['startUsage'],commit:<T>(work:()=>T)=>T,codex?:AgentOptions['codex']):Pick<TaskModelRun,'startUsage'|'codex'>{
+ return {codex,startUsage:options=>{const meter=commit(()=>start(options));return {id:meter.id,interrupt:()=>meter.interrupt(),issued:()=>commit(()=>meter.issued()),update:tokens=>commit(()=>meter.update(tokens)),finish:(status,facts)=>{try{return commit(()=>meter.finish(status,facts));}catch(error){try{meter.interrupt();}catch{}throw error;}}};}};
 }
 
 const reasons=new Set(['invalid_response','invalid_json','invalid_shape','response_too_large','unretrieved_citation','truncated_citation','undeclared_citation','output_limit','tools_unverified','host_validation','tool_failure','image_disclosure_disabled']);
@@ -27,12 +27,12 @@ export function safeAgentFailure(error:unknown,context:FailureContext={}){
 /** One genuine query is one accounting fragment; provider request counts remain
  * provider facts. Authorization runs at the actual model-send boundary, after
  * resource gates. Stream callbacks replace the fragment's cumulative sample. */
-export function queryWithUsage(model:Pick<TaskModelRun,'startUsage'>,options:AgentOptions,input:QueryInput,attribution?:ModelUsageStart['attribution']):Promise<AgentAnswer>;
-export function queryWithUsage<T>(model:Pick<TaskModelRun,'startUsage'>,options:AgentOptions,input:QueryInput,attribution:ModelUsageStart['attribution']|undefined,accept:(result:AgentAnswer)=>T|Promise<T>):Promise<T>;
-export async function queryWithUsage(model:Pick<TaskModelRun,'startUsage'>,options:AgentOptions,input:QueryInput,attribution?:ModelUsageStart['attribution'],accept?:(result:AgentAnswer)=>unknown):Promise<unknown>{
+export function queryWithUsage(model:Pick<TaskModelRun,'startUsage'|'codex'>,options:AgentOptions,input:QueryInput,attribution?:ModelUsageStart['attribution']):Promise<AgentAnswer>;
+export function queryWithUsage<T>(model:Pick<TaskModelRun,'startUsage'|'codex'>,options:AgentOptions,input:QueryInput,attribution:ModelUsageStart['attribution']|undefined,accept:(result:AgentAnswer)=>T|Promise<T>):Promise<T>;
+export async function queryWithUsage(model:Pick<TaskModelRun,'startUsage'|'codex'>,options:AgentOptions,input:QueryInput,attribution?:ModelUsageStart['attribution'],accept?:(result:AgentAnswer)=>unknown):Promise<unknown>{
  const meter=model.startUsage({attribution});let agent:ReturnType<typeof createAgent>|undefined,status:'completed'|'failed'='failed',context:FailureContext={},facts:{executionStarted:false}|undefined,sample:TokenUsage|undefined,sends=0,failed=false;
  try{
-  agent=createAgent({...options,authorizeModelRequest:async()=>{await options.authorizeModelRequest?.();meter.issued();sends++;}});
+  agent=createAgent({...options,codex:model.codex??options.codex,authorizeModelRequest:async()=>{await options.authorizeModelRequest?.();meter.issued();sends++;}});
   const result=await agent.query({...input,onUsage:tokens=>{sample=tokens;meter.update(tokens);input.onUsage?.(tokens);},onTrace:event=>{if(event.runId)context.runId=event.runId;input.onTrace?.(event);},...(input.validateOutput?{validateOutput:async answer=>{const issue=await input.validateOutput!(answer);if(issue&&validationCodes.has(issue.code))context.causeCode=issue.code;return issue;}}:{})});
   // Acceptance is a local final check, after the model run has ended. A failed
   // check keeps the fragment failed and never asks the model to repair output.
