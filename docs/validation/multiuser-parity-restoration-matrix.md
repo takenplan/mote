@@ -335,30 +335,32 @@ Android实际执行已转交专人：backend070的49171/PID81228生成A/B/admin�
 
 Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6692af58b8ddf38c061b842aa644a336f4473dc4aee757fc99741400；14PASS/Server3164=3160PASS2FAIL0cancel2skip/后7UNRUN，Android未跑。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-3740e89c-required-gate-failed.json` SHA256f148b8814c3c5e44979d13f3497cba2ad4bf450f530e2e74c8c7f6331edfba9d；原log/receipt/plan保留。sameHEAD/clean/cleanupConfirmed/锁释放/PID71644 gone后已恢复原File owner一次：capture-browser83:160 OCR发布409external_result_unknown、multiuser-memory226:125 Hindsight503memory_provider_unavailable，根因待查，不凭状态归fixture/生产bug。新File源须后续重绑core；当前27a实际结果不自动替新源通过。driver随后已于16:33:42.275Z启动Ext544 fresh22，runb851c1f4-9437-46de-8761-de51e75c6e28/PID91038，Node26ABI147/JDK21/Gradle1/hidden；初始build/type结束进入测试后已退短peak，common完整锁继续，普通独立API/UI/model并行。当前Ext结果RUNNING，正式汇总/main未释放。
 
-## 当前证据登记（2026-10-19 05:06，历史段落不代表当前状态）
+## 当前证据登记（2026-10-19 05:43，历史段落不代表当前状态）
 
-当前候选与完整证据以[计划登记](../design/multiuser-parity-restoration-plan.md#模块所有权与候选登记)及其当前检查点为准。全部66主行与22跨域场景不变，整体NOT_READY，额外24小时等待已取消；10个Draft均未合并，正式integration只有管理文档，main未合、未部署。新证据不回填旧SHA；fixture、原生UI、物理设备、真实模型分别记。
+当前候选和完整证据见[计划登记](../design/multiuser-parity-restoration-plan.md#模块所有权与候选登记)与其当前检查点。66主行/22跨域场景不变，整体NOT_READY；11个Draft170–180均未合，正式integration只有管理文档，main未纳本轮业务、未部署。fixture、原生UI、物理设备、真实模型分列，新结果不回填旧SHA。
 
 | 输入 / 证据 | 实际已验 | 剩余 / 限制 |
 | --- | --- | --- |
-| FILE f29 / Draft176远端仍4c01 | 确认原24a实际intake在live/unknown前409未登记；最小deferPhysical修复独审aec591cd通过 | full19 run817782fa/PID93991在途，初始峰已退；旧4c01合格13/binding8fb87f26不覆盖新生产；非图片/Memory/Ask及新组合待验 |
-| ASK a021 / Draft179 | PM批准正常common9/9PASS，185.775725s；Web601/Shared198/JVM373 fresh78XML/25exec，binding50fc7117；独审101另列 | 原e427 full23 FAILED/Server3188P3F2skip/8UNRUN保留；非新full23或ServerPASS，组合/实际UI/模型另验 |
-| CONN a562 / Draft178 | 必要fresh四build1544输出dfb5b256；批准common6/6PASS166.674991s，Web604/Shared198/JVM376 fresh79XML/25exec，binding92e13e19 | 原fdd full14 FAILED/3159P1F2skip保持，独立clean9+15另列；非新Server/full14，native实际另验 |
-| CONFIG 2aa / 原ee42FAILED | test-only/prod0；完整79路径独审394cc910、3066未变mode/blob/1546输出；独立whole29+七consumer32 PASS | PM29e19d73批准8待跑；原ee42 full23 16PASS/Web594P1文件F/6UNRUN，Server3135P2skip，仅15明确baseline；原signal/VM cause UNKNOWN，非OOM定论 |
-| MEM6f44 / Draft177 | full18/18PASS1351.864914s，Server3222P2skip/Web602/Shared198/JVM374 fresh78XML/25exec；binding0d0ef7c9 | 本地required scope已闭合；旧855失败保留，不能替代新组合/模型/UI及退款零重放 |
-| LIFE b30 / Draft174 | 批准正常common13/13PASS191.836518s，Web603/Shared198/JVM372 fresh78XML/25exec，bindingc44810da | 旧6cbd fullFAILED保持，Server3168P2skip仅明确未变baseline；非新22或全部UI |
-| EXT5a / Draft175 | 独审完整57路径；freshServerbuild1505输出+批准5项PASS428.868812s（80/38/26/16整file groups），bindingbcfb9d59；fresh native20另列 | 原544 fullFAILED/21组件PASS分别保存，不拼新22；实际MCP/配置消费者及最终组合另验 |
-| 全12 source24a / manifestbaf2d7f7 | 431basepaths/217delta/44冲突20files/schema216/310工件；独审2bccae89源批准；本树四build/语义tsc/SQLite/Sharp与1625输出已绑定 | 首动态bd81d9f8 NOT_QUALIFIED：39P3F（HOT1P1F/Web4P2F/其他34P），后置安全断言未达部分UNREACHED；真实模型/UI未运行 |
-| 24a唯一SDK诊断 / 9623bcf1 | 110.583s/2P0F/无timeout/2596输入前后不变/PGID收；9865事件21files，14实际加载sentinel+copied plugin call，211flush dropped0 | NONREPRO_ONLY，原bd81/2044 FAIL保持、根因UNKNOWN；无未插桩开销测量；metadata峰实际释放晚declared due27秒保留，不重复nonce |
-| 新source-r2 / 原Exec有界source-only | managed新树自准确24a，真实纳f29/a021/2aa；旧24a物理树不改 | 新head/tree/逐hunk与独立delta审尚待；禁止整文件覆盖Core版本链；新资格/Web6/HOT/非图片MemoryAsk消费者/真实Mote-Codex及UI仍待 |
-| core2044 / 报告1f7735e1及47e9afc2 | 60工件实际Files→Memory3→Ask引用/取消/重启，A16/B0；另37工件生成文本Actions语义→人审/claim40.673s/A新增2/B0 | 原HOT1P1F/Web1P5F/两rawscreen Actions INCOMPLETE仍保留；旧单诊断仅NONREPRO；无native WRITE/delivery，archive parity UNKNOWN，不能转给新head |
-| Desktop55 / 旧73最小物理Mac scope | 原73实际main/preload/生成账号/中央详情/退出仅子范围；新55作者native4/Desktop18/main-preload5，D2源同字节 | 新full16与D1–D4/TCC/capture/打包release待；继承“编码对话”P2标签不是新回归 |
-| Android262+070 / 173+88+241旧工件 | 实际原App/Worker/SAF/切号冷启；LOCAL两生成calendar事件READ；D01 11键/33map恢复 | FLAG_SECURE App像素受限；READtrue/WRITEfalse，seed不证明Mote WRITE；实体OEM未验不阻本轮批准范围 |
-| Android实际capture / 52170f61 | 192工件核齐；8完整JPEG/557196B/576×1280；原OS同意→UploadWorker8ACK；A→B停采集→回A归属队列；A200/B404原件hash一致、冷启不自动采集 | 全生成数据/模型usage0/OCRdisabled；无inflight lateACK或OCR质量/WRITE/D2证明。原进程/ports/lease已清；PR172范围已同步 |
-| AND-PRIVACY-EFFECT-01 / ready3525e567 | 旧准备轮2min无ready明确UNRUN、无UI/进程变化；新21:04:42Z实际登记5582/070profile与5min boot峰后恢复原Client | 只做真实mask pixels/excludedApp效果；尚无PASS，不重复D01/transport/SAF/READ；权限仅原App→OS，不预授、不改FLAG_SECURE |
-| CHECK-SCOPE be096 / Draft173 | 正常2/2、独审52infra/24实际CLI/542绑定；精确3helper映射保所有消费者/security/update/scripts types/diagnostics与unknown/rename/mixed | Server并发4/runner串行不改；没有因理论少步骤宣称实测净收益 |
+| FILE f29 / Draft176 | full19 PASS1446.428666s，Server3166P2skip/Desktop606/Web601/Shared198，bindingd44385af；post全真，正常push/78paths | Android25UPTODATE/0fresh，79旧XML377不重记；旧4c01/286结果保持；新523 C红及非图片/Memory/Ask组合另验 |
+| CONFIG 2aa / Draft180 | 批准common8 PASS181.04322s，Web606/JVM382 fresh80XML/25exec，binding9f17dbea；独审完整79paths/test-onlyprod0及29+32 | 15旧明确baseline+新8，不拼新23/Server；原ee42 FAILED/原signalUNKNOWN不改；current依赖/1546输出/fresh环境资格，无旧installed-lock归档冒证 |
+| ASK a021 / Draft179 | 批准9 PASS185.775725s，Web601/Shared198/JVM373 fresh78XML/25exec，binding50fc7117 | 原e427 fullFAILED/3188P3F2skip保持；本分支不等于523，当前owner只读3个新复合失败 |
+| CONN a562 / Draft178 | fresh四build1544输出dfb5b256后批准6 PASS166.674991s，Web604/JVM376 fresh79XML，binding92e13e19 | 原fdd FAILED/3159P1F2skip不洗；不是新full14/Server，native实际另验 |
+| MEM6f44 / Draft177 | full18 PASS1351.864914s，Server3222P2skip/Web602/JVM374 fresh78XML，binding0d0ef7c9 | 旧855失败保持，新组合/退款零重放/实际全journey另验 |
+| LIFE b30 / Draft174 | 批准13 PASS191.836518s/Web603/JVM372 fresh78XML，bindingc44810da | 原6cbd FAILED/Server3168P2skip仅baseline；非新22/全部UI；523容量原case红待因果 |
+| EXT5a / Draft175 | freshServerbuild1505输出+批准5项PASS428.868812s（整file80/38/26/16），bindingbcfb9d59/native20另列 | 原544 FAILED保持，不拼新22；523相关C组UNRUN |
+| 原24a / 2bccae89源批准 | 431basepaths/217delta/44冲突20files/schema216/310工件，本树build/tsc/ABI | 首动态bd81 NOT_QUALIFIED39P3F；唯一SDK诊断110.583s2P仅NONREPRO，无开销baseline；原2044各失败也保留 |
+| 新source523 / a88ee206 | 三新祖先/9delta路径/1prod/3188其余对象/68+8工件；本树正常安装build/语义tsc/SQLite-Sharp，1625outputs root核齐 | source接受不等runtime；没有cross-tree deps/dist或ignored install scripts；原24a物理树不改 |
+| 523关键B与C整体 / 5a09c0b2 | 初次普通HOT2/107.771s、Web6/14.139s、File3/8.178s均P；C Ask整2=76/73P3F147.812s，87总fixture=84P3F/31工件已核 | NOT_QUALIFIED；两taskgraph memory.materials3vs2、capacity重试前POSTcalls2vs1，根因UNKNOWN；helper后续/容量B删除重试未达部分UNREACHED。余10组UNRUN，原Ask只读triage，不删producer/改count/默认洗绿 |
+| 523最小actual / 52c3b258与98400aeb | fresh空profile/DB/原CLI登录服务→现有Codex stdio→一个marker Ask turn/一个completed usage，13001in54out；SIGTERM0/49174退 | 仅连通；无archive tools/citations/evidence IDs，requests0report不推物理请求数；未Files→Memory/Ask3mode/Actions，不给C红或native前置借绿 |
+| 非图片六witness / d5c80cf7 | 仅外部artifact准备，audio held/unknown/text文件/source-item/cancel/通知索引计划；script3bf50f0f | 未syntax/type/执行，C红后未审run；非图片attachment新binding+旧ASR held仍REQUIRED/UNKNOWN，不手拼内部attach替代真实入口 |
+| core2044 / 1f7735e1与47e9afc2 | 60工件真实Files→Memory3→Ask/取消重启A16/B0；37工件文本Actions语义→人审claim40.673s/A新增2/B0 | 原HOT1P1F/Web1P5F/两rawscreen INCOMPLETE保持；无nativeWRITE，archive parity UNKNOWN，不转新head |
+| Android262+070已完成子范围 | 原App/Worker/SAF/切号冷启173；LOCAL两生成calendar事件READ88；D01 11键/33map恢复241；实际8完整JPEG/8ACK transport192 | 每组各自输入，模型usage0/READtrue-WRITEfalse；FLAG_SECURE App像素受限，非523；实体OEM未验不阻本轮批准范围 |
+| Android真实privacy / 7c461664 | 249工件root核齐/亲看生成mask；6新完整JPEG270609B/A200-B404；每图core130208全黑，Chrome排除16.575s负例+清规则2新ChromeACK | 全33-key maps/原OSAccessibilityOff/进程portsleases恢复；JPEG边缘2.8px不作exact-edge/2px PASS；其他app/OEM/race/模型质量/WRITE未验，不重复旧basic8/D01认绿 |
+| Native523后续plan / d0c00b1f | 只读30Androiddiff与原target→批准→首claim写入合同；无执行/新资源 | 新APK/installedSHA/backend资格/D2/WRITE均UNRUN；manual不能保证阻前台页auto执行；不预先烧claim、不复制DB、不伪造ACK |
+| Desktop55 / 旧73最小Mac scope | 原73实际main/preload/生成账号详情/退出；55作者native4/Desktop18/main-preload5，D2源同字节 | full16排Actions后；D1–D4/TCC/capture/打包release待；继承标签P2非新回归 |
+| CHECK-SCOPE be096 / Draft173 | 正常2/2、独审52infra/24实际CLI/542绑定，精确3helper并保原消费者/security/update/类型/diagnostics及unknown/rename/mixed | Server4/runner串行不改，无理论步数当实测收益 |
 
-唯一common当前File19；后Config批准8、Actions15、Desktop16及最终精确组合重选scope。Config当前依赖与1546产物在root proof8cd4a628绑定，原installed-lock未独立归档限制保留，必须fresh完整六TS+Android环境；漂移则重开必要build/consumer资格。根因未知的HOT不凭诊断阳性关闭，不加第二次盲跑。PM条件估计主收敛06:15–08:15、汇总Draft07:30–10:30，沿原01:25锚点按实际新增工作调整，不随heartbeat平移；失败/UNRUN不计节省。绝不把module local补验或旧070/2044/262实际子范围转换成新组合整体验收。
+当前唯一common为Actions15 run28c8c359/PID20316，21:34:57Z开始；Desktop16随后。523 full23只是prospective临时候选计划，正式final必须PM另行释放真实integration新SHA、重选完整gate及Final独验，当前不自动执行或正式汇总。PM条件区间主收敛06:15–08:15、汇总Draft07:30–10:30保持原01:25锚点；新3红triage/可能修复另记，未知不能保证或每heartbeat平移。额外24h等待已取消，失败/UNRUN不计节省。
 
 ## 跨模块最终冻结旅程
 
