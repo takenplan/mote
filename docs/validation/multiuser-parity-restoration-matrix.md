@@ -8,7 +8,7 @@
 
 每行继承计划的模块登记（owner chat / branch / PR / 独立验收 chat / 候选 SHA）；未填为尚无候选。`C/N/R/S/U/OLD` 见计划证据定义，均描述起点审计，不是本轮修复结果。每行末列同时保留本轮证据、未验证与阻塞，不能用 audit evidence 关闭。
 
-初态为OPEN；当前逐行状态与下方精确候选登记共同构成完整记录。WEB-W01/W02已由PM确认模块READY，其余未以候选代码或作者定向结果自动关闭。每次更新须提供精确源码SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分；模块READY仍不代表最终跨模块验收或合入释放。
+初态为OPEN；当前逐行状态与下方精确候选登记共同构成完整记录。WEB-W01/W02既有browser scope已由PM确认PASS，新增最终真机QA为PENDING；其余未以候选代码或作者定向结果自动关闭。每次更新须提供精确源码SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分；模块READY仍不代表最终跨模块验收或合入释放。
 
 ## 全部行共用的验收前置
 
@@ -17,6 +17,8 @@
 - 相关flow至少覆盖正常、合法空、单项失败、retry/restart、暂停/取消、来源或账号撤权/删除、配置变化、迟到结果；保留成功兄弟与unknown事实。高风险积压、跨天、A→B→A等多状态组合单列，不能被pairwise删除。
 - 用户语义由模型解释，修复检索/上下文不加词表路由；不新增上限、手工恢复步骤、静默降级或自动付费历史处理。
 - 模块PR聚焦检查与check:affected先dry-run排期、按原范围执行；最终组合仅集成driver运行。隐藏UI/无窗口模拟器为默认，原生权限、前台交互、真实设备/模型另记。
+
+用户新增的最终门槛适用于全部66跟踪行：真机、真实UI连续交互；涉及真实LLM时统一用已盘点的本机Codex Server。当前physical与真实Codex结果均PENDING/UNRUN，fixture/API/unit/DOM/headless/模拟器仅作支持。逐场景绑定设备UI锁、隔离测试profile/数据库、生成数据、实际入口/交互/预期与精确源码；同一设备或profile/DB独占，不同独立设备/后端可并行，完整checks仍单driver串行。交互前说明窗口和权限影响；缺设备/授权给PM具体清单后处理，不部署、不重跑个人资料、不采集个人截图。MCP私人能力访问需用户鉴权，协议初始化由客户端完成；外部公开匿名源保留原合同，额外手工session/source步骤仍需证据。客户端只读盘点与细分矩阵待回，未启动真机UI或模型调用。
 
 ## 核心58项
 
@@ -126,8 +128,8 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | READY：Q002 driver required gate及R006独立动态PASS，PM已确认；跨模块/释放仍待 |
-| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | READY：Q002 driver required gate及R006独立动态PASS，PM已确认；跨模块/释放仍待 |
+| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | BROWSER_SCOPE_PASS：Q002/R006及旧PM确认保留；新增最终PHYSICAL_QA_PENDING，跨域/汇总待验 |
+| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | BROWSER_SCOPE_PASS：Q002/R006及旧PM确认保留；新增最终PHYSICAL_QA_PENDING，跨域/汇总待验 |
 
 ### EXT
 
@@ -284,6 +286,10 @@ Lifecycle c0bf Q004整22于13:56:11.283Z至14:16:02.268Z失败，runa6dc2854-d58
 Lifecycle独立只读报告=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-06cd-7242-96bb-349e5fdb83b3/lifecycle-static-c0bf80d6/static-prereview-v1.json` SHA2563b7f120ca541626d3499382a64e084fe7397064417d8705138327d6287f3e651，PM正式CHANGES_REQUIRED。R1/P1只对有旧2c262实际reserve/507证据的Todo create/正增长update、async processor artifact持久化恢复shared cap原子拒绝；A模型await时B占余量后A内容不得落库，删除/revoke/必要settlement可用，不由计账成员推新普遍写入政策。R2/P2恢复future串行fail-fast挡后续独立plugin/connector为源码控制流确认、影响推论，需先生成failed/held verifier动态证明，再保持每scope当前验证/失败可见而独立有效future可取得fresh authority，旧grant/pending/unknown不复活。c0bf没有async taskId，cached failed probe死锁不可达的判定已撤回；Ext最终companion另核。两项连同九失败已交owner，独立动态未跑。
 
 Memory最终855b89a0bdfe0e75d528b7a90cf9b8369e04237a已推/clean，driver核25源与27artifact/log hash；manifest=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6977-7fa3-8145-0b3696ae413c/memory-parity/final-855b89a0/manifest.json` SHA256655dd8c95223d39c2bb73eec8705acb9de3fb50ac2e59aa86d92c879c05e51ff。单memory.batch连续阶段/严格Coding复用/provenance批界/R01保存与问题同事务、cf6/a65/e01 charge/wait/资源/每call预算/完整schema修复均属新候选；855仅精确借070 parent-generation requiredschema一行与负例，未整拣Exec。作者855精确port45/backup26/真实index和SIGKILL/unknown进程7/headlessWeb8分别PASS；8de journey84源码等价范围与3a9 broad209PASS1 observer锁失败分别保留，不相加冒整套。新dry-run实际all6TS+Android22全部UNRUN，PM已恢复领域exact855只读预审；full/独验/native/live/>2与Exec070/Files873/生产者-Ask-Action组合均未验，非READY。Files873作为run523549b6唯一full执行，Memory排后续精确窗口。 driver另补855缺失的锁定Electron41.10.7执行文件（npm rebuild electron），不launch App/不改allowScripts，source与package-lock SHA22c87d68306fa770b5a1b1b18071a827044d4415d2d84837683556d77225d5a3保持不变；Node26 ABI147/JDK21全22选中环境预检PASS，依赖准备不作业务验收。
+
+Memory855独立只读报告=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/memory-855b89a0-source/review.json` SHA25600acbb400b24ba667c4945aa040a262e32f8854871af619861d7c6b0b2e3c3b3，PM已接受SOURCE_REVIEW_PASS_PENDING_DYNAMIC。F01/F02/F03/R01及已述M05端口旧缺口在exact855源码闭合，无确认新bug；25源/27附件hash一致，作者各输入结果仍不作独立动态。新完整22、最终真机真实UI、本机Codex Server真实模型与实际producer/Exec070/Files873固定组合全部未验，非READY，旧1c/static与3a9失败不改。
+
+临时组合准备仅供必要前置验收，正式integration仍只有文档变更。只读Memory855+Files873合成定位两文件四冲突，packet=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/memory855-files873-readonly-composition.json` SHA256e5b014fa346a357568686bf8d899cbe7ccb179b1b1fd7f3b995bfbd49632a38a。按PM预留第6槽，driver核active5后恢复Memory原owner为单一resolver；可编辑隔离树`/Users/utopiafar/.codex/worktrees/parity-runtime-combination-20261018/mote`，branch `codex/parity-runtime-combination-20261018`，HEAD855/MERGE_HEAD873，未解索引由owner逐hunk处理，再纳入完整Exec070并记录新增冲突；不能把先前四处当三源完整冲突数。冻结855/873/070与正式integration/main不改，未开PR/未测试，临时树无node_modules，不借原树依赖假验组合。owner交commit/tree、parents/来源、每hunk意图与UNRUN后结束；File原owner定向hunk及Control后续精确组合另槽复核，真机与真实Codex另派。
 
 ## 跨模块最终冻结旅程
 
