@@ -119,7 +119,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
     const todos=ask?registerScopedTodos(runtime,storage.db):undefined;
     if(execution&&ask)actions=registerScopedActions(runtime,storage.db,configuration,execution,ownerQuestions,ask,ingress);
-    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,cursorKey:privateCursorKey,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
+    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,cursorKey:privateCursorKey,configuration,execution,plugins,ingress,processing,memory,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
     if(execution&&plugins&&ask)restoreFuture=new RestoreFutureAuthority(runtime,storage.db,configuration,execution,plugins,connectors,ask,actions);
     capacity=new ScopedStorageCapacity(storage.db,configuration);

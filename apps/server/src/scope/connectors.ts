@@ -1,4 +1,6 @@
 import {archiveRead} from './archive-read-set.js';
+import {recordingFailure,recordingPhases,type RecordingPhase} from '../connectors/recording-flow.js';
+import {recordingArchiveCounts} from './connector-recording-archive.js';
 import {connectorOriginalProcessors} from '../connectors/original-processors.js';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
@@ -16,7 +18,7 @@ import {ExecutionFailure} from '../execution-engine.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
 import type {PluginManifest} from '../plugin-release.js';
 import type {ScopedRuntime} from './http.js';
-import type {TaskExecution,TaskRun} from './task-execution.js';
+import type {TaskExecution,TaskRun,UserTaskHandler,TaskParent} from './task-execution.js';
 import type {Configurations} from './configuration.js';
 import type {ScopedPluginHost} from './plugins.js';
 import type {IngressHost} from './ingress.js';
@@ -31,8 +33,9 @@ import {PrivateCursor} from './private-data-sql.js';
 
 type Row={user_id:string;id:string;generation:number;removed:number;settings:string;sync_authorized:number;storage_generation:number};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>[key,canonical(child)])):value;
-const DOMAIN='connectors',CONFIG='connectorSettings',TASK='connector.run';
+const DOMAIN='connectors',CONFIG='connectorSettings',TASK='connector.run',SELECT_TASK='connector.select';
 const pluginId=(id:string)=>'connector.'+id;
+const recordingTaskKind=(phase:RecordingPhase)=>'connector.recording.'+phase;
 const definitions=['gmail','google-calendar','lark','feishu-recordings','dingtalk-recordings'] as const;
 const publicSettings=(s:ConnectionSettings)=>({...s,googleClientSecret:undefined,googleClientId:s.googleClientId?'configured':undefined,googleRedirectUri:s.googleRedirectUri});
 const sourceStatusSchema=z.object({state:z.enum(['idle','syncing','error','permission_required']),code:z.string().max(200).optional(),lastSyncAt:z.string().datetime({offset:true}).optional()}).strict();
@@ -45,6 +48,7 @@ export class ScopedConnectors {
  private readonly extensions=new Map<string,ConnectorDefinition>();
  private readonly packages=new Map<ConnectorProvider,string>();
  private readonly active=new Map<string,Set<AbortController>>();
+ private readonly syncing=new Map<string,Set<AbortController>>();
  private readonly dispose:()=>Promise<void>;
  private readonly detachPlugin:()=>void;
  private readonly detachOriginalProcessor:()=>void;
@@ -52,7 +56,7 @@ export class ScopedConnectors {
  private readonly lifecycleQueue=new Map<string,Promise<void>>();
  private closed=false;
  private closing?:Promise<void>;
- constructor(private runtime:ScopedRuntime,private options:{db:DatabaseSync;directory:string;cursorKey:string;configuration:Configurations;execution:TaskExecution;plugins:ScopedPluginHost;ingress:IngressHost;transports?:ConnectorTransports;definitions?:readonly ConnectorDefinition[];processing?:import('./processing.js').ProcessingHost}){
+ constructor(private runtime:ScopedRuntime,private options:{db:DatabaseSync;directory:string;cursorKey:string;configuration:Configurations;execution:TaskExecution;plugins:ScopedPluginHost;ingress:IngressHost;transports?:ConnectorTransports;definitions?:readonly ConnectorDefinition[];processing?:import('./processing.js').ProcessingHost;memory?:Pick<import('./memory.js').MemoryHost,'ensureRecordingRecipe'>}){
   const {db,configuration,execution,plugins}=options;const detach=options.processing?connectorOriginalProcessors.map(processor=>options.processing!.processors.registry.register(processor)):[];this.detachOriginalProcessor=()=>{for(const dispose of detach)dispose();};
   db.exec(`CREATE TABLE IF NOT EXISTS connector_connections(user_id TEXT NOT NULL,id TEXT NOT NULL,generation INTEGER NOT NULL,removed INTEGER NOT NULL,settings TEXT NOT NULL,sync_authorized INTEGER NOT NULL DEFAULT 0,storage_generation INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(user_id,id));
    CREATE TABLE IF NOT EXISTS connector_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,instance_id TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(user_id,id));
@@ -74,18 +78,26 @@ export class ScopedConnectors {
   runtime.services.registerUser(DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:this.lifecycle});
   this.detachPlugin=plugins.onInstanceChange(async event=>{if(!event.instanceId.startsWith('connector.'))return;const id=event.instanceId.slice('connector.'.length);if(!db.prepare('SELECT 1 FROM connector_connections WHERE user_id=? AND id=? AND removed=0').get(event.userId,id))return;if(!event.action||event.action==='stop')this.abort(event.userId,id);if(event.context&&['resume','enable'].includes(event.action??''))await this.schedule(event.context,id);});
   this.migrateOperationPayloads();
-  this.dispose=execution.register({kind:TASK,pool:'connectors',concurrency:()=>4,policy:EXECUTION_POLICIES.networkAcquisition,parseInput:value=>connectorTask.parse(value),
+  const handler:UserTaskHandler={kind:TASK,pool:'connectors',concurrency:()=>4,policy:EXECUTION_POLICIES.networkAcquisition,parseInput:value=>connectorTask.parse(value),
    authorizeInput:(context,input)=>{this.binding(context,connectorTask.parse(input));},
    resources:input=>[{scope:'user',key:'connector:'+String(input.connectionId)}],
    validate:step=>{try{const input=connectorTask.parse(step.input),row=this.row(step.ownership!.userId,input.connectionId);plugins.assertStoredBinding(step.ownership!.userId,input.snapshotId);return !this.closed&&!row.removed&&row.generation===input.generation;}catch{return false;}},
    admit:step=>{const input=connectorTask.parse(step.input);if(input.action==='oauth'){const state=this.oauth(input.state!);if(!state||state.expires<=Date.now())return new ExecutionFailure('blocked','connector_oauth_expired');if(state.status==='pending')return new ExecutionFailure('waiting','connector_oauth_pending',Math.min(1000,state.expires-Date.now()));if(state.status!=='ready')return new ExecutionFailure('blocked','connector_oauth_consumed');}if(input.due>0&&!plugins.storedAdmissionOpen(step.ownership!.userId,pluginId(input.connectionId)))return new ExecutionFailure('blocked','connector_timer_paused');if(input.due>Date.now())return new ExecutionFailure('waiting','connector_timer_wait',input.due-Date.now());return;},
    execute:run=>this.execute(run),classify:error=>error instanceof z.ZodError?new ExecutionFailure('permanent','connector_input_invalid'):error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','connector_authority_revoked'):new ExecutionFailure('blocked',error instanceof ConnectorError?error.code:'connector_requires_attention'),
-  });
+  };
+  const disposeStages=recordingPhases.map(phase=>execution.register({...handler,kind:recordingTaskKind(phase),pool:'recording.'+phase,concurrency:()=>phase==='media'?1:2,policy:{...EXECUTION_POLICIES.networkAcquisition,timeoutMs:null},resources:input=>[{scope:'user',key:'connector-recording:'+String(input.connectionId)+':'+String(input.recordingKey)}],authorizeInput:(context,raw)=>this.recordingBinding(context,connectorTask.parse(raw),phase),classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','connector_authority_revoked'):recordingFailure(error)}));
+  const dispose=execution.register({...handler,kind:TASK}),disposeSelection=execution.register({...handler,kind:SELECT_TASK,pool:'connectors.control',policy:EXECUTION_POLICIES.control,resources:input=>[{scope:'user',key:'connector-selection:'+String(input.connectionId)}],authorizeInput:(context,raw)=>{const input=connectorTask.parse(raw),{row}=this.binding(context,input);if(input.action!=='operation'||input.operation!=='select'||!['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ConnectorError('connector_operation_invalid',400);}});
+  this.dispose=async()=>{await disposeSelection();await dispose();for(const disposeStage of disposeStages)await disposeStage();};
  }
  private tx<T>(work:()=>T):T{const db=this.options.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=work();if(own)db.exec('COMMIT');return result;}catch(e){if(own&&db.isTransaction)db.exec('ROLLBACK');throw e;}}
  private assert(context:UserContext){this.runtime.authority.assert(context);if(this.closed||this.options.db.prepare('SELECT 1 FROM connector_domain_state WHERE user_id=? AND deleted=1').get(context.userId))throw new ScopeError('invalid_identity',401);}
  private row(user:string,id:string):Row{const row=this.options.db.prepare('SELECT * FROM connector_connections WHERE user_id=? AND id=?').get(user,id) as Row|undefined;if(!row||row.removed)throw new ConnectorError('connector_not_found',404);return row;}
  private binding(context:UserContext,input:ConnectorTask){this.assert(context);const row=this.row(context.userId,input.connectionId);if(row.generation!==input.generation)throw new ScopeError('invalid_identity',401);const binding=this.options.plugins.binding(context,input.snapshotId);if(binding.instanceId!==pluginId(row.id)||binding.packageId!==this.packages.get(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ScopeError('invalid_identity',401);return {row,binding};}
+ private recordingBinding(context:UserContext,input:ConnectorTask,phase:RecordingPhase){
+  const {row}=this.binding(context,input);if(input.action!=='recording'||input.recordingPhase!==phase||!input.recordingKey||!['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ConnectorError('recording_job_binding_invalid',409);
+  const job=this.ledger(context,row.id,()=>this.binding(context,input)).get<{epoch:string;job:{phase:RecordingPhase};requests:string[]}>('recording-jobs',input.recordingKey),saved=this.vault(context,row.id,()=>this.binding(context,input)).read<{epoch:string}>('recordings.json');if(!job||job.job.phase!==phase||!job.requests?.length)throw new ConnectorError('recording_job_binding_invalid',409);if(job.epoch!==saved?.epoch)throw new ExecutionFailure('stale','recording_selection_changed');if(job.requests.every(id=>['cancelled','stale'].includes(this.options.execution.forUser(context).get(id).state)))throw new ExecutionFailure('stale','recording_request_cancelled');
+ }
+ private startRecordingSync(context:UserContext,id:string,operationId:string,parent?:TaskParent){return this.submit(context,id,{action:'sync',recurring:true},operationId,()=>{this.assert(context);this.options.db.prepare('UPDATE connector_connections SET sync_authorized=1 WHERE user_id=? AND id=?').run(context.userId,id);},parent);}
  private prepare(user:string,values:ConnectionSettings[]){
   for(const value of values)if(!this.packages.has(value.provider))throw new ConnectorError('connector_provider_unavailable');
   const db=this.options.db,before=db.prepare('SELECT * FROM connector_connections WHERE user_id=?').all(user) as Row[];let published=false;
@@ -93,6 +105,7 @@ export class ScopedConnectors {
    for(const value of values){const old=before.find(v=>v.id===value.id),changed=Boolean(old&&(old.removed||old.settings!==JSON.stringify(value))),previous=old?connectionSchema.parse(JSON.parse(old.settings)):undefined,credentialsChanged=Boolean(previous&&(['googleClientId','googleClientSecret','googleRedirectUri'] as const).some(key=>previous[key]!==value[key]));db.prepare('INSERT INTO connector_connections VALUES(?,?,?,0,?,0,?) ON CONFLICT(user_id,id) DO UPDATE SET generation=excluded.generation,removed=0,settings=excluded.settings,storage_generation=excluded.storage_generation,sync_authorized=CASE WHEN ? THEN 0 ELSE connector_connections.sync_authorized END').run(user,value.id,(old?.generation??1)+Number(changed),JSON.stringify(value),(old?.storage_generation??1)+Number(Boolean(old?.removed)||credentialsChanged),Number(changed));}published=true;});},rollback:()=>{if(published)this.tx(()=>{db.prepare('DELETE FROM connector_connections WHERE user_id=?').run(user);for(const row of before)db.prepare('INSERT INTO connector_connections VALUES(?,?,?,?,?,?,?)').run(row.user_id,row.id,row.generation,row.removed,row.settings,row.sync_authorized,row.storage_generation);});},complete:()=>{for(const old of before){const next=values.find(v=>v.id===old.id);if(!next||old.settings!==JSON.stringify(next)){this.abort(user,old.id);this.clearOperationPayloads(user,old.id);}}}};
  }
  private abort(user:string,id:string){for(const controller of this.active.get(hash([user,id]))??[])controller.abort();}
+ private abortSync(context:UserContext,id:string){for(const controller of this.syncing.get(hash([context.userId,id]))??[])controller.abort();for(const row of this.options.db.prepare("SELECT t.task_id FROM user_tasks t JOIN execution_steps e ON e.id=t.task_id AND e.user_id=t.user_id WHERE t.user_id=? AND json_extract(t.input,'$.connectionId')=? AND e.state IN ('waiting','running') AND ((e.kind=? AND json_extract(t.input,'$.action')='sync' AND (e.state='running' OR json_extract(t.input,'$.due')<=?)) OR (e.kind IN ('connector.recording.discover','connector.recording.metadata','connector.recording.transcript','connector.recording.media') AND json_extract(t.input,'$.action')='recording'))").all(context.userId,id,TASK,Date.now()))this.options.execution.forUser(context).cancel(String(row.task_id));}
  private oauth(state:string){return this.options.db.prepare('SELECT * FROM connector_oauth WHERE state_hash=?').get(hash(state)) as {user_id:string;instance_id:string;generation:number;snapshot_id:string;expires:number;status:string;task_id?:string}|undefined;}
  private vault(context:UserContext,id:string,assert:()=>void){return new ConnectorVault(this.options.db,this.options.directory,context.deploymentId,context.userId,id+':'+this.row(context.userId,id).storage_generation+':'+context.authorizationEpoch,assert);}
  private ledger(context:UserContext,id:string,assert:()=>void){const db=this.options.db,user=context.userId;return {
@@ -119,12 +132,17 @@ export class ScopedConnectors {
   };
   const pending={set:(state:string,value:{verifier:string;expires:number})=>{assert();vault.write('oauth:'+hash(state),value);},take:(state:string)=>{assert();const value=vault.read<{verifier:string;expires:number}>('oauth:'+hash(state));vault.clear('oauth:'+hash(state));return value;},clear:()=>{assert();db.prepare("UPDATE connector_oauth SET status='revoked' WHERE user_id=? AND instance_id=? AND status IN ('pending','ready')").run(context.userId,id);}};
   const ctx:LarkContext={config:{dataDir:vault.directory,connectors:{...settings,directory:vault.directory}},assertCurrent:assert,automaticTimers:false,state:name=>vault.state(name),pending,sources,
+   recordingEpochCurrent:epoch=>{assert();if(vault.read<{epoch:string}>('recordings.json')?.epoch!==epoch)throw new ExecutionFailure('stale','recording_selection_changed');},
+   recordingArchiveCounts:raw=>{assert();data.source(actual(raw));return recordingArchiveCounts(db,context,actual(raw),assert);},
+   recordingMemoryDefault:this.options.memory?async raw=>{assert();await this.options.memory!.ensureRecordingRecipe(context,actual(raw));assert();}:undefined,
+   assertFileAllowed:(raw,external)=>{assert();if(db.prepare('SELECT 1 FROM ig_file_forgets WHERE user_id=? AND source_id=? AND external_id=? AND blocked=1').get(context.userId,actual(raw),external))throw new ExecutionFailure('stale','recording_evidence_changed');},
+   retainedFile:(raw,external)=>{assert();const item=sources.getItem(raw,external);if(!item||item.deleted)return;const saved=db.prepare("SELECT r.id FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id WHERE r.user_id=? AND r.source_id=? AND r.capture_id=? AND r.retention='archive' AND f.format='recording-audio-backup'").get(context.userId,actual(raw),item.captureId);if(!saved)return;const original=ingress.originalForCapture(item.captureId);assert();return original.available===false||original.hash!==item.document?.originalMetadata?.bodyHash||original.mime!==item.mimeType?undefined:{id:item.captureId};},
    ledger:{get:(a,s,k)=>ledger.get(hash([a,s]),k),set:(a,s,k,v)=>ledger.set(hash([a,s]),k,v),drop:(a,s,k)=>ledger.drop(hash([a,s]),k),rows:(a,s,p,l,e)=>ledger.rows(hash([a,s]),p,l,e),forgotten:(raw,id)=>{assert();return ledger.rows<boolean>('forgotten:'+raw,id??'').filter(row=>id===undefined||row.key===id).map(row=>row.key);},versionExists:(raw,ext)=>{assert();return Boolean(sources.getItem(raw,ext));},counts:raw=>{assert();const exists=Boolean(db.prepare('SELECT 1 FROM connector_sources WHERE user_id=? AND instance_id=? AND local_id=?').get(context.userId,id,raw));const items=exists?all(raw):[];return {exists,documents:items.filter(i=>i.kind==='file').length,activities:items.filter(i=>i.kind==='event').length};}},
    publishFile:async(raw,item,bytes,authorize,_signal,format)=>this.tx(()=>{assert();authorize();const receipt=ingress.receiveSourceItemsWithOriginals(actual(raw),hash([item,hash(bytes),format??'file']),[item],[{bytes,mime:item.mimeType??'application/octet-stream',format}]).captures[0];vault.write('head:'+hash([raw,item.externalId]),{captureId:receipt.id,item});assert();return receipt;}),
   };
   return ctx;
  }
- private async adapter(context:UserContext,row:Row,assert:()=>void,signal:AbortSignal){
+ private async adapter(context:UserContext,row:Row,assert:()=>void,signal:AbortSignal,run?:TaskRun){
   const ctx=this.adapterContext(context,row,assert,signal),provider=connectionSchema.parse(JSON.parse(row.settings)).provider,scope={userId:context.userId,instanceId:row.id,directory:ctx.config.dataDir},google=this.options.transports?.google?.(scope);
   if(provider==='google-calendar'){const adapter=new GoogleCalendarConnector(ctx,google);await adapter.init();return adapter;}
   if(provider==='gmail'){
@@ -153,7 +171,7 @@ export class ScopedConnectors {
   }
   if(provider==='lark'){const runner=this.options.transports?.lark?.(scope)??createLarkRunner(scope.directory,{isolatedHome:true});const adapter=new LarkAdapter(ctx,async(command,options)=>{assert();const result=await runner(command,{...options,signal:AbortSignal.any([signal,...(options?.signal?[options.signal]:[])])});assert();return result;});await adapter.init();return adapter;}
   const extension=this.extensions.get(provider);if(extension){const adapter=await extension.create(ctx,Object.freeze(scope),signal);await adapter.init?.();return adapter;}
-  return new ScopedRecordingAdapter(ctx,provider as 'feishu-recordings'|'dingtalk-recordings',scope,this.options.transports,assert,signal,this.ledger(context,row.id,assert));
+  return new ScopedRecordingAdapter(ctx,provider as 'feishu-recordings'|'dingtalk-recordings',scope,this.options.transports,assert,signal,this.ledger(context,row.id,assert),{parentId:run?.task.id,get:id=>this.options.execution.forUser(context).get(id),...(run?{submit:async(phase:RecordingPhase,key:string,onAdmitted:(id:string)=>void)=>this.submit(context,row.id,{action:'recording',recordingKey:key,recordingPhase:phase},'phase:'+key,task=>onAdmitted(task.id),{parentTaskId:run.task.id}),retry:(id:string)=>{this.options.execution.forUser(context).linkTaskParent(run.task.id,id);return this.options.execution.forUser(context).retry(id);}}:{})});
  }
  private beginActivity(userId:string,instanceId:string){
   const id=randomUUID(),key=hash([userId,id]);let resolve!:()=>void,finished=false;const done=new Promise<void>(value=>resolve=value);this.options.db.prepare("INSERT INTO connector_activity VALUES(?,?,?,'active')").run(userId,id,instanceId);this.activities.set(key,{done});
@@ -171,21 +189,27 @@ export class ScopedConnectors {
  private async serializeLifecycle<T>(userId:string,work:()=>Promise<T>){const previous=this.lifecycleQueue.get(userId)??Promise.resolve(),result=previous.then(work),tail=result.then(()=>{},()=>{});this.lifecycleQueue.set(userId,tail);try{return await result;}finally{if(this.lifecycleQueue.get(userId)===tail)this.lifecycleQueue.delete(userId);}}
  private async execute(run:TaskRun){
   const input=connectorTask.parse(run.task.input),{row,binding}=this.binding(run.context,input),journal=this.beginActivity(run.context.userId,input.connectionId),controller=new AbortController(),key=hash([run.context.userId,row.id]),group=this.active.get(key)??new Set();group.add(controller);this.active.set(key,group);
-  const signal=AbortSignal.any([run.signal,controller.signal]),assert=()=>{run.grant.assert();this.binding(run.context,input);binding.assertCurrent();if(signal.aborted)throw new ScopeError('invalid_identity',401);};
+  if(input.action==='sync'||input.action==='recording'){const syncs=this.syncing.get(key)??new Set<AbortController>();syncs.add(controller);this.syncing.set(key,syncs);}
+  const signal=AbortSignal.any([run.signal,controller.signal]),assert=()=>{run.grant.assert();this.binding(run.context,input);binding.assertCurrent();if(signal.aborted)throw new ScopeError('invalid_identity',401);if(input.action==='recording')this.recordingBinding(run.context,input,input.recordingPhase!);};
   let adapter:Awaited<ReturnType<ScopedConnectors['adapter']>>|undefined;const stop=()=>{void adapter?.close().catch(()=>{});};signal.addEventListener('abort',stop,{once:true});
   try{
-   assert();this.options.db.prepare('INSERT OR IGNORE INTO connector_jobs VALUES(?,?,?)').run(run.context.userId,row.id,run.task.id);adapter=await this.adapter(run.context,row,assert,signal);assert();let result:unknown;
-   if(input.action==='oauth'){
+   assert();this.options.db.prepare('INSERT OR IGNORE INTO connector_jobs VALUES(?,?,?)').run(run.context.userId,row.id,run.task.id);adapter=await this.adapter(run.context,row,assert,signal,run);assert();let result:unknown;
+   if(input.action==='recording'){this.recordingBinding(run.context,input,input.recordingPhase!);if(!(adapter instanceof ScopedRecordingAdapter))throw new ConnectorError('recording_job_binding_invalid',409);result=await adapter.executeStage(input.recordingKey!,input.recordingPhase!,run.task.id);
+   }else if(input.action==='oauth'){
     const state=this.oauth(input.state!);if(!state||state.status!=='ready'||state.expires<=Date.now())throw new ConnectorError('connector_oauth_expired');
     const vault=this.vault(run.context,row.id,assert),code=vault.read<string>('code:'+hash(input.state));if(!code)throw new ConnectorError('connector_oauth_missing');
     this.options.db.prepare("UPDATE connector_oauth SET status='consumed' WHERE state_hash=? AND status='ready'").run(hash(input.state));vault.clear('code:'+hash(input.state));
     const oauth=this.oauthAdapter(adapter);if(!oauth)throw new ConnectorError('connector_oauth_invalid');
     run.external.begin('connector-oauth:'+hash(input.state));await oauth.callback(input.state!,code);assert();run.external.complete();result={connected:true};
    }else if(input.action==='sync'){
-    if(adapter instanceof LarkAdapter){adapter.startSync();result=await adapter.wait();}else if(adapter instanceof ScopedRecordingAdapter)result=await adapter.sync(input.due>0);else result=await adapter.sync();assert();
-    if(input.recurring&&this.row(run.context.userId,row.id).sync_authorized)await this.schedule(run.context,row.id,run.task.id);
+    const automatic=input.due>0,background=await this.backgroundEnabled(adapter);assert();
+    if(automatic&&(!background||!connectionSchema.parse(JSON.parse(row.settings)).autoSync||!row.sync_authorized))return {skipped:true};
+    // A polling cycle owns its successor independently of this acquisition's
+    // outcome. A terminal network failure must not destroy future discovery.
+    if(input.recurring&&background)await this.schedule(run.context,row.id,run.task.id);
+    assert();if(adapter instanceof LarkAdapter){adapter.startSync(undefined,automatic);result=await adapter.wait();}else if(adapter instanceof ScopedRecordingAdapter)result=await adapter.sync(automatic,false,run.task.id);else result=await adapter.sync(automatic);assert();
    }else {let timer:ReturnType<typeof setInterval>|undefined;if(adapter instanceof LarkAdapter)timer=setInterval(()=>{try{assert();run.progress({connector:adapter instanceof LarkAdapter?adapter.status().job:undefined});}catch{}},100);try{if(['login','setup'].includes(input.operation!))run.external.begin('connector-authorization:'+run.task.id);result=await this.operation(adapter,input.operation!,this.operationPayload(run,input,row,assert),value=>{assert();run.progress(value);});if(['login','setup'].includes(input.operation!)){run.external.complete();run.progress({authorization:'complete'});}}finally{clearInterval(timer);}}
-   assert();
+   assert();if(input.action==='operation'&&input.operation==='select'&&adapter instanceof ScopedRecordingAdapter&&(await adapter.status()).selection.enabled){const task=await this.startRecordingSync(run.context,row.id,'selection:'+run.task.id,{parentTaskId:run.task.id});result={...result as object,syncTask:{id:task.id,state:task.state}};}
    if(adapter instanceof LarkAdapter&&input.action==='operation'&&input.operation==='calendars'&&result&&typeof result==='object'&&'calendars' in result&&Array.isArray(result.calendars)&&Buffer.byteLength(JSON.stringify(result))>24000){
     // Preserve the complete explicit discovery in the existing encrypted,
     // owner/connection/epoch vault instead of truncating a task receipt.
@@ -193,13 +217,19 @@ export class ScopedConnectors {
     return {calendarInventory:run.task.id,count:result.calendars.length};
    }
    assert();if(input.action==='operation'&&input.operation==='disconnect'){await adapter.close();assert();this.clearOperationPayloads(run.context.userId,row.id);const vault=this.vault(run.context,row.id,assert);await rm(vault.directory,{recursive:true,force:true});assert();this.options.db.prepare('DELETE FROM connector_secrets WHERE user_id=? AND instance_id=?').run(run.context.userId,row.id+':'+row.storage_generation+':'+run.context.authorizationEpoch);this.options.db.prepare('UPDATE connector_connections SET storage_generation=storage_generation+1 WHERE user_id=? AND id=? AND generation=?').run(run.context.userId,row.id,row.generation);}return this.safeResult(adapter instanceof LarkAdapter?this.publicLarkStatus(run.context,row.id,result):result,adapter instanceof LarkAdapter);
-  }finally{signal.removeEventListener('abort',stop);let confirmed=false;try{await adapter?.close();confirmed=Boolean(adapter)||!this.extensions.has(connectionSchema.parse(JSON.parse(row.settings)).provider);}finally{journal.finish(confirmed);group.delete(controller);if(!group.size)this.active.delete(key);}}
+  }finally{signal.removeEventListener('abort',stop);let confirmed=false;try{await adapter?.close();confirmed=Boolean(adapter)||!this.extensions.has(connectionSchema.parse(JSON.parse(row.settings)).provider);}finally{journal.finish(confirmed);group.delete(controller);if(!group.size)this.active.delete(key);const syncs=this.syncing.get(key);syncs?.delete(controller);if(!syncs?.size)this.syncing.delete(key);}}
+ }
+ private async backgroundEnabled(adapter:Awaited<ReturnType<ScopedConnectors['adapter']>>){
+  if(adapter instanceof LarkAdapter)return adapter.status().selection.autoSync;
+  if(adapter instanceof ScopedRecordingAdapter){const status=await adapter.status();return status.selection.enabled&&status.selection.autoSync;}
+  return true;
  }
  private async schedule(context:UserContext,id:string,currentTaskId?:string){
   const row=this.row(context.userId,id),settings=connectionSchema.parse(JSON.parse(row.settings));if(!settings.autoSync||!row.sync_authorized||!this.options.plugins.storedAdmissionOpen(context.userId,pluginId(id)))return;
   const old=this.options.db.prepare('SELECT task_id FROM connector_timers WHERE user_id=? AND instance_id=?').get(context.userId,id),task=old?this.options.execution.engine.get(String(old.task_id)):undefined;
   if(task&&task.id!==currentTaskId&&task.ownership?.authorizationEpoch===context.authorizationEpoch&&['waiting','running'].includes(task.state))return;
-  try{await this.submit(context,id,{action:'sync',recurring:true,due:Date.now()+settings.syncIntervalMs},'timer:'+randomUUID(),next=>{
+  const interval=['feishu-recordings','dingtalk-recordings'].includes(settings.provider)?Math.min(settings.syncIntervalMs,300000):settings.syncIntervalMs;
+  try{await this.submit(context,id,{action:'sync',recurring:true,due:Date.now()+interval},'timer:'+randomUUID(),next=>{
    const prior=this.options.db.prepare('SELECT task_id FROM connector_timers WHERE user_id=? AND instance_id=?').get(context.userId,id),active=prior?this.options.execution.engine.get(String(prior.task_id)):undefined;
    if(active&&active.id!==currentTaskId&&active.id!==next.id&&active.ownership?.authorizationEpoch===context.authorizationEpoch&&['waiting','running'].includes(active.state))throw new ConnectorError('connector_timer_exists',409);
    this.options.db.prepare('INSERT INTO connector_timers VALUES(?,?,?) ON CONFLICT(user_id,instance_id) DO UPDATE SET task_id=excluded.task_id').run(context.userId,id,next.id);
@@ -260,16 +290,16 @@ export class ScopedConnectors {
   if(adapter instanceof LarkAdapter){
    if(operation==='setup'){adapter.startSetup();return adapter.wait();}if(operation==='check')return adapter.refresh();if(operation==='calendars')return adapter.calendars();if(operation==='select')return adapter.select(payload);if(operation==='configure'){adapter.configure(payload);return adapter.wait();}if(operation==='login'){adapter.login(z.object({calendar:z.boolean().optional()}).strict().parse(payload).calendar);return adapter.wait();}if(operation==='preview'){adapter.startPreview();return adapter.wait();}if(operation==='sync-document'){adapter.startSync(z.object({document:z.string().min(1).max(4000)}).strict().parse(payload).document);return adapter.wait();}
   }
-  if(adapter instanceof ScopedRecordingAdapter){if(operation==='check')return adapter.check();if(operation==='setup')return adapter.setup(progress);if(operation==='configure')return adapter.configure(payload);if(operation==='retry'){const status=await adapter.retry();return payload.resume===true?adapter.sync(false,true):status;}if(operation==='login')return adapter.login(progress);if(operation==='connect')return adapter.connect();if(operation==='select')return adapter.select(payload);}
+  if(adapter instanceof ScopedRecordingAdapter){if(operation==='check')return adapter.check();if(operation==='setup')return adapter.setup(progress);if(operation==='configure')return adapter.configure(payload);if(operation==='retry')return adapter.retry();if(operation==='login')return adapter.login(progress);if(operation==='connect')return adapter.connect();if(operation==='select')return adapter.select(payload);}
   throw new ConnectorError('connector_operation_invalid',400);
  }
- private async submit(context:UserContext,id:string,value:Partial<ConnectorTask>&{payload?:Record<string,unknown>},operationId:string,onAdmitted?:(task:{id:string})=>void){
+ private async submit(context:UserContext,id:string,value:Partial<ConnectorTask>&{payload?:Record<string,unknown>},operationId:string,onAdmitted?:(task:{id:string})=>void,parent?:TaskParent){
   this.assert(context);const row=this.row(context.userId,id),created=!value.snapshotId,fingerprint=hash(canonical([row.generation,context.authorizationEpoch,value])),prior=()=>this.options.db.prepare('SELECT input_hash,task_id FROM connector_commands WHERE user_id=? AND instance_id=? AND operation_id=?').get(context.userId,id,operationId);
-  const existing=prior();if(existing){if(existing.input_hash!==fingerprint)throw new ConnectorError('connector_command_conflict',409);return this.options.execution.forUser(context).get(String(existing.task_id));}
+  const existing=prior();if(existing){if(existing.input_hash!==fingerprint)throw new ConnectorError('connector_command_conflict',409);const task=this.options.execution.forUser(context).get(String(existing.task_id));if(parent?.parentTaskId)this.options.execution.forUser(context).linkTaskParent(parent.parentTaskId,task.id);if(value.action==='recording')onAdmitted?.(task);return task;}
   let snapshotId=value.snapshotId;if(!snapshotId)snapshotId=(await this.options.plugins.forUser(context).admit(pluginId(id))).id;
-  try{const {payload,...publicValue}=value,payloadRef=payload&&Object.keys(payload).length?randomUUID():undefined,input=connectorTask.parse({connectionId:id,generation:row.generation,snapshotId,...publicValue,payloadRef});this.binding(context,input);return await this.options.execution.forUser(context).submit({kind:TASK,operationId:'connector:'+id+':'+operationId,input},task=>{
+  try{const {payload,...publicValue}=value,payloadRef=payload&&Object.keys(payload).length?randomUUID():undefined,input=connectorTask.parse({connectionId:id,generation:row.generation,snapshotId,...publicValue,payloadRef});this.binding(context,input);return await this.options.execution.forUser(context).submit({kind:value.action==='recording'?recordingTaskKind(value.recordingPhase!):value.action==='operation'&&value.operation==='select'&&['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider)?SELECT_TASK:TASK,operationId:'connector:'+id+':'+operationId,input},task=>{
    const current=prior();if(current)throw new ConnectorError(current.input_hash===fingerprint?'connector_command_exists':'connector_command_conflict',409);onAdmitted?.(task);if(payloadRef)this.vault(context,id,()=>this.binding(context,input)).write('operation:'+payloadRef,{taskId:task.id,operation:input.operation,generation:input.generation,snapshotId:input.snapshotId,payload});this.options.db.prepare('INSERT INTO connector_commands VALUES(?,?,?,?,?)').run(context.userId,id,operationId,fingerprint,task.id);
-  });}catch(error){if(created)try{await this.options.plugins.forUser(context).release(snapshotId);}catch{}if(error instanceof ConnectorError&&error.code==='connector_command_exists'){this.assert(context);const current=prior();if(current?.input_hash===fingerprint)return this.options.execution.forUser(context).get(String(current.task_id));}throw error;}
+  },parent);}catch(error){if(created)try{await this.options.plugins.forUser(context).release(snapshotId);}catch{}if(error instanceof ConnectorError&&error.code==='connector_command_exists'){this.assert(context);const current=prior();if(current?.input_hash===fingerprint)return this.options.execution.forUser(context).get(String(current.task_id));}throw error;}
  }
  available(){return [...this.packages.keys()].map(provider=>({provider,packageId:this.packages.get(provider)!}));}
  install(context:UserContext,provider:ConnectorProvider,input:unknown){return this.options.plugins.installBundled(context,this.packages.get(provider)!,input);}
@@ -318,8 +348,8 @@ export class ScopedConnectors {
     const row=this.row(context.userId,id),snapshot=await this.options.plugins.forUser(context).admit(pluginId(id)),input=connectorTask.parse({connectionId:id,generation:row.generation,snapshotId:snapshot.id,action:'oauth'}),activity=this.activity(context,row,()=>{this.binding(context,input);}),assert=activity.assert;
     try{const adapter=await activity.open(),oauth=this.oauthAdapter(adapter);if(!oauth)throw new ConnectorError('connector_oauth_unsupported');const result=await oauth.start();assert();const state=new URL(result.authorizationUrl).searchParams.get('state')!;this.options.db.prepare("INSERT INTO connector_oauth VALUES(?,?,?,?,?,?,'pending',NULL)").run(hash(state),context.userId,id,row.generation,snapshot.id,Date.now()+result.expiresIn*1000);const task=await this.submit(context,id,{...input,state},'oauth:'+hash(state));this.options.db.prepare('UPDATE connector_oauth SET task_id=? WHERE state_hash=?').run(task.id,hash(state));return {...result,taskId:task.id};}finally{await activity.finish();}
    },
-   sync:(id:string,operationId:string)=>this.submit(context,id,{action:'sync',recurring:true},operationId,()=>{this.assert(context);this.options.db.prepare('UPDATE connector_connections SET sync_authorized=1 WHERE user_id=? AND id=?').run(context.userId,id);}),
-   operation:(id:string,operation:string,payload:Record<string,unknown>,operationId:string)=>{this.assert(context);const row=this.row(context.userId,id);return this.submit(context,id,{action:'operation',operation,payload:this.validateOperation(connectionSchema.parse(JSON.parse(row.settings)).provider,operation,payload)},operationId);},
+   sync:(id:string,operationId:string)=>this.startRecordingSync(context,id,operationId),
+   operation:(id:string,operation:string,payload:Record<string,unknown>,operationId:string)=>{this.assert(context);const row=this.row(context.userId,id),provider=connectionSchema.parse(JSON.parse(row.settings)).provider;return this.submit(context,id,{action:'operation',operation,payload:this.validateOperation(provider,operation,payload)},operationId,()=>{if(operation==='select'&&['feishu-recordings','dingtalk-recordings'].includes(provider))this.abortSync(context,id);});},
    disconnect:async(id:string,operationId:string)=>{this.assert(context);
     // An acknowledged-or-unknown existing command must pass the same input,
     // current-generation and account-epoch checks before any new retirement.

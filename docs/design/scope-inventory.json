@@ -1514,7 +1514,9 @@
       "table:connector_secrets",
       "table:connector_sources",
       "table:connector_timers",
-      "task:execution.register:kind:TASK"
+      "task:execution.register:kind:SELECT_TASK",
+      "task:execution.register:kind:TASK",
+      "task:execution.register:kind:recordingTaskKind(phase)"
     ]
   },
   "apps/server/src/scope/http.ts": {

@@ -122,6 +122,8 @@ export function checkProductionImports(directory=root){
     // owner-bound SQL to the existing read-only worker. Shared helpers never
     // construct the retired Indexer or global Store.
     [sourceRoot+'/scope/ask-retrieval.ts',new Set([sourceRoot+'/embedding-request.ts',sourceRoot+'/evidence-retrieval.ts',sourceRoot+'/vector-work.ts'])],
+    // Recording recipe definitions import pure prompt contracts, never a legacy host.
+    [sourceRoot+'/scope/memory.ts',new Set([sourceRoot+'/connectors/recording-memory.ts'])],
     [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
   ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
