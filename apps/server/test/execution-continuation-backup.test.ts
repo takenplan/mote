@@ -11,7 +11,8 @@ import {backupScopedInstance,verifiedScopedBackup} from '../../../scripts/scoped
 test('current continuous execution tables are required in stopped source and checksummed archive admission',async t=>{
  const root=mkdtempSync(join(tmpdir(),'mote-continuation-backup-')),source=join(root,'vault'),node=await buildApp({dataDir:source});t.after(async()=>{await node.app.close();rmSync(root,{recursive:true,force:true});});await node.app.close();
  const snapshot=join(root,'complete');await backupScopedInstance({source,out:snapshot});await verifiedScopedBackup(snapshot);
- const contracts={execution_dynamic_resources:['step_id','resource_key','fence'],execution_resource_waits:['step_id','resource_key','fence','created_at'],execution_attempt_charges:['step_id','fence','charged']};
+ // The parent-generation entry is the exact qualified 070ffc04 dependency.
+ const contracts={operation_parent_generations:['parent_id','child_id','slot','version'],execution_dynamic_resources:['step_id','resource_key','fence'],execution_resource_waits:['step_id','resource_key','fence','created_at'],execution_attempt_charges:['step_id','fence','charged']};
  for(const [table,columns] of Object.entries(contracts))for(const field of ['table',...columns])await t.test(table+':'+field,async()=>{
   const damaged=join(root,table+'-'+field);cpSync(snapshot,damaged,{recursive:true});const db=new DatabaseSync(join(damaged,'mote.sqlite'));
   try{db.exec(field==='table'?'DROP TABLE '+table:'ALTER TABLE '+table+' RENAME COLUMN '+field+' TO generated_missing_column');}finally{db.close();}
