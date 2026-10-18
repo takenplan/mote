@@ -234,6 +234,7 @@ for(const disposition of ['save','cancel','revoke'] as const)test('owner questio
  const a=await f.submit(f.a,[material.id]),b=await f.submit(f.b,[other.id]);await f.wait(f.b,b.id);
  await until(()=>f.read(db=>Boolean(db.prepare('SELECT review FROM mm_job_batches WHERE user_id=? AND job_id=? AND review IS NOT NULL').get(f.a.userId,a.id))),Boolean,'A finishes review and waits for its publisher');
  const questions=async(user:any)=>(await f.request(user.token,'/api/owner-questions')).json().items;
+ const premature=(await questions(f.a))[0];if(premature){const attempted=await f.request(f.a.token,'/api/owner-questions/'+premature.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:premature.revision,action:'unknown'});assert.notEqual(attempted.statusCode,200,'an unsaved evaluation cannot accept a real Owner reply');}
  assert.deepEqual(await questions(f.a),[],'there is no answerable question before saving');const foreign=(await questions(f.b))[0];assert.ok(foreign);assert.equal((await f.request(f.a.token,'/api/owner-questions/'+foreign.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:foreign.revision,action:'unknown'})).statusCode,404,'the real reply endpoint cannot operate on another owner');
  const queues=(await f.request(f.admin.token,'/api/admin/execution-settings')).json().queues;assert.equal(queues.memory.active,0,'publisher waiting holds no physical model admission');
  if(disposition==='cancel')assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+a.id+'/cancel','POST',{})).statusCode,200);
