@@ -55,16 +55,22 @@ context. Instance media status exposes neither credentials nor host directories.
 | --- | --- |
 | KEEP | Original image defaults, future profile selection, explicit historical complete/recompute, receipt proof, current evidence fences, private account configuration, one M05 engine, pinned asset catalog and existing worker supervisor. |
 | CHANGE | The image controls adapt M04/M05/M06 instead of the legacy composition; media assets have instance scope and administrator mutations; managed readiness can resume genuine unfinished processing intents through the existing recheck handoff. |
-| REMOVE | Missing production perception routes, shared credentials copied into account settings, separate legacy image queues, and a requirement to manually retry an image after installing its selected missing managed model. |
+| REMOVE | Missing production perception routes, shared credentials copied into account settings, separate legacy image queues, a requirement to manually retry an image after installing its selected missing managed model, and raw historical-image SQLite positions in public task progress. |
 | EXCEPTION | A derived endpoint is displayed for the selected account model reference. Endpoint/processor edits use the existing File Processing connection/profile controls; the image page cannot mutate a shared instance credential or create duplicate endpoint authority. |
 | UNKNOWN | Real weights, real OCR/ASR quality, physical-device behavior, deployment/runtime installation on the owner's host, and integrated client/full-gate results until separately performed. |
+
+Other task kinds retain their declared public progress unchanged; the host projection
+is opt-in by known task contract and has no owner selector or execution capability.
 
 The settings are canonical account configuration and participate in its existing
 portable export. Historical preview tokens are transient. Historical execution
 cursors are not portable execution authority; stopped instance backups retain the
 current cursor tables, while native/portable recovery keeps M05's existing grant
 retirement rules. SQLite cursor/watermark positions stay private; only the account's queued count
-and actual M05 task state are exposed. Global row positions are not account
+and actual M05 task state are exposed. A pure handler-declared M05 public-progress
+projection applies to persisted metadata too and remains after execution handler
+retirement; hiding one route or changing only new writes is insufficient. It
+rewrites no stored data and grants no execution. Global row positions are not account
 progress or evidence of another account's activity. A cursor's displayed task
 state comes from M05, including failure
 or retirement. Account/domain deletion removes the cursors and previews. Existing
