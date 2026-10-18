@@ -171,15 +171,21 @@ test('Web conversation list includes actual owned turn counts for equal conversa
  const page=await b.request<any>('/api/conversations');assert.equal(page.items[0].turnCount,0);assert.doesNotMatch(JSON.stringify(page),/Generated A conversation/);
 });
 
-test('Web outbound MCP preparation uses owned Ingress sources and original user configuration CAS without exposing saved tokens',async t=>{
- const {prepareWebMcpConnection}=await import('../../web/src/web-mcp.js'),f=await fixture(t),a=f.api(),baseline=await a.request<any>('/api/configuration');
+test('Web optional saved MCP configuration uses owned Ingress sources and original user configuration CAS without exposing saved tokens',async t=>{
+ const {webMcpConnections}=await import('../../web/src/web-mcp.js'),f=await fixture(t),a=f.api(),baseline=await a.request<any>('/api/configuration');
  const input={id:'generated-mcp',sourceId:'generated-mcp-source',name:'Generated MCP source',url:'https://synthetic.invalid/mcp',token:'GENERATED_A_MCP_SECRET'};
- const next=await prepareWebMcpConnection(a,baseline,input),connections=next.domains.find((domain:any)=>domain.id==='mcpConnections').saved.connections;
+ // Saved targets are optional. Exercise their supported configuration path;
+ // one-shot discovery is separately covered without any source/config writes.
+ await a.request('/api/ingress/devices',{method:'POST',body:JSON.stringify({id:'mcp-import',name:input.name,platform:'import'})});
+ await a.request('/api/ingress/sources',{method:'POST',body:JSON.stringify({id:input.sourceId,name:input.name,kind:'mcp',deviceId:'mcp-import',platform:'import',retention:'snapshot',enabled:true})});
+ const save=(api:ReturnType<typeof createApi>,revision:number,id=input.id)=>api.request<any>('/api/configuration/mcpConnections',{method:'PUT',body:JSON.stringify({revision,value:{connections:[{id,url:input.url,token:input.token,sourceIds:[input.sourceId]}]}})});
+ const next=await save(a,baseline.revision),connections=webMcpConnections(next);
  assert.equal(connections[0].id,input.id);assert.equal(connections[0].token,true);assert.deepEqual(connections[0].sourceIds,[input.sourceId]);
  assert.equal((await a.request<any>('/api/sources')).items.find((item:any)=>item.id===input.sourceId).kind,'mcp');
- await assert.rejects(prepareWebMcpConnection(a,baseline,{...input,id:'generated-stale'}),error=>(error as any).status===409);
+ await assert.rejects(save(a,baseline.revision,'generated-stale'),error=>(error as any).status===409);
+ assert.equal((await a.request<any>('/api/sources')).items.length,1);
  f.cookie('b');const b=createApi(f.bi);assert.doesNotMatch(JSON.stringify(await b.request('/api/configuration')),/GENERATED_A_MCP_SECRET|generated-mcp/);
- await assert.rejects(prepareWebMcpConnection(a,next,{...input,id:'generated-borrow'}),error=>(error as any).code==='session_changed');
+ await assert.rejects(save(a,next.revision,'generated-borrow'),error=>(error as any).code==='session_changed');
  assert.equal((await b.request<any>('/api/sources')).items.length,0);
 });
 

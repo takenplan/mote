@@ -4,10 +4,16 @@ import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {setTimeout} from 'node:timers/promises';
 import {parseAnswer} from '@mote/agent';
 import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
+
+async function importPhase(node:Awaited<ReturnType<typeof buildApp>>,id:string,expected:'awaiting_confirmation'|'completed'){
+  // HTTP 202 admits asynchronous work; it makes no one-second completion promise.
+  await node.featureServices.importTasks.get(id);
+  const job=node.imports.get(id);
+  assert.equal(job.status,expected,JSON.stringify({status:job.status,error:job.error,progress:job.progress,execution:job.execution}));
+}
 
 test('HTTP-imported maximum notes remain readable through native Ask and current correction fences',async t=>{
   const dataDir=mkdtempSync(join(tmpdir(),'mote-query-import-context-')),token='generated-context-owner';
@@ -64,11 +70,9 @@ test('HTTP-imported maximum notes remain readable through native Ask and current
   const created=await node.app.inject({method:'POST',url:'/api/imports',headers,payload:{instruction,files:[{name:'generated.custom',dataBase64:Buffer.from('Generated independent diary fixture').toString('base64')}]}});
   assert.equal(created.statusCode,202,created.body);
   const importId=created.json().id;
-  for(let i=0;i<100&&node.imports.get(importId).status!=='awaiting_confirmation';i++)await setTimeout(10);
-  assert.equal(node.imports.get(importId).status,'awaiting_confirmation');
+  await importPhase(node,importId,'awaiting_confirmation');
   const confirmed=await node.app.inject({method:'POST',url:'/api/imports/'+importId+'/confirm',headers});assert.equal(confirmed.statusCode,202,confirmed.body);
-  for(let i=0;i<100&&node.imports.get(importId).status!=='completed';i++)await setTimeout(10);
-  assert.equal(node.imports.get(importId).status,'completed');
+  await importPhase(node,importId,'completed');
   await node.materialOrganizer.tick(100);await node.sourcePipelines.tick(100);
   const answer=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Inspect generated diary context'}});
   assert.equal(answer.statusCode,200,answer.body);assert.equal(verified,1);

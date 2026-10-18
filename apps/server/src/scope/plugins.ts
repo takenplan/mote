@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {rm} from 'node:fs/promises';
+import {setTimeout as delay} from 'node:timers/promises';
 import type {DatabaseSync} from 'node:sqlite';
 import type {PluginCapability} from '@mote/shared';
 import type {ModelFeature} from '@mote/shared/models';
@@ -83,6 +84,11 @@ export class ScopedPluginHost {
  private checkRow(context:UserContext,input:{instanceId:string;id:string}){
   this.assert(context);const row=this.options.db.prepare('SELECT * FROM plugin_user_checks WHERE user_id=? AND instance_id=? AND id=?').get(context.userId,input.instanceId,input.id) as CheckRow|undefined,instance=this.instance(context.userId,input.instanceId);
   if(!row||row.generation!==instance.generation||row.signature!==signature(JSON.parse(instance.json)))throw new ScopeError('invalid_identity',401);return {row,instance};
+ }
+ private async beginCheck(context:UserContext,id:string){
+  await this.configuration(context);this.assert(context);const instance=this.instance(context.userId,id),value=JSON.parse(instance.json) as UserPluginInstance;this.validate(value,true);const checkId=randomUUID();this.options.db.prepare('INSERT INTO plugin_user_checks VALUES(?,?,?,?,?,NULL,NULL) ON CONFLICT(user_id,instance_id) DO UPDATE SET id=excluded.id,generation=excluded.generation,signature=excluded.signature,task_id=NULL,result=NULL').run(context.userId,id,checkId,instance.generation,signature(value));
+  const task=await this.options.execution.forUser(context).submit({kind:'plugin.check',operationId:'plugin-check:'+checkId,input:{instanceId:id,id:checkId}},task=>{this.checkRow(context,{instanceId:id,id:checkId});this.options.db.prepare('UPDATE plugin_user_checks SET task_id=? WHERE user_id=? AND instance_id=? AND id=?').run(task.id,context.userId,id,checkId);});this.checkRow(context,{instanceId:id,id:checkId});
+  return {checkId,taskId:task.id};
  }
  private installCheckTask(){
   this.disposeTasks.push(this.options.execution.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,parseInput:raw=>checkInputSchema.parse(raw),authorizeInput:(context,input)=>{this.checkRow(context,checkInputSchema.parse(input));},validate:task=>{try{const input=checkInputSchema.parse(task.input),row=this.options.db.prepare('SELECT * FROM plugin_user_checks WHERE user_id=? AND instance_id=? AND id=?').get(task.ownership?.userId??'',input.instanceId,input.id) as CheckRow|undefined,instance=row&&this.instance(row.user_id,row.instance_id);return Boolean(row&&instance&&row.generation===instance.generation&&row.signature===signature(JSON.parse(instance.json)));}catch{return false;}},
@@ -217,9 +223,16 @@ export class ScopedPluginHost {
    configure:async(raw:unknown,expectedRevision:number,preserveRedactedSecrets=false)=>{await this.configuration(context);this.assert(context);const value=instanceSchema.parse(raw),current=this.values(context.userId),index=current.instances.findIndex(i=>i.id===value.id);
     if(preserveRedactedSecrets&&index>=0&&current.instances[index].packageId===value.packageId){for(const field of this.package(value.packageId).manifest.configuration)if(field.type==='secret-reference'&&!Object.hasOwn(value.configuration,field.id)&&Object.hasOwn(current.instances[index].configuration,field.id))value.configuration[field.id]=current.instances[index].configuration[field.id];}
     this.validate(value);if(index<0)current.instances.push(value);else current.instances[index]=value;await this.options.configuration.forUser(context).replace(PLUGIN_CONFIGURATION_DOMAIN,current,expectedRevision);this.assert(context);return this.forUser(context).view();},
-   check:async(id:string)=>{await this.configuration(context);this.assert(context);const instance=this.instance(context.userId,id),value=JSON.parse(instance.json) as UserPluginInstance;this.validate(value,true);const idempotency=randomUUID();this.options.db.prepare('INSERT INTO plugin_user_checks VALUES(?,?,?,?,?,NULL,NULL) ON CONFLICT(user_id,instance_id) DO UPDATE SET id=excluded.id,generation=excluded.generation,signature=excluded.signature,task_id=NULL,result=NULL').run(context.userId,id,idempotency,instance.generation,signature(value));
-    const task=await this.options.execution.forUser(context).submit({kind:'plugin.check',operationId:'plugin-check:'+idempotency,input:{instanceId:id,id:idempotency}},task=>{this.checkRow(context,{instanceId:id,id:idempotency});this.options.db.prepare('UPDATE plugin_user_checks SET task_id=? WHERE user_id=? AND instance_id=? AND id=?').run(task.id,context.userId,id,idempotency);});this.checkRow(context,{instanceId:id,id:idempotency});
-    return {checked:false,observed:'checking',taskId:task.id};
+   startCheck:async(id:string)=>{const {taskId}=await this.beginCheck(context,id);return {checked:false,observed:'checking',taskId};},
+   check:async(id:string)=>{
+    const {checkId,taskId}=await this.beginCheck(context,id);
+    // Internal consumers need verification completion; HTTP clients retain the
+    // immediate durable receipt. Never follow another check or a new declaration.
+    for(;;){const {row,instance}=this.checkRow(context,{instanceId:id,id:checkId}),task=this.options.execution.forUser(context).get(taskId);
+     if(task.state==='succeeded'){if(!row.result)throw new StoreError('Plugin check result unavailable',502);const result=checkResultSchema.parse(JSON.parse(row.result));return {...result,checked:instance.verified_hash===signature(JSON.parse(instance.json)),taskId};}
+     if(!['waiting','running'].includes(task.state))throw new StoreError('Plugin check did not complete',409);
+     await delay(10);
+    }
    },
    action:async(id:string,action:'pause'|'disable'|'resume'|'enable'|'stop',expectedRevision:number)=>{await this.configuration(context);const row=this.instance(context.userId,id),instance=JSON.parse(row.json) as UserPluginInstance;instance.desired=action==='resume'||action==='enable';if(action==='stop')instance.revocation=randomUUID();await this.forUser(context).configure(instance,expectedRevision);if(!instance.desired){const retained=Boolean(this.options.db.prepare('SELECT 1 FROM plugin_user_snapshots WHERE user_id=? AND instance_id=? AND released=0 LIMIT 1').get(context.userId,id));this.options.db.prepare("UPDATE plugin_user_checks SET result=json_set(result,'$.observed',?) WHERE user_id=? AND instance_id=? AND result IS NOT NULL").run(retained?'draining':'disabled',context.userId,id);}for(const listener of this.instanceListeners)await listener({userId:context.userId,instanceId:id,context,action});return this.forUser(context).view();},
    admit:async(id:string,mode:'task'|'history'='task',bindingRevision=1)=>{await this.configuration(context);return this.transaction(()=>{this.assert(context);const row=this.instance(context.userId,id),instance=JSON.parse(row.json) as UserPluginInstance;if(!instance.desired||row.verified_hash!==signature(instance)||mode==='history'&&!instance.grants.history)throw new StoreError('Plugin admission is closed',409);z.number().int().positive().parse(bindingRevision);if(this.retiring.has(instance.packageId))throw new StoreError('Plugin package is retiring',409);const pkg=this.package(instance.packageId),fixed:Fixed={instance:clone(instance),components:this.components(pkg),packageId:pkg.view.id,version:pkg.view.version,digest:pkg.view.source.digest},snapshotId=randomUUID();this.options.db.prepare('INSERT INTO plugin_user_snapshots VALUES(?,?,?,?,?,?,?,0,?)').run(snapshotId,context.userId,id,row.generation,context.authorizationEpoch,bindingRevision,mode,JSON.stringify(fixed));return Object.freeze({id:snapshotId,packageId:fixed.packageId,version:fixed.version,digest:fixed.digest,mode,bindingRevision});});},

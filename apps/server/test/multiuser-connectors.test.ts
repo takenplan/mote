@@ -67,6 +67,15 @@ test('read-only source status uses actual per-user Gmail ledgers without opening
  await f.restart();calls=externalCalls;const ac=await f.node.authority.authenticate(f.alice.token),ar=f.node.services.forUser(ac).get<ConnectorSourceStatusReader>('connectors'),bContext=await f.node.authority.authenticate(f.bob.token),bRead=f.node.services.forUser(bContext).get<ConnectorSourceStatusReader>('connectors');assert.equal(ar.sourceStatuses([aId]).get(aId)?.state,'error');assert.equal(bRead.sourceStatuses([bId]).get(bId)?.state,'idle');await viaSdk(await sdk(f.alice.token,aId),'error');const bResumed=await sdk(f.bob.token,bId);await viaSdk(bResumed,'idle');assert.equal(externalCalls,calls);assert.equal((await f.request(f.alice.token,'/api/sources/'+aId,'DELETE')).statusCode,200);assert.deepEqual([...ar.sourceStatuses([aId])],[]);assert.equal(bRead.sourceStatuses([bId]).get(bId)?.state,'idle');assert.equal((await f.request(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:true})).statusCode,200);assert.throws(()=>ar.sourceStatuses([aId]));assert.equal(bRead.sourceStatuses([bId]).get(bId)?.state,'idle');await viaSdk(bResumed,'idle');assert.equal(externalCalls,calls);
 });
 
+test('connector enable retains its original configuration revision when a concurrent pause finishes after verification',async t=>{
+ const f=await fixture(t),entered=deferred(),held=deferred();t.after(()=>held.resolve());await f.install();await f.connect(f.alice.token);
+ const host=f.node.plugins!,forUser=host.forUser.bind(host);t.mock.method(host,'forUser',context=>{const service=forUser(context);return Object.freeze({...service,check:async(id:string)=>{const result=await service.check(id);if(context.userId===f.a.userId){entered.resolve();await held.promise;}return result;}});});
+ const revision=(await f.view(f.alice.token)).revision,pending=f.request(f.alice.token,'/api/connectors/same-connection/enable','POST',{expectedRevision:revision});await entered.promise;
+ await f.action(f.alice.token,'pause');held.resolve();const response=await pending;assert.equal(response.statusCode,409,response.body);
+ const plugins=(await f.request(f.alice.token,'/api/plugins')).json();assert.equal(plugins.instances[0].desired,false);
+ await f.connect(f.bob.token);assert.equal((await f.request(f.bob.token,'/api/plugins')).json().instances[0].desired,true);
+});
+
 test('installation creates no user instance, OAuth exchange, provider discovery or history collection',async t=>{const f=await fixture(t);await f.install();assert.equal((await f.view(f.alice.token)).connections.length,0);assert.deepEqual(f.calls,[]);assert.deepEqual(f.exchanges,[]);const p=await f.request(f.alice.token,'/api/plugins');assert.deepEqual(p.json().instances,[]);});
 
 test('A/B reversed OAuth callbacks and same provider account preserve stable owner, originals and independent cursors after restart',async t=>{
@@ -260,7 +269,10 @@ test('removing a configured Lark instance and deleting its connector domain eras
 });
 
 test('invalid provider operation payloads reject before task admission and never persist or reflect supplied secrets',async t=>{
- const secret='GENERATED_INVALID_OPERATION_SECRET',f=await fixture(t,{extra:{lark:()=>larkConfigurationTransport(async()=>{})}});await prepareLark(f);for(const [operation,payload] of [['unknown-operation',{secret}],['configure',{appId:secret,secret,brand:'feishu'}],['login',{secret}],['select',{secret}]]){const response=await f.request(f.alice.token,'/api/connectors/same-connection/operations','POST',{operation,payload,operationId:randomUUID()});assert.equal(response.statusCode,400,response.body);assert.equal(response.body.includes(secret),false);}const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{assert.equal(Number(db.prepare('SELECT count(*) n FROM user_tasks WHERE user_id=?').get(f.a.userId)!.n),0);}finally{db.close();}assertNoOperationSecret(f,[secret]);
+ const secret='GENERATED_INVALID_OPERATION_SECRET',f=await fixture(t,{extra:{lark:()=>larkConfigurationTransport(async()=>{})}});await prepareLark(f);
+ const before=(await f.request(f.alice.token,'/api/tasks')).json();assert.equal(before.items.length,1);assert.equal(before.items[0].kind,'plugin.check');assert.equal(before.items[0].state,'succeeded');
+ for(const [operation,payload] of [['unknown-operation',{secret}],['configure',{appId:secret,secret,brand:'feishu'}],['login',{secret}],['select',{secret}]]){const response=await f.request(f.alice.token,'/api/connectors/same-connection/operations','POST',{operation,payload,operationId:randomUUID()});assert.equal(response.statusCode,400,response.body);assert.equal(response.body.includes(secret),false);}
+ assert.deepEqual((await f.request(f.alice.token,'/api/tasks')).json(),before,'invalid operations cannot admit or change any task, including the completed enable check');assertNoOperationSecret(f,[secret]);
 });
 
 test('startup migrates earlier candidate raw operation inputs into encrypted references without dropping task history',async t=>{

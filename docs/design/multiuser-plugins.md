@@ -225,6 +225,11 @@ probe/attempt directories under M09. Each check is keyed by user and instance,
 then fenced by account authorization, configuration signature, generation and
 its M05 task grant. Probe directories are inside the existing deployment/user
 instance directory; failed or interrupted attempts retain their local receipts.
+The HTTP check route returns the pending durable receipt immediately. Internal
+consumers such as connector enable await that exact check's completion before
+publishing their configuration; admission alone is not verification. Waiting
+retains the original account/declaration fence and the caller's configuration
+revision, so a concurrent pause or configuration edit cannot be overwritten.
 The shared canary accepts only fenced provider/restart ports from
 `ScopedMemoryProviders`. Its exact import edge and contract-only dependencies
 are guarded; unrelated scoped hosts, legacy Store imports and direct file/SQL

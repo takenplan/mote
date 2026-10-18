@@ -142,7 +142,56 @@ node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/
 node --import tsx --test --test-concurrency=1 --test-timeout=120000 --test-name-pattern='M09 instance export|saved native provider checks|completed real conversation|native Mem0 instance backup' apps/server/test/multiuser-plugins.test.ts apps/server/test/multiuser-plugin-capability.test.ts apps/server/test/multiuser-instance-backup.test.ts
 ```
 
-The new clean candidate, RED/GREEN logs, original failed receipt, final targeted
-results and complete dry-run are recorded under external evidence
-`extensions-validation/scope-repair/`. Full affected and native checks remain for
-the driver; the original failed run is preserved.
+The clean scope-repair candidate `d4683421`, RED/GREEN logs, original failed
+receipt, targeted results and complete dry-run are recorded under external
+evidence `extensions-validation/scope-repair/`. The driver's subsequent full
+run and its consumer failures are recorded below; the earlier failure is kept.
+
+## Consumer contract repair after the second full gate
+
+The driver ran the complete plan on clean `d4683421faf2ce22be8d42c25eb385fa8a0b6aa1`.
+Its receipt is
+`/Users/utopiafar/Documents/Projects/mote/.git/mote-check-receipts/2026-10-18T12-26-42-641Z-6820aa4c-5f2e-4e23-b507-9d4b6ac79c2f.json`,
+with input identity
+`dea19c9c911eb733c1f09be43ad70e2780a72f4cbd26359dc23a498a57a7ee04`.
+Fourteen steps passed; Server failed with 3,087 passing, 62 failing and two
+skipped tests; the last seven steps, including Android, were **UNRUN**.
+The failed full log is `/tmp/mote-parity-extensions-driver-d4683421.log`.
+
+The connector failures exposed a production consumer mismatch: M09's check
+returned its durable task admission, while connector enable assumed verification
+had finished. M04 correctly refused the unverified configuration. The internal
+check now awaits the exact fenced task; the HTTP route continues to return an
+immediate checking receipt. No verification guard or provider canary is removed.
+Connector enable also retains the caller's original configuration revision after
+waiting. A held post-verification boundary reproduces the former concurrent-pause
+overwrite (200 instead of 409); the repaired path rejects the stale enable and
+preserves the pause while B remains usable.
+
+Two independent test assumptions were obsolete. The Web MCP test invoked the
+removed mandatory preparation helper; it now exercises optional saved targets
+through real Ingress/configuration APIs, retaining source ownership, secret
+redaction, CAS and session-change assertions. The existing one-shot renderer
+and discovery tests continue to require discovery with zero source/config writes.
+The legacy import fixture now awaits each actual route-launched prepare/commit
+promise instead of assuming completion within 100 × 10 ms. Only the qualified
+test-wait hunk from Memory commit `1c9be37b5e46e706bcf9715ea00cce052b3e9810`
+is adapted; no Memory parent or business change is copied. All Ask attribution,
+citations and correction fences remain in the original journey.
+
+The first focused connector-consumer run passed 66 of 67 tests. The sole failure
+was its old empty-task assertion: enable now leaves one completed `plugin.check`.
+The test still requires all invalid operations to reject before admission and
+never reflect/persist secrets; it additionally identifies the completed check
+and compares the entire task ledger before and after the invalid requests.
+The corrected case and concurrent-pause regression pass together. New internal
+check regressions cover completed verification before enable and declaration
+changes during a held real probe. The original Gmail 503, internal admission-only
+result and removed MCP helper are preserved as RED evidence.
+
+Exact candidate SHA, file hashes, commands, final focused results, failed full
+receipt and fresh affected dry-run are recorded under external evidence
+`extensions-validation/consumer-repair/`. The new full affected/native run remains
+for the driver, and prior full passing phases cannot be reused. No push or PR is
+made before that complete gate passes. Real models/providers, physical devices,
+foreground UI and deployment remain **UNRUN**.

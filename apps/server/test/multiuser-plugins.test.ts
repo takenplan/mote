@@ -46,6 +46,24 @@ async function fixture(t:TestContext,options:{releases?:ReturnType<typeof releas
  return {directory,get node(){return node;},nodes,adapters,admin,a,b,alice,bob,releases,request,view,configure,action,instance,install,admit,invoke,wait,login,async restart(lifecycle?:LifecycleAuthority){await node.app.close();node=await buildApp({dataDir:directory},{pluginReleaseTransport:transport,lifecycleAuthority:lifecycle});nodes.push(node);register();return node;}};
 }
 
+test('internal plugin check waits for its durable verification before a connector consumer enables the instance',async t=>{
+ const f=await fixture(t),packageId=await f.install();
+ await f.configure(f.alice.token,{id:'same-instance',packageId,name:'Generated instance',configuration:{label:'A'},desired:false,grants:{capabilities:['ui'],sourceIds:[],history:false}});
+ const context=await f.node.authority.authenticate(f.alice.token),service=f.node.plugins!.forUser(context),before=await service.view(),checked=await service.check('same-instance');
+ assert.equal(checked.checked,true,JSON.stringify(checked));assert.equal((await f.request(f.alice.token,'/api/tasks/'+checked.taskId)).json().state,'succeeded');
+ const enabled=await service.action('same-instance','enable',before.revision);assert.equal(enabled.instances[0].desired,true);assert.equal(enabled.instances[0].checked,true);
+});
+
+test('internal plugin check cannot complete against a changed declaration while its real probe is pending',async t=>{
+ const f=await fixture(t),packageId=await f.install(),entered=deferred(),held=deferred();t.after(()=>held.resolve());
+ f.node.plugins!.registerCapabilityProbe(['model'],async()=>{entered.resolve();await held.promise;return {capabilities:[{id:'generated.model',state:'verified'}],issues:[]};});
+ const instance={id:'same-instance',packageId,name:'Generated instance',configuration:{label:'A'},desired:false,grants:{capabilities:['model'] as const,sourceIds:[],history:false}};
+ await f.configure(f.alice.token,instance);const context=await f.node.authority.authenticate(f.alice.token),service=f.node.plugins!.forUser(context);
+ const pending=assert.rejects(service.check('same-instance'),error=>(error as any).statusCode===401);await entered.promise;
+ await f.configure(f.alice.token,{...instance,configuration:{label:'Changed while checking'}});held.resolve();await pending;
+ const view=await service.view();assert.equal(view.instances[0].checked,false);assert.equal(view.instances[0].desired,false);
+});
+
 test('generated local release registers actual Cordis capabilities through production and isolates A/B with identical instance identities',async t=>{
  const f=await fixture(t),packageId=await f.install();await f.instance(f.alice.token,packageId,'A configuration');await f.instance(f.bob.token,packageId,'B_PRIVATE configuration');
  const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token);const ca=await f.node.authority.authenticate(f.alice.token),inventory=await f.node.plugins!.forUser(ca).inventory(a.id);assert.equal(inventory.capabilities.length,5);assert.equal(inventory.capabilities.find(c=>c.id==='generated.processor')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.source')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.model')?.reason,'scoped_domain_unavailable');
