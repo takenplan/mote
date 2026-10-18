@@ -57,7 +57,7 @@
 | 模块键 / 编号 | Owner chat | Branch / PR | 独立验收 chat | 候选 SHA | 状态 / 阻塞 |
 | --- | --- | --- | --- | --- | --- |
 | MEM / MEM-M01..M08 | [MEM开发](codex://threads/01a14e8f-6977-7fa3-8145-0b3696ae413c) | `codex/parity-memory-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收 |
-| FILE / FILE-01..06；FILE-07旧缺陷观察 | [FILE开发](codex://threads/01a14e8f-6b10-7001-b7d6-84ba844a5604) | `codex/parity-files-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收；FILE-07非阻塞旧缺陷 |
+| FILE / FILE-01..06；FILE-07旧缺陷观察 | [FILE开发](codex://threads/01a14e8f-6b10-7001-b7d6-84ba844a5604) | `codex/parity-files-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | 部分head `67b28439cac04942911eacd4cf3118a4fbe51586` | WAIT_FEATURE；完整FILE-PERCEPTION OPEN，非最终冻结；FILE-07非阻塞 |
 | ASK / ASK-A01..A05 | [ASK开发](codex://threads/01a14e8f-6d35-77d1-ad5f-531013c4ea08) | `codex/parity-ask-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收 |
 | CONN / CONN-C01..C07 | [CONN开发](codex://threads/01a14e8f-6edd-7772-b552-f0ce79bb7c61) | `codex/parity-connectors-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
@@ -132,7 +132,9 @@
 | Q007 | DESKTOP / `73c1115287fe07e1824526861ebc2e8ed3cf39fc` / 起点2c78ca8d | Desktop+Server+Web；Android=false，D2另跨端联调 | WAIT_GLOBAL_SLOT；作者83项及29+1/类型/预检报告通过 | `/tmp/mote-parity-desktop-affected-plan-final.json`；完整gate/独验UNRUN |
 | R002 | CONN / C07 Kotlin/helper/JVM/instrumentation | 专用`dev.mote.collector.RecordingParityInstrumentedTest`；生成scoped后端smoke作者报告通过 | WAIT_INPUT_AND_SLOT；Gradle/emulator UNRUN | 精确完整输入/SHA与环境待回报，无当前运行授权 |
 | R003 / Q008 | CONFIG / 必要Kotlin+模型instrumentation及central/Android/scope-tooling | 待精确候选/输入hash/最终dry-run；本树Gradle JVM+debug/testAPK及headless模型方法，再完整affected | WAIT_CANDIDATE_AND_GLOBAL_SLOT；尚无运行授权 | FILE/LIFE producer依赖另列UNRUN；不得用定向结果跳过完整gate所选步骤 |
-| Q001 / Q003 / Q004 / Q005 / Q006 | FILE / EXT / LIFE / ASK / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 新增Android/shared影响按最终输入重选 |
+| P009 / R004 | FILE / 后续环境与native消费者 | Electron补当前lock执行文件；既有JAVA_HOME；JVM+FilesCatalogParityInstrumentedTest无窗口 | WAIT_INPUT_AND_GLOBAL_SLOT；未授权运行 | Java现有`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`，SDK`/Users/utopiafar/Library/Android/sdk`；不视为需要新装JDK |
+| Q001 | FILE / 部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 当前计划ALL6 TS+Android/root scope；`/tmp/mote-files-final-check-plan.json` | WAIT_FEATURE；完整Perception/managed MediaAssets未完成，不开完整gate | 扩大预检Electron/Java缺项，SQLite PASS；native消费者UNRUN |
+| Q003 / Q004 / Q005 / Q006 | EXT / LIFE / ASK / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 新增Android/shared影响按最终输入重选 |
 
 同一已冻结输入可在一个批准资源窗口按顺序做原生旅程与完整affected，但完整driver保留全部选中步骤，不能跨轮缓存或拼接定向PASS；Gradle实际UP-TO-DATE/skip与真实执行分开记录。任一步后改代码/输入，重新冻结、重选范围并复验受影响结论。
 
