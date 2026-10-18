@@ -54,7 +54,7 @@ class CentralPortableDownloadTest {
         }
     }
 
-    @Test fun `download publishes only exact receipt bytes and removes all staging`() {
+    @Test fun `direct portable download verifies response bytes and removes all staging`() {
         val bytes="Synthetic private export 中文".toByteArray(Charsets.UTF_8)
         val sha=Ingress3Client.hash(bytes)
         for(case in listOf("good","hash","mime","etag","length","retired")) {
@@ -68,7 +68,7 @@ class CentralPortableDownloadTest {
                         while(input.readLine().isNotEmpty()) Unit
                         val actual=if(case=="hash")bytes.copyOf().apply { this[0]=(this[0]+1).toByte() } else bytes
                         val mime=if(case=="mime")"application/octet-stream" else "application/json; charset=utf-8"
-                        val etag=if(case=="etag")"0".repeat(64) else sha
+                        val etag=if(case=="etag")"invalid" else sha
                         val length=if(case=="length")actual.size+1 else actual.size
                         socket.getOutputStream().apply {
                             write("HTTP/1.1 200 OK\r\nContent-Type: $mime\r\nContent-Length: $length\r\nETag: \"$etag\"\r\nConnection: close\r\n\r\n".toByteArray())
@@ -81,7 +81,7 @@ class CentralPortableDownloadTest {
                 val output=java.io.File(directory,"selected.json").apply {writeText("Generated existing document sentinel")}
                 var opened=0
                 try {
-                    val run={api.downloadVerified("/api/portable/exports/generated/content",{opened++;output.outputStream()},CentralDownload(bytes.size.toLong(),sha,"application/json; charset=utf-8"),directory)}
+                    val run={api.downloadStaged("/api/export",{opened++;output.outputStream()},directory)}
                     if(case=="good") {run();assertArrayEquals(bytes,output.readBytes());assertEquals(1,opened)}
                     else {assertThrows(Exception::class.java,run);assertEquals("Generated existing document sentinel",output.readText());assertEquals(0,opened)}
                     assertEquals(listOf("selected.json"),directory.listFiles()!!.map {it.name});response.get(5,TimeUnit.SECONDS)

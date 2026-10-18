@@ -21,28 +21,26 @@ async function fixture(t:TestContext){
  return {get node(){return node;},request,checked,login,admin,a,b,releaseOnClose,restart:async()=>{await node.app.close();node=await buildApp({dataDir:directory});}};
 }
 
-test('real portable export enters owner Activity while held, completes with exact receipt and loses its artifact on cancel',async t=>{
+test('real portable export enters owner Activity while held, completes with no downloadable archive artifact',async t=>{
  const f=await fixture(t),entered=deferred(),release=deferred(),domain='generated-activity-export';f.releaseOnClose.push(release.resolve);
  f.node.services.registerUser(domain,{scope:'user',create:()=>({}),lifecycle:{exportUser:async subject=>{if(subject.userId===f.a.userId){entered.resolve();await release.promise;}return {domain,version:1,userId:subject.userId,deploymentId:subject.deploymentId,payload:{body:'Generated A archive bytes, never an Activity payload'}};},deleteUser:async(_subject,operationId)=>({status:'complete',operationId}),restoreUser:async()=>{}}});
- const receipt=await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()}),id='export:'+receipt.id;await entered.promise;
- const page=await f.checked(f.a.token,'/api/work-activity?state=active&limit=1');assert.equal(page.items.length,1);assert.equal(page.items[0].id,id);assert.equal(page.items[0].state,'running');assert.equal(page.items[0].progress.mode,'semantic');assert.equal(page.items[0].progress.total,undefined);
+ const pending=f.request(f.a.token,'/api/export');await entered.promise;
+ const page=await f.checked(f.a.token,'/api/work-activity?state=active&limit=1');assert.equal(page.items.length,1);const id=page.items[0].id;assert.match(id,/^export:/);assert.equal(page.items[0].state,'running');assert.equal(page.items[0].progress.mode,'semantic');assert.equal(page.items[0].progress.total,undefined);
  for(const token of [f.b.token,f.admin.token]){assert.equal((await f.request(token,'/api/work-activity/'+id)).statusCode,404);assert.equal((await f.checked(token,'/api/work-activity')).items.length,0);}
  assert.equal((await f.checked(f.a.token,'/api/work-activity?sourceId=same-source')).items.length,0,'account exports have no invented source relationship');
- release.resolve();await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='completed',()=> 'real export did not complete');
- const completed=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(completed.state,'completed');assert.equal(completed.progress.mode,'semantic');assert.equal(completed.progress.stage,'finished');assert.equal(completed.artifacts.length,1);assert.equal(completed.artifacts[0].id,receipt.id);assert.deepEqual(completed.technical.operationIds,[]);assert.equal(completed.evidence.count,0);assert.doesNotMatch(JSON.stringify(completed),/archive bytes|grant_id|token_hash|password/);
- assert.equal((await f.request(f.a.token,'/api/portable/exports/'+receipt.id+'/content')).statusCode,200);
- await f.checked(f.a.token,'/api/portable/exports/'+receipt.id+'/cancel','POST',{});const cancelled=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(cancelled.state,'cancelled');assert.deepEqual(cancelled.artifacts,[]);assert.equal((await f.request(f.a.token,'/api/portable/exports/'+receipt.id+'/content')).statusCode,409);
- await f.restart();assert.equal((await f.checked(f.a.token,'/api/work-activity/'+id)).state,'cancelled');
+ release.resolve();const content=await pending;assert.equal(content.statusCode,200,content.body);assert.equal('export:'+content.headers['x-mote-operation-id'],id);
+ const completed=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(completed.state,'completed');assert.equal(completed.progress.mode,'semantic');assert.equal(completed.progress.stage,'finished');assert.deepEqual(completed.artifacts,[]);assert.deepEqual(completed.technical.operationIds,[]);assert.equal(completed.evidence.count,0);assert.doesNotMatch(JSON.stringify(completed),/archive bytes|grant_id|token_hash|password/);
+ await f.restart();assert.equal((await f.checked(f.a.token,'/api/work-activity/'+id)).state,'completed');
 });
 
 test('Activity filters complete lifecycle visibility before LIMIT and never adopts exports from a prior account epoch',async t=>{
  const f=await fixture(t),ids:string[]=[];
- for(let index=0;index<12;index++)for(const owner of [f.a,f.b]){const receipt=await f.checked(owner.token,'/api/portable/exports','POST',{operationId:randomUUID()});await f.checked(owner.token,'/api/portable/exports/'+receipt.id+'/cancel','POST',{});if(owner===f.a)ids.push('export:'+receipt.id);}
+ for(let index=0;index<12;index++)for(const owner of [f.a,f.b]){const response=await f.request(owner.token,'/api/export');assert.equal(response.statusCode,200,response.body);if(owner===f.a)ids.push('export:'+response.headers['x-mote-operation-id']);}
  const seen=new Set<string>();let cursor:number|null=0;
- do{const page=await f.checked(f.a.token,'/api/work-activity?state=completed&limit=5&cursor='+cursor);for(const row of page.items){assert.ok(ids.includes(row.id));assert.equal(row.state,'cancelled');assert.ok(!seen.has(row.id));seen.add(row.id);}cursor=page.nextCursor;}while(cursor!==null);
+ do{const page=await f.checked(f.a.token,'/api/work-activity?state=completed&limit=5&cursor='+cursor);for(const row of page.items){assert.ok(ids.includes(row.id));assert.equal(row.state,'completed');assert.ok(!seen.has(row.id));seen.add(row.id);}cursor=page.nextCursor;}while(cursor!==null);
  assert.equal(seen.size,12);assert.equal((await f.checked(f.a.token,'/api/work-activity?state=active&limit=1')).items.length,0);
  await f.checked(f.admin.token,'/api/admin/accounts/'+f.a.userId+'/password','POST',{password});const replacement=await f.login('generated-a');
- assert.equal((await f.checked(replacement.token,'/api/work-activity?state=completed')).items.length,0);assert.equal((await f.request(replacement.token,'/api/work-activity/'+ids[0])).statusCode,404);assert.equal((await f.request(replacement.token,'/api/portable/exports/'+ids[0].slice(7))).statusCode,409);
+ assert.equal((await f.checked(replacement.token,'/api/work-activity?state=completed')).items.length,0);assert.equal((await f.request(replacement.token,'/api/work-activity/'+ids[0])).statusCode,404);
  assert.equal((await f.checked(f.b.token,'/api/work-activity?state=completed&limit=100')).items.length,12);
 });
 
@@ -60,22 +58,20 @@ test('administrator Activity reports durable unknown deletion metadata without e
  assert.equal((await f.request(f.admin.token,'/api/work-activity/'+id)).statusCode,401,'retired administrator authority cannot retain metadata access');assert.equal((await f.checked(second.token,'/api/work-activity/'+id)).state,'completed');
 });
 
-test('Activity follows real failed export and explicit same-operation retry without turning domain steps into records',async t=>{
+test('Activity follows real failed export and a new direct request after failure without turning domain steps into records',async t=>{
  const f=await fixture(t),domain='generated-activity-failure';let fail=true;
  f.node.services.registerUser(domain,{scope:'user',create:()=>({}),lifecycle:{exportUser:async subject=>{if(fail)throw Error('Generated export provider failure');return {domain,version:1,userId:subject.userId,deploymentId:subject.deploymentId,payload:{}};},deleteUser:async(_subject,operationId)=>({status:'complete',operationId}),restoreUser:async()=>{}}});
- const receipt=await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()}),id='export:'+receipt.id;
- await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='failed',()=> 'generated export did not fail');
- const attention=await f.checked(f.a.token,'/api/work-activity?state=attention&limit=1');assert.equal(attention.items[0].id,id);assert.equal(attention.items[0].state,'failed');assert.equal(attention.items[0].progress.mode,'semantic');assert.deepEqual(attention.items[0].artifacts,[]);
+ const rejected=await f.request(f.a.token,'/api/export');assert.equal(rejected.statusCode,503,rejected.body);
+ const attention=await f.checked(f.a.token,'/api/work-activity?state=attention&limit=1');const id=attention.items[0].id;assert.match(id,/^export:/);assert.equal(attention.items[0].state,'failed');assert.equal(attention.items[0].progress.mode,'semantic');assert.deepEqual(attention.items[0].artifacts,[]);
  const failed=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(failed.branches.length,failed.branchCounts.total);assert.ok(failed.branches.every((branch:any)=>!branch.progress||branch.progress.mode==='semantic'));assert.deepEqual(failed.evidence,{count:0,refs:[]});
- fail=false;await f.checked(f.a.token,'/api/portable/exports/'+receipt.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='completed',()=> 'explicit export retry did not complete');
- const done=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(done.state,'completed');assert.equal(done.branchCounts.completed,done.branchCounts.total);assert.equal(done.artifacts[0].id,receipt.id);assert.equal((await f.checked(f.a.token,'/api/work-activity?state=attention')).items.length,0);
+ fail=false;const response=await f.request(f.a.token,'/api/export');assert.equal(response.statusCode,200,response.body);const newId='export:'+response.headers['x-mote-operation-id'];assert.notEqual(newId,id);
+ const done=await f.checked(f.a.token,'/api/work-activity/'+newId);assert.equal(done.state,'completed');assert.equal(done.branchCounts.completed,done.branchCounts.total);assert.deepEqual(done.artifacts,[]);assert.equal((await f.checked(f.a.token,'/api/work-activity/'+id)).state,'failed');
 });
 
 for(const mode of ['complete','cancel'] as const)test('actual same-account portable import Activity follows '+mode+' without inventing an artifact or restoring preserved authority',async t=>{
  const f=await fixture(t),sourceId='generated-import-source';
  await f.checked(f.a.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated source',kind:'local-files',deviceId:'generated-device',platform:'import',retention:'archive'});
- const exported=await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+exported.id)).state==='completed',()=> 'archive for actual import did not complete');
- const archive=await f.checked(f.a.token,'/api/portable/exports/'+exported.id+'/content');await f.checked(f.a.token,'/api/sources/'+sourceId,'DELETE');
+ const archive=await f.checked(f.a.token,'/api/export');await f.checked(f.a.token,'/api/sources/'+sourceId,'DELETE');
  const entry=(f.node.services as any).users.get('memory'),read=entry.lifecycle.exportUser,entered=deferred(),release=deferred();f.releaseOnClose.push(release.resolve);
  entry.lifecycle.exportUser=async(subject:unknown)=>{const result=await read(subject);entered.resolve();await release.promise;return result;};
  const receipt=await f.checked(f.a.token,'/api/portable/imports','POST',{operationId:randomUUID(),archive}),id='import:'+receipt.id;await entered.promise;

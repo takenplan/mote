@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {fixture} from './fixtures/scoped-actions.js';
 import {waitForState} from './fixtures/scoped-query-accounts.js';
 
-async function exported(f:Awaited<ReturnType<typeof fixture>>){const id=randomUUID();await f.ok(f.a.token,'/api/portable/exports','POST',{operationId:id});await waitForState(()=>f.ok(f.a.token,'/api/portable/exports/'+id),value=>value.state==='completed','actual account archive');return f.ok(f.a.token,'/api/portable/exports/'+id+'/content');}
+async function exported(f:Awaited<ReturnType<typeof fixture>>){return f.ok(f.a.token,'/api/export');}
 async function imported(f:Awaited<ReturnType<typeof fixture>>,archive:unknown,id=randomUUID()){await f.ok(f.a.token,'/api/portable/imports','POST',{operationId:id,archive});return waitForState(()=>f.ok(f.a.token,'/api/portable/imports/'+id),value=>value.state!=='working','actual account import');}
 
 test('actual portable HTTP imports owned missing todos and preserves Actions authority while same-ID B and successful retries stay unchanged',async t=>{

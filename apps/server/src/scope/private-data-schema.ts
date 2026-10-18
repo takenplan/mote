@@ -23,6 +23,7 @@ export function installPrivateData(db:DatabaseSync){
       CHECK((source_id IS NULL AND external_id IS NULL AND revision IS NULL) OR (source_id IS NOT NULL AND external_id IS NOT NULL AND revision IS NOT NULL)),
       FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
     CREATE INDEX IF NOT EXISTS pd_captures_recent ON pd_captures(user_id,context_at DESC,id DESC);
+    CREATE TABLE IF NOT EXISTS pd_capture_deletions(user_id TEXT NOT NULL,id TEXT NOT NULL,deleted_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
     CREATE TABLE IF NOT EXISTS pd_import_declarations(user_id TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NULL,source_id TEXT NOT NULL,fingerprint TEXT NOT NULL,instruction TEXT NOT NULL,PRIMARY KEY(user_id,id,version),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS pd_capture_imports(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(user_id,capture_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,id,version) REFERENCES pd_import_declarations(user_id,id,version) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS pd_source_heads(

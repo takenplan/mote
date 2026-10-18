@@ -51,6 +51,7 @@ export class Originals{
   this.assert();if(bytes.length>FILE_MAX_BYTES)throw new PrivateDataError('invalid_data',413);
   const hash=bytesHash(bytes),old=this.sql.get('SELECT hash,bytes FROM ig_objects WHERE user_id=$user AND hash=?',hash);
   if(old&&Number(old.bytes)>=0&&existsSync(join(this.area('objects'),hash))){this.readObject(hash);return this.get(hash);}
+  this.sql.reserveStorageObject(hash,bytes.length,Math.max(0,Number(old?.bytes??0)));
   const parent=this.area('objects'),stage=join(parent,hash+'.'+randomUUID()+'.tmp');privateDirectory(stage);
   const checksums:string[]=[];
   try{
@@ -67,13 +68,14 @@ export class Originals{
   if(total!==size||sum.digest('hex')!==hash)throw conflict();
  }
  private record(hash:string,size:number,checksums:string[]){
+  this.sql.originalStorageResident(hash,true,size);
   this.sql.run('INSERT INTO ig_objects VALUES($user,?,?,?) ON CONFLICT(user_id,hash) DO UPDATE SET bytes=excluded.bytes,parts=excluded.parts',hash,size,checksums.length);
   for(const [index,checksum] of checksums.entries())this.sql.run('INSERT INTO ig_parts VALUES($user,?,?,?) ON CONFLICT(user_id,hash,part) DO NOTHING',hash,index,checksum);
  }
  writePart(id:string,part:number,bytes:Buffer){
   const path=join(this.uploadPath(id),String(part));
   if(existsSync(path+'.plain')||existsSync(path+'.aes')){if(!this.contentRead(path).equals(bytes))throw conflict();}
-  else this.contentWrite(path,bytes);
+  else {this.sql.reserveStoragePart(id,bytes.length);this.contentWrite(path,bytes);}
   this.assert();
  }
  /** Generic import starts before a whole-file hash is available. This is the
@@ -83,7 +85,7 @@ export class Originals{
   try{
    const encryption=this.workerEncryption();
    const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption},signal);
-   this.assert();if(JSON.stringify(encryption)!==JSON.stringify(this.workerEncryption()))throw conflict();return this.sql.transaction(()=>{const destination=join(this.area('objects'),result.hash);if(existsSync(destination))this.verifyDirectory(destination,result.hash,size,result.checksums);else{renameSync(stage,destination);sync(parent);}this.record(result.hash,size,result.checksums);return this.get(result.hash);});
+   this.assert();if(JSON.stringify(encryption)!==JSON.stringify(this.workerEncryption()))throw conflict();return this.sql.transaction(()=>{const destination=join(this.area('objects'),result.hash);if(existsSync(destination))this.verifyDirectory(destination,result.hash,size,result.checksums);else{renameSync(stage,destination);sync(parent);}this.sql.preparedImportStorage(id,result.hash);this.record(result.hash,size,result.checksums);return this.get(result.hash);});
   }finally{this.cleanStage(stage);}
  }
  /** Uses the same bounded child worker as existing large-file intake. No SQL
@@ -121,7 +123,7 @@ export class Originals{
   const input=this.sql.get('SELECT expires FROM ig_snapshot_inputs WHERE user_id=$user AND original_id=?',id),available=!input||Number(input.expires)>Date.now();
   return {ref,sourceId:String(row.source_id),captureId:String(row.capture_id),hash:String(row.hash),bytes:Number(row.bytes),mime:String(row.mime),retention:row.retention as Original['retention'],available};
  }
- releaseSnapshot(ref:string){const value=this.original(ref);if(value.retention!=='snapshot')throw conflict();this.sql.run('INSERT INTO ig_snapshot_inputs VALUES($user,?,0) ON CONFLICT(user_id,original_id) DO UPDATE SET expires=0',ref.slice(9));}
+ releaseSnapshot(ref:string){return this.sql.transaction(()=>{const value=this.original(ref);if(value.retention!=='snapshot')throw conflict();this.sql.run('INSERT INTO ig_snapshot_inputs VALUES($user,?,0) ON CONFLICT(user_id,original_id) DO UPDATE SET expires=0',ref.slice(9));this.sql.retireExportCopies();});}
  restoreSnapshot(ref:string){const value=this.original(ref);if(value.retention!=='snapshot')throw conflict();this.readObject(value.hash);this.sql.run('UPDATE ig_snapshot_inputs SET expires=? WHERE user_id=$user AND original_id=?',Date.now()+86400000,ref.slice(9));return this.original(ref);}
  read(ref:string,range:{offset?:number;length?:number}={}){
   const original=this.original(ref),offset=range.offset??0,length=range.length??Math.min(FILE_PART_BYTES,original.bytes-offset);
@@ -145,11 +147,11 @@ export class Originals{
   return release;
  }
  gc(){return this.sql.transaction(()=>{
-  if(this.sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))throw conflict();
+  if(this.sql.originalActivity())throw conflict();
   this.sql.run('DELETE FROM ig_pins WHERE user_id=$user AND expires<=?',Date.now());let removed=0;
   const parent=this.area('objects');
   for(const row of this.sql.all("SELECT hash FROM ig_objects o WHERE o.user_id=$user AND NOT EXISTS(SELECT 1 FROM ig_originals r LEFT JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id WHERE r.user_id=o.user_id AND r.hash=o.hash AND(r.retention='archive' OR s.original_id IS NULL OR s.expires>?)) AND NOT EXISTS(SELECT 1 FROM ig_archive_files a WHERE a.user_id=o.user_id AND a.hash=o.hash) AND NOT EXISTS(SELECT 1 FROM ig_pins p WHERE p.user_id=o.user_id AND p.hash=o.hash)",Date.now())){
-   const hash=String(row.hash);if(!digest.test(hash))throw conflict();const path=join(parent,hash);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});removed++;}if(!this.sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND hash=? LIMIT 1',hash))this.sql.run('DELETE FROM ig_objects WHERE user_id=$user AND hash=?',hash);
+   const hash=String(row.hash);if(!digest.test(hash))throw conflict();const stored=this.sql.get('SELECT bytes FROM ig_objects WHERE user_id=$user AND hash=?',hash);this.sql.originalStorageResident(hash,false,Math.max(0,Number(stored?.bytes??0)));const metadata=this.sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND hash=? LIMIT 1',hash);if(metadata)this.sql.retireExportCopies();const path=join(parent,hash);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});removed++;}if(!metadata)this.sql.run('DELETE FROM ig_objects WHERE user_id=$user AND hash=?',hash);
   }
   for(const name of readdirSync(parent))if(/^[a-f0-9]{64}\.[a-f0-9-]{36}\.tmp$/.test(name)||digest.test(name)&&!this.sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=?',name)){const path=join(parent,name);privateDirectory(path);rmSync(path,{recursive:true});}
   return {removed};

@@ -46,7 +46,7 @@ test('new named policy tables survive stopped native restore, with old authority
    const headers={'x-mote-protocol-version':'2',authorization:'Bearer '+user.token};assert.equal((await restored.app.inject({url:'/api/auth/self',headers})).statusCode,401);
    const fresh=await restored.accounts!.login(index===0?'generated-a':'generated-b','Generated-joint-files-password','generated','client',0);assert.equal(fresh.userId,user.userId);
    headers.authorization='Bearer '+fresh.token;
-   const page=await restored.app.inject({url:'/api/file-processing',headers});assert.equal(page.statusCode,200,page.body);assert.equal(page.json().settings.automatic,false);assert.deepEqual(page.json().policy,policy);
+   const page=await restored.app.inject({url:'/api/file-processing',headers});assert.equal(page.statusCode,200,page.body);assert.equal(page.json().settings.automatic,true,'future policy intent survives without renewing an old task grant');assert.deepEqual(page.json().policy,policy);
    const chunks=await restored.app.inject({url:'/api/files/'+f.files[index].id+'/chunks',headers});assert.equal(chunks.statusCode,200,chunks.body);assert.equal(chunks.json().items[0].ocrText,'GENERATED_POLICY_LIFECYCLE_'+(index===0?'A':'B'));
   }
   assert.deepEqual(rows(target),before);
@@ -62,9 +62,7 @@ test('new named policy tables survive stopped native restore, with old authority
 
 test('same-account portable merge preserves current named plans without new grants, and account erasure removes only its new tables',async t=>{
  const f=await seed(t),before=rows(f.directory),bBefore=await f.checked(f.b.token,'/api/files/'+f.files[1].id),taskRows=(db:DatabaseSync)=>db.prepare("SELECT u.task_id,u.grant_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id WHERE e.kind='processing.pipeline' ORDER BY u.task_id").all(),tasks=read(f.directory,taskRows);
- const exportId=randomUUID();await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:exportId});
- await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+exportId)).state==='completed',()=> 'Generated personal export did not complete',10000);
- const archive=await f.checked(f.a.token,'/api/portable/exports/'+exportId+'/content');
+ const exportId=randomUUID();const archive=await f.checked(f.a.token,'/api/export');
  // This candidate declares complete applied-plan portable recovery OPEN. Record
  // its actual wire shape without making omission a permanent expected contract.
  t.diagnostic('Personal archive top-level fields: '+Object.keys(archive).sort().join(','));

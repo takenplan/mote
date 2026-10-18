@@ -47,7 +47,7 @@ export function fileForgetting(sql:PrivateSql,originals:Originals,data:()=>Priva
     const uploads=sql.all("SELECT id FROM ig_uploads WHERE user_id=$user AND source_id=? AND json_extract(manifest,'$.item.externalId')=?",p.sourceId,p.externalId).map(row=>String(row.id));
     sql.run("DELETE FROM ig_uploads WHERE user_id=$user AND source_id=? AND json_extract(manifest,'$.item.externalId')=?",p.sourceId,p.externalId);
     sql.run("DELETE FROM ig_batches WHERE user_id=$user AND source_id=? AND EXISTS(SELECT 1 FROM json_each(ig_batches.receipt,'$.captures') c WHERE json_extract(c.value,'$.id') IN(SELECT value FROM json_each(?)))",p.sourceId,JSON.stringify(ids));
-    for(const id of ids)data().deleteCapture(id);const result:ForgetReceipt={deleted:ids.length,cleanup:'pending',decision:{sourceId:p.sourceId,externalId:p.externalId,decisionId,generation:previous+1}};sql.run('INSERT INTO ig_file_forget_operations VALUES($user,?,?,?)',input.operationId,input.digest,JSON.stringify(result));return {ids,refs,uploads,result};
+    for(const id of ids)data().forgetCapture(id);const result:ForgetReceipt={deleted:ids.length,cleanup:'pending',decision:{sourceId:p.sourceId,externalId:p.externalId,decisionId,generation:previous+1}};sql.run('INSERT INTO ig_file_forget_operations VALUES($user,?,?,?)',input.operationId,input.digest,JSON.stringify(result));return {ids,refs,uploads,result};
    });
    // SQL removal is committed first. A held physical reader or an I/O failure
    // may postpone existing GC, never roll back metadata to now-missing bytes.

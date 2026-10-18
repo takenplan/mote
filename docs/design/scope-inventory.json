@@ -1570,8 +1570,9 @@
       "table:ig_capture_updates",
       "table:ig_devices",
       "table:ig_file_forget_operations",
-      "table:ig_file_generations",
       "table:ig_file_forgets",
+      "table:ig_file_generations",
+      "table:ig_file_revisions",
       "table:ig_import_parts",
       "table:ig_import_uploads",
       "table:ig_meta",
@@ -1693,6 +1694,7 @@
     "scope": "mixed",
     "module": "M02",
     "surfaces": [
+      "table:pd_capture_deletions",
       "table:pd_capture_imports",
       "table:pd_captures",
       "table:pd_fts",
@@ -2329,15 +2331,10 @@
     "surfaces": [
       "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/admin/accounts/:id'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/account-deletions/:id'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/export'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports/:id'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports/:id/cancel'"
     ]
@@ -2553,6 +2550,34 @@
     "notes": "M04 owns user-qualified numeric usage fragments and host-owner recovery metadata. An existing meter may only interrupt its own retained fragment after revocation; it cannot add samples, recreate deleted rows or recover business/model authority.",
     "surfaces": [
       "table:user_model_usage_owners"
+    ]
+  },
+  "apps/server/src/scope/storage-capacity.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "table:scoped_storage_capacity",
+      "table:scoped_storage_evictions",
+      "table:scoped_storage_prepared_imports"
+    ]
+  },
+  "apps/server/src/scope/storage-settings.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/storage-settings'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/storage-settings'"
+    ]
+  },
+  "apps/server/src/scope/restore-future.ts": {
+    "scope": "user",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "table:lifecycle_future",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>configuration.instance.current<{agentConcurrency:number}>('execution').agentConcurrency,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>input.parse(raw),resources:()=>[{scope:'user',key:kind}],authorizeInput:(context,raw)=>{const row=this.sql(context).get('SELECT restoration_id,epoch FROM lifecycle_future WHERE user_id=$user');if(!row||row.restoration_id!==raw.restorationId||row.epoch!==context.authorizationEpoch)throw new PrivateDataError('conflict',409);},execute:run=>this.resume(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','restore_future_requires_attention')}"
     ]
   }
 }

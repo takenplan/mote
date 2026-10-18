@@ -78,7 +78,7 @@ batch_targets AS (SELECT j.user_id,j.id job_id,j.group_id,b.id batch_id,e.id evi
    const exporting=id.startsWith('export:'),importing=id.startsWith('import:'),receipt=exporting?this.hosts.lifecycle.exportReceipt(context,String(row.lookup_id)):importing?this.hosts.lifecycle.importReceipt(context,String(row.lookup_id)):this.hosts.lifecycle.deletionReceipt(context,String(row.lookup_id));
    const branchState=(value:string):WorkState=>value==='complete'?'completed':value==='preserved'?'excluded':value==='result_unknown'?'needs_input':'waiting';
    const branches:WorkBranch[]=detail?receipt.domains.map(domain=>({id:receipt.id+':'+String(domain.domain),title:String(domain.domain),state:branchState(String(domain.state)),artifactIds:[]})):[];
-   const artifacts:WorkActivity['artifacts']=exporting&&receipt.state==='completed'?[{id:receipt.id,kind:'result',title:moteText('导出资料'),ref:'portable-export:'+receipt.id,href:'#/system/storage?export='+encodeURIComponent(receipt.id)}]:[];
+   const artifacts:WorkActivity['artifacts']=[];
    const work:WorkActivity={...base,kind:exporting?'export':importing?'import':'delete',goal:moteText(exporting?'导出资料':importing?'导入归档':'删除账号资料'),progress:{mode:'semantic',stage:status==='completed'?'finished':status==='running'?'saving':'checking'},branches,branchCounts:{total:receipt.domains.length,running:0,completed:receipt.domains.filter(domain=>domain.state==='complete').length},artifacts,destination:exporting||importing?'vault':'about'};
    if(!exporting&&!importing)this.runtime.authority.assertAdministrator(context);this.runtime.authority.assert(context);return work;
   }

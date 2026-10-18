@@ -1,3 +1,4 @@
+import {archiveRead} from './archive-read-set.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {rm} from 'node:fs/promises';
@@ -156,6 +157,8 @@ export class ScopedPluginHost {
   return view;
  }
  private values(userId:string):PluginConfiguration{return {instances:(this.options.db.prepare('SELECT json FROM plugin_user_instances WHERE user_id=? AND removed=0 ORDER BY id').all(userId)).map(row=>JSON.parse(String(row.json)) as UserPluginInstance)};}
+ /** Fixed host restoration reader; never part of the user/plugin facade. */
+ restorationDefinition(context:UserContext,id:string){this.assert(context);return instanceSchema.parse(JSON.parse(this.instance(context.userId,id).json));}
  private safe(instance:UserPluginInstance){const value=clone(instance),pkg=this.package(value.packageId);for(const field of pkg.manifest.configuration)if(field.type==='secret-reference')delete value.configuration[field.id];return value;}
  forUser(context:UserContext){
   this.assert(context);
@@ -218,7 +221,7 @@ export class ScopedPluginHost {
  readonly lifecycle:DomainLifecycle={
   // Personal archive import preserves live settings and operational authority.
   importUser:false,
-  exportUser:async subject=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'export');return this.transaction(()=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'export');return {domain:PLUGINS_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-plugins-v1',coverage:{instanceDefinitions:true,credentials:false,activeAuthorization:false,runtimeData:false,excluded:['provider-domain-data','runtime-files','snapshots','subscriptions','events']},instances:this.values(subject.userId).instances.map(value=>({...this.safe(value),desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}))}};});},
+  exportUser:async subject=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'export');return archiveRead(subject.userId,()=>this.transaction(()=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'export');return {domain:PLUGINS_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-plugins-v1',coverage:{instanceDefinitions:true,credentials:false,activeAuthorization:false,runtimeData:false,excluded:['provider-domain-data','runtime-files','snapshots','subscriptions','events']},instances:this.values(subject.userId).instances.map(value=>({...this.safe(value),desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}))}};}));},
   deleteUser:async(subject,operationId)=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'delete');this.transaction(()=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'delete');this.options.db.prepare('INSERT INTO plugin_user_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);this.options.db.prepare('UPDATE plugin_user_instances SET generation=generation+1,removed=1,verified_hash=NULL WHERE user_id=? AND removed=0').run(subject.userId);this.options.db.prepare('UPDATE plugin_user_snapshots SET released=1 WHERE user_id=?').run(subject.userId);});this.pruneSubscriptions();if(!await this.closeWorkers(record=>record.userId===subject.userId))return {status:'result_unknown',operationId};await this.retireRevoked();this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'delete');await rm(this.directory(subject.userId),{recursive:true,force:true});this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'delete');this.transaction(()=>{for(const table of ['plugin_user_snapshots','plugin_user_instances','plugin_user_events','plugin_user_restore'])this.options.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
   restoreUser:async(subject,archive,operationId)=>this.restore(subject,archive,operationId),
  };

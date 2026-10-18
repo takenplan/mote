@@ -1,3 +1,4 @@
+import {archiveRead} from './archive-read-set.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,existsSync,rmSync,renameSync,openSync,fsyncSync,closeSync,fstatSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -381,14 +382,14 @@ export class Configurations {
     exportUser:async context=>{
       this.assertSubject(context,'export');const entry=await this.entry(context);this.assertSubject(context,'export');
       try{
-      const document=entry.service.document();document.models=removeCredentials(entry.service.current('models'));
+      return archiveRead(context.userId,()=>{const document=entry.service.document();document.models=removeCredentials(entry.service.current('models'));
       // Registered extension projections already replace declared sensitive
       // fields with booleans. They are omitted on portable export and must be
       // re-entered by their owning domain rather than restored as credentials.
       for(const domain of entry.service.view().domains)if(!['models','modelPrices'].includes(domain.id)){
         if(domain.fields.some(f=>f.sensitive))delete document[domain.id];
       }
-      return {domain:'configuration',version:1,deploymentId:context.deploymentId,userId:context.userId,payload:{document,usage:this.usage(context.userId).items.map(portableUsageReceipt),credentialsIncluded:false,omittedDomains:entry.service.view().domains.filter(d=>!Object.hasOwn(document,d.id)).map(d=>d.id)}};
+      return {domain:'configuration',version:1,deploymentId:context.deploymentId,userId:context.userId,payload:{document,usage:this.usage(context.userId).items.map(portableUsageReceipt),credentialsIncluded:false,omittedDomains:entry.service.view().domains.filter(d=>!Object.hasOwn(document,d.id)).map(d=>d.id)}};});
       }finally{if(!('credentialId' in context)){if(this.entries.get(context.userId)===entry)this.entries.delete(context.userId);await entry.service.close();}}
     },
     deleteUser:async(context,operationId)=>this.serializeLifecycle(context.userId,async()=>{
