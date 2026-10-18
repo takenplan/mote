@@ -15,9 +15,9 @@ coverage, not evidence that the scoped production journey works.
 | M03 | Independently reviewed legal empty output; missing coverage; incomplete partial proposals blocked without batch publication; original job retry after restart preserves completed sibling task IDs/attempts. |
 | M04 | `multiuser-memory-integration-domains.test.ts`: actual personal/coding split, independent reviews, either domain fails while the sibling commits, restart and same-job retry preserve completed domain. |
 | M05 | Oversized publication drains through frozen bounded successors, preserving due-time wait, successful supersession, restart and cancel/stop fences. Observation-only publication creates no consolidation window; observations do not satisfy `minChanges` or enter the integration prompt. |
-| M06 | `multiuser-memory-coding-preparation.test.ts`: same-ID dual-owner clean Coding intake, independent understanding, work/event Material, extraction, independent review; restart reuse, incomplete retry and cancel/delete/account-disable late results. |
+| M06 | `multiuser-memory-coding-preparation.test.ts`: same-ID dual-owner clean Coding intake, independent understanding, work/event Material, exact complete candidate reuse versus ordinary extraction for context gaps, independent review; two sessions plus ordinary input keep three final batches; restart reuse, incomplete retry and cancel/delete/account-disable late results. |
 | M07 | Both extraction and independent review receive `quote_not_found` correction before quote-backed coverage checks, and retain content-free candidate/span diagnostics. |
-| M08 | Eight independent generated originals keep subsequent model work pending/running behind a provider gate while the first reviewed batch is already searchable; persisted draft/review/prepared checkpoints and stage dependencies remain. |
+| M08 | Eight independent generated originals keep subsequent model work pending/running behind a provider gate while the first reviewed batch is already searchable; persisted draft/review/prepared/saved checkpoints remain within one continuous task, without stage dependency reentry. |
 
 `multiuser-memory.test.ts` and the existing scoped Memory suites additionally cover
 source withdrawal, cancellation, account disable, original-image review, external
@@ -70,3 +70,29 @@ state and worker cleanup before all existing Ask/correction assertions. It uses
 the existing server test-runner bound; product timeouts and import behavior are
 unchanged. Frozen before/after SHA, logs and the fresh full-gate result belong in
 the external validation receipt; the failed Q006 run remains failed.
+
+
+## Continuous-batch review corrections
+
+The independent review of `1c9be37b` identified F01 (three independently admitted
+stage tasks), F02 (unconditional extra Coding extraction), F03 (mixed provenance
+target batches) and R01 (actionable Owner questions before save). The interim
+three-task design is superseded by [the continuous-batch ADR](../adr-memory-continuous-batch.md).
+Existing tests encoding that interim design were rewritten around original batch
+drain semantics, checkpoint reuse and actual publication.
+
+| Scenario | Production entry and evidence |
+| --- | --- |
+| F01 | `scoped-memory-parity.test.ts`: continuous backlog, early searchable result, one actual batch task and persisted checkpoints; `multiuser-memory.test.ts`: pause drains the admitted batch. |
+| F02/F03 | `multiuser-memory-coding-preparation.test.ts`: real Coding ingress, exact reuse (understanding + independent review), context-gap nonreuse (understanding + extraction + independent review), two short sessions plus an ordinary original in one job, three final target batches. |
+| R01 | `scoped-memory-parity.test.ts`: held same-owner publisher, independent owner progress, no question or reply capability before save, cancellation/model withdrawal; successful save then actual unknown reply. `scoped-memory-owner-publication.test.ts`: real installed provider worker held before put, cancelled put and failed readback/unknown journal. |
+| Restart | `multiuser-memory-index-continuation.test.ts`: real `initialize-admin` and `src/index.ts` child processes, ordinary upload and Coding ingress over HTTP, SIGKILL during independent review, exact understanding/draft reuse, successful other-owner task/attempt unchanged and distinct interrupted/completed usage fragments. |
+| Shared resource port | `execution-continuation.test.ts`: three actual processes share the durable lock, two same-owner saves serialize while another owner completes; pre-call wait does not spend an attempt, between-call wait exceeds the protection budget safely, wait/acquired cancellation, revocation and expired-fence rejection leave no reservation. |
+
+The before/after fixture evidence records the original Memory source identity
+separately from the host port/test overlay. A static failure and a failed fixture
+precondition are not relabeled as a successful dynamic counterexample. Final
+frozen-source commands, hashes and statuses belong in the external manifest.
+The full affected gate, the configured greater-than-two model check with the
+qualified Execution dependency, native consumers, physical devices and live models
+remain separate validation obligations.

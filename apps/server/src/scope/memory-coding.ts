@@ -22,7 +22,7 @@ export type ScopedCodingScope={
 
 /** Select explicit, current clean-dialogue products only. A batch may contain
  * several sessions or ordinary originals; each Coding session is understood
- * independently while the later extraction retains its original batch. */
+ * independently. Final Memory batches also preserve the same provenance boundary. */
 export function scopedCodingScopes(data:ScopedMemoryData,input:ScopedMemoryTask):ScopedCodingScope[]{
  if(input.phase!=='extract')return [];
  const records=data.assertInputs(input),ranges=data.ranges(input),scopes=new Map<string,ScopedCodingScope>();
@@ -48,6 +48,9 @@ export function scopedCodingScopes(data:ScopedMemoryData,input:ScopedMemoryTask)
 
 export type ScopedCodingPreparation={
  version:1;fingerprint:string;runId:string;materialRef:string;ranges:Range[];
+ generationContract:string;workContract?:MemoryWorkContract;complete:true;
+ /** Host-validated candidates with exact coverage and successful read receipts. */
+ candidateResult:QueryResult;
  /** Structured products remain separate from the readable navigation text. */
  products:ReturnType<typeof parseConversationProducts>;
  text:string;materialDraft:MaterialDraft;
@@ -58,9 +61,21 @@ type CodingPorts={
   * This grants no publication and does not bypass the independent reviewer. */
  validate:(draft:QueryResult)=>void;
  assertCurrent:()=>void;
+ generationContract:string;
 };
 type Work={members?:MemoryWorkMember[];contextMembers?:MemoryWorkMember[];workContract?:MemoryWorkContract;[key:string]:unknown};
 const inScope=(range:{id:string;offset:number;length:number},scope:ScopedCodingScope)=>scope.ranges.some(allowed=>range.id===allowed.id&&range.offset>=allowed.offset&&range.offset+range.length<=allowed.offset+allowed.length);
+
+/** The policy/model/range identity is host-authored and checked again at reuse.
+ * An artifact cannot supply a looser admission policy or expand the batch. */
+export function codingGenerationContract(input:ScopedMemoryTask,base:QueryInput){return memoryHash({productsVersion:3,strategy:input.strategy,model:input.model,binding:input.binding,profile:input.profile,question:base.question,work:base.taskContext?.memoryWork,timeZone:base.timeZone,contextTime:base.contextTime,ranges:base.evidenceRanges});}
+export function reuseScopedCoding(prepared:ScopedCodingPreparation,input:ScopedMemoryTask,base:QueryInput):QueryResult|undefined{
+ const ranges=(value:readonly Range[])=>[...value].sort((a,b)=>a.id.localeCompare(b.id)||a.offset-b.offset);
+ const work=base.taskContext?.memoryWork as Work|undefined;
+ if(prepared.version!==1||prepared.complete!==true||!work?.members||!prepared.candidateResult||prepared.generationContract!==codingGenerationContract(input,base)||prepared.workContract!==work.workContract||JSON.stringify(ranges(prepared.ranges))!==JSON.stringify(ranges(input.ranges??[])))return;
+ try{const coverage=readMemoryWorkCoverage(prepared.candidateResult,work.members,undefined,undefined,work.workContract);if(coverage.incomplete||coverage.saturated||coverage.notAssessed.length||coverage.missing.length)return;}catch{return;}
+ return prepared.candidateResult;
+}
 
 /** One shared semantic product contract runs behind account-bound query,
  * validation and publication ports. The returned preparation is persisted by
@@ -108,7 +123,8 @@ export async function prepareScopedCoding(scope:ScopedCodingScope,base:QueryInpu
    {key:'work-records',state:'ready',revision:scope.fingerprint,blockIds:['work-records']},
    {key:'events',state:'ready',revision:scope.fingerprint,blockIds:['events']}],
   fidelity:{state:'summary-only',limitations:['model_interpretation','bounded_conversation']},retention:{original:'retained',policy:'keep'}};
- ports.assertCurrent();return {version:1,fingerprint:scope.fingerprint,runId:result.runId,materialRef:scope.material.ref,ranges:scope.ranges.map(range=>({...range})),products,text,materialDraft};
+ const {coverage,capacity}=JSON.parse(result.answer),candidateResult={...result,answer:JSON.stringify({memories:products.memoryCandidates,...(selectedWork?{coverage,...(contract?{}:{capacity})}:{})})};
+ ports.assertCurrent();return {version:1,complete:true,generationContract:ports.generationContract,workContract:contract,candidateResult,fingerprint:scope.fingerprint,runId:result.runId,materialRef:scope.material.ref,ranges:scope.ranges.map(range=>({...range})),products,text,materialDraft};
 }
 
 /** Call only through the current Memory grant's commit fence after durable

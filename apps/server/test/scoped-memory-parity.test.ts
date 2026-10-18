@@ -7,6 +7,7 @@ import {scopedMemoryFixture} from './fixtures/scoped-memory-host.js';
 import {defaultMemorySettings} from '../src/scope/memory-schema.js';
 import {memoryCandidateOutputContract} from '../src/memory-strategy-contract.js';
 import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+import {EXECUTION_POLICIES} from '../src/execution-policy.js';
 
 // These fixtures use the production composition, account APIs, durable executor,
 // provider HTTP transport and Agent tool loop. Every source and credential is
@@ -188,9 +189,9 @@ test('MEM-M08: a reviewed batch is searchable while later model requests and add
  const f=await scopedMemoryFixture(t);await batchSettings(f);const held=deferred(),entered=deferred();t.after(()=>held.resolve());
  const facts=Array.from({length:8},(_value,index)=>'GENERATED_BACKLOG_'+index+': Nora keeps generated bicycle '+index+'.'),materials=[];
  for(const [index,fact] of facts.entries())materials.push(await f.publish(f.a,'A','same-source','backlog-'+index,fact.padEnd(256,'.')));
- let reviewed=false,gateActive=false;const phases:{phase:string;target:string}[]=[];
+ let reviewed=false,gateActive=false;const phases:{phase:string;target:string;taskId:string;fence:string;attempt:number;at:number}[]=[];
  const verify=script(f,'A',async(res,body,value)=>{
-  const current=phase(value),members=value.untrustedTaskContext.memoryWork.members,member=members[0],quote=value.untrustedEvidence.find(record=>record.id===member.id)!.ocrText,memories=[claim(member.id,quote,'Generated searchable backlog result')];phases.push({phase:current,target:member.id});
+  const current=phase(value),members=value.untrustedTaskContext.memoryWork.members,member=members[0],quote=value.untrustedEvidence.find(record=>record.id===member.id)!.ocrText,memories=[claim(member.id,quote,'Generated searchable backlog result')];const step=f.read(db=>db.prepare("SELECT id,fence,attempts FROM execution_steps WHERE user_id=? AND kind='memory.batch' AND state='running' AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,member.id))!;phases.push({phase:current,target:member.id,taskId:String(step.id),fence:String(step.fence),attempt:Number(step.attempts),at:Date.now()});
   if(current==='extract'&&reviewed&&!gateActive){gateActive=true;entered.resolve();await held.promise;}
   if(current==='review')reviewed=true;
   reply(res,{memories,coverage:coverage(members,memories)},body.messages.length,[member.id]);
@@ -205,10 +206,12 @@ test('MEM-M08: a reviewed batch is searchable while later model requests and add
  assert.ok(persisted.draft&&persisted.review&&persisted.prepared,'same-batch extraction, review and save checkpoints are retained');
  const root='memory:'+createHash('sha256').update(JSON.stringify([f.a.userId,'memory:'+submitted.id])).digest('hex'),members=f.read(db=>db.prepare('SELECT step_id FROM execution_operation_steps WHERE operation_id=? AND active=1').all(root).map(row=>row.step_id));
  for(const task of tasks(current))assert.ok(members.includes(task.id),'the actual owner-bound Memory root aggregates every batch stage');
- for(const batch of f.read(db=>db.prepare('SELECT tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').all(f.a.userId,submitted.id))){const stages=JSON.parse(String(batch.tasks));for(const [next,prior] of [['review','extract'],['publish','review']])assert.ok(f.read(db=>db.prepare('SELECT 1 FROM execution_dependencies WHERE step_id=? AND dependency_id=?').get(stages[next],stages[prior])),'stage ordering remains a durable dependency, not pool priority');}
+ for(const batch of f.read(db=>db.prepare('SELECT tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').all(f.a.userId,submitted.id))){const children=JSON.parse(String(batch.tasks));assert.deepEqual(Object.keys(children),['batch'],'one continuously executing task owns all checkpoints');assert.equal(f.read(db=>db.prepare('SELECT kind FROM execution_steps WHERE id=?').get(children.batch))!.kind,'memory.batch');assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM execution_dependencies WHERE step_id=?').get(children.batch))!.n,0,'no stage-to-stage workflow re-entry');}
 
  assert.ok(phases.some(call=>call.phase==='review'),'an independent review precedes publication');verify();held.resolve();await f.wait(f.a,submitted.id);verify();
  assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,materials.length);
+ for(const target of new Set(phases.map(call=>call.target))){const timeline=phases.filter(call=>call.target===target);assert.deepEqual(timeline.map(call=>call.phase),['extract','review']);assert.equal(new Set(timeline.map(call=>call.taskId)).size,1);assert.equal(new Set(timeline.map(call=>call.fence)).size,1,'one running lease continues directly into independent review');assert.ok(timeline.every(call=>call.attempt===1));assert.ok(timeline[1].at>=timeline[0].at);}
+ t.diagnostic(JSON.stringify({continuousBatchTimeline:phases}));
 });
 
 test('MEM-M03: an incomplete batch retains reviewed gaps without opening an owner question before evaluation completes',async t=>{
@@ -220,4 +223,44 @@ test('MEM-M03: an incomplete batch retains reviewed gaps without opening an owne
  });
  const submitted=await f.submit(f.a,[first.id,second.id]);await until(()=>job(f,f.a,submitted.id),value=>Boolean(failureTask(value)),'the entire incomplete batch remains blocked');verify();assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM oq_questions WHERE user_id=?').get(f.a.userId))!.n,0,'an unfinished batch cannot create an actionable owner continuation');
  incomplete=false;const retry=await f.request(f.a.token,'/api/memory/jobs/'+submitted.id+'/retry','POST',{});assert.equal(retry.statusCode,200,retry.body);await f.wait(f.a,submitted.id);verify();assert.equal(f.requests.length,3,'retry preserves the valid extraction and reruns only the unfinished reviewer');
+});
+
+for(const disposition of ['save','cancel','revoke'] as const)test('owner questions become actionable only with a saved evaluation after a held publisher: '+disposition,async t=>{
+ const f=await scopedMemoryFixture(t),entered=deferred(),release=deferred();t.after(()=>release.resolve());await batchSettings(f,12000);
+ f.node.execution!.register({kind:'generated.publisher',pool:'generated.publisher',concurrency:()=>2,policy:EXECUTION_POLICIES.control,parseInput:()=>({}),resources:()=>[{scope:'user',key:'memory-publication'}],execute:async()=>{entered.resolve();await release.promise;return null;}});
+ const context=await f.node.authority.authenticate(f.a.token),holder=await f.node.execution!.forUser(context).submit({kind:'generated.publisher',operationId:randomUUID(),input:{}});await entered.promise;
+ const material=await f.publish(f.a,'A'),other=await f.publish(f.b,'B');
+ for(const owner of ['A','B'])f.answers.set(owner,(_raw,keys,ids)=>({memories:[],coverage:keys.map(key=>({key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Who is the generated speaker?',choices:[],evidence:[{id:ids[0],quote:'GENERATED_MEMORY_'+owner+': Nora prefers generated tea.'}]}}))}));
+ const a=await f.submit(f.a,[material.id]),b=await f.submit(f.b,[other.id]);await f.wait(f.b,b.id);
+ await until(()=>f.read(db=>Boolean(db.prepare('SELECT review FROM mm_job_batches WHERE user_id=? AND job_id=? AND review IS NOT NULL').get(f.a.userId,a.id))),Boolean,'A finishes review and waits for its publisher');
+ const questions=async(user:any)=>(await f.request(user.token,'/api/owner-questions')).json().items;
+ assert.deepEqual(await questions(f.a),[],'there is no answerable question before saving');const foreign=(await questions(f.b))[0];assert.ok(foreign);assert.equal((await f.request(f.a.token,'/api/owner-questions/'+foreign.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:foreign.revision,action:'unknown'})).statusCode,404,'the real reply endpoint cannot operate on another owner');
+ const queues=(await f.request(f.admin.token,'/api/admin/execution-settings')).json().queues;assert.equal(queues.memory.active,0,'publisher waiting holds no physical model admission');
+ if(disposition==='cancel')assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+a.id+'/cancel','POST',{})).statusCode,200);
+ if(disposition==='revoke')await f.replace(f.a.token,'models',{profiles:[],selections:{}});
+ release.resolve();await f.terminal(holder.id);
+ if(disposition==='save'){
+  await f.wait(f.a,a.id);const question=(await questions(f.a))[0];assert.ok(question);assert.equal((await job(f,f.a,a.id)).batches[0].state,'awaiting_context');
+  const closed=await f.request(f.a.token,'/api/owner-questions/'+question.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:question.revision,action:'unknown'});assert.equal(closed.statusCode,200,closed.body);assert.equal(closed.json().state,'closed');assert.equal((await job(f,f.a,a.id)).state,'committed');
+ }else{await f.terminal(a.tasks.batch.id);assert.deepEqual(await questions(f.a),[]);assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM mm_records WHERE user_id=?').get(f.a.userId))!.n,0);}
+ assert.equal((await questions(f.b))[0].id,foreign.id,'B keeps its saved question');
+});
+
+test('a saved batch receipt survives shutdown before task completion without redoing model work or opening duplicate questions',async t=>{
+ const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A'),entered=deferred(),release=deferred();t.after(()=>release.resolve());
+ f.answers.set('A',(_raw,keys,ids)=>({memories:[],coverage:keys.map(key=>({key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Which generated speaker?',choices:[],evidence:[{id:ids[0],quote:'GENERATED_MEMORY_A: Nora prefers generated tea.'}]}}))}));
+ // Hold only the projection boundary after the actual domain save. HTTP
+ // admission, model calls, provider staging and the saved transaction are real.
+ const host=f.node.memory as any,execute=host.execute.bind(host);host.execute=async(...args:any[])=>{const result=await execute(...args);entered.resolve();await release.promise;return result;};
+ const created=await f.submit(f.a,[material.id]);await entered.promise;assert.equal(f.requests.length,2);assert.equal(f.read(db=>db.prepare("SELECT count(*) n FROM mm_batch_artifacts WHERE user_id=? AND job_id=? AND kind='saved'").get(f.a.userId,created.id))!.n,1);assert.equal((await f.request(f.a.token,'/api/owner-questions')).json().items.length,1);
+ await f.restart();release.resolve();const done=await f.wait(f.a,created.id);assert.equal(done.tasks.batch.id,created.tasks.batch.id);assert.equal(f.requests.length,2,'retained save returns its receipt without another model call');assert.equal((await f.request(f.a.token,'/api/owner-questions')).json().items.length,1);
+});
+
+test('a saved integration resumes its task receipt after replacing its own related card',async t=>{
+ const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A');await f.wait(f.a,(await f.submit(f.a,[material.id])).id);const parent=(await f.request(f.a.token,'/api/memories')).json().items[0],entered=deferred(),release=deferred();t.after(()=>release.resolve());
+ f.answers.set('A',()=>({memories:[{...claim(parent.evidenceIds[0],'GENERATED_MEMORY_A: Nora prefers generated tea.','Generated consolidated replacement'),relatedMemoryIds:[parent.id],relations:[{kind:'supersedes',memoryId:parent.id,version:parent.version,fingerprint:parent.fingerprint}]}]}));
+ const host=f.node.memory as any,execute=host.execute.bind(host);host.execute=async(...args:any[])=>{const value=await execute(...args);entered.resolve();await release.promise;return value;};
+ const response=await f.request(f.a.token,'/api/memory/jobs','POST',{operationId:randomUUID(),materialIds:[material.id],memoryIds:[parent.id],phase:'integrate'});assert.equal(response.statusCode,200,response.body);const created=response.json();await until(()=>job(f,f.a,created.id),value=>{assert.ok(!failureTask(value),JSON.stringify(value));return value.batches.some((batch:any)=>batch.state==='committed');},'integration reaches the saved projection boundary');await entered.promise;
+ const afterSave=f.requests.length;assert.equal((await f.request(f.a.token,'/api/memories/'+parent.id)).json().supersededBy!==undefined,true);
+ await f.restart();release.resolve();const done=await f.wait(f.a,created.id);assert.equal(done.tasks.batch.id,created.tasks.batch.id);assert.equal(f.requests.length,afterSave,'the saved supersession does not invalidate or replay its own completed batch');assert.equal(done.state,'committed');
 });

@@ -54,7 +54,7 @@ export class MemoryIntegration {
    if(remaining.length){
     const nextId=memoryUUID([id,'integration-continuation',remaining]),next:IntegrationWindow={generation:window.generation,settings:window.settings,binding:window.binding,pending:remaining};
     data.sql.run("INSERT OR IGNORE INTO mm_integration_windows VALUES($user,?,?,0,NULL,NULL,'pending',?)",nextId,JSON.stringify(next),String(row.created_at));
-    const task=this.execution.forUser(run.context).submitSync({kind:'memory.integration-window',operationId:'memory-integration-window:'+nextId,input:{id:nextId},dependencies:Object.entries(child.tasks).filter(([stage])=>stage==='publish'||stage.startsWith('publish:')).map(([,task])=>task.id)});
+    const task=this.execution.forUser(run.context).submitSync({kind:'memory.integration-window',operationId:'memory-integration-window:'+nextId,input:{id:nextId},dependencies:Object.entries(child.tasks).filter(([stage])=>stage==='batch'||stage.startsWith('batch:')).map(([,task])=>task.id)});
     data.sql.run('UPDATE mm_integration_windows SET task_id=? WHERE user_id=$user AND id=?',task.id,nextId);
    }
    data.sql.run("UPDATE mm_integration_windows SET state='complete',job_id=? WHERE user_id=$user AND id=?",child.id,id);

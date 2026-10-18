@@ -20,7 +20,7 @@ for(const mutation of mutations)test('MEM-M02: scoped catalog metadata fences '+
  else f.responses.set('A',res=>{res.statusCode=422;res.end('Generated terminal provider refusal');});
  const host=f.node.memory as any,query=host.query.bind(host);let assembled=false;
  host.query=(run:any,input:ScopedMemoryTask,args:QueryInput)=>query(run,input,{...args,onTrace:(event:any)=>{
-  if(event.type==='context.assembled'&&run.task.kind==='memory.extract'&&input.inputs.some(pin=>pin.id===targetId)&&!assembled){
+  if(event.type==='context.assembled'&&run.task.kind==='memory.batch'&&input.inputs.some(pin=>pin.id===targetId)&&!assembled){
    assembled=true;
    if(mutation==='source-description')data.privateData.updateSourceContext('context-source',{expectedVersion:0,description:'Generated changed owner description.'});
    if(mutation==='source-owner')data.privateData.updateSource('context-source',{ownerRelation:'third_party'});
@@ -35,11 +35,11 @@ for(const mutation of mutations)test('MEM-M02: scoped catalog metadata fences '+
   }
   args.onTrace?.(event);
  }});
- const submitted=await f.submit(f.a,[target.id,context.id]),extract=f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE user_id=? AND kind='memory.extract' AND json_extract(input,'$.jobId')=? AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,submitted.id,targetId));
+ const submitted=await f.submit(f.a,[target.id,context.id]),extract=f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE user_id=? AND kind='memory.batch' AND json_extract(input,'$.jobId')=? AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,submitted.id,targetId));
  assert.ok(extract);const state=await f.terminal(String(extract.id));
  if(mutation==='unread-body'){
   assert.equal(state,'succeeded');
-  const publish=f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE user_id=? AND kind='memory.publish' AND json_extract(input,'$.jobId')=? AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,submitted.id,targetId));assert.ok(publish);
+  const publish=f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE user_id=? AND kind='memory.batch' AND json_extract(input,'$.jobId')=? AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,submitted.id,targetId));assert.ok(publish);
   assert.equal(await f.terminal(String(publish.id)),'succeeded','the independently reviewed target saves even though an unread sibling body changed');
   assert.equal(f.read(db=>db.prepare("SELECT state FROM mm_job_batches WHERE user_id=? AND job_id=? AND EXISTS(SELECT 1 FROM json_each(input,'$.inputs') p WHERE json_extract(p.value,'$.id')=?)").get(f.a.userId,submitted.id,targetId)!.state),'committed');
  }else assert.ok(['failed','blocked','stale'].includes(state));

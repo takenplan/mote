@@ -38,7 +38,7 @@ internal object CentralMemoryJobPresentation {
         else when (state(job)) { "paused" -> listOf("resume" to "继续", "cancel" to "取消"); "waiting", "running" -> listOf("pause" to "暂停", "cancel" to "取消"); "failed", "blocked" -> listOf("retry" to "重试", "cancel" to "取消"); "needs_input" -> listOf("cancel" to "取消"); else -> emptyList() }
     fun results(job: JSONObject): List<String> {
         val tasks = job.getJSONObject("tasks")
-        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("publish") }.flatMap { stage ->
+        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("batch") }.flatMap { stage ->
             val task = tasks.getJSONObject(stage); val ids = if (task.optString("state") == "succeeded") task.optJSONObject("result")?.optJSONArray("memoryIds") else null
             if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also { value -> UUID.fromString(value) } }
         }.distinct().toList()

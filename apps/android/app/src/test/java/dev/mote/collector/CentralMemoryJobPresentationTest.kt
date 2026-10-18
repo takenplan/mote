@@ -8,6 +8,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CentralMemoryJobPresentationTest {
+    @Test fun continuousBatchesExposeOnlyTheirSuccessfullySavedResults() {
+        val saved = java.util.UUID.randomUUID().toString()
+        val pending = java.util.UUID.randomUUID().toString()
+        val job = JSONObject().put("tasks", JSONObject()
+            .put("batch:0", JSONObject().put("state", "succeeded").put("result", JSONObject().put("memoryIds", org.json.JSONArray().put(saved))))
+            .put("batch:1", JSONObject().put("state", "running").put("result", JSONObject().put("memoryIds", org.json.JSONArray().put(pending)))))
+        assertEquals(listOf(saved), CentralMemoryJobPresentation.results(job))
+    }
     @Test fun committedOwnerCorrectionKeepsItsActualResultAfterItReplacesTheOriginalInput() {
         val id = java.util.UUID.randomUUID().toString()
         val job = JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("state", "committed").put("current", false)
@@ -18,7 +26,7 @@ class CentralMemoryJobPresentationTest {
         assertTrue(CentralMemoryJobPresentation.notice(job) != null)
     }
     @Test fun changedUncommittedInputsDoNotOfferAnotherRetryOrInventAResult() {
-        val job = JSONObject("""{"id":"generated","state":"ready","current":false,"batches":[],"tasks":{"publish":{"state":"waiting","result":{"memoryIds":["generated"]}}}}""")
+        val job = JSONObject("""{"id":"generated","state":"ready","current":false,"batches":[],"tasks":{"batch":{"state":"waiting","result":{"memoryIds":["generated"]}}}}""")
         assertEquals("资料已更新，本次结果失效", CentralMemoryJobPresentation.status(job))
         assertTrue(CentralMemoryJobPresentation.controls(job).isEmpty())
     }
