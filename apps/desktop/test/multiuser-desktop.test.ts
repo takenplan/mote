@@ -332,10 +332,9 @@ it.each(['desktop','named'] as const)('shows automatic M06 OCR from a %s source 
 },30000);
 
 it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{
- const f=await fixture(),receipt=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(receipt.statusCode,receipt.body).toBe(200);const id=receipt.json().id,workId='export:'+id;
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+id)).json().state).toBe('completed'),{timeout:10000});
+ const f=await fixture(),content=await f.request(f.a.token,'/api/export');expect(content.statusCode,content.body).toBe(200);const id=String(content.headers['x-mote-operation-id']),workId='export:'+id;
  let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
- const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[{id,href:'#/system/storage?export='+id}]});
+ const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[]});
  let finish:(()=>Promise<void>)|undefined;app.intercept=async(raw)=>{const url=new URL(raw.url);if(url.pathname==='/api/work-activity'){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);const child=app.child;finish=async()=>{child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')});};return true;}return false;};
  const late=app.documentCall('A','workActivity',[{state:'completed'}]).then(()=>({error:''}),error=>({error:String(error)}));await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
  await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;await finish!();expect((await late).error).toContain('changed');
@@ -344,16 +343,14 @@ it('consumes real portable Activity through emitted main/preload, rejects A late
  const returned=await f.login('generated-a');await app.call('mote:ask',['login',{token:returned.token}]);await app.document('A-returned');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
  await app.documentCall('A-returned','openWorkActivity',[workId]);expect(opened).toBeTypeOf('string');const query=new URLSearchParams(new URL(opened!).hash.split('?')[1]);expect(query.get('work')).toBe(workId);expect(opened).not.toContain(f.a.token);expect(opened).not.toContain(f.b.token);
  const exchanged=await f.node.app.inject({url:'/api/login/exchange',method:'POST',headers:{'content-type':'application/json','x-mote-protocol-version':'2'},payload:{code:query.get('loginTicket')}});expect(exchanged.statusCode,exchanged.body).toBe(200);expect(exchanged.json().userId).toBe(f.a.userId);
- const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts[0].id).toBe(id);
- expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
+ const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts).toEqual([]);
+
 },30000);
 
 it('consumes committed same-account import through actual main/preload and keeps its browser work handoff bound to A',async()=>{
  const f=await fixture(),sourceId='generated-desktop-import',source={id:sourceId,name:'Generated import',kind:'local-files',deviceId:'generated-import-device',platform:'import',retention:'archive'};
  expect((await f.request(f.a.token,'/api/ingress/sources','POST',source)).statusCode).toBe(200);
- const exported=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(exported.statusCode,exported.body).toBe(200);const exportId=exported.json().id;
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+exportId)).json().state).toBe('completed'),{timeout:10000});
- const archive=await f.request(f.a.token,'/api/portable/exports/'+exportId+'/content');expect(archive.statusCode,archive.body).toBe(200);expect((await f.request(f.a.token,'/api/sources/'+sourceId,'DELETE')).statusCode).toBe(200);
+ const archive=await f.request(f.a.token,'/api/export');expect(archive.statusCode,archive.body).toBe(200);expect((await f.request(f.a.token,'/api/sources/'+sourceId,'DELETE')).statusCode).toBe(200);
  const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('import-A');
  const imported=await f.request(f.a.token,'/api/portable/imports','POST',{operationId:randomUUID(),archive:archive.json()});expect(imported.statusCode,imported.body).toBe(200);const id=imported.json().id,workId='import:'+id;
  await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/imports/'+id)).json().state).toBe('completed'),{timeout:10000});

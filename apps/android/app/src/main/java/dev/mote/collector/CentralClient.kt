@@ -117,9 +117,15 @@ internal class CentralClient(
             val declaredBytes = connection.getHeaderField("Content-Length")?.let { value ->
                 requireNotNull(value.toLongOrNull()).also { require(it >= 0 && it <= maxBytes) }
             }
-            if (expected != null) {
-                require(status == 200 && connection.contentType == expected.contentType && (!expected.requireEtag || connection.getHeaderField("ETag") == "\"${expected.sha256}\"")) { "Export response does not match its receipt" }
-                require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
+            val required = expected ?: if (URI(path).path == "/api/export") {
+                require(connection.contentType == "application/json; charset=utf-8" && declaredBytes != null) { "Invalid portable response" }
+                val etag = requireNotNull(connection.getHeaderField("ETag"))
+                require(Regex("\"[a-f0-9]{64}\"").matches(etag)) { "Invalid portable response digest" }
+                CentralDownload(declaredBytes, etag.substring(1, etag.length - 1), "application/json; charset=utf-8")
+            } else null
+            if (required != null) {
+                require(status == 200 && connection.contentType == required.contentType && (!required.requireEtag || connection.getHeaderField("ETag") == "\"${required.sha256}\"")) { "Export response does not match its receipt" }
+                require(connection.getHeaderField("Content-Length")?.toLongOrNull() == required.bytes)
             }
             val digest = java.security.MessageDigest.getInstance("SHA-256"); var received = 0L
             connection.inputStream.use { input ->
@@ -131,7 +137,7 @@ internal class CentralClient(
             }
             checkActive()
             if (declaredBytes != null) require(received == declaredBytes) { "Incomplete download response" }
-            if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
+            if (required != null) require(received == required.bytes && digest.digest().joinToString("") { "%02x".format(it) } == required.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
     }
     fun downloadVerified(path: String, openOutput: () -> java.io.OutputStream, expected: CentralDownload, directory: File) = stagedDownload(path, openOutput, directory, expected)

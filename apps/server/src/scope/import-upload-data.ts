@@ -5,6 +5,7 @@ import {FILE_PART_BYTES} from '@mote/shared';
 import {importUploadManifestSchema,archivedImportFileSchema,archiveRelativePath} from '../archive-contract.js';
 import {PrivateDataError,missing,type PrivateSql} from './private-data-sql.js';
 import {bytesHash,type Originals} from './originals.js';
+import {collectImportUploads} from './ingress-gc.js';
 
 /** Called only after M03 has verified and retained the whole original object. */
 export function recordArchivedFile(sql:PrivateSql,hash:string,name:string,sizeBytes:number,mimeType='application/octet-stream'):ArchivedFile{
@@ -25,14 +26,8 @@ export function importUploadData(sql:PrivateSql,originals:Originals,epoch:number
    admit();const parsed=importUploadManifestSchema.parse(value),{id=randomUUID(),...manifest}=parsed;archiveRelativePath(manifest.name);
    // Preserve the original one-day staging policy. A running M03 worker owns
    // its parts until it settles; cleanup never races its private filesystem.
-   if(!sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1')){
-    for(const row of sql.all('SELECT id,stage_id,file_id FROM ig_import_uploads WHERE user_id=$user AND expires<=?',Date.now())){
-     originals.cleanUpload(String(row.stage_id));sql.run('DELETE FROM ig_import_uploads WHERE user_id=$user AND id=?',String(row.id));
-     if(row.file_id&&!sql.get('SELECT id FROM ig_import_uploads WHERE user_id=$user AND file_id=? LIMIT 1',String(row.file_id))&&!sql.get('SELECT file_id FROM ig_archive_links WHERE user_id=$user AND file_id=? LIMIT 1',String(row.file_id))){
-      const jobs=sql.get("SELECT id FROM ig_archive_files WHERE user_id=$user AND id=? AND EXISTS(SELECT 1 FROM sqlite_master WHERE name='mp_import_files')",String(row.file_id));
-      if(!jobs||!sql.get('SELECT file_id FROM mp_import_files WHERE user_id=$user AND file_id=? LIMIT 1',String(row.file_id)))sql.run('DELETE FROM ig_archive_files WHERE user_id=$user AND id=?',String(row.file_id));
-     }
-    }
+   if(!sql.originalActivity()){
+    collectImportUploads(sql,originals);
    }
    const prior=sql.get('SELECT manifest FROM ig_import_uploads WHERE user_id=$user AND id=?',id);
    if(prior&&String(prior.manifest)!==JSON.stringify(manifest))throw conflict();

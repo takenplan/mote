@@ -113,6 +113,8 @@ export function checkProductionImports(directory=root){
   // projects vendor authorization URLs. These exact imports grant no runtime
   // access to legacy stores and are not allowances for other scoped callers.
   const hostHelpers=new Map([
+    // M16 reuses transactional logical payload accounting, not a private legacy Store.
+    [sourceRoot+'/scope/storage-capacity.ts',new Set([sourceRoot+'/storage-ledger.ts'])],
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
     [sourceRoot+'/scope/processing.ts',new Set([sourceRoot+'/processor-admission.ts',sourceRoot+'/media-execution-facts.ts'])],
     [sourceRoot+'/scope/model-query.ts',new Set([sourceRoot+'/memory-validation.ts'])],
@@ -163,6 +165,11 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
+  // Fixed host lifecycle adapters own account inventory, trigger installation
+  // and the shared instance ledger. User reads/writes still go through their
+  // fixed PrivateSql owner; no request supplies a database, path or owner.
+  if(['apps/server/src/scope/archive-maintenance.ts','apps/server/src/scope/lifecycle-export-retention.ts','apps/server/src/scope/storage-capacity.ts','apps/server/src/scope/restore-future.ts'].includes(path))return [];
+
   if(path==='apps/server/src/scope/actions-schema.ts'||path==='apps/server/src/scope/todo-schema.ts'||path==='apps/server/src/scope/owner-question-schema.ts'||path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts'||path==='apps/server/src/scope/mcp-schema.ts'||path==='apps/server/src/scope/ask-schema.ts'||path==='apps/server/src/scope/memory-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){

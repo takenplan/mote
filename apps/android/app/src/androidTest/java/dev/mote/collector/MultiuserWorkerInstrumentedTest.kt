@@ -53,29 +53,20 @@ class MultiuserWorkerInstrumentedTest {
                 fun button(label:String):android.widget.Button? {var result:android.widget.Button?=null;scenario.onActivity {activity->result=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}};return result}
                 fun click(label:String) {waitFor {button(label)!=null};val target=button(label)!!;instrumentation.runOnMainSync {target.performClick()}}
                 waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
-                click("中央资料与附件导出")
-                waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
-                waitFor {if(button("下载")!=null)true else {val refresh=button("刷新");if(refresh!=null)instrumentation.runOnMainSync {refresh.performClick()};false}}
                 monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
-                val oldDownload=button("下载")!!;click("下载")
+                val oldDownload=button("中央资料与附件导出")!!;click("中央资料与附件导出")
                 waitFor {output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
                 val bytes=output.readBytes();val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(settings.read().account()!!.userId,archive.getString("userId"));assertEquals(3,archive.getInt("version"))
                 assertEquals(1,monitor!!.hits);assertFalse(String(bytes,Charsets.UTF_8).contains(token("a")))
-                val page=CentralPortable(CentralAccess.requireClient(app)).list();val id=page.getJSONArray("items").getJSONObject(0).getString("id")
-                assertEquals(Ingress3Client.hash(bytes),CentralPortable(CentralAccess.requireClient(app)).read(id).getString("sha256"))
-                // Reopen through normal native navigation before the independent cancellation case.
-                scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看详情")
-                waitFor {button("下载")!=null}
+                // The original action can be repeated without a central download-history step.
+                output.delete();click("中央资料与附件导出")
+                waitFor {monitor!!.hits==2&&output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+                assertEquals(archive.getString("userId"),JSONObject(output.readText()).getString("userId"))
                 val sentinel="Generated existing document must survive a retired export"
                 output.writeText(sentinel)
-                CentralPortable(CentralAccess.requireClient(app)).control(id,"cancel")
-                click("下载")
-                waitFor {monitor!!.hits==2}
-                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
-                assertEquals(sentinel,output.readText())
                 login(app,"b");scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
-                scenario.onActivity {activity->oldDownload.performClick();assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(id)})}
-                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
+                scenario.onActivity {oldDownload.performClick()}
+                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText())
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
@@ -314,9 +305,8 @@ class MultiuserWorkerInstrumentedTest {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val api=CentralAccess.requireClient(app);val defaults=api.get("/api/configuration").toString();val note=QuickNotes.save(app,"Generated portable import original "+java.util.UUID.randomUUID(),"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
-        val portable=CentralPortable(api);val export=portable.start(java.util.UUID.randomUUID().toString());var receipt=export
-        waitFor {receipt=portable.read(export.getString("id"));receipt.getString("state")=="completed"}
-        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()};portable.save(receipt,app.cacheDir) {file.outputStream()}
+        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()}
+        api.downloadStaged("/api/export",{file.outputStream()},app.cacheDir)
         val uri=android.provider.DocumentsContract.buildDocumentUri(app.packageName+".file-fixtures","native-portable.json")
         val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()

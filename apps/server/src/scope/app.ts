@@ -54,11 +54,15 @@ import {LifecycleOperations} from './lifecycle-operations.js';
 import {registerManagement,type ManagementConfig} from './management.js';
 import {registerLifecycleRoutes} from './lifecycle-routes.js';
 import {registerCaptureBrowserReads} from './capture-browser-routes.js';
+import {ScopedStorageCapacity,isStorageLimit} from './storage-capacity.js';
+import {ArchiveMaintenance} from './archive-maintenance.js';
+import {registerStorageSettings} from './storage-settings.js';
+import {RestoreFutureAuthority} from './restore-future.js';
 export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
  * is complete. Account administration never mounts the retired owner services. */
-export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;media?:Partial<MediaConfiguration>;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{mediaAssets?:MediaAssetsOptions;verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
+export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;maxStorageBytes?:number;retentionDays?:number;media?:Partial<MediaConfiguration>;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{mediaAssets?:MediaAssetsOptions;verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
   const storage=openScopeStorage(config.dataDir);
   let managedMedia:ManagedMedia|undefined;
   let configuration:Configurations|undefined;
@@ -71,6 +75,9 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
   let mcp:ScopedMcp|undefined;
   let actions:ScopedActions|undefined;
   let lifecycle:LifecycleOperations|undefined;
+  let capacity:ScopedStorageCapacity|undefined;
+  let archiveMaintenance:ArchiveMaintenance|undefined;
+  let restoreFuture:RestoreFutureAuthority|undefined;
   let management:Awaited<ReturnType<typeof registerManagement>>|undefined;
   try{
     const app=Fastify({logger:false});
@@ -84,14 +91,15 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     lifecycle?.bind(runtime);
     registerWebInventory(runtime);
     app.setErrorHandler((error,_request,reply)=>{
+      if(isStorageLimit(error)||error instanceof StoreError&&error.statusCode===507)return reply.code(507).send({error:'storage_limit'});
       const failure=error instanceof AskError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
-    if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
+    if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl,context=>restoreFuture?.admit(context));
     app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory','ask']:[]),...(actions?['actions','todos']:[]),...(mcp?['mcp-sources']:[]),...(mcp&&memory?['mcp-memory']:[])]}));
     managedMedia=registerManagedMedia(runtime,config,options.mediaAssets);
     const privateCursorKey=registerPrivateData(runtime,storage.db);
-    configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
+    configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document??(config.maxStorageBytes!==undefined||config.retentionDays!==undefined?{version:1,revision:0,storage:{...(config.maxStorageBytes!==undefined?{maxStorageBytes:config.maxStorageBytes}:{}),...(config.retentionDays!==undefined?{retentionDays:config.retentionDays}:{})}}:undefined)});
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
     if(execution){registerInstanceControls(runtime,configuration,execution);registerIndexMaintenance(runtime,storage.db,execution); }
@@ -113,13 +121,20 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&ask)actions=registerScopedActions(runtime,storage.db,configuration,execution,ownerQuestions,ask,ingress);
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,cursorKey:privateCursorKey,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
-    if(execution){registerTaskRoutes(runtime,execution,privateCursorKey);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await lifecycle?.close();await mcp?.close();await execution.close();await contentStorage?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
+    if(execution&&plugins&&ask)restoreFuture=new RestoreFutureAuthority(runtime,storage.db,configuration,execution,plugins,connectors,ask,actions);
+    capacity=new ScopedStorageCapacity(storage.db,configuration);
+    registerStorageSettings(runtime,configuration);
+    archiveMaintenance=new ArchiveMaintenance({db:storage.db,deploymentId:storage.deploymentId,directory:config.dataDir,cursorKey:privateCursorKey,configuration,contentCipher:contentStorage?.cipher});
+    app.addHook('onReady',async()=>{archiveMaintenance?.start();});
+    app.addHook('preClose',async()=>{archiveMaintenance?.close();});
+    if(execution){registerTaskRoutes(runtime,execution,privateCursorKey);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await execution.close();await contentStorage?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     if(lifecycle&&ask)lifecycle.bindImportPublication((context,work)=>ask!.automations.preserveImportEvents(context,work));
     if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);management=await registerManagement(runtime,configuration,config,options.updateDependencies);}
     if(execution&&ask&&memory&&processing&&lifecycle)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing,lifecycle});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
-    return {...runtime,managedMedia,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
-  }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();storage.close();throw error;}
+    app.addHook('onClose',async()=>{await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
+    app.addHook('onClose',async()=>{archiveMaintenance?.close();capacity?.close();});
+    return {...runtime,managedMedia,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,archiveMaintenance,restoreFuture,deploymentId:storage.deploymentId};
+  }catch(error){archiveMaintenance?.close();capacity?.close();await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }

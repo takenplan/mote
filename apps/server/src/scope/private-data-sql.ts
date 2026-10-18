@@ -1,9 +1,12 @@
 import type {DatabaseSync,SQLInputValue,StatementSync} from 'node:sqlite';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {deflateRawSync,inflateRawSync} from 'node:zlib';
+import {reserveStorage,reserveStorageObject,originalStorageResident,reserveStoragePart,preparedImportStorage,isStorageLimit} from './storage-capacity.js';
+import {archiveRead} from './archive-read-set.js';
+import {eraseExportCopies} from './lifecycle-export-retention.js';
 
 export class PrivateDataError extends Error{
-  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired'|'file_forgotten',readonly statusCode=400){super(code);}
+  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired'|'file_forgotten'|'storage_limit'|'capture_deleted',readonly statusCode=400){super(code);}
 }
 export const missing=()=>new PrivateDataError('not_found',404);
 // Reuse only compiled SQL, never rows, owner bindings or an authorization result.
@@ -27,9 +30,25 @@ export class PrivateSql{
     }
     const statement=this.db.prepare(sql);if(cache.size>=256)cache.delete(cache.keys().next().value!);cache.set(key,statement);return statement;
   }
-  get(sql:string,...args:SQLInputValue[]){return this.statement(sql).get({$user:this.userId},...args);}
-  all(sql:string,...args:SQLInputValue[]){return this.statement(sql).all({$user:this.userId},...args);}
-  run(sql:string,...args:SQLInputValue[]){const statement=this.statement(sql,true);statement.setReadBigInts(true);return statement.run({$user:this.userId},...args);}
+  get(sql:string,...args:SQLInputValue[]){return archiveRead(this.userId,()=>this.statement(sql).get({$user:this.userId},...args));}
+  all(sql:string,...args:SQLInputValue[]){return archiveRead(this.userId,()=>this.statement(sql).all({$user:this.userId},...args));}
+  /** Owner-fixed erasure of managed full-account copies, without exposing the
+   * shared lifecycle journal or an owner selector to a domain service. */
+  retireExportCopies(){this.authorize();eraseExportCopies(this.db,this.userId);}
+  run(sql:string,...args:SQLInputValue[]){const statement=this.statement(sql,true);statement.setReadBigInts(true);try{return statement.run({$user:this.userId},...args);}catch(error){if(isStorageLimit(error))throw new PrivateDataError('storage_limit',507);throw error;}}
+  reserveStorage(bytes:number){this.authorize();reserveStorage(this.db,bytes);}
+  reserveStorageObject(hash:string,bytes:number,prior:number){this.authorize();reserveStorageObject(this.db,this.userId,hash,bytes,prior);}
+  originalStorageResident(hash:string,resident:boolean,bytes:number){this.authorize();originalStorageResident(this.db,this.userId,hash,resident,bytes);}
+  reserveStoragePart(stageId:string,bytes:number){this.authorize();reserveStoragePart(this.db,this.userId,stageId,bytes);}
+  preparedImportStorage(stageId:string,hash:string){this.authorize();preparedImportStorage(this.db,this.userId,stageId,hash);}
+  /** Fixed current-schema physical holds. Processing keeps an unresolved media
+   * activity after an ambiguous external result, even after its timed original
+   * pin expires. Schema inspection exposes no owner data or caller-selected SQL. */
+  originalActivity(){
+    this.authorize();
+    if(this.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))return true;
+    return Boolean(this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='mp_activity'").get()&&this.get('SELECT id FROM mp_activity WHERE user_id=$user LIMIT 1'));
+  }
   /** Cleanup capability for one fixed pin UUID; retirement must not
    * turn its release into a read or leave a live pin until expiration. */
   pinDisposer(id:string):()=>void{

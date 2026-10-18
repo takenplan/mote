@@ -7,6 +7,8 @@ import type {UserContext} from './context.js';
 import type {ScopedRuntime} from './http.js';
 import {LifecycleAuthority,type LifecycleContext,type UserExport,type DeletionReceipt} from './lifecycle.js';
 import {PrivateDataError,PrivateCursor} from './private-data-sql.js';
+import {archiveReadSet} from './archive-read-set.js';
+import {installExportErasure} from './lifecycle-export-retention.js';
 
 const hash=(value:Buffer|string)=>createHash('sha256').update(value).digest('hex');
 const operationId=z.string().uuid();
@@ -52,36 +54,56 @@ export class LifecycleOperations {
  private receipt(row:Operation){return {id:row.id,kind:row.kind,userId:row.user_id,deploymentId:this.deploymentId,state:row.state,phase:row.state==='working'?(row.kind==='export'?'exporting':row.kind==='import'?'validating':'erasing'):row.state,progress:{mode:'semantic' as const},scope:{kind:'account' as const},createdAt:row.created_at,updatedAt:row.updated_at,domains:this.db.prepare('SELECT domain,state FROM lifecycle_domains WHERE operation_id=? ORDER BY domain').all(row.id),...(row.error?{error:row.error}:{}),...(row.kind==='export'?{format:'mote-portable',version:3,coverage:{domains:JSON.parse(row.domains) as string[],credentials:false,activeAuthorization:false,instanceBackup:false},...(row.state==='completed'?{bytes:row.bytes,sha256:row.sha256,filename:`mote-portable-${row.id}.json`,contentType:'application/json; charset=utf-8'}:{})}:row.kind==='import'?{format:'mote-portable',version:3,coverage:{importedDomains:this.db.prepare("SELECT domain FROM lifecycle_domains WHERE operation_id=? AND state<>'preserved' ORDER BY domain").all(row.id).map(value=>String(value.domain)),preservedDomains:this.db.prepare("SELECT domain FROM lifecycle_domains WHERE operation_id=? AND state='preserved' ORDER BY domain").all(row.id).map(value=>String(value.domain)),credentials:false,activeAuthorization:false,instanceBackup:false}}:{logicalAccessRevoked:true})};}
  private own(context:UserContext,id:string){const runtime:ScopedRuntime=this.host();runtime.authority.assert(context);const row=this.row(id);if(!row||row.kind!=='export'||row.user_id!==context.userId)throw new AuthError('archive_not_found',404);if(row.epoch!==context.authorizationEpoch)throw new AuthError('archive_authorization_changed',409);return row;}
  exportReceipt(context:UserContext,id:string){return this.receipt(this.own(context,id));}
- listExports(context:UserContext,raw:unknown){return this.listPersonal(context,raw,'export');}
  listImports(context:UserContext,raw:unknown){return this.listPersonal(context,raw,'import');}
  private listPersonal(context:UserContext,raw:unknown,kind:'export'|'import'){const runtime:ScopedRuntime=this.host();runtime.authority.assert(context);const {limit,cursor}=z.object({limit:z.coerce.number().int().min(1).max(100).default(30),cursor:z.string().max(8192).optional()}).strict().parse(raw),identity={collection:'portable-'+kind+'s',limit,epoch:context.authorizationEpoch},codec=new PrivateCursor(this.cursorKey,this.deploymentId,context.userId),position=cursor?codec.decode(cursor,identity):undefined;
   const rows=this.db.prepare(`SELECT * FROM lifecycle_operations WHERE user_id=? AND kind=? AND epoch=? ${position?'AND(created_at<? OR(created_at=? AND id<?))':''} ORDER BY created_at DESC,id DESC LIMIT ?`).all(context.userId,kind,context.authorizationEpoch,...(position?[position.at,position.at,position.id]:[]),limit+1) as Operation[],selected=rows.slice(0,limit),last=selected.at(-1);runtime.authority.assert(context);return {items:selected.map(row=>this.receipt(row)),nextCursor:rows.length>limit&&last?codec.encode(identity,{at:last.created_at,id:last.id}):null};
  }
  private launch(id:string,work:()=>Promise<void>){if(this.active.has(id))return;const promise=Promise.resolve().then(work).catch(()=>{if(!this.closed&&this.row(id)?.state==='working')this.update(id,'failed','lifecycle_failed');}).finally(()=>this.active.delete(id));this.active.set(id,promise);}
- export(context:UserContext,rawId:string){const id=operationId.parse(rawId);const runtime:ScopedRuntime=this.host();runtime.authority.assert(context);const prior=this.row(id);if(prior)return this.exportReceipt(context,id);const domains=this.domains(),row=this.transaction(()=>{runtime.authority.assert(context);return this.create(id,context.userId,'export',context.authorizationEpoch,domains);});this.launch(id,()=>this.writeExport(context,id));return this.receipt(row);}
- private async writeExport(context:UserContext,id:string){
-  const runtime:ScopedRuntime=this.host(),assert:()=>void=()=>{runtime.authority.assert(context);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);};
-  try{
+ private async generateExport(context:UserContext,id:string,assert:()=>void){
+  const runtime=this.host();
    assert();const domains=JSON.parse(this.row(id)!.domains) as string[];
    if(domains.some(domain=>!runtime.services.lifecycleDomains().includes(domain)))throw new ScopeError('scope_unavailable',503);
    // Warm the existing ConfigService first: opening its own defaults can write.
    // No SQLite transaction spans an asynchronous provider read. Changes during
    // the export invalidate the archive rather than returning mixed epochs.
    await runtime.services.forUser(context).exportUser('configuration');assert();
-   const changes=()=>JSON.stringify([this.db.prepare('SELECT total_changes() n').get()!.n,this.db.prepare('PRAGMA data_version').get()!.data_version]);
-   const before=changes(),archives:UserExport[]=[];
-   for(const domain of domains){assert();const value=await runtime.services.forUser(context).exportUser(domain);assert();archives.push(value);}
-   const configuration=await runtime.services.forUser(context).exportUser('configuration');assert();
-   if(JSON.stringify(configuration)!==JSON.stringify(archives.find(value=>value.domain==='configuration'))||JSON.stringify(domains)!==JSON.stringify(runtime.services.lifecycleDomains()))throw new AuthError('archive_changed',409);
-   if(before!==changes())throw new AuthError('archive_changed',409);
+   const snapshot=await archiveReadSet(context.userId,async()=>{
+    // Begin every independent domain read before awaiting providers. Canonical
+    // SQL snapshots are thus observed before a slow external Memory read, and
+    // the final witness still rechecks every observed dependency atomically.
+    const results=await Promise.allSettled(domains.map(async domain=>{assert();const value=await runtime.services.forUser(context).exportUser(domain);assert();return value;}));
+    const failure=results.find(value=>value.status==='rejected');if(failure?.status==='rejected')throw failure.reason;
+    const archives:UserExport[]=results.map(value=>(value as PromiseFulfilledResult<UserExport>).value);
+    const configuration=await runtime.services.forUser(context).exportUser('configuration');assert();
+    if(JSON.stringify(configuration)!==JSON.stringify(archives.find(value=>value.domain==='configuration')))throw new AuthError('archive_changed',409);
+    return archives;
+   }),archives=snapshot.value;
    const content=Buffer.from(JSON.stringify({format:'mote-portable',version:3,deploymentId:this.deploymentId,userId:context.userId,createdAt:this.row(id)!.created_at,coverage:{domains,credentials:false,activeAuthorization:false,instanceBackup:false},domains:archives}));
    if(content.length>this.maxExportBytes)throw new AuthError('archive_too_large',413);
-   this.transaction(()=>{assert();this.db.prepare('INSERT INTO lifecycle_exports VALUES(?,?)').run(id,content);this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=?").run(id);this.db.prepare('UPDATE lifecycle_operations SET bytes=?,sha256=? WHERE id=?').run(content.length,hash(content),id);this.update(id,'completed');});
-  }catch(error){if(this.closed)return;if(this.row(id)?.state==='cancelled')return;this.update(id,'failed',error instanceof AuthError?error.code:error instanceof ScopeError?'domain_unavailable':'domain_export_failed');}
+   return {content,domains,current:()=>{assert();if(!snapshot.current()||JSON.stringify(domains)!==JSON.stringify(runtime.services.lifecycleDomains()))throw new AuthError('archive_changed',409);}};
  }
- retryExport(context:UserContext,id:string){const row=this.own(context,id);if(row.state!=='failed')throw new AuthError('archive_conflict',409);this.update(id,'working');this.launch(id,()=>this.writeExport(context,id));return this.exportReceipt(context,id);}
- cancelExport(context:UserContext,id:string){this.own(context,id);this.transaction(()=>{this.db.prepare('DELETE FROM lifecycle_exports WHERE operation_id=?').run(id);this.update(id,'cancelled');});return this.exportReceipt(context,id);}
- content(context:UserContext,id:string){const row=this.own(context,id);if(row.state!=='completed')throw new AuthError('archive_not_ready',409);const value=this.db.prepare('SELECT content FROM lifecycle_exports WHERE operation_id=?').get(id);if(!value)throw new AuthError('archive_not_ready',409);const bytes=Buffer.from(value.content as Uint8Array);if(bytes.length!==row.bytes||hash(bytes)!==row.sha256)throw new AuthError('archive_corrupt',409);const runtime:ScopedRuntime=this.host();runtime.authority.assert(context);return {bytes,sha256:row.sha256!,filename:`mote-portable-${id}.json`};}
+ private publishExport(id:string,value:Awaited<ReturnType<LifecycleOperations['generateExport']>>){
+  this.transaction(()=>{value.current();this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=?").run(id);this.db.prepare('UPDATE lifecycle_operations SET bytes=?,sha256=? WHERE id=?').run(value.content.length,hash(value.content),id);this.update(id,'completed');});
+ }
+ /** One original user action generates and delivers a current full archive.
+  * A no-content receipt may survive; no raw archive is persisted or retained by
+  * the host after this request finishes. */
+ async download(context:UserContext,signal:AbortSignal){
+  const id=randomUUID(),runtime:ScopedRuntime=this.host();runtime.authority.assert(context);const domains=this.domains();this.transaction(()=>this.create(id,context.userId,'export',context.authorizationEpoch,domains));
+  const abort=()=>{if(!this.closed&&this.row(id)?.state==='working')this.update(id,'cancelled');};signal.addEventListener('abort',abort,{once:true});
+  const assert=()=>{signal.throwIfAborted();runtime.authority.assert(context);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);};
+  try{const value=await this.generateExport(context,id,assert);this.publishExport(id,value);return this.delivery(context,id,value.content,signal);}
+  catch(error){if(!this.closed&&this.row(id)?.state!=='cancelled')this.update(id,'failed',error instanceof AuthError?error.code:error instanceof ScopeError?'domain_unavailable':'domain_export_failed');throw error;}
+  finally{signal.removeEventListener('abort',abort);}
+ }
+ private delivery(context:UserContext,id:string,bytes:Buffer,signal?:AbortSignal){
+  const runtime:ScopedRuntime=this.host(),row=this.own(context,id),deadline=this.snapshotDeadline(bytes),assert=()=>{signal?.throwIfAborted();runtime.authority.assert(context);if(this.row(id)?.state!=='completed')throw new AuthError('archive_changed',409);if(Date.now()>=deadline){this.update(id,'failed','archive_changed');throw new AuthError('archive_changed',409);}};
+  assert();return {operationId:id,bytes,sha256:row.sha256!,filename:`mote-portable-${id}.json`,assert,finish:(completed:boolean)=>{if(!completed&&!this.closed&&this.row(id)?.state==='completed')this.update(id,'failed','delivery_interrupted');}};
+ }
+ private snapshotDeadline(bytes:Buffer){
+  const ingress=(JSON.parse(bytes.toString()) as {domains:UserExport[]}).domains.find(domain=>domain.domain==='ingress')?.payload as {originals?:{id:string;hash:string}[];objects?:{hash:string}[];snapshots?:{id:string;expires:number}[]}|undefined;
+  const included=new Set(ingress?.objects?.map(value=>value.hash)),originals=new Map(ingress?.originals?.map(value=>[value.id,value.hash]));return (ingress?.snapshots??[]).reduce((at,value)=>included.has(originals.get(value.id)!)?Math.min(at,value.expires):at,Infinity);
+ }
  private ownImport(context:UserContext,id:string){const runtime:ScopedRuntime=this.host();runtime.authority.assert(context);const row=this.row(id);if(!row||row.kind!=='import'||row.user_id!==context.userId)throw new AuthError('archive_not_found',404);if(row.epoch!==context.authorizationEpoch)throw new AuthError('archive_authorization_changed',409);return row;}
  importReceipt(context:UserContext,id:string){return this.receipt(this.ownImport(context,id));}
  importArchive(context:UserContext,rawId:string,raw:unknown){
@@ -96,17 +118,20 @@ export class LifecycleOperations {
  }
  cancelImport(context:UserContext,id:string){const row=this.ownImport(context,id);if(row.state==='completed')throw new AuthError('archive_already_committed',409);this.update(id,'cancelled');return this.importReceipt(context,id);}
  private async writeImport(context:UserContext,id:string,archive:z.infer<typeof personalArchive>){
-  const runtime:ScopedRuntime=this.host(),cleanup:Array<()=>void>=[],assert=()=>{runtime.authority.assert(context);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);},changes=()=>JSON.stringify([this.db.prepare('SELECT total_changes() n').get()!.n,this.db.prepare('PRAGMA data_version').get()!.data_version]);
+  const runtime:ScopedRuntime=this.host(),cleanup:Array<()=>void>=[],assert=()=>{runtime.authority.assert(context);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);};
   try{
    assert();const policy=runtime.services.personalImportDomains(),merged=policy.filter(value=>value.mode==='merge').map(value=>value.id).sort((a,b)=>{const x=importOrder.indexOf(a),y=importOrder.indexOf(b);return (x<0?importOrder.length:x)-(y<0?importOrder.length:y)||a.localeCompare(b);});
-   await runtime.services.forUser(context).exportUser('configuration');assert();const before=changes();
+   await runtime.services.forUser(context).exportUser('configuration');assert();
    // Verify actual current provider bodies outside SQLite. No asynchronous
    // hook, native provider or model runs inside the publication transaction.
-   for(const domain of merged){await runtime.services.forUser(context).exportUser(domain);assert();}
-   this.transaction(()=>{assert();if(before!==changes()||JSON.stringify(policy)!==JSON.stringify(runtime.services.personalImportDomains()))throw new AuthError('archive_changed',409);this.importPublication!(context,()=>{for(const domain of merged){assert();const rollback=runtime.services.forUser(context).importUser(domain,{...archive.domains.find(item=>item.domain===domain)!,payload:archive.domains.find(item=>item.domain===domain)!.payload},id);if(rollback!==undefined){if(typeof rollback!=='function')throw new ScopeError('undeclared_scope',500);cleanup.push(rollback);}this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=? AND domain=?").run(id,domain);}assert();});this.update(id,'completed');});
+   const snapshot=await archiveReadSet(context.userId,async()=>{
+    await runtime.services.forUser(context).exportUser('configuration');assert();
+    for(const domain of merged){await runtime.services.forUser(context).exportUser(domain);assert();}
+   });
+   this.transaction(()=>{assert();if(!snapshot.current()||JSON.stringify(policy)!==JSON.stringify(runtime.services.personalImportDomains()))throw new AuthError('archive_changed',409);this.importPublication!(context,()=>{for(const domain of merged){assert();const rollback=runtime.services.forUser(context).importUser(domain,{...archive.domains.find(item=>item.domain===domain)!,payload:archive.domains.find(item=>item.domain===domain)!.payload},id);if(rollback!==undefined){if(typeof rollback!=='function')throw new ScopeError('undeclared_scope',500);cleanup.push(rollback);}this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=? AND domain=?").run(id,domain);}assert();});this.update(id,'completed');});
   }catch(error){let clean=true;for(const rollback of cleanup.reverse())try{rollback();}catch{clean=false;}if(this.closed||this.row(id)?.state==='cancelled')return;this.update(id,'failed',!clean?'archive_cleanup_required':error instanceof AuthError?error.code:error instanceof PrivateDataError&&error.code==='conflict'?'archive_conflict':error instanceof ScopeError?'domain_unavailable':'archive_invalid');}
  }
- deleteAccount(context:UserContext,userId:string,rawId:string){const runtime=this.host();runtime.authority.assertAdministrator(context);const id=operationId.parse(rawId),prior=this.row(id);if(prior){if(prior.kind!=='delete'||prior.user_id!==userId)throw new AuthError('deletion_conflict',409);return this.receipt(prior);}const domains=this.domains();const row=this.transaction(()=>{runtime.accounts!.beginDeletion(context,runtime.authority,userId,id);for(const old of this.db.prepare("SELECT id FROM lifecycle_operations WHERE user_id=? AND kind IN ('export','import')").all(userId)){this.db.prepare('DELETE FROM lifecycle_exports WHERE operation_id=?').run(old.id);this.update(String(old.id),'cancelled');}return this.create(id,userId,'delete',0,domains);});this.launch(id,()=>this.erase(id));return this.receipt(row);}
+ deleteAccount(context:UserContext,userId:string,rawId:string){const runtime=this.host();runtime.authority.assertAdministrator(context);const id=operationId.parse(rawId),prior=this.row(id);if(prior){if(prior.kind!=='delete'||prior.user_id!==userId)throw new AuthError('deletion_conflict',409);return this.receipt(prior);}const domains=this.domains();const row=this.transaction(()=>{this.db.prepare('DELETE FROM lifecycle_future WHERE user_id=?').run(userId);runtime.accounts!.beginDeletion(context,runtime.authority,userId,id);for(const old of this.db.prepare("SELECT id FROM lifecycle_operations WHERE user_id=? AND kind IN ('export','import')").all(userId)){this.db.prepare('DELETE FROM lifecycle_exports WHERE operation_id=?').run(old.id);this.update(String(old.id),'cancelled');}return this.create(id,userId,'delete',0,domains);});this.launch(id,()=>this.erase(id));return this.receipt(row);}
  deletionReceipt(context:UserContext,id:string){this.host().authority.assertAdministrator(context);const row=this.row(id);if(!row||row.kind!=='delete')throw new AuthError('deletion_not_found',404);return this.receipt(row);}
  retryDeletion(context:UserContext,id:string){const runtime=this.host();runtime.authority.assertAdministrator(context);const row=this.row(id);if(!row||row.kind!=='delete')throw new AuthError('deletion_not_found',404);if(row.state==='completed'||this.active.has(id))return this.receipt(row);const domains=[...new Set([...(JSON.parse(row.domains) as string[]),...this.domains()])];this.transaction(()=>{for(const domain of domains)this.db.prepare("INSERT OR IGNORE INTO lifecycle_domains VALUES(?,?,'waiting',?)").run(id,domain,randomUUID());this.db.prepare('UPDATE lifecycle_operations SET domains=? WHERE id=?').run(JSON.stringify(domains),id);this.update(id,'working');});this.launch(id,()=>this.erase(id));return this.receipt(this.row(id)!);}
  private async erase(id:string){
@@ -122,6 +147,6 @@ export class LifecycleOperations {
  }
  /** A crashed export has no live owner capability to resume. Delete operations
   * retain their explicit approval, but retry is an administrator action. */
- recover(){this.db.prepare("UPDATE lifecycle_operations SET state='failed',error='interrupted' WHERE state='working'").run();}
+ recover(){installExportErasure(this.db);this.db.prepare("UPDATE lifecycle_operations SET state='failed',error='interrupted' WHERE state='working'").run();}
  async close(){this.closed=true;await Promise.allSettled(this.active.values());}
 }

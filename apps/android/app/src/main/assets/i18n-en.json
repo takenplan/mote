@@ -75,6 +75,7 @@
   "等待清除确认": "Awaiting erasure confirmation",
   "外部结果待确认": "External outcome awaiting confirmation",
   "归档校验失败，请重新读取操作回执。": "Archive verification failed. Reload the operation receipt.",
+  "归档校验失败，请重新导出。": "Archive verification failed. Export again.",
   "仅导出当前账号的规范资料；凭据、执行授权和实例备份不包含在内。": "Exports canonical records for the current account only. Credentials, execution authority and instance backups are excluded.",
   "覆盖范围与处理状态": "Coverage and processing status",
   "下载归档": "Download archive",

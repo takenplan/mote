@@ -82,9 +82,7 @@ test('compiled personal plans survive one native/Hindsight/Docker archive withou
  progress('compiled-personal-start');const p=await makeProfile('personal',initial),first=await startCentral(p,'personal');
  for(const user of users)assert.equal(remote(p,first,'/api/auth/self',user.token).status,401);
  const a=remoteLogin(p,first,'generated-a'),b=remoteLogin(p,first,'generated-b');
- const exportId=randomUUID();ok(p,first,'/api/portable/exports',a.token,'POST',{operationId:exportId});
- await wait(()=>ok(p,first,'/api/portable/exports/'+exportId,a.token).state==='completed','Compiled personal export did not finish');
- const saved=ok(p,first,'/api/portable/exports/'+exportId+'/content',a.token),planSection=saved.domains.find((d:any)=>d.domain==='processing').payload.policyPlans;
+ const saved=ok(p,first,'/api/export',a.token),planSection=saved.domains.find((d:any)=>d.domain==='processing').payload.policyPlans;
  assert.equal(planSection.plans.length,1);assert.equal(planSection.bindings.length,1);assert.ok(!JSON.stringify(planSection).includes(users[1].userId));
  const view=ok(p,first,'/api/file-processing',a.token),newPolicy={...policy,profiles:policy.profiles.map(profile=>({...profile,diarizationProcessor:'audio.diarize-wespeaker'}))};
  ok(p,first,'/api/file-processing',a.token,'PUT',{revision:view.revision,settings:view.settings,policy:newPolicy});

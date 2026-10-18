@@ -1,3 +1,4 @@
+import {archiveRead} from './archive-read-set.js';
 import {connectorOriginalProcessors} from '../connectors/original-processors.js';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
@@ -204,6 +205,15 @@ export class ScopedConnectors {
    this.options.db.prepare('INSERT INTO connector_timers VALUES(?,?,?) ON CONFLICT(user_id,instance_id) DO UPDATE SET task_id=excluded.task_id').run(context.userId,id,next.id);
   });}catch(error){if(!(error instanceof ConnectorError&&error.code==='connector_timer_exists'))throw error;}
  }
+ /** New login authorizes only future timers under their current instance
+  * scope. Provider cursors survive; no old task, OAuth flow or call is retried. */
+ async resumeRestored(context:UserContext,connections:readonly {id:string;generation:number}[],assertFuture:()=>unknown){
+  for(const saved of connections){assertFuture();const row=this.row(context.userId,saved.id),settings=connectionSchema.parse(JSON.parse(row.settings));
+   if(row.removed||row.generation!==saved.generation||!settings.autoSync)continue;
+   this.options.db.prepare('UPDATE connector_connections SET sync_authorized=1 WHERE user_id=? AND id=? AND generation=? AND removed=0').run(context.userId,saved.id,saved.generation);
+   await this.schedule(context,saved.id);assertFuture();
+  }
+ }
  private validateOperation(provider:string,operation:string,payload:Record<string,unknown>){
   const empty=z.object({}).strict();let schema:z.ZodType<Record<string,unknown>>|undefined;
   if(operation==='disconnect')schema=empty;
@@ -332,7 +342,7 @@ export class ScopedConnectors {
  private readonly lifecycle:DomainLifecycle={
   // Personal archive import preserves live settings and operational authority.
   importUser:false,
-  exportUser:async subject=>{this.runtime.services.assertSubject(subject,DOMAIN,'export');const rows=this.options.db.prepare('SELECT settings FROM connector_connections WHERE user_id=? AND removed=0 ORDER BY id').all(subject.userId);return {domain:DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{connections:rows.map(r=>{const {googleClientSecret:_secret,...settings}=connectionSchema.parse(JSON.parse(String(r.settings)));return settings;}),coverage:{settings:true,credentials:false,oauth:false,activeGrants:false,providerData:'ingress/private-data',restoreEnabled:false}}};},
+  exportUser:async subject=>{this.runtime.services.assertSubject(subject,DOMAIN,'export');const rows=archiveRead(subject.userId,()=>this.options.db.prepare('SELECT settings FROM connector_connections WHERE user_id=? AND removed=0 ORDER BY id').all(subject.userId));return {domain:DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{connections:rows.map(r=>{const {googleClientSecret:_secret,...settings}=connectionSchema.parse(JSON.parse(String(r.settings)));return settings;}),coverage:{settings:true,credentials:false,oauth:false,activeGrants:false,providerData:'ingress/private-data',restoreEnabled:false}}};},
   deleteUser:async(subject,operationId)=>this.serializeLifecycle(subject.userId,async()=>{this.runtime.services.assertSubject(subject,DOMAIN,'delete');this.tx(()=>{this.options.db.prepare('INSERT INTO connector_domain_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);this.options.db.prepare('UPDATE connector_connections SET generation=generation+1,removed=1,sync_authorized=0 WHERE user_id=? AND removed=0').run(subject.userId);});for(const row of this.options.db.prepare('SELECT id FROM connector_connections WHERE user_id=?').all(subject.userId))this.abort(subject.userId,String(row.id));
    // M05 remains responsible for the durable task records. Do not acknowledge
    // local erasure while a provider operation still retains this user's files.

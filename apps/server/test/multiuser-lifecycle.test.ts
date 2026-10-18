@@ -32,31 +32,15 @@ async function fixture(t:TestContext){
  return {directory,get node(){return node;},request,login,admin,a,b,restart};
 }
 
-test('portable 3 actual production entry exports only its owner, exact resumable bytes and no login grants',async t=>{
- const f=await fixture(t),operationId=randomUUID();
- const db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());
+test('portable 3 direct production download exports only its owner and has no historical content route',async t=>{
+ const f=await fixture(t),db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());
  await waitForScopedState(()=>!db.prepare("SELECT 1 FROM execution_steps WHERE state='running' OR(state='waiting' AND coalesce(error,'')<>'memory_window_pending') LIMIT 1").get(),()=>JSON.stringify(db.prepare('SELECT kind,state,error FROM execution_steps').all()));
- const started=await f.request(f.a.token,'POST','/api/portable/exports',{operationId});
- assert.equal(started.statusCode,200,started.body);
- const id=started.json().id;
- let receipt=started.json();
- for(let tries=0;receipt.state==='working'&&tries<100;tries++){await new Promise(r=>setTimeout(r,10));receipt=(await f.request(f.a.token,'GET','/api/portable/exports/'+id)).json();}
- assert.equal(receipt.state,'completed',JSON.stringify(receipt));
- assert.equal(receipt.userId,f.a.userId);assert.equal(receipt.deploymentId,f.a.deploymentId);
- assert.equal((await f.request(f.b.token,'GET','/api/portable/exports/'+id)).statusCode,404);
- assert.equal((await f.request(f.admin.token,'GET','/api/portable/exports/'+id+'/content')).statusCode,404);
- const content=await f.request(f.a.token,'GET','/api/portable/exports/'+id+'/content');
- assert.equal(content.statusCode,200,content.body);assert.equal(content.headers['content-type'],'application/json; charset=utf-8');
+ const content=await f.request(f.a.token,'GET','/api/export');assert.equal(content.statusCode,200,content.body);assert.equal(content.headers['content-type'],'application/json; charset=utf-8');
  const archive=content.json();assert.equal(archive.version,3);assert.equal(archive.userId,f.a.userId);assert.match(content.body,/Generated A private/);assert.doesNotMatch(content.body,/Generated B private|password_hash|password_salt|token_hash/);
  for(const owner of [f.a,f.b,f.admin])assert.ok(!content.body.includes(owner.token));
- assert.equal(receipt.bytes,content.rawPayload.length);
- const part=await f.request(f.a.token,'GET','/api/portable/exports/'+id+'/content',undefined,{range:'bytes=10-39','if-range':content.headers.etag as string});
- assert.equal(part.statusCode,206);assert.deepEqual(part.rawPayload,content.rawPayload.subarray(10,40));
- assert.equal((await f.request(f.a.token,'GET','/api/portable/exports/'+id+'/content',undefined,{range:'bytes=999999999999-'})).statusCode,416);
- await f.restart();assert.deepEqual((await f.request(f.a.token,'GET','/api/portable/exports/'+id+'/content')).rawPayload,content.rawPayload);
- assert.equal((await f.request(f.a.token,'POST','/api/portable/exports',{operationId})).json().id,id);
- const cancelled=await f.request(f.a.token,'POST','/api/portable/exports/'+id+'/cancel',{});assert.equal(cancelled.statusCode,200);assert.equal(cancelled.json().state,'cancelled');
- assert.equal((await f.request(f.a.token,'GET','/api/portable/exports/'+id+'/content')).statusCode,409);
+ const id=String(content.headers['x-mote-operation-id']);assert.equal(db.prepare('SELECT COUNT(*) n FROM lifecycle_exports').get()!.n,0);
+ for(const owner of [f.a,f.b,f.admin])assert.equal((await f.request(owner.token,'GET','/api/portable/exports/'+id+'/content')).statusCode,503);
+ await f.restart();assert.equal((await f.request(f.a.token,'GET','/api/export')).statusCode,200);
 });
 
 test('production account deletion revokes before erasure, is durable and cannot delete B or reenable a deleted account',async t=>{
@@ -78,18 +62,10 @@ test('production account deletion revokes before erasure, is durable and cannot 
  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n,0);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.b.userId)!.n,1);}finally{db.close();}
 });
 
-test('portable receipt paging is owner/query/epoch qualified through 205 cancelled operations',async t=>{
- const f=await fixture(t),ids=new Set<string>();
- for(let i=0;i<205;i++){const id=randomUUID();ids.add(id);assert.equal((await f.request(f.a.token,'POST','/api/portable/exports',{operationId:id})).statusCode,200);assert.equal((await f.request(f.a.token,'POST','/api/portable/exports/'+id+'/cancel',{})).statusCode,200);}
- let cursor:string|undefined,seen=new Set<string>(),firstCursor:string|undefined;
- do{const page=await f.request(f.a.token,'GET','/api/portable/exports?limit=31'+(cursor?'&cursor='+encodeURIComponent(cursor):''));assert.equal(page.statusCode,200,page.body);for(const item of page.json().items){assert.equal(item.userId,f.a.userId);assert.equal(item.state,'cancelled');assert.ok(ids.has(item.id));assert.ok(!seen.has(item.id));seen.add(item.id);}cursor=page.json().nextCursor;if(!firstCursor)firstCursor=cursor;}while(cursor);
- assert.equal(seen.size,205);assert.ok(firstCursor);
- assert.deepEqual((await f.request(f.b.token,'GET','/api/portable/exports')).json().items,[]);
- assert.equal((await f.request(f.b.token,'GET','/api/portable/exports?limit=31&cursor='+encodeURIComponent(firstCursor!))).statusCode,400);
- assert.equal((await f.request(f.a.token,'GET','/api/portable/exports?limit=30&cursor='+encodeURIComponent(firstCursor!))).statusCode,400);
- assert.equal((await f.request(f.a.token,'GET','/api/portable/exports?userId='+f.b.userId)).statusCode,401);
- const web=await f.request(undefined,'POST','/api/auth/login',{username:'generated-alice',password,mode:'web'}),cookie=String(web.headers['set-cookie']).split(';')[0];
- assert.equal((await f.request(undefined,'POST','/api/portable/exports',{operationId:randomUUID()},{cookie,'x-mote-session-id':web.json().credentialId})).statusCode,403);
+test('direct export rejects owner selectors and has no export start or history endpoint',async t=>{
+ const f=await fixture(t);
+ assert.equal((await f.request(f.a.token,'GET','/api/export?userId='+f.b.userId)).statusCode,401);
+ for(const method of ['GET','POST'] as const)assert.equal((await f.request(f.a.token,method,'/api/portable/exports',method==='POST'?{operationId:randomUUID()}:undefined)).statusCode,503);
 });
 
 test('real executing A task loses publication before delete finishes while B still commits',async t=>{

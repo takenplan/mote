@@ -247,6 +247,10 @@ function read(sql:PrivateSql):Payload{
  * observation/version identities. Existing hidden heads stay hidden. */
 function mergeCanonical(sql:PrivateSql,archive:UserExport){
  const value=envelopeSchema.parse(archive);if(value.userId!==sql.userId)invalid();validate(value.payload);
+ // The local deletion journal is current owner intent, as in the original
+ // Store.insert/import path. A portable archive cannot undo a known deletion;
+ // a different account or a genuinely new capture identity remains unrelated.
+ if(sql.get('SELECT id FROM pd_capture_deletions WHERE user_id=$user AND id IN(SELECT value FROM json_each(?)) LIMIT 1',JSON.stringify(value.payload.captures.map(row=>row.id))))throw new PrivateDataError('conflict',409);
  const current=read(sql),merged=structuredClone(current),keys:Record<keyof typeof current,string[]>={format:[],coverage:[],sources:['id'],source_contexts:['source_id','version'],captures:['id'],import_declarations:['id','version'],capture_imports:['capture_id'],source_heads:['source_id','external_id'],materials:['id'],material_versions:['material_id','revision'],material_captures:['material_id','revision','member_id'],material_inputs:['material_id','revision','member_id'],material_contexts:['material_id','revision','source_id'],material_sources:['material_id','revision','source_id'],material_declarations:['material_id','id','version']};
  const conflict=():never=>{throw new PrivateDataError('conflict',409);};
  for(const table of tables){const identity=(row:Record<string,unknown>)=>canonical(keys[table.key].map(key=>row[key])),rows=new Map((merged[table.key] as Record<string,unknown>[]).map(row=>[identity(row),row]));
@@ -281,7 +285,7 @@ export function privateDataLifecycle(sqlFor:(subject:UserDataSubject,purpose:Lif
     deleteUser:async(subject,operationId)=>{
       const sql=sqlFor(subject,'delete');
       sql.transaction(()=>{
-        for(const table of ['pd_capture_imports','pd_import_declarations','pd_material_declarations','pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+        for(const table of ['pd_capture_imports','pd_import_declarations','pd_material_declarations','pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts','pd_capture_deletions'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
       });
       return {status:'complete',operationId};
     },
