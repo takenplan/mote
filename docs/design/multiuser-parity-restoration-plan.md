@@ -139,7 +139,7 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 | Q001 / Q001-R1 | FILE / exact873旧gate→新3740e89c | 873 run523549b6，1615.494s；14PASS/Server3121PASS34FAIL1cancel2skip/后7UNRUN，Desktop606PASS；已cleanup | FAILED_AND_SUPERSEDED；新374作者198PASS/22全UNRUN，不拼旧绿 | binding98e3646e；两生产根因和逐35项分类见新manifest6066451b，新host只读390b00d3须组合重核 |
 | Q001-A | FILE / exact8217旧gate | runfacf1b1a，151.598s；Desktop603PASS/3FAIL；12步PASS后9UNRUN | FAILED_AND_CLEANED；source同HEAD/clean/cleanupConfirmed，锁释放 | metadata canonicalization mismatch已由e799修；两OCR失败是A pre-manual旧fixture假设，不是B privacy回归；原log不改 |
 | Q004 | LIFE / exactef808c12；旧c0bf已FAIL | 旧run a6dc2854 14PASS/Server9FAIL2skip/后7UNRUN已清理；新ef作者分输入通过，独立f1258d50源码闭合 | WAIT_SERIAL_FULL22；新source未经完整门禁，非READY | manifest7349f7b9；旧九410与新held/合法ABA证据分列，mid-scope restart/stop/负race/饱和并发仍待 |
-| Q006 | MEM / exact855b89a0，base2c78 | 已推/clean，25源/27artifact hash核；22步；作者855 port45/backup26/process7/Web8及8de84结果按源分列 | WAIT_SERIAL_CHECK；PM已派领域新855只读，无动态 | manifest655dd8c9；3a9 broad209PASS1FAIL与72f失败/1c静态退回保留，不拼PASS |
+| Q006 | MEM / exact855b89a0，base2c78 | driver新selection22，Node26 ABI147/JDK21/1Gradle/hidden；source clean及全env已核 | RUNNING；runa77215a6-274c-4d30-a031-59d3a125307c，23:34:49（Asia/Shanghai），Server已有一条backup失败待原栈 | `/tmp/mote-parity-memory-driver-855b89a0.log`；不新增并行复测，不借旧13步或作者绿；后续按正常失败/cleanup流程 |
 | Q006-A | MEM旧72f/1c历史 | 72f run d5a6098d整13步8PASS/Server3160PASS1FAIL2skip/后4UNRUN，1298.654s；1c只修fixture8PASS后独立F01..03/R01退回 | FAILED_AND_SUPERSEDED；原receipt/diagnostic均保留，不再跑旧源 | 当前855修生产流程，必须新22及新独验，旧13/定向不拼PASS |
 | Q003 | EXT / exact544bcd73，repairBase082 | 52源/13日志绑定核对；作者72PASS0skip；独立delta c58f039a源码P1闭合 | WAIT_SERIAL_FULL22；未push/PR/动态/UI/real-Codex，旧082 HOLD仅历史 | manifestdc4928e4；proof/unknown/issued/package与内部wait/CAS均待精确组合 |
 | Q003-B | EXT / exactd468旧gate | run6820aa4c，1430.727s；14PASS/Server3087PASS62FAIL2skip/后7UNRUN | FAILED_AND_CLEANED；source未改/cleanupConfirmed/锁释放 | 58 config_prepare_failed、两recording503、1旧MCP helper、1legacy import preparing观察；082各类别修复与原失败分开 |
@@ -185,7 +185,7 @@ MCP访问Mote私人上下文与能力必须用户鉴权和账号授权；外部M
 | G002 | CONN native C07 / exact179 | 首次save auto on/off与阶段历史两方法，真实select→一次admit→追踪syncTask；先核14步/专用无窗口窗口，backup固定true不增toggle | WAIT_SERIAL_RESOURCES；新native JVM/APK/instrumentation/独验UNRUN |
 | G003 | AND D2及Ask组合 | D2前置`5744d6a832117a9f9aec7affd37453ab15d455cf`（含早期1417及part/commit upload_expired补充），Android与Ask消费者精确SHA待冻；仅临时组合，非PR夹带/正式合入 | WAIT_DEPENDENCY |
 | G004 | 四独立验收chat | 排队传达已决L06/D01、精确PR/head/base/依赖与新消费者清单，闲置不唤醒；一次一项 | WAIT_GLOBAL_SLOT |
-| G005 | 串行完整gate与native窗 | AND262整7及fixture APK已完成；AVD冷启工程窗结束/清理后继续Mem855/Ext544/LIFEef/Conn179/Action42b/Desktop73c/Config5b/File374等精确输入 | ONE_DRIVER_WINDOW；ASKe23 HOLD修schema，不因设备排障空等全部队列 |
+| G005 | 串行完整gate | Mem855当前唯一22；File374/Ext544/LIFEef/Conn179/Action42b/Desktop73c/Config5b等待串行；Android262 gate7+APK已完；ASKe23 HOLD | RUNNING_ONE_DRIVER；AVD owned进程/端口/设备锁已清理，客户端仅只读诊断，不阻全队列 |
 | G006 | Memory855生产流程/宿主port候选 | 连续batch/严格Coding复用/provenance分组/保存后问题与cf6/a65/e01修复已冻；855仅精确借070 parent-generation schema一行，完整模块未拣 | WAIT_NEW_SOURCE_STATIC_AND_FULL22；作者各输入通过不替代独验/实际组合，3a9失败保留 |
 | G007 | Config实际consumer组合 / 新5b | 5b + Files最终修复head + LIFEc0bf + Aske23；已读Files192但其后续新head仍待；fixture/hidden browser/native命令见configuration-resources-parity文档 | REQUEST_REGISTERED；实际startup/生成artifactTransport/角色403/图片与storage联合未运行，不改正式integration |
 | G008 | Files M05 publicProgress port | exact8217纯schema/retired只读投影在e799未改；原Exec owner只读无新增确认blocker，作者57+1与动态独验分开 | 窄host source复核已做；新Files并发fix后的全gate/控制组/固定组合/native仍待 |
