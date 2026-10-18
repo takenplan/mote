@@ -67,7 +67,10 @@ cancellation and lease recovery cannot leave a current lock behind; reservations
 and pending requests from expired fences are reaped. Durable resource requests
 share account/operation turns with ready static publishers. These turns use the
 existing engine fairness tables and one consistent order across resource keys;
-new arrivals cannot win by racing a local polling timer. Reacquiring a released
+new arrivals cannot win by racing a local polling timer. A static peer must pass
+the same `capacityAvailable` predicate as tick and transactional admission,
+including live limits, durable leases and unsettled local work. An already
+running continuation does not acquire another pool slot. Reacquiring a released
 static resource restores visible ownership for that effect and then its released
 state. A fence-bound attempt-charge receipt prevents interruption of an unstarted
 call from refunding an older failure. These current tables are required by stopped

@@ -132,6 +132,13 @@ export class ExecutionEngine {
  private running(pool:string,lane:ExecutionLane,now=this.now()){
   return (this.store.db.prepare("SELECT * FROM execution_steps WHERE pool=? AND state='running' AND lease_until>?").all(pool,now) as Row[]).filter(row=>this.lane(view(row))===lane).length;
  }
+ /** One readiness predicate is shared by admission and static resource peers.
+  * Configured owner/unit partitions extend this predicate, never a second
+  * resource-wait capacity calculation. */
+ private capacityAvailable(step:ExecutionStep,now=this.now()){
+  const lane=this.lane(step),limit=this.limit(step.pool,lane);
+  return !this.active.has(step.id)&&[...this.active.values()].filter(active=>active.pool===step.pool&&active.lane===lane).length<limit&&this.running(step.pool,lane,now)<limit;
+ }
  /** Safe resource projection: no goals, evidence, provider credentials or prose. */
  poolSnapshot(pool:string){
   const lanes=this.admissions.has(pool)?['background','interactive'] as const:['background'] as const;
@@ -232,14 +239,15 @@ export class ExecutionEngine {
  private resourceTurn(stepId:string,key:string){
   const db=this.store.db,now=this.now();
   if(!db.prepare("SELECT 1 FROM execution_resource_waits w JOIN execution_steps e ON e.id=w.step_id AND e.fence=w.fence WHERE w.resource_key=? AND e.state='running' AND e.lease_until>?").get(key,now))return true;
-  const first=db.prepare(`WITH candidates AS (
+  const ordered=db.prepare(`WITH candidates AS (
    SELECT e.id,e.user_id,e.operation_id,w.created_at,e.rowid AS position FROM execution_resource_waits w JOIN execution_steps e ON e.id=w.step_id AND e.fence=w.fence WHERE w.resource_key=? AND e.state='running' AND e.lease_until>?
    UNION ALL
    SELECT e.id,e.user_id,e.operation_id,e.created_at,e.rowid FROM execution_resources r JOIN execution_steps e ON e.id=r.step_id WHERE r.resource_key=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN(SELECT value FROM json_each(?))
     AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded')
     AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence))
-  ) SELECT c.id FROM candidates c LEFT JOIN execution_user_fairness u ON u.pool='@resources' AND u.user_id=c.user_id LEFT JOIN execution_fairness f ON f.pool='@resources' AND f.operation_id=c.operation_id ORDER BY coalesce(u.last_started,0),coalesce(f.last_started,0),c.created_at,c.position LIMIT 1`).get(key,now,key,now,JSON.stringify([...this.handlers.keys()]),now);
-  return !first||first.id===stepId;
+  ) SELECT c.id FROM candidates c LEFT JOIN execution_user_fairness u ON u.pool='@resources' AND u.user_id=c.user_id LEFT JOIN execution_fairness f ON f.pool='@resources' AND f.operation_id=c.operation_id ORDER BY coalesce(u.last_started,0),coalesce(f.last_started,0),c.created_at,c.position`).all(key,now,key,now,JSON.stringify([...this.handlers.keys()]),now);
+  for(const candidate of ordered){const step=this.get(String(candidate.id));if(!step||step.state==='waiting'&&!this.capacityAvailable(step,now))continue;return step.id===stepId;}
+  return true;
  }
  private servedResource(step:ExecutionStep){
   const db=this.store.db,sequence=Number(db.prepare("INSERT INTO execution_sequence VALUES('@resources',1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next").get()!.next);
@@ -282,7 +290,7 @@ export class ExecutionEngine {
     while([...this.active.values()].filter(a=>a.pool===pool&&a.lane===lane).length<limit){
      if(this.running(pool,lane)>=limit)break;
      const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_user_fairness u ON u.pool=e.pool AND u.user_id=e.user_id LEFT JOIN execution_stage_groups g ON g.step_id=e.id LEFT JOIN execution_stage_fairness s ON s.pool=e.pool AND s.user_id=e.user_id AND s.group_key=g.group_key LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence)) ORDER BY coalesce(u.last_started,0),coalesce(s.last_started,0),coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
-     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
+     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.capacityAvailable(view(candidate as Row))&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
      const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
@@ -297,9 +305,8 @@ export class ExecutionEngine {
   const db=this.store.db,now=this.now(),fence=randomUUID(),policy=this.policy(handler,view(row)),timeout=policy.timeoutMs;
   db.exec('BEGIN IMMEDIATE');
   try{
-   const lane=this.lane(view(row)),limit=this.limit(row.pool,lane);
    if(db.prepare("SELECT state FROM execution_steps WHERE id=?").get(row.id)?.state!=='waiting'){db.exec('COMMIT');return;}
-   if(this.running(row.pool,lane,now)>=limit){db.exec('COMMIT');return;}
+   if(!this.capacityAvailable(view(row),now)){db.exec('COMMIT');return;}
    if(db.prepare("SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=? AND owner.id!=? AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence) LIMIT 1").get(row.id,row.id,now)){db.exec('COMMIT');return;}
    if(!this.staticResourceTurn(view(row))){db.exec('COMMIT');return;}
    if(!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);db.exec('COMMIT');return;}

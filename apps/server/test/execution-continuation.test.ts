@@ -139,3 +139,12 @@ test('contested resource fairness survives another host shutdown and restart und
  for(const owner of ['A','B']){const own=saved.filter(event=>event.owner===owner);assert.ok(own.slice(0,2).some(event=>event.operation===owner+':other'),'another operation gets its next fair account turn');}
  assert.ok(events.filter(event=>event.phase==='done').every(event=>event.attempts.every((attempt:number)=>attempt===1)));assert.equal(store.db.prepare('SELECT count(*) n FROM execution_resource_waits').get()!.n,0);
 });
+
+test('a static peer in a full pool cannot block an already running continuation for a free resource',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'mote-resource-capacity-')),store=new Store(root),engine=new ExecutionEngine(store),entered=deferred(),release=deferred();let dynamicSaved=false,staticSaved=false;
+ t.after(async()=>{release.resolve();await engine.close();store.close();rmSync(root,{recursive:true,force:true});});
+ engine.register({...base,kind:'busy',pool:'static',concurrency:()=>1,execute:async()=>{entered.resolve();await release.promise;return null;}});
+ engine.register({...base,kind:'publisher',pool:'static',concurrency:()=>1,resourceKeys:()=>['publisher'],execute:async()=>{staticSaved=true;return null;}});
+ engine.register({...base,execute:async(_step,_signal,grant)=>grant.withResource('publisher',async()=>{dynamicSaved=true;return null;})});
+ const busy=engine.enqueue('busy','busy',{}),holding=engine.drain([busy]);await entered.promise;const blocked=engine.enqueue('older-static','publisher',{}),dynamic=engine.enqueue('ready-continuation','batch',{});const saving=engine.drain([dynamic]);await until(()=>dynamicSaved);assert.equal(staticSaved,false);assert.equal(engine.get(dynamic)!.state,'succeeded');release.resolve();await Promise.all([holding,saving]);await engine.drain([blocked]);assert.equal(staticSaved,true);
+});
