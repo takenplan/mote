@@ -144,8 +144,8 @@ test('held external model output cannot publish an old A job after account revoc
  await waitForState(()=>f.ok(f.b.token,'/api/memory/jobs/'+bj.id),v=>v.state==='committed','B genuine memory publication during A revoke');
  release();
  const fresh=await f.ok(undefined,'/api/auth/login','POST',{username:'generated-a',password,mode:'client'});
- const retired=await waitForState(()=>f.ok(fresh.token,'/api/memory/jobs/'+job.id),v=>v.tasks.extract.state==='stale','A old task retirement after late response');
- assert.equal(retired.tasks.publish.state,'blocked');assert.equal(retired.tasks.publish.attempts,0);
+ const retired=await waitForState(()=>f.ok(fresh.token,'/api/memory/jobs/'+job.id),v=>v.tasks.batch.state==='stale','A old task retirement after late response');
+ assert.deepEqual(Object.keys(retired.tasks),['batch']);assert.equal(retired.tasks.batch.attempts,1);assert.equal(f.requests.filter(request=>request.owner==='A').length,1,'revoked extraction cannot enter independent review or save');
  assert.deepEqual((await f.ok(fresh.token,'/api/memories')).items,[]);
  assert.equal((await f.ok(f.b.token,'/api/memories')).items[0].title,'Generated B');
  assert.ok(f.requests.filter(r=>r.owner==='A').every(r=>!r.raw.includes(memoryText('B'))));
