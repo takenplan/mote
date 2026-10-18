@@ -131,7 +131,10 @@
 | Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_GLOBAL_SLOT；R001已释放，WEB仍idle不得提前唤醒 | 完整gate未运行；非独立PASS |
 | Q007 | DESKTOP / `73c1115287fe07e1824526861ebc2e8ed3cf39fc` / 起点2c78ca8d | Desktop+Server+Web；Android=false，D2另跨端联调 | WAIT_GLOBAL_SLOT；作者83项及29+1/类型/预检报告通过 | `/tmp/mote-parity-desktop-affected-plan-final.json`；完整gate/独验UNRUN |
 | R002 | CONN / C07 Kotlin/helper/JVM/instrumentation | 专用`dev.mote.collector.RecordingParityInstrumentedTest`；生成scoped后端smoke作者报告通过 | WAIT_INPUT_AND_SLOT；Gradle/emulator UNRUN | 精确完整输入/SHA与环境待回报，无当前运行授权 |
+| R003 / Q008 | CONFIG / 必要Kotlin+模型instrumentation及central/Android/scope-tooling | 待精确候选/输入hash/最终dry-run；本树Gradle JVM+debug/testAPK及headless模型方法，再完整affected | WAIT_CANDIDATE_AND_GLOBAL_SLOT；尚无运行授权 | FILE/LIFE producer依赖另列UNRUN；不得用定向结果跳过完整gate所选步骤 |
 | Q001 / Q003 / Q004 / Q005 / Q006 | FILE / EXT / LIFE / ASK / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 新增Android/shared影响按最终输入重选 |
+
+同一已冻结输入可在一个批准资源窗口按顺序做原生旅程与完整affected，但完整driver保留全部选中步骤，不能跨轮缓存或拼接定向PASS；Gradle实际UP-TO-DATE/skip与真实执行分开记录。任一步后改代码/输入，重新冻结、重选范围并复验受影响结论。
 
 ## 全局对话槽位与待办（用户最新约束）
 
