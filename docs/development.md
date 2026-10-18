@@ -145,7 +145,7 @@ npm run check:affected -- --base origin/main --head HEAD --dry-run
 | `docs/design/scope-inventory.json` | scope 契约及检查基础设施回归，不构建应用 | 该文件是检查器的可执行输入，不按纯文档跳过 |
 | 仅 Web | Web 类型/测试及共享契约测试；构建 shared、Agent 等实际前置 | Web 集成 fixture 仍使用真实 Server 代码；对应浏览器交互另验，不自动运行整个 Server 套件 |
 | Server | Server 及 Web 消费者检查、共享契约与中央运行器回归 | 对应 API、导入/查询/Memory 等流程；客户端契约变化补跨端旅程 |
-| 仅 `scripts/backup.ts`、`scripts/scoped-backup-schema.mjs`、`scripts/scoped-backup.mjs` | 完整 Server / Web 消费者检查、共享契约、中央运行器、profile/日志保留及根级 security/update 回归；`backup.ts` 额外保留脚本 TypeScript 检查 | 这些是实例备份入口与 helper；混合 Desktop、Android、shared 或未知路径继续合并各自义务；移动/改名同时检查旧新路径 |
+| 仅 `scripts/backup.ts`、`scripts/scoped-backup-schema.mjs`、`scripts/scoped-backup.mjs` | 完整 Server / Web 消费者检查、共享契约、中央运行器、profile/日志保留及根级 security/update 回归；`backup.ts` 额外保留脚本 TypeScript 检查及 diagnostics 声明构建前置 | 这些是实例备份入口与 helper；混合 Desktop、Android、shared 或未知路径继续合并各自义务；移动/改名同时检查旧新路径 |
 | Agent / 中央插件 | Agent 的实际消费者，或中央工作区检查 | 对应委派、恢复、插件生命周期及上下文授权 |
 | macOS / diagnostics | Desktop 及实际依赖检查、共享契约；diagnostics 变化覆盖 Desktop 消费者 | Desktop 构建、受影响 UI；原生助手/依赖/打包变更在 macOS 编译；权限与系统生命周期单独验收 |
 | Android | `check:i18n`、发布工具回归、Gradle debug 单测（包含测试依赖的代码编译） | 对应 variant 构建、lint、instrumentation；后台与权限变化单独真机验收 |

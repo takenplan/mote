@@ -44,6 +44,7 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
   const desktop = selected.has('@mote/desktop');
   const applications = selected.size > 0 || selection.android || selection.contracts;
   const scope = server || selection.rootTests?.includes('scope');
+  const scriptTypes = selection.all || selection.rootTests?.includes('scripts-types');
   if (!applications && !selection.tooling && !scope) return [];
   const steps = new Map();
   const add = (id, phase, command, args, cwd) => {
@@ -64,6 +65,9 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
   // Desktop source-CLI fixtures start the real Server in a native child, whose
   // package imports require the compiled Agent even in a Desktop-only plan.
   if (web || server || desktop) includeBuild('@mote/agent');
+  // The complete scripts tsconfig imports Desktop contracts, whose diagnostics
+  // type is resolved from this package's emitted declarations.
+  if (scriptTypes) includeBuild('@mote/diagnostics');
   // Desktop typechecks/tests use source; its build would compile native helpers.
   builds.delete('@mote/desktop');
 
@@ -93,7 +97,7 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
   // Emitting tsc builds already check exactly the workspace's tsconfig. Avoid
   // running tsc --noEmit a second time against the same unchanged inputs.
   for (const name of selected) if (!built.has(name)) npm(`typecheck:${name}`, 'typecheck', ['typecheck', '-w', name]);
-  if (selection.all || selection.rootTests?.includes('scripts-types')) node('typecheck:scripts', 'typecheck', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.scripts.json']);
+  if (scriptTypes) node('typecheck:scripts', 'typecheck', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.scripts.json']);
 
   const tested = new Set(selected);
   if (applications && byName.has('@mote/shared')) tested.add('@mote/shared');
