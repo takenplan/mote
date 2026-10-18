@@ -9,7 +9,7 @@ import java.io.File
 object SupportEvents {
     fun record(context: Context, stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null) {
         runCatching { runtime(context).event(stage, code, elapsedMs, httpStatus) }
-        if (!context.getSharedPreferences("mote", Context.MODE_PRIVATE).getBoolean("diagnosticsEnabled", false)) return
+        if (!context.getSharedPreferences("mote", Context.MODE_PRIVATE).getBoolean("diagnosticsEnabled", RuntimeProfile.current.detailedDiagnostics)) return
         // Diagnostic storage failure never changes capture/queue correctness.
         runCatching { journal(context).record(stage, code, elapsedMs, httpStatus) }
     }

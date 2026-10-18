@@ -15,12 +15,24 @@ const { randomUUID } = require('node:crypto');
   assert(!recordMetadataSchema.safeParse({ version: 1, observedAt: '2026-09-14T00:00:00Z', device: { serialNumber: 'forbidden' } }).success);
   const current = require(join(asar, 'dist/config.js')); const { DurableQueue } = require(join(asar, 'dist/queue.js'));
   const { NoteDraftStore } = require(join(asar, 'dist/note-draft.js')); const { collectionForApp } = require(join(asar, 'dist/app-collection.js'));
-  const version = packagedRequire('./package.json').version;
+  const {desktopSecretStorage} = require(join(asar, 'dist/secret-storage.js'));
+  const {resolveProfile,profileDefaults} = require(join(asar, 'dist/profile.js'));
+  const {DESKTOP_STORAGE_VERSION} = require(join(asar, 'dist/storage-format.js'));
+  const metadata = packagedRequire('./package.json'), version = metadata.version, development = Boolean(metadata.moteDevelopment);
+  if(development) assert.equal(metadata.productName, 'Mote Collector Dev', 'Electron must derive a separate default userData directory for the Dev package');
   const directory = await mkdtemp(join(tmpdir(), 'mote-packaged-metadata-'));
   try {
-    const config = { ...current.defaultConfig(), deviceName: 'Generated current format fixture', token: 'synthetic-old-token-not-keychain', appCollectionRules: {'dev.generated.private': 'off'}, masks: [{ x: 0, y: 0, width: .1, height: .1 }] };
-    const secrets = { available: () => true, encrypt: value => Buffer.from(value).map(byte => byte ^ 71), decrypt: value => Buffer.from(value).map(byte => byte ^ 71).toString() };
+    const profile = resolveProfile([`--profile=${development ? 'dev' : 'prod'}`], {}, directory);
+    const defaults = profileDefaults(profile, {}, development);
+    const config = { ...defaults, deviceName: 'Generated current format fixture', token: 'synthetic-current-token-not-keychain', account: {origin: defaults.serverUrl, deploymentId: 'generated-packaged-deployment', userId: 'generated-packaged-user', username: 'Generated packaged account'}, appCollectionRules: {'dev.generated.private': 'off'}, masks: [{ x: 0, y: 0, width: .1, height: .1 }] };
+    const system = development ? new Proxy({}, {get: () => () => {throw Error('Development package must never access Keychain');}}) : {isEncryptionAvailable: () => true, getSelectedStorageBackend: () => 'keychain', encryptString: value => Buffer.from(value).map(byte => byte ^ 71), decryptString: value => Buffer.from(value).map(byte => byte ^ 71).toString()};
+    const secrets = desktopSecretStorage(profile, development, system);
     const oldStore = new current.ConfigStore(directory, secrets); await oldStore.save(config);
+    const persisted = JSON.parse(await readFile(join(directory, 'config.json'), 'utf8'));
+    assert.equal(persisted.version, DESKTOP_STORAGE_VERSION);
+    assert.equal(persisted.config.token, undefined); assert.equal(persisted.config.diagnosticsEnabled, development);
+    if(development){assert.equal(persisted.developmentToken, config.token);assert.equal(persisted.encryptedToken, undefined);}
+    else {assert(persisted.encryptedToken);assert.equal(persisted.developmentToken, undefined);assert(!(await readFile(join(directory,'config.json'),'utf8')).includes(config.token));}
     const oldQueue = new DurableQueue(join(directory, 'queue'), config); await oldQueue.initialize();
     const screenshot = { id: randomUUID(), deviceId: config.deviceId, deviceName: config.deviceName, platform: 'macos', capturedAt: '2026-09-14T00:00:00Z', durationMs: 15000, appId: 'dev.generated.old', appName: 'Generated app', source: 'screen', imageMime: 'image/jpeg', ocrText: 'Generated old image envelope', privacy: { excluded: false, redacted: true, mode: 'local', reason: 'synthetic fixture mask' } };
     const jpegEnvelope = Buffer.from([255,216,255,224,0,4,77,84,255,217]); await oldQueue.enqueue(screenshot, jpegEnvelope);
@@ -53,10 +65,9 @@ const { randomUUID } = require('node:crypto');
     const QRCode = require('qrcode'); const payload = 'mote-generated-qr-fixture-no-invitation'; const png = await QRCode.toBuffer(payload, { type: 'png', width: 256 });
     const decoded = JSON.parse(execFileSync(helper, ['qr'], { input: png, encoding: 'utf8', timeout: 15000 })); assert.deepEqual(decoded.payloads, [payload]);
     const { inspectBundle } = require(join(asar, 'dist/update-install.js'));
-    const development=Boolean(packagedRequire('./package.json').moteDevelopment);
     const inspect=()=>inspectBundle(join(resources,'native/mote-updater'),resolve(resources,'../..'),version,process.arch);
     if(development)await assert.rejects(inspect,{message:'UPDATE_BUNDLE_INVALID'});else await inspect();
-    const result = { ok: true, version, packagedExecutableNodeMode: true, metadataSubpathResolvedInsideAsar: true, strictSchemaAndActivityQueue: true, nativeWindowPolicyLinked: true, packagedNativeQrFixture: true, nativeUpdaterIdentity: true, desktopStorageFormat:3, configDeviceTokenPrivacyPreserved: true, currentDefaults: { defaultCollection: migrated.defaultCollection, metadataEnabled: migrated.metadataEnabled }, oldQueueBytesAndPreparedDraftPreserved: true, preparedRetryNoDuplicateOrNewMetadata: true, syntheticModelUnchanged: true, realKeychainUsed: false, normalAppStarted: false, personalScreensOrCalendarRead: false, qwenExecuted: false };
+    const result = { ok: true, version, profile:development?'dev':'prod', credentialStorage:secrets.mode, packagedExecutableNodeMode: true, metadataSubpathResolvedInsideAsar: true, strictSchemaAndActivityQueue: true, nativeWindowPolicyLinked: true, packagedNativeQrFixture: true, nativeUpdaterIdentity: true, desktopStorageFormat:DESKTOP_STORAGE_VERSION, configDeviceTokenPrivacyPreserved: true, currentDefaults: { defaultCollection: migrated.defaultCollection, metadataEnabled: migrated.metadataEnabled, diagnosticsEnabled:migrated.diagnosticsEnabled }, currentQueueBytesAndPreparedDraftPreserved: true, preparedRetryNoDuplicateOrNewMetadata: true, syntheticModelUnchanged: true, realKeychainUsed: false, normalAppStarted: false, personalScreensOrCalendarRead: false, qwenExecuted: false };
     if (process.argv[4]) await writeFile(process.argv[4], JSON.stringify(result, null, 2), { mode: 0o600 }); process.stdout.write(JSON.stringify(result) + '\n');
   } finally { await rm(directory, { recursive: true, force: true }); }
 })().catch(error => { process.stderr.write('Packaged metadata fixture failed: ' + error.message + '\n'); process.exitCode = 1; });

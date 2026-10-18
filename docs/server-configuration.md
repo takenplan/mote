@@ -93,7 +93,7 @@ perception:
 | `storage.retentionDays` | 0，最高 36500 | 0 关闭按时间删除；正数按既有保留规则清理 |
 | `storage.contentEncryptionEnabled/dataKey` | false / 空 | 原件内容加密与私有密钥；SQLite 原文不因该项加密 |
 | `execution.interactiveConcurrency/agentConcurrency/llmConcurrency/memoryConcurrency` | 2 / 8 / 4 / 3 | 分离通道和处理池的执行名额 |
-| `diagnostics.enabled/debug/traceEnabled/level` | true / false / false / info | 固定结构化诊断和显式详细 Agent trace；CLI dev 可设置 trace 为 true |
+| `diagnostics.enabled/debug/traceEnabled/level` | true / Dev true、其它 false / false / info | 固定结构化诊断；显式 debug / silent 保留。多用户实例禁止正文 trace，个人 trace 由本人独立开启 |
 | `diagnostics.directory/maxBytes/maxFiles/maxEntries` | 数据目录 logs / DEV 100 MiB，其它 2 MiB / 3 / 2000 | 日志目录、文件轮转和内存保留上限 |
 | `connectors.syncIntervalMs` | 900000，60000–86400000 | 自动拉取已授权来源的间隔 |
 | `media.ocrEndpoint/asrEndpoint` | loopback 9010 `/ocr` / 9009 `/transcribe` | 受管理媒体服务；与已保存的自定义处理服务区分 |

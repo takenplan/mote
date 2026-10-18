@@ -17,8 +17,8 @@ flowchart LR
   Repo --> Desktop[desktop-vX.Y.Z]
   Repo --> Android[android-vX.Y.Z]
   Central --> Source[中央源码包]
-  Desktop --> ZIP[Mac DEV ZIP]
-  Android --> APK[Android DEV APK]
+  Desktop --> ZIP[Mac Prod ZIP]
+  Android --> APK[Android Prod APK]
   Contract[Wire 2 / Ingress 3] --- Central
   Contract --- Desktop
   Contract --- Android
@@ -30,12 +30,12 @@ flowchart LR
 
 破坏契约的修改应同步调整受影响消费者与 fixture。平台 feature inventory 与来源 capability registry 继续描述实际安装能力；产品版本号不能用来猜测设备能做什么。TS、Kotlin 与连接链路共用生成的协议 fixture，真机和真实模型验证另行记录。
 
-三个工作流分别匹配三个标签前缀。版本脚本只递增选中的产品；Android versionCode 仅随 Android 升级单调递增。检查器根据 workspace 依赖图和非 npm 构建输入选择范围：共享协议检查全部端，中央插件只检查 Central。根配置、lockfile 或未知构建输入采取保守的全消费者检查。各端发布 workflow 只构建对应组件并验证版本、签名与附件；可选测试由 `MOTE_PRE_RELEASE_CHECKS` 控制，当前暂停策略见[发布流程](releasing.md#mvp-阶段的-github-检查开关)。纯文档（含 AGENTS.md 和各语言 README）不触发应用构建。本地 `npm run check:affected` 与启用后的 CI 共用选择规则，额外用户流程验证见[开发指南](development.md#pr-check-scope)。测试范围和发布范围分开，检查通过不会替任何端自动发版。
+三个工作流分别匹配三个标签前缀。版本脚本只递增选中的产品；Android versionCode 仅随 Android 升级单调递增。检查器根据 workspace 依赖图和非 npm 构建输入选择范围：共享协议检查全部端，中央插件只检查 Central。根配置、lockfile 或未知构建输入采取保守的全消费者检查。各端发布 workflow 只构建对应组件并验证版本、签名与附件；Beta / 正式标签始终执行组件测试；`MOTE_PRE_RELEASE_CHECKS` 仅控制 Dev 可选测试，当前暂停策略见[发布流程](releasing.md#mvp-阶段的-github-检查开关)。纯文档（含 AGENTS.md 和各语言 README）不触发应用构建。本地 `npm run check:affected` 与启用后的 CI 共用选择规则，额外用户流程验证见[开发指南](development.md#pr-check-scope)。测试范围和发布范围分开，检查通过不会替任何端自动发版。
 
-历史统一标签仍可作为发布记录阅读。当前更新器只读取所属组件标签和明确声明组件的签名清单，拒绝统一旧流及缺失组件。DEV 发布不附签名清单，仍由用户手动安装。签名验证与安装身份校验是当前功能，不能用旧清单兜底。
+历史统一标签仍可作为发布记录阅读。当前更新器只读取所属组件标签和明确声明组件的签名清单，拒绝统一旧流及缺失组件。当前发布不附签名更新清单，仍由用户手动安装；Dev 仅作为按提交标识的 Actions Artifact，Beta / 正式 Tag 构建 Prod 包。签名验证与安装身份校验是当前功能，不能用旧清单兜底。
 
 中央源码发布包含构建所需工作区及锁文件，在独立目录安装依赖、构建 server/web。同代更新沿用现有 profile 的备份、切换和回退流程；跨代不直接复用不兼容的资料库。它不把用户配置、密钥、模型权重或归档数据编入产物，不创建新的镜像发布通道。
 
 未来 iOS 或新硬件实现只需新增产品组、安装身份和对应平台的协议测试。中央插件沿用现有 manifest、权限与宿主 capability 契约，在可独立加载升级之前仍随 Central 构建；本次不引入插件市场或承诺插件热更新。外部社区设备、SDK 或插件有独立维护与授权需求时，再考虑单独仓库。
 
-实际操作见 [发布流程](releasing.md)，保留本地配置的升级步骤见 [更新说明](updating.md)。
+Profile、调试默认项与 Dev 文件凭据的责任边界见 [Profile 与发版 ADR](adr-profile-release-policy.md)。实际操作见 [发布流程](releasing.md)，保留本地配置的升级步骤见 [更新说明](updating.md)。

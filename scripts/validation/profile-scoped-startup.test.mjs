@@ -33,6 +33,7 @@ test('real native dev/test CLI starts before account initialization, restarts sa
   }
  });
  for(const name of ['dev','test'])profiles.push(await initializeFixture(home,name));
+ for(const p of profiles){assert.equal(p.document.diagnostics.debug,p.profile==='dev');assert.equal(p.document.diagnostics.traceEnabled,false);}
  assert.notEqual(profiles[0].dataDir,profiles[1].dataDir);
  assert.notEqual(profiles[0].port,profiles[1].port);
  assert.notEqual(profiles[0].project,profiles[1].project);

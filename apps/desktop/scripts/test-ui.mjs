@@ -16,6 +16,7 @@ function run(binary,args,env,label){
  assert.equal(result.status,0,`${label} failed (signal ${result.signal??'none'})`);
 }
 run(process.execPath,['--import','tsx','apps/desktop/scripts/multiuser-native-runner.mjs'],{},'Actual wire-2 account/theme lifecycle');
+run(process.execPath,['--import','tsx','apps/desktop/scripts/multiuser-pairing-runner.mjs','--case=dev-storage'],{},'Actual development JSON credential lifecycle');
 let cold=0,restarts=0;
 for(const preference of ['light','dark','auto'])for(const os of ['light','dark']){
  const profile=await mkdtemp(join(tmpdir(),'mote-public-ui-appearance-'));

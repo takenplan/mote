@@ -111,10 +111,10 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
       ]},
       { id: 'diagnostics', title: moteText("诊断与日志"), description: moteText("安全支持包保持路径和正文隔离；此配置视图不作为诊断附件导出。"), fields: [
         field('diagnosticsEnabled', moteText("结构化诊断开关"), config.diagnosticsEnabled ?? true, moteText("记录固定事件、状态与数值指标。silent 日志级别会同时停止记录。"), 'MOTE_DIAGNOSTICS_ENABLED'),
-        field('diagnosticsDebug', moteText("调试模式"), config.diagnosticsDebug ?? false, moteText("增加允许的固定调试事件，不开放任意正文日志。"), 'MOTE_DEBUG'),
+        field('diagnosticsDebug', moteText("调试模式"), config.diagnosticsDebug ?? config.profile === 'dev', moteText("增加允许的固定调试事件，不开放任意正文日志。"), 'MOTE_DEBUG'),
         field('agentTraceEnabled', moteText("详细 Agent 执行跟踪"), config.agentTraceEnabled ?? config.profile === 'dev', moteText("显式记录 Agent 的请求上下文、组装后的 prompt、模型输出、工具参数与结果、校验和阶段状态到 central 日志。包含个人内容，只建议开发环境开启；开发环境默认开启。"), 'MOTE_AGENT_TRACE_ENABLED'),
         field('logLevel', moteText("配置的日志级别"), config.logLevel ?? 'info', moteText("支持 debug、info、warn、error、silent。调试模式会将非 silent 级别提升为 debug。"), 'MOTE_LOG_LEVEL'),
-        field('effectiveLogLevel', moteText("实际诊断日志级别"), config.logLevel === 'silent' ? 'silent' : config.diagnosticsDebug ? 'debug' : config.logLevel ?? 'info', moteText("silent 优先；其余情况下调试模式使用 debug。诊断总开关关闭时，任何级别均不记录事件。")),
+        field('effectiveLogLevel', moteText("实际诊断日志级别"), config.logLevel === 'silent' ? 'silent' : (config.diagnosticsDebug ?? config.profile === 'dev') ? 'debug' : config.logLevel ?? 'info', moteText("silent 优先；其余情况下调试模式使用 debug。诊断总开关关闭时，任何级别均不记录事件。")),
         field('logDirectory', moteText("日志目录"), logDir, moteText("结构化中央日志的实际路径；Docker 通常位于 /data/logs。"), 'MOTE_LOG_DIR', ownerPath),
         field('logMaxBytes', moteText("每份结构化日志上限"), config.logMaxBytes ?? defaultLogMaxBytes(config.profile), moteText("独立于资料容量上限。"), 'MOTE_LOG_MAX_MB', { unit: 'bytes' }),
         field('logMaxFiles', moteText("日志文件数上限"), config.logMaxFiles ?? 3, moteText("有限轮转的总文件数量；Docker/进程管理器输出另有部署级上限。"), 'MOTE_LOG_MAX_FILES', { unit: 'files' }),

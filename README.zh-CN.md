@@ -23,7 +23,7 @@ Mote 是 AI-native 的个人上下文采集器与自部署归档。把电脑和�
 
 Mote 包含两部分：**中央节点（Central）** 保存归档并提供网页界面，可选的 **macOS / Android App** 负责采集和同步。中央可以放在自己的 Mac、Linux 服务器或 NAS 上。无需先开启屏幕采集，写一条笔记就能开始体验。
 
-> **开发预览阶段：** Central、macOS、Android 分别发布，当前下载为 DEV 构建，手动更新。已有用户请先阅读[升级指南](docs/updating.md)：旧归档格式会被拒绝读取，不会自动迁移。
+> **开发预览阶段：** Central、macOS、Android 分别发布，Dev 构建按提交保留为 Actions Artifact，Beta 与正式发布使用 Prod Profile，均手动更新。已有用户请先阅读[升级指南](docs/updating.md)：旧归档格式会被拒绝读取，不会自动迁移。
 
 ### 1. 启动自己的资料库
 
@@ -47,12 +47,12 @@ node scripts/dev-server.mjs
 
 先点击中央网页的 **记录**，保存一条简短笔记，再到 **资料库** 找到它。也可以使用资料库中的导入工具添加选定材料，检查预览后确认。
 
-需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 下载对应客户端：
+需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 下载对应 Prod 客户端；Dev 构建从 [Actions](https://github.com/utopiafar/mote/actions) 的组件工作流下载 Artifact，见[发布指南](docs/releasing.md)。
 
 | 设备 | 安装 | 连接 |
 | --- | --- | --- |
-| macOS 13.3+ | 下载适合本机架构的 Mac DEV ZIP，解压并将 App 移到应用目录。 | 导入邀请 JSON、文字或二维码图片；首次打开及权限步骤见 [Mac 指南](docs/desktop.md)。 |
-| Android 10+ | 安装 Android DEV APK。 | 扫描邀请二维码或导入 JSON；权限和后台设置见 [Android 指南](docs/android.md)。 |
+| macOS 13.3+ | 下载适合本机架构与 Profile 的 Mac ZIP，解压并将 App 移到应用目录。 | 导入邀请 JSON、文字或二维码图片；首次打开及权限步骤见 [Mac 指南](docs/desktop.md)。 |
+| Android 10+ | 安装对应 Profile 的 Android APK；Dev / Prod 使用独立安装身份。 | 扫描邀请二维码或导入 JSON；权限和后台设置见 [Android 指南](docs/android.md)。 |
 
 登录中央后，打开 **采集与设备 → 连接设备**，填写设备可访问的节点地址，生成邀请。在客户端导入邀请，核对地址、账号和设备身份后确认连接。邀请 10 分钟后失效，仅能使用一次。每个 App 获得独立、可撤销且绑定该账号的设备采集凭据，不授予私有归档浏览或管理权限；中央页面和问一问需另行按账号登录。详见[账号绑定邀请契约](docs/design/multiuser-qr-pairing.md)。
 

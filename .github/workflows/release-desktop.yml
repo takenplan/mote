@@ -2,8 +2,15 @@ name: Release Desktop
 on:
   push:
     tags: ['desktop-v*']
-  # Select the component's exact version tag when running this manually.
   workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Branch build profile (release tags always use prod)'
+        type: choice
+        options: [dev, prod]
+        default: dev
+env:
+  MOTE_BUILD_PROFILE: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || inputs.profile || 'dev' }}
 permissions:
   contents: read
 concurrency:
@@ -15,6 +22,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      profile: ${{ steps.version.outputs.profile }}
+      build_id: ${{ steps.version.outputs.build_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -32,13 +41,13 @@ jobs:
         with: { node-version: '24', cache: npm }
       - run: npm ci
       - name: Build desktop workspace dependencies
-        run: npm run build -w @mote/shared -w @mote/diagnostics
+        run: npm run build:libs
       - name: Verify desktop workspaces and generated fixtures
-        if: vars.MOTE_PRE_RELEASE_CHECKS == 'true'
+        if: needs.version.outputs.profile == 'prod' || vars.MOTE_PRE_RELEASE_CHECKS == 'true'
         run: npm run check:desktop
-      - name: Build and verify Mac DEV application
+      - name: Build and verify the selected Mac profile
         env:
-          MOTE_PRE_RELEASE_CHECKS: ${{ vars.MOTE_PRE_RELEASE_CHECKS || 'false' }}
+          MOTE_PRE_RELEASE_CHECKS: ${{ needs.version.outputs.profile == 'prod' && 'true' || vars.MOTE_PRE_RELEASE_CHECKS || 'false' }}
           MOTE_MAC_SIGNING_MODE: ${{ vars.MOTE_MAC_SIGNING_MODE || 'adhoc' }}
           CSC_LINK: ${{ secrets.MOTE_MAC_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MOTE_MAC_CERTIFICATE_PASSWORD }}
@@ -46,10 +55,11 @@ jobs:
           MOTE_APPLE_API_KEY_P8: ${{ secrets.MOTE_APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.MOTE_APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.MOTE_APPLE_API_ISSUER }}
-        run: MOTE_MAC_DEVELOPMENT=1 node scripts/release/mac-package.mjs
+        run: node scripts/release/mac-package.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with: { name: release-desktop, path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
+        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
   publish:
+    if: needs.version.outputs.profile == 'prod'
     needs: [version, package]
     runs-on: ubuntu-24.04
     environment: release
@@ -61,8 +71,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: '24' }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with: { name: release-desktop, path: artifacts/release }
-      - name: Publish verified desktop DEV release
+        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release }
+      - name: Publish verified desktop Beta or stable release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release/publish.mjs desktop

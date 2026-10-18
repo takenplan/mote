@@ -37,7 +37,7 @@ def adb(*args, check=True):
 
 if adb('shell', 'getprop', 'ro.boot.qemu.avd_name') != 'mote_fixture_api35':
     raise SystemExit('Refusing to run outside the dedicated synthetic fixture AVD.')
-package = 'dev.mote.collector.dev' if options.build_type == 'development' else 'dev.mote.collector'
+package = 'dev.mote.collector.dev' if options.build_type == 'development' else 'dev.mote.collector.test'
 for path in (android / f'app/build/outputs/apk/{options.build_type}/app-{options.build_type}.apk', android / f'app/build/outputs/apk/androidTest/{options.build_type}/app-{options.build_type}-androidTest.apk'):
     adb('install', '-r', str(path))
 

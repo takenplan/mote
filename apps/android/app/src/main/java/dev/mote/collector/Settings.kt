@@ -2,7 +2,6 @@ package dev.mote.collector
 
 import android.content.Context
 import android.os.Build
-import android.util.Base64
 import java.util.UUID
 
 data class CollectorConfig(
@@ -67,7 +66,8 @@ class SettingsChangedFailure : IllegalStateException(MoteI18n.text("已保存设
 class Settings(private val context: Context) {
     init { LocalDataFormat.requireCurrent(context) }
     private val prefs = context.getSharedPreferences("mote", Context.MODE_PRIVATE)
-    private val secret = SecretBox()
+    private val secret = context.secretBox()
+    private val credentialValue = CredentialValue(RuntimeProfile.current, secret)
     init { read() }
     val deviceId: String get() = synchronized(Settings::class.java) {
         prefs.getString("deviceId", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("deviceId", it).commit() }
@@ -97,10 +97,10 @@ class Settings(private val context: Context) {
         intervalSeconds = prefs.getInt("interval", 30), maxQueueMiB = prefs.getInt("maxQueue", 256),
         wifiOnly = prefs.getBoolean("wifiOnly", true), excludedPackages = prefs.getString("excluded", "")!!,
         masks = prefs.getString("masks", "")!!,
-        debugHttp = prefs.getBoolean("debugHttp", BuildConfig.MOTE_PROFILE == "dev"), mode = prefs.getString("mode", "accessibility")!!,
+        debugHttp = prefs.getBoolean("debugHttp", RuntimeProfile.current.developerTools), mode = prefs.getString("mode", "accessibility")!!,
         jpegQuality = prefs.getInt("jpegQuality", 75), captureMaxSide = prefs.getInt("captureMaxSide", 1280),
         chargingOnly = prefs.getBoolean("chargingOnly", false), batteryPauseBelowPct = prefs.getInt("batteryPauseBelowPct", 0),
-        diagnosticsEnabled = prefs.getBoolean("diagnosticsEnabled", false), diagnosticsIntervalSeconds = prefs.getInt("diagnosticsIntervalSeconds", 60),
+        diagnosticsEnabled = prefs.getBoolean("diagnosticsEnabled", RuntimeProfile.current.detailedDiagnostics), diagnosticsIntervalSeconds = prefs.getInt("diagnosticsIntervalSeconds", 60),
         appCollectionRules = prefs.getString("appCollectionRules", AppCollectionRules.DEFAULT)!!,
         metadataEnabled = prefs.getBoolean("metadataEnabled", true),
         syncPaused = prefs.getBoolean("syncPaused", false), syncMode = prefs.getString("syncMode", "batch")!!,
@@ -127,7 +127,7 @@ class Settings(private val context: Context) {
     private fun credentials(ciphertext: String?): String {
         if (ciphertext == null) return ""
         if (cachedCiphertext != ciphertext) {
-            cachedToken = String(secret.open(Base64.decode(ciphertext, Base64.NO_WRAP)))
+            cachedToken = credentialValue.decode(ciphertext)
             cachedCiphertext = ciphertext
         }
         return cachedToken
@@ -142,7 +142,7 @@ class Settings(private val context: Context) {
             "syncChargingOnly" to c.syncChargingOnly, "syncBatteryNotLow" to c.syncBatteryNotLow,
             "packedUpload" to c.packedUpload, "syncBatchSize" to c.syncBatchSize, "jsonlWindowMinutes" to c.jsonlWindowMinutes, "server" to c.server.trim().trimEnd('/'),
             "token" to (prefs.getString("token", null)?.takeIf { credentials(it) == c.token }
-                ?: Base64.encodeToString(secret.seal(c.token.toByteArray()), Base64.NO_WRAP)),
+                ?: credentialValue.encode(c.token)),
             "deviceName" to c.deviceName, "interval" to c.intervalSeconds, "maxQueue" to c.maxQueueMiB,
             "wifiOnly" to c.wifiOnly, "excluded" to c.excludedPackages, "masks" to c.masks,
             "debugHttp" to c.debugHttp, "mode" to c.mode, "appCollectionRules" to c.appCollectionRules, "metadataEnabled" to c.metadataEnabled,

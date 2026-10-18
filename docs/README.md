@@ -8,7 +8,7 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 
 | 需要了解什么 | 当前说明 |
 | --- | --- |
-| 安装、开发、部署与更新 | [项目首页（中文）](../README.zh-CN.md)、[English](../README.md)、[开发](development.md)、[部署](deployment.md)、[当前 DEV 更新](updating.md)、[发布](releasing.md) |
+| 安装、开发、部署与更新 | [项目首页（中文）](../README.zh-CN.md)、[English](../README.md)、[开发](development.md)、[部署](deployment.md)、[更新](updating.md)、[发布](releasing.md)、[Profile 规范](adr-profile-release-policy.md) |
 | 采集、隐私和上传 | [统一行为](collection-and-sync.md)、[macOS](desktop.md)、[Android](android.md)、[文字审查与中央感知](central-perception.md)、[同步恢复](sync-recovery.md) |
 | 本地 OCR / ASR 与文件 | [运行时和模型安装](ocr-asr-implementation-plan.md)、[文件归档](files.md)、[文件处理](file-processing.md)、[类型策略](file-processing-policies.md) |
 | MVP 清理、断代与验证 | [当前基线与本轮回归](audits/mvp-baseline-cleanup-2026-10-09.md)、[基线 ADR](adr-mvp-baseline.md)；历史 [原始审计](audits/compatibility-audit-2026-10-04.md) 与 [83 项实施](audits/compatibility-cleanup-2026-10-04.md) |
@@ -97,6 +97,8 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | [raw-logs](raw-logs.md) | 原始日志与日志中心 |
 | [release-architecture](release-architecture.md) | Monorepo 内独立发布边界、协议与验证 |
 | [releasing](releasing.md) | 发布版本与签名 |
+| [Profile 发版 ADR](adr-profile-release-policy.md) | Dev 文件凭据、Prod Beta/正式标签和既有边界的取代关系 |
+| [Profile 发版回归](testing-profile-release.md) | 构建、凭据、配对重启、诊断和产物身份的验证矩阵 |
 | [server-configuration](server-configuration.md) | 服务端配置参考 |
 | [sqlite-concurrency](sqlite-concurrency.md) | SQLite process locks |
 | [sync-recovery](sync-recovery.md) | 同步机制与恢复设计 |

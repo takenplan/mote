@@ -23,7 +23,7 @@ For example, ask: “What did I work on this week?”, “Where did I see that d
 
 Mote has two parts: **Central**, your archive and web interface, and optional **macOS / Android apps** that collect and sync context. Central can run on your Mac, a Linux server, or a NAS. You can try it with a note before enabling screen collection.
 
-> **Development preview:** Central, macOS, and Android have separate releases. Current downloads are DEV builds and use manual updates. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
+> **Development preview:** Central, macOS, and Android have separate releases. Dev builds are commit-addressed Actions artifacts; Beta and stable releases use the Prod profile. All use manual updates. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
 
 ### 1. Start your archive
 
@@ -47,12 +47,12 @@ For a daily archive, use a profile outside the checkout. The [deployment guide](
 
 Start with **Record** in the web interface: save a short note, then find it in **Library**. You can also use Library's import tools to add selected material, inspect the preview, and confirm it.
 
-To collect from your devices, download the matching app from [Releases](https://github.com/utopiafar/mote/releases):
+To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases). For Dev builds, select the component workflow Artifact in [Actions](https://github.com/utopiafar/mote/actions); see the [release guide](docs/releasing.md).
 
 | Device | Install | Connect |
 | --- | --- | --- |
-| macOS 13.3+ | Download the Mac DEV ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
-| Android 10+ | Install the Android DEV APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
+| macOS 13.3+ | Download the Mac ZIP for your architecture and profile, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
+| Android 10+ | Install the Android APK for your profile; Dev and Prod have separate app identities. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
 
 After signing in to Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, account, and device identity, and confirm. Invitations expire after 10 minutes and can be used once. Each paired app receives a separately revocable device credential for that account's collection; it does not grant private archive browsing or administration. Sign in separately to use Central pages and Ask. See the [account-bound invitation contract](docs/design/multiuser-qr-pairing.md).
 

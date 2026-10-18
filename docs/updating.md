@@ -1,6 +1,6 @@
 # 更新 Mote 与存储代际边界
 
-当前开发阶段按 **Central、macOS、Android** 独立创建 DEV prerelease。请打开 [GitHub Releases](https://github.com/utopiafar/mote/releases)，选择 `central-v…`、`desktop-v…` 或 `android-v…` 对应的发布；各端的版本号不能相互比较。`releases/latest` 不代表某个端的最新 prerelease。当前发布不附 `mote-release.json` 或 GHCR 镜像，保留的签名更新器不能用于获取当前 DEV 版本。
+按 **Central、macOS、Android** 独立发布。Dev 从各组件 Actions workflow 下载按提交标识的 Artifact；Beta / 正式版从 [GitHub Releases](https://github.com/utopiafar/mote/releases) 选择组件 Tag，其中 `-beta.N` 是 Pre-release，其余为正式发布，均使用 Prod Profile。各端版本不能相互比较，`releases/latest` 不代表某个端最新版本。当前工作流不附 `mote-release.json` 或 GHCR 镜像，安装和升级仍手动进行，不能使用保留的签名更新器获取这些新产物。
 
 ## 配置格式与历史存储边界
 
@@ -12,11 +12,11 @@
 
 ## Mac App
 
-保存输入，退出使用同一个 App bundle 的全部 Mote 实例，解压下载的 Mac DEV ZIP，用其中的 App 覆盖原 DEV App 后启动。设备身份、配置、凭据、草稿、队列和模型在应用包之外；当前格式 4 的同代更新不要删除资料目录。格式 3 或更早的目录会被拒绝，须先备份，再明确选择新目录或重置；旧队列、草稿和凭据不自动接入多用户账号。默认 profile 仍使用原 userData 路径，换 App bundle 不会把旧资料变成新格式。连接当前中央后按账号登录。当前使用 ad-hoc 签名时，系统可能再次要求运行、Keychain、屏幕或日历授权。
+保存输入，退出使用同一个 App bundle 的全部 Mote 实例，解压同 Profile 的 Mac ZIP，用其中的 App 覆盖对应身份 App 后启动。Dev App 与 Prod App 分开安装。设备身份、配置、凭据、草稿、队列和模型在应用包之外；当前格式 4 的同代更新不要删除资料目录。格式 3 或更早的目录会被拒绝，须先备份，再明确选择新目录或重置；旧队列、草稿和凭据不自动接入多用户账号。默认 profile 仍使用原 userData 路径，换 App bundle 不会把旧资料变成新格式。连接当前中央后按账号登录。当前使用 ad-hoc 签名时，系统可能再次要求运行、屏幕或日历授权；Prod 还可能要求 Keychain。Dev build 或 dev Profile 的 Mote 自有凭据只使用私有 JSON，不访问 Keychain。旧 Dev 加密凭据或恢复检查点不会自动转换，先保留完整旧目录，再创建空 Dev 目录重新登录。正式 Mac build 仍必须选精确的 `dev` 名称；备份并移开原 dev 目录后重建，不能用 `dev-new` 假定会开启文件凭据。独立 Dev App 可使用新的空命名目录。
 
 ## Android App
 
-下载 Android DEV APK，同包覆盖安装。必须保持包名 `dev.mote.collector.dev`、签名证书一致且 versionCode 不降低；DEV 与日常包不是同一个安装身份。系统可能要求允许安装应用并确认更新。当前格式 4 的同代更新不要先卸载或清除数据，可保留当前队列和设置；格式 3 或更早的安装会明确拒绝旧数据，须先用旧版本导出和备份，再显式清除应用存储或选择全新独立安装。清除/卸载会丢失 Keystore，不能保证以旧目录恢复凭据、私有草稿和操作 ledger，需要重新按账号登录与授权。更新可能中断投屏，会话恢复仍由 Android 权限与后台规则控制。
+下载对应 Profile 的 APK，同包覆盖安装。Dev 包名 `dev.mote.collector.dev`，Beta / 正式包名 `dev.mote.collector`；签名证书必须一致且 versionCode 不降低。Test 的 `dev.mote.collector.test` 不作日常分发。首次从旧加密 Dev 切换到文件凭据时明确拒绝旧目录；保留旧程序和资料后，显式清除旧 Dev 存储并重新登录，不能把这一步用于日常 Prod。系统可能要求允许安装应用并确认更新。当前格式 4 的同代更新不要先卸载或清除数据，可保留当前队列和设置；格式 3 或更早的安装会明确拒绝旧数据，须先用旧版本导出和备份，再显式清除应用存储或选择全新独立安装。清除/卸载会丢失应用本地密钥（Prod / Test 为 Keystore，Dev 为 JSON AES 密钥），不能保证以旧目录恢复凭据、私有草稿和操作 ledger，需要重新按账号登录与授权。更新可能中断投屏，会话恢复仍由 Android 权限与后台规则控制。
 
 ## 中央节点
 
@@ -46,7 +46,7 @@ node scripts/mote.mjs rollback --profile prod --home /srv/mote/profiles --restor
 
 ## 签名清单更新通道
 
-代码仍保留客户端签名清单下载与安装、中央 `check-update` / `update`、独立更新助手及失败回退。它们要求受内置公钥信任的 manifest 和对应资产；切换仓库不会更换信任根，不能跳过签名、证书或版本校验。验证器只接受所属端的独立标签与必填组件身份：`central-vX.Y.Z`、`desktop-vX.Y.Z`、`android-vX.Y.Z`。旧统一 `vX.Y.Z` 标签与缺组件的清单拒绝；清单不能夹带其他端资产。当前 DEV 发布不使用该通道。历史验证见 [0.5.1 更新验收](update-validation.md)，当前产物与流程见 [发布说明](releasing.md)。
+代码仍保留客户端签名清单下载与安装、中央 `check-update` / `update`、独立更新助手及失败回退。它们要求受内置公钥信任的 manifest 和对应资产；切换仓库不会更换信任根，不能跳过签名、证书或版本校验。验证器只接受所属端的独立标签与必填组件身份：`central-vX.Y.Z`、`desktop-vX.Y.Z`、`android-vX.Y.Z`。旧统一 `vX.Y.Z` 标签与缺组件的清单拒绝；清单不能夹带其他端资产。当前 Profile 发布不使用该通道。历史验证见 [0.5.1 更新验收](update-validation.md)，当前产物与流程见 [发布说明](releasing.md)。
 
 ## 验证边界
 

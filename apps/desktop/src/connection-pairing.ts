@@ -1,9 +1,9 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {mkdir,open,readFile,rename,rm} from 'node:fs/promises';
+import {chmod,lstat,mkdir,open,readFile,rename,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {accountKey,DESKTOP_PROTOCOL_HEADERS} from './account';
 import type {Config,Platform} from './contracts';
-import type {SecretStorage} from './config';
+import {CredentialStorageMismatch,type SecretStorage} from './config';
 import {parseDesktopConnectionInvitation,type DesktopConnectionInvitation} from './connection-invitation';
 import {connectionRequest,ConnectionError,testConnection,type ConnectionIdentity} from './connection';
 import {loginVerifier} from './login-session';
@@ -30,17 +30,19 @@ function installed(config:Config,pending:Pending):boolean {
  return Boolean(g&&config.token===g.token&&!config.authSignedOut&&config.serverUrl===g.serverUrl&&config.deviceId===g.deviceId&&config.account?.deploymentId===g.deploymentId&&config.account?.userId===g.userId&&config.authExpiresAt===g.expiresAt);
 }
 
-/** One encrypted recovery journal, using the existing OS secret store. It is an
+/** One recovery journal, using the selected profile's credential store. It is an
  * M01 transport checkpoint, never an account credential inventory or upload queue. */
 export class DesktopPairing {
  private writes:Promise<unknown>=Promise.resolve();
  private epoch=0;
  private busy=false;
  readonly path:string;
- constructor(private directory:string,private secrets:SecretStorage,private fetcher:typeof fetch=fetch,private now=Date.now){this.path=join(directory,'connection-pending.enc');}
+ constructor(private directory:string,private secrets:SecretStorage,private fetcher:typeof fetch=fetch,private now=Date.now){this.path=join(directory,secrets.mode==='json'?'connection-pending.json':'connection-pending.enc');}
  private serial<T>(operation:()=>Promise<T>):Promise<T>{const task=this.writes.then(operation);this.writes=task.catch(()=>{});return task;}
  private async read():Promise<Pending|undefined>{
   await this.writes;
+  const other=join(this.directory,this.secrets.mode==='json'?'connection-pending.enc':'connection-pending.json');
+  try{await lstat(other);throw new CredentialStorageMismatch();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
   let bytes:Buffer;try{bytes=await readFile(this.path);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error;}
   if(!this.secrets.available()||bytes.length>32768)throw invalid();
   let p:Pending;try{p=JSON.parse(this.secrets.decrypt(bytes));}catch{throw invalid();}
@@ -54,6 +56,7 @@ export class DesktopPairing {
  private save(p:Pending,assertCurrent:()=>void):Promise<void>{return this.serial(async()=>{
   assertCurrent();if(!this.secrets.available())throw Error('System encrypted storage is unavailable');
   await mkdir(this.directory,{recursive:true,mode:0o700});
+  await chmod(this.directory,0o700);
   const temporary=join(this.directory,`connection-pending.${randomUUID()}.tmp`),file=await open(temporary,'wx',0o600);
   try{await file.writeFile(this.secrets.encrypt(JSON.stringify(p)));await file.sync();}finally{await file.close();}
   try{assertCurrent();await rename(temporary,this.path);if(process.platform!=='win32'){const directory=await open(this.directory,'r');try{await directory.sync();}finally{await directory.close();}}}finally{await rm(temporary,{force:true});}
@@ -66,7 +69,7 @@ export class DesktopPairing {
  async begin(invitation:DesktopConnectionInvitation,config:Config,platform:Platform,assertCurrent:()=>void):Promise<void>{
   if(this.busy)throw Error('Device pairing is already in progress');
   if(invitation.deviceId&&invitation.deviceId!==config.deviceId)throw new ConnectionError('AUTH','Invitation belongs to a different device');
-  const sourceBinding=fingerprint(config),existing=await this.read().catch(()=>undefined);assertCurrent();
+  const sourceBinding=fingerprint(config),existing=await this.read().catch(error=>{if(error instanceof CredentialStorageMismatch)throw error;return undefined;});assertCurrent();
   // The same invitation already names an immutable claim, including uncertain
   // issued work. Reject changed metadata/source without erasing its verifier.
   if(existing&&JSON.stringify(existing.invitation)===JSON.stringify(invitation)){

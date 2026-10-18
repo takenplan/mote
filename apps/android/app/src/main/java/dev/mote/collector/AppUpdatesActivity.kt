@@ -28,13 +28,13 @@ class AppUpdatesActivity : MoteActivity() {
     private val refresh = object : Runnable { override fun run() { render(); handler.postDelayed(this, 1000) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        if (BuildConfig.APPLICATION_ID.endsWith(".dev")) {
+        if (RuntimeProfile.current == RuntimeProfile.DEV) {
             val body = moteDetailPage(title = MoteI18n.text("应用更新"))
             body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; MoteUi.type(this, NativeFontRole.SECTION, medium = true); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceItem), 0, moteDp(MoteTheme.spaceInline)) })
-            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceItem)) })
+            body.addView(TextView(this).apply { text = MoteI18n.text("DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceItem)) })
             body.addView(MoteUi.button(Button(this).apply {
                 text = MoteI18n.text("下载 DEV 安装包")
-                setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/releases"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }
+                setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/actions/workflows/release-android.yml"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }
             }, true))
             MoteUi.styleTree(body)
             return
