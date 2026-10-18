@@ -5,25 +5,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { checkPlan, runChecks } from './check-affected.mjs';
+import { checkPlan, runChecks, parseArguments, sourceIdentity } from './check-affected.mjs';
+import { fixedChecks } from './check-plan.mjs';
 import { changedPaths } from './affected-components.mjs';
 
 const cli = fileURLToPath(new URL('check-affected.mjs', import.meta.url));
 const tests = ['scripts/release/affected-components.test.mjs'];
-const npmChecks = affected => checkPlan(affected, tests).filter(step => step.command === 'npm').map(step => step.args[1]);
-
-test('local plans select components, include Android, and retain broad integration checks', () => {
+test('fixed entry points retain component obligations and never turn into a diff-only no-op', () => {
   assert.deepEqual(checkPlan({}, tests), []);
-  assert.deepEqual(npmChecks({ central: true }), ['check:i18n', 'check:central']);
-  assert.deepEqual(npmChecks({ desktop: true }), ['check:i18n', 'check:desktop']);
-  const android = checkPlan({ android: true, tooling: true }, tests);
-  assert.deepEqual(npmChecks({ android: true }), ['check:i18n']);
-  assert.equal(android[1].command, process.execPath);
+  const central = checkPlan(fixedChecks('central'), tests);
+  for (const name of ['shared', 'agent', 'server', 'web']) assert.ok(central.some(step => step.id === `test:@mote/${name}`));
+  assert.ok(central.some(step => step.id === 'central-runner'));
+  const desktop = checkPlan(fixedChecks('desktop'), tests);
+  for (const name of ['shared', 'diagnostics', 'desktop']) assert.ok(desktop.some(step => step.id === `test:@mote/${name}`));
+  assert.ok(!desktop.some(step => step.id === 'build:@mote/desktop'));
+  const android = checkPlan(fixedChecks('android'), tests);
   assert.equal(android.at(-1).command, 'apps/android/gradlew');
   assert.ok(android.at(-1).args.includes(':app:testDebugUnitTest'));
-  assert.deepEqual(npmChecks({ central: true, desktop: true, android: true }), ['check:local']);
-  assert.equal(checkPlan({ central: true, desktop: true, android: true }, tests).at(-1).command, 'apps/android/gradlew');
-  assert.deepEqual(checkPlan({ tooling: true }, tests), [{ command: process.execPath, args: ['--test', ...tests] }]);
+  const all = checkPlan(fixedChecks('all'), tests);
+  for (const id of ['typecheck:scripts', 'root-tests', 'client-tests', 'central-runner', 'android-unit']) assert.ok(all.some(step => step.id === id));
+  assert.ok(!checkPlan(fixedChecks('typescript'), tests).some(step => step.id === 'android-unit'));
+  assert.throws(() => fixedChecks('unknown'), /Unknown/);
+  assert.throws(() => parseArguments(['--all', '--head', 'HEAD']), /Choose/);
 });
 
 function repository(t) {
@@ -41,6 +44,7 @@ function repository(t) {
   mkdirSync(join(directory, 'packages'));
   mkdirSync(join(directory, 'scripts/release'), { recursive: true });
   write('README.md');
+  write('package.json', JSON.stringify({ private: true, type: 'module' }));
   write('apps/desktop/src/old.ts');
   write('.gitignore', 'ignored/\n');
   git('add', '.');
@@ -115,7 +119,8 @@ test('invalid revisions and options fail instead of reporting no checks', t => {
 
 test('actual tooling-only CLI executes regression checks without invoking application tools', t => {
   const { directory, write, base } = repository(t);
-  const marker = join(directory, 'regression-ran');
+  const marker = join(directory, 'ignored/regression-ran');
+  mkdirSync(join(directory, 'ignored'));
   write('scripts/release/affected-components.mjs');
   write('scripts/release/check-affected.test.mjs', `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'passed');`);
   // Start as a user's CLI, not as a child worker of this test runner.
@@ -129,14 +134,45 @@ test('actual tooling-only CLI executes regression checks without invoking applic
   assert.equal(readFileSync(marker, 'utf8'), 'passed');
 });
 
-test('check execution stops at the first failing command', t => {
-  const directory = mkdtempSync(join(tmpdir(), 'mote-check-stop-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+test('check execution stops at the first failing command', async t => {
+  const { directory } = repository(t);
   const marker = join(directory, 'unexpected');
-  const status = runChecks([
-    { command: process.execPath, args: ['-e', 'process.exit(7)'] },
-    { command: process.execPath, args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unexpected')`] },
-  ]);
+  const status = await runChecks([
+    { id: 'failure', phase: 'preflight', command: process.execPath, args: ['-e', 'process.exit(7)'] },
+    { id: 'unexpected', phase: 'test', command: process.execPath, args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unexpected')`] },
+  ], { directory, lock: false, receiptPath: join(directory, 'receipt.json') });
   assert.equal(status, 7);
   assert.deepEqual(execFileSync(process.execPath, ['-e', `console.log(require('node:fs').existsSync(${JSON.stringify(marker)}))`], { encoding: 'utf8' }).trim(), 'false');
+});
+
+test('actual CLI dependency preflight fails before any selected regression can execute', t => {
+  const { directory, write, base } = repository(t);
+  const marker = join(directory, 'ignored/heavy-marker');
+  mkdirSync(join(directory, 'ignored'));
+  write('package.json', JSON.stringify({ dependencies: { 'generated-uninstalled-package': '1' } }));
+  write('scripts/release/check-plan.mjs');
+  write('scripts/release/check-plan.test.mjs', `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'must not execute');`);
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, [cli, '--base', base], { cwd: directory, encoding: 'utf8', env });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /generated-uninstalled-package/);
+  assert.ok(!existsSync(marker));
+  assert.match(result.stdout, /UNRUN preflight\/release-contracts/);
+});
+
+test('source identity includes staged/unstaged/untracked source and ignores generated outputs', t => {
+  const { directory, write, git } = repository(t);
+  const first = sourceIdentity(directory);
+  write('ignored/output.log', 'generated output');
+  assert.equal(sourceIdentity(directory), first);
+  write('apps/web/src/change.ts');
+  const changed = sourceIdentity(directory);
+  assert.notEqual(changed, first);
+  const cache = new Map();
+  assert.equal(sourceIdentity(directory, cache), changed);
+  git('add', '.');
+  assert.equal(sourceIdentity(directory), changed);
+  write('apps/web/src/change.ts', 'next input');
+  assert.notEqual(sourceIdentity(directory), changed);
+  assert.equal(sourceIdentity(directory, cache), sourceIdentity(directory), 'per-run file digest reuse observes changed file metadata');
 });

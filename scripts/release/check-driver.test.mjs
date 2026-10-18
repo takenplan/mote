@@ -1,0 +1,185 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, access } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
+import { spawn, execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
+import { checkDriverPaths, runChecks } from './check-driver.mjs';
+
+const driverUrl = new URL('./check-driver.mjs', import.meta.url).href;
+const exists = path => access(path).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
+async function until(predicate, description) {
+  const deadline = performance.now() + 10000;
+  while (!await predicate()) { assert.ok(performance.now() < deadline, description); await delay(20); }
+}
+function alive(pid) { try { process.kill(pid, 0); return true; } catch (error) { if (error.code === 'ESRCH') return false; throw error; } }
+
+async function repository(t) {
+  const root = await mkdtemp(join(tmpdir(), 'mote-check-driver-')), directory = join(root, 'repository'), runs = [];
+  await mkdir(directory);
+  const git = (...args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init', '-b', 'main'); git('config', 'user.name', 'Generated fixture'); git('config', 'user.email', 'fixture@example.invalid');
+  await writeFile(join(directory, 'fixture.txt'), 'Generated check driver fixture\n');
+  git('add', '.'); git('commit', '-m', 'generated fixture');
+  const entry = join(root, 'entry.mjs');
+  await writeFile(entry, `import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';import {join} from 'node:path';import {runChecks} from ${JSON.stringify(driverUrl)};const options={directory:process.argv[3]};if(process.argv[4]!=='default')options.receiptPath=process.argv[4];if(process.argv[5]==='identity')options.inputIdentity=()=>createHash('sha256').update(readFileSync(join(options.directory,'fixture.txt'))).digest('hex');process.exitCode=await runChecks(JSON.parse(readFileSync(process.argv[2],'utf8')),options);`);
+  t.after(async () => {
+    for (const run of runs) if (run.child.exitCode === null && run.child.signalCode === null) run.child.kill('SIGTERM');
+    await Promise.all(runs.map(run => run.done));
+    await rm(root, { recursive: true, force: true });
+  });
+  async function start(plan, options = {}) {
+    const id = randomUUID(), planPath = join(root, `${id}-plan.json`), receiptPath = options.defaultReceipt ? 'default' : join(root, `${id}-receipt.json`);
+    await writeFile(planPath, JSON.stringify(plan));
+    const child = spawn(process.execPath, [entry, planPath, options.directory ?? directory, receiptPath, options.inputIdentity ? 'identity' : ''], {
+      env: { ...process.env, ...(options.path ? { PATH: options.path } : {}) }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    for (const stream of [child.stdout, child.stderr]) stream.on('data', part => { output += part; });
+    const done = new Promise((resolveExit, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolveExit({ code, signal, output })); });
+    const run = { child, done, receiptPath, output: () => output }; runs.push(run); return run;
+  }
+  const node = (id, code, extra = []) => ({ id, phase: 'fixture', command: process.execPath, args: ['-e', code, ...extra] });
+  return { root, directory, git, start, node, paths: checkDriverPaths(directory) };
+}
+
+test('real driver stops after failure and writes elapsed metadata without command arguments', async t => {
+  const f = await repository(t), unexpected = join(f.root, 'unexpected'), secret = 'generated-secret-do-not-copy-to-receipt';
+  const run = await f.start([
+    f.node('first', 'setTimeout(()=>{},30)', [secret]),
+    f.node('failing', 'process.exit(7)'),
+    f.node('unrun', `require('node:fs').writeFileSync(${JSON.stringify(unexpected)},'unexpected')`),
+  ]);
+  const terminal = await run.done; assert.equal(terminal.code, 7, terminal.output);
+  assert.equal(await exists(unexpected), false);
+  const raw = await readFile(run.receiptPath, 'utf8'), receipt = JSON.parse(raw);
+  assert.deepEqual(receipt.steps.map(step => step.status), ['passed', 'failed', 'unrun']);
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.exitCode, 7);
+  assert.deepEqual(receipt.runtime, { node: process.versions.node, modules: process.versions.modules, platform: process.platform, arch: process.arch });
+  assert.ok(receipt.steps[0].elapsedMs >= 30); assert.ok(receipt.elapsedMs >= receipt.steps[0].elapsedMs);
+  assert.equal(raw.includes(secret), false); assert.equal(raw.includes('process.exit(7)'), false);
+  assert.match(terminal.output, /PASS fixture\/first .*s/); assert.match(terminal.output, /FAIL fixture\/failing .*exit 7/); assert.match(terminal.output, /UNRUN fixture\/unrun/);
+  assert.equal(await exists(f.paths.lockDirectory), false);
+});
+
+test('independent real CLI processes in two worktrees share one atomic repository lock', { skip: process.platform === 'win32' }, async t => {
+  const f = await repository(t), worktree = join(f.root, 'worktree'), marker = join(f.root, 'entered');
+  f.git('worktree', 'add', '-b', 'generated-second', worktree);
+  assert.deepEqual(checkDriverPaths(worktree), f.paths);
+  const plan = [f.node('held', `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000)`)], first = await f.start(plan);
+  await until(() => exists(marker), 'first check must enter its actual command');
+  const firstOwner = await readFile(join(f.paths.lockDirectory, 'owner.json'), 'utf8');
+  const second = await f.start(plan, { directory: worktree }), refused = await second.done;
+  assert.notEqual(refused.code, 0); assert.match(refused.output, /UNRUN: repository check lock exists/); assert.match(refused.output, /Owner PID .*cwd .*started/);
+  assert.equal(await readFile(join(f.paths.lockDirectory, 'owner.json'), 'utf8'), firstOwner);
+  const receipt = JSON.parse(await readFile(second.receiptPath, 'utf8')); assert.equal(receipt.status, 'blocked'); assert.equal(receipt.steps[0].status, 'unrun');
+  first.child.kill('SIGTERM'); const stopped = await first.done; assert.equal(stopped.code, 143, stopped.output);
+  assert.equal(await exists(f.paths.lockDirectory), false);
+  const third = await f.start([f.node('after-release', 'process.exit(0)')]); assert.equal((await third.done).code, 0);
+});
+
+test('uncertain and stale locks are preserved instead of being automatically reclaimed', async t => {
+  const f = await repository(t), marker = join(f.root, 'unexpected');
+  await mkdir(f.paths.lockDirectory);
+  for (const owner of [undefined, { pid: 99999999, directory: f.directory, startedAt: '2000-01-01T00:00:00.000Z', runId: 'generated-stale-owner' }]) {
+    if (owner) await writeFile(join(f.paths.lockDirectory, 'owner.json'), JSON.stringify(owner));
+    const run = await f.start([f.node('must-not-run', `require('node:fs').writeFileSync(${JSON.stringify(marker)},'unexpected')`)]), result = await run.done;
+    assert.notEqual(result.code, 0); assert.match(result.output, /not reclaimed automatically/); assert.equal(await exists(marker), false); assert.equal(await exists(f.paths.lockDirectory), true);
+    if (owner) assert.deepEqual(JSON.parse(await readFile(join(f.paths.lockDirectory, 'owner.json'), 'utf8')), owner);
+  }
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaches the owned process group, waits for its child and releases the lock`, { skip: process.platform === 'win32' }, async t => {
+  const f = await repository(t), parentMarker = join(f.root, 'parent.pid'), grandMarker = join(f.root, 'grandchild.pid'), grandEntry = join(f.root, 'grandchild.cjs');
+  await writeFile(grandEntry, `require('node:fs').writeFileSync(${JSON.stringify(grandMarker)},String(process.pid));setInterval(()=>{},1000);`);
+  const code = `const fs=require('node:fs'),child=require('node:child_process').spawn(process.execPath,[${JSON.stringify(grandEntry)}],{stdio:'ignore'});fs.writeFileSync(${JSON.stringify(parentMarker)},String(process.pid));for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{if(child.exitCode!==null||child.signalCode!==null)process.exit(0);else child.once('exit',()=>process.exit(0));});setInterval(()=>{},1000);`;
+  const unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  const unrelatedDone = new Promise(resolveExit => unrelated.once('close', resolveExit));
+  t.after(async () => { unrelated.kill('SIGTERM'); await unrelatedDone; });
+  const run = await f.start([f.node('parent-and-grandchild', code), f.node('unrun', 'process.exit(0)')]);
+  await until(() => exists(grandMarker), 'owned grandchild must start');
+  const parent = Number(await readFile(parentMarker, 'utf8')), grandchild = Number(await readFile(grandMarker, 'utf8'));
+  run.child.kill(signal); const result = await run.done;
+  assert.equal(result.code, signal === 'SIGINT' ? 130 : 143, result.output);
+  assert.equal(alive(parent), false); assert.equal(alive(grandchild), false); assert.equal(alive(unrelated.pid), true);
+  assert.equal(await exists(f.paths.lockDirectory), false);
+  const receipt = JSON.parse(await readFile(run.receiptPath, 'utf8')); assert.equal(receipt.status, 'interrupted'); assert.equal(receipt.cleanupConfirmed, true); assert.equal(receipt.steps[1].status, 'unrun');
+});
+
+test('separate generated repositories do not contend and successful gates write default receipts', { skip: process.platform === 'win32' }, async t => {
+  const a = await repository(t), b = await repository(t), markerA = join(a.root, 'entered'), markerB = join(b.root, 'entered');
+  const held = (f, marker) => f.node('independent', `require('node:fs').writeFileSync(${JSON.stringify(marker)},'entered');setInterval(()=>{},1000)`);
+  const first = await a.start([held(a, markerA)]), second = await b.start([held(b, markerB)]);
+  await until(async () => await exists(markerA) && await exists(markerB), 'both repositories must run independently');
+  first.child.kill('SIGTERM'); second.child.kill('SIGTERM'); await Promise.all([first.done, second.done]);
+  const final = await a.start([a.node('success', 'process.exit(0)')], { defaultReceipt: true }); assert.equal((await final.done).code, 0);
+  const files = await readdir(a.paths.receiptDirectory); assert.equal(files.length, 1);
+  const receipt = JSON.parse(await readFile(join(a.paths.receiptDirectory, files[0]), 'utf8')); assert.equal(receipt.status, 'passed'); assert.equal(receipt.steps[0].status, 'passed');
+});
+
+test('spawn failures release the lock, and an empty plan has no repository or receipt side effects', async t => {
+  const f = await repository(t), failed = await f.start([{ id: 'missing-command', phase: 'fixture', command: join(f.root, 'not-installed'), args: [] }]);
+  assert.notEqual((await failed.done).code, 0); assert.equal(await exists(f.paths.lockDirectory), false);
+  const emptyDirectory = join(f.root, 'not-a-repository'); await mkdir(emptyDirectory);
+  assert.equal(await runChecks([], { directory: emptyDirectory, receiptPath: join(emptyDirectory, 'unexpected.json') }), 0);
+  assert.deepEqual(await readdir(emptyDirectory), []);
+});
+
+test('an input edit after preflight prevents the heavy command and cannot reuse a prior PASS', async t => {
+  const f = await repository(t), heavy = join(f.root, 'heavy-ran');
+  const run = await f.start([
+    f.node('preflight', `require('node:fs').writeFileSync('fixture.txt','generated edited input')`),
+    f.node('heavy', `require('node:fs').writeFileSync(${JSON.stringify(heavy)},'unexpected')`),
+  ], { inputIdentity: true });
+  const result = await run.done; assert.notEqual(result.code, 0, result.output); assert.equal(await exists(heavy), false);
+  const receipt = JSON.parse(await readFile(run.receiptPath, 'utf8'));
+  assert.equal(receipt.inputChanged, true); assert.equal(receipt.status, 'failed'); assert.deepEqual(receipt.steps.map(step => step.status), ['passed', 'unrun']);
+  assert.equal(await exists(f.paths.lockDirectory), false);
+});
+
+test('an input edit in the final command also prevents a successful whole-gate receipt', async t => {
+  const f = await repository(t), run = await f.start([f.node('final', `require('node:fs').writeFileSync('fixture.txt','generated final input')`)], { inputIdentity: true });
+  assert.notEqual((await run.done).code, 0);
+  const receipt = JSON.parse(await readFile(run.receiptPath, 'utf8')); assert.equal(receipt.inputChanged, true); assert.equal(receipt.status, 'failed'); assert.equal(receipt.steps[0].status, 'passed');
+});
+
+test('changed lock ownership is preserved and cannot produce a successful receipt', async t => {
+  const f = await repository(t), replacement = { runId: 'generated-different-owner', pid: process.pid, directory: f.directory, startedAt: new Date().toISOString() };
+  const run = await f.start([f.node('change-owner', `require('node:fs').writeFileSync(${JSON.stringify(join(f.paths.lockDirectory, 'owner.json'))},${JSON.stringify(JSON.stringify(replacement))})`)]);
+  assert.notEqual((await run.done).code, 0);
+  assert.deepEqual(JSON.parse(await readFile(join(f.paths.lockDirectory, 'owner.json'), 'utf8')), replacement);
+  const receipt = JSON.parse(await readFile(run.receiptPath, 'utf8')); assert.equal(receipt.status, 'failed'); assert.equal(receipt.reason, 'check_lock_owner_changed');
+});
+
+test('receipt publication keeps the lock and detects an edit at that real filesystem checkpoint', async t => {
+  const f = await repository(t), receiptPath = join(f.root, 'published-receipt.json'), input = join(f.directory, 'fixture.txt');
+  let edited = false, lockHeldWhenPublished = false;
+  const inputIdentity = () => {
+    if (!edited && existsSync(receiptPath)) {
+      lockHeldWhenPublished = existsSync(f.paths.lockDirectory);
+      edited = true;
+      writeFileSync(input, 'Generated edit while final receipt is published\n');
+    }
+    return createHash('sha256').update(readFileSync(input)).digest('hex');
+  };
+  const result = await runChecks([f.node('successful-command', 'process.exit(0)')], { directory: f.directory, receiptPath, inputIdentity });
+  assert.notEqual(result, 0); assert.equal(edited, true); assert.equal(lockHeldWhenPublished, true);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.inputChanged, true); assert.equal(receipt.exitCode, result);
+  assert.equal(await exists(f.paths.lockDirectory), false);
+});
+
+test('npm-style shell descendants use the invoking Node before an incompatible PATH runtime', { skip: process.platform === 'win32' }, async t => {
+  const f = await repository(t), bin = join(f.root, 'bin'), wrong = join(f.root, 'wrong-node-ran'), actual = join(f.root, 'actual-runtime.json');
+  await mkdir(bin);
+  await writeFile(join(bin, 'node'), `#!/bin/sh\nprintf incompatible > '${wrong}'\nexit 97\n`, { mode: 0o700 });
+  const npmStyle = join(bin, 'generated-npm'), childEntry = join(f.root, 'nested-runtime.cjs');
+  await writeFile(childEntry, `require('node:fs').writeFileSync(${JSON.stringify(actual)},JSON.stringify({node:process.versions.node,modules:process.versions.modules,execPath:process.execPath}));`);
+  await writeFile(npmStyle, `#!/bin/sh\nnode "$1"\n`, { mode: 0o700 });
+  const run = await f.start([{ id: 'npm-style-child', phase: 'fixture', command: npmStyle, args: [childEntry] }], { path: [bin, process.env.PATH ?? ''].join(delimiter) });
+  const result = await run.done; assert.equal(result.code, 0, result.output); assert.equal(await exists(wrong), false);
+  assert.deepEqual(JSON.parse(await readFile(actual, 'utf8')), { node: process.versions.node, modules: process.versions.modules, execPath: process.execPath });
+});
