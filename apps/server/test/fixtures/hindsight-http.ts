@@ -7,7 +7,7 @@ import type {HindsightRuntimeFactory} from '../../src/scope/memory-providers.js'
 /** Scripted external native API, not a MemoryHost/provider replacement. Real
  * HindsightEngine owns banks, immutable import, staging, recall, lineage and
  * durable recovery; the real M04/M05/M09 product chain supplies all authority. */
-export async function hindsightHttpFixture(){
+export async function hindsightHttpFixture(options:{beforeRequest?:(event:{method:string|undefined;bank:string;path:string;userId?:string})=>void|Promise<void>}={}){
  type Bank={facts:any[];operations:Map<string,any>;documents:Set<string>};
  const faults={consolidateAfterCommit:false};
  const descriptors:{userId:string;container:string;volume:string}[]=[];
@@ -19,6 +19,7 @@ export async function hindsightHttpFixture(){
    if(url.pathname==='/health'){respond({status:'healthy'});return;}if(url.pathname==='/version'){respond({api_version:'0.10.2',features:{worker:false}});return;}
    if(url.pathname==='/v1/default/banks'){respond({banks:[...banks.keys()].map(bank_id=>({bank_id}))});return;}
    const match=/^\/v1\/default\/banks\/([^/]+)(.*)$/.exec(url.pathname);if(!match){respond({},404);return;}const id=decodeURIComponent(match[1]),path=match[2],scope=scopes.get(id);
+   await options.beforeRequest?.({method:req.method,bank:id,path,userId:scope?.userId});
    if(req.method==='PUT'&&!path){if(!banks.has(id))banks.set(id,{facts:[],operations:new Map(),documents:new Set()});respond({});return;}
    if(req.method==='DELETE'&&!path){banks.delete(id);respond({});return;}
    const bank=banks.get(id);if(!bank){respond({},404);return;}
