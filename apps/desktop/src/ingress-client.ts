@@ -19,7 +19,11 @@ export async function ingressRequest(config:Config,path:string,body:unknown,meth
  if(!accountKey(config))throw Error('Account confirmation required');
  signal?.throwIfAborted();await assertAccountConnection(config);signal?.throwIfAborted();
  const response=await fetch(validateServerUrl(config.serverUrl)+path,{method,headers:{...ACCOUNT_INGRESS_HEADERS,Authorization:'Bearer '+requireConnectionToken(config),'Content-Type':'application/json'},credentials:'omit',redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000),...(method==='GET'?{}:{body:meteredBody(JSON.stringify(body),onBytes),duplex:'half'} as object)});
- if(!response.ok){await response.body?.cancel();throw new TransportFailure('Account ingress request failed',httpFailure(response.status),response.status);}
+ if(!response.ok){
+  const failure=new TransportFailure('Account ingress request failed',httpFailure(response.status),response.status);
+  try{const rejected=JSON.parse(await readResponseText(response,4096));if(response.status===409&&rejected?.error==='upload_expired')Object.assign(failure,{uploadExpired:true});}catch{}
+  throw failure;
+ }
  return JSON.parse(await readResponseText(response,2*1024*1024));
 }
 export function requireAccountReceipt(value:any,config:Pick<Config,'account'>,sourceId:string,batchId:string,expected:readonly {id?:string;externalId?:string;revision?:string}[]):any[]{

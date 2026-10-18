@@ -39,8 +39,17 @@ Screenshots have a 16 MiB transport body bound; file parts retain the existing
 4 MiB chunk and 512 MiB full-file contracts. Part JSON has a 6 MiB body bound.
 Source-item batches retain the shared schema and ordinary transport bound. These
 are transport/decoder bounds, not daily processing quotas. Upload staging and
-pins retain the existing one-day recovery/hold period. A receipt retry never
-renews an expired upload grant.
+pins retain the existing one-day recovery/hold period. A normal unchanged file
+revision can retry after its temporary upload session expires: current owner,
+source, immutable manifest and epoch checks recover a still-valid durable receipt
+before the session deadline check, or replace an expired uncommitted transport
+attempt with a fresh UUID under the same request key. The old attempt cannot
+commit afterward. This does not renew snapshot byte availability or an expired
+snapshot recovery grant; committed receipt replay grants no new byte window.
+A part/commit/read against an expired ordinary upload returns HTTP 409
+`upload_expired`; clients retain that immutable revision for the next normal
+begin. Epoch, source, snapshot-recovery and immutable conflicts remain distinct
+refusals. This also covers suspension after begin and before part/commit.
 
 ## Storage, identity and failure ordering
 

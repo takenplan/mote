@@ -394,3 +394,14 @@ it('preserves the declared context reader through actual main/preload handoff fo
  await app.documentCall('context-A','openCentral',['ask','context:'+ref]);expect(new URLSearchParams(new URL(opened!).hash.split('?')[1]).get('evidence')).toBe('context:'+ref);
  const {readEvidenceRoute}=await nativeImport(pathToFileURL(resolve(repository,'apps/web/src/evidence-route.ts')).href);expect(readEvidenceRoute(new URL(opened!).hash)).toBe('context:'+ref);
 },20000);
+
+it('keeps scoped content/record pages and held detail responses out of a replacement account through actual main/preload',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('browse-A');const config=(await app.call('mote:get-status')).config;
+ const record={...event(),deviceId:config.deviceId,capturedAt:'2026-09-13T12:00:00Z',ocrText:'Generated A scoped browse body'};await uploadCapture({...f.config(f.a),deviceId:config.deviceId},record,image);await uploadCapture({...f.config(f.b),deviceId:config.deviceId},{...record,ocrText:'Generated B scoped browse body'},image);
+ expect((await app.documentCall('browse-A','centralContent')).items[0].preview).toBe(record.ocrText);expect((await app.documentCall('browse-A','centralContentDetail',[record.id])).text).toContain(record.ocrText);
+ const held:(()=>void)[]=[];app.intercept=async raw=>{const url=new URL(raw.url);if(url.pathname==='/api/capture-browser'||url.pathname==='/api/captures/'+record.id){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);held.push(()=>app.child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')}));return true;}return false;};
+ const page=app.documentCall('browse-A','centralContent').then(()=>'',error=>String(error)),detail=app.documentCall('browse-A','centralContentDetail',[record.id]).then(()=>'',error=>String(error));await vi.waitFor(()=>expect(held).toHaveLength(2));
+ await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;for(const release of held)release();expect(await page).toContain('changed');expect(await detail).not.toBe('');await app.document('browse-B');
+ const b=await app.documentCall('browse-B','centralContent');expect(b.items[0].preview).toBe('Generated B scoped browse body');expect(JSON.stringify(b)).not.toContain(record.ocrText);await expect(app.documentCall('browse-A','centralContent')).rejects.toThrow();
+ const active=(await app.call('mote:get-status')).config;expect((await f.request(f.b.token,'/api/connections/'+f.b.credentialId,'DELETE')).statusCode).toBe(200);expect(await app.documentCall('browse-B','centralContent')).toEqual({items:[],total:0,authorizationDenied:true});expect(active.account.userId).toBe(f.b.userId);
+},20000);
