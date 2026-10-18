@@ -7,6 +7,8 @@ import java.net.URI
 data class AccountBinding(val origin: String, val deploymentId: String, val userId: String) {
     init { require(origin == normalize(origin)); require(deploymentId.matches(ID) && userId.matches(ID)) }
     val key: String get() = SourceRules.hash(listOf(origin, deploymentId, userId).joinToString("\u0000"))
+    /** Personal capture policy survives verified URL and credential rotation. */
+    val preferenceKey: String get() = SourceRules.hash(listOf(deploymentId, userId).joinToString("\u0000"))
     fun json() = JSONObject().put("origin", origin).put("deploymentId", deploymentId).put("userId", userId)
     companion object {
         private val ID = Regex("[A-Za-z0-9_.:-]{1,128}")

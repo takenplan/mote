@@ -58,6 +58,9 @@ class CalendarActions(private val context: Context, private val foreground: Bool
     fun connect(): JSONArray = ConnectionGuard.sync {
         val calendars = calendars()
         request("/api/actions/targets", JSONObject().put("deviceId", settings.deviceId).put("deviceName", settings.read().deviceName).put("calendars", calendars))
+        // Registration is an explicit account action. Retain it independently of
+        // WorkManager so settings changes can retire and restore the same work.
+        check(context.accountPreferences("calendar-actions").edit().putBoolean("connected", true).commit())
         CalendarActionWorker.schedule(context)
         calendars
     } ?: error(MoteI18n.text("连接正在切换"))

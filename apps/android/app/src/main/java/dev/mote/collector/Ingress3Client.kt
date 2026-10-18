@@ -25,8 +25,8 @@ internal class Ingress3Client(
         verify() // No private bytes leave before this exact credential is verified.
         check(current())
         val (status, value) = request(method, path, body)
-        if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 request failed", value?.optString("error").orEmpty())
         check(current()) { "Account changed" }
+        if (status !in 200..299 || value == null) reject(status, value)
         return value
     }
     fun register(source: JSONObject) {
@@ -34,7 +34,7 @@ internal class Ingress3Client(
         check(device.optString("id") == deviceId)
         val result = send("POST", "/api/ingress/sources", source)
         check(result.optString("id") == source.getString("id") && result.optString("deviceId") == deviceId && result.optString("platform") == "android")
-        check(result.optBoolean("enabled", true))
+        if (!result.optBoolean("enabled", true)) throw FileIngressRejection(409, "source_paused", paused = true)
         if (listOf("name", "retention", "initialSync").any { source.has(it) && source.opt(it) != result.opt(it) }) {
             val patch = JSONObject(); for (key in listOf("name", "retention", "initialSync")) if (source.has(key)) patch.put(key, source.get(key))
             val updated = send("PATCH", "/api/ingress/sources/${source.getString("id")}", patch)
@@ -43,18 +43,61 @@ internal class Ingress3Client(
     }
     fun captures(events: List<JSONObject>): JSONObject {
         require(events.isNotEmpty())
-        val sourceId = "android-capture-${SourceRules.hash(deviceId).take(32)}"
-        register(JSONObject().put("id", sourceId).put("name", deviceName).put("deviceId", deviceId).put("platform", "android").put("kind", "custom").put("retention", "snapshot"))
+        val source = captureSource()
+        val sourceId = source.getString("id")
+        register(source)
         val batch = batchId(JSONArray(events))
         val path = "/api/ingress/sources/$sourceId/captures"
         val receipt = if (compressed != null) {
             verify()
             val (status, value) = compressed.invoke(path, batch, events)
-            if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 compressed request failed")
-            check(current()); value
+            check(current()) { "Account changed" }
+            if (status !in 200..299 || value == null) reject(status, value)
+            value
         } else send("POST", path, JSONObject().put("batchId", batch).put("items", JSONArray(events)))
         Ingress3Receipt.captures(binding, sourceId, batch, events, receipt)
         return receipt
+    }
+    /** Preserve packed transport, splitting only explicit per-record/size rejections.
+     * Publish each verified ACK immediately, so a later network failure cannot
+     * discard earlier progress. A pause is never a conflict on every record. */
+    fun settleCaptures(events: List<JSONObject>, settled: (JSONObject, Int) -> Unit) {
+        try {
+            captures(events)
+            for (event in events) { check(current()); settled(event, 200) }
+        } catch (error: FileTransportFailure) {
+            if (error is FileIngressRejection && error.paused) throw error
+            if (error.httpStatus !in setOf(409, 410, 413)) throw error
+            check(current()) { "Account changed" }
+            if (events.size == 1) {
+                if (error.httpStatus == 413) throw error
+                // A pause may race the registration and capture POST. The
+                // generic 409 is not enough to quarantine a singleton record.
+                if (error.httpStatus == 409) register(captureSource())
+                settled(events.single(), error.httpStatus)
+            } else {
+                val middle = (events.size + 1) / 2
+                settleCaptures(events.take(middle), settled)
+                settleCaptures(events.drop(middle), settled)
+            }
+        }
+    }
+    /** Registration is the existing device-scoped source read-or-create port.
+     * It preserves a disabled source and never re-enables it. */
+    fun sourcePaused(source: LocalSource): Boolean {
+        val result = send("POST", "/api/ingress/sources", source.registration(deviceId))
+        check(result.optString("id") == source.id && result.optString("deviceId") == deviceId && result.optString("platform") == "android")
+        return !result.optBoolean("enabled", true)
+    }
+    private fun captureSource() = JSONObject().put("id", "android-capture-${SourceRules.hash(deviceId).take(32)}")
+        .put("name", deviceName).put("deviceId", deviceId).put("platform", "android").put("kind", "custom").put("retention", "snapshot")
+    private fun reject(status: Int, body: JSONObject?): Nothing {
+        val code = body?.optString("error").orEmpty()
+        // Expiry retires only a transport attempt. A later begin may restore
+        // the immutable revision; it is not a conflict requiring user repair.
+        if (status == 409 && code == "upload_expired") throw FileTransportFailure(status, "Ingress3 upload expired", code)
+        if (status in setOf(409, 410, 426)) throw FileIngressRejection(status, code)
+        throw FileTransportFailure(status, "Ingress3 request failed", code)
     }
     fun item(source: LocalSource, body: JSONObject): JSONObject {
         register(source.registration(deviceId))

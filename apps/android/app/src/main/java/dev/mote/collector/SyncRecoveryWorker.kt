@@ -12,10 +12,12 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
     override fun doWork(): Result = ConnectionGuard.sync { run() } ?: Result.retry()
     private fun run(): Result {
         val settings = Settings(applicationContext); val config = settings.read()
+        // A retired WorkRequest cannot publish even a failure into the next
+        // account's recovery page. Validate before selecting any owner state.
+        if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) return Result.failure()
         val state = applicationContext.accountPreferences("sync-recovery")
-        fun report(message: String) { state.edit().putString("message", message).putString("at", Instant.now().toString()).commit() }
+        fun report(message: String) { if (!isStopped) state.edit().putString("message", message).putString("at", Instant.now().toString()).commit() }
         try {
-            if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) { report(MoteI18n.text("连接或同步策略已变化，本次操作已停止；请重新发起")); return Result.failure() }
             config.validateConnection()
             SyncSchedule.waitingReason(applicationContext, config)?.let { report(it); return Result.retry() }
             if (inputData.getBoolean("replay", false)) {
@@ -67,13 +69,19 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
         }
     }
     companion object {
-        fun start(context: Context, replay: Boolean) {
+        fun start(context: Context, replay: Boolean) = ConnectionGuard.sync {
             val config = Settings(context).read(); config.validateConnection()
             val request = OneTimeWorkRequestBuilder<SyncRecoveryWorker>().setConstraints(SyncSchedule.constraints(config, explicit = true))
                 .setInputData(workDataOf("replay" to replay, "syncStamp" to SyncSchedule.stamp(config)))
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
-            WorkManager.getInstance(context).enqueueUniqueWork("mote-sync-recovery", ExistingWorkPolicy.KEEP, request)
+            // Persist the request message first: a fast, empty-queue worker may
+            // otherwise complete before the caller overwrites its final report.
             context.accountPreferences("sync-recovery").edit().putString("message", MoteI18n.text("操作已请求；重复点击会合并，等待网络条件或当前操作完成")).apply()
-        }
+            WorkManager.getInstance(context).enqueueUniqueWork("mote-sync-recovery", ExistingWorkPolicy.KEEP, request)
+        } ?: error(MoteI18n.text("连接正在切换"))
+        fun stop(context: Context) = ConnectionGuard.sync {
+            WorkManager.getInstance(context).cancelUniqueWork("mote-sync-recovery").result.get(10, TimeUnit.SECONDS)
+            context.accountPreferences("sync-recovery").edit().putString("message", MoteI18n.text("已请求停止检查；已进入待发队列的记录按同步策略保留")).apply()
+        } ?: error(MoteI18n.text("连接正在切换"))
     }
 }
