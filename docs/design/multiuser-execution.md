@@ -90,6 +90,17 @@ claiming the step happen in `BEGIN IMMEDIATE`. A user with many distinct
 operations cannot bypass user fairness. The existing pool/lane concurrency,
 renewable leases and resource-availability checks remain shared across connections.
 
+An optional host-only pool partition supplies an opaque capacity key, unit and
+limit. A key can span pools; exact coordinator/physical-child tasks can share
+one unit. M05 counts distinct units from durable running leases and this host's
+unsettled local promises, and uses the same `capacityAvailable` predicate at
+candidate selection and transactional claim. Reusing an already occupied unit
+permits its genuine child to continue after a hot limit decrease. Unconfigured
+pools retain their existing pool/lane limits. The callback is not accepted from
+task JSON, creates no grant and changes no persistence or public task shape.
+The Files host binds image keys to trusted owner/declared-kind metadata; actual
+model gates and shared physical resources remain separate constraints.
+
 Resource keys come from the registered host handler. A `user` resource is encoded
 with its user ID; a `shared` resource deliberately serializes the same physical
 resource across users. Caller input cannot turn a user resource into a shared
