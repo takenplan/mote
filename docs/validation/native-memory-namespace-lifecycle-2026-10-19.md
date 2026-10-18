@@ -31,3 +31,26 @@ External Q001-R2 evidence binds the original required failure, the unchanged
 journey reproduction, controlled RED/GREEN, final source hashes and consumer
 results. Focused checks do not replace the failed File374 gate or the earlier
 Files873 failure.
+
+## Memory module integration
+
+The original Memory module ports source commit `2643859732e71320bef8901d6705979327ddfdce`
+onto `83562440df8b4c14193a045794abb49c9145cb11`. Its two provider conflicts
+retain Memory's per-call `ModelCall`, relay admission, M04 lease and usage paths
+while replacing Entry-local serialization with whole-namespace ownership. No
+Files branch history or temporary combined-tree production source is imported.
+
+The native admission fixture must first admit both real A/B batch continuations
+at capacity two. A generated native HTTP barrier holds B before its first relay;
+the real administrator API then reduces capacity to one. B must remain running
+with zero attempts and unchanged usage while the physical Memory gate reports
+one waiter. Releasing A must produce exactly the A-then-B native call order with
+peak one. This preserves the physical admission assertions when the executor
+also follows the live Memory limit; merely waiting for B's durable task does not
+exercise this gate. The fixture adds no alternative production scheduler.
+
+The precondition repair is the same test-only delta as
+`b8ca4d979fe4c4e381094192633f42a92e5544b3`. Focused validation of this original
+module and the separate combined-source candidate are distinct evidence. The
+historical `855b89a0` required failure and `83562440` focused results are not a
+required-gate result for a newer candidate.
