@@ -50,13 +50,13 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
  const deterministic=(job:Job)=>Object.values(job.containers??{}).some(pin=>!pin.expanded)||!contentFiles(job).length||!!job.sourcePackId||job.processing==='automatic'&&!job.instruction.trim()&&!job.sourcePackId&&contentFiles(job).every(file=>plain(file.name));
  const submit=(context:UserContext,job:Job,phase:Input['phase'])=>{
   const sql=sqlFor(context),input:Input={jobId:job.id,generation:job.generation,phase,...(phase==='commit'?{manifest:job.manifest}:{})};bound(context,input);
-  const value=execution.forUser(context).submitSync({kind:'processing.import-'+phase,operationId:'import:'+job.id+':'+job.generation+':'+phase,input});
+  const value=execution.forUser(context).submitSync({kind:'processing.import-'+phase,operationId:'import:'+job.id+':'+job.generation+':'+phase,input},{parentOperationId:'import:'+job.id,generation:{slot:phase,version:String(job.generation)}});
   if(phase==='prepare')job.prepareTask=value.id;else job.commitTask=value.id;save(sql,job);return value;
  };
  const submitPrepare=async(context:UserContext,job:Job)=>{
   const sql=sqlFor(context),input:Input={jobId:job.id,generation:job.generation,phase:'prepare'};bound(context,input);
   try{
-   const value=await execution.forUser(context).submit({kind:deterministic(job)?'processing.import-decode':'processing.import-prepare',operationId:'import:'+job.id+':'+job.generation+':prepare',input});
+   const value=await execution.forUser(context).submit({kind:deterministic(job)?'processing.import-decode':'processing.import-prepare',operationId:'import:'+job.id+':'+job.generation+':prepare',input},undefined,{parentOperationId:'import:'+job.id,generation:{slot:'prepare',version:String(job.generation)}});
    bound(context,input);job.prepareTask=value.id;save(sql,job);
   }catch(error){bound(context,input);job.status='needs_configuration';job.processingStatus='blocked';job.error=error instanceof ExecutionFailure?error.code:'import_model_unavailable';save(sql,job);}
  };
@@ -122,6 +122,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    if(media.captureId)continue;run.signal.throwIfAborted();run.grant.assert();bound(run.context,input);if(!intake.available(media.format))throw new ExecutionFailure('blocked','import_media_intake_changed');
    const file=originals.archivedFile(media.fileId),bytes=originals.archivedBytes(file.id),revision=createHash('sha256').update(JSON.stringify([file.hash,media.format.mimeType])).digest('hex');
    const receipt=run.grant.commit(()=>{bound(run.context,input);const receipt=originals.receiveSourceItemsWithOriginals(job.sourceId,'import-media:'+job.id+':'+job.generation+':'+file.id,[{externalId:'file:'+file.relativePath,revision,observedAt:job.createdAt,title:file.name,text:'',kind:'file',layer:'original',mimeType:media.format.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown'}}],[{bytes,mime:media.format.mimeType,format:'file',...(media.format.mimeType.startsWith('image/')&&job.imageProfileId?{processingProfileId:job.imageProfileId}:{})}]),ack=receipt.captures[0];
+    execution.forUser(run.context).linkParent('import:'+job.id,'file:'+ack.id);execution.forUser(run.context).linkParent('import:'+job.id,'capture:'+ack.id);
     originals.attachArchivedFiles(ack.id,[file.id]);media.captureId=ack.id;if(ack.duplicate)job.progress.duplicates++;else{new ScopedImportAttribution(sql).bind(ack.id,declaration);job.progress.imported++;job.captureIds.push(ack.id);}job.progress.processed++;if(!ack.duplicate)for(const item of receipt.captures)if(item.original)publishParsed(run.context,item.original.ref,'import:'+job.id+':'+job.generation+':'+item.id);save(sql,job);return receipt;
    });
   }
@@ -131,6 +132,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
     bound(run.context,input);const receipt=originals.receiveSourceItems(job.sourceId,'import:'+job.id+':'+job.generation+':'+index,[record.item]),ack=receipt.captures[0];
     for(const fileId of [...record.evidencePaths,...record.attachments]){if(!job.files.some(file=>file.id===fileId))throw conflict();}
     originals.attachArchivedFiles(ack.id,[...new Set([...record.evidencePaths,...record.attachments])]);
+    execution.forUser(run.context).linkParent('import:'+job.id,'file:'+ack.id);execution.forUser(run.context).linkParent('import:'+job.id,'capture:'+ack.id);
     if(ack.duplicate)job.progress.duplicates++;else{new ScopedImportAttribution(sql).bind(ack.id,declaration);job.progress.imported++;job.captureIds.push(ack.id);}
     job.recordsProcessed=index+1;job.progress.processed=index+1+(job.media?.filter(item=>item.captureId).length??0);if(!ack.duplicate)for(const item of receipt.captures)if(item.original)publishParsed(run.context,item.original.ref,'import:'+job.id+':'+job.generation+':'+item.id);save(sql,job);return receipt;
    });

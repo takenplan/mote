@@ -189,7 +189,8 @@ test('independent KEEP all four live limits reach actual Memory and Ask HTTP pro
  try{
   await configure({...limits,agentConcurrency:1,llmConcurrency:1,memoryConcurrency:1});
   const aj=await request(f.a,'/api/memory/jobs','POST',{materialIds:[a.id],operationId:randomUUID()}),bj=await request(f.b,'/api/memory/jobs','POST',{materialIds:[b.id],operationId:randomUUID()});
-  await until(async()=>{const q=(await view()).queues;return requests.length===1&&q.memory.active===1&&q.memory.waiting===1;});
+  await until(async()=>{const q=(await view()).queues;return requests.length===1&&q.memory.active===1&&f.node.execution!.engine.list({kind:'memory.extract',state:'waiting'}).items.length===1;});
+  assert.equal((await view()).queues.memory.waiting,0,'capacity waiting stays in the durable Memory pool before acquiring physical gates');
   await configure({...limits,agentConcurrency:1,llmConcurrency:1,memoryConcurrency:2});
   await until(async()=>{const q=(await view()).queues;return q.memory.active===2&&q.agents.active===1&&q.agents.waiting===1;});assert.equal(requests.length,1);
   await configure({...limits,agentConcurrency:2,llmConcurrency:1,memoryConcurrency:2});
@@ -202,7 +203,8 @@ test('independent KEEP all four live limits reach actual Memory and Ask HTTP pro
  try{
   await configure({...limits,interactiveConcurrency:1,memoryConcurrency:2});
   const aid=randomUUID(),bid=randomUUID();await request(f.a,'/api/query-runs','POST',{id:aid,input:{question:'State that this is a synthetic admission check without using archive evidence.'}});await request(f.b,'/api/query-runs','POST',{id:bid,input:{question:'State that this is a synthetic admission check without using archive evidence.'}});
-  await until(async()=>{const q=(await view()).queues;return requests.length===offset+1&&q.interactive.active===1&&q.interactive.waiting===1;});
+  await until(async()=>{const q=(await view()).queues;return requests.length===offset+1&&q.interactive.active===1&&f.node.execution!.engine.poolSnapshot('ask.models').interactive.waiting===1;});
+  assert.equal((await view()).queues.interactive.waiting,0,'capacity waiting stays in the durable interactive lane');
   const waiting=(await view()).queues;assert.equal(waiting.models.active,0);assert.equal(waiting.agents.active,0);
   await configure({...limits,interactiveConcurrency:2,memoryConcurrency:2});await until(()=>requests.length===offset+2);assert.equal((await view()).queues.interactive.active,2);ah.resolve();bh.resolve();
   for(const [user,id]of [[f.a,aid],[f.b,bid]] as const){await until(async()=>(await request(user,'/api/query-runs/'+id)).status!=='running');assert.equal((await request(user,'/api/query-runs/'+id)).status,'completed');}

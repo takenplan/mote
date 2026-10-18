@@ -58,10 +58,17 @@ checkpoint/progress methods and external journal methods. A handler uses
 through this interface. Model tools receive no capability to choose another user.
 
 Submission validates input and derives task and operation identity from the host
-user plus the caller's business identity. Duplicate admission is idempotent only
+user plus the caller's business identity. Operations retain the original business
+family before the opaque account-bound hash, including the `workflow:actions:`
+marker consumed by the Web change feed. Family never grants execution or access. Duplicate admission is idempotent only
 for the same immutable input and dependency set. A cross-user dependency is
 rejected before grant/task insertion. The engine also rejects mismatched
 ownership, cross-user operation ancestry, self dependencies and dependency cycles.
+Trusted domains may pass parent task/business identifiers as a separate admission
+option or link existing business/task parents through their user-bound host.
+HTTP task JSON cannot install ancestry. Membership propagation includes late,
+nested children and retained history; parent attribution does not cancel work or
+renew a grant. See [current parity journeys](../validation/execution-parity-2026-10-18.md).
 
 `task_authorizations` binds a durable grant to one task, user and account epoch.
 `UserContextAuthority.restoreTask(grantId)` asks the host verifier to read this
@@ -209,9 +216,11 @@ an iterative acyclic graph before writes. It restores history with revoked grant
 and the original epoch. Nonterminal entries become
 `blocked/restore_authorization_required`; neither history nor an old model receipt
 mints fresh authority. Same-operation replay is idempotent and a different payload
-conflicts. Whole-instance offline recovery preserves the original complete SQLite
-state and durable task grants; M16 owns its orchestration and supported archive
-format. Portable task-history restore does not promise automatic resumption or
+conflicts. Whole-instance offline recovery preserves complete SQLite task history and
+parent-generation metadata while retiring old login and task execution authority.
+The current archive schema requires the parent-edge generation table and its four
+columns; missing mappings are rejected rather than recreated. M16 owns the
+recovery orchestration and supported archive format. Portable task-history restore does not promise automatic resumption or
 single-user historical recovery.
 
 ## Supersession and verification
