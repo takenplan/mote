@@ -231,7 +231,8 @@ export class IngressHost{
      const current=upload(id);if(current.receipt)return checkReceipt(JSON.parse(String(current.receipt)));
      const binding=source(String(current.source_id)),head=data().sourceItem(binding.id,manifest.item.externalId);
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
-     const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
+     const item={...manifest.item,document:{...manifest.item.document,path:manifest.relativePath},metadata:{...manifest.item.metadata,version:1 as const,file:{...manifest.item.metadata?.file,sizeBytes:manifest.sizeBytes}}};
+     const ack=data().receiveSourceItems(binding.id,[item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      let reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot',manifest.item.layer==='snapshot'):undefined;
      if(reference&&!ack.duplicate&&manifest.processingProfileId)bindProfile(reference.ref,manifest.processingProfileId);

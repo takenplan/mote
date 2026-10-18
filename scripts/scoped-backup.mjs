@@ -37,7 +37,17 @@ function metadata(db){
  if(!row||row.epoch!==5||row.format!=='mote-private-users-v1'||!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(row.deployment_id)||db.prepare('PRAGMA user_version').get().user_version!==5)throw Error('Unsupported backup storage epoch');
  return {deploymentId:row.deployment_id};
 }
-function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);validateCaptureUpdates(db);return meta;}
+function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);validateCaptureUpdates(db);validateFileHeads(db);return meta;}
+// The last retained file is a canonical pointer, never inferred from capture
+// insertion order. A stopped native snapshot must preserve that identity.
+function validateFileHeads(db){
+ if(db.prepare(`SELECT 1 FROM ig_file_heads f LEFT JOIN pd_captures c ON c.user_id=f.user_id AND c.id=f.capture_id
+  LEFT JOIN pd_source_heads h ON h.user_id=f.user_id AND h.source_id=f.source_id AND h.external_id=f.external_id
+  LEFT JOIN pd_captures head ON head.user_id=h.user_id AND head.id=h.capture_id
+  WHERE c.id IS NULL OR head.id IS NULL OR c.source_id IS NOT f.source_id OR c.external_id IS NOT f.external_id
+  OR json_extract(c.json,'$.source') IS NOT 'file' OR COALESCE(json_extract(c.json,'$.provenance.deleted'),0)<>0
+  OR (json_extract(head.json,'$.source')='file' AND COALESCE(json_extract(head.json,'$.provenance.deleted'),0)=0 AND f.capture_id<>h.capture_id) LIMIT 1`).get())throw Error('Incomplete or corrupt file head projection');
+}
 // This journal's high-water counter cannot be inferred from surviving events:
 // a deleted highest capture is valid, but a missing/rewound counter is not.
 function validateCaptureUpdates(db){

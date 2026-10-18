@@ -17,7 +17,7 @@ import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import type {ScopedRuntime} from './http.js';
 import type {UserContext} from './context.js';
 import type {IngressHost} from './ingress.js';
-import type {TaskExecution,TaskRun} from './task-execution.js';
+import {TaskError,type TaskExecution,type TaskRun} from './task-execution.js';
 import type {PrivateData} from './private-data.js';
 import type {ImportIntakeRegistry} from '../import-intake.js';
 import {ScopedImportAttribution} from './import-attribution.js';
@@ -26,6 +26,7 @@ import {identityHash} from './originals.js';
 import {projectImportProgress} from './processing-import-progress.js';
 import type {MemoryHost} from './memory.js';
 import {archiveRelativePath,MAX_FILE_BYTES} from '../archive-contract.js';
+import {hostImportDirectory,readImportParts,ImportInputError} from '../import-host-directory.js';
 
 const taskInput=z.object({jobId:z.string().uuid(),generation:z.number().int().nonnegative(),phase:z.enum(['prepare','commit']),manifest:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 type Input=z.infer<typeof taskInput>;
@@ -151,13 +152,27 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
  const forUser=(context:UserContext)=>{const sql=sqlFor(context),get=(id:string)=>{const job=publicJob(updateFromTask(context,load(sql,id)));return {...job,...projectImportProgress(sql,job,execution.forUser(context),runtime.services.forUser(context).get<ReturnType<MemoryHost['forUser']>>('memory'),ref=>readProcessing(context,ref))};};return Object.freeze({
   capabilities:()=>intake.list(),sourcePacks:()=>({items:sourcePackSpecs.map(({id,version,description})=>({id,version,...(description?{description}:{})}))}),get,list:()=>({items:sql.all('SELECT id FROM mp_import_jobs WHERE user_id=$user ORDER BY rowid DESC LIMIT 100').map(row=>get(String(row.id)))}),
   create:async(raw:unknown)=>{
-   owner(context);const request=importRequestSchema.parse(raw);if(request.directory)throw new PrivateDataError('invalid_data',403);if(request.sourcePackId&&!sourcePacks.has(request.sourcePackId))throw new PrivateDataError('invalid_data',422);
+   owner(context);const request=importRequestSchema.parse(raw);if(request.directory)runtime.authority.assertAdministrator(context);if(request.sourcePackId&&!sourcePacks.has(request.sourcePackId))throw new PrivateDataError('invalid_data',422);
    const fingerprint=identityHash(request),id=request.requestId??randomUUID(),existing=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(existing){if(existing.fingerprint!==fingerprint)throw conflict();return get(id);}
    let archivedFileIds=request.archivedFileIds;
    if(request.files){const service=ingress.forUser(context);archivedFileIds=[];let total=0;
     for(const [index,file] of request.files.entries()){
      if(!validBase64(file.dataBase64))throw new PrivateDataError('invalid_data');const bytes=Buffer.from(file.dataBase64,'base64');if(bytes.toString('base64')!==file.dataBase64)throw new PrivateDataError('invalid_data');total+=bytes.length;if(bytes.length>MAX_FILE_BYTES||total>256*1024*1024)throw new PrivateDataError('invalid_data',413);
      const hash=identityHash(['inline-import',context.userId,id,index]),uploadId=hash.slice(0,8)+'-'+hash.slice(8,12)+'-5'+hash.slice(13,16)+'-a'+hash.slice(17,20)+'-'+hash.slice(20,32);service.beginImportUpload({id:uploadId,name:file.name,sizeBytes:bytes.length,...(file.mimeType?{mimeType:file.mimeType}:{})});for(let offset=0;offset<bytes.length;offset+=FILE_PART_BYTES)service.importUploadPart(uploadId,offset/FILE_PART_BYTES,bytes.subarray(offset,offset+FILE_PART_BYTES));archivedFileIds.push((await service.commitImportUpload(uploadId)).id);
+    }
+   }
+   if(request.directory){
+    // The SQLite connection is opened by the host from its admitted vault;
+    // neither request JSON nor a staged job chooses the protected directory.
+    const vault=db.location('main');if(!vault)throw new PrivateDataError('scope_unavailable',503);
+    const assert=()=>{sqlFor(context);owner(context);runtime.authority.assertAdministrator(context);};
+    const entries=await hostImportDirectory(request.directory,dirname(vault),assert).catch(error=>{if(error instanceof ImportInputError)throw new TaskError(error.code,error.statusCode);throw error;}),service=ingress.forUser(context);archivedFileIds=[];
+    if(!entries.length)throw new PrivateDataError('invalid_data');
+    for(const [index,file] of entries.entries()){
+     assert();const hash=identityHash(['directory-import',context.userId,id,index]),uploadId=hash.slice(0,8)+'-'+hash.slice(8,12)+'-5'+hash.slice(13,16)+'-a'+hash.slice(17,20)+'-'+hash.slice(20,32);
+     service.beginImportUpload({id:uploadId,name:file.name,sizeBytes:file.sizeBytes});let part=0;
+     for(const bytes of readImportParts(file.path,file.identity,assert))service.importUploadPart(uploadId,part++,bytes);
+     archivedFileIds.push((await service.commitImportUpload(uploadId)).id);assert();
     }
    }
    const job=sql.transaction(()=>{

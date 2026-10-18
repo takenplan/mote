@@ -167,12 +167,12 @@ function imageBlocks(body:MaterialBody,record:CaptureRecord,image:ImageMaterialP
     const start=body.blocks.length;body.text(`${prefix}:ocr`,record.ocrText,record.id,'plain',undefined,undefined,evidenceContext(record,'other'));
     originals.push({key:`${prefix}/ocr`,state:'ready',blockIds:body.blocks.slice(start).map(block=>block.id)});
   }
-  return [...originals,...image.jobs.filter(job=>job.name!=='ocr').map(job=>{
+  return [...originals,...image.jobs.filter(job=>job.name!=='ocr'&&job.kind!=='ocr').map(job=>{
     const product=image.products.find(p=>p.name===job.name),start=body.blocks.length;
     if(product?.text)body.text(`${prefix}:${job.name}`,JSON.stringify({imageInterpretation:product.text,regions:product.regions,originalEvidence:product.evidence,productVersion:product.revision,
       evidenceKind:'model_interpretation',attribution:'Preserve the depicted author and uncertainty; this is not a verbatim original or an owner statement.'}),record.id,'json',
       {imageEvidence:product.evidence,productVersion:product.revision},undefined,evidenceContext(record,'summary'));
-    return {key:prefix==='image'?`image-${job.name}`:`${prefix}/${job.name}`,state:job.state,blockIds:body.blocks.slice(start).map(b=>b.id),...(product?{revision:product.revision}:{}),...(job.reason?{reason:job.reason}:{})};
+    return {key:prefix==='image'?`image-${job.name}`:`${prefix}/${job.name}`,state:job.state,blockIds:body.blocks.slice(start).map(b=>b.id),...(product?{revision:product.revision}:job.revision?{revision:job.revision}:{}),...(job.reason?{reason:job.reason}:{})};
   })];
 }
 

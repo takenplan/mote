@@ -1572,6 +1572,7 @@
       "table:ig_file_forget_operations",
       "table:ig_file_generations",
       "table:ig_file_forgets",
+      "table:ig_file_heads",
       "table:ig_import_parts",
       "table:ig_import_uploads",
       "table:ig_meta",
