@@ -488,7 +488,9 @@ actual global image policy and M04 reference. Image execution flags are account
 configuration; query-image permission is consumed through the existing asynchronous
 read port. Profile changes affect future images, while unfinished images retain
 their applied plan. Historical completion/recomputation is explicit and uses
-existing M05/M06 admission, receipt reuse and current-evidence checks.
+existing M05/M06 admission, receipt reuse and current-evidence checks. Backfill status exposes only its own
+job ID, task state, queued count and fixed error code; internal SQLite cursors and
+watermarks stay private.
 
 `GET /api/media-models` and `/api/perception/media-models` expose authenticated
 instance health. Original `/api/media-models/:role/{install,cancel,import}` and

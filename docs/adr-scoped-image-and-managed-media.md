@@ -63,7 +63,10 @@ The settings are canonical account configuration and participate in its existing
 portable export. Historical preview tokens are transient. Historical execution
 cursors are not portable execution authority; stopped instance backups retain the
 current cursor tables, while native/portable recovery keeps M05's existing grant
-retirement rules. A cursor's displayed task state comes from M05, including failure
+retirement rules. SQLite cursor/watermark positions stay private; only the account's queued count
+and actual M05 task state are exposed. Global row positions are not account
+progress or evidence of another account's activity. A cursor's displayed task
+state comes from M05, including failure
 or retirement. Account/domain deletion removes the cursors and previews. Existing
 vault repair, compatibility paths, real weight downloads and historical replay
 are outside this assignment.
