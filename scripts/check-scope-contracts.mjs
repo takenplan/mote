@@ -87,7 +87,7 @@ export function checkProductionImports(directory=root){
   for(const path of ['coding-dialogue-projection.ts','observation-key.ts','memory-feedback.ts','owner-question-contract.ts','owner-question-replies.ts','material-organizer-contract.ts','memory-image-proof.ts','memory-owner-correction.ts','capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
   // M08 shares pure evidence scope, presentation, measurement, report and control contracts.
   // Every private repository remains behind its context-bound ScopedServices facade.
-  for(const path of ['working-memory-plan.ts','source-catalog-path.ts','text-window.ts','activity-measurement.ts','media-activity.ts','context-query-core.ts','context-navigation.ts','evidence-range.ts','delegation-controls.ts','delegation-protocol.ts','insights.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['working-memory-plan.ts','source-catalog-path.ts','text-window.ts','activity-measurement.ts','media-activity.ts','context-query-core.ts','context-navigation.ts','source-context-identity.ts','evidence-range.ts','delegation-controls.ts','delegation-protocol.ts','insights.ts'])allowed.add(sourceRoot+'/'+path);
   // M06 constructs only the existing shared processor registry and uses pure
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
@@ -116,6 +116,10 @@ export function checkProductionImports(directory=root){
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
     [sourceRoot+'/scope/processing.ts',new Set([sourceRoot+'/processor-admission.ts',sourceRoot+'/media-execution-facts.ts'])],
     [sourceRoot+'/scope/model-query.ts',new Set([sourceRoot+'/memory-validation.ts'])],
+    // M08 owns the embedding grant/model/usage fence and supplies only private
+    // owner-bound SQL to the existing read-only worker. Shared helpers never
+    // construct the retired Indexer or global Store.
+    [sourceRoot+'/scope/ask-retrieval.ts',new Set([sourceRoot+'/embedding-request.ts',sourceRoot+'/evidence-retrieval.ts',sourceRoot+'/vector-work.ts'])],
     [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
   ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];

@@ -250,3 +250,24 @@ M07 independent A/C7/7 EXIT0,54178ms
 above, and M11 owning13/13 EXIT0,92271ms. These independent receipts close the
 shared A/B/C representative contract only. They do not stand in for each module's
 final focused/combined/build/emitted/affected or remote-head/PR gates.
+
+## Public Context parity regression journeys
+
+`multiuser-context-pagination.test.ts` exercises the real registered Context
+HTTP endpoints against generated, same-time Material originals published through
+the owned ingress host. It covers minimum response-size search pages, exact
+entity enumeration across restart, browse continuation beyond 200 same-group
+candidates without hiding a later collection, cross-account and changed-query cursor
+rejection, source-collection browse/read/expand, ranked response truncation and
+metadata, explicit too-small ranked responses, the effective public cap, and an
+internal original page larger than the public response cap.
+
+`multiuser-mcp-query.test.ts` also checks the actual MCP SDK schemas and calls for
+explicit response sizes, budget-bound continuation, source navigation and ranked
+metadata. Its ready/partial and complete multi-block scenarios expand browse
+navigation before asserting original content. Browsing a collection does not
+itself disclose its full body or turn the collection into original evidence.
+
+These are generated fixture journeys. They do not establish live embedding or
+model quality, physical-device capture, personal-data behavior, or deployment.
+Run receipts and candidate SHA are reported separately for the module PR.

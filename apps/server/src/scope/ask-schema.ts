@@ -6,6 +6,14 @@ import {catalogParent} from '../source-catalog-path.js';
 export const ASK_DOMAIN='ask';
 export class AskError extends Error{constructor(readonly code:string,readonly statusCode=400){super(code);}}
 export const askHash=(value:unknown):string=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+/** Fixed host schema; ordinary retrieval reads/writes use PrivateSql. */
+export function installAskRetrieval(db:DatabaseSync):string{
+ db.exec(`CREATE TABLE IF NOT EXISTS ma_embeddings(user_id TEXT NOT NULL,evidence_id TEXT NOT NULL,fingerprint TEXT NOT NULL,receipt TEXT NOT NULL,anchor_hash TEXT NOT NULL,model_key TEXT NOT NULL,embedding TEXT NOT NULL,PRIMARY KEY(user_id,evidence_id,model_key));
+  CREATE TABLE IF NOT EXISTS ma_embedding_events(user_id TEXT NOT NULL,id TEXT NOT NULL,input TEXT NOT NULL,PRIMARY KEY(user_id,id));
+  CREATE TRIGGER IF NOT EXISTS ma_embedding_capture_removed AFTER DELETE ON pd_captures BEGIN DELETE FROM ma_embeddings WHERE user_id=old.user_id AND evidence_id=old.id; END;
+  CREATE TRIGGER IF NOT EXISTS ma_embedding_material_removed AFTER DELETE ON mm_evidence BEGIN DELETE FROM ma_embeddings WHERE user_id=old.user_id AND evidence_id=old.id; END;`);
+ return String(db.prepare('PRAGMA database_list').get()!.file);
+}
 const time=z.string().datetime({offset:true});
 export const askInputSchema=z.object({modelReference:z.object({kind:z.enum(['shared','personal']),id:z.string().min(1).max(256)}).strict().optional(),modelOverride:z.string().trim().min(1).max(512).refine(value=>!/[\u0000-\u001f\u007f]/.test(value)).optional(),question:z.string().trim().min(1).max(8000),attachmentIds:z.array(z.string().uuid()).max(8).refine(ids=>new Set(ids).size===ids.length).optional(),conversationId:z.string().uuid().optional(),turnId:z.string().uuid().optional(),after:time.optional(),before:time.optional(),deviceId:z.string().min(1).max(128).optional(),timeZone:z.string().max(100).default('UTC'),language:z.enum(['zh-CN','en']).default('zh-CN')}).strict().refine(v=>!v.after||!v.before||Date.parse(v.after)<Date.parse(v.before),'Invalid time range');
 export const insightInputSchema=askInputSchema.innerType().extend({question:z.string().trim().min(1).max(8000).optional(),prompt:z.string().trim().max(8000).optional()}).strict().refine(v=>!v.question||!v.prompt,'Choose one prompt').transform(({question,prompt,...value})=>askInputSchema.parse({...value,question:question||prompt||(value.language==='en'?'Review this period of personal context. Choose findings supported by evidence, distinguish facts, inferences and gaps, retain source citations and produce a complete personal-insight report and static HTML.':'请回顾这段时间的个人上下文，选择有证据支撑的发现。区分事实、推断与信息缺口，保留来源引用，用 personal-insight Skill 生成完整文字报告和静态 HTML 展示。')}));
@@ -15,7 +23,7 @@ export type AskTask=z.infer<typeof askTaskSchema>;
 export type AskSnapshot={at:string;materials:{id:string;revision:string}[];captures:{id:string;receipt:string}[];memories:{id:string;version:number;fingerprint:string}[]};
 export type AskScope={sourceIds?:readonly string[];snapshot?:AskSnapshot;assertCurrent:()=>void};
 export type EvidencePin={id:string;hash:string;receipt?:string;kind?:'measurement'|'history'|'attachment';headId?:string;source?:{id:string;incarnation:string}};
-export type MaterialPin={id:string;revision:string;sources?:{id:string;incarnation:string}[];sourceContext?:{sourceId:string;version:number;fingerprint:string}};
+export type MaterialPin={id:string;revision:string;sources?:{id:string;incarnation:string}[];sourceContext?:{sourceId:string;version:number;fingerprint:string;kind?:'metadata'}};
 export type AskRow={id:string;input:string;fingerprint:string;mode:'chat'|'insight'|'compact';status:string;generation:number;fragment:number;task_id:string|null;model:string;scope:string;context:string;conversation_revision:number;conversation_incarnation:string;pins:string;materials:string;memory_pins:string;events:string;workspace:string|null;request_bound:number;created_at:string;updated_at:string;result:string|null};
 /** Persisted SQL, rather than connection-local callbacks, also protects offline
  * writers. Dependencies are owner-bound and include inherited dialogue roots. */
@@ -51,7 +59,7 @@ function installConversationHistory(db:DatabaseSync){
   ['source_deleted','pd_sources','BEFORE DELETE','old.user_id','source','old.id','',true],
   ['capture_changed','pd_captures','AFTER UPDATE OF json,fingerprint','new.user_id','capture','new.id','WHEN new.json!=old.json OR new.fingerprint!=old.fingerprint',false],
   ['material_changed','pd_materials','AFTER UPDATE OF revision,min_visible_sequence','new.user_id','material','new.id','WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence',false],
-  ['source_changed','pd_sources','AFTER UPDATE OF json','new.user_id','source','new.id',"WHEN json_extract(new.json,'$.enabled') IS NOT json_extract(old.json,'$.enabled') OR json_extract(new.json,'$.retention') IS NOT json_extract(old.json,'$.retention') OR json_extract(new.json,'$.ownerRelation') IS NOT json_extract(old.json,'$.ownerRelation') OR json_extract(new.json,'$.ownerRelationVersion') IS NOT json_extract(old.json,'$.ownerRelationVersion') OR json_extract(new.json,'$.sourceContext') IS NOT json_extract(old.json,'$.sourceContext') OR json_extract(new.json,'$.name') IS NOT json_extract(old.json,'$.name')",false],
+  ['source_changed','pd_sources','AFTER UPDATE OF json','new.user_id','source','new.id',"WHEN json_extract(new.json,'$.enabled') IS NOT json_extract(old.json,'$.enabled') OR json_extract(new.json,'$.retention') IS NOT json_extract(old.json,'$.retention') OR json_extract(new.json,'$.ownerRelation') IS NOT json_extract(old.json,'$.ownerRelation') OR json_extract(new.json,'$.ownerRelationVersion') IS NOT json_extract(old.json,'$.ownerRelationVersion') OR json_extract(new.json,'$.sourceContext') IS NOT json_extract(old.json,'$.sourceContext') OR json_extract(new.json,'$.name') IS NOT json_extract(old.json,'$.name') OR json_extract(new.json,'$.deviceId') IS NOT json_extract(old.json,'$.deviceId') OR json_extract(new.json,'$.kind') IS NOT json_extract(old.json,'$.kind') OR json_extract(new.json,'$.platform') IS NOT json_extract(old.json,'$.platform')",false],
  ] as const){db.exec(`DROP TRIGGER IF EXISTS ma_history_${name};CREATE TRIGGER ma_history_${name} ${event} ON ${table} ${when} BEGIN ${change(owner,matching(owner,kind,id),deleted,matchingRuns(owner,kind,id))} END;`);}
  // M07 anchors are disposable interpretation cache. Withdraw prepared context
  // and summaries before their lineage disappears, retaining historical prose.
@@ -100,7 +108,8 @@ export function installAsk(db:DatabaseSync){
  CREATE INDEX IF NOT EXISTS ma_auto_event_owner ON ma_auto_events(user_id,kind,seq);
  CREATE TRIGGER IF NOT EXISTS ma_auto_material_insert AFTER INSERT ON pd_materials BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
  CREATE TRIGGER IF NOT EXISTS ma_auto_material_update AFTER UPDATE ON pd_materials WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
- CREATE TRIGGER IF NOT EXISTS ma_auto_turn AFTER INSERT ON ma_turns BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'working',new.conversation_id); END;
+ DROP TRIGGER IF EXISTS ma_auto_turn;
+ CREATE TRIGGER ma_auto_turn AFTER INSERT ON ma_turns WHEN coalesce(json_extract(new.result,'$.status'),'completed')!='failed' BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'working',new.conversation_id); END;
  CREATE TABLE IF NOT EXISTS ma_auto_windows(user_id TEXT NOT NULL,id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,state TEXT NOT NULL,through INTEGER NOT NULL,plan TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ma_auto_runs(user_id TEXT NOT NULL,run_id TEXT NOT NULL,window_id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,PRIMARY KEY(user_id,run_id));
  CREATE TABLE IF NOT EXISTS ma_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
