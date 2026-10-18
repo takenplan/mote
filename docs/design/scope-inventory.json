@@ -369,6 +369,7 @@
       "table:execution_operation_steps",
       "table:execution_resource_releases",
       "table:execution_resources",
+      "table:execution_dynamic_resources",
       "table:execution_sequence",
       "table:execution_stage_fairness",
       "table:execution_stage_groups",
@@ -376,7 +377,7 @@
       "table:execution_user_fairness",
       "table:execution_user_sequence"
     ],
-    "notes": "M05 owns host-declared stage service history and attempt-fenced physical resource releases. These scheduling rows contain no private evidence or model authorization."
+    "notes": "M05 owns host-declared stage service history, attempt-fenced physical resource releases and running-grant dynamic reservations shared with static publishers. These scheduling rows contain no private evidence or model authorization."
   },
   "apps/server/src/execution-settings-routes.ts": {
     "scope": "legacy-quarantined",

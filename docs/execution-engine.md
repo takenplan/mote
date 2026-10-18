@@ -47,3 +47,26 @@ The Context DAG uses the same engine. Domain code validates input fingerprints, 
 ## Trusted delegated lanes (2026-10-10)
 
 The existing delegated-agents pool derives lanes from host-registered coordinator profiles; children inherit their parent lane. Background effective capacity is min(agentConcurrency,32), interactive capacity is interactiveConcurrency, with no borrowing/preemption. Claims count leases by lane inside the same SQLite transaction, including other connections. Durable query recovery preserves successful child artifacts and a bounded workspace; citation permission still requires fresh delivery. Capacity cooldowns do not consume failed-processing attempts; typed actual failures retain their registered finite policy. See [ADR](adr-system-refactor.md).
+
+
+## Continuous scoped batches
+
+A host-registered continuous batch may choose `modelAdmission: 'per-call'`.
+It remains one durable Execution task and retains its immutable M04 snapshot;
+each `withModel` invocation independently enters the existing account-fair
+physical gates and creates its own measured usage receipt. Capacity waits do not
+start the task's first physical attempt or consume a call protection budget.
+Subsequent calls receive their own protection budget inside admission.
+
+The host-only `TaskRun.withResource` port derives the owner from the current
+context. It shares the engine's static resource locks through a fence-bound
+`execution_dynamic_resources` reservation, acquiring only for an actual effect.
+Acquisition waits retain the running continuation, recheck the grant and hold no
+resource. Static publishers in other processes see the same reservation. Release,
+cancellation and lease recovery cannot leave a current lock behind; reservations
+from expired fences are reaped. Resource names and owners are never model or
+client capabilities. Domain source/configuration checks still run after waiting
+and before every external effect and fenced commit.
+
+This port restores Memory's original single `memory.batch` continuation; it does
+not add a domain scheduler or require model stages to reenter the task workflow.
