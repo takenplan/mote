@@ -25,10 +25,12 @@ test('backup plans keep complete Server/Web suites, CLI/profile security and upd
     for (const regression of ['dev-log-retention', 'profile-config', 'profile-proxy', 'storage-owner']) {
       assert.ok(steps.find(step => step.id === 'release-integration').args.includes(`scripts/release/${regression}.test.mjs`), regression);
     }
-    for (const id of ['build:@mote/diagnostics', 'test:@mote/diagnostics', 'typecheck:@mote/desktop', 'test:@mote/desktop', 'android-unit', 'client-tests']) {
+    for (const id of ['test:@mote/diagnostics', 'typecheck:@mote/desktop', 'test:@mote/desktop', 'android-unit', 'client-tests']) {
       assert.ok(!names.includes(id), `${path}: ${id}`);
     }
     assert.equal(names.includes('typecheck:scripts'), path === 'scripts/backup.ts', path);
+    assert.equal(names.includes('build:@mote/diagnostics'), path === 'scripts/backup.ts', path);
+    if (path === 'scripts/backup.ts') assert.ok(names.indexOf('build:@mote/diagnostics') < names.indexOf('typecheck:scripts'));
   }
 });
 
