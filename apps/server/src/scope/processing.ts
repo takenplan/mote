@@ -17,6 +17,7 @@ import {ProcessorAdmission} from '../processor-admission.js';
 import {readMediaExecutionFact} from '../media-execution-facts.js';
 import {imageOutput} from '../evidence-image.js';
 import {DEFAULT_IMAGE_RECIPE} from '../image-recipes.js';
+import {perceptionConfigurationSchema,defaultPerceptionConfiguration} from '../perception-configuration.js';
 import {defaultFileRecipe,defaultFileOutput,TRANSCRIPT_OUTPUT} from '../file-recipes.js';
 import {alignDialogue} from '../file-dialogue.js';
 import {formatWork} from '../format-work.js';
@@ -80,6 +81,7 @@ export class ProcessingHost {
  private readonly pluginStages=new WeakMap<TaskRun,{input:ProcessingInput;artifactId:string}>();
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly ingress:IngressHost,private readonly plugins:ScopedPluginHost,sourcePacks:readonly ImportPythonPackConfig[]=[]){
   installProcessing(db);
+  configuration.registerDomain('perception',()=>({id:'perception',schema:perceptionConfigurationSchema,defaultValue:defaultPerceptionConfiguration(),resolve:raw=>raw,fields:Object.keys(defaultPerceptionConfiguration()).map(path=>({path,effect:'next-request' as const}))}));
   this.processorAdmission=new ProcessorAdmission({db,reserveMetadata:()=>{}});
   this.importJobs=processingImports(runtime,db,ingress,execution,this.processors.intake,(context,ref,operationId)=>{const {settings}=this.snapshot(context);return settings.enabled&&!settings.automatic&&!this.policies.bindPlan(context,ref)?.archiveOnly?this.submitSync(context,ref,operationId):undefined;},sourcePacks,(context,ref)=>this.forUser(context).status(ref));
   ingress.configureSnapshotRecovery({needed:(context,ref)=>{
@@ -218,6 +220,7 @@ export class ProcessingHost {
   submit:async(value:unknown)=>{const input=z.object({originalRef:z.string(),operationId:z.string().min(1).max(256)}).strict().parse(value);await this.configuration.forUser(context).view();if(this.fileControl(context,input.originalRef).cancelled)throw new TaskError('file_processing_cancelled',409);this.input(context,processingInputSchema.parse({originalRef:input.originalRef,...this.snapshot(context,input.originalRef)}));const plan=this.policies.bindPlan(context,input.originalRef);if(plan?.archiveOnly)return {saved:true,processingRequired:false};return this.submit(context,input.originalRef,input.operationId);},
   view:async()=>{await this.configuration.forUser(context).view();return {settings:this.snapshot(context).settings,processors:this.processors.registry.list(),...this.processors.recipes.list(),outputs:this.processors.outputs.list()};},
   derive:async(value:unknown)=>{const input=z.object({originalRef:z.string(),operationId:z.string().min(1).max(256),modes:z.array(z.enum(['summary','turns','image'])).min(1).max(3)}).strict().parse(value);await this.configuration.forUser(context).view();return this.submitDerivatives(context,input.originalRef,input.operationId,input.modes);},
+  perceptionSettings:async()=>{const view=await this.configuration.forUser(context).view();return perceptionConfigurationSchema.parse(view.domains.find(domain=>domain.id==='perception')?.effective);},
   status:(ref:string)=>this.status(context,ref),
   fileStatus:(ref:string)=>this.status(context,ref,true),
   currentImageRecipeProducts:(ref:string)=>this.currentImageRecipeProducts(context,ref),
