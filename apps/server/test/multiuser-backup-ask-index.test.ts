@@ -23,7 +23,7 @@ const cli=(script:string,args:string[])=>spawnSync(process.execPath,['--import',
 const backup=(source:string,out:string)=>cli(backupScript,['--data',source,'--out',out]);
 const restore=(from:string,target:string,deploymentId:string)=>cli(restoreScript,['--from',from,'--data',target,'--deployment-id',deploymentId]);
 const database=<T>(root:string,work:(db:DatabaseSync)=>T):T=>{const db=new DatabaseSync(join(root,'mote.sqlite'));try{return work(db);}finally{db.close();}};
-const successful=(result:ReturnType<typeof cli>)=>assert.equal(result.status,0,result.stderr||String(result.error));
+const successful=(result:ReturnType<typeof cli>)=>{assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);};
 const checksummed=(archive:string)=>{const path=join(archive,'backup-manifest.json'),manifest=JSON.parse(readFileSync(path,'utf8'));manifest.checksums['mote.sqlite']=createHash('sha256').update(readFileSync(join(archive,'mote.sqlite'))).digest('hex');writeFileSync(path,JSON.stringify(manifest));};
 
 test('ASK-STATIC-01 actual backup and restore CLIs reject every missing current Ask index table or column before publication',async t=>{
@@ -32,8 +32,8 @@ test('ASK-STATIC-01 actual backup and restore CLIs reject every missing current 
  const damages=Object.entries(currentIndexColumns).flatMap(([table,columns])=>[{name:table+'-table',sql:'DROP TABLE '+table},...columns.map(column=>({name:table+'-'+column,sql:'ALTER TABLE '+table+' RENAME COLUMN '+column+' TO generated_missing_'+column}))]);
  for(const [mode,path]of [['source',f.root],['archive',snapshot]] as const)for(const damage of damages)await t.test(mode+'-'+damage.name,()=>{
   const malformed=join(directory,mode+'-'+damage.name),output=malformed+'-rejected';cpSync(path,malformed,{recursive:true});database(malformed,db=>db.exec(damage.sql));
-  if(mode==='archive')checksummed(malformed);
-  const result=mode==='source'?backup(malformed,output):restore(malformed,output,f.node.deploymentId);assert.notEqual(result.status,0,mode+' accepted '+damage.name);assert.equal(existsSync(output),false,'incomplete current schema must be refused before destination creation');
+  if(mode==='archive')checksummed(malformed);const unchanged=createHash('sha256').update(readFileSync(join(malformed,'mote.sqlite'))).digest('hex');
+  const result=mode==='source'?backup(malformed,output):restore(malformed,output,f.node.deploymentId);assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.status,1,mode+' accepted '+damage.name);assert.match(result.stderr,mode==='source'?/Incomplete instance domain database/:/Instance restore failed/);assert.equal(existsSync(output),false,'incomplete current schema must be refused before destination creation');assert.equal(createHash('sha256').update(readFileSync(join(malformed,'mote.sqlite'))).digest('hex'),unchanged,'admission cannot repair or mutate the source database');
  });
 });
 
@@ -67,6 +67,6 @@ test('current stopped index roundtrip retains vectors and pending events without
  await waitForState(async()=>database(target,db=>db.prepare('SELECT id FROM pd_captures WHERE user_id=? AND external_id=?').get(a.userId,'future-a')),Boolean,'new original accepted');
  await waitForState(async()=>calls.slice(callsBefore).filter(call=>call.input.includes('GENERATED_FUTURE_TRAVEL_A')).length,count=>count>0,'fresh production index calls selected owner embedding');
  await waitForState(async()=>http.ok(a.token,'/api/context/retrieve?'+new URLSearchParams({query:'generated future synonym'})),page=>page.retrieval.mode==='hybrid'&&page.items.some((card:any)=>card.snippet.includes('GENERATED_FUTURE_TRAVEL_A')),'fresh indexed original is queryable');
- await http.ok(b.token,'/api/ingress/sources/same-source/items','POST',{batchId:'future-b',items:[item('GENERATED_UNCONFIGURED_B','future-b')]});assert.equal(calls.filter(call=>call.owner==='B').length,0,'unconfigured indexing still admits its durable event without calling a provider');assert.equal(calls.filter(call=>call.input.includes('GENERATED_PENDING_MUST_NOT_REPLAY')).length,0);
+ await http.ok(b.token,'/api/ingress/sources/same-source/items','POST',{batchId:'future-b',items:[item('GENERATED_UNCONFIGURED_B','future-b')]});await waitForState(async()=>database(target,db=>db.prepare("SELECT state FROM execution_steps WHERE user_id=? AND kind='ask.index-admit'").all(b.userId)),rows=>rows.length>0&&rows.every(row=>row.state==='succeeded'),'unconfigured future event admitted and consumed');assert.equal(calls.filter(call=>call.owner==='B').length,0,'unconfigured indexing still admits its durable event without calling a provider');assert.equal(calls.filter(call=>call.input.includes('GENERATED_PENDING_MUST_NOT_REPLAY')).length,0);
  database(target,db=>{for(const row of before.pending)assert.equal(db.prepare('SELECT state FROM execution_steps WHERE id=?').get(row.id)!.state,'blocked');assert.deepEqual(db.prepare('SELECT * FROM ma_embedding_events WHERE id IN(SELECT value FROM json_each(?)) ORDER BY user_id,id').all(JSON.stringify(before.events.map(row=>row.id))),before.events);});
 });

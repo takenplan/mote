@@ -209,6 +209,15 @@ querying retained data do not start a historical paid reindex. Existing vectors
 remain a private disposable projection and are omitted from portable Ask exports.
 Ask deletion removes the account's vectors and index intents.
 
+Stopped instance backups retain both index tables and require every current
+column before copying or publishing a restore. `ma_embedding_events` is the
+durable input dependency for admitted indexing tasks, including intake while no
+embedding model is selected. A missing table or column is an incomplete current
+archive; startup must not turn it into an empty repaired journal. This native
+archive contract is distinct from the data-only portable Ask export. Restoring
+index data does not renew old tasks or grants, replay pending events, or admit a
+historical paid reindex; fresh authorized intake uses the ordinary producer.
+
 Both the Agent's `search_context` and public Context ranked retrieval use the
 shared optional vector scan and reciprocal rank fusion. Literal matches keep the
 existing newest-first channel; cosine order supplies the semantic channel. The
