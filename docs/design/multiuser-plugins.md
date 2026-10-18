@@ -238,6 +238,9 @@ external ledger retains uncertain results across lease recovery and orderly
 shutdown. A new check or confirmed retry cannot overwrite an unresolved attempt,
 including one whose instance declaration was removed. Its fixed package remains
 pinned, and plugin deletion returns `result_unknown` with local evidence retained.
+Hydrating an already enabled declaration preserves its saved intent and leaves
+the blocked check visible, so status reads and pause remain available. A new
+enable/resume transition cannot bypass the unresolved check.
 
 Only a result saved after joined provider/worker cleanup may be reused on
 recovery. Its checkpoint is written before the final external ACK; recovery of

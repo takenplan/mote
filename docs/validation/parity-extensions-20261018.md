@@ -248,6 +248,14 @@ one concurrent SQLite read with the fixture's default zero busy timeout; that
 harness failure is retained separately and is not counted as defect evidence.
 The fixture now waits for that real database read without editing task data.
 
+Intermediate `7e733aeec4b2fd48430761fa7e83aa553a05e07b` passed 70 focused tests.
+A sixth process scenario then exposed an overbroad enable guard: restarting an
+already enabled instance during a recheck made `/api/plugins` return 503 while
+M04 hydrated its saved declaration. The guard now distinguishes hydration from
+a new enable transition. The added scenario requires readable blocked status,
+working pause, no new canary and refusal to resume over the old unknown. The
+intermediate result and its RED are kept separately from the final freeze.
+
 Only focused headless Node fixtures run in this repair. The new full 22-step
 affected plan remains for the driver after a new clean freeze; Q003 stays on
 hold until that handoff. Native/JVM/UI, real suppliers/models, physical devices
