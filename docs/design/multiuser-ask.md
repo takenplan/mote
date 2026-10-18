@@ -54,7 +54,11 @@ Pins retain their first exact snapshot; a later read cannot overwrite it. Artifa
 also pin their run and conversation lifetime, and apply the requested source scope.
 Conversation summaries, Memory cards and child prose are fallible context. Only
 originals disclosed in that model attempt can authorize a citation. Images require
-explicit expansion and real M03 pixels. Traces, errors and usage omit secrets and
+explicit expansion, real M03 pixels and the current account's original
+`perception.allowQueryImages` permission. That permission defaults off and is
+rechecked before and after asynchronous pixel preparation. Existing text and
+captions stay readable. Explicit dialogue uploads retain their independent
+attachment grant, as in the original flow. Traces, errors and usage omit secrets and
 private payload prose. No legacy global vector index or fake Memory fallback is used.
 
 ## Working memory, children and durable recovery
