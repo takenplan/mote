@@ -27,6 +27,17 @@ test('public and transitive production imports cannot select the legacy fixture'
   assert.ok(failures.some(value=>value.includes('src/helper.mjs')&&value.includes('non-production')));
 });
 
+test('reviewed processing, usage and authorization helpers are allowed only from their owning scoped hosts',t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-scoped-host-helpers-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const src=join(directory,'apps/server/src');mkdirSync(join(src,'scope'),{recursive:true});mkdirSync(join(src,'connectors'),{recursive:true});
+  for(const path of ['index.ts','app.ts','processor-admission.ts','media-execution-facts.ts','memory-validation.ts','connectors/authorization-output.ts'])writeFileSync(join(src,path),'export {};');
+  const imports={'task-execution.ts':"import '../processor-admission.js';",'processing.ts':"import '../processor-admission.js';import '../media-execution-facts.js';",'model-query.ts':"import '../memory-validation.js';",'connector-recordings.ts':"import '../connectors/authorization-output.js';"};
+  for(const [path,source] of Object.entries(imports))writeFileSync(join(src,'scope',path),source);
+  assert.deepEqual(checkProductionImports(directory),[]);
+  writeFileSync(join(src,'scope','unreviewed.ts'),"import '../processor-admission.js';import '../media-execution-facts.js';import '../memory-validation.js';import '../connectors/authorization-output.js';");
+  const failures=checkProductionImports(directory);assert.equal(failures.length,4);assert.ok(failures.every(value=>value.includes('unscoped production import: apps/server/src/scope/unreviewed.ts')));
+});
+
 test('undeclared tables, APIs, MCP tools/resources/prompts, tasks, directories, extensions and scoped registrations fail the architecture check',()=>{
   const source=`const server=Fastify();server.get('/api/private',handler);
     db.exec('CREATE TABLE private_new(id TEXT)');

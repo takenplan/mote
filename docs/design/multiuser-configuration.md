@@ -89,6 +89,8 @@ sample on `onUsage`, and finalizes the same fragment on success or failure.
 After cancellation or authorization revocation, the existing meter can only
 interrupt its own retained fragment, preserving earlier samples. This narrow
 finalizer cannot add usage, authorize a request or recreate a deleted row.
+The scope inventory assigns this numeric fragment ledger and its host-owner
+recovery rows to M04; the meter handle is not a business or model-access grant.
 The scoped query finalizer runs local result acceptance before marking success;
 image JSON, schema and pixel-read rejection preserve a failed fragment and its
 reported consumption without starting model repair or another request.

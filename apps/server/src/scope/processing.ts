@@ -78,8 +78,6 @@ export class ProcessingHost {
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly ingress:IngressHost,private readonly plugins:ScopedPluginHost,sourcePacks:readonly ImportPythonPackConfig[]=[]){
   installProcessing(db);
   this.processorAdmission=new ProcessorAdmission({db,reserveMetadata:()=>{}});
-  db.exec('CREATE TABLE IF NOT EXISTS mp_worker_cleanup(user_id TEXT NOT NULL,request_id TEXT NOT NULL,scope TEXT NOT NULL,snapshot_id TEXT NOT NULL,supported INTEGER NOT NULL,PRIMARY KEY(user_id,request_id))');
-  db.exec('CREATE TABLE IF NOT EXISTS mp_media_calls(user_id TEXT NOT NULL,task_id TEXT NOT NULL,issuance_id TEXT PRIMARY KEY REFERENCES task_external_calls(issuance_id) ON DELETE CASCADE,request_id TEXT NOT NULL,stage TEXT NOT NULL,scope TEXT NOT NULL,snapshot_id TEXT NOT NULL,supported INTEGER NOT NULL DEFAULT -1,fact TEXT,result_accepted INTEGER NOT NULL DEFAULT 0,replay_confirmed INTEGER NOT NULL DEFAULT 0)');
   this.importJobs=processingImports(runtime,db,ingress,execution,this.processors.intake,(context,ref,operationId)=>{const {settings}=this.snapshot(context);return settings.enabled&&!settings.automatic&&!this.policies.bindPlan(context,ref)?.archiveOnly?this.submitSync(context,ref,operationId):undefined;},sourcePacks,(context,ref)=>this.forUser(context).status(ref));
   ingress.configureSnapshotRecovery({needed:(context,ref)=>{
    const sql=this.sql(context);if(this.state(sql).deleted||sql.get('SELECT id FROM mp_artifacts WHERE user_id=$user AND original_id=? AND complete=1 LIMIT 1',ref.slice(9)))return false;

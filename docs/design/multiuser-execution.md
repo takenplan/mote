@@ -98,6 +98,11 @@ failure attempt. Existing task-specific policy, typed finite retries, safe failu
 receipts and checkpoint reuse remain in force; unclassified errors do not imply
 safe replay.
 
+M05 owns the `execution_stage_groups`/`execution_stage_fairness` service history,
+attempt-fenced `execution_resource_releases`, and admitted `task_model_resources`.
+The latter retain host-derived physical resource identity from M04, with no model
+credentials or additional authorization.
+
 Before an external effect, the handler must durably call `external.begin(key)`;
 `external.complete()` records a confirmed successful outcome. Every call has a
 fixed issuance ID and immutable user/epoch/key/time facts in `task_external_calls`;
