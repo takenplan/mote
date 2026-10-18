@@ -17,6 +17,7 @@ import {ProcessorAdmission} from '../processor-admission.js';
 import {readMediaExecutionFact} from '../media-execution-facts.js';
 import {imageOutput} from '../evidence-image.js';
 import {DEFAULT_IMAGE_RECIPE} from '../image-recipes.js';
+import {perceptionConfigurationSchema,defaultPerceptionConfiguration} from '../perception-configuration.js';
 import {defaultFileRecipe,defaultFileOutput,TRANSCRIPT_OUTPUT} from '../file-recipes.js';
 import {alignDialogue} from '../file-dialogue.js';
 import {formatWork} from '../format-work.js';
@@ -77,6 +78,7 @@ export class ProcessingHost {
  private readonly pluginStages=new WeakMap<TaskRun,{input:ProcessingInput;artifactId:string}>();
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly ingress:IngressHost,private readonly plugins:ScopedPluginHost,sourcePacks:readonly ImportPythonPackConfig[]=[]){
   installProcessing(db);
+  configuration.registerDomain('perception',()=>({id:'perception',schema:perceptionConfigurationSchema,defaultValue:defaultPerceptionConfiguration(),resolve:raw=>raw,fields:Object.keys(defaultPerceptionConfiguration()).map(path=>({path,effect:'next-request' as const}))}));
   this.processorAdmission=new ProcessorAdmission({db,reserveMetadata:()=>{}});
   this.importJobs=processingImports(runtime,db,ingress,execution,this.processors.intake,(context,ref,operationId)=>{const {settings}=this.snapshot(context);return settings.enabled&&!settings.automatic&&!this.policies.bindPlan(context,ref)?.archiveOnly?this.submitSync(context,ref,operationId):undefined;},sourcePacks,(context,ref)=>this.forUser(context).status(ref));
   ingress.configureSnapshotRecovery({needed:(context,ref)=>{
@@ -215,6 +217,7 @@ export class ProcessingHost {
   submit:async(value:unknown)=>{const input=z.object({originalRef:z.string(),operationId:z.string().min(1).max(256)}).strict().parse(value);await this.configuration.forUser(context).view();if(this.fileControl(context,input.originalRef).cancelled)throw new TaskError('file_processing_cancelled',409);this.input(context,processingInputSchema.parse({originalRef:input.originalRef,...this.snapshot(context,input.originalRef)}));const plan=this.policies.bindPlan(context,input.originalRef);if(plan?.archiveOnly)return {saved:true,processingRequired:false};return this.submit(context,input.originalRef,input.operationId);},
   view:async()=>{await this.configuration.forUser(context).view();return {settings:this.snapshot(context).settings,processors:this.processors.registry.list(),...this.processors.recipes.list(),outputs:this.processors.outputs.list()};},
   derive:async(value:unknown)=>{const input=z.object({originalRef:z.string(),operationId:z.string().min(1).max(256),modes:z.array(z.enum(['summary','turns','image'])).min(1).max(3)}).strict().parse(value);await this.configuration.forUser(context).view();return this.submitDerivatives(context,input.originalRef,input.operationId,input.modes);},
+  perceptionSettings:async()=>{const view=await this.configuration.forUser(context).view();return perceptionConfigurationSchema.parse(view.domains.find(domain=>domain.id==='perception')?.effective);},
   status:(ref:string)=>{const {sql,original,current}=this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true),row=sql.get('SELECT p.*,h.revision AS current_revision,h.sequence,h.min_visible_sequence FROM mp_publications p JOIN pd_materials h ON h.user_id=p.user_id AND h.id=p.material_id WHERE p.user_id=$user AND h.user_id=$user AND p.original_id=? AND h.sequence>=h.min_visible_sequence',ref.slice(9)),processed=sql.get('SELECT id FROM mp_artifacts WHERE user_id=$user AND original_id=? AND complete=1 LIMIT 1',ref.slice(9));const derivations=sql.all('SELECT d.kind,d.artifact_id AS artifactId,d.material_id AS materialId,h.revision FROM mp_derivations d JOIN pd_materials h ON h.user_id=d.user_id AND h.id=d.material_id WHERE d.user_id=$user AND h.user_id=$user AND d.original_id=? AND h.sequence>=h.min_visible_sequence ORDER BY d.kind',ref.slice(9)).map(row=>({kind:String(row.kind),artifactId:String(row.artifactId),materialId:String(row.materialId),revision:String(row.revision)}));return {original,current,saved:true,processingRequired:!this.policies.current(context,ref)?.archiveOnly,appliedPolicy:this.policies.current(context,ref),processed:!!processed,indexed:!!row||derivations.length>0,...(row?{artifactId:String(row.artifact_id),materialId:String(row.material_id),revision:String(row.current_revision)}:{}),index:{material:!!row||derivations.length>0,memory:false},derivations};},
   artifact:(id:string)=>this.artifact(context,id),
   fileStageIds:(ref:string)=>this.fileStageIds(context,ref),
