@@ -9,7 +9,14 @@ import {parseAnswer} from '@mote/agent';
 import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
-test('HTTP-imported maximum notes remain readable through native Ask and current correction fences',async t=>{
+type ImportHost=Awaited<ReturnType<typeof buildApp>>;
+const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return {promise,resolve};};
+async function importPhase(node:ImportHost,id:string,expected:'awaiting_confirmation'|'completed'){
+  for(let attempt=0;attempt<100&&node.imports.get(id).status!==expected;attempt++)await setTimeout(10);
+  assert.equal(node.imports.get(id).status,expected);
+}
+
+for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain readable through native Ask and current correction fences'+(delayedCommit?' with delayed source persistence':''),async t=>{
   const dataDir=mkdtempSync(join(tmpdir(),'mote-query-import-context-')),token='generated-context-owner';
   const prefix='These generated diary narrators are mine; quoted visitors remain separate. ',instruction=prefix+'甲'.repeat(12000-prefix.length);
   assert.equal(instruction.length,12000);
@@ -59,16 +66,32 @@ test('HTTP-imported maximum notes remain readable through native Ask and current
       }finally{await bridge.close();}
     }}),
   });
-  t.after(async()=>{await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
+  const sourceEntered=deferred(),sourceRelease=deferred();let held=false,releaseTask:Promise<void>|undefined;
+  if(delayedCommit){const upsert=node.sources.upsert.bind(node.sources);t.mock.method(node.sources,'upsert',async(...args:Parameters<typeof node.sources.upsert>)=>{
+    if(!held){held=true;sourceEntered.resolve();await sourceRelease.promise;}
+    return upsert(...args);
+  });}
+  t.after(async()=>{sourceEntered.resolve();await releaseTask;sourceRelease.resolve();await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
   const headers={authorization:'Bearer '+token};
   const created=await node.app.inject({method:'POST',url:'/api/imports',headers,payload:{instruction,files:[{name:'generated.custom',dataBase64:Buffer.from('Generated independent diary fixture').toString('base64')}]}});
   assert.equal(created.statusCode,202,created.body);
   const importId=created.json().id;
-  for(let i=0;i<100&&node.imports.get(importId).status!=='awaiting_confirmation';i++)await setTimeout(10);
-  assert.equal(node.imports.get(importId).status,'awaiting_confirmation');
+  await importPhase(node,importId,'awaiting_confirmation');
   const confirmed=await node.app.inject({method:'POST',url:'/api/imports/'+importId+'/confirm',headers});assert.equal(confirmed.statusCode,202,confirmed.body);
-  for(let i=0;i<100&&node.imports.get(importId).status!=='completed';i++)await setTimeout(10);
-  assert.equal(node.imports.get(importId).status,'completed');
+  if(delayedCommit)releaseTask=(async()=>{
+    await sourceEntered.promise;
+    // Reproduce persistence taking longer than the former 100 × 10 ms polling
+    // assumption. The same admitted commit remains live and holds its grant.
+    await setTimeout(1500);
+    const pending=node.imports.get(importId),step=node.executor.get(node.imports.confirmationIdentity(importId));
+    assert.equal(pending.status,'importing');assert.equal(pending.progress.processed,0);assert.equal(step?.state,'running');assert.equal(node.imports.hasActiveWorker(importId),true);
+    t.diagnostic(JSON.stringify({heldPersistence:{status:pending.status,processed:pending.progress.processed,taskState:step?.state,workerActive:node.imports.hasActiveWorker(importId)}}));
+    sourceRelease.resolve();
+  })();
+  await importPhase(node,importId,'completed');await releaseTask;
+  assert.deepEqual(node.imports.get(importId).progress,{total:2,processed:2,imported:2,duplicates:0});
+  assert.equal(node.executor.get(node.imports.confirmationIdentity(importId))?.state,'succeeded');
+  assert.equal(node.imports.hasActiveWorker(importId),false);
   await node.materialOrganizer.tick(100);await node.sourcePipelines.tick(100);
   const answer=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Inspect generated diary context'}});
   assert.equal(answer.statusCode,200,answer.body);assert.equal(verified,1);
