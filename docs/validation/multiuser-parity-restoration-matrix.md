@@ -8,7 +8,7 @@
 
 每行继承计划的模块登记（owner chat / branch / PR / 独立验收 chat / 候选 SHA）；未填为尚无候选。`C/N/R/S/U/OLD` 见计划证据定义，均描述起点审计，不是本轮修复结果。每行末列同时保留本轮证据、未验证与阻塞，不能用 audit evidence 关闭。
 
-所有核心行初态 OPEN：本轮实现证据=无、运行验收=UNRUN、独立验收/PM释放=无，等待模块候选。每次更新须提供精确源码 SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分。模块登记与该行共同构成完整记录。
+初态为OPEN；当前逐行状态与下方精确候选登记共同构成完整记录。WEB-W01/W02已由PM确认模块READY，其余未以候选代码或作者定向结果自动关闭。每次更新须提供精确源码SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分；模块READY仍不代表最终跨模块验收或合入释放。
 
 ## 全部行共用的验收前置
 
@@ -26,14 +26,14 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| MEM-M01 | C / P1 | 完整提取输出合同 | CONFIG | 默认个人 v5 及依赖宿主格式的配方经真实提取入口捕获请求；提取与独立审核均含同一完整字段/引文/coverage 合同及示例，保持不可变策略版本。 | M01；静态调用链；窄测试加载失败 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M02 | C / P1 | 同任务主动补读 | ASK / FILE | 跨批年份/本人/续文缺口由提取和独立审核通过 context_evidence 读取同任务已授权原件；记录精确披露依赖；跨账号/未授权范围拒绝。 | M02；静态装配与工具门控 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M03 | C / P1 | 未完成评估与同任务重试 | EXEC | 分别覆盖incomplete、漏coverage、合法no_candidates及incomplete+部分候选；未完成范围不得提前正式发布或成功结算，成功兄弟保留，同job retry只补缺口不重放成功；重启可恢复，取消不续跑。 | M03; static extraction-review-publish-retry chain | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M04 | C / P1 | 自动双域整合 | EXEC | 一次提取产生合法 personal/coding 卡；自动按卡实际域分别整合并保存独立检查点，改变 settings.profile 不遗漏另一域，手工范围保持。 | M04；静态 SQL/分组 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M05 | C / P2 | 整合仅已选长期 Memory | — | 日常 observation 不计入自动整合 minChanges 或发送给整合模型；selected Memory 保持原触发与独立审核；不新增观察转长期产品。 | M05；静态输入谓词 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M06 | C / P1 | Coding 理解准备与 work/event 产物 | FILE / EXEC / ACTION | Coding 导入→清洗原文→独立会话理解→workRecords/events 及理解引用→Memory 提取/独立审核；失败/重试/重启保留阶段；actionCues 仍为空。 | M06；真实旧/新 composition | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M07 | C / P2 | 引文错误顺序与安全诊断 | CONFIG | 错误 quote、offset 与 coverage 归属分别触发原反馈顺序；安全诊断有 phase/run/candidate/span/field/尝试信息，无原文或秘密；审核失败不抹提取成功。 | M07；静态 validator/诊断链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| MEM-M08 | R / P2 | 持续模型积压下及时发布 | EXEC / CONFIG | 生成持续 eligible 模型工作并持有慢模型；已独立审核结果在积压未清空时仍可发布/查询，记录时序与配置并发；每用户仍单 publisher，未知外部结果不重放。 | M08；资源与跨池顺序推导，未测饥饿 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| MEM-M01 | C / P1 | 完整提取输出合同 | CONFIG | 默认个人 v5 及依赖宿主格式的配方经真实提取入口捕获请求；提取与独立审核均含同一完整字段/引文/coverage 合同及示例，保持不可变策略版本。 | M01；静态调用链；窄测试加载失败 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| MEM-M02 | C / P1 | 同任务主动补读 | ASK / FILE | 跨批年份/本人/续文缺口由提取和独立审核通过 context_evidence 读取同任务已授权原件；记录精确披露依赖；跨账号/未授权范围拒绝。 | M02；静态装配与工具门控 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| MEM-M03 | C / P1 | 未完成评估与同任务重试 | EXEC | 分别覆盖incomplete、漏coverage、合法no_candidates及incomplete+部分候选；未完成范围不得提前正式发布或成功结算，成功兄弟保留，同job retry只补缺口不重放成功；重启可恢复，取消不续跑。 | M03; static extraction-review-publish-retry chain | OPEN；incomplete恢复源码可追踪；R01保存后问题时序与最终新source待freeze，完整独验UNRUN |
+| MEM-M04 | C / P1 | 自动双域整合 | EXEC | 一次提取产生合法 personal/coding 卡；自动按卡实际域分别整合并保存独立检查点，改变 settings.profile 不遗漏另一域，手工范围保持。 | M04；静态 SQL/分组 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| MEM-M05 | C / P2 | 整合仅已选长期 Memory | — | 日常 observation 不计入自动整合 minChanges 或发送给整合模型；selected Memory 保持原触发与独立审核；不新增观察转长期产品。 | M05；静态输入谓词 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| MEM-M06 | C / P1 | Coding 理解准备与 work/event 产物 | FILE / EXEC / ACTION | Coding 导入→清洗原文→独立会话理解→workRecords/events 及理解引用→Memory 提取/独立审核；失败/重试/重启保留阶段；actionCues 仍为空。 | M06；真实旧/新 composition | CHANGES_REQUIRED；F02精确理解复用/F03provenance分组已返修WIP，最终冻结/独验UNRUN |
+| MEM-M07 | C / P2 | 引文错误顺序与安全诊断 | CONFIG | 错误 quote、offset 与 coverage 归属分别触发原反馈顺序；安全诊断有 phase/run/candidate/span/field/尝试信息，无原文或秘密；审核失败不抹提取成功。 | M07；静态 validator/诊断链 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| MEM-M08 | R / P2 | 持续模型积压下及时发布 | EXEC / CONFIG | 生成持续 eligible 模型工作并持有慢模型；已独立审核结果在积压未清空时仍可发布/查询，记录时序与配置并发；每用户仍单 publisher，未知外部结果不重放。 | M08；资源与跨池顺序推导，未测饥饿 | CHANGES_REQUIRED；F01连续批与新M05宿主port复核，实际>2/EXEC固定组合与独验UNRUN |
 
 ### FILE
 
@@ -41,12 +41,12 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| FILE-01 | C+N / P1 | 权威设备与资料时间投影 | ASK / MEM | 旧日期资料今日上传/处理后，经真实 Files→Material→Ask/Memory 按原设备/原日期可发现；接收/处理时间分开，重启与修订仍保留权威 origin。 | FILE-01；生成 SQLite 谓词 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| FILE-02 | C / P1 | 原件归档与处理方案分离 | MEM / CONFIG | archive 保留+OCR/理解与真实 archive-only 成对覆盖；慢图片步骤期间父资料不提前 ready，理解与原图组合保留；补自定义 image:<step> recipe+caption。 | FILE-02；静态父组合/readiness | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| FILE-03 | C+N / P1 | 原位置缺失仍可读中央归档 | LIFE / DESKTOP / AND | 本轮fresh及新portable闭环：归档→deleted revision/无原件新head→列表/旧详情/播放/导出仍达最后归档版并显示originMissing，forget/disable拒绝。当前epoch5既有deleted且无持久head身份不回填/猜排序，明确未修边界，不能声称其列表已恢复。 | FILE-03；生成 Files JOIN | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| FILE-04 | C+N / P2 | reference/Shadow 元数据目录 | DESKTOP / AND / EXT | 仅文件信息扫描/上传 ACK 后 Files 列表与详情可见，hasOriginal=false/不可下载/不处理表达准确；同 ID 另一账号不可见。 | FILE-04；生成 Files JOIN | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| FILE-05 | C / P2 | 管理员目录预览确认导入 | CONFIG / EXT | 生成独立目录经管理员原目录入口→遍历/预览→明确确认→SourcePack/导入；普通用户拒绝，symlink/资料库交叉路径保护保留；单文件 host-import 不能替代。 | FILE-05；静态 request.directory 403 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| FILE-06 | C+N / P2 | 按相对路径搜索文件 | DESKTOP / AND | 多个同名 note.txt 分属不同目录；标题与 relativePath 均按原字面搜索并保持账号/游标范围；路径独有命中可见。 | FILE-06；生成 SQL title/path | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| FILE-01 | C+N / P1 | 权威设备与资料时间投影 | ASK / MEM | 旧日期资料今日上传/处理后，经真实 Files→Material→Ask/Memory 按原设备/原日期可发现；接收/处理时间分开，重启与修订仍保留权威 origin。 | FILE-01；生成 SQLite 谓词 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| FILE-02 | C / P1 | 原件归档与处理方案分离 | MEM / CONFIG | archive 保留+OCR/理解与真实 archive-only 成对覆盖；慢图片步骤期间父资料不提前 ready，理解与原图组合保留；补自定义 image:<step> recipe+caption。 | FILE-02；静态父组合/readiness | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| FILE-03 | C+N / P1 | 原位置缺失仍可读中央归档 | LIFE / DESKTOP / AND | 本轮fresh及新portable闭环：归档→deleted revision/无原件新head→列表/旧详情/播放/导出仍达最后归档版并显示originMissing，forget/disable拒绝。当前epoch5既有deleted且无持久head身份不回填/猜排序，明确未修边界，不能声称其列表已恢复。 | FILE-03；生成 Files JOIN | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| FILE-04 | C+N / P2 | reference/Shadow 元数据目录 | DESKTOP / AND / EXT | 仅文件信息扫描/上传 ACK 后 Files 列表与详情可见，hasOriginal=false/不可下载/不处理表达准确；同 ID 另一账号不可见。 | FILE-04；生成 Files JOIN | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| FILE-05 | C / P2 | 管理员目录预览确认导入 | CONFIG / EXT | 生成独立目录经管理员原目录入口→遍历/预览→明确确认→SourcePack/导入；普通用户拒绝，symlink/资料库交叉路径保护保留；单文件 host-import 不能替代。 | FILE-05；静态 request.directory 403 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| FILE-06 | C+N / P2 | 按相对路径搜索文件 | DESKTOP / AND | 多个同名 note.txt 分属不同目录；标题与 relativePath 均按原字面搜索并保持账号/游标范围；路径独有命中可见。 | FILE-06；生成 SQL title/path | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### ASK
 
@@ -54,11 +54,11 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| ASK-A01 | R / P1 | 目录元数据独立依赖与发布 fence | FILE / CONN | 仅 sources/devices 目录读取→provider await→删除/停用/改名或相关说明改变→发送/保存前复核旧元数据；纯 lastSyncAt 心跳不撤销；精确说明读取另有 pin。 | A01；高置信静态链，竞态未运行 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ASK-A02 | C / P1 | 账号语义/混合召回与相关度 | CONFIG / EXT / FILE | 配置 embedding 的账号经生产入口写入生成语料后 semantic/hybrid/ranked 检索可达；候选隔离、rank/coverage/degraded 如实报告；未配置保持原行为，不启动历史收费回填。 | A02；静态 producer/reader 缺口 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ASK-A03 | C+N / P2 | 说明发现及 preview | CONN | 来源名不命中而说明独有命中时可发现，返回原命中 preview/长度及 exact ref；读取精确版本，账号隔离，不引入词表路由。 | A03；生成说明匹配 SQL | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ASK-A04 | C / P2 | 确定失败轮次历史与重试 | WEB / EXEC | 问题确定失败→离开→重开对话仍显示原问题/失败轮次并能再次提问；取消/超时失效 grant/撤权后的迟到成功不写为完成。 | A04；静态 producer→GET→UI | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ASK-A05 | C+N / P2 | 外部显式响应分页 | EXT | 经外部Context/MCP验证browse聚合导航collections、search稳定枚举、retrieve相关排序且拒绝cursor，并请求显式maxCharacters；长记录截页/续页和truncated正确。内部Ask仍无字符配额，bundle保留独立合同。 | A05; extracted queryPage over maxCharacters with truncated=false | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| ASK-A01 | R / P1 | 目录元数据独立依赖与发布 fence | FILE / CONN | 仅 sources/devices 目录读取→provider await→删除/停用/改名或相关说明改变→发送/保存前复核旧元数据；纯 lastSyncAt 心跳不撤销；精确说明读取另有 pin。 | A01；高置信静态链，竞态未运行 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ASK-A02 | C / P1 | 账号语义/混合召回与相关度 | CONFIG / EXT / FILE | 配置 embedding 的账号经生产入口写入生成语料后 semantic/hybrid/ranked 检索可达；候选隔离、rank/coverage/degraded 如实报告；未配置保持原行为，不启动历史收费回填。 | A02；静态 producer/reader 缺口 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ASK-A03 | C+N / P2 | 说明发现及 preview | CONN | 来源名不命中而说明独有命中时可发现，返回原命中 preview/长度及 exact ref；读取精确版本，账号隔离，不引入词表路由。 | A03；生成说明匹配 SQL | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ASK-A04 | C / P2 | 确定失败轮次历史与重试 | WEB / EXEC | 问题确定失败→离开→重开对话仍显示原问题/失败轮次并能再次提问；取消/超时失效 grant/撤权后的迟到成功不写为完成。 | A04；静态 producer→GET→UI | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ASK-A05 | C+N / P2 | 外部显式响应分页 | EXT | 经外部Context/MCP验证browse聚合导航collections、search稳定枚举、retrieve相关排序且拒绝cursor，并请求显式maxCharacters；长记录截页/续页和truncated正确。内部Ask仍无字符配额，bundle保留独立合同。 | A05; extracted queryPage over maxCharacters with truncated=false | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### CONN
 
@@ -66,13 +66,13 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| CONN-C01 | C / P1 | 故障后持续周期发现 | EXEC | 真实 scoped sync→生成 429/503/网络终态→网络恢复→未来 poll 继续；重启仍继续周期责任，暂停/撤权停止，unknown 外部副作用不盲重放。 | C01；静态 successor/schedule | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C02 | C / P1 | 原后台同步开关生效 | WEB / CONFIG | 录音与 Lark autoSync=false→保存→一次手动同步→跨原 poll 周期不自动读；开启则恢复原周期；connection 生命周期作为权限门而不吞用户开关。 | C02；静态 selection/connection 失配 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C03 | C / P1 | Lark 自动来源与预览确认 | FILE / WEB | 已有日历/旧范围周期→新文档范围只预览→后台 poll 不 confirm/归档新正文；明确手动确认后才按原行为同步，automatic=true 来源准确。 | C03；静态 startSync 参数 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C04 | C / P1 | 单录音规范正文与证据图 | FILE / MEM | 多段录音经真实 sync→处理→Memory intake 只形成一份规范语义全文，精确 segment locator/raw export/音频关系保留；缩短/empty/unsupported 修订与历史不回退。 | C04；静态 N+1 producer，未测产卡数 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C05 | C / P1 | 录音原专用配方安装绑定 | MEM / CONFIG | 枚举原 recording v3 提取/审核配方；新录音来源默认正确绑定，显式覆盖保留；请求捕获确认非 generic personal，不重做历史任务。 | C05；静态安装/默认绑定缺口 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C06 | C / P2 | 选择变化复用已确认音频 | FILE / LIFE | 同账号已备份→改变仍包含录音的选择/autoSync→再次同步 provider.media 调用不增加；当前账号/source/媒体身份及撤权检查有效。 | C06；静态 existingMedia=undefined | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONN-C07 | C / P2 | 独立阶段状态和重试时间 | WEB / AND | 生成 metadata/transcript/audio 各阶段独立失败与不同重试时间；真实页面显示正确 phase/state/error/nextAttemptAt，成功兄弟不被 aggregate error 覆盖。 | C07；服务端事实→Web 类型/渲染漏接 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| CONN-C01 | C / P1 | 故障后持续周期发现 | EXEC | 真实 scoped sync→生成 429/503/网络终态→网络恢复→未来 poll 继续；重启仍继续周期责任，暂停/撤权停止，unknown 外部副作用不盲重放。 | C01；静态 successor/schedule | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C02 | C / P1 | 原后台同步开关生效 | WEB / CONFIG | 录音与 Lark autoSync=false→保存→一次手动同步→跨原 poll 周期不自动读；开启则恢复原周期；connection 生命周期作为权限门而不吞用户开关。 | C02；静态 selection/connection 失配 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C03 | C / P1 | Lark 自动来源与预览确认 | FILE / WEB | 已有日历/旧范围周期→新文档范围只预览→后台 poll 不 confirm/归档新正文；明确手动确认后才按原行为同步，automatic=true 来源准确。 | C03；静态 startSync 参数 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C04 | C / P1 | 单录音规范正文与证据图 | FILE / MEM | 多段录音经真实 sync→处理→Memory intake 只形成一份规范语义全文，精确 segment locator/raw export/音频关系保留；缩短/empty/unsupported 修订与历史不回退。 | C04；静态 N+1 producer，未测产卡数 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C05 | C / P1 | 录音原专用配方安装绑定 | MEM / CONFIG | 枚举原 recording v3 提取/审核配方；新录音来源默认正确绑定，显式覆盖保留；请求捕获确认非 generic personal，不重做历史任务。 | C05；静态安装/默认绑定缺口 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C06 | C / P2 | 选择变化复用已确认音频 | FILE / LIFE | 同账号已备份→改变仍包含录音的选择/autoSync→再次同步 provider.media 调用不增加；当前账号/source/媒体身份及撤权检查有效。 | C06；静态 existingMedia=undefined | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONN-C07 | C / P2 | 独立阶段状态和重试时间 | WEB / AND | 生成 metadata/transcript/audio 各阶段独立失败与不同重试时间；真实页面显示正确 phase/state/error/nextAttemptAt，成功兄弟不被 aggregate error 覆盖。 | C07；服务端事实→Web 类型/渲染漏接 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### EXEC
 
@@ -80,9 +80,9 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| EXEC-X01 | C+N / P1 | 业务 Operation family 与增量更新 | WEB / MEM / FILE / ASK / ACTION | 各域后台运行→完成产生原业务 kind/filter 与变化通知；已打开的相应页面自动失效更新，同 ID 双用户不互读；不能靠全量 reset 代替。 | X01；函数抽取 feed+generated-kind SQL | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| EXEC-X02 | C+N / P1 | 交互与后台独立 lane | ASK / CONFIG | 生成持续慢后台 Insight 占满背景名额时聊天仍能用原交互 lane；账号公平保留，等待模型 gate 不先占掉聊天机会；记录派发时序。 | X02；静态链+limit 函数 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| EXEC-X03 | C+N / P2 | 有效并发配置驱动执行 | CONFIG / MEM | 热更新原交互/后台/Memory 并发到允许值后生产池实测生效，配置8不被隐藏 fixed2 截断；资源真实互斥仍保留并可诊断。 | X03；抽取 limit 配置8→2 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| EXEC-X01 | C+N / P1 | 业务 Operation family 与增量更新 | WEB / MEM / FILE / ASK / ACTION | 各域后台运行→完成产生原业务 kind/filter 与变化通知；已打开的相应页面自动失效更新，同 ID 双用户不互读；不能靠全量 reset 代替。 | X01；函数抽取 feed+generated-kind SQL | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| EXEC-X02 | C+N / P1 | 交互与后台独立 lane | ASK / CONFIG | 生成持续慢后台 Insight 占满背景名额时聊天仍能用原交互 lane；账号公平保留，等待模型 gate 不先占掉聊天机会；记录派发时序。 | X02；静态链+limit 函数 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| EXEC-X03 | C+N / P2 | 有效并发配置驱动执行 | CONFIG / MEM | 热更新原交互/后台/Memory 并发到允许值后生产池实测生效，配置8不被隐藏 fixed2 截断；资源真实互斥仍保留并可诊断。 | X03；抽取 limit 配置8→2 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### CONFIG
 
@@ -90,13 +90,13 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| CONFIG-C01 | C+N / P1 | 个人目标改变与秘密复用确认 | WEB | 保存过生成 key/敏感 headers/body 的个人连接→修改 provider/protocol/baseUrl→未确认复用必须按原提示处理；确认/重填/清除路径正确，无真实网络或秘密回显。 | C01；retainViewSecret 函数抽取 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C02 | C / P1 | Codex 探测与业务统一运行配置 | ASK / MEM / FILE / EXT | 配置生成 executable/home 进程 fixture；目录/探测/Ask/Memory/分析/复核/导入及相关 provider 路径均使用固定实例 runtime，不回落默认登录；真实 Codex 另列。 | C02；静态 runtime 注入分岔 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C03 | C / P2 | 用量统计、分页与价格入口 | WEB | 日期/时区/from-to、Agent/模块/Skill/provider/model/status 过滤、分组/汇总/facets/下钻/分页及价格编辑用原界面可达；双用户数据不混；价格快照保留。 | C03；静态 query/页面退化 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C04 | C / P2 | 个人草稿目录/探测后保存 | WEB | 未保存个人 endpoint/key 草稿→目录/测试→选模型→保存；探测不改有效配置；错误草稿不影响在途工作；shared 引用仍禁任意 caller target/key。 | C04；静态 dirty 阻挡 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C05 | C / P2 | 普通配置新版本与真正撤权分开 | EXEC / ASK / MEM | 在途/yield 任务期间普通 maxTokens/reasoning/timeout 更新：原快照可完成，后续用新值；删除/撤回资源/凭据则拒绝旧 lease，重启仍精确校验。 | C05；静态全 settings hash 撤权 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C06 | C / P2 | 个人每功能独立模型选择 | WEB | 一套个人 endpoint/key 保存一次，聊天 model A、Memory model B 持久选择并执行；不复制连接/凭据；shared 管理员固定完整引用权限保持。 | C06；静态 selection/schema/UI | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| CONFIG-C07 | C / P2 | 入口明确用量归属 | FILE / MEM | 生成文件分析/复核/导入真实入口执行后收据 Agent/module/skill 与原归属一致，operation/account 独立；不按内容推断，真实历史未知仍未知。 | C07；静态 attribution 缺口 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| CONFIG-C01 | C+N / P1 | 个人目标改变与秘密复用确认 | WEB | 保存过生成 key/敏感 headers/body 的个人连接→修改 provider/protocol/baseUrl→未确认复用必须按原提示处理；确认/重填/清除路径正确，无真实网络或秘密回显。 | C01；retainViewSecret 函数抽取 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C02 | C / P1 | Codex 探测与业务统一运行配置 | ASK / MEM / FILE / EXT | 配置生成 executable/home 进程 fixture；目录/探测/Ask/Memory/分析/复核/导入及相关 provider 路径均使用固定实例 runtime，不回落默认登录；真实 Codex 另列。 | C02；静态 runtime 注入分岔 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C03 | C / P2 | 用量统计、分页与价格入口 | WEB | 日期/时区/from-to、Agent/模块/Skill/provider/model/status 过滤、分组/汇总/facets/下钻/分页及价格编辑用原界面可达；双用户数据不混；价格快照保留。 | C03；静态 query/页面退化 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C04 | C / P2 | 个人草稿目录/探测后保存 | WEB | 未保存个人 endpoint/key 草稿→目录/测试→选模型→保存；探测不改有效配置；错误草稿不影响在途工作；shared 引用仍禁任意 caller target/key。 | C04；静态 dirty 阻挡 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C05 | C / P2 | 普通配置新版本与真正撤权分开 | EXEC / ASK / MEM | 在途/yield 任务期间普通 maxTokens/reasoning/timeout 更新：原快照可完成，后续用新值；删除/撤回资源/凭据则拒绝旧 lease，重启仍精确校验。 | C05；静态全 settings hash 撤权 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C06 | C / P2 | 个人每功能独立模型选择 | WEB | 一套个人 endpoint/key 保存一次，聊天 model A、Memory model B 持久选择并执行；不复制连接/凭据；shared 管理员固定完整引用权限保持。 | C06；静态 selection/schema/UI | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| CONFIG-C07 | C / P2 | 入口明确用量归属 | FILE / MEM | 生成文件分析/复核/导入真实入口执行后收据 Agent/module/skill 与原归属一致，operation/account 独立；不按内容推断，真实历史未知仍未知。 | C07；静态 attribution 缺口 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### DESKTOP
 
@@ -104,10 +104,10 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| DESKTOP-D1 | C+N / P1 | 文件逐项 ACK/拒绝/暂时失败 | FILE / EXEC | source scan→同批 ok/409/410/暂时失败/later；已成功逐项结清、永久拒绝按版本隔离、无关项继续；重启不丢 ACK，不改 ID/前驱覆盖中央。 | D1；生产 sendBatch 合成 seam | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| DESKTOP-D2 | C / P1 | 跨24小时会话与 durable ACK 恢复 | FILE / LIFE | 真实客户端与 Ingress 上传未commit/commit但ACK丢失→模拟超过24h且无GC→同版本重启重试恢复 ACK 或新合法 attempt；无手工GC/改文件步骤，字节与owner校验保留。 | D2；静态跨端状态链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| DESKTOP-D3 | C+N / P2 | 服务端分页与首屏 | FILE / ASK | 生成长历史与整日截图，真实浏览入口每页只消费原 limit/cursor、后续页失败不阻首屏；翻页/头部插入不靠本地 offset 全量扫描；账号/device/query绑定。 | D3；capturePages 1000行 seam | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| DESKTOP-D4 | C+N / P2 | 中央原始 sizeBytes 显示 | FILE | 有OCR/无OCR中央截图分别保留 server sizeBytes，2MiB不变14字节/0；本机记录原大小算法不回退，真实隐藏 renderer 验显示。 | D4；preview 生产函数 seam | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| DESKTOP-D1 | C+N / P1 | 文件逐项 ACK/拒绝/暂时失败 | FILE / EXEC | source scan→同批 ok/409/410/暂时失败/later；已成功逐项结清、永久拒绝按版本隔离、无关项继续；重启不丢 ACK，不改 ID/前驱覆盖中央。 | D1；生产 sendBatch 合成 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| DESKTOP-D2 | C / P1 | 跨24小时会话与 durable ACK 恢复 | FILE / LIFE | 真实客户端与 Ingress 上传未commit/commit但ACK丢失→模拟超过24h且无GC→同版本重启重试恢复 ACK 或新合法 attempt；无手工GC/改文件步骤，字节与owner校验保留。 | D2；静态跨端状态链 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| DESKTOP-D3 | C+N / P2 | 服务端分页与首屏 | FILE / ASK | 生成长历史与整日截图，真实浏览入口每页只消费原 limit/cursor、后续页失败不阻首屏；翻页/头部插入不靠本地 offset 全量扫描；账号/device/query绑定。 | D3；capturePages 1000行 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| DESKTOP-D4 | C+N / P2 | 中央原始 sizeBytes 显示 | FILE | 有OCR/无OCR中央截图分别保留 server sizeBytes，2MiB不变14字节/0；本机记录原大小算法不回退，真实隐藏 renderer 验显示。 | D4；preview 生产函数 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### AND
 
@@ -115,10 +115,10 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| AND-01 | C+N / P1 | 设置/重登恢复日历投递 | ACTION / CONFIG | 真实 connect→RuntimeSettings.apply/replaceAccount→WorkManager 持久调度→投递；普通设置与同账号重登成对恢复，A→B旧工作退休，不能仅直接 doWork。 | AND-01；静态调用+源码断言 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| AND-02 | C+N / P1 | 原始采集逐项结清与冲突隔离 | FILE / EXEC | packed及单条队列含同ID不同内容409后仍上传正常生成记录；原冲突可见且不堵队头；核对旧410适用状态而不伪称已复现，不自动改ID/覆盖。 | AND-02；静态跨端+源码断言 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| AND-03 | C+N / P2 | 窄 transport 原 typed outcome | FILE / CONN | disabled 注册、source item 409、file_forgotten410，自动/手动分别走原 paused/permanent/blocked 状态；不误作 offline 无限重试，恢复入口及权限正确。 | AND-03；静态异常分类+断言 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| AND-04 | C+N / P2 | 恢复页与 Worker 同账号状态 | WEB | 页面检查/补传/停止→Worker→真实页面报告一致；A/B切换和旧结果迟到不回写新页面；读取与写入均为同一账号 store，用户步骤不增加。 | AND-04；静态 prefs 错位+断言 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| AND-01 | C+N / P1 | 设置/重登恢复日历投递 | ACTION / CONFIG | 真实 connect→RuntimeSettings.apply/replaceAccount→WorkManager 持久调度→投递；普通设置与同账号重登成对恢复，A→B旧工作退休，不能仅直接 doWork。 | AND-01；静态调用+源码断言 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| AND-02 | C+N / P1 | 原始采集逐项结清与冲突隔离 | FILE / EXEC | packed及单条队列含同ID不同内容409后仍上传正常生成记录；原冲突可见且不堵队头；核对旧410适用状态而不伪称已复现，不自动改ID/覆盖。 | AND-02；静态跨端+源码断言 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| AND-03 | C+N / P2 | 窄 transport 原 typed outcome | FILE / CONN | disabled 注册、source item 409、file_forgotten410，自动/手动分别走原 paused/permanent/blocked 状态；不误作 offline 无限重试，恢复入口及权限正确。 | AND-03；静态异常分类+断言 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| AND-04 | C+N / P2 | 恢复页与 Worker 同账号状态 | WEB | 页面检查/补传/停止→Worker→真实页面报告一致；A/B切换和旧结果迟到不回写新页面；读取与写入均为同一账号 store，用户步骤不增加。 | AND-04；静态 prefs 错位+断言 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### WEB
 
@@ -135,9 +135,9 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| EXT-E01 | C+N / P2 | 停用无引用实例退役卸载 | CONFIG / MEM | 管理员安装→配置→停用无历史引用实例→原卸载操作成功；其他账号实例/真实历史/在途check继续阻挡，UI allowed与执行一致，不要求手改JSON。 | E01；旧/新真实方法抽取+SQLite | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| EXT-E02 | C / P2 | 原核验入口真实 provider probe | MEM / CONFIG | 生成不可用/可用 provider 经原核验入口得到准确capabilities/issues/observed状态与反馈；describe不冒充验证；隔离probe目录与固定模型授权，失败不激活错误方案。 | E02；静态probe→describe变化 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| EXT-E03 | C / P2 | MCP reference 目录元数据 | FILE / ASK | reference 导入经分页资源目录获得真实 name/MIME，缺失才用原fallback；不读正文，取消/撤权/账号边界与正常import同效。 | E03；静态分支 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| EXT-E01 | C+N / P2 | 停用无引用实例退役卸载 | CONFIG / MEM | 管理员安装→配置→停用无历史引用实例→原卸载操作成功；其他账号实例/真实历史/在途check继续阻挡，UI allowed与执行一致，不要求手改JSON。 | E01；旧/新真实方法抽取+SQLite | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| EXT-E02 | C / P2 | 原核验入口真实 provider probe | MEM / CONFIG | 生成不可用/可用 provider 经原核验入口得到准确capabilities/issues/observed状态与反馈；describe不冒充验证；隔离probe目录与固定模型授权，失败不激活错误方案。 | E02；静态probe→describe变化 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| EXT-E03 | C / P2 | MCP reference 目录元数据 | FILE / ASK | reference 导入经分页资源目录获得真实 name/MIME，缺失才用原fallback；不读正文，取消/撤权/账号边界与正常import同效。 | E03；静态分支 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### ACTION
 
@@ -145,10 +145,10 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| ACTION-A01 | S+R / P2 | 完整语义产物消费与检查点 | MEM / FILE / EXEC | Actions主责旧bounded screen/完整segment的真实producer→semantic actionCues→calendar extraction，含原触发/提示/artifact-revision检查点；不能只补consumer或扩大所有资料；无完整segment保留原文分支，Coding actionCues仍空。 | A01; confirmed structure, quality consequences unrun | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ACTION-A02 | C+N / P2 | 同批合并/去重/执行保护 | EXEC | 真实批准建议入口覆盖create sameAs+update、两个sameAs、完全相同new、已有approved/executing/uncertain子操作；一次批次合并/版本推进、精确去重，不使合法批次stale。 | A02；三例真实方法抽取 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ACTION-A03 | C / P2 | 成功历史身份独立于授权代次 | CONFIG / EXEC | 成功历史→停用再开/只改时区→新内容继续而成功模型单元不重跑；重启/失败retry复用检查点，授权generation仍拒绝旧未授权工作。 | A03；静态policy/cursor/job身份 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| ACTION-A04 | C / P2 | 纯重命名保留建议/批准 | ASK / CONN | 来源纯改名/无实际变化保存后原建议可看/批准/claim且不报已删除；删除/撤权/语义依赖变化仍失效，迟到ACK只结算外部事实。 | A04；静态触发器/proof/claim | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| ACTION-A01 | S+R / P2 | 完整语义产物消费与检查点 | MEM / FILE / EXEC | Actions主责旧bounded screen/完整segment的真实producer→semantic actionCues→calendar extraction，含原触发/提示/artifact-revision检查点；不能只补consumer或扩大所有资料；无完整segment保留原文分支，Coding actionCues仍空。 | A01; confirmed structure, quality consequences unrun | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ACTION-A02 | C+N / P2 | 同批合并/去重/执行保护 | EXEC | 真实批准建议入口覆盖create sameAs+update、两个sameAs、完全相同new、已有approved/executing/uncertain子操作；一次批次合并/版本推进、精确去重，不使合法批次stale。 | A02；三例真实方法抽取 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ACTION-A03 | C / P2 | 成功历史身份独立于授权代次 | CONFIG / EXEC | 成功历史→停用再开/只改时区→新内容继续而成功模型单元不重跑；重启/失败retry复用检查点，授权generation仍拒绝旧未授权工作。 | A03；静态policy/cursor/job身份 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| ACTION-A04 | C / P2 | 纯重命名保留建议/批准 | ASK / CONN | 来源纯改名/无实际变化保存后原建议可看/批准/claim且不报已删除；删除/撤权/语义依赖变化仍失效，迟到ACK只结算外部事实。 | A04；静态触发器/proof/claim | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ### LIFE
 
@@ -156,11 +156,11 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| LIFE-L01 | C / P1 | 原保留周期启动/每小时维护 | FILE / ASK / MEM | 生成旧/新采集和文件版本；真实启动/小时推进按context_end清理超龄非文件并撤派生/历史，排除文件规则与retentionDays=0保留；不处理真实资料。 | L01；静态配置无消费者 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| LIFE-L02 | C / P1 | 既有实例逻辑容量准入 | FILE / DESKTOP / AND | 生成小容量实例在原逻辑计数边界返回507且不先接受丢数据，客户端保留队列并在释放后继续；并发双用户共享实例账本，不新增个人配额/磁盘写满实验。 | L02；静态实例上限失效 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| LIFE-L03 | C+N / P1 | 个人导入导出一致性隔离 | MEM / FILE | A导出/导入含await provider期间B持续写入不误报archive_changed；A真实依赖变化/撤权仍拒绝，双连接/重启覆盖，不靠全库静默重试。 | L03；全局fingerprint SQLite | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| LIFE-L04 | C / P1 | 中央导出内容副本删除生命周期 | FILE / MEM / ASK | 按原生成当前完整导出→直接响应下载旅程，无中央永久完整副本/下载历史。内部任务进度、无内容receipt和必要暂存按完成/失败/取消/断流/重启清理及原重试；授权/pin/删除fence保持。不得新增latest-only/TTL/次数政策或额外用户下载步骤；仅生成fixture，不操作真实历史副本。 | L04；静态保存/下载/删除全链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| LIFE-L05 | C / P2 | 原GC启动/周期驱动 | FILE / EXEC / EXT | 生成失效upload/workspace/snapshot/失败restore残留→真实启动/周期自动回收；活跃pin和真实unknown仍保留，不依赖用户手工GC，不按时长猜活动死亡。 | L05；静态gc存在但无驱动 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| LIFE-L01 | C / P1 | 原保留周期启动/每小时维护 | FILE / ASK / MEM | 生成旧/新采集和文件版本；真实启动/小时推进按context_end清理超龄非文件并撤派生/历史，排除文件规则与retentionDays=0保留；不处理真实资料。 | L01；静态配置无消费者 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| LIFE-L02 | C / P1 | 既有实例逻辑容量准入 | FILE / DESKTOP / AND | 生成小容量实例在原逻辑计数边界返回507且不先接受丢数据，客户端保留队列并在释放后继续；并发双用户共享实例账本，不新增个人配额/磁盘写满实验。 | L02；静态实例上限失效 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| LIFE-L03 | C+N / P1 | 个人导入导出一致性隔离 | MEM / FILE | A导出/导入含await provider期间B持续写入不误报archive_changed；A真实依赖变化/撤权仍拒绝，双连接/重启覆盖，不靠全库静默重试。 | L03；全局fingerprint SQLite | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| LIFE-L04 | C / P1 | 中央导出内容副本删除生命周期 | FILE / MEM / ASK | 按原生成当前完整导出→直接响应下载旅程，无中央永久完整副本/下载历史。内部任务进度、无内容receipt和必要暂存按完成/失败/取消/断流/重启清理及原重试；授权/pin/删除fence保持。不得新增latest-only/TTL/次数政策或额外用户下载步骤；仅生成fixture，不操作真实历史副本。 | L04；静态保存/下载/删除全链 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| LIFE-L05 | C / P2 | 原GC启动/周期驱动 | FILE / EXEC / EXT | 生成失效upload/workspace/snapshot/失败restore残留→真实启动/周期自动回收；活跃pin和真实unknown仍保留，不依赖用户手工GC，不按时长猜活动死亡。 | L05；静态gc存在但无驱动 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
 ## 补充、未知与旧缺陷
 
@@ -168,14 +168,14 @@
 
 | 编号 / 模块 | 起点分类 | 目标 / 依赖 | 具体验收或裁定要求 | 审计来源 | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- |
-| EXEC-S01 / EXEC | S / 补充 | 原Operation父子链与进度；FILE / MEM / ASK / CONN | 导入→文件→处理→Memory、Ask协调→子研究等实际入口保留原父子链接/汇聚/取消/进度，跨owner链接拒绝；Work SQL展示不能替代Operations详情验收。 | execution.md S01；确认结构变化 | OPEN：待候选；无本轮运行证据 |
-| EXT-ES01 / EXT | S+U / 补充 | MCP无状态使用与重启；ASK / EXEC | 生成受支持客户端按原stateless POST使用；对比initialize/session/重启重连步骤，证明必要隔离而不新增无依据必需步骤；凭据轮换/撤权仍有效。 | extensions.md ES01；实际客户端未验证 | UNKNOWN：待调查/必要PM裁定，保持安全边界；无本轮运行证据 |
-| EXT-ES02 / EXT | S+U / 补充 | 单次发现/导入前置步骤；FILE / CONFIG / WEB | 原一次目标选择→发现→导入旅程与当前持久连接/预建source对照，保留原可达步骤及私有凭据归属；必须新增步骤的必要性送PM，不自行固化。 | extensions.md ES02；结构必要性未证明 | UNKNOWN：待调查/必要PM裁定，保持安全边界；无本轮运行证据 |
-| EXT-EC01 / EXT | U+N / 候选 | 资源模板发现协议可达性；ASK | 用仓库实际SDK与合法资源服务核对templates/list及prompts/list可选性，再生成Method not found场景验证资源发现结果；未证实前不升级为确认回归。 | extensions.md EC01；stub证明失败，合法性未确认 | UNKNOWN：待调查/必要PM裁定，保持安全边界；无本轮运行证据 |
+| EXEC-S01 / EXEC | S / 补充 | 原Operation父子链与进度；FILE / MEM / ASK / CONN | 导入→文件→处理→Memory、Ask协调→子研究等实际入口保留原父子链接/汇聚/取消/进度，跨owner链接拒绝；Work SQL展示不能替代Operations详情验收。 | execution.md S01；确认结构变化 | OPEN：Exec070已通过模块整22步；真实producer父链/跨域固定组合与独验UNRUN |
+| EXT-ES01 / EXT | S+U / 补充 | MCP无状态使用与重启；ASK / EXEC | 生成受支持客户端按原stateless POST使用；对比initialize/session/重启重连步骤，证明必要隔离而不新增无依据必需步骤；凭据轮换/撤权仍有效。 | extensions.md ES01；实际客户端未验证 | UNKNOWN：EXT当前修复与协议证据见登记；实际完整入口/独验未关闭，非新增用户批准等待 |
+| EXT-ES02 / EXT | S+U / 补充 | 单次发现/导入前置步骤；FILE / CONFIG / WEB | 原一次目标选择→发现→导入旅程与当前持久连接/预建source对照，保留原可达步骤及私有凭据归属；必须新增步骤的必要性送PM，不自行固化。 | extensions.md ES02；结构必要性未证明 | UNKNOWN：EXT当前修复与协议证据见登记；实际完整入口/独验未关闭，非新增用户批准等待 |
+| EXT-EC01 / EXT | U+N / 候选 | 资源模板发现协议可达性；ASK | 用仓库实际SDK与合法资源服务核对templates/list及prompts/list可选性，再生成Method not found场景验证资源发现结果；未证实前不升级为确认回归。 | extensions.md EC01；stub证明失败，合法性未确认 | UNKNOWN：EXT当前修复与协议证据见登记；实际完整入口/独验未关闭，非新增用户批准等待 |
 | LIFE-L06 / LIFE | S+U / 补充 | 恢复策略意图与执行授权；EXEC / CONFIG / 所有自动域 | 整实例备份→空目标恢复→可信登录/显式启动与旧版对照；保留原策略意图并退休旧credentials/leases/grants。用户已选重新登录后按原开关继续未来任务；旧执行权不恢复、已完成外部操作不重复、unknown外部写先对账；新授权后的未完成内部阶段/已知未发生外部写保留正常恢复。 | lifecycle.md L06；确定设置变化，安全方案未验 | IN_PROGRESS；重新登录按原开关继续已定；无独立运行证据 |
 | AND-D01 / AND | U→CHANGE / 用户已决 | 采集/隐私/同步偏好按账号；CONFIG / AND | 用户已决定采集/隐私/同步偏好按账号独立保存，OS权限/硬件仍设备级。以A设置→B初始与修改→回A、同账号凭据轮换/重启、旧Worker/迟到结果验证隔离和原用户控制；不做旧格式迁移，外观共享保留。 | android.md D01；起点未知已由用户明确裁定 | IN_PROGRESS；政策已定；独立运行UNRUN |
 | FILE-07 / FILE | OLD / 旧缺陷 | ZIP Markdown相对附件关系；MEM / FILE | 单列两版共同缺失的同包精确相对媒体关系；mapper输入集合旧问题已修，不重报。若PM另行释放修复，另记范围/新输入生成旅程，不自动历史OCR/ASR/Memory重算。 | files.md FILE-07；旧缺陷，不在58项 | OUTSIDE：旧缺陷待PM另行范围释放；无本轮运行证据 |
-| CONFIG-UX01 / CONFIG | C+S / 体验补充 | 专用配置控件退为JSON编辑；WEB | 原Provider预设自动地址/协议、推理强度、请求/Agent超时、token预算、本机免密、headers/body专用操作按原信息架构可用；后端接受字段/通用JSON不算原体验恢复。 | configuration.md + web.md 原未编号交叉差异；web.md末节 | OPEN：待候选；无本轮运行证据 |
+| CONFIG-UX01 / CONFIG | C+S / 体验补充 | 专用配置控件退为JSON编辑；WEB | 原Provider预设自动地址/协议、推理强度、请求/Agent超时、token预算、本机免密、headers/body专用操作按原信息架构可用；后端接受字段/通用JSON不算原体验恢复。 | configuration.md + web.md 原未编号交叉差异；web.md末节 | OPEN：Config5b当前候选/作者证据见登记；实际组合UI与完整独验UNRUN |
 
 ## 补充调查与消费者门槛（不改变66主行）
 
@@ -229,7 +229,7 @@
 | Desktop完整模块候选 `73c1115287fe07e1824526861ebc2e8ed3cf39fc`，base起点2c78ca8d | 作者报告5文件83项、Ingress/snapshot29+explicit expired1项、Server/Desktop类型与依赖预检通过；真实main/preload/startup/迟到ACK/换账号/旧read拒绝已包含。handoff=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-745e-7330-8770-aed83a43077f/desktop-parity-evidence/handoff.json`。 | 最终affected计划Desktop+Server+Web，Android=false；Android D2消费仍需与其冻结SHA临时组合。 | CANDIDATE；Q007等待全局槽；未运行完整gate/未PR/未独验/未正式集成 |
 | Files部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 作者已推送/clean；restore提交`980674f6`；67b284为最小Perception只读port供ASK review消费。冻结部分head的HTTP30项/类型/scope/i18n作者EXIT0，receipt=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6b10-7001-b7d6-84ba844a5604/parity-files-evidence/receipt.json`；同目录perception-next-contract.json为PROPOSED未交付。完整独立image/history与managed MediaAssets仍OPEN。当前ALL6 TS+Android/root scope预检缺Electron/Java环境，Server/Mem0 Node26 ABI147已报PASS；native源码/测试已落盘但UNRUN。 | ASK只消费该精确最小port；FILE其余功能完成后重新冻结、重选检查。当前部分定向与port不能关闭FILE-PERCEPTION或原生验收。 | Q001 WAIT_FEATURE；P009/R004后续窗口排队，非最终READY，无PR/merge |
 | Ask历史部分core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | 含fixture-only c94e9e9及精准Material发布seam ac3533c1（cherry b66527d3），不含其父Memory业务。真实noteCapture→发布通知/上传→M06→向量worker→Context/Ask fresh引用等固定core54项作者EXIT0，证据仅绑定f2。 | 已由下方最终e23候选接Files最小port/allowQueryImages取代；该core不关闭完整FILE-PERCEPTION，也不等于Memory原任务验证。 | SUPERSEDED；历史定向结果保留，当前Q005按e23重选/检查 |
-| Execution source冻结 `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | 作者最终回执：clean，冻结精确6文件定向25/25 EXIT0（45.41s），Server/Web类型、scope-contract、含Android实际环境及dry-run EXIT0；回执`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7094-7af3-880a-8580a9135ea1/execution-evidence/frozen-receipt.json`。host parent/lane seam `f416966727bdb182c0fd2921a94a57be43e5a987`为Memory已review前置。Node26 ABI147双SQLite/Java21预检作者PASS。未push/PR。 | 最终dry-run所选server/Web/shared/Android JVM/scope/tooling须完整gate；Memory >2/发布和跨域parent消费者仍需各自精确SHA组合，不以seam review当通过。 | Q009 DONE_PASS；driver exact1e9整14步/1490.842s及JVM373通过，Server另2skip明确未验；未push/PR/独验/READY，联合及新seam不在此轮 |
+| Execution历史冻结 `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | 作者定向25/25与类型/scope通过仅其准确输入；EXEC f4169667共享parent/lane seam为Memory已review前置。driver整14步PASS/1490.842s，JVM实际373项、Server3133PASS/2skip，cleanupConfirmed。 | 新Memory/Files host接口与实际producer/父链及>2组合均不在该轮；独立静态F01 backup schema遗漏另记。 | SUPERSEDED；新070整22已PASS/已推Draft171，独验/READY未释放；旧14步保持历史证据 |
 | Extensions历史候选 `d347b4647aa0c66a42bc3f7adf5129466b16aa16`，base2c78ca8d | 作者clean；报告plugin39/MCP18/Web13/两进程unknown-write2项与类型/i18n通过；含真实canary与SIGKILL生成进程。证据`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-79dc-70b3-8d6c-608e696cb79d/extensions-validation/frozen-candidate.json`及frozen-affected-plan.txt。 | Hindsight两构造runtime与CONFIG精确依赖仍验；shared helper异步时序冲突找owner复核；Android JVM/完整gate/真实模型供应商Docker物理端部署UNRUN。 | SUPERSEDED；旧Q003 scope门禁FAIL/19UNRUN，准确证据保留；下方d468修复重新整轮 |
 | Configuration候选 `79bf961020782661c701cb0d3af47d1e5f48a0e3`，base2c78ca8d | 作者clean；54文件hash/准确命令/依赖与UNRUN见`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e/configuration-evidence/frozen-candidate.json`。精确候选生产生成API/Codex/Usage16项及重建真实隐藏browser作者EXIT0，截图已检查；此前57模型/18UI等仅各自被测输入。 | C07依赖FILE实际入口；Images/history/managed UI依赖FILE真实port，storage依赖LIFE，embedding/allowQueryImages依赖ASK，联合实跑UNRUN；managed UI可能补候选。JVM/原生四方法及完整gate未跑，不能称完全恢复。 | R003/Q008旧79bf历史冻结；PM已恢复实际Files/LIFE/Ask consumer修订，新head/组合/完整gate/native/独验待验 |
 | Memory历史冻结 `8b7bcc16650ea84092df8b730703f85a3a43e181`，base2c78ca8d | 含精准共享seam802b2e53（orig f4169667）与7b299257（orig ece742f0）。旧77中两范围回归在8b精确复跑2PASS；其它扩展多文件focused属各自迭代结果，不转记72f全通过。历史计划`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6977-7fa3-8145-0b3696ae413c/memory-parity/frozen-affected-plan.json`，Node26 ABI147 native ready。 | >2配置并发必须联合完整EXEC `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`真实门闩；standalone仅seam不能证明。parent/发布与其它域组合逐项列SHA，内容去重不替代原owner gate。 | SUPERSEDED；最终72f增mixed incomplete durable回归，Q006已FAIL，修复另冻新head；PR/独验UNRUN |
@@ -238,8 +238,8 @@
 | Ask最终候选 `e23c06a3f3ea30a5d844fbadb76de0475b17246b` | 作者clean，未push/PR；core f2b44331精确54项EXIT0（f2b44331-focused.json），最终e23c图片权限/Filesport/显式附件4项、类型/scope EXIT0（e23c06a3-image-port.json），同parity-ask-evidence目录。review精准Memory b66527d3→ac3533c1、FILE67b28439→82e81c7a及fixture c94e9e9，无父业务盲拣。 | Files实际origin/device业务、EXEC完整1e9父/slots、CONFIG Codex compaction仍精确联合待验；allowQueryImages最终已接，defaultfalse/A-B/await后关闭拒绝/显式附件独立grant生成覆盖。 | Q005 WAIT_SERIAL_CHECK；全6TS+Android/i18n/tooling22项计划`/tmp/mote-ask-final-check-plan.json`；完整gate/原生/独验UNRUN |
 | Actions候选 `42b57dee735467362239cab27dbc923a93cfe7a1`，base2c78ca8d | 作者clean，未push/PR；manifest/check-plan=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7b96-7d00-9b68-d9d30aea97dd/parity-actions-evidence/{candidate.json,check-plan.txt}`。报告106组合（header前）+最终lifecycle delta29+emitted进程1+emitted backup20（含3新表negative）各自准确输入PASS；不把source-entry当dist验证。 | pure合同ece742f0已由Memory定向review/pick，集成内容去重，原两owner gate分别执行；ACTION-S1在此模块，全部producer/consumer和unknown副作用边界仍独验。 | Q012 WAIT_SERIAL_CHECK；all6 TS+Android所选完整gateUNRUN，无PR/独验 |
 | Web Draft [#170](https://github.com/utopiafar/mote/pull/170) | driver按PM管理授权正常push `codex/parity-web-20261018`，远端与PR head均核对为f8f684b6；创建时base `codex/parity-integration-20261018`@c49ffa8d，Draft/Open/CLEAN且未合；已attach当前集成chat。PR body明确driver代跑门禁及作者范围/未验。 | PR metadata后续补充作者home-desktop-a.png实际Agent页的预审证据缺口，未改冻结源码或文档输入；statusCheckRollup空不作CI通过。 | R006正式独验PASS，PM已确认Web范围READY；未释放/正式集成或main |
-| LIFE冻结 `c0bf80d6f884c0cde15ab40bfff6cc9c8197b962`，base2c78ca8d | 作者已推/clean；manifest/22步计划/源码hash及准确分层结果在`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7dc6-7fb3-a058-cb39df965cb9/lifecycle-candidate-c0bf80d6/{handoff.json,check-plan.json,delivery.md}`。Node26 ABI147/两SQLite resolver当前复验PASS；各自import15/lifecycle27/direct16/Web13/maintenance19/policy46/future1等结果不加总重叠，原失败日志保留，非完整gate。 | FILE ig_file_heads/portable anchors↔本树ig_file_revisions、DESKTOP begin expiry↔capacity/parts、ACTION cursor resumeRestored、EXT异步check启用及新canonical checks7列、CONFIG storage saved/effective需owner冻结精确联合；新表不迁移旧数据。 | Q004 WAIT_SERIAL_CHECK；Android/native/emitted Desktop/Docker/Hindsight/physical/live/PR/独验UNRUN |
-| Extensions修复 `d4683421faf2ce22be8d42c25eb385fa8a0b6aa1`，parent d347 | 最小4个M09 surface+单host probe helper入口与crypto/两pure合同限制；负例拒绝其它host/legacy Store/fs/sqlite。backup-schema补checks7列，owner/table/generation/无目标写入与当前generated Mem0备份权限回归。manifest=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-79dc-70b3-8d6c-608e696cb79d/extensions-validation/scope-repair/repair-candidate.json`；作者clean，CLI/12项scope-pure/4项lifecycle-backup通过。 | 旧d347 gate FAIL仍保留，新整轮22步需重跑；同LIFE备份schema内容去重，L06未改。Hindsight普通/新probe runtime与CONFIG联合仍待。 | Q003 RUNNING；driver exactd468整22步，run6820aa4c，未push/PR/独验，不沿用d347片段 |
+| LIFE冻结 `c0bf80d6f884c0cde15ab40bfff6cc9c8197b962`，base2c78ca8d | 已推/clean，driver核75源hash/15日志，Node26 ABI147/JDK21全环境PASS。manifest/计划在lifecycle-candidate-c0bf80d6目录；作者各输入15/27/16/13/19/46/1等不加总。 | FILE heads/portable、DESKTOP expiry/capacity、ACTION cursor、EXT async checks7列、CONFIG saved/effective、EXEC070 parent schema及Memory新current表需准确联合，不迁移旧数据。 | Q004 RUNNING；runa6dc2854-d582-4c4c-932a-48bc5ecd7b74，从13:56:11.283Z唯一fresh22；Android/native/emitted Desktop/Docker/Hindsight/physical/live/PR/独验待结果 |
+| Extensions修复 `d4683421faf2ce22be8d42c25eb385fa8a0b6aa1`，parentd347 | 最小4个M09 surface+单host probe pure helper与backup checks7列；作者scope/backup定向结果仅其准确输入。manifest同EXT目录scope-repair/repair-candidate.json。 | driver整22实际14PASS/Server3087PASS62FAIL2skip/后7UNRUN；run6820aa4c，1430.727s，cleanupConfirmed/clean。 | SUPERSEDED；082修consumer时序后又被P1静态退回，新source待交；不拼旧PASS |
 
 最终Memory head由`8b7bcc16650ea84092df8b730703f85a3a43e181`更新为`72f0e55ba26d54f9a3d66fa6e5a8deb706e4371a`（clean，仅新增mixed incomplete+owner-question durable回归），该新增case作者EXIT0，证明incomplete整批不提前创建可操作问答。旧suite精确为77项=75PASS/2FAIL，旧报78修正；两新增原件遗漏已修，在8b精确2项复跑PASS。其它最后扩展期间多文件focused仅迭代证据，不冒称72f全通过。最终计划为同Memory证据目录`final-affected-plan.json`；Q006按72f整13步已FAIL，8前置/构建PASS、Server3160PASS/1FAIL/2skip、后4步UNRUN。原失败及窄2PASS分开保留。接续1c9be37b5e46e706bcf9715ea00cce052b3e9810已推/clean，仅fixture与validation文档变更：受控持久化1500ms在红559b557a实复现旧1秒假设，新helper join HTTP route实际已接纳promise，保留samejob/两条imported/executor终态与原三次Ask/更正/引用断言，runner120000ms未改。作者精确1c并发4相关三文件8PASS/0skip、类型/13步dry-run EXIT0；manifest同Memory目录`q006-fix-manifest.json`。不能据旧原日志复原最后await或冒称性能无回归。新整13步及与EXEC1e9联合>2门闩仍UNRUN。
 
@@ -258,6 +258,24 @@ Conn新179237a05c320f4dca18b83d4d3aa00d6ac8bf30已推/clean/远端核对，drive
 Execution Draft [#171](https://github.com/utopiafar/mote/pull/171)已由PM准active driver正常push同1e9并创建/attach；创建base integration@3c663da9797b912185d4455d1b33c096f728aed7，复核head1e9、Draft/Open/CLEAN/未合、check rollup空。body准确引用driver门禁/2skip/native与新seam未验；只改PR metadata不更换源码。控制组只读预审已分派，不作动态独验/READY/合入。
 
 Exec控制预审报告`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-06cd-7242-96bb-349e5fdb83b3/execution-static-1e9ec7ab/static-prereview-v1.json`（SHA2568488b1a26ed273cfc9fba3ee85514f6b14d1eaa8d3936a108bb035b72671ab29）已由driver完整读finding/hash核对；driver另以git show独立核1e9/LIFEc0bf均未登记新表。按PM后续授权、最新active4（Config/Memory/driver/Files）核对后恢复Exec为第5槽，具体修复而非FYI；不唤醒LIFE，不占Q003重窗。只focused当前schema缺表/缺列准入与正常真实standalone/profile generation roundtrip，代码先本地新freeze/重选完整gate，再允许更新远端PR源码；无真实数据迁移/回填。PR body已明示静态修复待完成，旧14步PASS不变，动态独验/所有新ports组合仍UNRUN。
+
+Files 8217 Q001在实际Desktop suite失败：12步PASS、Desktop606=603PASS/3FAIL、后9步UNRUN，151.598s，runfacf1b1a/inputIdentity779c49a19ce13eea164a57aa65e4f526283d4e226d57b4fbc351a2be3a976d48；cleanupConfirmed/sameHEAD/clean/锁释放。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-8217a0fb-required-gate-failed.json`（SHA256a2ea60c11f0cdaad3be5878971ffac8fcf07e52291476e230cb55e3c58c235f5）。两OCR断言实际在A登录后的:322，B到:326才切换；driver先前凭标题写成B不准确，现按固定源码更正，原3条log/状态不改，不定性隐私泄漏。
+
+Files e799d9b387e4d964491017995f449af4c9439e19已推/clean，6文件修正：upload commit与snapshot recovery共用fileRevisionItem path/size canonicalization，改变path/title/time/hash/size仍409；OCR fixture恢复原独立image-auto语义，保留A实际automatic OCR、B默认Perception与原disabled intake，B零产品/零中央文字/无completed OCR或A结果，不发明固定pending/blocked状态。作者同源完整Desktop36与Server49/noEmit通过，committed HEAD原3失败case3PASS（33筛出）；旧gate不抵消。manifest=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6b10-7001-b7d6-84ba844a5604/parity-files-evidence/consumer-repair/manifest.json`，SHA256698d5043e338b36d7552bc667a7ecc72c46d548da3e68e832a46cae7e8082747。M04/M05/Config DTO未改，未导入Desktop四个expiry hunk。e799仍因下述独立static并发缺口HOLD，完整22/独验/native未跑。
+
+Files静态report=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/files-8217a0fb-static/review.json`（SHA2560e7a35d315011b5b5ccce481603b201e4ad2c23210816e0ed51033357d0c1d78）确认P2 FILES-STATIC-01：settings1..8仅account admission，OCR/analysis全池2、image-stage/pipeline4仍截断，旧各kind直接用配置concurrency；EXEC070只配Ask/Memory不代补，e799两processing文件亦未变。PM已恢复Files修原有效各kind1..8/双owner与既有物理边界，需真实held >2/>4、另一kind/owner、热调/取消/迟到；不能缩range或添隐含cap。其它01..06/heads/managed/publicProgress未发现另一确认源码blocker，不等于动态PASS；57+1仅author，native/live/权重/组合均UNRUN。
+
+Extensions d468 full22实际14PASS/Server3087PASS62FAIL2skip/后7UNRUN，1430.727s，run6820aa4c/inputIdentitydea19c9c911eb733c1f09be43ad70e2780a72f4cbd26359dc23a498a57a7ee04；cleanupConfirmed/sameHEAD/clean。binding driver目录extensions-d4683421-required-gate-failed.json SHA256aa5204a677b39236c6d9f89e986ab005beabaf609ed5dcb0529323d3970584f5。08268977f63778e109573414649b51bab8888e6a本地clean/未push，driver49源hash核无差；manifest extensions-validation/consumer-repair/repair-candidate.json SHA2561551d3bddee5857edf8718c6f61f29a175677cd3cf74c16c650e7225d3c003e2。内部check等待/CAS、saved MCP realIngress与legacyImport真实promise等作者163/1630skip保留；新22从未启动。独立只读report=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-08cc-7631-b1bb-fe8b691c3e27/extensions-readonly-08268977/pre-review-report.json`，SHA2564bf47db53e047e1278dd457d2078115c74fdd9c1f470d95132ac5e7217a9531b；P1 EXT-RO-082-01源码确认probe真实put/remove没有external.begin/complete或持久attempt，重启会新随机namespace再写，maxAttempts1不挡host recovery，可能掩盖旧unknown。动态未复现，不冒真实供应商事故。PM已CHANGES_REQUIRED/HOLD并恢复owner修durable reconcile或保持unknown；真实HTTP check+worker在写已发后kill/restart/正常shutdown/账号B及ACK/cleanup unknown待新freeze验证，无新增用户手工步骤。
+
+Exec 070ffc04a859d01551674070cdf16551a2c29928/parent1e9修复当前backup必需parent generation表四列；旧真实CLI RED正常1PASS/五malformed失败（含parent容器共6FAIL），新frozen7PASS与既有offline/profile/conversation/unknown3PASS。manifest execution-f01-070ffc04/frozen-receipt.json SHA256d4a67ca91a6c1c6da83f1f2c4c5994b34e0912aeb9cd61b85823048a792ee482，driver8artifact hash核无差。Q009-R1从13:16:51.394Z至13:41:40.778Z整22/22PASS，1489.376s，run21f009bb-9952-4bb9-9c60-739a1cfbbe53/inputIdentity999b6d02f78ce3434357c81fc49f1dc7afdb41e36baaf00eeccfd0f1d06235ec；sameHEAD/clean/cleanupConfirmed/锁释放。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/execution-070ffc04-required-gate.json`，SHA25695ad1463146308ab43f050a0651cbeba0b3e83d4e1e86bd88768ce5755ae12de。Agent327PASS/1skip、Desktop606、Diagnostics5、Server3140PASS/2skip、Shared198/Web602、release65+37/root29/CLI5通过。Android command PASS但25/25 UP-TO-DATE，0fresh；78XML/373缓存不称本轮重跑。三opt-in跳过为installed Codex synthetic Responses、pinned Python Source Pack、macOS staged-input sandbox。已正常push070并更新Draft171 head/body，Open/未合；独验/native/physical/live/actual index与新Memory/Files ports及实际producer组合仍UNRUN，非READY。
+
+原Exec owner的host-port只读笔记位于`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7094-7af3-880a-8580a9135ea1/m05-host-port-static-review/static-host-ports.md`（SHA2561d0c4d1684fdd1219503baf5045647e39d2b4d1793dd7e6dc98bb51d0ae2aed5），无运行/组合。cf6四项源码缺口由a65 followup处理：3张current表dynamic_resources/attempt_charges/resource_waits、same-fence charges、durable公平wait/reacquire、finite timer及缺表列，作者58/typecheck通过，仅WIP。新8de7791050b1777bfc2d54c0a1a611579b584e0e含保存前真实owner reply反例与修复；e01beda57c11d41b8debd69b4df1bbbef21ce807统一tick/claim/resourceTurn静态peer capacity，作者45定向通过。210项原209PASS/1 observer SQLite锁失败保留，readOnly/timeout fixture修复后真实index/unknown/feedback等7PASS，held save/cancel/revoke3PASS；最终schema/backup文件仍dirty、最终journey未交，不是候选gate。Files另在同capacity helper加可信owner/kind/parent unit分组，生产HTTP生成fixture实held A8OCR+8understanding/B各1及热8→3→8/取消仅作者WIP；不绕实例agent/llm与各物理worker槽。两owner已对齐保留三个callsite，组合partition×dynamic continuation、双连接/双进程/公平/取消重启仍UNRUN，不能借旧cf6/1e9/070或彼此窄测。
+
+Files8217与Exec070分别补固定Electron41.10.7，npm postinstall仅该包；未改allowScripts策略、未launch App，root package-lock前后均22c87d68306fa770b5a1b1b18071a827044d4415d2d84837683556d77225d5a3，Node26 ABI147全选环境PASS。依赖准备不是业务验收；070 native JVM全UP-TO-DATE与先前1e9实际373项运行分开记录，真实权限/设备/live始终另记。
+
+Files并发修复8730258dc4007cfe51a8a9f2f1869c8791181e71已推/clean，driver核7改动源hash与20artifact/log；manifest=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6b10-7001-b7d6-84ba844a5604/parity-files-evidence/capacity-repair/manifest.json`，SHA256467db01b37d5977d85487ca21f2fb6f0c451f0e82923b5d2a4802c611a743eca。独立M05 commit894ae45cc10555b35bfff417d2f4d6a490d47406与Files适配873分离，M04/publicProgress/DTO及前轮snapshot/OCR fixture保留。e799生成production-upload held3/8 RED2FAIL，新同源最终98/98PASS0skip（Perception10/M05 31/material-media-snapshot-catalog21/Desktop36），types/scope/i18n8641通过；不是full或独验。跨pool partition key/unit/concurrency用可信owner/kind/parent row计数，tick/claim同capacity，未配置旧池2/4及physical/instance gates保留；owner静态互审约定Memory e01第三resourceTurn callsite同用Files helper。新完整22/native/真实权重/固定Memory组合均UNRUN，Q001待串行，作者已结束。
+
+Extensions082 P1新增作者动态RED：真实HTTP check+actual worker+生成remote provider首次put held，SIGKILL/lease恢复后旧unknown未解时A put由1增至11；原日志extensions-validation/probe-recovery/082-issued-write-red.log保留。owner正在既有M05 external issuance/checkpoint中持久attempt并挡未知重发；尚未提交新候选/最终GREEN，不将该进展冒修复完成。写ACK/cleanup ACK/正常shutdown及B可用仍待最终证据。
 
 ## 跨模块最终冻结旅程
 

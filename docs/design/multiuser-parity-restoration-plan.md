@@ -56,16 +56,16 @@
 
 | 模块键 / 编号 | Owner chat | Branch / PR | 独立验收 chat | 候选 SHA | 状态 / 阻塞 |
 | --- | --- | --- | --- | --- | --- |
-| MEM / MEM-M01..M08 | [MEM开发](codex://threads/01a14e8f-6977-7fa3-8145-0b3696ae413c) | `codex/parity-memory-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `1c9be37b5e46e706bcf9715ea00cce052b3e9810`（退回） | CHANGES_REQUIRED；独立只读F01/F02/F03+R01风险，PM已裁定生产流程修正；不再开1c gate/PR |
-| FILE / FILE-01..06；FILE-07旧缺陷观察 | [FILE开发](codex://threads/01a14e8f-6b10-7001-b7d6-84ba844a5604) | `codex/parity-files-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `f4618a5a213fa7b832b1a56d6e77055f2113c602`（HOLD） | IN_PROGRESS；图片/媒体实现已推，global cursor公开投影修复待新head；FILE-07非阻塞 |
+| MEM / MEM-M01..M08 | [MEM开发](codex://threads/01a14e8f-6977-7fa3-8145-0b3696ae413c) | `codex/parity-memory-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | WIP `8de7791050b1777bfc2d54c0a1a611579b584e0e`；host followup `e01beda57c11d41b8debd69b4df1bbbef21ce807` | IN_PROGRESS；旧1c退回，连续批/Coding/保存后问答与公平capacity修复在最终窄测，dirty schema/backup待最终freeze；非gate PASS |
+| FILE / FILE-01..06；FILE-07旧缺陷观察 | [FILE开发](codex://threads/01a14e8f-6b10-7001-b7d6-84ba844a5604) | `codex/parity-files-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `8730258dc4007cfe51a8a9f2f1869c8791181e71` | CANDIDATE；已推/clean，P2 capacity修复作者同源98PASS/0skip，旧8217 FAIL/e799 HOLD保留；新22步/独验/native/Memory组合UNRUN |
 | ASK / ASK-A01..A05 | [ASK开发](codex://threads/01a14e8f-6d35-77d1-ad5f-531013c4ea08) | `codex/parity-ask-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `e23c06a3f3ea30a5d844fbadb76de0475b17246b` | CANDIDATE；clean/core+allowQueryImages已冻，Q005完整gate/独验UNRUN |
 | CONN / CONN-C01..C07 | [CONN开发](codex://threads/01a14e8f-6edd-7772-b552-f0ce79bb7c61) | `codex/parity-connectors-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `179237a05c320f4dca18b83d4d3aa00d6ac8bf30` | CANDIDATE；F01..05修复已推/clean/50hash核对，旧4fe保留退回；新14步/native/独验UNRUN |
-| EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / [Draft #171](https://github.com/utopiafar/mote/pull/171) | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`（退回） | STATIC_CHANGES_REQUIRED；14步旧门禁保留，父generation表缺必需backup schema；PM准owner修，未READY |
+| EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / [Draft #171](https://github.com/utopiafar/mote/pull/171) | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `070ffc04a859d01551674070cdf16551a2c29928` | CANDIDATE；F01修复后driver整22步PASS/1489.376s，已push/更新PR；Android全25任务缓存/未重跑，独验与新ports组合待验，非READY |
 | CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `5b218d926568ed4c4a51ba8a50e9278f706f4cfa` | CANDIDATE；真实consumer源已冻/clean/68hash核对，未push；22步/实际组合/native/独验UNRUN |
 | DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `73c1115287fe07e1824526861ebc2e8ed3cf39fc` | CANDIDATE；affected/独验UNRUN，待槽 |
 | AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `2622844e3b226f3ebae9542bdb16aafedc5cf3a7` | CANDIDATE；clean，D01已实现待新冻结门禁/原生；未push/PR/独验 |
 | WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / [Draft #170](https://github.com/utopiafar/mote/pull/170) | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | READY；Q002+正式R006 W01/W02 PASS，PM已审确认；未释放合入 |
-| EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `d4683421faf2ce22be8d42c25eb385fa8a0b6aa1` | CANDIDATE；scope修复已冻，旧d347 gateFAIL；新整轮UNRUN |
+| EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `08268977f63778e109573414649b51bab8888e6a`（HOLD） | CHANGES_REQUIRED；独立P1 EXT-RO-082-01：probe外写未知时重启可重发；PM已恢复owner修durable attempt，无新22步/PR |
 | ACTION / ACTION-A01..A04 | [ACTION开发](codex://threads/01a14e8f-7b96-7d00-9b68-d9d30aea97dd) | `codex/parity-actions-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `42b57dee735467362239cab27dbc923a93cfe7a1` | CANDIDATE；clean且作者定向回执已报，Q012完整gate/独验UNRUN |
 | LIFE / LIFE-L01..L06 | [LIFE开发](codex://threads/01a14e8f-7dc6-7fb3-a058-cb39df965cb9) | `codex/parity-lifecycle-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `c0bf80d6f884c0cde15ab40bfff6cc9c8197b962` | CANDIDATE；已推/clean，Q004完整gate及独验UNRUN |
 
@@ -135,13 +135,16 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 | R002 | CONN / exact179237a0 native两方法 | RecordingParityInstrumentedTest阶段历史+首次save auto on/off，无pre-sync；新14步含JVM，APK/instrumentation另排 | WAIT_SERIAL_RESOURCES；原生未跑，API/serial实际窗口重核 | Node24.22 ABI137/JDK21，生成backend开发smoke仅其输入；独立实际index/managed CLI启动仍UNRUN，不能冒原生/真实供应商 |
 | R003 / Q008 | CONFIG / `5b218d926568ed4c4a51ba8a50e9278f706f4cfa` | 新dry-run实际all=true/22步六TS+Android；manifest68hash全核，18窄PASS+types/i18n/scope/两个入口语法通过 | WAIT_FINAL_FILES_COMBINATION_AND_SERIAL_CHECK；owner已结束 | 组合Config5b + Files最终publicProgress新head + LIFEc0bf + Aske23；旧79bf图/语法不作实际启动/浏览器/native证据 |
 | R006 | 独立客户端验收 / PR#170 exact f8 | 私有依赖/构建、窄12项、真实main双用户browser77.096s、13入口11.086s、30012ms设备刷新/31s卸载无读、6图真实场景 | DONE_PASS并已释放；PM确认Web范围READY | JSON SHA256 4cb7d378cf69b135e06ff5161f4d8936a95560da5ff5929d8a4ca83f6f6e199b；跨EXEC/新域组合仍UNRUN |
-| P009 / R004 | FILE / 后续环境与native消费者 | Electron补当前lock执行文件；既有JAVA_HOME；JVM+FilesCatalogParityInstrumentedTest无窗口 | WAIT_INPUT_AND_GLOBAL_SLOT；未授权运行 | Java现有`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`，SDK`/Users/utopiafar/Library/Android/sdk`；不视为需要新装JDK |
-| Q001 | FILE / f4618a5a（parent67b，base2c78）待接续修复 | driver核pushed/clean及实际22步all6TS+Android/root；plan `/tmp/mote-parity-files-driver-f4618a5a-plan.txt` | HOLD_WAIT_NEW_HEAD；global SQLite cursor/watermark须所有public progress投影移除，不开f461 gate | 原完整image/media实现与定向结果只绑定其输入；后续精确冻结/回归/环境/native待验 |
-| Q004 | LIFE / `c0bf80d6f884c0cde15ab40bfff6cc9c8197b962`，base2c78ca8d | 已推/clean；handoff/check-plan/delivery同lifecycle-candidate-c0bf80d6目录；22步 | WAIT_SERIAL_CHECK；不插队打断当前gate | Node26 ABI147及两处SQLite复验作者PASS；Android/emitted Desktop/Docker/Hindsight/physical/live UNRUN |
+| P009 / R004 | FILE / 8217依赖准备已完；native等新并发freeze | driver补固定Electron41.10.7后全环境PASS/源码和lock未变；原生未运行 | P009 DONE_ENV；R004 WAIT_NEW_INPUT_AND_WINDOW | 8217 gate Desktop失败/e799 sourcepool静态退回；native 4JVM/2instrument方法合同只作未验计划，不冒producer smoke为native |
+| Q001 | FILE / exact8730258d，parent e799 | driver核pushed/clean及7源hash/20artifact；P2 owner/kind/unit分组/唯一capacity helper，作者同源98/98无skip | WAIT_SERIAL_CHECK；新22全部UNRUN，旧8217 FAIL不抵消 | manifest467db01b；Memory e01默认helper与三callsite组合合同待固定，native/真实provider/跨进程组合另验 |
+| Q001-A | FILE / exact8217旧gate | runfacf1b1a，151.598s；Desktop603PASS/3FAIL；12步PASS后9UNRUN | FAILED_AND_CLEANED；source同HEAD/clean/cleanupConfirmed，锁释放 | metadata canonicalization mismatch已由e799修；两OCR失败是A pre-manual旧fixture假设，不是B privacy回归；原log不改 |
+| Q004 | LIFE / exactc0bf80d6，base2c78ca8d | driver核clean/75源hash/15日志，全env预检PASS；fresh actual22，Node26 ABI147/JDK21/1Gradle/MOTE_TEST_SHOW_UI=0 | RUNNING；runa6dc2854-d582-4c4c-932a-48bc5ecd7b74，21:56:11（Asia/Shanghai） | `/tmp/mote-parity-lifecycle-driver-c0bf80d6.log`；未完成不作PASS，联合/nativeUI/Docker/physical/live另记 |
 | Q006 | MEM / `72f0e55ba26d54f9a3d66fa6e5a8deb706e4371a` | 8前置/构建PASS；Server3160PASS/1FAIL/2skip；后4步UNRUN，elapsed1298.654s | FAILED/REPAIR_RELEASED；runId d5a6098d-6db1-4f99-991c-f4e735dd4fce；cleanupConfirmed/clean/锁释放 | query-import-context:71 actual importing≠completed；同SHA窄测2PASS不抵消失败，原因待定；>2联合UNRUN |
-| Q003 | EXT修复 `d4683421faf2ce22be8d42c25eb385fa8a0b6aa1`，parent d347 | driver复核actual22步/clean/全环境；Node26 ABI147/JDK21/Gradle1worker/MOTE_TEST_SHOW_UI=0 | RUNNING；run6820aa4c-5f2e-4e23-b507-9d4b6ac79c2f，20:26:42（Asia/Shanghai） | `/tmp/mote-parity-extensions-driver-d4683421.log`；旧d347 FAIL+19UNRUN保留，新整轮不拼PASS |
+| Q003 | EXT / exact082 HOLD，parentd468 | 49源hash/作者163PASS保留；独立只读P1确认canary无durable external fence，重启可再写/错误ready，动态未验 | WAIT_SOURCE_RECOVERY_FIX；PM已恢复owner，不开082完整gate | report4bf47db5；保留HTTP即时checking/原owner与revision CAS，真实HTTP+worker进程kill/restart与B隔离待新freeze |
+| Q003-B | EXT / exactd468旧gate | run6820aa4c，1430.727s；14PASS/Server3087PASS62FAIL2skip/后7UNRUN | FAILED_AND_CLEANED；source未改/cleanupConfirmed/锁释放 | 58 config_prepare_failed、两recording503、1旧MCP helper、1legacy import preparing观察；082各类别修复与原失败分开 |
 | Q005 | ASK / `e23c06a3f3ea30a5d844fbadb76de0475b17246b` | all6TS+Android/i18n/tooling22项；/tmp/mote-ask-final-check-plan.json | WAIT_SERIAL_CHECK | 精准前置已接；完整gate/独验UNRUN |
 | Q009 | EXEC / `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | driver整14步PASS/1490.842s；Server3133+2skip，Web602/Shared198/release37，Android JVM373/0skip | DONE_PASS；run67404cc8，20:24:10（Asia/Shanghai），cleanupConfirmed/clean/锁释放 | inputIdentity99e9bb294dca83022cece84186a5008794eac49cbe024bb2757c51cb1022ddaf；新Memory/Files M05接口与组合不在此轮 |
+| Q009-R1 | EXEC / exact070ffc04，已push/PR171已更新 | fresh22/22PASS，1489.376s；Server3140PASS2skip/Agent327PASS1skip/Desktop606/Web602/Shared198 | DONE_PASS；run21f009bb，21:41:40（Asia/Shanghai），sameHEAD/clean/cleanupConfirmed/锁释放 | binding95ad1463；Android25/25 UP-TO-DATE、0fresh，不冒373重跑；独验/native/新ports联合未验 |
 | Q010 / R005 | AND / `2622844e3b226f3ebae9542bdb16aafedc5cf3a7`，base2c78ca8d | android/i18n，workspaces=[]；environment/i18n/release/shared build+test/release integration/android-unit；frozen plan`/tmp/mote-parity-android-plan-frozen.json` | WAIT_GLOBAL_SLOT；完整gate+multiuserFixture APK/testAPK+API37无窗口serial5580待授权 | 请求Gradle1worker，门禁入口实际参数待driver核对；D2与Ask组合另排，无重资源进程存活 |
 | Q011 | CONN / 4fe01f47旧候选 | Java25环境修正轮及Java21过时候选停止轮分别保存；不得拼PASS | STOPPED_CHANGES_REQUIRED，PM释放owner修复F01-F05；R002暂缓 | Java21 receipt d287d97c原cleanup=false/EPERM保留；后验13PID与PGID3095均消失，核owner后只清残留锁，可写入已通知 |
 | Q011-R1 | CONN / `179237a05c320f4dca18b83d4d3aa00d6ac8bf30`，base2c78 | 已推/clean/50输入hash全核；新manifest a84cbec0；实际14步Server/Web/shared+Android，private Node24.22 ABI137/JDK21 | WAIT_SERIAL_CHECK_AND_NATIVE；旧两轮停止绝不拼PASS | 作者各自20/匹配8/reader4/backup2/parent4/Web6+2结果分列；原生两方法与实际index/managed CLI/live/physical未验 |
@@ -154,14 +157,14 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 
 后续同时执行对话目标5、上限6，PM和driver也计入。当前已运行任务继续，不中断/取消；现有子代理继续完成，完成后不补位。不再创建chat或spawn子代理，不因FYI唤醒idle/notLoaded的开发或验收chat。重启须先由PM/driver检查总active并登记槽位，超额存续自然收敛，不新增占用。等待检查/前置/验收的模块留下精确待办后结束回合，不空转。
 
-2026-10-18 20:34:41（Asia/Shanghai）只读快照5 active：PM/控制组Exec只读/Memory/driver/Files。Conn179与Config5b已交接结束；PM协调结束后回4，是否释放下一执行槽由PM/driver重新计数后决定。Q003 Extensions是唯一完整gate；Q009已完成清理且PR171已创建，无新worker或并行重窗。
+2026-10-18 21:57（Asia/Shanghai）只读快照4 active：PM/Extensions/Memory/driver；Files873已交冻结后idle，三独验组idle，未恢复旧chat或子代理。Q009-R1已完成清理且PR171指向070；Q004 Lifecycle是唯一完整gate，runa6dc2854。Files新22排队；Memory/Extensions须交新freeze后再排。
 
 | 槽位对象 | 快照状态 | 当前工作 / 释放条件 |
 | --- | --- | --- |
-| PM / driver | idle / active | PM已放行只读Memory预审后结束；Q009仍唯一完整gate |
-| Files / Memory | 2 active | Files public进度读口修复；Memory连续批/复用/分组/问题时序；无并行重资源窗 |
-| CONN / CONFIG / ASK / LIFE / AND / ACTION / EXEC / DESKTOP / WEB / EXT | 10 idle/notLoaded | Conn179与Config5b已交接并结束；不为FYI恢复owner |
-| 控制组Exec只读 / 其余三独验 | 1 active / 3 idle/notLoaded | PM只读预审exact1e9/PR171，无安装/运行，报告不自动转动态PASS |
+| PM / driver | 2 active | PM协调；driver持唯一Q004完整gate并更新台账 |
+| Files / Memory / Extensions | idle / 2 active | Files873已冻结并交接；Memory最终窄测；Ext P1未知探针恢复修复；均无并行重窗 |
+| CONN / CONFIG / ASK / LIFE / AND / ACTION / EXEC / DESKTOP / WEB | 9 idle/notLoaded | 均已有精确候选交接；LIFE完整gate由driver代跑，不为FYI恢复owner |
+| 四独立验收组 | 4 idle/notLoaded | Web范围已READY；Exec070/Files873后续复核与完整独验待另释放，不因旧静态报告自动PASS |
 
 | 待办号 | 待通知/执行对象 | 具体条件与范围 | 当前状态 |
 | --- | --- | --- | --- |
@@ -169,12 +172,13 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 | G002 | CONN native C07 / exact179 | 首次save auto on/off与阶段历史两方法，真实select→一次admit→追踪syncTask；先核14步/专用无窗口窗口，backup固定true不增toggle | WAIT_SERIAL_RESOURCES；新native JVM/APK/instrumentation/独验UNRUN |
 | G003 | AND D2及Ask组合 | D2前置`5744d6a832117a9f9aec7affd37453ab15d455cf`（含早期1417及part/commit upload_expired补充），Android与Ask消费者精确SHA待冻；仅临时组合，非PR夹带/正式合入 | WAIT_DEPENDENCY |
 | G004 | 四独立验收chat | 排队传达已决L06/D01、精确PR/head/base/依赖与新消费者清单，闲置不唤醒；一次一项 | WAIT_GLOBAL_SLOT |
-| G005 | 所有完整affected请求 | Q001 FILE/Q003 EXT/Q004 LIFE/Q005 ASK及后续ACTION/DESKTOP/CONFIG；Memory必须生产修正后新freeze | Q003当前运行，Q009已通过待发布/独验，其余WAIT_CANDIDATE_OR_SLOT |
-| G006 | Memory生产流程修正 | 独立只读hash a2c9c62c；F01批内continuation、F02精确理解复用、F03 provenance分批、R01保存后才open问题；fixture1c修复保留 | OWNER_ACTIVE_PM_RELEASED；1c/72f CHANGES_REQUIRED，不重跑旧候选；新freeze再整gate/固定EXEC组合 |
+| G005 | 完整affected队列 | Q004 LIFEc0bf当前唯一22；Q009-R1已PASS；Files873/ASKe23/CONN179/ACTION42b/DESKTOP73c/AND262/CONFIG5b待串行；EXT/Memory须新freeze | ONE_DRIVER_WINDOW；任何新源重选整轮，不拼旧PASS |
+| G006 | Memory生产流程/宿主port修订 | 633→a65→8de/e01仍WIP；作者210项原209PASS/observer SQLite锁失败保留，修fixture后真实进程7PASS/held save-cancel-revoke3PASS；默认capacity三callsite统一 | OWNER_ACTIVE；最终journey/schema/backup/typecheck与精确freeze待交，partition×dynamic及全gate仍UNRUN |
 | G007 | Config实际consumer组合 / 新5b | 5b + Files最终修复head + LIFEc0bf + Aske23；已读Files192但其后续新head仍待；fixture/hidden browser/native命令见configuration-resources-parity文档 | REQUEST_REGISTERED；实际startup/生成artifactTransport/角色403/图片与storage联合未运行，不改正式integration |
-| G008 | Files M05 publicProgress port | 当前persisted completed/retired进度全读口schema投影；host-only无业务grant，A/B/重启/源撤权遗忘正负例，Task→Operation→Work全consumer清单 | PM已准必要最小hunk；待Files精确新SHA与EXEC/control后续复核，不触当前Q009输入 |
-| G009 | EXEC Draft#171 / schema修复 | driver同1e9发布/attach已完成；控制只读F01/P2确认operation_parent_generations与4列未入必需schema，LIFEc0bf同缺 | OWNER_REPAIR_DISPATCHED；原14步保持历史PASS，新源码先本地冻/不先push，重选整轮后更新PR |
-| G010 | Memory M05 admission/resource新seam | PM准Memory自己branch最小host-only逐次model admission+同Engine grant动态resource/execution_resources/单publisher；save与owner question同grant commit | WIP；精确hunk/scope/SHA及等待/cancel/lease/revoke/跨进程/usage/unknown回归待交，旧Q009不覆盖，Exec/control通知排队 |
+| G008 | Files M05 publicProgress port | exact8217纯schema/retired只读投影在e799未改；原Exec owner只读无新增确认blocker，作者57+1与动态独验分开 | 窄host source复核已做；新Files并发fix后的全gate/控制组/固定组合/native仍待 |
+| G009 | EXEC Draft#171 / exact070 | F01 required parent-generation schema+真实CLI/恢复regression；新22步driver PASS，已正常push且PR head/body核对，Draft/Open/未合 | WAIT_INDEPENDENT_ACCEPTANCE；新Memory/Filesports及实际producer/父链组合另验，非READY |
+| G010 | Memory/Files M05 capacity组合 | Memory e01默认capacityAvailable供tick/claim/resourceTurn静态peer共用；Files在同helper增可信owner/kind/parent unit partition，保留三个callsite；两owner已直接对齐 | WAIT_FINAL_FREEZES；不同源码定向不作组合PASS，双连接/双进程/动态continuation与分组公平待实跑 |
+| G011 | Files873只读delta预审 / PM已登记第5槽 | PM直接恢复领域reviewer，driver不重复派；只读容量修复/最小M05 port/授权物理fence与旧journey保留，不安装或运行 | DISPATCH_BY_PM；不占LIFE重窗，不自动READY；Memory最终freeze后的固定组合另验 |
 
 已决政策立即适用于活跃owner；未运行验证仍UNRUN。任何新产品分歧仍送PM，政策已答项不再重复提问。
 
@@ -188,7 +192,7 @@ AND-D01已由PM进一步明确：旧全局隐私/采集/同步值无可信owner�
 
 ## 待发送给正式验收的更新摘要
 
-不因FYI唤醒idle；G004有槽且有精确PR/head/base再交下述摘要。当前客户端chat仅只读Web diff预审，未PR/gate完整回执前不作完整独验PASS、不跑浏览器或完整check。
+不因FYI唤醒idle；G004有槽且有精确PR/head/base再交下述摘要。Web R006已完成独验且模块READY；Files/Ext/Memory旧候选静态结论不等于修复新head通过。其它完整独验按精确候选与必要依赖另排。
 
 - L06：用户选重新登录后按原开关继续未来任务；旧credentials/leases/grants退休，已完成外部操作不重复，unknown外部写先对账。不是逐域重开，也不复活旧执行权。
 - D01：偏好按稳定deployment/account独立；旧全局无owner不猜/不复制/不删，缺本人快照用既有CollectorConfig默认且采集停止/本人预览未确认。换号恢复参数不自动运行；OS/SAF/device/debug/容量/外观设备级但SAF不等于另一账号source授权。
