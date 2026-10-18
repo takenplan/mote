@@ -2083,7 +2083,7 @@
     "status": "implemented",
     "surfaces": [
       "extension:runtime.services.registerUser:MEMORY_DOMAIN",
-      "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.batch'",
       "task:execution.register:kind:'memory.admit'",
       "task:execution.register:kind:'memory.correct'",
       "task:execution.register:kind:'memory.reconcile'"

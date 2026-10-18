@@ -97,3 +97,24 @@ frozen-source commands, hashes and statuses belong in the external manifest.
 The full affected gate, the configured greater-than-two model check with the
 qualified Execution dependency, native consumers, physical devices and live models
 remain separate validation obligations.
+
+
+## Concurrent process observer regression
+
+The frozen `3a9d2fa5` targeted server run completed 210 tests: 209 passed and one
+failed while the parent of `multiuser-memory-outcome-process.test.ts` read
+`execution_steps` from a live child database using a zero-wait SQLite connection.
+The actual error was `database is locked`; an isolated retry passed and does not
+override that failed run. The observer now uses the existing generated-fixture
+read-only connection with the same five-second lock wait as the live host. The
+other Memory process observers use the same contract.
+
+`generated-memory-observer.test.ts` holds an exclusive transaction in another
+real process. It proves the former observer fails while the bounded observer
+waits and reads the committed value. This changes fixture observation only;
+product deadlines, grants, model calls, unknown-result assertions, physical
+worker retirement, successful sibling receipts and exact erasure checks remain
+unchanged. The seven-test process follow-up covers that regression, actual index
+restart, unknown external outcome, admission, review, feedback and Owner reply.
+The broad failed receipt remains in the evidence manifest; a fresh full affected
+gate is still required on the final candidate.
