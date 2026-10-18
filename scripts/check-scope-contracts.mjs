@@ -72,7 +72,7 @@ export function checkProductionImports(directory=root){
   // these helpers construct no Store and register no legacy routes.
   for(const path of ['concurrency.ts','execution-settings.ts'])allowed.add(sourceRoot+'/'+path);
   // M04 uses the original configuration and pure model/usage contracts.
-  for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','usage-query.ts','usage-summary.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
   // M09's adapted package catalog and worker/Cordis lifecycle have no private
   // Store dependency. Only ScopedPluginHost exposes their user capabilities.
   for(const path of ['plugin-center.ts','plugin-release.ts','plugin-runtime.ts','backend-plugin-scope.ts','execution-policy.ts'])allowed.add(sourceRoot+'/'+path);

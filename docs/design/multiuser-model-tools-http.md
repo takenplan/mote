@@ -1,8 +1,9 @@
-# Saved model connection tools (finite M04 contract)
+# Model connection tools
 
-These manual tools preserve the original preset copy, connection test and model
-directory capabilities. They use M01 protocol-2 authentication and the existing
-M04 personal configuration transaction. Device credentials cannot invoke them.
+These tools preserve the original preset copy, connection test and model
+directory capabilities, including inspection of unsaved personal drafts. They
+use M01 protocol-2 authentication and the existing M04 personal configuration
+transaction. Device credentials cannot invoke them.
 This is a backend consumer contract, not a whole Models or Web acceptance claim.
 
 ## Personal preset copy
@@ -34,9 +35,26 @@ route cannot copy a shared ID or the legacy deployment profile.
 {"revision":12,"reference":{"kind":"personal","id":"saved-preset"}}
 ```
 
-`kind` can also be `shared`, with an existing fixed shared resource ID. There are
-no endpoint, credential or model overrides in either body. Use the current
+`kind` can also be `shared`, with an existing fixed shared resource ID. Shared
+references accept no endpoint, credential or model overrides. Use the current
 personal configuration revision even when inspecting a shared resource.
+
+For a personal connection, add `draft` containing the full settings object. The
+ID can identify the same saved personal connection or a new unsaved connection.
+API key, headers and extra body may use their redacted boolean status or be
+omitted to retain the same-ID saved values; explicit values replace them and
+`null` clears them. A new ID inherits no credentials. Validation uses the same
+personal model schema, including the prohibition on environment expansion and
+host Codex login. Neither catalog nor probe writes YAML, increments revision,
+changes a selection or alters an admitted request.
+
+If provider, protocol or base URL changes while any saved credential is retained,
+the request returns `409 model_settings_credential_reuse`. The user can replace
+or clear the credential, or explicitly set `allowCredentialReuse:true` for that
+request. The same decision applies to redacted personal/shared configuration
+page saves. PUT accepts the flag beside `revision`, `value` and
+`preserveRedactedSecrets`; PATCH accepts it beside `revision`, `patches` and
+`preserveRedactedSecrets`. The flag is an edit decision, never saved policy.
 
 The catalog returns the existing `{items:[{id,name,...}]}` model directory. It
 uses the original provider/Codex directory algorithm and can discover IDs before
@@ -56,10 +74,11 @@ Logout, relogin, configuration replacement or withdrawal of a shared resource
 rejects the stale result. A held probe response cannot authorize later model/tool
 requests after credential retirement.
 
-These routes inspect saved references. Testing unsaved form fields is not part
-of this finite contract: save the visible personal preset through the original
-M04 form first. Shared connections stay read-only. No new store, scheduler,
-credential cache or automatic retry mechanism is introduced.
+Personal forms can discover a directory, choose a model and run the generated
+probe before saving. This supersedes the earlier saved-reference-only contract,
+which inserted an unnecessary save-and-activate step. Shared connections stay
+read-only. No new store, scheduler, credential cache or automatic retry mechanism
+is introduced.
 
 ## Executed validation and open work
 
@@ -100,4 +119,8 @@ personal `selections` map is empty. Consumers render feature choices from this
 metadata and save explicit personal/shared references through the existing
 whole models CAS; metadata reading neither selects a default nor grants a
 shared endpoint/credential copy. Unsupported feature keys still reject400.
-The model-tool POST contracts above are unchanged.
+Personal feature selections additionally accept `model` on a personal reference,
+so one connection and credential can serve different model IDs across features.
+Shared references remain strict `{kind:'shared',id}` values with their fixed
+administrator-selected model. An absent personal override uses the connection's
+model. Model discovery itself does not modify these selections.
