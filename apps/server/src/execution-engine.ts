@@ -231,7 +231,6 @@ export class ExecutionEngine {
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?").all(now) as Row[]){
    // An expired host lease proves interruption, not a completed processing
    // failure. Issued external calls remain protected by their domain ledger.
-   this.active.get(row.id)?.controller.abort(interrupted);
    db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-1),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
   }
  }

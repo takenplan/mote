@@ -124,6 +124,16 @@ test('an expired lease cannot commit even before another host reclaims it',async
  assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
 });
 
+test('lease recovery fences the old grant immediately and waits for its local handler cleanup before restarting the same step',async t=>{
+ let release!:()=>void,enter!:()=>void,finishCleanup!:()=>void;const held=new Promise<void>(resolve=>release=resolve),entered=new Promise<void>(resolve=>enter=resolve),cleanup=new Promise<void>(resolve=>finishCleanup=resolve);t.after(()=>{release();finishCleanup();});
+ const {engine,advance}=await fixture(t);let calls=0,bodies=0,maximumBodies=0,oldGrant!:Parameters<ExecutionHandler['execute']>[2];const committed:number[]=[];
+ engine.register({...base,concurrency:()=>2,execute:async(_step,_signal,grant)=>{const call=++calls;bodies++;maximumBodies=Math.max(maximumBodies,bodies);try{if(call===1){oldGrant=grant;enter();await held;grant.assert();}return call;}finally{if(call===1)await cleanup;bodies--;}} ,commit:(_step,result)=>committed.push(Number(result))});
+ const id=engine.enqueue('lease-cleanup','fixture',{}),running=engine.drain([id]);await entered;advance(30001);await engine.tick();await new Promise(resolve=>setImmediate(resolve));await engine.tick();
+ assert.equal(engine.get(id)!.state,'waiting');assert.throws(()=>oldGrant.assert(),{code:'grant_revoked'});assert.equal(calls,1,'an expired wrapper cannot admit the same step while its local handler remains active');
+ release();await new Promise(resolve=>setImmediate(resolve));await engine.tick();assert.equal(calls,1,'asynchronous handler cleanup also belongs to the previous local execution');finishCleanup();await running;
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);assert.equal(maximumBodies,1);assert.deepEqual(committed,[2]);
+});
+
 test('an expired lease cannot publish a permanent failure before recovery',async t=>{
  const {engine,advance}=await fixture(t);let calls=0;
  engine.register({...base,execute:async()=>{if(++calls===1){advance(30001);throw new ExecutionFailure('permanent','late_failure');}return null;}});

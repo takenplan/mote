@@ -89,6 +89,9 @@ sample on `onUsage`, and finalizes the same fragment on success or failure.
 After cancellation or authorization revocation, the existing meter can only
 interrupt its own retained fragment, preserving earlier samples. This narrow
 finalizer cannot add usage, authorize a request or recreate a deleted row.
+The scoped query finalizer runs local result acceptance before marking success;
+image JSON, schema and pixel-read rejection preserve a failed fragment and its
+reported consumption without starting model repair or another request.
 Repeated samples and finalization do not add consumption. Independent queries
 or reexecution use distinct fragments even under one retained lease; successful
 checkpoint reuse creates none. The host-only `recordUsage` convenience method
