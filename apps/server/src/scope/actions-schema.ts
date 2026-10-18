@@ -21,12 +21,15 @@ export function installActions(db:DatabaseSync){db.exec(`
  DROP TRIGGER IF EXISTS ac_source_insert;
  CREATE TRIGGER ac_source_insert AFTER INSERT ON pd_sources WHEN NOT EXISTS(SELECT 1 FROM ac_state a WHERE a.user_id=new.user_id AND a.deleted=1) BEGIN INSERT INTO ac_sources VALUES(new.user_id,new.id,lower(hex(randomblob(16)))) ON CONFLICT(user_id,id) DO UPDATE SET epoch=excluded.epoch; END;
  DROP TRIGGER IF EXISTS ac_source_update;
- CREATE TRIGGER ac_source_update AFTER UPDATE ON pd_sources WHEN new.json!=old.json AND NOT EXISTS(SELECT 1 FROM ac_state a WHERE a.user_id=new.user_id AND a.deleted=1) BEGIN UPDATE ac_sources SET epoch=lower(hex(randomblob(16))) WHERE user_id=new.user_id AND id=new.id; END;
+ -- A display rename or timestamp-only save preserves evidence and authorization.
+ -- Every other source change still retires the old Actions proof and approval.
+ CREATE TRIGGER ac_source_update AFTER UPDATE ON pd_sources WHEN json_remove(new.json,'$.name','$.updatedAt')!=json_remove(old.json,'$.name','$.updatedAt') AND NOT EXISTS(SELECT 1 FROM ac_state a WHERE a.user_id=new.user_id AND a.deleted=1) BEGIN UPDATE ac_sources SET epoch=lower(hex(randomblob(16))) WHERE user_id=new.user_id AND id=new.id; END;
  CREATE TRIGGER IF NOT EXISTS ac_source_delete AFTER DELETE ON pd_sources BEGIN DELETE FROM ac_sources WHERE user_id=old.user_id AND id=old.id; END;
  CREATE TABLE IF NOT EXISTS ac_proposals(user_id TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,proof TEXT NOT NULL,scope TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ac_dependencies(user_id TEXT NOT NULL,action_id TEXT NOT NULL,kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(user_id,action_id,kind,id),FOREIGN KEY(user_id,action_id) REFERENCES ac_proposals(user_id,id) ON DELETE CASCADE);
  CREATE INDEX IF NOT EXISTS ac_proposal_page ON ac_proposals(user_id,created_at DESC,id DESC);
  CREATE TABLE IF NOT EXISTS ac_targets(user_id TEXT NOT NULL,device_id TEXT NOT NULL,epoch TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,device_id));
+ CREATE TABLE IF NOT EXISTS ac_discovery_state(user_id TEXT PRIMARY KEY,captures INTEGER NOT NULL DEFAULT 0,materials INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS ac_jobs(user_id TEXT NOT NULL,id TEXT NOT NULL,input TEXT NOT NULL,proof TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ac_operations(user_id TEXT NOT NULL,id TEXT NOT NULL,action_id TEXT NOT NULL,approval_hash TEXT NOT NULL,target_epoch TEXT,authorization_revision INTEGER NOT NULL,account_epoch INTEGER NOT NULL,native_external_id TEXT,task_id TEXT,issuance_id TEXT,claimed INTEGER NOT NULL DEFAULT 0,ack TEXT,revoked INTEGER NOT NULL DEFAULT 0,published INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,action_id) REFERENCES ac_proposals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ac_restore(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,id));
@@ -46,3 +49,11 @@ export function installActions(db:DatabaseSync){db.exec(`
 
 export const actionsDeleted=(db:DatabaseSync,userId:string)=>Boolean(db.prepare('SELECT deleted FROM ac_state WHERE user_id=?').get(userId)?.deleted);
 export function actionPolicyCurrent(db:DatabaseSync,userId:string,input:{id:unknown;generation:unknown},taskId:string){const state=db.prepare('SELECT * FROM ac_state WHERE user_id=?').get(userId);return Boolean(state&&!state.deleted&&JSON.parse(String(state.settings)).enabled===true&&state.policy_id===input.id&&state.generation===input.generation&&state.policy_task===taskId);}
+
+/** Schema installation is the only unscoped SQL exception for Actions. */
+export function installActionSemanticSchema(db:DatabaseSync){
+  db.exec(`CREATE INDEX IF NOT EXISTS ac_capture_segment_group ON pd_captures(user_id,json_extract(json,'$.deviceId'),json_extract(json,'$.source'),json_extract(json,'$.appId'),json_extract(json,'$.windowTitle'),json_extract(json,'$.provenance.sourceId'),floor(unixepoch(json_extract(json,'$.capturedAt'),'subsec')/300),context_at,id);
+   CREATE TABLE IF NOT EXISTS ac_semantic_products(user_id TEXT NOT NULL,id TEXT NOT NULL,revision TEXT NOT NULL,input TEXT NOT NULL,proof TEXT NOT NULL,task_id TEXT,json TEXT,consumed INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,id,revision));
+   CREATE TABLE IF NOT EXISTS ac_semantic_dependencies(user_id TEXT NOT NULL,id TEXT NOT NULL,revision TEXT NOT NULL,kind TEXT NOT NULL,root_id TEXT NOT NULL,PRIMARY KEY(user_id,id,revision,kind,root_id),FOREIGN KEY(user_id,id,revision) REFERENCES ac_semantic_products(user_id,id,revision) ON DELETE CASCADE);`);
+  for(const [table,kind] of [['pd_captures','capture'],['pd_sources','source']] as const)db.exec(`CREATE TRIGGER IF NOT EXISTS ac_semantic_${kind}_deleted BEFORE DELETE ON ${table} BEGIN DELETE FROM ac_semantic_products WHERE user_id=old.user_id AND (id,revision) IN(SELECT id,revision FROM ac_semantic_dependencies WHERE user_id=old.user_id AND kind='${kind}' AND root_id=old.id); END;`);
+}

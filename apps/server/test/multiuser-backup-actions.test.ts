@@ -13,7 +13,7 @@ import {password} from './fixtures/scoped-query-accounts.js';
 import {launchScopedProcess,scopedHttpClient} from './fixtures/scoped-process.js';
 import {backupScopedInstance,restoreScopedInstance} from '../../../scripts/scoped-backup.mjs';
 
-const tables=['ac_meta','ac_state','ac_sources','ac_proposals','ac_dependencies','ac_targets','ac_jobs','ac_operations','ac_restore','td_meta','td_state','td_todos','td_restore'];
+const tables=['ac_meta','ac_state','ac_sources','ac_proposals','ac_dependencies','ac_targets','ac_jobs','ac_operations','ac_restore','ac_discovery_state','ac_semantic_products','ac_semantic_dependencies','td_meta','td_state','td_todos','td_restore'];
 
 test('stopped recovery preserves actual Actions/todos and external facts, retires old action authority and rejects incomplete domain schemas',async t=>{
  const f=await modelFixture(t),root=mkdtempSync(join(tmpdir(),'mote-m16-actions-backup-')),snapshot=join(root,'snapshot'),target=join(root,'target'),config=join(root,'instance.yaml'),todoId=randomUUID(),actions:any[]=[];
@@ -27,7 +27,7 @@ test('stopped recovery preserves actual Actions/todos and external facts, retire
   assert.equal((await f.ok(user.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'})).mutationAllowed,true);
   await f.ok(user.token,'/api/actions/'+approved.id+'/receipt','POST',{deviceId:'same-device',operationId:approved.operationId,status:label==='A'?'uncertain':'succeeded',...(label==='B'?{externalId:'generated-successful-native-event'}:{})});actions.push(approved);
  }
- const before=f.read(db=>({todos:db.prepare('SELECT * FROM td_todos ORDER BY user_id,id').all(),proposals:db.prepare('SELECT * FROM ac_proposals ORDER BY user_id,id').all(),operations:db.prepare('SELECT user_id,id,claimed,issuance_id,native_external_id,ack,task_id,published FROM ac_operations ORDER BY user_id,id').all(),completed:db.prepare("SELECT id,input,attempts FROM execution_steps WHERE state='succeeded' ORDER BY id").all(),states:db.prepare('SELECT user_id,generation,authorization_revision FROM ac_state ORDER BY user_id').all()}));
+ const before=f.read(db=>({discovery:db.prepare('SELECT * FROM ac_discovery_state ORDER BY user_id').all(),products:db.prepare('SELECT * FROM ac_semantic_products ORDER BY user_id,id,revision').all(),semanticDependencies:db.prepare('SELECT * FROM ac_semantic_dependencies ORDER BY user_id,id,revision,kind,root_id').all(),todos:db.prepare('SELECT * FROM td_todos ORDER BY user_id,id').all(),proposals:db.prepare('SELECT * FROM ac_proposals ORDER BY user_id,id').all(),operations:db.prepare('SELECT user_id,id,claimed,issuance_id,native_external_id,ack,task_id,published FROM ac_operations ORDER BY user_id,id').all(),completed:db.prepare("SELECT id,input,attempts FROM execution_steps WHERE state='succeeded' ORDER BY id").all(),states:db.prepare('SELECT user_id,generation,authorization_revision FROM ac_state ORDER BY user_id').all()}));
  assert.equal(before.operations.length,2);assert.ok(before.operations.every(row=>row.claimed===1&&row.issuance_id));
  await f.node.app.close();writeFileSync(config,serializeConfigDocument({version:1,revision:0,storage:{dataDir:f.directory},server:{host:'127.0.0.1',port:0},actions:{enabled:true,timeZone:'UTC'}}));
  await backupScopedInstance({source:f.directory,out:snapshot,configFile:config});
@@ -35,6 +35,7 @@ test('stopped recovery preserves actual Actions/todos and external facts, retire
   await restoreScopedInstance({from:snapshot,target});
   const instance=parseConfigDocument(readFileSync(join(target,'instance.yaml'),'utf8'),{}).savedDocument;assert.equal(instance.actions?.enabled,false,'inherited instance action policy must be retired');
   const db=new DatabaseSync(join(target,'mote.sqlite'));try{
+   assert.deepEqual(db.prepare('SELECT * FROM ac_discovery_state ORDER BY user_id').all(),before.discovery);assert.deepEqual(db.prepare('SELECT * FROM ac_semantic_products ORDER BY user_id,id,revision').all(),before.products);assert.deepEqual(db.prepare('SELECT * FROM ac_semantic_dependencies ORDER BY user_id,id,revision,kind,root_id').all(),before.semanticDependencies);
    assert.deepEqual(db.prepare('SELECT * FROM td_todos ORDER BY user_id,id').all(),before.todos);assert.deepEqual(db.prepare('SELECT * FROM ac_proposals ORDER BY user_id,id').all(),before.proposals);
    assert.deepEqual(db.prepare('SELECT user_id,id,claimed,issuance_id,native_external_id,ack,task_id,published FROM ac_operations ORDER BY user_id,id').all(),before.operations,'issued/successful/unknown facts retain their exact identity');
    assert.deepEqual(db.prepare("SELECT id,input,attempts FROM execution_steps WHERE state='succeeded' ORDER BY id").all(),before.completed);

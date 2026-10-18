@@ -6,7 +6,7 @@ import {ActionSettingsSaveError} from '../action-contract.js';
 import {actionsRuntimeSettingsSchema} from '../actions-configuration.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {askHash,type EvidencePin,type MaterialPin} from './ask-schema.js';
-import {AskEvidence} from './ask-evidence.js';
+import {ActionEvidence} from './action-evidence.js';
 import type {PrivateData} from './private-data.js';
 import type {UserContext} from './context.js';
 import type {ScopedRuntime} from './http.js';
@@ -56,7 +56,7 @@ export class ScopedActions{
  private owner(context:UserContext){this.runtime.authority.assert(context);if(this.runtime.authority.isTask(context)||this.runtime.accounts?.credentialInfo(context,this.runtime.authority).deviceId)throw new PrivateDataError('scope_unavailable',403);}
  device(context:UserContext,id?:string,requireGrant=true){this.runtime.authority.assert(context);const deviceId=this.runtime.authority.isTask(context)?undefined:this.runtime.accounts?.credentialInfo(context,this.runtime.authority).deviceId;if(deviceId&&(id&&id!==deviceId||requireGrant&&!parse<string[]>(this.state(context).review_devices).includes(deviceId)))throw new PrivateDataError('scope_unavailable',403);return deviceId;}
  codec(context:UserContext){return new PrivateCursor(this.cursorKey,context.deploymentId,context.userId);}
- evidence(context:UserContext,sourceIds?:readonly string[],observe?:(pins:EvidencePin[],materials:MaterialPin[])=>void){return new AskEvidence(this.sql(context),this.runtime.services.forUser(context).get<PrivateData>('private-data'),this.codec(context),{sourceIds,assertCurrent:()=>this.runtime.authority.assert(context)},observe);}
+ evidence(context:UserContext,sourceIds?:readonly string[],observe?:(pins:EvidencePin[],materials:MaterialPin[])=>void){return new ActionEvidence(this.sql(context),this.runtime.services.forUser(context).get<PrivateData>('private-data'),this.codec(context),{sourceIds,assertCurrent:()=>this.runtime.authority.assert(context)},observe);}
  proof(context:UserContext,ids:readonly string[],sourceIds?:readonly string[]):ActionProof{
   const pins:EvidencePin[]=[],materials:MaterialPin[]=[],repo=this.evidence(context,sourceIds,(p,m)=>{for(const pin of p)if(!pins.some(old=>old.id===pin.id))pins.push(pin);for(const material of m)if(!materials.some(old=>old.id===material.id))materials.push(material);});repo.evidence(ids);
   const sources=[...new Set([...pins.flatMap(pin=>pin.source?[pin.source.id]:[]),...materials.flatMap(material=>(material.sources??[]).map(source=>source.id))])].sort().map(id=>{const epoch=this.sql(context).get('SELECT epoch FROM ac_sources WHERE user_id=$user AND id=?',id)?.epoch;if(!epoch)throw missing();return {id,epoch:String(epoch)};});return {pins,materials,sources};
@@ -104,9 +104,9 @@ export class ScopedActions{
    data.run("INSERT INTO ac_state(user_id,deleted,generation) VALUES($user,1,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1,generation=generation+1,settings='{\"enabled\":false,\"timeZone\":\"Asia/Shanghai\"}',review_devices='[]',authorization_revision=authorization_revision+1,policy_id=NULL,policy_task=NULL");
    if(policyTask)this.execution.engine.cancel(String(policyTask));
    data.run('UPDATE ac_operations SET revoked=1 WHERE user_id=$user');
-   for(const row of data.all('SELECT task_id FROM ac_jobs WHERE user_id=$user AND task_id IS NOT NULL UNION SELECT task_id FROM ac_operations WHERE user_id=$user AND task_id IS NOT NULL UNION SELECT policy_task task_id FROM ac_state WHERE user_id=$user AND policy_task IS NOT NULL'))this.execution.engine.cancel(String(row.task_id));
+   for(const row of data.all('SELECT task_id FROM ac_jobs WHERE user_id=$user AND task_id IS NOT NULL UNION SELECT task_id FROM ac_operations WHERE user_id=$user AND task_id IS NOT NULL UNION SELECT task_id FROM ac_semantic_products WHERE user_id=$user AND task_id IS NOT NULL UNION SELECT policy_task task_id FROM ac_state WHERE user_id=$user AND policy_task IS NOT NULL'))this.execution.engine.cancel(String(row.task_id));
    data.run("DELETE FROM oq_questions WHERE user_id=$user AND json_extract(json,'$.question.provider.id')='actions.calendar'");
-   for(const table of ['ac_jobs','ac_targets','ac_sources','ac_dependencies','ac_restore'])data.run('DELETE FROM '+table+' WHERE user_id=$user');
+   for(const table of ['ac_semantic_dependencies','ac_semantic_products','ac_discovery_state','ac_jobs','ac_targets','ac_sources','ac_dependencies','ac_restore'])data.run('DELETE FROM '+table+' WHERE user_id=$user');
    // An uncertain receipt is not settlement. Keep only the exact outstanding
    // issuance/native identity needed by a previously bound transport callback.
    const unknown="issuance_id IS NOT NULL AND (ack IS NULL OR coalesce(json_extract(ack,'$.status'),'')<>'succeeded')";

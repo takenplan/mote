@@ -2390,6 +2390,7 @@
     "module": "M12",
     "surfaces": [
       "task:host.execution.register:kind:'actions.extract'",
+      "task:host.execution.register:kind:'actions.prepare'",
       "task:host.execution.register:kind:'actions.watch'"
     ]
   },
@@ -2415,11 +2416,14 @@
     "module": "M12",
     "surfaces": [
       "table:ac_dependencies",
+      "table:ac_discovery_state",
       "table:ac_jobs",
       "table:ac_meta",
       "table:ac_operations",
       "table:ac_proposals",
       "table:ac_restore",
+      "table:ac_semantic_dependencies",
+      "table:ac_semantic_products",
       "table:ac_sources",
       "table:ac_state",
       "table:ac_targets"
@@ -2553,6 +2557,13 @@
     "notes": "M04 owns user-qualified numeric usage fragments and host-owner recovery metadata. An existing meter may only interrupt its own retained fragment after revocation; it cannot add samples, recreate deleted rows or recover business/model authority.",
     "surfaces": [
       "table:user_model_usage_owners"
+    ]
+  },
+  "apps/server/src/scope/action-semantic-products.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.understand'"
     ]
   }
 }
