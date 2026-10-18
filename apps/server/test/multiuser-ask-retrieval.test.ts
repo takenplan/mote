@@ -53,15 +53,34 @@ test('production intake generates owned vectors; Context and actual Ask recall n
 });
 
 test('automatic capture organizers publish real Material originals and semantic indexes through startup/intake hooks',async t=>{
- const f=await archive(t),captureId=randomUUID();
+ const f=await archive(t),captureId=randomUUID(),entered=deferred(),release=deferred();t.after(()=>release.resolve());
+ // Hold B's distinct canonical metadata embedding, after its text vector can
+ // already satisfy the old first-vector readiness check.
+ f.scripts.set('B',async(input,res)=>{if(input.includes('"captureId"')){entered.resolve();await release.promise;}res.setHeader('content-type','application/json');res.end(JSON.stringify({data:[{embedding:input===question||input.includes('rail journey')?[1,0]:[0,1]}],usage:{prompt_tokens:7,total_tokens:7}}));});
+ const producers=()=>f.read(db=>({
+  tasks:db.prepare("SELECT e.id,e.user_id,e.kind,e.state,e.attempts,u.input,u.model_receipt,u.grant_id,a.authorization_epoch,a.revoked FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id JOIN task_authorizations a ON a.task_id=e.id WHERE e.kind IN ('memory.materials','ask.index-admit','ask.embedding') ORDER BY e.id").all(),
+  evidence:db.prepare('SELECT e.user_id,e.id,e.hash FROM mm_evidence e JOIN pd_materials h ON h.user_id=e.user_id AND h.id=e.material_id AND h.revision=e.material_revision ORDER BY e.user_id,e.id').all(),
+  vectors:db.prepare('SELECT * FROM ma_embeddings ORDER BY user_id,evidence_id,model_key').all(),
+  events:db.prepare('SELECT * FROM ma_embedding_events ORDER BY user_id,id').all(),
+ }));
  for(const [user,owner]of [[f.a,'A'],[f.b,'B']]as const){
   const current=await f.ok(user.token,'/api/configuration');await f.ok(user.token,'/api/configuration/processing','PUT',{revision:current.revision,value:{...defaultProcessingSettings(),automatic:true,understandingEnabled:false}});
   await f.ok(user.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'generated-real-capture',items:[noteCapture({id:captureId,deviceId:'same-device',deviceName:'Generated device',platform:'import',capturedAt:'2026-10-16T12:00:00Z',text:travel(owner)})]});
   await waitForState(async()=>f.read(db=>Number(db.prepare('SELECT count(*) n FROM ma_embeddings v JOIN mm_evidence e ON e.user_id=v.user_id AND e.id=v.evidence_id JOIN pd_materials h ON h.user_id=e.user_id AND h.id=e.material_id AND h.revision=e.material_revision WHERE v.user_id=?').get(user.userId)!.n)),count=>count>0,'real capture organizer publication produced a current canonical semantic vector');
  }
+ await entered.promise;const partial=producers(),inflight=partial.tasks.find(task=>task.user_id===f.b.userId&&task.kind==='ask.embedding'&&task.state==='running');assert.ok(inflight,'the first current vector does not establish completion of every admitted embedding');
+ const pendingInput=JSON.parse(String(inflight.input));assert.ok(!partial.vectors.some(vector=>vector.user_id===f.b.userId&&vector.evidence_id===pendingInput.id));
+ const oldRequests=f.requests.map(request=>({...request}));await f.restart();release.resolve();await f.ok(f.a.token,'/api/auth/self');
+ await waitForState(async()=>producers(),state=>state.tasks.every(task=>task.state==='succeeded')&&state.vectors.length===state.evidence.length,'all actual organizer, admission and embedding tasks completed');
+ const completed=producers();assert.deepEqual(completed.tasks.map(task=>task.id),partial.tasks.map(task=>task.id),'restart resumes existing producer tasks without admitting historical work');assert.deepEqual(completed.events,partial.events);
+ const resumed=completed.tasks.find(task=>task.id===inflight.id)!;for(const key of ['user_id','input','model_receipt','grant_id','authorization_epoch','revoked'])assert.equal(resumed[key],inflight[key],'unfinished producer retains '+key);
+ for(const task of partial.tasks.filter(task=>task.state==='succeeded'))assert.deepEqual(completed.tasks.find(current=>current.id===task.id),task,'a completed producer is never reexecuted');
+ const repeated=oldRequests.find(request=>request.owner==='B'&&request.input.includes('"captureId"'))!;assert.ok(repeated);assert.deepEqual(f.requests.slice(oldRequests.length),[repeated],'only the interrupted exact metadata input is reissued on the original model');
+ for(const task of completed.tasks.filter(task=>task.kind==='ask.embedding')){const input=JSON.parse(String(task.input)),vector=completed.vectors.find(value=>value.user_id===task.user_id&&value.evidence_id===input.id),evidence=completed.evidence.find(value=>value.user_id===task.user_id&&value.id===input.id),model=JSON.parse(String(task.model_receipt));assert.ok(vector&&evidence);assert.deepEqual([vector.fingerprint,vector.receipt,vector.anchor_hash],[input.fingerprint,input.receipt,evidence.hash]);assert.equal(model.userId,task.user_id);assert.equal(model.model,'generated-embedding');}
+ t.diagnostic(JSON.stringify({phase:'producer-recovery',interruptedTask:inflight.id,input:pendingInput,modelReceipt:JSON.parse(String(inflight.model_receipt)),completedTasks:completed.tasks.map(task=>({id:task.id,kind:task.kind,state:task.state,attempts:task.attempts})),vectorReceipts:completed.vectors.map(vector=>({userId:vector.user_id,id:vector.evidence_id,receipt:vector.receipt}))}));
  const queriesBefore=f.requests.filter(request=>request.input!==question).length;await f.restart();
  for(const [user,owner]of [[f.a,'A'],[f.b,'B']]as const){const page=await f.ok(user.token,'/api/context/retrieve?'+new URLSearchParams({query:question,maxCharacters:'16000'}));assert.equal(page.retrieval.mode,'hybrid');assert.match(page.items[0].ref,/^material:/);assert.ok(page.items[0].snippet.includes(travel(owner)),JSON.stringify(page));assert.ok(!JSON.stringify(page).includes(travel(owner==='A'?'B':'A')));}
- assert.equal(f.requests.filter(request=>request.input!==question).length,queriesBefore,'startup must reuse completed producer output');
+ assert.equal(f.requests.filter(request=>request.input!==question).length,queriesBefore,'startup must reuse completed producer output');assert.deepEqual(producers(),completed,'completed task identities, fixed model receipts, grants and vectors survive startup unchanged');
  const id=randomUUID();await f.ok(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated real intake travel question'}});const result=await waitForState(()=>f.ok(f.a.token,'/api/query-runs/'+id),value=>value.status!=='running','real Ask uses processed semantic evidence');assert.equal(result.status,'completed',JSON.stringify(result));assert.ok(result.result.citations.some((citation:any)=>citation.excerpt.includes('rail journey')),JSON.stringify(result));assert.ok(f.bodies.some(body=>body.includes('hybrid')&&body.includes(travel('A'))));
 });
 
