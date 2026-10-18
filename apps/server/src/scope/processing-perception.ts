@@ -4,7 +4,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {z} from 'zod';
 import {imageSettingsSchema,perceptionConfigurationSchema,defaultPerceptionConfiguration,type PerceptionConfiguration} from '../perception-configuration.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
-import {ExecutionFailure,type ExecutionStep} from '../execution-engine.js';
+import {ExecutionFailure,type ExecutionStep,type ExecutionPoolAdmission} from '../execution-engine.js';
 import {ScopeError} from './baseline.js';
 import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import {attachmentVisible} from './ingress-attachments.js';
@@ -34,6 +34,7 @@ export class ProcessingPerception {
  private closed=false;
  private readonly stop:()=>Promise<void>;
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly host:()=>ProcessingHost,changed:(context:UserContext)=>void){
+  for(const [pool,limit] of [['processing.pipeline',4],['processing.image-stage',4],['processing.ocr',2],['processing.analysis',2]] as const)execution.engine.configurePool(pool,{lane:()=> 'background',concurrency:{background:()=>limit,interactive:()=>limit},partition:step=>this.capacity(step)});
   configuration.registerDomain('perception',subject=>({id:'perception',schema:perceptionConfigurationSchema,defaultValue:defaultPerceptionConfiguration(),resolve:raw=>raw,fields:[{path:'enabled',effect:'immediate'},{path:'concurrency',effect:'next-admission'},...['understandingEnabled','providerRevision','allowExternalProcessing','allowQueryImages'].map(path=>({path,effect:'next-request' as const}))],prepare:next=>{
    const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_perception_state WHERE user_id=$user'),value=perceptionConfigurationSchema.parse(next),json=JSON.stringify(value);let published=false;
    return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_perception_state VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_perception_state SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_perception_state WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&this.executionStamp(before?perceptionConfigurationSchema.parse(JSON.parse(String(before.json))):defaultPerceptionConfiguration())!==this.executionStamp(value)){const preserved=this.profileChanges.has(subject.userId);this.profileChanges.add(subject.userId);try{changed(subject);}finally{if(!preserved)this.profileChanges.delete(subject.userId);}}}};
@@ -58,15 +59,23 @@ export class ProcessingPerception {
   if(step.kind==='processing.image-understanding'||step.kind==='processing.analysis'&&step.input.mode==='image')return 'understanding';
   if(step.kind==='processing.image-stage')return imageRecipeInputSchema.parse(step.input).imageStep.kind;
  }
- admit(step:ExecutionStep){
-  if(!step.ownership)return new ExecutionFailure('stale','image_owner_missing');const sql=new PrivateSql(this.db,step.ownership.userId,()=>{}),limit=this.value(sql).concurrency,kind=this.stageKind(step),active=new Set<string>();
-  // Kind is the executor-validated recipe snapshot, even if a plugin unloads.
-  // The original image pools limit each declared stage kind. A coordinator
-  // waiting on a durable child is not another physical image execution.
-  for(const row of sql.all("SELECT e.kind,u.input,EXISTS(SELECT 1 FROM user_tasks cu JOIN execution_steps ce ON ce.user_id=cu.user_id AND ce.id=cu.task_id WHERE cu.user_id=$user AND ce.user_id=$user AND json_extract(cu.input,'$.parentTaskId')=e.id AND ce.state='waiting') waiting_child FROM execution_steps e JOIN user_tasks u ON u.user_id=e.user_id AND u.task_id=e.id WHERE e.user_id=$user AND u.user_id=$user AND e.id<>? AND e.state='running' AND json_extract(u.input,'$.originalRef')<>? AND (e.kind IN('processing.ocr','processing.image-understanding','processing.image-stage') OR e.kind='processing.analysis' AND json_extract(u.input,'$.mode')='image')",step.id,String(step.input.originalRef))){
-   if(row.kind==='processing.image-stage'&&row.waiting_child)continue;const input=JSON.parse(String(row.input));if(this.stageKind({kind:String(row.kind),input})===kind)active.add(String(input.originalRef));
+ private capacity(step:ExecutionStep):ReturnType<NonNullable<ExecutionPoolAdmission['partition']>>{
+  if(!step.ownership)return;const sql=new PrivateSql(this.db,step.ownership.userId,()=>{});
+  if(step.kind==='processing.pipeline')return step.input.perceptionStamp===undefined?undefined:{key:JSON.stringify(['image-coordinator',step.ownership.userId]),unit:step.id,concurrency:Number.MAX_SAFE_INTEGER};
+  let kind:string|undefined;try{kind=this.stageKind(step);}catch{return;}if(!kind)return;
+  // A genuine image-stage parent and its physical OCR/model child represent
+  // one declared stage, even though M05 retains both durable task receipts.
+  let unit=step.id;
+  if(step.kind!=='processing.image-stage'&&typeof step.input.parentTaskId==='string'){
+   const parent=sql.get("SELECT u.task_id,u.input FROM user_tasks u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=$user AND e.user_id=$user AND u.task_id=? AND e.kind='processing.image-stage'",step.input.parentTaskId);
+   if(parent){const input=imageRecipeInputSchema.safeParse(JSON.parse(String(parent.input)));if(input.success&&input.data.originalRef===step.input.originalRef&&input.data.imageStep.kind===kind)unit=String(parent.task_id);}
   }
-  return active.size>=limit?new ExecutionFailure('waiting','image_processing_busy',100,{executionStarted:false}):undefined;
+  return {key:JSON.stringify(['image-stage',step.ownership.userId,kind]),unit,concurrency:this.value(sql).concurrency};
+ }
+ admit(step:ExecutionStep){
+  // M05's one host capacity predicate owns per-kind admission in every pool.
+  // A second row-count gate here would disagree for exact parent/child units.
+  return step.ownership?undefined:new ExecutionFailure('stale','image_owner_missing');
  }
  private save(context:UserContext,job:Backfill){this.sql(context).run('UPDATE mp_image_backfills SET json=? WHERE user_id=$user AND id=?',JSON.stringify(job),job.id);}
  private load(context:UserContext,id:string):Backfill{const row=this.sql(context).get('SELECT json FROM mp_image_backfills WHERE user_id=$user AND id=?',id);if(!row)throw missing();const value=JSON.parse(String(row.json)) as Backfill;if(value.epoch!==context.authorizationEpoch)throw new PrivateDataError('conflict',409);return value;}

@@ -21,6 +21,23 @@ automatic switch is unchanged. Image tasks retain the executor-validated stage
 kind for pool accounting even if installed capabilities later change. Unsupported
 current task inputs retire; they are not reinterpreted or migrated.
 
+The image limit is enforced by M05's host-only capacity partition, across the
+existing processing pools. The partition key uses trusted ownership and the
+validated declared stage kind. A genuine image-stage parent and its exact
+physical OCR/understanding child share one capacity unit; the child binding is
+read back from the same owner's durable task metadata. Each owner's OCR,
+understanding and derived kinds independently use the current 1–8 setting.
+Image pipeline coordinators do not impose a second fixed total. This supersedes
+the temporary shared 2/4 pool ceilings and the separate Perception row-count
+admission gate, which could not enforce the original settings consistently.
+Unconfigured pools keep their original limits. Existing instance model gates,
+managed/custom local listener resource keys, cooldowns, user fairness, durable
+leases and publication fences still apply. Lowering a limit leaves issued work
+intact and delays new units; local execution promises still settling count
+alongside durable leases. Existing cancellation, physical cleanup and unknown
+external-result rules are unchanged. No public DTO or storage schema
+changes, capacity migration or second scheduler is introduced.
+
 Historical preview reads only current owned image metadata and accepted receipts.
 It binds a source/time query, inclusive `after`, exclusive `before`, account epoch,
 fixed original-row watermark and ten-minute token, with at most twenty previews
@@ -54,8 +71,8 @@ context. Instance media status exposes neither credentials nor host directories.
 | Disposition | Boundary |
 | --- | --- |
 | KEEP | Original image defaults, future profile selection, explicit historical complete/recompute, receipt proof, current evidence fences, private account configuration, one M05 engine, pinned asset catalog and existing worker supervisor. |
-| CHANGE | The image controls adapt M04/M05/M06 instead of the legacy composition; media assets have instance scope and administrator mutations; managed readiness can resume genuine unfinished processing intents through the existing recheck handoff. |
-| REMOVE | Missing production perception routes, shared credentials copied into account settings, separate legacy image queues, a requirement to manually retry an image after installing its selected missing managed model, and raw historical-image SQLite positions in public task progress. |
+| CHANGE | The image controls adapt M04/M05/M06 instead of the legacy composition; host capacity units restore the original owner/kind limits across physical child pools; media assets have instance scope and administrator mutations; managed readiness can resume genuine unfinished processing intents through the existing recheck handoff. |
+| REMOVE | Missing production perception routes, shared credentials copied into account settings, separate legacy image queues, accidental shared 2/4 image ceilings and duplicate row-count admission, a requirement to manually retry an image after installing its selected missing managed model, and raw historical-image SQLite positions in public task progress. |
 | EXCEPTION | A derived endpoint is displayed for the selected account model reference. Endpoint/processor edits use the existing File Processing connection/profile controls; the image page cannot mutate a shared instance credential or create duplicate endpoint authority. |
 | UNKNOWN | Real weights, real OCR/ASR quality, physical-device behavior, deployment/runtime installation on the owner's host, and integrated client/full-gate results until separately performed. |
 

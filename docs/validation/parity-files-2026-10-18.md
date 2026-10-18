@@ -93,6 +93,8 @@ Generated real HTTP regressions cover:
 | --- | --- |
 | Independent image admission while file automatic is off; disabled admission; enabling retains the old applied profile; new images use the changed profile; provider revision retains completed receipts until explicit recompute; account concurrency and query disclosure updates retain active work; external OCR permission blocks before physical issuance; complete reuses accepted products; recompute is explicit; restart does not replay completed work. | `multiuser-perception-history.test.ts` |
 | Source/date bounds, inclusive/exclusive times, foreign/consumed/restarted preview tokens and fixed watermark; durable scheduling across the 200-item page boundary. | `multiuser-perception-history.test.ts` |
+| Actual held OCR/understanding/derived stages at 3 and 8 per owner/kind, equal concurrent B work, hot lowering and subsequent release; physical HTTP OCR and pixel-reading model calls reach 8 each while B retains its own slot, hot 8→3→8 and cancellation with a late response. Nine generated local listeners provide independent physical OCR capacity; the fixture explicitly raises the existing instance model gates rather than bypassing them. | `multiuser-perception-history.test.ts` |
+| Cross-pool exact parent/child capacity units, two real SQLite connections, unchanged default pool limits, shared physical resource exclusion, hot lowering and late cancellation commit rejection. | `multiuser-execution-core.test.ts` |
 | Administrator-only install/cancel/import, role mutex across two installer hosts, range resume after cancellation/restart, pinned checksum failure and recovery, local bundles without network downloads, no restart-triggered downloads. | `multiuser-managed-media.test.ts` |
 | Installed weights versus authenticated worker readiness; model-missing OCR automatically resumes its genuine old processing intent; actual selected OCR/ASR calls receive the fixed worker credential; another account cannot read the result. | `multiuser-managed-media.test.ts` |
 | Existing supervisor starts before weights, observes later installation, restarts a stopped worker and stops children with the parent. | Targeted `workers start before model files` case in `scripts/media-workers.test.mjs` |
@@ -136,3 +138,29 @@ Focused repair-tree validation passed: the complete Desktop multi-user file
 Perception cases), server TypeScript no-emit and diff checks. The affected plan
 contains 22 checks and was dry-run only here. These generated fixtures do not
 establish native-client, emulator, physical-device or live-model acceptance.
+
+## FILES-STATIC-01 capacity repair
+
+The static review correctly identified that account admission alone could not
+raise the fixed OCR/analysis pools above 2 or image-stage/pipeline pools above 4.
+Generated production-upload tests at 3 and 8 held stages reproduced that failure.
+The M05 partition adapter removes those accidental ceilings while retaining the
+original owner/kind setting and actual physical gates. Waiting/admitted counts
+are not the throughput assertion: fixtures hold actual stage callbacks or HTTP
+processor/model responses after pixel inspection, then check successful
+publication and owner isolation after release. Real model weights are unused.
+
+The Memory dynamic-resource continuation port is a separate fixed dependency.
+Both owners agreed that static-peer eligibility in its `resourceTurn` must use
+the same `capacityAvailable` predicate as tick/claim, with Files' capacity/unit
+implementation replacing Memory's default implementation. Its running dynamic
+continuation does not reacquire task capacity. Partition × dynamic continuation
+competition across processes/restart is **UNRUN** until the driver tests the
+fixed combined candidate; neither branch's narrow results establish that gate.
+
+The final capacity repair source passed 10 Perception tests, 31 M05/handler/queue/
+lane tests, 21 Files/managed-media/snapshot/catalog consumers and 36 Desktop
+multi-user tests (98 total), plus server no-emit, scope/import and bilingual
+checks. This retains the e799 snapshot/OCR fixture repair and the 8217 historical
+progress privacy scenarios. The new full 22-check plan remains driver-owned and
+unperformed on this candidate; older failed/partial gates are not combined.
