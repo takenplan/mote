@@ -24,7 +24,8 @@ export type HindsightRuntimeFactory=(options:Parameters<typeof createHindsightEn
 export type MemoryProviderOptions={hindsightRuntimeFactory?:HindsightRuntimeFactory};
 type Binding=Extract<ScopedMemoryBinding,{kind:'plugin'}>;
 type ProviderConfig={snapshot_id:string;operation_id:string;configuration_hash:string};
-type Entry={provider:MemoryProvider;tail:Promise<unknown>;active?:{assert:()=>void;lease?:ModelLease;opaque?:ModelUsageMeter;meters:Map<string,ModelUsageMeter>};base:ProviderConfig};
+type ModelCall=<T>(work:()=>Promise<T>)=>Promise<T>;
+type Entry={provider:MemoryProvider;tail:Promise<unknown>;active?:{assert:()=>void;lease?:ModelLease;opaque?:ModelUsageMeter;meters:Map<string,ModelUsageMeter>;modelCall?:ModelCall};base:ProviderConfig};
 const referenceSchema=z.string().regex(/^(personal|shared):.+$/).transform(value=>{const at=value.indexOf(':');return {kind:value.slice(0,at) as 'personal'|'shared',id:value.slice(at+1)};});
 const unavailable=()=>new MemoryProviderError('unavailable','The retained scoped Memory provider is unavailable');
 
@@ -70,7 +71,7 @@ export class ScopedMemoryProviders {
    const assert=()=>{const active=entry.active;if(!active?.lease)throw unavailable();active.assert();this.configuration.assertLease(active.lease);};
    if(descriptor.adapter==='mote.mem0@1')return new Mem0MemoryProvider({directory:join(descriptor.directory,'memory-'+tag),embedding:{baseUrl:settings.baseUrl,model:settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:settings.apiKey||'unused-local-literal-reader'}},{assertEmbeddingAuthority:()=>{assert();const active=entry.active!;active.opaque??=this.configuration.startUsage(active.lease!,{attribution:{agentId:'memory-provider',moduleId:'memories',skillId:null}});active.opaque.issued();},...(restored.status!=='restored'?{embeddingUnavailable:unavailable()}:{})});
    if(descriptor.adapter==='mote.hindsight@1'){
-    const options:Parameters<typeof createHindsightEngine>[0]={directory:join(descriptor.directory,'memory-'+tag),instanceId:binding.instanceId,configurationIdentity:memoryHash([context.deploymentId,descriptor.namespace,base.configuration_hash]),modelFingerprint:literal?.modelFingerprint??hindsightModelFingerprint(settings),settings:{...settings},onRequestStarted:request=>{assert();const active=entry.active!;if(!active.meters.has(request.requestId))active.meters.set(request.requestId,this.configuration.startUsage(active.lease!,{attribution:{requestId:request.requestId,agentId:'memory-provider',moduleId:'memories',skillId:null}}));},assertModelAuthority:request=>{assert();const meter=entry.active!.meters.get(request.requestId);if(!meter)throw unavailable();meter.issued();},runModel:async work=>{assert();const result=await work();assert();return result;},onUsage:(tokens,request)=>{assert();const meter=entry.active!.meters.get(request.requestId);if(!meter)throw unavailable();meter.update(tokens);},onRequestFinished:request=>{const meter=entry.active?.meters.get(request.requestId);try{assert();meter?.finish(request.status);}catch{try{meter?.interrupt();}catch{/* Cleanup cannot restore authority or replace the original provider outcome. */}}}};
+    const options:Parameters<typeof createHindsightEngine>[0]={directory:join(descriptor.directory,'memory-'+tag),instanceId:binding.instanceId,configurationIdentity:memoryHash([context.deploymentId,descriptor.namespace,base.configuration_hash]),modelFingerprint:literal?.modelFingerprint??hindsightModelFingerprint(settings),settings:{...settings},onRequestStarted:()=>{assert();},assertModelAuthority:request=>{assert();const active=entry.active!;let meter=active.meters.get(request.requestId);if(!meter){meter=this.configuration.startUsage(active.lease!,{attribution:{requestId:request.requestId,agentId:'memory-provider',moduleId:'memories',skillId:null}});active.meters.set(request.requestId,meter);}meter.issued();},runModel:async work=>{assert();const call=entry.active!.modelCall,result=await (call?call(work):work());assert();return result;},onUsage:(tokens,request)=>{assert();const meter=entry.active!.meters.get(request.requestId);if(!meter)throw unavailable();meter.update(tokens);},onRequestFinished:request=>{const meter=entry.active?.meters.get(request.requestId);try{assert();meter?.finish(request.status);}catch{try{meter?.interrupt();}catch{/* Cleanup cannot restore authority or replace the original provider outcome. */}}}};
     return this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(options.directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:context.userId}),model:settings.model}):createHindsightEngine(options);
    }
    throw unavailable();
@@ -78,12 +79,12 @@ export class ScopedMemoryProviders {
   entry.provider=restored.status==='restored'?await this.configuration.withModel(restored.lease,create):await create(literal!.settings);return entry;
  }
  private async entry(context:UserContext,binding:Binding){const descriptor=await this.descriptor(context,binding);if(!descriptor.adapter)return this.open(context,binding);const key=memoryHash([descriptor.namespace,descriptor.configuration]),existing=this.entries.get(key);if(existing)return existing;const created=this.open(context,binding);this.entries.set(key,created);void created.catch(()=>{if(this.entries.get(key)===created)this.entries.delete(key);});return created;}
- private async call<T>(context:UserContext,binding:Binding,assertCurrent:()=>void,work:(provider:MemoryProvider)=>Promise<T>,literalRead=false):Promise<T>{
+ private async call<T>(context:UserContext,binding:Binding,assertCurrent:()=>void,work:(provider:MemoryProvider)=>Promise<T>,literalRead=false,modelCall?:ModelCall):Promise<T>{
   assertCurrent();const descriptor=await this.descriptor(context,binding),entry=await this.entry(context,binding);assertCurrent();
   const assert=()=>{this.authority.assert(context);descriptor.assertCurrent();assertCurrent();if(this.closed)throw unavailable();};
   const execute=async()=>{
    assert();let lease:ModelLease|undefined;if(entry.base.snapshot_id){const current=await this.configuration.restoreLease(context,entry.base.snapshot_id,entry.base.operation_id);assert();if(current.status==='restored')lease=await this.configuration.forkLease(context,entry.base.snapshot_id,entry.base.operation_id,'memory-call:'+randomUUID());else if(!literalRead||!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(current.reason))throw unavailable();}assert();
-   entry.active={assert,lease,meters:new Map()};let status:'completed'|'failed'='failed',failed=false;
+   entry.active={assert,lease,meters:new Map(),modelCall};let status:'completed'|'failed'='failed',failed=false;
    try{const result=await work(entry.provider);assert();status='completed';return result;}
    catch(error){failed=true;assert();throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='unsupported_input'?'memory_provider_unsupported_input':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
    finally{const meters=[...(entry.active?.opaque?[entry.active.opaque]:[]),...entry.active?.meters.values()??[]];try{assert();for(const meter of meters)meter.finish(status);}catch(error){for(const meter of meters){try{meter.interrupt();}catch{/* Only retire this existing observation; never mask the provider failure. */}}if(!failed)throw error;}finally{entry.active=undefined;}}
@@ -104,10 +105,10 @@ export class ScopedMemoryProviders {
   });
  }
  async verify(context:UserContext,binding:Binding,assertCurrent:()=>void,signal:AbortSignal){const descriptor=await this.descriptor(context,binding);return this.call(context,binding,assertCurrent,provider=>provider instanceof HindsightEngine?provider.probe(signal):provider.recover({namespace:descriptor.namespace}));}
- async nativeDraft(context:UserContext,binding:Binding,input:HindsightPrepare,assertCurrent:()=>void){
+ async nativeDraft(context:UserContext,binding:Binding,input:HindsightPrepare,assertCurrent:()=>void,modelCall:ModelCall){
   const descriptor=await this.descriptor(context,binding);if(descriptor.adapter!=='mote.hindsight@1')return;
   if(memoryHash(descriptor.namespace)!==memoryHash(input.namespace))throw unavailable();
-  return this.call(context,binding,assertCurrent,provider=>{if(!(provider instanceof HindsightEngine))throw unavailable();return provider.prepare(input);});
+  return this.call(context,binding,assertCurrent,provider=>{if(!(provider instanceof HindsightEngine))throw unavailable();return provider.prepare(input);},false,modelCall);
  }
  /** A lifecycle grant opens only literal read/export or exact erasure. It
   * carries no model lease and cannot authorize semantic provider operations. */

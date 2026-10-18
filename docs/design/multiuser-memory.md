@@ -190,7 +190,9 @@ query/usage receipt and the existing account-fair physical admission gates. Wait
 for a model or publisher consumes neither a physical call protection budget nor
 a new attempt. Owner-bound evidence resources exclude overlapping originals. The
 single per-user publisher resource is acquired from the same ExecutionEngine only
-around provider staging and the actual fenced save. A saved evaluation and its
+around duplicate resolution, write preparation, provider staging and the actual
+fenced save. Two independently reviewed targets using the same supported context
+resolve to the same existing card under that publisher. A saved evaluation and its
 Owner questions are committed together; held, failed, unknown or cancelled
 publication cannot expose an answerable question. Independent batches may overlap
 and the first saved batch can be searchable while later model work remains queued.
@@ -282,3 +284,11 @@ artifact matching the whole current target batch, the same work contract and
 completed, unsaturated coverage. Mismatches or context gaps retain only the
 untrusted interpretation and use ordinary extraction. Both paths always receive
 a separate independent review. Work/events navigation excludes Memory candidates.
+
+
+Native Hindsight extraction supplies a host-only model-call port to its relay.
+Each actual relay request enters the same M05 physical admission as the independent
+Agent reviewer; native operation polling and transport waits do not retain that
+model slot. Its own fixed provider lease and usage attribution remain M04-owned.
+A usage fragment starts at issued model authority after admission, excluding
+unissued capacity waiting. This is separate from the publication resource.

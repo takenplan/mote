@@ -264,3 +264,16 @@ test('a saved integration resumes its task receipt after replacing its own relat
  const afterSave=f.requests.length;assert.equal((await f.request(f.a.token,'/api/memories/'+parent.id)).json().supersededBy!==undefined,true);
  await f.restart();release.resolve();const done=await f.wait(f.a,created.id);assert.equal(done.tasks.batch.id,created.tasks.batch.id);assert.equal(f.requests.length,afterSave,'the saved supersession does not invalidate or replay its own completed batch');assert.equal(done.state,'committed');
 });
+
+test('two nonoverlapping target batches deduplicate shared supported context inside the actual publisher',async t=>{
+ const held=deferred(),entered=deferred();t.after(()=>held.resolve());const f=await scopedMemoryFixture(t);await batchSettings(f);
+ f.node.execution!.register({kind:'generated.publisher',pool:'generated.publisher',concurrency:()=>1,policy:EXECUTION_POLICIES.control,parseInput:()=>({}),resources:()=>[{scope:'user',key:'memory-publication'}],execute:async()=>{entered.resolve();await held.promise;return null;}});await f.node.execution!.forUser(await f.node.authority.authenticate(f.a.token)).submit({kind:'generated.publisher',operationId:randomUUID(),input:{}});await entered.promise;
+ const facts=['GENERATED_SHARED_A: Nora repaired the blue bicycle.','GENERATED_SHARED_B: Nora confirmed the same repair.'],materials=[];for(const [index,fact] of facts.entries())materials.push(await f.publish(f.a,'A','same-source','shared-'+index,fact.padEnd(256,'.')));
+ const data=await f.data(f.a),ids=materials.map(material=>data.materialEvidence(material.id)[0].id),verify=script(f,'A',(res,body,value)=>{
+  const member=value.untrustedTaskContext.memoryWork.members[0],other=ids.find(id=>id!==member.id)!;
+  if(!toolUses(body).some((use:any)=>use.name==='context_evidence'&&use.input.id===other))return writeMessagesResponse(res,{stage:body.messages.length,tool:{name:'context_evidence',args:{id:other,offset:0,length:256}}});
+  const memory={...claim(ids[0],facts[0],'Generated shared conclusion'),statement:'The generated narrator repaired and confirmed this bicycle. '+ids.map(id=>'['+id+']').join(' '),evidenceIds:ids,evidence:ids.map((id,index)=>({id,quote:facts[index]}))};reply(res,{memories:[memory],coverage:coverage([member],[memory])},body.messages.length,ids);
+ });
+ const created=await f.submit(f.a,materials.map(material=>material.id));await until(()=>f.read(db=>db.prepare('SELECT review,prepared FROM mm_job_batches WHERE user_id=? AND job_id=?').all(f.a.userId,created.id)),rows=>rows.length===2&&rows.every(row=>Boolean(row.review)),'both independently reviewed batches wait for publication');
+ assert.ok(f.read(db=>db.prepare('SELECT prepared FROM mm_job_batches WHERE user_id=? AND job_id=?').all(f.a.userId,created.id)).every(row=>row.prepared===null),'duplicate selection and write preparation stay inside the saving resource');held.resolve();const done=await f.wait(f.a,created.id);verify();assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,1);assert.equal(new Set(tasks(done).flatMap(task=>task.result.memoryIds)).size,1);assert.ok(done.batches.every((batch:any)=>batch.state==='committed'));
+});

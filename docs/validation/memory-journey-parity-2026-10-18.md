@@ -47,8 +47,8 @@ The PR description and its attached external validation receipt record the final
 candidate SHA, exact commands, exit statuses, evidence paths and required
 affected-check receipt. Preliminary WIP successes are not relabeled as frozen
 candidate validation.
-Physical devices, live models, real SDK/provider accounts and deployment remain
-UNRUN. No personal screenshots or production data were collected or replayed.
+Physical devices, live models, real provider accounts and native service
+deployments remain UNRUN. SDK fixture checks are reported separately. No personal screenshots or production data were collected or replayed.
 
 
 ## Import/Ask consumer completion observation
@@ -86,6 +86,7 @@ drain semantics, checkpoint reuse and actual publication.
 | F01 | `scoped-memory-parity.test.ts`: continuous backlog, early searchable result, one actual batch task and persisted checkpoints; `multiuser-memory.test.ts`: pause drains the admitted batch. |
 | F02/F03 | `multiuser-memory-coding-preparation.test.ts`: real Coding ingress, exact reuse (understanding + independent review), context-gap nonreuse (understanding + extraction + independent review), two short sessions plus an ordinary original in one job, three final target batches. |
 | R01 | `scoped-memory-parity.test.ts`: held same-owner publisher, independent owner progress, no question or reply capability before save, cancellation/model withdrawal; successful save then actual unknown reply. `scoped-memory-owner-publication.test.ts`: real installed provider worker held before put, cancelled put and failed readback/unknown journal. |
+| Publication/native calls | Shared supported context from two nonoverlapping target batches deduplicates under the actual publisher. `scoped-memory-native-admission.test.ts` uses the installed native adapter and generated HTTP service/relay callbacks to verify shared A/B model admission and exclusion of capacity waiting from usage fragments. This is a scripted service, not a live backend or model check. |
 | Restart | `multiuser-memory-index-continuation.test.ts`: real `initialize-admin` and `src/index.ts` child processes, ordinary upload and Coding ingress over HTTP, SIGKILL during independent review, exact understanding/draft reuse, successful other-owner task/attempt unchanged and distinct interrupted/completed usage fragments. |
 | Shared resource port | `execution-continuation.test.ts`: three actual processes share the durable lock, two same-owner saves serialize while another owner completes; pre-call wait does not spend an attempt, between-call wait exceeds the protection budget safely, wait/acquired cancellation, revocation and expired-fence rejection leave no reservation. |
 

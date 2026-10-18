@@ -9,7 +9,7 @@ import type {HindsightRuntimeFactory} from '../../src/scope/memory-providers.js'
  * durable recovery; the real M04/M05/M09 product chain supplies all authority. */
 export async function hindsightHttpFixture(){
  type Bank={facts:any[];operations:Map<string,any>;documents:Set<string>};
- const faults={consolidateAfterCommit:false};
+ const faults:{consolidateAfterCommit:boolean;beforeSemantic?:(userId:string)=>Promise<void>}={consolidateAfterCommit:false};
  const descriptors:{userId:string;container:string;volume:string}[]=[];
  const banks=new Map<string,Bank>(),scopes=new Map<string,Parameters<HindsightRuntimeFactory>[0]>(),events:{userId?:string;bank:string;path:string;body:unknown;facts:any[]}[]=[];
  const server=createServer(async(req,res)=>{
@@ -22,7 +22,7 @@ export async function hindsightHttpFixture(){
    if(req.method==='PUT'&&!path){if(!banks.has(id))banks.set(id,{facts:[],operations:new Map(),documents:new Set()});respond({});return;}
    if(req.method==='DELETE'&&!path){banks.delete(id);respond({});return;}
    const bank=banks.get(id);if(!bank){respond({},404);return;}
-   const semantic=async()=>{if(!scope)throw Error('Native worker has no host bank grant');const request={requestId:randomUUID(),purpose:'operation' as const};scope.onRequestStarted?.(request);await scope.assertModelAuthority?.(request);scope.onUsage?.({requests:1,reportedRequests:1,inputTokens:10,outputTokens:5,totalTokens:15,cacheReadTokens:0,cacheWriteTokens:0},request);scope.onRequestFinished?.({...request,status:'completed'});};
+   const semantic=async()=>{if(!scope)throw Error('Native worker has no host bank grant');const request={requestId:randomUUID(),purpose:'operation' as const};scope.onRequestStarted?.(request);const physical=async()=>{await scope!.assertModelAuthority?.(request);await faults.beforeSemantic?.(scope!.userId);scope!.onUsage?.({requests:1,reportedRequests:1,inputTokens:10,outputTokens:5,totalTokens:15,cacheReadTokens:0,cacheWriteTokens:0},request);scope!.onRequestFinished?.({...request,status:'completed'});};await (scope.runModel?scope.runModel(physical):physical());};
    events.push({userId:scope?.userId,bank:id,path,body,facts:structuredClone(bank.facts)});
    if(req.method==='PATCH'&&path==='/config'){respond({});return;}
    if(req.method==='GET'&&path==='/memories/list'){const offset=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??100);respond({items:bank.facts.slice(offset,offset+limit),total:bank.facts.length});return;}

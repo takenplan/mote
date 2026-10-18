@@ -243,7 +243,7 @@ export class MemoryHost {
    if(interpretations.length)base.taskContext={...base.taskContext,turns:base.taskContext?.turns??[],untrustedInterpretations:JSON.stringify(interpretations)};
   }
   if(!job.draft){
-   if(input.binding.kind==='plugin'&&data.images(input).length&&(await this.providers.descriptor(run.context,input.binding)).adapter==='mote.hindsight@1')throw new ScopedMemoryError('memory_provider_unsupported_input',409);const native=input.binding.kind==='plugin'?await this.providers.nativeDraft(run.context,input.binding,{namespace:this.namespace(run.context,input.binding),opId:run.task.id,phase:input.phase,evidence:[...data.ranges(input),...input.contextRanges??[]].map(range=>({record:records.find(record=>record.id===range.id)!,offset:range.offset,length:range.length})),relatedMemories:related,signal:run.signal},assert):undefined,draft=native??reused??await this.query(run,input,base);assert();if(!native)data.validate(draft,input,related);run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET draft=? WHERE user_id=$user AND job_id=? AND id=? AND draft IS NULL',JSON.stringify(draft),input.jobId,input.batchId!);});run.checkpoint.write('output',input.jobId);
+   if(input.binding.kind==='plugin'&&data.images(input).length&&(await this.providers.descriptor(run.context,input.binding)).adapter==='mote.hindsight@1')throw new ScopedMemoryError('memory_provider_unsupported_input',409);const native=input.binding.kind==='plugin'?await this.providers.nativeDraft(run.context,input.binding,{namespace:this.namespace(run.context,input.binding),opId:run.task.id,phase:input.phase,evidence:[...data.ranges(input),...input.contextRanges??[]].map(range=>({record:records.find(record=>record.id===range.id)!,offset:range.offset,length:range.length})),relatedMemories:related,signal:run.signal},assert,work=>run.model!.withModel(()=>work())):undefined,draft=native??reused??await this.query(run,input,base);assert();if(!native)data.validate(draft,input,related);run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET draft=? WHERE user_id=$user AND job_id=? AND id=? AND draft IS NULL',JSON.stringify(draft),input.jobId,input.batchId!);});run.checkpoint.write('output',input.jobId);
   }
   job=this.assertJob(run.context,input);run.checkpoint.write('phase','review');
   if(!job.review||JSON.parse(job.review).coverage?.notAssessed?.length){
@@ -253,11 +253,13 @@ export class MemoryHost {
    run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET review=? WHERE user_id=$user AND job_id=? AND id=?',JSON.stringify({result:reviewed,receipt,...(coverage?{coverage}:{})}),input.jobId,input.batchId!);});run.checkpoint.write('output',input.jobId);if(coverage?.notAssessed.length){run.grant.commit(()=>{data.sql.run("UPDATE mm_job_batches SET state='incomplete' WHERE user_id=$user AND job_id=? AND id=?",input.jobId,input.batchId!);data.sql.run("UPDATE mm_jobs SET state='incomplete' WHERE user_id=$user AND id=?",input.jobId);});throw new ExecutionFailure('blocked','memory_evaluation_incomplete');}
   }
   job=this.assertJob(run.context,input);run.checkpoint.write('phase','publish');
-  if(!job.review)throw missing();const reviewed=JSON.parse(job.review);const reviewedResult=queryResultSchema.parse(reviewed.result) as QueryResult,duplicates:Memory[]=[];if(!job.prepared)for(const id of data.duplicateIds(reviewedResult,input,related)){duplicates.push(await this.read(run.context,id));assert();}
-  const prepared=job.prepared?preparedMemoryExtractionSchema.parse(JSON.parse(job.prepared)):data.prepareExtract(reviewedResult,input,related,reviewed.receipt,duplicates);
-  if(!job.prepared)run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET prepared=? WHERE user_id=$user AND job_id=? AND id=?',JSON.stringify(prepared),input.jobId,input.batchId!);});
+  if(!job.review)throw missing();const reviewed=JSON.parse(job.review),reviewedResult=queryResultSchema.parse(reviewed.result) as QueryResult;
   return run.withResource({scope:'user',key:'memory-publication'},async()=>{
-   assert();data.assertPrepared(prepared,input);
+   assert();job=this.assertJob(run.context,input);const duplicates:Memory[]=[];
+   if(!job.prepared)for(const id of data.duplicateIds(reviewedResult,input,related)){duplicates.push(await this.read(run.context,id));assert();}
+   const prepared=job.prepared?preparedMemoryExtractionSchema.parse(JSON.parse(job.prepared)):data.prepareExtract(reviewedResult,input,related,reviewed.receipt,duplicates);
+   if(!job.prepared)run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET prepared=? WHERE user_id=$user AND job_id=? AND id=?',JSON.stringify(prepared),input.jobId,input.batchId!);});
+   data.assertPrepared(prepared,input);
    await this.stagePrepared(run,input,prepared,assert);
    assert();data.assertPrepared(prepared,input);
    run.grant.commit(()=>{
