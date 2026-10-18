@@ -18,6 +18,15 @@ test('Web-only plans retain real fixture prerequisites without the full Server s
   assert.ok(!steps.some(step => step.args.includes('scripts/release/dev-server.test.mjs')));
 });
 
+test('Desktop-only plans preserve the cold source-CLI Agent prerequisite without adding its suite', () => {
+  for (const steps of [plan('apps/desktop/src/config.ts'), checkPlan(fixedChecks('desktop'), release)]) {
+    const names = ids(steps);
+    assert.equal(names.filter(id => id === 'build:@mote/agent').length, 1);
+    assert.ok(names.indexOf('build:@mote/agent') < names.indexOf('test:@mote/desktop'));
+    for (const id of ['test:@mote/agent', 'test:@mote/server', 'build:@mote/server', 'central-runner']) assert.ok(!names.includes(id), id);
+  }
+});
+
 test('mixed Central/Desktop checks build and test shared prerequisites once', () => {
   const steps = plan('apps/server/src/app.ts', 'apps/desktop/src/main.ts'), names = ids(steps);
   assert.equal(new Set(names).size, names.length);

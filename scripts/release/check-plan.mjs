@@ -61,7 +61,9 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
   };
   for (const name of selected) includeBuild(name);
   if (applications && byName.has('@mote/shared')) includeBuild('@mote/shared');
-  if (web || server) includeBuild('@mote/agent');
+  // Desktop source-CLI fixtures start the real Server in a native child, whose
+  // package imports require the compiled Agent even in a Desktop-only plan.
+  if (web || server || desktop) includeBuild('@mote/agent');
   // Desktop typechecks/tests use source; its build would compile native helpers.
   builds.delete('@mote/desktop');
 
