@@ -164,3 +164,35 @@ multi-user tests (98 total), plus server no-emit, scope/import and bilingual
 checks. This retains the e799 snapshot/OCR fixture repair and the 8217 historical
 progress privacy scenarios. The new full 22-check plan remains driver-owned and
 unperformed on this candidate; older failed/partial gates are not combined.
+
+## Q001-R1 server consumer closure
+
+The driver gate on `8730258d` failed with 34 server failures and one cancellation;
+14 earlier steps passed (including all 606 Desktop tests), and seven later steps
+were unrun. The author capacity checks and static combination review do not
+override that failed run.
+
+| Cause | Repair and retained regression purpose |
+| --- | --- |
+| A new transport batch for the same original created another automatic processing intent. | Deduplicate against the actual intake task's original incarnation and attachment binding. The default-enabled image journey keeps file automatic off, holds real OCR and pixel understanding, then proves one publication and one consumption per ordinary/daily recipe after duplicate transport. New incarnation/attachment paths remain separate. |
+| Forgetting A retired its task before the known local physical HTTP worker returned, allowing B through. | Retain the actual listener fact until transport completion. A minimal M05 host port returns only the candidate's M04-issued opaque processor keys after task owner/grant checks; M06 does not query foreign task rows. The real held transport/forget/pin test proves B queues without issuing or spending attempts, then progresses after release, while A cannot publish late. |
+| Image fixtures submitted a second manual task after M03 had already admitted automatic work. | Observe the actual intake task ID from the durable production admission. Keep real queueing, owner isolation, cancellation/revocation, unknown issuance, restore and late-result assertions; do not turn image automatic off. Explicit duplicate-operation/idempotency and M09 media-only authority fixtures use audio with the existing file automatic preference off, avoiding an unrelated image intent. |
+| OCR-only fixtures changed the file understanding flag, while independent image understanding retained its default. | Configure only the intended image understanding preference in its real domain. The default-enabled OCR plus pixel-understanding/Memory journey stays enabled and verifies both stages. |
+| A recheck fixture predicted an internal revision stamp and waited forever at the wrong control identity. | Observe the genuine recheck control's stamp/intent and keep its original held-continuation, second dependency change and completed-unit non-revival checks. |
+| Material/rollback fixtures expected two organizer notifications. | Intake, admitted processing and accepted publication produce three distinct organizer notifications. Assert one extraction, one publication, one Memory intake and all rollback/orphan/grant invariants instead of omitting the admission event. |
+| M03-only erasure can leave M02's raw source metadata projection. | Preserve zero M06 artifacts/publications and no late text. Only the exact raw `mote.file` source-metadata shape is permitted in that case; it is not an inference result. Other retirement modes retain zero Material assertions. |
+| An isolated tombstone fixture omitted the current canonical source-head table. | Supply that current schema prerequisite and assert no retained file head is inferred without an authoritative head. No production migration or old deleted-head reconstruction is added. |
+
+The external closure manifest maps each of the 35 original display entries to
+its actual producer/intent cause and new evidence. `e650707f` received a separate
+read-only review of eight conflict regions: the Files 873 contracts were retained
+statically, but it contains the failed input and remains untested. New processing
+and TaskExecution host-port changes require a newly fixed combination and review.
+
+The repair source passed 98 tests across all seven affected failure-family files,
+both selected default-image/daily Memory journeys, all 10 Perception preservation
+tests, 31 M05/handler/queue/lane tests, 21 Files/managed-media/snapshot/catalog
+consumers and 36 Desktop multi-user cases (198 executed cases, zero failures or
+cancellations). Server no-emit, scope/import and bilingual checks also passed.
+The new full 22-check plan remains unrun here; native UI, emulator and real local
+Codex validation are assigned separately. The original Q001-R1 gate stays failed.

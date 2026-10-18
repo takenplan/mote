@@ -38,6 +38,23 @@ alongside durable leases. Existing cancellation, physical cleanup and unknown
 external-result rules are unchanged. No public DTO or storage schema
 changes, capacity migration or second scheduler is introduced.
 
+Intake idempotency follows the retained original incarnation and attachment
+binding, rather than the transport batch. Redelivering an acknowledged original
+does not retry a failed task, refresh its grant, or start another image/Memory
+interpretation. Explicit retry/recompute remain separate owner operations. A new
+allowed original incarnation or attachment binding can admit its own task.
+
+A retired task can still have a known local HTTP transport in progress. M06
+records only its actual opaque listener key until that transport settles. The
+host-only M05 `processingResourceKeys` port checks the real task's owner/grant
+and returns only the processor keys already pinned by its M04 lease. Admission
+waits on the same known local listener, using the existing availability recheck;
+publication retirement never becomes evidence of physical completion. This adds
+no task authority, public DTO, scheduler or persistent format. Existing durable
+resource locks, worker busy responses and unknown-external-result rules remain
+responsible for their existing boundaries; this local fact is not a distributed
+worker-completion claim.
+
 Historical preview reads only current owned image metadata and accepted receipts.
 It binds a source/time query, inclusive `after`, exclusive `before`, account epoch,
 fixed original-row watermark and ten-minute token, with at most twenty previews

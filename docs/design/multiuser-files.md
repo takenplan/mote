@@ -49,6 +49,16 @@ projection used at upload publication. Recovery still requires the current
 owned original, exact bytes, unchanged item metadata and its existing recovery
 identity; canonicalization does not renew a recovery grant.
 
+Automatic intake admits one task for the current original incarnation and
+attachment binding. A different transport batch carrying the same acknowledged
+input does not create another processing intent or renew a retired grant.
+Explicit retry/recompute and a new allow-again/attachment incarnation retain
+their existing flows. Local media admission also retains a known still-running
+HTTP listener after its publishing task is cancelled or forgotten: M05 supplies
+that candidate's already-issued opaque physical keys, and M06 waits until its
+actual transport settles. No original bytes or another owner's task rows are
+exposed by this host-only resource metadata port.
+
 This read checkpoint does **not** close proposed review,
 acoustic override/sample assets,
 cancel/retry/forget or complete original legacy recording export outcomes. Those
