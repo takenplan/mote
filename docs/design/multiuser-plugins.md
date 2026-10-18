@@ -219,3 +219,20 @@ Administrators can disable their own unreferenced instance and directly uninstal
 the package. Retirement uses the same configuration authority and preserves all
 foreign declarations and retained task/history readers. No manual configuration
 removal step is required.
+
+The scope ledger registers `plugin_user_checks`, `plugin.check`, and the private
+probe/attempt directories under M09. Each check is keyed by user and instance,
+then fenced by account authorization, configuration signature, generation and
+its M05 task grant. Probe directories are inside the existing deployment/user
+instance directory; failed or interrupted attempts retain their local receipts.
+The shared canary accepts only fenced provider/restart ports from
+`ScopedMemoryProviders`. Its exact import edge and contract-only dependencies
+are guarded; unrelated scoped hosts, legacy Store imports and direct file/SQL
+imports are rejected.
+
+Capability-check rows are operational state, excluded from personal instance
+exports and removed only for the deleted account. Stopped whole-instance
+backups include the table with its seven current columns and validate its owner
+against the account catalog. Restore preserves receipt data but the existing
+instance-generation change, cleared verification and revoked task grants prevent
+old checks from restoring execution authority. No older-schema migration is added.

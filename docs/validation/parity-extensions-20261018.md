@@ -92,10 +92,13 @@ this is not independent module acceptance.
 The complete required plan is **all six TypeScript workspaces plus Android**,
 because the scoped plugin projection and its bilingual catalog are shared
 contracts. It includes the actual consumers, root integration and native JVM
-checks. It is queued with the integration driver as **Q003**; **UNRUN** until that
-slot is released. A dry-run is a plan, not a passing gate. The exact clean SHA,
-full selection/check list, commands, hashes and logs are in the external receipt.
-No Draft PR or push is performed before the required gate passes.
+checks. The driver's first full run at `d347b4647aa0c66a42bc3f7adf5129466b16aa16`
+**failed** at `scope-contracts`; its remaining 19 steps were **UNRUN**. The new
+candidate requires a fresh complete run in **Q003**. A dry-run is a plan, not a
+passing gate, and no earlier passing phase is combined into a new gate result.
+The exact clean SHA, full selection/check list, commands, hashes and logs are in
+the external receipt. No Draft PR or push is performed before the required gate
+passes.
 
 Integration seam: Configuration C02's effective Hindsight `codex` path must be
 applied to both the normal provider constructor and the restored probe constructor
@@ -103,3 +106,43 @@ in `scope/memory-providers.ts`. No unverified branch is copied into this candida
 Files continues to own the local reference catalog projection; Web owns Home
 extension slots. Lifecycle future-intent restoration is separately coordinated;
 this module does not renew old grants, sessions or snapshots.
+
+## Scope/backup contract repair after the failed full gate
+
+The original driver receipt is
+`/Users/utopiafar/Documents/Projects/mote/.git/mote-check-receipts/2026-10-18T11-20-11-879Z-3453c407-c670-4bb0-82f1-75b7e887084a.json`;
+the log is `/tmp/mote-parity-extensions-driver-d347b464.log`. Environment and
+i18n passed, scope registration failed, and the rest of that run did not execute.
+The five reported gaps were two private directory registrations, the check table,
+the durable check task and the exact canary import edge.
+
+The repair registers only those four surfaces and the single owning-host import.
+It additionally constrains the canary helper's runtime imports to crypto and its
+two pure Memory contracts. Negative fixtures reject use by another scoped host,
+legacy Store imports and direct file/SQLite imports. The real canary still runs
+through the same bounded provider ports; no legacy production host is installed.
+
+Schema/lifecycle review also found the check table absent from stopped-backup
+admission. Its exact seven columns now participate in existing owner validation.
+Generated archive mutations missing the table/column or introducing an unknown
+owner are rejected before target publication. A real native Mem0 backup/restore
+continues to retain canonical bodies while withholding prior plugin authority.
+Production HTTP negatives reject A submitting B's same-instance check identity;
+plugin export excludes operational check receipts and A's deletion preserves B's
+receipt. No restoration policy or provider runtime is changed in this repair.
+
+The initial scope command exited 1; the new negative-test pair also failed before
+the guard/schema repair (missing authorized import and missing backup rejection).
+After repair the scope command exits 0, **12/12** architecture/canary checks and
+**4/4** selected real lifecycle/backup checks pass, exit 0. Exact commands:
+
+```sh
+node scripts/check-scope-contracts.mjs
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/scope-architecture.test.ts apps/server/test/memory-provider-probe.test.ts
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 --test-name-pattern='M09 instance export|saved native provider checks|completed real conversation|native Mem0 instance backup' apps/server/test/multiuser-plugins.test.ts apps/server/test/multiuser-plugin-capability.test.ts apps/server/test/multiuser-instance-backup.test.ts
+```
+
+The new clean candidate, RED/GREEN logs, original failed receipt, final targeted
+results and complete dry-run are recorded under external evidence
+`extensions-validation/scope-repair/`. Full affected and native checks remain for
+the driver; the original failed run is preserved.

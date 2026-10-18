@@ -175,6 +175,7 @@ export const scopedBackupSchema = Object.freeze({
  "plugin_packages":["id","json"],
  "plugin_release_previews":["id","json"],
  "plugin_retired_packages":["id","json"],
+ "plugin_user_checks":["user_id","instance_id","id","generation","signature","task_id","result"],
  "plugin_user_events":["user_id","sequence","json"],
  "plugin_user_instances":["user_id","id","generation","removed","json","verified_hash"],
  "plugin_user_restore":["user_id","operation_id","payload_hash","json","applied"],

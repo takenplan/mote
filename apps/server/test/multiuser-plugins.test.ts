@@ -95,9 +95,12 @@ test('failed installation and undeclared actual components never activate a user
 
 test('M09 instance export excludes B and opaque credentials; deletion fences retained handles and clears only A runtime state',async t=>{
  const f=await fixture(t),pkg=await f.install();await f.instance(f.alice.token,pkg,'A');await f.instance(f.bob.token,pkg,'B_PRIVATE');const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token),context=await f.node.authority.authenticate(f.alice.token),service=f.node.services.forUser(context);
+ const checks=(userId:string)=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{return db.prepare('SELECT id,task_id FROM plugin_user_checks WHERE user_id=?').all(userId);}finally{db.close();}};assert.equal(checks(f.a.userId).length,1);assert.equal(checks(f.b.userId).length,1);
  const exported=await service.exportUser('plugins'),json=JSON.stringify(exported);assert.equal(json.includes('B_PRIVATE'),false);assert.equal(json.includes('personal:generated-secret-reference'),false);assert.equal(json.includes('activeAuthorization":false'),true);
+ assert.equal(Object.hasOwn(exported.payload as object,'checks'),false);assert.equal(json.includes(String(checks(f.a.userId)[0].task_id)),false,'operational check receipts are not portable instance definitions');
  const before=await f.invoke(f.bob.token,b.id,{put:'B state'},'generated.memory');await f.wait(f.bob.token,before.id);assert.equal((await service.deleteUser('plugins','generated-delete')).status,'complete');assert.throws(()=>f.node.plugins!.forUser(context).events());assert.equal((await f.request(f.alice.token,`/api/plugin-snapshots/${a.id}/invoke`,'POST',{componentId:'generated.processor',payload:{},operationId:'late'})).statusCode,401);
  const tb=await f.invoke(f.bob.token,b.id);assert.equal((await f.wait(f.bob.token,tb.id)).result.label,'B_PRIVATE');assert.equal((await service.deleteUser('plugins','generated-delete')).status,'complete');
+ assert.equal(checks(f.a.userId).length,0);assert.equal(checks(f.b.userId).length,1,'deletion keeps the other account check receipt');
 });
 
 test('a generated source plugin uses the production M03 binder with a host-fixed source subset without a central dispatch branch',async t=>{
