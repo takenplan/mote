@@ -81,6 +81,14 @@ before issuance and observes a known completed result after a lost response;
 unknown issuance is surfaced instead of blindly replaying inference. Visual
 input in its text-only engine mode is explicitly unsupported.
 
+Native provider calls and purpose-limited maintenance share one host turn for
+the exact namespace and fixed configuration. Maintenance holds that turn from
+cached-engine retirement through its own handle's close, so a foreground read
+cannot open another engine over the same native control directory during
+cleanup. Entry eviction does not end directory ownership. Different namespaces
+retain independent turns; model leases, read-bank scope and lifecycle authority
+are checked on their existing paths. Host shutdown drains these native turns.
+
 Binding prepare drains admitted work, verifies the real target and stages all
 current and retained published historical versions. Every version's complete
 transitive sources are checked before provider setup, verification or disclosure,
