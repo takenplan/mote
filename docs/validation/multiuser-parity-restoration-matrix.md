@@ -277,6 +277,8 @@ Files并发修复8730258dc4007cfe51a8a9f2f1869c8791181e71已推/clean，driver�
 
 Extensions082 P1新增作者动态RED：真实HTTP check+actual worker+生成remote provider首次put held，SIGKILL/lease恢复后旧unknown未解时A put由1增至11；原日志extensions-validation/probe-recovery/082-issued-write-red.log保留。owner正在既有M05 external issuance/checkpoint中持久attempt并挡未知重发；尚未提交新候选/最终GREEN，不将该进展冒修复完成。写ACK/cleanup ACK/正常shutdown及B可用仍待最终证据。
 
+Files873独立只读delta报告=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/files-8730258d-delta/review.json`，SHA256515baf84a4f201d7e7b67d8dfceb260f44e09e777918974807c283053e83796d；PM正式接受FILES-STATIC-01在exact873源码闭合，SOURCE_DELTA_PASS_PENDING_DYNAMIC，无确认新bug，非READY。作者98项与20附件/7源/2RED hash吻合；旧e799修复/publicProgress及portable边界保留，独立动态/新整22仍UNRUN。最终Memory组合必须保留Files optional partition/capacity/unit/active.step及for(;;)循环，通过同canonical predicate覆盖tick/claim/resourceTurn静态peer；不能仅替helper却带回e01:289–291 outer while/running固定pool2/4 cap。保留动态wait/turn公平，running continuation不重新admit；最终source树/冲突hunk由原owners复核，driver不自行设计业务解冲突，两连接/独立进程/restart/hot/cancel-revoke-unknown-late另验。
+
 ## 跨模块最终冻结旅程
 
 这些旅程与逐行验收互补；只在单一最终集成 SHA 执行并记录结果。依赖模块尚未释放，不启动完整套件。

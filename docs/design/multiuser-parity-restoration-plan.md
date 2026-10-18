@@ -178,7 +178,7 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 | G008 | Files M05 publicProgress port | exact8217纯schema/retired只读投影在e799未改；原Exec owner只读无新增确认blocker，作者57+1与动态独验分开 | 窄host source复核已做；新Files并发fix后的全gate/控制组/固定组合/native仍待 |
 | G009 | EXEC Draft#171 / exact070 | F01 required parent-generation schema+真实CLI/恢复regression；新22步driver PASS，已正常push且PR head/body核对，Draft/Open/未合 | WAIT_INDEPENDENT_ACCEPTANCE；新Memory/Filesports及实际producer/父链组合另验，非READY |
 | G010 | Memory/Files M05 capacity组合 | Memory e01默认capacityAvailable供tick/claim/resourceTurn静态peer共用；Files在同helper增可信owner/kind/parent unit partition，保留三个callsite；两owner已直接对齐 | WAIT_FINAL_FREEZES；不同源码定向不作组合PASS，双连接/双进程/动态continuation与分组公平待实跑 |
-| G011 | Files873只读delta预审 / PM已登记第5槽 | PM直接恢复领域reviewer，driver不重复派；只读容量修复/最小M05 port/授权物理fence与旧journey保留，不安装或运行 | DISPATCH_BY_PM；不占LIFE重窗，不自动READY；Memory最终freeze后的固定组合另验 |
+| G011 | Files873只读delta预审 | report515baf84；PM接受FILES-STATIC-01源码闭合，无确认新bug；作者98PASS不作独立动态 | DONE_SOURCE_DELTA_PASS_PENDING_DYNAMIC；Q001可排新22，非READY；后续组合须保留File for(;;)，不带回e01 outer pool2/4 cap |
 
 已决政策立即适用于活跃owner；未运行验证仍UNRUN。任何新产品分歧仍送PM，政策已答项不再重复提问。
 
