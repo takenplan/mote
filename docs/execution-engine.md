@@ -64,7 +64,14 @@ context. It shares the engine's static resource locks through a fence-bound
 Acquisition waits retain the running continuation, recheck the grant and hold no
 resource. Static publishers in other processes see the same reservation. Release,
 cancellation and lease recovery cannot leave a current lock behind; reservations
-from expired fences are reaped. Resource names and owners are never model or
+and pending requests from expired fences are reaped. Durable resource requests
+share account/operation turns with ready static publishers. These turns use the
+existing engine fairness tables and one consistent order across resource keys;
+new arrivals cannot win by racing a local polling timer. Reacquiring a released
+static resource restores visible ownership for that effect and then its released
+state. A fence-bound attempt-charge receipt prevents interruption of an unstarted
+call from refunding an older failure. These current tables are required by stopped
+backup admission as well as the source inventory. Resource names and owners are never model or
 client capabilities. Domain source/configuration checks still run after waiting
 and before every external effect and fenced commit.
 

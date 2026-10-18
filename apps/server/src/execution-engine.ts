@@ -100,6 +100,8 @@ export class ExecutionEngine {
   store.db.exec(`CREATE TABLE IF NOT EXISTS execution_steps(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,kind TEXT NOT NULL,pool TEXT NOT NULL,input TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,recovery_deadline INTEGER NOT NULL DEFAULT 0,user_id TEXT NOT NULL DEFAULT '',user_position INTEGER NOT NULL DEFAULT 0,authorization_epoch INTEGER,grant_id TEXT);
    CREATE TABLE IF NOT EXISTS execution_resources(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,PRIMARY KEY(step_id,resource_key));
    CREATE TABLE IF NOT EXISTS execution_dynamic_resources(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,fence TEXT NOT NULL,PRIMARY KEY(step_id,resource_key));
+   CREATE TABLE IF NOT EXISTS execution_resource_waits(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,fence TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(step_id,resource_key));
+   CREATE TABLE IF NOT EXISTS execution_attempt_charges(step_id TEXT PRIMARY KEY REFERENCES execution_steps(id) ON DELETE CASCADE,fence TEXT NOT NULL,charged INTEGER NOT NULL);
    CREATE INDEX IF NOT EXISTS execution_resource_owners ON execution_resources(resource_key,step_id);
    CREATE TABLE IF NOT EXISTS execution_dependencies(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,dependency_id TEXT NOT NULL REFERENCES execution_steps(id),PRIMARY KEY(step_id,dependency_id));
    CREATE INDEX IF NOT EXISTS execution_dependents ON execution_dependencies(dependency_id,step_id);
@@ -225,6 +227,26 @@ export class ExecutionEngine {
   void this.tick().catch(()=>{});
   for(;;){const tasks=ids.flatMap(id=>{const task=this.active.get(id)?.task;return task?[task]:[];});if(!tasks.length)return;await Promise.all(tasks);void this.tick().catch(()=>{});}
  }
+ /** Running continuations and ready static publishers share one durable
+  * user/operation turn order. The same order across keys avoids lock-order cycles. */
+ private resourceTurn(stepId:string,key:string){
+  const db=this.store.db,now=this.now();
+  if(!db.prepare("SELECT 1 FROM execution_resource_waits w JOIN execution_steps e ON e.id=w.step_id AND e.fence=w.fence WHERE w.resource_key=? AND e.state='running' AND e.lease_until>?").get(key,now))return true;
+  const first=db.prepare(`WITH candidates AS (
+   SELECT e.id,e.user_id,e.operation_id,w.created_at,e.rowid AS position FROM execution_resource_waits w JOIN execution_steps e ON e.id=w.step_id AND e.fence=w.fence WHERE w.resource_key=? AND e.state='running' AND e.lease_until>?
+   UNION ALL
+   SELECT e.id,e.user_id,e.operation_id,e.created_at,e.rowid FROM execution_resources r JOIN execution_steps e ON e.id=r.step_id WHERE r.resource_key=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN(SELECT value FROM json_each(?))
+    AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded')
+    AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence))
+  ) SELECT c.id FROM candidates c LEFT JOIN execution_user_fairness u ON u.pool='@resources' AND u.user_id=c.user_id LEFT JOIN execution_fairness f ON f.pool='@resources' AND f.operation_id=c.operation_id ORDER BY coalesce(u.last_started,0),coalesce(f.last_started,0),c.created_at,c.position LIMIT 1`).get(key,now,key,now,JSON.stringify([...this.handlers.keys()]),now);
+  return !first||first.id===stepId;
+ }
+ private servedResource(step:ExecutionStep){
+  const db=this.store.db,sequence=Number(db.prepare("INSERT INTO execution_sequence VALUES('@resources',1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next").get()!.next);
+  db.prepare("INSERT INTO execution_user_fairness VALUES('@resources',?,?) ON CONFLICT(pool,user_id) DO UPDATE SET last_started=excluded.last_started").run(step.ownership?.userId??'',sequence);
+  db.prepare("INSERT INTO execution_fairness VALUES('@resources',?,?) ON CONFLICT(pool,operation_id) DO UPDATE SET last_started=excluded.last_started").run(step.operationId,sequence);
+ }
+ private staticResourceTurn(step:ExecutionStep){return this.store.db.prepare('SELECT resource_key FROM execution_resources WHERE step_id=?').all(step.id).every(row=>this.resourceTurn(step.id,String(row.resource_key)));}
  private recover(){
   const db=this.store.db,now=this.now();
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='waiting' AND recovery_deadline>0 AND recovery_deadline<=?").all(now) as Row[]){
@@ -239,7 +261,7 @@ export class ExecutionEngine {
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?").all(now) as Row[]){
    // An expired host lease proves interruption, not a completed processing
    // failure. Issued external calls remain protected by their domain ledger.
-   db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-1),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
+   db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-coalesce((SELECT charged FROM execution_attempt_charges c WHERE c.step_id=execution_steps.id AND c.fence=execution_steps.fence),0)),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
   }
  }
  /** Start available slots. Return only work admitted by this call; slow older work is independent. */
@@ -249,6 +271,7 @@ export class ExecutionEngine {
   this.pumping=true;const started:Promise<void>[]=[];
   try{
    this.recover();
+   this.store.db.prepare("DELETE FROM execution_resource_waits WHERE NOT EXISTS(SELECT 1 FROM execution_steps e WHERE e.id=execution_resource_waits.step_id AND e.fence=execution_resource_waits.fence AND e.state='running' AND e.lease_until>?)").run(this.now());
    this.store.db.prepare("DELETE FROM execution_dynamic_resources WHERE NOT EXISTS(SELECT 1 FROM execution_steps e WHERE e.id=execution_dynamic_resources.step_id AND e.fence=execution_dynamic_resources.fence AND e.state='running' AND e.lease_until>?)").run(this.now());
    const blocked=this.store.db.prepare("WITH RECURSIVE blocked(id) AS (SELECT id FROM execution_steps WHERE state IN ('failed','blocked','cancelled','stale') UNION SELECT d.step_id FROM execution_dependencies d JOIN blocked b ON b.id=d.dependency_id) SELECT e.id FROM execution_steps e JOIN blocked b ON b.id=e.id WHERE e.state='waiting'").all();
    for(const row of blocked){this.store.db.prepare("UPDATE execution_steps SET state='blocked',error='dependency_failed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),String(row.id));this.project(String(row.id));}
@@ -259,7 +282,7 @@ export class ExecutionEngine {
     while([...this.active.values()].filter(a=>a.pool===pool&&a.lane===lane).length<limit){
      if(this.running(pool,lane)>=limit)break;
      const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_user_fairness u ON u.pool=e.pool AND u.user_id=e.user_id LEFT JOIN execution_stage_groups g ON g.step_id=e.id LEFT JOIN execution_stage_fairness s ON s.pool=e.pool AND s.user_id=e.user_id AND s.group_key=g.group_key LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence)) ORDER BY coalesce(u.last_started,0),coalesce(s.last_started,0),coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
-     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane){row=candidate as Row;break;}}
+     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
      const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
@@ -278,6 +301,7 @@ export class ExecutionEngine {
    if(db.prepare("SELECT state FROM execution_steps WHERE id=?").get(row.id)?.state!=='waiting'){db.exec('COMMIT');return;}
    if(this.running(row.pool,lane,now)>=limit){db.exec('COMMIT');return;}
    if(db.prepare("SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=? AND owner.id!=? AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence) LIMIT 1").get(row.id,row.id,now)){db.exec('COMMIT');return;}
+   if(!this.staticResourceTurn(view(row))){db.exec('COMMIT');return;}
    if(!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);db.exec('COMMIT');return;}
    const admission=handler.admit?.(view(row));
    if(admission){
@@ -289,6 +313,8 @@ export class ExecutionEngine {
    }
    const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+?,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(handler.deferAttempts?0:1,fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}
+   db.prepare('INSERT INTO execution_attempt_charges VALUES(?,?,?) ON CONFLICT(step_id) DO UPDATE SET fence=excluded.fence,charged=excluded.charged').run(row.id,fence,handler.deferAttempts?0:1);
+   if(db.prepare('SELECT 1 FROM execution_resources WHERE step_id=?').get(row.id))this.servedResource(this.get(row.id)!);
    const sequence=Number(db.prepare('INSERT INTO execution_sequence(pool,next) VALUES(?,1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next').get(row.pool)!.next);
    db.prepare('INSERT INTO execution_user_fairness(pool,user_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,user_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.user_id,sequence);
    const group=db.prepare('SELECT group_key FROM execution_stage_groups WHERE step_id=?').get(row.id);if(group)db.prepare('INSERT INTO execution_stage_fairness VALUES(?,?,?,?) ON CONFLICT(pool,user_id,group_key) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.user_id,String(group.group_key),sequence);
@@ -309,7 +335,7 @@ export class ExecutionEngine {
     if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
    };
    const grant:ExecutionGrant=Object.freeze({assert:assertGrant,withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
-    assertGrant();if(!attemptStarted){grant.commit(()=>{db.prepare('UPDATE execution_steps SET attempts=attempts+1 WHERE id=? AND fence=?').run(row.id,fence);step.attempts++;});attemptStarted=true;}let callDeadline:ReturnType<typeof setTimeout>|undefined;
+    assertGrant();if(!attemptStarted){grant.commit(()=>{db.prepare('UPDATE execution_steps SET attempts=attempts+1 WHERE id=? AND fence=?').run(row.id,fence);db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);step.attempts++;});attemptStarted=true;}let callDeadline:ReturnType<typeof setTimeout>|undefined;
     if(timeout!==null){callDeadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);callDeadline.unref();}
     try{const value=await work();assertGrant();return value;}finally{clearTimeout(callDeadline);}
    },withResource:async<T>(key:string,work:()=>Promise<T>):Promise<T>=>{
@@ -317,23 +343,31 @@ export class ExecutionEngine {
     // A dynamic reservation is a running-grant fact. It never becomes a
     // prerequisite on recovery, so retained model checkpoints can resume before
     // requesting the publisher again. Old fences convey no lock ownership.
-    let acquired=false;
+    let acquired=false,reacquiredStatic=false;
+    const owned=grant.commit(()=>Boolean(db.prepare("SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases WHERE step_id=? AND resource_key=? AND fence=?) UNION ALL SELECT 1 FROM execution_dynamic_resources WHERE step_id=? AND resource_key=? AND fence=?").get(row.id,key,row.id,key,fence,row.id,key,fence)));
+    if(owned){const value=await work();assertGrant();return value;}
+    grant.commit(()=>{this.store.reserveMetadata(Buffer.byteLength(key)+96);db.prepare('INSERT INTO execution_resource_waits VALUES(?,?,?,?) ON CONFLICT(step_id,resource_key) DO UPDATE SET fence=excluded.fence,created_at=excluded.created_at').run(row.id,key,fence,this.now());});this.scheduleTick();
     try{
      for(;;){
       const claim=grant.commit(()=>{
+       if(!this.resourceTurn(row.id,key))return false;
        if(db.prepare("SELECT 1 FROM (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held JOIN execution_steps owner ON owner.id=held.step_id WHERE held.resource_key=? AND owner.id!=? AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence) LIMIT 1").get(key,row.id,this.now()))return false;
-       if(!db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(row.id,key)&&!db.prepare('SELECT 1 FROM execution_dynamic_resources WHERE step_id=? AND resource_key=? AND fence=?').get(row.id,key,fence)){
+       if(db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(row.id,key)){db.prepare('DELETE FROM execution_resource_releases WHERE step_id=? AND resource_key=? AND fence=?').run(row.id,key,fence);reacquiredStatic=true;}
+       else if(!db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(row.id,key)&&!db.prepare('SELECT 1 FROM execution_dynamic_resources WHERE step_id=? AND resource_key=? AND fence=?').get(row.id,key,fence)){
         this.store.reserveMetadata(Buffer.byteLength(key)+96);
         db.prepare('INSERT INTO execution_dynamic_resources VALUES(?,?,?) ON CONFLICT(step_id,resource_key) DO UPDATE SET fence=excluded.fence').run(row.id,key,fence);acquired=true;
        }
-       return true;
+       this.servedResource(step);db.prepare('DELETE FROM execution_resource_waits WHERE step_id=? AND resource_key=? AND fence=?').run(row.id,key,fence);return true;
       });
       if(claim)break;
       await delay(20,undefined,{signal});assertGrant();
      }
      assertGrant();const value=await work();assertGrant();return value;
     }finally{
-     if(acquired){db.prepare('DELETE FROM execution_dynamic_resources WHERE step_id=? AND resource_key=? AND fence=?').run(row.id,key,fence);this.scheduleTick();}
+     db.prepare('DELETE FROM execution_resource_waits WHERE step_id=? AND resource_key=? AND fence=?').run(row.id,key,fence);
+     if(acquired)db.prepare('DELETE FROM execution_dynamic_resources WHERE step_id=? AND resource_key=? AND fence=?').run(row.id,key,fence);
+     if(reacquiredStatic&&this.isCurrentGrant(row.id,fence))db.prepare('INSERT INTO execution_resource_releases VALUES(?,?,?) ON CONFLICT(step_id,resource_key) DO UPDATE SET fence=excluded.fence').run(row.id,key,fence);
+     this.scheduleTick();
     }
    },startBudget:()=>{assertGrant();startBudget();},releaseResource:(key:string)=>{grant.commit(()=>{if(!db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(row.id,key))return;db.prepare('INSERT INTO execution_resource_releases VALUES(?,?,?) ON CONFLICT(step_id,resource_key) DO UPDATE SET fence=excluded.fence').run(row.id,key,fence);});this.scheduleTick();},commit:<T>(write:()=>T):T=>{
     if(db.isTransaction)throw new Error('Execution grant commit requires its own transaction');
@@ -363,7 +397,7 @@ export class ExecutionEngine {
    const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
    const failure=admissionWait||classified.code==='rate_limited'&&classified.category==='transient'?new ExecutionFailure('waiting',classified.code,classified.retryAfterMs):classified;
    const stopping=this.stopping||signal.reason===interrupted;
-   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(capacityWait||stopping||failure.facts?.executionStarted===false));
+   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(attemptStarted&&(capacityWait||stopping||failure.facts?.executionStarted===false)));
    let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':capacityWait?'waiting':failure.category==='permanent'||attempts>=policy.maxAttempts?'failed':'waiting';
    const at=this.now(),availableAt=stopping?0:at+Math.max(capacityWait?1:0,failure.retryAfterMs??(capacityWait?1000:Math.min(3600000,1000*2**(attempts-1))));
    const recoveryDeadline=capacityWait||policy.maxRecoveryWindowMs===null?0:failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,policy.maxRecoveryWindowMs)):Number(row.recovery_deadline)||0;

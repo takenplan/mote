@@ -370,6 +370,8 @@
       "table:execution_resource_releases",
       "table:execution_resources",
       "table:execution_dynamic_resources",
+      "table:execution_resource_waits",
+      "table:execution_attempt_charges",
       "table:execution_sequence",
       "table:execution_stage_fairness",
       "table:execution_stage_groups",
