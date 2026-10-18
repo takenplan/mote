@@ -1,5 +1,7 @@
 # M07 existing-capability parity ledger
 
+The 2026-10-18 [original journey restoration](multiuser-memory.md#original-journey-parity-restoration-2026-10-18) corrects the interim production gaps in prompt assembly, context reading, incomplete settlement, consolidation, Coding preparation and publication resources. Historical receipts below retain their exact tested scope and SHA; they do not establish those corrected journeys.
+
 This capability ledger compares the existing
 `features/memory.ts`, `memory-routes.ts`, `material-organizers.ts`,
 `memory-owner-questions.ts`, `memory-feedback-planner.ts`, `memory-lifecycle.ts`,

@@ -173,3 +173,85 @@ selected Material ID to its exact revision. A provided map must cover all and
 only the selected IDs; it cannot fall back to current versions for omitted
 entries. Existing callers without the map retain their original current-input
 semantics. The admitted M07 pins remain the existing durable task source of truth.
+
+## Original journey parity restoration (2026-10-18)
+
+The scoped production host preserves each batch's original continuous journey:
+prepare original evidence (including Coding conversation understanding), extract,
+validate/correct, independently review, then save. `memory.extract` and
+`memory.review` retain separate immutable model leases and persist their outputs
+before completing their dependency checkpoints. `memory.publish` retains prepared
+provider writes and the sole per-user publication resource. Model stages use
+owner-bound original-evidence resources; they do not hold the publisher while
+waiting for a model. Independent batches may overlap, and an already reviewed
+batch can become searchable while later batches still have model work queued.
+The Execution module owns configured model concurrency and aggregate operation
+progress. Memory admission, batches, correction and feedback children join their
+owner-bound `memory:<job>` operation through its host-only parent API; Memory does not add another scheduler or serialize all batches.
+
+Extraction and review append the same `memoryCandidateOutputContract` to their
+fixed selected policies. Both can independently call `context_evidence` for the
+frozen same-job, same-recipe original catalog. The catalog grants reading, not
+body disclosure, extra targets or completion of another batch. `readInputs` pins
+canonical originals and `evidenceReadRanges` freezes their exact intervals.
+Only successful host-delivered ranges may support quotes. Separately retained
+metadata receipts fence the source, time, owner declarations and visibility that
+the catalog already disclosed, without turning unread bodies into dependencies.
+Actual reads are
+rechecked across model sends, stage transitions and publication; an unread
+catalog entry is not a saved result dependency. Context-only claims remain
+invalid. Account, source, Material, policy, model, cancellation and provider fences
+continue to apply; no catalog grants another owner's originals or archive search.
+
+A valid `no_candidates` result still receives independent review. Missing coverage
+fails host validation. Reviewed `incomplete` retains the range and reason and
+blocks with `memory_evaluation_incomplete`; no part of that batch is published.
+Retrying the original job reuses a valid extraction draft and completed siblings,
+runs the unfinished independent review, and saves only after complete evaluation.
+Restart does not silently authorize a paid replay of blocked work. Specific
+`needs_context` and `needs_owner_input` retain their separate continuation flows.
+
+Automatic consolidation selects published, unsuperseded episode cards admitted
+as long-term `memory`, then partitions them by their actual personal/coding domain
+into independent draft/review/publication checkpoints. Bounded windows retain
+frozen remaining pins and their original due clock for durable successors; a
+below-threshold tail waits for the original count-or-maximum-wait condition.
+Cancellation or withdrawal blocks successor admission. The extraction profile is
+a recipe choice, not a result-domain filter. Observations neither trigger nor
+count toward consolidation and are never promoted by this path. Manual selection
+retains its existing exact-card/version restrictions.
+
+Coding uses the shared conversation product parser and prompt through scoped
+query, validation and publication ports. A bounded clean session produces an
+independent understanding before ordinary extraction. The Memory-owned
+`mm_batch_artifacts` checkpoint retains the complete preparation before derived
+Material publication. The derived summary, work-records and events are untrusted
+navigation referencing the exact original Material; they cannot supply original
+quotes. Candidates remain private and still require extraction and independent
+Memory review. `actionCues` stays empty. A restart reuses the preparation; cancel,
+stop and domain deletion fence late results and clear private preparations.
+Original withdrawal or revision also scrubs retained candidate/review/prepared
+bodies and private interpretations that actually depended on that original;
+owner audit rechecks exact delivered-read receipts before disclosure.
+
+Validation checks envelope/declarations, then exact quotes, then quote-backed
+coverage ownership. Each batch exposes its last 20 content-free validation
+failures under `validationFailures`, including phase, attempt, run ID and safe
+candidate/span/field measurements. Source prose, quotes, model values, credentials
+and arbitrary exception text are not copied into these diagnostics.
+
+| Disposition | Responsibility |
+| --- | --- |
+| KEEP | Original policies, exact originals, independent review, honest empty results, successful siblings, one publisher, immutable provider journal and all lifecycle fences. |
+| CHANGE | Restore full output-contract assembly, same-task context reads, incomplete/retry settlement, actual-domain consolidation and Coding preparation through account-bound ports. |
+| REMOVE | Batch-only reading restriction, success settlement of incomplete evaluation, profile-only consolidation, observation promotion and model-stage publisher lock. |
+| EXCEPTION | Current wire/storage only; no migration, historical replay, compatibility implementation, Coding action cues or additional paid retry policy. Fresh recording sources retain the existing recording recipe without overwriting an owner override. |
+| UNKNOWN | Scripted fixtures prove host ordering, isolation and lifecycle only. Live model quality, real external provider behavior and physical-device behavior require their own checks. |
+
+This restores the accepted [context-reading](../adr-memory-context-reading.md),
+[range-evaluation](../adr-memory-range-evaluation.md) and
+[Coding product](../coding-agent-memory.md) responsibilities through the current
+scoped host. It supersedes the interim batch-only reader and single-profile
+consolidation implementation, not the authorization or provider boundary.
+Regression mapping and run receipts are recorded in
+[the parity validation record](../validation/memory-journey-parity-2026-10-18.md).

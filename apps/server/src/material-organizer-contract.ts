@@ -6,7 +6,7 @@ import {uiPageCaptureSource} from './capture-memory-source.js';
 import type {MaterialDraft,MaterialEvidenceContext} from './scope/material-model.js';
 import type {ImageMaterialProjection} from './image-materials.js';
 import type {readFileSpeakerAttributions} from './file-speaker-attribution.js';
-const materialId=(sourceId:string,externalId:string)=>'mat_'+createHash('sha256').update(JSON.stringify([sourceId,externalId])).digest('hex');
+export const materialId=(sourceId:string,externalId:string)=>'mat_'+createHash('sha256').update(JSON.stringify([sourceId,externalId])).digest('hex');
 /** Organizers select declared source shapes, never infer a topic or user intent. */
 export interface MaterialOrganizerFile {
   image?:ImageMaterialProjection;

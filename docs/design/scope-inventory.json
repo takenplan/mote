@@ -2044,6 +2044,7 @@
     "module": "M07",
     "status": "implemented",
     "surfaces": [
+      "table:mm_batch_artifacts",
       "table:mm_binding_locks",
       "table:mm_binding_preparations",
       "table:mm_capture_intakes",
