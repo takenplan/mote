@@ -64,7 +64,7 @@
 | CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | `79bf961020782661c701cb0d3af47d1e5f48a0e3` | CANDIDATE；clean，WAIT_PRODUCER/DRIVER_SLOT，非完整恢复 |
 | DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `73c1115287fe07e1824526861ebc2e8ed3cf39fc` | CANDIDATE；affected/独验UNRUN，待槽 |
 | AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `2622844e3b226f3ebae9542bdb16aafedc5cf3a7` | CANDIDATE；clean，D01已实现待新冻结门禁/原生；未push/PR/独验 |
-| WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；driver required gate PASS；未PR/独验，owner等发布槽 |
+| WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / [Draft #170](https://github.com/utopiafar/mote/pull/170) | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；required gate PASS；Draft #170已attach，R006正式动态独验进行中 |
 | EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `d347b4647aa0c66a42bc3f7adf5129466b16aa16` | CANDIDATE；clean待Q003完整gate，非模块PASS/独验 |
 | ACTION / ACTION-A01..A04 | [ACTION开发](codex://threads/01a14e8f-7b96-7d00-9b68-d9d30aea97dd) | `codex/parity-actions-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | `42b57dee735467362239cab27dbc923a93cfe7a1` | CANDIDATE；clean且作者定向回执已报，Q012完整gate/独验UNRUN |
 | LIFE / LIFE-L01..L06 | [LIFE开发](codex://threads/01a14e8f-7dc6-7fb3-a058-cb39df965cb9) | `codex/parity-lifecycle-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收；L06重新登录按原开关继续已定 |
@@ -134,6 +134,7 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 | Q007 | DESKTOP / `73c1115287fe07e1824526861ebc2e8ed3cf39fc` / 起点2c78ca8d | Desktop+Server+Web；Android=false，D2另跨端联调 | WAIT_GLOBAL_SLOT；作者83项及29+1/类型/预检报告通过 | `/tmp/mote-parity-desktop-affected-plan-final.json`；完整gate/独验UNRUN |
 | R002 | CONN / C07 Kotlin/helper/JVM/instrumentation | 专用`dev.mote.collector.RecordingParityInstrumentedTest`；生成scoped后端smoke作者报告通过 | WAIT_INPUT_AND_SLOT；Gradle/emulator UNRUN | 精确完整输入/SHA与环境待回报，无当前运行授权 |
 | R003 / Q008 | CONFIG / `79bf961020782661c701cb0d3af47d1e5f48a0e3`，base2c78ca8d | server/Web+Android/i18n/tooling/root scope，all=false；frozen-check-plan.log | WAIT_PRODUCER_AND_GLOBAL_SLOT；完整gate/Gradle/emulator未授权 | native变体修正：`-Pmote.testBuildType=multiuserFixture :app:testDebugUnitTest :app:assembleMultiuserFixture :app:assembleMultiuserFixtureAndroidTest`，四方法见manifest |
+| R006 | 客户端独验 / Web Draft #170 / head f8f684b6 / 创建时base c49ffa8d | PM预授权已消费，driver释放短动态窗；真实main/scoped双用户W01/W02及已绘制Home desktop/mobile截图 | RUNNING；reviewer已确认接收并建独立worktree；不得并跑下一完整gate | 只读预审F01为作者视觉证据缺口，非已确认业务失败；动态结论待回执 |
 | P009 / R004 | FILE / 后续环境与native消费者 | Electron补当前lock执行文件；既有JAVA_HOME；JVM+FilesCatalogParityInstrumentedTest无窗口 | WAIT_INPUT_AND_GLOBAL_SLOT；未授权运行 | Java现有`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`，SDK`/Users/utopiafar/Library/Android/sdk`；不视为需要新装JDK |
 | Q001 | FILE / 部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 当前计划ALL6 TS+Android/root scope；`/tmp/mote-files-final-check-plan.json` | WAIT_FEATURE；完整Perception/managed MediaAssets未完成，不开完整gate | 扩大预检Electron/Java缺项，SQLite PASS；native消费者UNRUN |
 | Q004 | LIFE | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 最终输入重选 |
@@ -163,7 +164,7 @@ PM后续明确授权：冻结clean模块的必跑check:affected可由现有drive
 
 | 待办号 | 待通知/执行对象 | 具体条件与范围 | 当前状态 |
 | --- | --- | --- | --- |
-| G001 | WEB Q002 | driver required gate已PASS；root结束后PM重读≤4再恢复owner第5槽仅push/Draft PR/attach，引用driver真实receipt | WAIT_OWNER_PUBLICATION_SLOT；未PR/独验 |
+| G001 | WEB Q002 | driver正常push/创建Draft PR#170并attach，head维持f8；PM已释放管理交付，无需唤醒Web作者 | DONE_PUBLICATION；R006正式独验待结论 |
 | G002 | CONN native C07 | 精确Kotlin/helper/JVM/instrumentation候选就绪，R001后单独资源窗，槽位允许；原backup固定true不增toggle | WAIT_CANDIDATE |
 | G003 | AND D2及Ask组合 | D2前置`5744d6a832117a9f9aec7affd37453ab15d455cf`（含早期1417及part/commit upload_expired补充），Android与Ask消费者精确SHA待冻；仅临时组合，非PR夹带/正式合入 | WAIT_DEPENDENCY |
 | G004 | 四独立验收chat | 排队传达已决L06/D01、精确PR/head/base/依赖与新消费者清单，闲置不唤醒；一次一项 | WAIT_GLOBAL_SLOT |
