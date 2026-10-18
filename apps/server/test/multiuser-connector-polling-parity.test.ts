@@ -34,7 +34,19 @@ async function pollingFixture(t:TestContext,transports:ConnectorTransports){
    await f.host.execution!.tick();task=await checked(token,'/api/tasks/'+id);
    if(task.state===state)return task;
    if(!['waiting','running'].includes(task.state))assert.fail(JSON.stringify(task));
-   if(task.failure?.code==='recording_stages_pending')try{t.mock.timers.tick(Math.max(1,task.availableAt-Date.now()));}catch(error){if((error as any).code!=='ERR_INVALID_STATE')throw error;}
+   if(task.state==='waiting'&&task.error==='recording_stages_pending'&&task.availableAt>Date.now()){
+    // Advance only the local parent ACK once its actual scan children finish.
+    // Advancing while provider/file I/O is outstanding invents elapsed poll
+    // intervals and can replace the current page with a later discovery round.
+    const pending=f.read(db=>db.prepare(`SELECT 1 FROM user_tasks parent
+     JOIN connector_ledger request ON request.user_id=parent.user_id AND request.instance_id=? AND request.key='request:'||parent.task_id
+     JOIN connector_ledger scan ON scan.user_id=request.user_id AND scan.instance_id=request.instance_id AND scan.scope=request.scope AND scan.key='scan:'||json_extract(request.json,'$')
+     JOIN json_each(scan.json,'$.jobs') member
+     JOIN connector_ledger job ON job.user_id=scan.user_id AND job.instance_id=scan.instance_id AND job.scope='recording-jobs' AND job.key=member.value
+     LEFT JOIN execution_steps step ON step.user_id=job.user_id AND step.id=json_extract(job.json,'$.taskId')
+     WHERE parent.task_id=? AND (step.id IS NULL OR step.state IN ('waiting','running')) LIMIT 1`).get(connectionId,id));
+    if(!pending)try{t.mock.timers.tick(task.availableAt-Date.now());}catch(error){if((error as any).code!=='ERR_INVALID_STATE')throw error;}
+   }
    await delay(5);
   }
   assert.fail('Generated connector task did not settle: '+JSON.stringify(task));
@@ -236,9 +248,46 @@ test('recording selection persists promptly while an old provider read ignores a
 });
 
 test('recording polling retains the original five-minute wake ceiling for a longer configured connector interval',async t=>{
- t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-18T00:00:00Z')});
- const calls:ProviderCall[]=[],p=await pollingFixture(t,{dingtalk:dingtalkTransport(calls)}),{f}=p;
- await p.install('dingtalk-recordings');await p.configure(f.a.token,'dingtalk-recordings',900000);await p.operation(f.a.token,'connect');await p.operation(f.a.token,'select',recordingSelection);await p.run(f.a.token,'sync');
- const cycle=p.timer(f.a.userId);assert.ok(cycle.input.due<=Date.now()+300000&&cycle.input.due>=Date.now()+298000,'Only local coordinator acknowledgements advance the generated clock after scheduling');
- calls.length=0;t.mock.timers.tick(300001);await p.wait(f.a.token,cycle.id);assert.ok(calls.some(call=>call.kind==='search'),'The old recording tick directly starts the next discovery at the five-minute ceiling');
+ const scheduledAt=Date.parse('2026-10-18T00:00:00Z');
+ t.mock.timers.enable({apis:['Date'],now:scheduledAt});
+ let release!:()=>void,entered=false;
+ const held=new Promise<void>(resolve=>release=resolve);t.after(()=>release());
+ const calls:ProviderCall[]=[],searchTimes:number[]=[],base=dingtalkTransport(calls);
+ const p=await pollingFixture(t,{dingtalk:scope=>{
+  const provider=base(scope);
+  return async(...args)=>{
+   if(args[0].kind==='search'){entered=true;await held;searchTimes.push(Date.now());}
+   return provider(...args);
+  };
+ }}),{f}=p;
+ const observe=async(read:()=>boolean|Promise<boolean>,label:string)=>{
+  for(let spin=0;spin<1000;spin++){
+   await f.host.execution!.tick();if(await read())return;await delay(5);
+  }
+  assert.fail(label);
+ };
+ await p.install('dingtalk-recordings');await p.configure(f.a.token,'dingtalk-recordings',900000);
+ await p.operation(f.a.token,'connect');await p.operation(f.a.token,'select',recordingSelection);
+ const manual=await p.checked(f.a.token,'/api/connectors/'+connectionId+'/sync','POST',{operationId:randomUUID()});
+ const completing=p.wait(f.a.token,manual.id);
+ await observe(()=>entered,'The selected recording discovery must enter its actual transport');
+ await observe(async()=>{const task=await p.checked(f.a.token,'/api/tasks/'+manual.id);return task.state==='waiting'&&task.error==='recording_stages_pending';},'The manual coordinator must wait for the held scan');
+ assert.equal(Date.now(),scheduledAt,'Waiting for active provider work cannot advance the generated coordinator clock');
+ const cycle=p.timer(f.a.userId);
+ assert.equal(cycle.input.due,scheduledAt+300000,'The configured fifteen-minute interval retains the original five-minute scheduling ceiling');
+ // Provider completion and local coordinator ACKs can occur after scheduling.
+ // They cannot change the timer's original deadline or create a slower scan gate.
+ t.mock.timers.tick(3000);release();await completing;
+ assert.equal(p.timer(f.a.userId).id,cycle.id,'Manual completion retains one future polling chain');
+ assert.equal(p.timer(f.a.userId).input.due,scheduledAt+300000,'Late acquisition/ACK completion cannot postpone the scheduled wake');
+ const remaining=cycle.input.due-Date.now();assert.ok(remaining>1);
+ calls.length=0;searchTimes.length=0;t.mock.timers.tick(remaining-1);
+ await f.host.execution!.tick();await delay(10);
+ assert.deepEqual(calls,[],'A future recording poll cannot probe or discover before its saved deadline');
+ t.mock.timers.tick(1);
+ await observe(()=>calls.some(call=>call.kind==='search'),'The due recording poll must issue its actual provider discovery');
+ assert.deepEqual(searchTimes,[cycle.input.due],'The original wake deadline directly starts discovery, independently of the earlier ACK time');
+ await p.wait(f.a.token,cycle.id);
+ assert.ok(calls.some(call=>call.kind==='search'),'The old recording tick directly starts the next discovery at the five-minute ceiling');
+ assert.equal(p.timer(f.a.userId).input.due,cycle.input.due+300000,'The next cycle keeps the same original wake interval');
 });
