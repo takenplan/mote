@@ -126,8 +126,8 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | CANDIDATE；driver f8f684b6 required gate PASS（9步骤），独立旅程/跨模块UNRUN；证据继承WEB-Q002 |
+| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | CANDIDATE；driver f8f684b6 required gate PASS（9步骤），独立旅程/跨模块UNRUN；证据继承WEB-Q002 |
 
 ### EXT
 
@@ -227,6 +227,8 @@
 | Memory source冻结 `8b7bcc16650ea84092df8b730703f85a3a43e181`，base2c78ca8d | 作者clean；含精准共享seam802b2e53（orig f4169667）与7b299257（orig ece742f0）。精确新四文件+EXEC parent API+pure product legacy消费者及旧77中两范围回归复跑仍RUNNING；迭代结果不转记冻结PASS。计划`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6977-7fa3-8145-0b3696ae413c/memory-parity/frozen-affected-plan.json`，Node26 ABI147 native ready。 | >2配置并发必须联合完整EXEC `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`真实门闩；standalone仅seam不能证明。parent/发布与其它域组合逐项列SHA，内容去重不替代原owner gate。 | Q006 WAIT_FINAL_FOCUSED_AND_GLOBAL_SLOT；完整gate/PR/独验UNRUN |
 | Android冻结 `2622844e3b226f3ebae9542bdb16aafedc5cf3a7`，base2c78ca8d | 作者clean未push/PR；D01稳定deployment+user原子个人snapshot、origin仅metadata、旧全局保留不猜归属/默认停止、stale preview/save挡B，以及永久拒绝/暂停竞态/upload_expired分类已落盘；新增4个instrumentation类和typed JVM。新冻结重资源结果尚无。 | 所选affected→multiuserFixture APK/testAPK→专用API37 serial5580 core/SAF/D01含force-stop；1worker实际入口核对。D2仅临时加精确5744d6a三commit、Ask需其精确业务SHA，组合单独验证不夹带PR。 | Q010/R005 WAIT_GLOBAL_SLOT；旧R001不同输入结果不转记；完整gate/新原生/独验UNRUN |
 | Connectors候选 `4fe01f477df6f564cd4c977c79efbe979e73e1d3`，base2c78ca8d | 作者已推送且远端核对；manifest=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6edd-7772-b552-f0ce79bb7c61/connector-parity-evidence/manifest.json`。报告各自输入下focused76/Web13/summary-selection5/最后Web2及类型/scope/i18n通过，不能转标冻结全gate。含c6e1e48f→abd8c495 Memory seam与e84b8bb7 producer，按内容去重。 | Q011完整affected与R002原生RecordingParityInstrumentedTest方法各自排期；冻结完整gate/Gradle/APK/emulator/真实supplier-model-物理端UNRUN。selected Android，Node24.22 ABI137/JBR环境精确记录。 | CANDIDATE；无PR/独验/正式合入；等槽不唤醒idle |
+| Ask最终候选 `e23c06a3f3ea30a5d844fbadb76de0475b17246b` | 作者clean，未push/PR；core f2b44331精确54项EXIT0（f2b44331-focused.json），最终e23c图片权限/Filesport/显式附件4项、类型/scope EXIT0（e23c06a3-image-port.json），同parity-ask-evidence目录。review精准Memory b66527d3→ac3533c1、FILE67b28439→82e81c7a及fixture c94e9e9，无父业务盲拣。 | Files实际origin/device业务、EXEC完整1e9父/slots、CONFIG Codex compaction仍精确联合待验；allowQueryImages最终已接，defaultfalse/A-B/await后关闭拒绝/显式附件独立grant生成覆盖。 | Q005 WAIT_SERIAL_CHECK；全6TS+Android/i18n/tooling22项计划`/tmp/mote-ask-final-check-plan.json`；完整gate/原生/独验UNRUN |
+| Actions候选 `42b57dee735467362239cab27dbc923a93cfe7a1`，base2c78ca8d | 作者clean，未push/PR；manifest/check-plan=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-7b96-7d00-9b68-d9d30aea97dd/parity-actions-evidence/{candidate.json,check-plan.txt}`。报告106组合（header前）+最终lifecycle delta29+emitted进程1+emitted backup20（含3新表negative）各自准确输入PASS；不把source-entry当dist验证。 | pure合同ece742f0已由Memory定向review/pick，集成内容去重，原两owner gate分别执行；ACTION-S1在此模块，全部producer/consumer和unknown副作用边界仍独验。 | Q012 WAIT_SERIAL_CHECK；all6 TS+Android所选完整gateUNRUN，无PR/独验 |
 
 最终Memory head由`8b7bcc16650ea84092df8b730703f85a3a43e181`更新为`72f0e55ba26d54f9a3d66fa6e5a8deb706e4371a`（clean，仅新增mixed incomplete+owner-question durable回归），该新增case作者EXIT0，证明incomplete整批不提前创建可操作问答。旧suite精确为77项=75PASS/2FAIL，旧报78修正；两新增原件遗漏已修，在8b精确2项复跑PASS。其它最后扩展期间多文件focused仅迭代证据，不冒称72f全通过。最终计划为同Memory证据目录`final-affected-plan.json`；Q006仍须按72f完整门禁、与EXEC1e9联合>2真实门闩。
 
@@ -249,7 +251,9 @@
 
 | 记录ID / 行号 | 候选SHA / baseSHA / tree输入 | Owner / 验收chat / PR | 命令与真实入口 / 生成输入 | 结果与回执/日志 | 未执行与原因 / 阻塞 / PM释放 |
 | --- | --- | --- | --- | --- | --- |
-| 尚无业务运行 | — | — | — | UNRUN | 无候选或释放；仅文档阶段 |
+| WEB-Q002 / WEB-W01、W02 | `f8f684b6dee904d820b9952ead336da5a33f330f` / base2c78ca8d；inputIdentity`cc37d2a7c864bfd87aef4343e74582cca87e387343780842fe7248f3d84c4cc5` | integration driver本chat实跑，PM允许冻结模块准确workdir代跑；Web owner未冒领 | `PATH=/tmp/mote-node24-runtime-20261014/node-v24.21.0-darwin-arm64/bin:$PATH npm run check:affected -- --base 2c78ca8d52a7d17fae20962cf68d09a717ffc73a --head f8f684b6dee904d820b9952ead336da5a33f330f`；cwd原Web工作树 | EXIT0，9/9步骤，116.413s；Web602、Shared198、release-contracts65、release-integration19均0fail/0skip。原receipt=`.git/mote-check-receipts/2026-10-18T11-01-18-502Z-91082734-146e-4fa2-9acc-32eac6a54248.json`；绑定摘要/日志见下。 | 输入未变化，完成后sameHEAD/clean，cleanupConfirmed=true、锁释放。PR/独验、跨EXEC组合、真实模型/供应商/设备/部署未验 |
+
+Q002绑定摘要与完整日志：`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/web-f8f684b6-required-gate.json`及同名.log。原始日志中的FAIL来自release-driver负例测试，外层release-contracts与最终9步骤均passed，不当作本候选失败。
 
 原生构建、隐藏Electron/浏览器、Android JVM/instrumentation/模拟器、物理设备、真实模型/供应商与部署分别记结果，不能用fixture替代。最终检查实际失败、中断、UNRUN、skip均保留。GitHub Checks是否启用需单列，空rollup不算通过；不修改Actions设置。
 
