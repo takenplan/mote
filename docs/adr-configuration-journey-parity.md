@@ -77,3 +77,24 @@ Business entrances supply attribution explicitly: file analysis and review use
 The [validation record](validation/configuration-parity-2026-10-18.md) records
 production API and hidden Web evidence separately from live checks. This work
 does not deploy, migrate old formats or reprocess real personal data.
+
+
+## Resource consumer continuation
+
+KEEP: the original Images and File/Voice settings categories, named native
+controls, private content encryption, explicit historical confirmation and
+operator-owned installation/storage policy. CHANGE: all accounts read the
+Files producer's safe instance model status; only administrators receive install
+and cancel controls. Image settings preserve derived service fields and reference
+a file-policy profile instead of editing endpoint or credentials. Historical
+results display actual M05 states; public progress contains only queued counts.
+REMOVE: hidden scoped media cards, editable derived endpoint fields, treating all
+unfinished history states as active scheduling, and stale preview confirmation
+after draft/range changes. EXCEPTION: installed model files do not imply worker
+readiness or authorize processing, select models, or confirm history. Storage
+keeps separate saved and effective values until its existing restart boundary.
+UNKNOWN: combined production startup/browser and native execution require the
+coordinated driver window; generated contract tests alone do not prove them.
+
+The exact producer seams and validation commands are in the
+[resource consumer handoff](validation/configuration-resources-parity-2026-10-18.md).

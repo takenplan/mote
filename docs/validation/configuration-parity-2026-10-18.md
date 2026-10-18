@@ -66,13 +66,19 @@ checks remain unrun pending the driver slot.
 Files owns C07's real attribution entrances and FILE-PERCEPTION's private image
 policy, history preview/confirm and actual managed OCR/ASR runtime. Ask owns
 optional embedding selection and `allowQueryImages` consumption. LIFE owns the
-administrator storage-settings producer. Configuration's independent Images
-component and administrator storage controls have contract tests, but their
-real cross-module APIs are not present in this standalone baseline. Managed
-media status/installation controls need the exact Files producer contract before
-that portion can be marked restored; the candidate does not fabricate readiness
-or authorize ordinary-user host installation. Frozen dependency SHAs and joint
-results must be supplied before READY.
+administrator storage-settings producer. Configuration's consumers now use the inspected Files, LIFE and Ask production
+contracts. Shared media health is read-only for ordinary accounts; explicit
+installation/cancellation uses administrator endpoints. Images retain the full
+revision-bearing settings, derived service metadata, exact history states and
+opaque preview/confirmation tokens. Native controls use the same APIs.
+
+The [resource consumer handoff](configuration-resources-parity-2026-10-18.md)
+records exact inspected producer SHAs, the M04 metadata seam, permission matrix,
+real startup/browser/native commands and evidence requirements. These producer
+commits are not merged into the independent Configuration branch. Combined-tree
+startup, hidden resource-browser and native checks remain **UNRUN**, pending the
+coordinated driver window. Existing `79bf9610` model/Usage browser evidence does
+not establish acceptance of the subsequent resource consumers.
 
 ## Unperformed checks
 

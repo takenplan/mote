@@ -20,4 +20,7 @@ test('instance storage controls keep original units, CAS revision and saved/effe
  assert.deepEqual(writes,[{revision:7,retentionDays:90,maxStorageBytes:5*1024**3}]);
  assert.match(dom.window.document.body.textContent!,/标记的设置需要重启后生效/);assert.match(dom.window.document.querySelector('.effective-settings')!.textContent!,/30 天/);
  assert.equal(dom.window.document.querySelector<HTMLSelectElement>('select[aria-label="资料容量上限"]')!.value,'5120');
+ state={...state,revision:9,saved:{...state.saved,maxStorageBytes:5*1024**3+1}};await act(async()=>{root.render(React.createElement(ScopedStorageSettings,{api:{...api}}));await new Promise(resolve=>setTimeout(resolve,20));});
+ await act(async()=>{const select=dom.window.document.querySelector<HTMLSelectElement>('select[aria-label="历史记录保留"]')!;select.value='180';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+ await act(async()=>{dom.window.document.querySelector<HTMLButtonElement>('button.primary')!.click();await new Promise(resolve=>setTimeout(resolve,20));});assert.equal(writes.at(-1).maxStorageBytes,5*1024**3+1,'changing retention preserves a capacity that is not a whole MiB');
 });
