@@ -153,7 +153,7 @@ npm run check:affected -- --base origin/main --head HEAD --dry-run
 | 检查选择器、计划、驱动、环境预检及本地检查入口 | 对应检查基础设施回归，包含 CLI 的隔离 Git fixture | 无需应用构建 |
 | 通用发布工具、公共 workflow、根配置/lockfile、未知构建输入 | 保守检查全部消费者 | 相关部署、容器、依赖安装或发布链路 |
 
-所有范围由同一驱动执行，先运行所选环境、翻译、scope 契约和纯发布工具预检，再构建、检查类型、执行工作区测试及其余运行时回归，最后执行所需 Android 单测。环境预检核对 Node、依赖是否安装、相关原生 SQLite 能否实际运行，以及 Android 所需 Java/SDK；缺失时直接失败，不自动安装或修复。构建前置与测试消费者分别选择，同一计划中的任务只执行一次；已由构建执行的同份 TypeScript 检查、Agent 隐式构建及共享测试不再重复运行。Server 的 dev-server/profile 运行时回归只随 Server、Central 或全量计划执行，不加入无关 Desktop/Android 计划。
+所有范围由同一驱动执行，先运行所选环境、翻译、scope 契约和纯发布工具预检，再构建、检查类型、执行工作区测试及其余运行时回归，最后执行所需 Android 单测。环境预检核对 Node、依赖是否安装、Server/Mem0 实际解析的原生 SQLite 能否运行、macOS 隐藏窗口测试所需 Electron 可执行文件，以及 Android 所需 Java/SDK；缺失时直接失败，不自动安装或修复。构建前置与测试消费者分别选择，同一计划中的任务只执行一次；已由构建执行的同份 TypeScript 检查、Agent 隐式构建及共享测试不再重复运行。Server 的 dev-server/profile 运行时回归只随 Server、Central 或全量计划执行，不加入无关 Desktop/Android 计划。
 
 `check:local` 固定选择全部 TypeScript 工作区和根回归；`check:central`、`check:desktop` 固定选择各自工作区，均使用同一驱动。`check:local` 不包含 Android 测试、Desktop 原生编译、浏览器 E2E、真机或真实模型验收。`check:affected` 在共享协议、根配置、lockfile 或未知输入影响三端时仍选择全部 TypeScript 与 Android 单测。新增文案需检查翻译和 Android catalog 同步；shared 和共享翻译目录仍保守选择全部消费者。
 

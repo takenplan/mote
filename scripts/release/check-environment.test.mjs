@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkEnvironment, missingDependencies } from './check-environment.mjs';
+import { checkEnvironment, missingDependencies, desktopRuntimeFailure } from './check-environment.mjs';
 
 test('dependency preflight detects undeclared installations without importing packages or building', t => {
   const directory = mkdtempSync(join(tmpdir(), 'mote-check-environment-'));
@@ -43,4 +43,17 @@ test('preflight exercises the actual nested Mem0 SQLite resolution as well as th
   assert.ok(checkEnvironment({ directory, workspaces: ['@mote/server'] }).some(failure => failure.includes('Mem0 native SQLite')));
   put('apps/server/node_modules/mem0ai/node_modules/better-sqlite3/index.cjs', adapter);
   assert.deepEqual(checkEnvironment({ directory, workspaces: ['@mote/server'] }), []);
+});
+
+test('Desktop preflight checks the installed Electron executable without opening a window', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'mote-check-electron-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const manifest = join(directory, 'package.json'); writeFileSync(manifest, '{}');
+  assert.match(desktopRuntimeFailure(manifest), /Electron executable is missing/);
+  const module = join(directory, 'node_modules/electron'); mkdirSync(module, { recursive: true });
+  writeFileSync(join(module, 'package.json'), '{"main":"index.cjs"}');
+  writeFileSync(join(module, 'index.cjs'), "module.exports=__dirname+'/generated-executable'");
+  assert.match(desktopRuntimeFailure(manifest), /Electron executable is missing/);
+  writeFileSync(join(module, 'generated-executable'), 'generated runtime marker; never executed');
+  assert.equal(desktopRuntimeFailure(manifest), undefined);
 });

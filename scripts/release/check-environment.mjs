@@ -12,6 +12,14 @@ export function missingDependencies(manifestPath) {
     !require.resolve.paths(name)?.some(directory => existsSync(join(directory, name, 'package.json'))));
 }
 
+export function desktopRuntimeFailure(manifestPath) {
+  try {
+    const binary = createRequire(manifestPath)('electron');
+    if (typeof binary === 'string' && existsSync(binary)) return undefined;
+  } catch {}
+  return 'Electron executable is missing for the macOS hidden-window regression. Run npm rebuild electron before retrying.';
+}
+
 export function checkEnvironment({ directory = process.cwd(), workspaces = [], android = false } = {}) {
   const failures = [];
   const manifest = resolve(directory, 'package.json');
@@ -26,6 +34,10 @@ export function checkEnvironment({ directory = process.cwd(), workspaces = [], a
       const missing = missingDependencies(path);
       if (missing.length) failures.push(`Missing dependencies in ${path}: ${missing.join(', ')}. Run npm ci first.`);
     } catch (error) { failures.push(`Cannot inspect dependencies: ${path}: ${error.code ?? error.message}`); }
+  }
+  if (!failures.length && process.platform === 'darwin' && workspaces.includes('@mote/desktop')) {
+    const failure = desktopRuntimeFailure(resolve(directory, 'apps/desktop/package.json'));
+    if (failure) failures.push(failure);
   }
   // Web integration fixtures use the real Server's native SQLite adapter too.
   if (!failures.length && workspaces.some(name => name === '@mote/server' || name === '@mote/web')) {
