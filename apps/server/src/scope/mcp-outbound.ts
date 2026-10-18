@@ -1,5 +1,6 @@
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import {McpError,ErrorCode} from '@modelcontextprotocol/sdk/types.js';
 import {z} from 'zod';
 import {remoteUrl,restrictedFetch} from '../connectors/network.js';
 import {ConnectorError} from '../connectors/types.js';
@@ -13,6 +14,9 @@ import {identityHash} from './originals.js';
 export const outboundConnection=z.object({id:z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/),enabled:z.boolean().default(true),url:z.string().min(1).max(2000),token:z.string().max(4096).refine(value=>!/[\r\n\0]/.test(value)).default(''),sourceIds:z.array(z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/)).min(1).max(500)}).strict();
 export const outboundSettings=z.object({connections:z.array(outboundConnection).max(500).default([])}).strict().superRefine((value,ctx)=>{if(new Set(value.connections.map(c=>c.id)).size!==value.connections.length)ctx.addIssue({code:'custom',message:'Duplicate MCP connection'});for(const c of value.connections)try{remoteUrl(c.url,true);}catch{ctx.addIssue({code:'custom',message:'Invalid MCP endpoint'});}});
 export type OutboundConnection=z.infer<typeof outboundConnection>;
+/** A one-time target is request-owned; it does not publish reusable credentials. */
+export const outboundTarget=z.object({url:z.string().min(1).max(2000),token:z.string().min(1).max(4096).refine(value=>!/[\r\n\0]/.test(value)).optional()}).strict();
+export type OutboundTarget=z.infer<typeof outboundTarget>;
 const selection=z.object({sourceId:z.string().min(1).max(128),resourceUris:z.array(z.string().min(1).max(4000)).max(30).refine(values=>new Set(values).size===values.length).optional(),tool:z.object({name:z.string().min(1).max(200),arguments:z.record(z.unknown()).default({}),confirmedReadOnly:z.literal(true)}).strict().optional()}).strict().refine(value=>Boolean(value.resourceUris?.length)!==Boolean(value.tool));
 type Binding={context:UserContext;connection:OutboundConnection;sql:PrivateSql;data:PrivateData;ingress:IngressHost;allowLocal:boolean;assert:()=>void;pinSource:(id:string)=>number;reportStatus:(sourceId:string,revision:number,status:NonNullable<SourceConnection['status']>)=>void};
 
@@ -39,7 +43,7 @@ export class McpOutbound{
   const resources:unknown[]=[],tools:unknown[]=[],prompts:unknown[]=[],templates:unknown[]=[];
   const pages=async(read:(cursor?:string)=>Promise<{nextCursor?:string}>,count:()=>number,max:number)=>{let cursor:string|undefined;const seen=new Set<string>();for(let page=0;page<10;page++){binding.assert();signal.throwIfAborted();const result=await read(cursor);binding.assert();cursor=result.nextCursor;if(!cursor||count()>=max)break;if(seen.has(cursor))throw new ConnectorError('mcp_cursor_invalid',502);seen.add(cursor);}};
   const capabilities=client.getServerCapabilities();
-  if(capabilities?.resources){await pages(async cursor=>{const result=await client.listResources({cursor},{signal,timeout:20000});resources.push(...result.resources.slice(0,500-resources.length).map(r=>({uri:r.uri,name:r.name,mimeType:r.mimeType})));return result;},()=>resources.length,500);await pages(async cursor=>{const result=await client.listResourceTemplates({cursor},{signal,timeout:20000});templates.push(...result.resourceTemplates.slice(0,500-templates.length).map(r=>({uriTemplate:r.uriTemplate,name:r.name})));return result;},()=>templates.length,500);}
+  if(capabilities?.resources){await pages(async cursor=>{const result=await client.listResources({cursor},{signal,timeout:20000});resources.push(...result.resources.slice(0,500-resources.length).map(r=>({uri:r.uri,name:r.name,mimeType:r.mimeType})));return result;},()=>resources.length,500);try{await pages(async cursor=>{const result=await client.listResourceTemplates({cursor},{signal,timeout:20000});templates.push(...result.resourceTemplates.slice(0,500-templates.length).map(r=>({uriTemplate:r.uriTemplate,name:r.name})));return result;},()=>templates.length,500);}catch(error){if(!(error instanceof McpError&&error.code===ErrorCode.MethodNotFound))throw error;}}
   if(capabilities?.tools)await pages(async cursor=>{const result=await client.listTools({cursor},{signal,timeout:20000});tools.push(...result.tools.slice(0,200-tools.length).map(t=>({name:t.name,title:t.title,description:t.description?.slice(0,2000),readOnly:t.annotations?.readOnlyHint===true})));return result;},()=>tools.length,200);
   if(capabilities?.prompts)await pages(async cursor=>{const result=await client.listPrompts({cursor},{signal,timeout:20000});prompts.push(...result.prompts.slice(0,200-prompts.length).map(p=>({name:p.name,description:p.description?.slice(0,2000)})));return result;},()=>prompts.length,200);
   return {resources,tools,prompts,templates};
@@ -60,9 +64,19 @@ export class McpOutbound{
    if(input.tool)candidates.add(identityHash([binding.connection.url,'tool',input.tool.name,input.tool.arguments]));
    const heads=new Map([...candidates].map(id=>[id,identityHash(binding.data.sourceItem(source.id,id))]));
    const assertHeads=()=>{for(const [id,head] of heads)if(identityHash(binding.data.sourceItem(source.id,id))!==head)throw new ConnectorError('mcp_input_changed',409);};
+   const metadata=new Map<string,{name:string;mimeType?:string}>();
+   if(source.retention==='reference'&&input.resourceUris&&client.getServerCapabilities()?.resources){
+    const selected=new Set(input.resourceUris),seen=new Set<string>();let cursor:string|undefined;
+    for(let page=0;page<10;page++){
+     assert();const result=await client.listResources({cursor},{signal,timeout:20000});assert();
+     for(const resource of result.resources)if(selected.has(resource.uri))metadata.set(resource.uri,resource);
+     cursor=result.nextCursor;if(!cursor||metadata.size===selected.size)break;
+     if(seen.has(cursor))throw new ConnectorError('mcp_cursor_invalid',502);seen.add(cursor);
+    }
+   }
    for(const uri of input.resourceUris??[]){
     const identity=identityHash([binding.connection.url,'resource',uri]);manifests.set(identity,[]);assert();
-    if(source.retention==='reference'){const externalId=identityHash([binding.connection.url,uri,0]);chunks.push({identity,externalId,title:'MCP reference',text:'',mimeType:'text/plain',uri:'mcp://'+identityHash(binding.connection.url).slice(0,24)+'/'+identityHash(uri)});manifests.get(identity)!.push(externalId);continue;}
+    if(source.retention==='reference'){const info=metadata.get(uri),externalId=identityHash([binding.connection.url,uri,0]);chunks.push({identity,externalId,title:(info?.name??'MCP reference').slice(0,2000),text:'',mimeType:info?.mimeType??'text/plain',uri:'mcp://'+identityHash(binding.connection.url).slice(0,24)+'/'+identityHash(uri)});manifests.get(identity)!.push(externalId);continue;}
     const result=await client.readResource({uri},{signal,timeout:20000});assert();
     for(const [index,entry] of result.contents.entries()){if(!('text' in entry)||typeof entry.text!=='string')throw new ConnectorError('mcp_binary_resource_not_supported',415);if(entry.text.length>100000)throw new ConnectorError('mcp_resource_too_large',413);const externalId=identityHash([binding.connection.url,uri,index]);chunks.push({identity,externalId,title:uri.slice(0,2000),text:entry.text,mimeType:entry.mimeType??'text/plain'});manifests.get(identity)!.push(externalId);if(chunks.length>100)throw new ConnectorError('mcp_resource_limit',413);}
    }
@@ -91,6 +105,6 @@ export class McpOutbound{
   this.queues.set(key,work);void work.finally(()=>{if(this.queues.get(key)===work)this.queues.delete(key);}).catch(()=>{});return work;
  }
  async closeUser(user:string){const entries=[...this.active].filter(entry=>entry.user===user);for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}
- async retireChanged(user:string,connections:readonly OutboundConnection[]){const entries=[...this.active].filter(entry=>entry.user===user&&entry.fingerprint!==identityHash(connections.find(connection=>connection.id===entry.connection)??null));for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}
+ async retireChanged(user:string,connections:readonly OutboundConnection[]){const entries=[...this.active].filter(entry=>entry.user===user&&entry.connection!==''&&entry.fingerprint!==identityHash(connections.find(connection=>connection.id===entry.connection)??null));for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}
  async close(){this.closed=true;for(const entry of this.active)entry.abort.abort();await Promise.allSettled([...this.active].map(async entry=>{await entry.client.close();await entry.settled;}));await Promise.allSettled([...this.queues.values()]);}
 }

@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './plugin-check.js';
 // Opt-in generated-data acceptance. Uses the compiled runtime and existing local
 // images. Only this run's labelled volumes/containers are stopped or removed.
 import test from 'node:test';
@@ -117,7 +118,7 @@ test('compiled personal plans survive one native/Hindsight/Docker archive withou
   const user=await login(index?'generated-b':'generated-a'),settings={...defaultModelSettings(),provider:'custom',protocol:'openai-completions',model:'generated-no-inference',baseUrl:'http://127.0.0.1:1/v1',apiKey:'GENERATED_NATIVE_FIXTURE_ONLY',allowUnauthenticatedLocal:true};
   await change(user.token,'models',{profiles:[{id:'native-history',name:'Generated native history',settings}],selections:{memory:{kind:'personal',id:'native-history'}}});
   let plugins=await checked(user.token,'/api/plugins');await checked(user.token,'/api/plugin-instances','POST',{expectedRevision:plugins.revision,instance:{id:'same-native-instance',packageId,name:'Generated native history',configuration:{modelProfileId:'personal:native-history'},desired:false,grants:{capabilities:['engine'],sourceIds:['same-source'],history:true}}});
-  await checked(user.token,'/api/plugin-instances/same-native-instance/check','POST',{});plugins=await checked(user.token,'/api/plugins');await checked(user.token,'/api/plugin-instances/same-native-instance/enable','POST',{expectedRevision:plugins.revision});
+  await waitForPluginCheck(await checked(user.token,'/api/plugin-instances/same-native-instance/check','POST',{}),id=>checked(user.token,'/api/tasks/'+id));plugins=await checked(user.token,'/api/plugins');await checked(user.token,'/api/plugin-instances/same-native-instance/enable','POST',{expectedRevision:plugins.revision});
   const context=await app.authority.authenticate(user.token),snapshot=await app.plugins.forUser(context).admit('same-native-instance','history',1),binding={kind:'plugin',revision:1,instanceId:'same-native-instance',snapshotId:snapshot.id};
   await app.memory.providers.provision(context,binding);
   const descriptor=await app.plugins.domainProvider(context,snapshot.id,['engine']),directory=join(descriptor.directory,'memory-'+digest(descriptor.namespace)),identity=digest(randomUUID()).slice(0,24);

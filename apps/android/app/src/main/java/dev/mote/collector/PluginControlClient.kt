@@ -49,8 +49,8 @@ internal class PluginControlClient(private val client: CentralClient) {
             val grants = raw.getJSONObject("grants")
             PluginInstance(raw.getString("id"), raw.getString("packageId"), raw.getString("name"), value.getLong("revision"),
                 PluginControlProjection.strings(grants.getJSONArray("sourceIds")).joinToString(", "), raw.getJSONObject("configuration"), PluginControlProjection.fields(pkg.getJSONArray("configurationSchema")),
-                PluginControlProjection.capabilities(raw.getJSONArray("capabilities")), raw.getBoolean("desired"), "unknown", emptyList(),
-                if (raw.getBoolean("desired")) setOf("disable") else setOf("configure", "check") + if (raw.getBoolean("checked")) setOf("enable") else emptySet(),
+                PluginControlProjection.capabilities(raw.getJSONArray("capabilities")), raw.getBoolean("desired"), raw.optString("observed", "unknown"), PluginControlProjection.strings(raw.optJSONArray("issues")),
+                if (raw.optString("observed") == "checking") emptySet() else if (raw.getBoolean("desired")) setOf("disable") else setOf("configure", "check") + if (raw.getBoolean("checked") && PluginControlProjection.strings(raw.optJSONArray("issues")).isEmpty()) setOf("enable") else emptySet(),
                 raw.getJSONObject("secretStatus"), JSONObject().apply { for (key in listOf("id", "packageId", "name", "configuration", "desired", "revocation", "grants")) put(key, raw.get(key)) }, raw.getBoolean("checked"))
         }
         val projected = JSONObject().put("revision", value.getLong("revision")).put("installation", admin?.getJSONObject("installation") ?: JSONObject().put("supported", false))

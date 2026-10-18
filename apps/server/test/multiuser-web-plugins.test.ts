@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -33,19 +34,19 @@ test('actual M09 view supplies owned edit metadata and distinguishes declared fr
  assert.deepEqual(a.secretStatus,{credential:true});assert.equal(a.configuration.credential,undefined);
  assert.ok(before.packages[0].declaredCapabilities.includes('processor'));
  assert.equal(a.capabilities.find((v:any)=>v.id==='generated.processor').state,'unknown');
- assert.equal((await f.request(f.a,'/api/plugin-instances/same-instance/check','POST',{})).statusCode,200);
+ const checking=await f.request(f.a,'/api/plugin-instances/same-instance/check','POST',{});assert.equal(checking.statusCode,200);assert.equal(checking.json().observed,'checking');await waitForPluginCheck(checking.json(),async id=>(await f.request(f.a,'/api/tasks/'+id)).json());
  const checked=(await f.view(f.a)).instances[0];assert.equal(checked.checked,true);assert.equal(checked.capabilities.find((v:any)=>v.id==='generated.processor').state,'verified');
  assert.equal(checked.capabilities.find((v:any)=>v.id==='generated.model').state,'unsupported');
  assert.equal((await f.view(f.b)).instances[0].checked,false);assert.doesNotMatch(JSON.stringify(checked),/personal:A|personal:B/);
 });
 
 test('explicit masked reference preservation edits the existing owned instance under CAS without adopting another account reference',async t=>{
- const f=await fixture(t),view=await f.view(f.a),a=view.instances[0],{generation,checked,secretStatus,capabilities,...instance}=a;
+ const f=await fixture(t),view=await f.view(f.a),a=view.instances[0],{generation,checked,secretStatus,capabilities,observed,issues,...instance}=a;
  instance.name='A edited';instance.configuration.label='A edited';
  const changed=await f.request(f.a,'/api/plugin-instances','POST',{instance,expectedRevision:view.revision,preserveRedactedSecrets:true});assert.equal(changed.statusCode,200,changed.body);
  const context=await f.node.authority.authenticate(f.a);assert.equal(f.stored(context.userId).configuration.credential,'personal:A');
  assert.equal((await f.request(f.a,'/api/plugin-instances','POST',{instance,expectedRevision:view.revision,preserveRedactedSecrets:true})).statusCode,409);
- const bv=await f.view(f.b),b=bv.instances[0],{generation:bg,checked:bc,secretStatus:bs,capabilities:bp,...bi}=b;
+ const bv=await f.view(f.b),b=bv.instances[0],{generation:bg,checked:bc,secretStatus:bs,capabilities:bp,observed:bo,issues:bis,...bi}=b;
  bi.name='B edited';assert.equal((await f.request(f.b,'/api/plugin-instances','POST',{instance:bi,expectedRevision:bv.revision,preserveRedactedSecrets:true})).statusCode,200);
  const cb=await f.node.authority.authenticate(f.b);assert.equal(f.stored(cb.userId).configuration.credential,'personal:B');
 });

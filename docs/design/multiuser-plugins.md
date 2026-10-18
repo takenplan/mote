@@ -208,3 +208,14 @@ and whole-instance recovery await their domain acceptance.
 
 Executed checks and review findings are recorded in
 [M09 validation](../validation/multiuser-m09-plugins.md).
+
+## Restored control journeys
+
+The [extension parity ADR](../adr-extension-journey-parity.md) restores actual
+provider capability checks, observed status and issues at the original check step.
+Exact descriptor validation remains necessary and is followed by the trusted
+domain probe; a matching `describe` result alone is not a verified provider.
+Administrators can disable their own unreferenced instance and directly uninstall
+the package. Retirement uses the same configuration authority and preserves all
+foreign declarations and retained task/history readers. No manual configuration
+removal step is required.

@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
@@ -38,7 +39,7 @@ async function fixture(t:TestContext){
  await until(()=>node.plugins!.catalog.view().packages[0].state==='installed','generated local release did not install');
  const view=(token:string)=>checked(token,'/api/plugins');
  const configure=async(token:string,instance:unknown)=>checked(token,'/api/plugin-instances','POST',{instance,expectedRevision:(await view(token)).revision});
- const action=async(token:string,action:string)=>checked(token,'/api/plugin-instances/same-instance/'+action,'POST',action==='check'?{}:{expectedRevision:(await view(token)).revision});
+ const action=async(token:string,action:string)=>{const result=await checked(token,'/api/plugin-instances/same-instance/'+action,'POST',action==='check'?{}:{expectedRevision:(await view(token)).revision});if(action==='check')await waitForPluginCheck(result,id=>checked(token,'/api/tasks/'+id));return result;};
  const admit=(token:string)=>checked(token,'/api/plugin-instances/same-instance/snapshots','POST',{});
  const source=async(token:string,id:string,retention='archive')=>checked(token,'/api/ingress/sources','POST',{id,name:'Generated '+id,kind:retention==='archive'?'coding-agent':'custom',deviceId:'same-device',platform:'import',retention});
  for(const [token,label] of [[alice.token,'A'],[bob.token,'B_PRIVATE']]){await source(token,'allowed-source');await source(token,'other-source');await configure(token,{id:'same-instance',packageId,name:'Generated source plugin',configuration:{label},desired:false,grants:{capabilities:['source'],sourceIds:['allowed-source'],history:false}});await action(token,'check');await action(token,'enable');}
@@ -88,7 +89,7 @@ for(const mode of ['stop','grant-revoke','plugin-delete','ingress-delete','accou
  // An async marker may exist before its PID is written; Number('') is process-group PID 0.
  const task=await f.submit(f.alice.token,f.snapshots.a.id,'receiveSourceItems',['allowed-source','late-'+mode,[item('late-'+mode)]],{waitForRelease:key,emitAfterRelease:true,partialPid:mode==='plugin-delete'});let entered:string|undefined,pid=0;await until(()=>{entered=find(join(f.directory,'plugins','instances'),'joint-entered-'+key);if(!entered)return false;pid=Number(readFileSync(entered,'utf8'));return Number.isSafeInteger(pid)&&pid>0;},'source worker did not publish a valid PID');const directory=dirname(entered!);
  if(mode==='stop')await f.action(f.alice.token,'stop');
- if(mode==='grant-revoke'){await f.action(f.alice.token,'pause');const instance=(await f.view(f.alice.token)).instances[0];delete instance.generation;delete instance.checked;delete instance.secretStatus;delete instance.capabilities;instance.grants.sourceIds=[];await f.configure(f.alice.token,instance);}
+ if(mode==='grant-revoke'){await f.action(f.alice.token,'pause');const instance=(await f.view(f.alice.token)).instances[0];delete instance.generation;delete instance.checked;delete instance.secretStatus;delete instance.capabilities;delete instance.observed;delete instance.issues;instance.grants.sourceIds=[];await f.configure(f.alice.token,instance);}
  if(mode==='plugin-delete')assert.equal((await f.node.services.forUser(context).deleteUser('plugins','joint-delete-plugins')).status,'complete');
  if(mode==='ingress-delete')assert.equal((await f.node.services.forUser(context).deleteUser('ingress','joint-delete-ingress')).status,'complete');
  if(mode==='account-disable')await f.checked(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:true});

@@ -82,7 +82,7 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
         schedulePoll()
     }
     private fun schedulePoll() {
-        val active = inventory?.packages?.any { it.state == "installing" } == true || preparedBinding?.optString("state") in setOf("waiting", "running")
+        val active = inventory?.packages?.any { it.state == "installing" } == true || inventory?.instances?.any { it.observed == "checking" } == true || preparedBinding?.optString("state") in setOf("waiting", "running")
         if (!active) return
         val revision = ui.navigationRevision
         val next = Runnable { if (!ui.isDestroyed && !ui.isFinishing && revision == ui.navigationRevision && !ui.isWorking) load() else close() }
@@ -238,5 +238,5 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
     private fun source(value: JSONObject, target: LinearLayout) { ui.text(value.getString("repository"), NativeFontRole.SUPPORT, target); ui.text(MoteI18n.text("固定版本") + " · " + value.getString("tag") + " · " + value.getString("commit"), NativeFontRole.META, target); ui.text(MoteI18n.text("完整性摘要") + " · " + value.getString("digest"), NativeFontRole.META, target) }
     private fun capabilities(values: List<PluginCapability>, target: LinearLayout) { values.forEach { ui.text(it.id + " · " + capability(it.state), NativeFontRole.SUPPORT, target); if (it.reason.isNotBlank()) ui.text(it.reason, NativeFontRole.META, target) } }
     private fun capability(state: String) = when (state) { "verified" -> MoteI18n.text("已核验"); "unsupported" -> MoteI18n.text("不支持"); else -> MoteI18n.text("尚未核验") }
-    private fun state(state: String) = when (state) { "installed" -> MoteI18n.text("已安装"); "installing" -> MoteI18n.text("正在安装"); "failed" -> MoteI18n.text("安装失败"); "restart-required" -> MoteI18n.text("等待节点重启"); "enabled" -> MoteI18n.text("已启用"); "disabled" -> MoteI18n.text("已停用"); "unconfigured" -> MoteI18n.text("待配置"); "draining" -> MoteI18n.text("停用中"); "blocked" -> MoteI18n.text("需要处理"); else -> state }
+    private fun state(state: String) = when (state) { "configured" -> MoteI18n.text("已配置"); "checking" -> MoteI18n.text("正在核验"); "ready" -> MoteI18n.text("可运行"); "installed" -> MoteI18n.text("已安装"); "installing" -> MoteI18n.text("正在安装"); "failed" -> MoteI18n.text("安装失败"); "restart-required" -> MoteI18n.text("等待节点重启"); "enabled" -> MoteI18n.text("已启用"); "disabled" -> MoteI18n.text("已停用"); "unconfigured" -> MoteI18n.text("待配置"); "draining" -> MoteI18n.text("停用中"); "blocked" -> MoteI18n.text("需要处理"); else -> state }
 }
