@@ -45,7 +45,10 @@ export type PluginRuntimeFactory=(scope:Readonly<{userId:string;instanceId:strin
  * scope. Generated probe storage and cleanup never reuse live provider data. */
 export type PluginCapabilityProbe=(input:Readonly<{
  context:UserContext;instance:UserPluginInstance;components:readonly PluginComponent[];packageId:string;adapter?:string;
- directory:string;namespace:PluginInvocation['namespace'];signal:AbortSignal;
+ directory:string;attempt:Readonly<{id:string;createdAt:string}>;namespace:PluginInvocation['namespace'];signal:AbortSignal;
+ /** After local configuration/authority checks, before dispatching provider IO.
+  * The host owns issuance, result acknowledgement and interrupted recovery. */
+ beginExternal:()=>void;
  assertCurrent:()=>void;runtime:()=>PluginRuntime;restart:()=>Promise<PluginRuntime>;
  onClose:(close:()=>Promise<void>)=>void;
 }>)=>Promise<{capabilities:PluginCapability[];issues:string[]}>;

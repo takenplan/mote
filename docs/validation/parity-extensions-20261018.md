@@ -195,3 +195,61 @@ receipt and fresh affected dry-run are recorded under external evidence
 for the driver, and prior full passing phases cannot be reused. No push or PR is
 made before that complete gate passes. Real models/providers, physical devices,
 foreground UI and deployment remain **UNRUN**.
+
+## Interrupted canary recovery repair (EXT-RO-082-01)
+
+Independent source review marked clean `08268977f63778e109573414649b51bab8888e6a`
+**CHANGES_REQUIRED / NOT READY** before Q003. Its author-reported 163 passing
+focused tests remain evidence for that exact head; they do not validate this
+repair or replace the failed `d4683421` full gate.
+
+The missing M05 external issuance was dynamically reproduced through the real
+HTTP check route, an actual child worker and a generated loopback provider. With
+A's first write still held, SIGKILL plus genuine lease recovery dispatched ten
+new canary put calls, increasing the count from 1 to 11. Original-source variants
+at write ACK loss and orderly shutdown also increased 1 to 11; cleanup ACK loss
+increased 10 to 20. All four original-source cases failed. These are generated
+fixture effects, not evidence of an incident at a real supplier.
+
+The repair persists an attempt in M05 checkpoints and registers external
+issuance at actual provider dispatch, after configuration/credential preflight.
+An unfinished issuance remains unknown instead of running another canary. New
+checks, confirmed retries and declaration removal cannot hide that same-instance
+fact. Unknown attempts pin their fixed package and retain their directory when
+plugin deletion returns `result_unknown`. The generated canary derives its
+namespace/body/operation IDs from its saved attempt rather than recreating them.
+
+Four interrupted process variants now retain the original write counts and
+blocked receipt while B can perform another real check. Late remote completion
+cannot publish ready through the retired worker. A fifth process variant uses a
+SQLite fault trigger to kill the host inside the final external-ACK transaction,
+after the separate result checkpoint commits. Genuine rollback leaves the ACK
+lost; recovery reuses the same completed result and its ten original put calls,
+with no provider reopening and no remaining generated canary records. The
+fixture removes only its fault trigger before restarting. It never fabricates
+task state, external state, grants or an internal substitute handler. Restart
+advances only the fixture wall clock to expire the real dead-host lease.
+
+The initial implementation registered issuance before native credential
+preflight; one existing missing-credential case exposed that unnecessary unknown
+state. Registration now occurs after preflight and the original case passes.
+Its failed log is preserved. A real-worker identity test checks exact canary
+bodies and operation receipts in independent generated stores; an additional
+domain regression covers cancelled-check package protection and retained
+deletion evidence. The working repair's complete recovery/canary/plugin consumer
+batch passed **42/42** before freezing. Exact source bindings, RED/GREEN commands,
+new frozen results and hashes are recorded under external evidence
+`extensions-validation/probe-recovery/`.
+
+The bound RED rerun uses the final process fixture against the four exact
+`08268977` production source objects, restoring the working fix afterward. Its
+four failures all show additional canary calls. A preceding binding attempt hit
+one concurrent SQLite read with the fixture's default zero busy timeout; that
+harness failure is retained separately and is not counted as defect evidence.
+The fixture now waits for that real database read without editing task data.
+
+Only focused headless Node fixtures run in this repair. The new full 22-step
+affected plan remains for the driver after a new clean freeze; Q003 stays on
+hold until that handoff. Native/JVM/UI, real suppliers/models, physical devices
+and deployment are **UNRUN**. No push or PR update is performed before the new
+complete gate, and no earlier passing phase is credited to the new candidate.

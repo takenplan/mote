@@ -64,6 +64,19 @@ test('internal plugin check cannot complete against a changed declaration while 
  const view=await service.view();assert.equal(view.instances[0].checked,false);assert.equal(view.instances[0].desired,false);
 });
 
+test('an issued capability check retains its package and deletion evidence after cancellation and declaration removal',async t=>{
+ const entered=deferred(),held=deferred();t.after(()=>held.resolve());const f=await fixture(t),packageId=await f.install();
+ f.node.plugins!.registerCapabilityProbe(['model'],async input=>{input.beginExternal();entered.resolve();await held.promise;input.assertCurrent();return {capabilities:[{id:'generated.model',state:'verified'}],issues:[]};});
+ await f.configure(f.admin.token,{id:'same-instance',packageId,name:'Generated issued probe',configuration:{label:'admin'},desired:false,grants:{capabilities:['model'],sourceIds:[],history:false}});
+ const check=await f.request(f.admin.token,'/api/plugin-instances/same-instance/check','POST',{});assert.equal(check.statusCode,200,check.body);await entered.promise;
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));let attemptDirectory:string;try{const attempt=JSON.parse(String(db.prepare('SELECT checkpoints FROM user_tasks WHERE task_id=?').get(check.json().taskId)!.checkpoints))['plugin-probe-attempt'],row=db.prepare('SELECT id FROM plugin_user_checks WHERE task_id=?').get(check.json().taskId)!;attemptDirectory=join(f.directory,'plugins','instances',createHash('sha256').update(JSON.stringify([f.node.authority.deploymentId,f.admin.userId])).digest('hex'),'probes',createHash('sha256').update(JSON.stringify(row.id)).digest('hex'),attempt.id);assert.ok(existsSync(attemptDirectory));}finally{db.close();}
+ assert.equal((await f.request(f.admin.token,'/api/tasks/'+check.json().taskId+'/cancel','POST',{})).statusCode,200);await f.wait(f.admin.token,check.json().taskId,'cancelled');
+ const context=await f.node.authority.authenticate(f.admin.token),configuration=f.node.configuration.forUser(context),view=await configuration.view();await configuration.replace('pluginInstances',{instances:[]},view.revision);
+ const catalog=await f.request(f.admin.token,'/api/admin/plugins');assert.ok(!catalog.json().packages[0].allowedActions.includes('uninstall'));assert.equal((await f.request(f.admin.token,'/api/plugins/'+encodeURIComponent(packageId)+'/uninstall','POST',{expectedRevision:catalog.json().revision,operationId:randomUUID()})).statusCode,409);
+ assert.equal((await f.node.services.forUser(context).deleteUser('plugins','generated-unknown-check-delete')).status,'result_unknown');
+ assert.ok(existsSync(attemptDirectory));assert.equal((await f.view(f.bob.token)).instances.length,0);held.resolve();
+});
+
 test('generated local release registers actual Cordis capabilities through production and isolates A/B with identical instance identities',async t=>{
  const f=await fixture(t),packageId=await f.install();await f.instance(f.alice.token,packageId,'A configuration');await f.instance(f.bob.token,packageId,'B_PRIVATE configuration');
  const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token);const ca=await f.node.authority.authenticate(f.alice.token),inventory=await f.node.plugins!.forUser(ca).inventory(a.id);assert.equal(inventory.capabilities.length,5);assert.equal(inventory.capabilities.find(c=>c.id==='generated.processor')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.source')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.model')?.reason,'scoped_domain_unavailable');

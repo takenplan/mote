@@ -22,6 +22,26 @@ Checks report actual capability state, issues and observed status; a failed
 check cannot enable the configuration. Generation, account, configuration and
 model authorization still fence asynchronous probes and their publication.
 
+Capability checks use the existing M05 external-call ledger and checkpoints.
+The attempt ID, fixed package and creation time are durable before provider IO;
+the capability owner registers issuance after local configuration/credential
+validation and before dispatch. Generic canary namespace, body and operation IDs
+derive from that attempt. Native provider journals remain in its retained probe
+directory. An interrupted issued attempt without a completed result remains
+unknown. A new check, explicit task retry or a removed/recreated declaration
+cannot replace that fact with a fresh probe or ready state. Unresolved attempts
+also retain their package and prevent plugin deletion from erasing their local
+evidence while reporting complete.
+
+A result becomes recoverable only after verification and local provider/worker
+cleanup have joined. Its checkpoint precedes the final external acknowledgement.
+Recovery can acknowledge and publish that exact completed result without another
+provider call. It cannot infer an outcome for an unfinished attempt. Generic
+canary cleanup requiring reconciliation remains unknown; closing a transport is
+never evidence that a remote effect rolled back. Unknown remote effects without
+completed proof remain retained; automatic supplier-specific reconciliation is
+not added by this repair. No new engine, user step or compatibility path is used.
+
 MCP inbound accepts the original standalone POST through a fresh SDK transport.
 Initialized SDK clients can continue to retain a credential-bound session.
 A supplied session ID must belong to that exact credential; stale or foreign IDs
@@ -55,6 +75,9 @@ resource-only service built with the pinned official SDK verifies this behavior.
 | REMOVE | Permanent disabled-own-instance uninstall pin; describe-only verification; mandatory initialization/session and saved connection/source before discovery; fixed reference title/MIME. |
 | EXCEPTION | Other users' instances and all real retained snapshots continue to protect shared packages. Trusted plugin code is not an OS sandbox. A supplied stale session ID still fails. |
 | UNKNOWN | Real third-party provider/model behavior, physical clients and deployment until separately run. Generated SDK/provider fixtures do not prove those checks. |
+| CHANGE | Interrupted checks retain one M05-issued attempt instead of opening a fresh random canary after lease recovery. |
+| REMOVE | Treating a control task's single-attempt budget or retained random directory as an unknown-effect recovery fence. |
+| EXCEPTION | A completed post-cleanup result may finish publication after restart; this reuses proof and performs no provider IO. |
 
 This supersedes the mandatory session and connection prerequisites in the
 [M11 design](design/multiuser-mcp.md) and describe-only check interpretation in

@@ -230,6 +230,21 @@ consumers such as connector enable await that exact check's completion before
 publishing their configuration; admission alone is not verification. Waiting
 retains the original account/declaration fence and the caller's configuration
 revision, so a concurrent pause or configuration edit cannot be overwritten.
+The attempt ID, package and creation time are stored in M05 checkpoints before
+provider dispatch. Capability owners call the host issuance port after local
+preflight. Generic canary identities derive from the saved attempt; native
+provider control files stay in that same attempt directory. The existing M05
+external ledger retains uncertain results across lease recovery and orderly
+shutdown. A new check or confirmed retry cannot overwrite an unresolved attempt,
+including one whose instance declaration was removed. Its fixed package remains
+pinned, and plugin deletion returns `result_unknown` with local evidence retained.
+
+Only a result saved after joined provider/worker cleanup may be reused on
+recovery. Its checkpoint is written before the final external ACK; recovery of
+that ACK finishes the original check without opening a provider or creating
+another canary. An unfinished issuance or uncertain generic canary cleanup has
+no such result and remains blocked. This repair retains unknown outcomes; it
+does not add a supplier-specific remote reconciler or an erasure claim.
 The shared canary accepts only fenced provider/restart ports from
 `ScopedMemoryProviders`. Its exact import edge and contract-only dependencies
 are guarded; unrelated scoped hosts, legacy Store imports and direct file/SQL
