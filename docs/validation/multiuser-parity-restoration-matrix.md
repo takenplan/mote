@@ -159,7 +159,7 @@
 | LIFE-L01 | C / P1 | 原保留周期启动/每小时维护 | FILE / ASK / MEM | 生成旧/新采集和文件版本；真实启动/小时推进按context_end清理超龄非文件并撤派生/历史，排除文件规则与retentionDays=0保留；不处理真实资料。 | L01；静态配置无消费者 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
 | LIFE-L02 | C / P1 | 既有实例逻辑容量准入 | FILE / DESKTOP / AND | 生成小容量实例在原逻辑计数边界返回507且不先接受丢数据，客户端保留队列并在释放后继续；并发双用户共享实例账本，不新增个人配额/磁盘写满实验。 | L02；静态实例上限失效 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
 | LIFE-L03 | C+N / P1 | 个人导入导出一致性隔离 | MEM / FILE | A导出/导入含await provider期间B持续写入不误报archive_changed；A真实依赖变化/撤权仍拒绝，双连接/重启覆盖，不靠全库静默重试。 | L03；全局fingerprint SQLite | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
-| LIFE-L04 | C / P1 | 中央导出内容副本删除生命周期 | FILE / MEM / ASK | 完整导出→忘记文件/删采集→旧中央content下载拒绝且不残留可读正文/原件；重复导出副本可清理，无内容回执可保留；不要求擦除用户离线备份。 | L04；静态保存/下载/删除全链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
+| LIFE-L04 | C / P1 | 中央导出内容副本删除生命周期 | FILE / MEM / ASK | 按原生成当前完整导出→直接响应下载旅程，无中央永久完整副本/下载历史。内部任务进度、无内容receipt和必要暂存按完成/失败/取消/断流/重启清理及原重试；授权/pin/删除fence保持。不得新增latest-only/TTL/次数政策或额外用户下载步骤；仅生成fixture，不操作真实历史副本。 | L04；静态保存/下载/删除全链 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
 | LIFE-L05 | C / P2 | 原GC启动/周期驱动 | FILE / EXEC / EXT | 生成失效upload/workspace/snapshot/失败restore残留→真实启动/周期自动回收；活跃pin和真实unknown仍保留，不依赖用户手工GC，不按时长猜活动死亡。 | L05；静态gc存在但无驱动 | OPEN；无候选证据；全部旅程UNRUN；待owner候选/验收 |
 
 ## 补充、未知与旧缺陷
@@ -200,6 +200,7 @@
 | ASK-INTAKE-01 / ASK-A02 × MEM | ASK / MEM publication port | 作者新增真实生产fixture先红：noteCapture经MemoryHost captureMaterials→PrivateData直接publish，Ingress/M06 hooks未收到，canonical embedding为0。双方协调最小Material publication通知port，Ask订阅新发布输出；不改Memory语义、不做查询时历史扫描/backfill。作者报既有A01 16/A04 8/A05 HTTP4+MCP4/A02 24项定向通过，均在途、未附冻结SHA，不能覆盖新缺链。 | 作者生产fixture失败已报；修复后真实intake→发布通知→scoped embedding/检索及双用户/修订删除/重启待验，独立UNRUN |
 | CONFIG-EXT-HINDSIGHT / CONFIG-C02 × EXT-E02 | EXT / CONFIG、MEM | EXT报告新Hindsight实际probe构造与原provider执行构造并存；固定Codex executable/home必须同时进入二者。只合原执行构造一行不能关闭C02或E02。冻结组合后验证生成runtime路径、probe及正常执行、撤权与账号隔离；冲突解决请两owner复核。 | 在途结构依赖；无候选SHA/组合运行证据；独验UNRUN |
 | CONN-C05-SEAM / CONN-C05 × FILE | CONN producer / FILE、MEM consumers | 精确前置`e84b8bb72ac195e047d9a590eec7221b9ffcfdcb`仅`scope/processing.ts` artifacts声明：保留extraction，对!derived+完整coverage+非空blocks以同revision/blockIds补extracted-text，原录音配方版本/fingerprint不变。FILE勿重复实现alias；与origin/status等hunk合并后去重复核。作者报Node24类型及canonical/empty/unsupported/late-forget定向3项、recording12项通过，日志`/tmp/mote-connectors-recording-parity-final-node24.log`；实际被测为abd8c495+当时WIP（含同alias字节），非该单commit或最终组合的独立PASS。 | 精确producer可定位；最终冻结/affected/独验及FILE组合回归UNRUN |
+| MEM-SHARED-SEAMS / MEM × EXEC/ACTION | MEM / EXEC、ACTION | 作者review精准纳入EXEC f416966727bdb182c0fd2921a94a57be43e5a987→本树802b2e53、ACTION ece742f090a9d2502775184b0396e073050e4de9→本树7b299257。仅共享seam；pure conversation parser拆出、mm_batch_artifacts inventory与窄pure allowlist保持生产边界。集成按内容去重，两原owner门禁仍执行，不因Memory定向结果冒领原分支PASS。 | Memory尚未冻；旧78项中发现普通integrate新增原件分组遗漏2例已修待复跑，不能称PASS；parent根/stage/options组合UNRUN |
 
 独立验收准备工件（不代表通过）：领域组v1.1.0，`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/acceptance-checklist-v1.1.json`，SHA256 `9ffd1c49834ca086c55a579b830b65fcb652c6b1b266f6e95701a170625bd1c2`；23主条目+13额外项，独立应用运行全部UNRUN。其Todo回执为owner实跑/验收chat审回执，非独立运行。
 
@@ -221,6 +222,7 @@
 | Files部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 作者已推送/clean；restore提交`980674f6`；67b284为最小Perception只读port供ASK review消费。完整独立image/history与managed MediaAssets仍OPEN。当前ALL6 TS+Android/root scope预检缺Electron/Java环境，Server/Mem0 Node26 ABI147已报PASS；native源码/测试已落盘但UNRUN。 | ASK只消费该精确最小port；FILE其余功能完成后重新冻结、重选检查。当前部分定向与port不能关闭FILE-PERCEPTION或原生验收。 | Q001 WAIT_FEATURE；P009/R004后续窗口排队，非最终READY，无PR/merge |
 | Ask部分core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | clean未push/PR；含fixture-only c94e9e9及精准Material发布seam ac3533c1（cherry b66527d3），不含其父Memory业务。作者报告真实noteCapture→发布通知/上传→M06→向量worker→Context/Ask fresh引用通过，并报A01/A04/A05/A02/shared/scope/consumer定向通过；固定core复跑仍进行中。 | Files最小perception port67b284需验证并接allowQueryImages后再冻结最终SHA。该core不关闭完整FILE-PERCEPTION，也不等于Memory原任务验证。 | Q005 WAIT_DEPENDENCY；完整gate/PR/独验UNRUN |
 | Execution source冻结 `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | 作者source冻结，最终focused25项及Server/Web类型进行中；host parent/lane seam `f416966727bdb182c0fd2921a94a57be43e5a987`为Memory已review前置。Node26 ABI147双SQLite/Java21预检作者PASS。未push/PR。 | 最终dry-run所选server/Web/shared/Android JVM/scope/tooling须完整gate；Memory >2/发布和跨域parent消费者仍需各自精确SHA组合，不以seam review当通过。 | Q009 WAIT_FINAL_FOCUSED_AND_GLOBAL_SLOT；clean输入核验/完整gate/独验待完成 |
+| Extensions候选 `d347b4647aa0c66a42bc3f7adf5129466b16aa16`，base2c78ca8d | 作者clean；报告plugin39/MCP18/Web13/两进程unknown-write2项与类型/i18n通过；含真实canary与SIGKILL生成进程。证据`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-79dc-70b3-8d6c-608e696cb79d/extensions-validation/frozen-candidate.json`及frozen-affected-plan.txt。 | Hindsight两构造runtime与CONFIG精确依赖仍验；shared helper异步时序冲突找owner复核；Android JVM/完整gate/真实模型供应商Docker物理端部署UNRUN。 | Q003 WAIT_GLOBAL_SLOT；未push/PR/独验，不唤醒idle |
 
 ## 跨模块最终冻结旅程
 

@@ -65,7 +65,7 @@
 | DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `73c1115287fe07e1824526861ebc2e8ed3cf39fc` | CANDIDATE；affected/独验UNRUN，待槽 |
 | AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收；D01偏好按账号独立已定 |
 | WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；作者检查进行中，独验UNRUN |
-| EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收 |
+| EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `d347b4647aa0c66a42bc3f7adf5129466b16aa16` | CANDIDATE；clean待Q003完整gate，非模块PASS/独验 |
 | ACTION / ACTION-A01..A04 | [ACTION开发](codex://threads/01a14e8f-7b96-7d00-9b68-d9d30aea97dd) | `codex/parity-actions-20261018` / — | [独立验收](codex://threads/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c) | — | IN_PROGRESS；未冻结/未验收 |
 | LIFE / LIFE-L01..L06 | [LIFE开发](codex://threads/01a14e8f-7dc6-7fb3-a058-cb39df965cb9) | `codex/parity-lifecycle-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收；L06重新登录按原开关继续已定 |
 
@@ -134,7 +134,8 @@
 | R003 / Q008 | CONFIG / 必要Kotlin+模型instrumentation及central/Android/scope-tooling | 待精确候选/输入hash/最终dry-run；本树Gradle JVM+debug/testAPK及headless模型方法，再完整affected | WAIT_CANDIDATE_AND_GLOBAL_SLOT；尚无运行授权 | FILE/LIFE producer依赖另列UNRUN；不得用定向结果跳过完整gate所选步骤 |
 | P009 / R004 | FILE / 后续环境与native消费者 | Electron补当前lock执行文件；既有JAVA_HOME；JVM+FilesCatalogParityInstrumentedTest无窗口 | WAIT_INPUT_AND_GLOBAL_SLOT；未授权运行 | Java现有`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`，SDK`/Users/utopiafar/Library/Android/sdk`；不视为需要新装JDK |
 | Q001 | FILE / 部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 当前计划ALL6 TS+Android/root scope；`/tmp/mote-files-final-check-plan.json` | WAIT_FEATURE；完整Perception/managed MediaAssets未完成，不开完整gate | 扩大预检Electron/Java缺项，SQLite PASS；native消费者UNRUN |
-| Q003 / Q004 / Q006 | EXT / LIFE / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 最终输入重选 |
+| Q004 / Q006 | LIFE / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 最终输入重选 |
+| Q003 | EXT / `d347b4647aa0c66a42bc3f7adf5129466b16aa16` / base2c78ca8d | ALL6 TS+Android，22 checks；frozen-candidate.json/frozen-affected-plan.txt | WAIT_GLOBAL_SLOT；未push/PR/独验 | Node26 ABI147/Java21/SDK/native/Electron作者预检PASS；Android JVM与完整gateUNRUN |
 | Q005 | ASK / core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | 6TS+Android/i18n/tooling/all，22 checks；`/tmp/mote-ask-f2b44331-check-plan.json` | WAIT_DEPENDENCY；Files port67b284需验证，最终allowQueryImages候选未冻 | core定向作者报告通过，非最终独验；完整gate未开 |
 | Q009 | EXEC / `1e9ec7ab253cbb25bd21f14f3aee9ea19bbb96d2`，base2c78ca8d | server/Web+shared test+Android JVM/scope/tooling；`/tmp/mote-execution-affected-plan-final.json` | WAIT_FINAL_FOCUSED_AND_GLOBAL_SLOT；未授权完整gate | Node26 ABI147/Java21与实际SQLite预检作者PASS，末25项/类型回执待报 |
 
@@ -163,6 +164,8 @@
 | G005 | 所有完整affected请求 | Q001 FILE/Q003 EXT/Q004 LIFE/Q005 ASK/Q006 MEM及后续EXEC/ACTION/DESKTOP/CONFIG；最终dry-run+clean SHA齐备，资源/全局槽双重满足 | WAIT_CANDIDATE_OR_SLOT |
 
 已决政策立即适用于活跃owner；未运行验证仍UNRUN。任何新产品分歧仍送PM，政策已答项不再重复提问。
+
+LIFE-L04已由PM明确：恢复原当前完整导出直接响应下载；删除中央永久完整副本/下载历史这一替代旅程，仅保留内部单引擎进度、无内容回执及必要暂存。完成/失败/取消/断流/重启按原清理与重试，不新增latest-only、TTL、次数政策或额外步骤，不操作真实历史副本。控制/最终验收通知排G004。
 
 ## 已确认首启动与账号偏好边界
 
