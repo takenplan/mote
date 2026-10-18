@@ -20,7 +20,8 @@ async function imageSettings(f:Awaited<ReturnType<typeof scopedFilesFixture>>,to
 // Manual-retry fixtures retire a real disabled intake through the public proof
 // route. Enabling images leaves that cancelled intent retired; file automatic
 // alone is not a way to arrange a never-admitted historical image.
-async function retireDisabledIntake(f:Awaited<ReturnType<typeof scopedFilesFixture>>,token:string,id:string){const path='/api/images/'+id;let view:any;for(let i=0;i<500;i++){view=await f.checked(token,path);if(view.jobs.some((job:any)=>job.state==='blocked'))break;await delay(10);}assert.ok(view.jobs.some((job:any)=>job.state==='blocked'),JSON.stringify(view));assert.equal(view.enabled,false);await f.checked(token,path+'/cancel','POST',{proof:view.proof});assert.ok((await f.checked(token,path)).jobs.every((job:any)=>job.state==='cancelled'));}
+async function disabledImageIntake(f:Awaited<ReturnType<typeof scopedFilesFixture>>,token:string,id:string){const path='/api/images/'+id,proof=(await f.checked(token,path)).proof;let view:any;for(let i=0;i<500;i++){view=await f.checked(token,path);assert.equal(view.proof,proof,'disabled intake barrier remains on the current original incarnation');if(view.jobs.some((job:any)=>job.state==='blocked'))break;await delay(10);}assert.ok(view.jobs.some((job:any)=>job.state==='blocked'),JSON.stringify(view));assert.equal(view.enabled,false);return view;}
+async function retireDisabledIntake(f:Awaited<ReturnType<typeof scopedFilesFixture>>,token:string,id:string){const path='/api/images/'+id,view=await disabledImageIntake(f,token,id);await f.checked(token,path+'/cancel','POST',{proof:view.proof});assert.ok((await f.checked(token,path)).jobs.every((job:any)=>job.state==='cancelled'));}
 
 test('original Files image progress uses genuine scoped tasks, explicit retries, cancellation, restart and same-ID A/B',async t=>{
  const f=await scopedFilesFixture(t),calls:string[]=[];let release:()=>void=()=>{},hold=false;

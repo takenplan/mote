@@ -226,7 +226,10 @@ export class ProcessingHost {
   // Transport batches attest reception. A new batch for the same retained
   // incarnation is not another processing intent or a retry of an old grant.
   for(const row of sql.all("SELECT u.input FROM mp_admissions a JOIN user_tasks u ON u.user_id=a.user_id AND u.task_id=a.task_id WHERE a.user_id=$user AND u.user_id=$user AND a.original_id=? AND a.request_key LIKE 'intake:%'",originalRef.slice(9))){const prior=processingInputSchema.parse(JSON.parse(String(row.input)));if((prior.originalGeneration??0)===generation&&prior.attachmentGeneration===attachment)return;}
-  return this.submit(context,originalRef,operationId);
+  // Intake records the current incarnation's intent even while retired I/O is
+  // still settling. The coordinator waits for that physical fact before it can
+  // admit a child; public/manual submissions retain their confirmation guard.
+  return this.submitSync(context,originalRef,operationId,undefined,undefined,true);
  }
  forUser(context:UserContext){this.runtime.authority.assert(context);return Object.freeze({
   testLocal:async(raw:unknown)=>{
