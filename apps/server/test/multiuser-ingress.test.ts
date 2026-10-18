@@ -84,6 +84,44 @@ test('disconnect/restart resumes original parts and ownership; duplicate batches
  const changed=await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'same-key',revision:revision('same-source',Buffer.from('changed'))});assert.equal(changed.statusCode,409);
 });
 
+test('ordinary retry after more than a day replaces only the expired uncommitted transport and retains immutable owner and predecessor checks',async t=>{
+ const f=await fixture(t);for(const token of [f.alice.token,f.bob.token])await f.register(token);
+ const bytes=Buffer.alloc(FILE_PART_BYTES+137,11),a=await f.begin(f.alice.token,bytes),b=await f.begin(f.bob.token,bytes);await f.part(f.alice.token,a.id,bytes.subarray(0,FILE_PART_BYTES));await f.part(f.bob.token,b.id,bytes.subarray(0,FILE_PART_BYTES));
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());const expired=Date.now()-25*3600000;db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(expired,f.a.userId,a.id);
+ const expiredPart=await f.request(f.alice.token,'/api/ingress/uploads/'+a.id+'/parts/1','PUT',{bytes:bytes.subarray(FILE_PART_BYTES).toString('base64'),checksum:bytesHash(bytes.subarray(FILE_PART_BYTES))});assert.equal(expiredPart.statusCode,409);assert.deepEqual(expiredPart.json(),{error:'upload_expired'},'ordinary transport expiry is retryable rather than an immutable revision rejection');
+ await f.restart();
+ assert.equal((await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'same-key',revision:revision('same-source',Buffer.from('Generated conflicting expired revision'))})).statusCode,409);
+ const resumed=await f.begin(f.alice.token,bytes);assert.notEqual(resumed.id,a.id);assert.deepEqual(resumed.parts,[]);assert.equal(resumed.userId,f.a.userId);assert.equal(resumed.sourceId,'same-source');
+ assert.equal((await f.request(f.alice.token,'/api/ingress/uploads/'+a.id+'/commit','POST',{})).statusCode,404,'a late old attempt cannot publish');
+ const ownerRoot=join(f.directory,'originals',identityHash([f.deploymentId,f.a.userId]),'uploads');assert.ok(!readdirSync(ownerRoot).includes(a.id),'expired staging is removed');
+ const other=await f.begin(f.bob.token,bytes);assert.equal(other.id,b.id);assert.equal(other.parts.length,1,'A retry cannot discard B staging under the same source/request/revision');
+ await f.part(f.alice.token,resumed.id,bytes.subarray(0,FILE_PART_BYTES));await f.part(f.alice.token,resumed.id,bytes.subarray(FILE_PART_BYTES),1);const receipt=await f.commit(f.alice.token,resumed.id);assert.equal(receipt.captures.length,1);assert.equal((await f.request(f.alice.token,'/api/captures')).json().items.length,1);
+ const next=await f.begin(f.alice.token,bytes,'stale-predecessor');db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(expired,f.a.userId,next.id);const renewed=await f.begin(f.alice.token,bytes,'stale-predecessor');await f.part(f.alice.token,renewed.id,bytes.subarray(0,FILE_PART_BYTES));await f.part(f.alice.token,renewed.id,bytes.subarray(FILE_PART_BYTES),1);
+ // The same immutable revision remains an idempotent duplicate, while an
+ // actual successor must still name the current predecessor after renewal.
+ assert.equal((await f.commit(f.alice.token,renewed.id)).captures[0].id,receipt.captures[0].id);
+ const successor={...revision('same-source',Buffer.from('Generated successor')),item:{...item('same-external','','next-revision')},previousRevision:null};
+ const begun=await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'successor',revision:successor});assert.equal(begun.statusCode,200,begun.body);db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(expired,f.a.userId,begun.json().id);
+ const attempt=await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'successor',revision:successor});assert.equal(attempt.statusCode,200,attempt.body);await f.part(f.alice.token,attempt.json().id,Buffer.from('Generated successor'));assert.equal((await f.request(f.alice.token,'/api/ingress/uploads/'+attempt.json().id+'/commit','POST',{})).statusCode,409);assert.equal((await f.request(f.alice.token,'/api/captures')).json().items.length,1);
+});
+
+test('lost ACK after transport expiry replays the durable receipt without duplicate capture or renewed upload authority',async t=>{
+ const f=await fixture(t);for(const token of [f.alice.token,f.bob.token])await f.register(token);
+ const bytes=Buffer.from('Generated durable expired ACK'),upload=await f.begin(f.alice.token,bytes);await f.part(f.alice.token,upload.id,bytes);const received=await f.commit(f.alice.token,upload.id),db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());const expired=Date.now()-25*3600000;db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(expired,f.a.userId,upload.id);
+ await f.restart();const replay=await f.begin(f.alice.token,bytes);assert.equal(replay.id,upload.id);assert.deepEqual(replay.receipt,received);assert.equal(db.prepare('SELECT expires FROM ig_uploads WHERE user_id=? AND id=?').get(f.a.userId,upload.id)!.expires,expired);assert.equal((await f.request(f.alice.token,'/api/captures')).json().items.length,1);
+ assert.equal((await f.request(f.alice.token,'/api/ingress/uploads/'+upload.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum:bytesHash(bytes)})).statusCode,409,'receipt replay does not reopen the expired transport');
+ assert.equal((await f.request(f.bob.token,'/api/ingress/uploads/'+upload.id)).statusCode,404);const other=await f.begin(f.bob.token,bytes);assert.notEqual(other.id,upload.id);assert.ok(!other.receipt);
+ assert.equal((await f.request(f.alice.token,'/api/captures/'+received.captures[0].id,'DELETE')).statusCode,200);assert.equal((await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'same-key',revision:revision('same-source',bytes)})).statusCode,404,'a removed durable input cannot be acknowledged or reconstructed by retry');assert.equal((await f.request(f.alice.token,'/api/captures')).json().items.length,0);
+});
+
+test('expired ordinary retries retain source withdrawal, revoked credential and authorization epoch fences',async t=>{
+ const f=await fixture(t);await f.register(f.alice.token);const bytes=Buffer.from('Generated revoked expired upload'),upload=await f.begin(f.alice.token,bytes),db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());db.prepare('UPDATE ig_uploads SET expires=? WHERE user_id=? AND id=?').run(Date.now()-25*3600000,f.a.userId,upload.id);
+ const path='/api/ingress/sources/same-source/uploads',payload={batchId:'same-key',revision:revision('same-source',bytes)};
+ assert.equal((await f.request(f.alice.token,'/api/sources/same-source','PATCH',{enabled:false})).statusCode,200);assert.equal((await f.request(f.alice.token,path,'POST',payload)).statusCode,409);assert.equal((await f.request(f.alice.token,'/api/sources/same-source','PATCH',{enabled:true})).statusCode,200);
+ assert.equal((await f.request(f.alice.token,'/api/auth/logout','POST',{})).statusCode,200);assert.equal((await f.request(f.alice.token,path,'POST',payload)).statusCode,401);
+ const nextPassword='Generated-next-ingress-password';assert.equal((await f.request(f.admin.token,'/api/admin/accounts/'+f.a.userId+'/password','POST',{password:nextPassword})).statusCode,200);const login=await f.request(undefined,'/api/auth/login','POST',{username:'generated-a',password:nextPassword,mode:'client'});assert.equal(login.statusCode,200,login.body);assert.equal((await f.request(login.json().token,path,'POST',payload)).statusCode,409,'a new epoch cannot adopt the old attempt');assert.equal(db.prepare('SELECT id FROM ig_uploads WHERE user_id=?').get(f.a.userId)!.id,upload.id);assert.equal((await f.request(login.json().token,'/api/captures')).json().items.length,0);
+});
+
 test('source/Coding archive originals stay scoped and out of raw data search; restricted plugins cannot widen dependencies',async t=>{
  const f=await fixture(t);for(const token of [f.alice.token,f.bob.token]){await f.register(token,source('coding','archive'));await f.register(token,source('other'));}
  const input={...item('same-external','GENERATED_PRIVATE_CODING_TOOL_BODY'),kind:'message',document:{coding:{version:1,provider:'codex',sessionId:'same-session',projectKey:'same-project',eventId:'same-event',role:'tool_result',part:0,parts:1},timeBasis:'unknown',contentRole:'transcript'}};

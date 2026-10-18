@@ -1,6 +1,6 @@
 import type {Config} from './contracts';
-import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
-import {assertAccountConnection,ingressKey} from './ingress-client';
+import {DESKTOP_PROTOCOL_HEADERS} from './account';
+import {assertAccountConnection} from './ingress-client';
 import {requireConnectionToken} from './login-session';
 import {validateServerUrl} from './config';
 import {readResponseText} from './response-body';
@@ -12,21 +12,6 @@ export async function accountResponse(config:Config,path:string,body?:unknown):P
  return response;
 }
 export async function accountJson(config:Config,path:string,body?:unknown):Promise<any>{return JSON.parse(await readResponseText(await accountResponse(config,path,body),4*1024*1024));}
-/** Walk the real signed server cursor; never apply a local filter after LIMIT. */
-export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,false);}
-/** The original archive presentation observes current declared extraction,
- * while canonical intake/content readers retain their immutable capture API. */
-export async function accountCapturePreviews(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,true);}
-async function capturePages(config:Config,filters:Record<string,string>,browser:boolean):Promise<any[]>{
- const items:any[]=[],seen=new Set<string>();let cursor:string|undefined;
- do{const page=await accountJson(config,(browser?'/api/capture-browser?':'/api/captures?')+new URLSearchParams({deviceId:config.deviceId,...filters,...(browser?{limit:'60'}:{projection:'preview',limit:'200'}),...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
- return items;
-}
-export function accountPagePosition(config:Config,cursor:string|undefined,query:unknown):number{
- if(!cursor)return 0;let value:any;try{value=JSON.parse(Buffer.from(cursor,'base64url').toString());}catch{throw Error('Invalid account page cursor');}
- if(value.account!==accountKey(config)||value.query!==ingressKey(query)||!Number.isSafeInteger(value.offset)||value.offset<0)throw Error('Invalid account page cursor');return value.offset;
-}
-export function accountPageCursor(config:Config,query:unknown,offset:number):string{return Buffer.from(JSON.stringify({account:accountKey(config),query:ingressKey(query),offset})).toString('base64url');}
 export async function accountOriginalDescriptor(config:Config,record:any):Promise<any|undefined>{
  // The intake reader deliberately hides its internal ingress source field.
  // Resolve only actual owned source inventory, then the exact capture binding;

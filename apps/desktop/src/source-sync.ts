@@ -26,7 +26,7 @@ function snapshotMetadataIdentity(raw:ScannedItem):string{
 }
 interface Known { policy?:string; contentHash: string; discoveryHash?: string; revision: string; item: ScannedItem }
 interface RejectedItem { item: SourceItem; status: number }
-interface BatchResult { acks: Record<string, unknown>[]; rejected?: RejectedItem[] }
+interface BatchResult { acks: Record<string, unknown>[]; rejected?: RejectedItem[]; failure?: unknown }
 export interface SnapshotRecovery {captureId:string;externalId:string;revision:string;sha256:string;sizeBytes:number;observedAt:string;recoveryId?:string}
 interface State {
   version: typeof DESKTOP_STORAGE_VERSION;
@@ -218,10 +218,15 @@ export class SourceSync {
         if ('error' in outcome) { if(!failure||failure instanceof UploadSliceYield)failure=outcome.error;continue; }
         const {acks,rejected=[]}=outcome.result;
         const accepted=new Set(acks.map(ack=>itemKey({externalId:String(ack.externalId),revision:String(ack.revision)})));
-        observer?.settle(source,outcome.batch,acks,rejected);
+        if(outcome.result.failure){
+          const settled=new Set([...accepted,...rejected.map(value=>itemKey(value.item))]);
+          observer?.settle(source,outcome.batch.filter(item=>settled.has(itemKey(item))),acks,rejected);
+          observer?.failed(source,outcome.batch.filter(item=>!settled.has(itemKey(item))),outcome.result.failure);
+        }else observer?.settle(source,outcome.batch,acks,rejected);
         const permanent=rejected.filter(value=>[400,409,410,413,422].includes(value.status));
         await this.acknowledge(source,outcome.batch.filter(item=>accepted.has(itemKey(item))),acks,permanent);
         for(const value of rejected)if(!permanent.includes(value)){deferred.add(itemKey(value.item));rejectedStatus??=value.status;}
+        if(outcome.result.failure&&(!failure||failure instanceof UploadSliceYield))failure=outcome.result.failure;
       }
       scheduler.committed(queue,bytes);
       if (failure) throw failure;
@@ -255,9 +260,26 @@ export class SourceSync {
   private async sendBatch(source: SourceDefinition, batch: SourceItem[], request: SourceRequest, signal?: AbortSignal, observer?: SourceUploadObserver): Promise<BatchResult> {
     if(request.account){
       if(batch.some(item=>item.kind==='file'&&(item.localOriginal||item.localOriginalBase64||item.document?.fileIndex))){
-        const acks:Record<string,unknown>[]=[];
-        for(const item of batch){const ack=await this.sendAccountFile(source,item,request,signal);observer?.settle(source,[item],[ack]);acks.push(ack);}
-        return {acks};
+        const acks:Record<string,unknown>[]=[],rejected:RejectedItem[]=[];
+        let failure:unknown;
+        for(const item of batch){
+          try{acks.push(await this.sendAccountFile(source,item,request,signal));}
+          catch(error){
+            const status=(error as {httpStatus?:number})?.httpStatus;
+            if((error as {uploadExpired?:boolean})?.uploadExpired){failure=error;break;}
+            // A source pause shares HTTP409 with an immutable revision conflict.
+            // Confirm the current registration before isolating only this version.
+            if(status===409){
+              try{const current=await request('/api/ingress/sources',source,'POST',signal) as {id?:unknown;enabled?:unknown};if(current?.id!==source.id||current.enabled!==true){failure=error;break;}}
+              catch(confirmationError){failure=confirmationError;break;}
+            }
+            if(Number.isInteger(status)&&status!>=400&&status!<=599&&![401,403,404,426].includes(status!)){rejected.push({item,status:status!});continue;}
+            // Network loss, retired authority and cooperative slicing stop this
+            // attempt, while its earlier validated ACKs still reach the outbox.
+            failure=error;break;
+          }
+        }
+        return {acks,rejected,failure};
       }
       const wire=batch.map(({localOriginal:_,localOriginalBase64:__,snapshotRecovery:___,...item})=>item),batchId='items-'+ingressKey(wire);
       const result=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/items`,{batchId,items:wire},'POST',signal);

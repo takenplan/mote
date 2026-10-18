@@ -6,7 +6,7 @@ import {archiveRead} from './archive-read-set.js';
 import {eraseExportCopies} from './lifecycle-export-retention.js';
 
 export class PrivateDataError extends Error{
-  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired'|'file_forgotten'|'storage_limit'|'capture_deleted',readonly statusCode=400){super(code);}
+  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired'|'file_forgotten'|'storage_limit'|'capture_deleted'|'upload_expired',readonly statusCode=400){super(code);}
 }
 export const missing=()=>new PrivateDataError('not_found',404);
 // Reuse only compiled SQL, never rows, owner bindings or an authorization result.

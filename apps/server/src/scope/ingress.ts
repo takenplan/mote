@@ -216,7 +216,15 @@ export class IngressHost{
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
     if(manifest.sourceId!==sourceId||manifest.item.kind!=='file'||manifest.item.text||binding.retention==='reference'&&manifest.item.layer!=='reference'||binding.retention!=='reference'&&manifest.item.layer==='reference')throw conflict();
     forgetting.allowed(sourceId,manifest.item);declaration(sourceId,input.importDeclaration);const digest=identityHash(input.importDeclaration===undefined?manifest:{manifest,importDeclaration:input.importDeclaration}),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
-    if(previous){if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch||Number(previous.expires)<=Date.now())throw conflict();if(previous.receipt)checkReceipt(JSON.parse(String(previous.receipt)));return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(previous.receipt?{receipt:JSON.parse(String(previous.receipt))}:{})};}
+    if(previous){
+     if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch)throw conflict();
+     const received=previous.receipt?checkReceipt(JSON.parse(String(previous.receipt))):undefined;
+     if(received||Number(previous.expires)>Date.now())return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(received?{receipt:received}:{})};
+     // Expiry closes this transport attempt, not the immutable file revision.
+     // Snapshot recovery grants retain their separate, nonrenewable boundary.
+     if(sql.get('SELECT upload_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',String(previous.id)))throw conflict();
+     originals.cleanUpload(String(previous.id));sql.run('DELETE FROM ig_uploads WHERE user_id=$user AND id=?',String(previous.id));
+    }
     const id=randomUUID();sql.run('INSERT INTO ig_uploads VALUES($user,?,?,?,?,?,?,?,NULL)',id,sourceId,input.batchId,digest,JSON.stringify(manifest),context.authorizationEpoch,Date.now()+86400000);
     if(input.importDeclaration)sql.run('INSERT INTO ig_upload_imports VALUES($user,?,?)',id,JSON.stringify(input.importDeclaration));return {id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[]};
    }),
@@ -276,7 +284,7 @@ export class IngressHost{
     const result=receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));afterWrite?.(result);for(const [index,ack]of result.captures.entries()){const format=formats?.[index]??inputs?.[index]?.format??(inputs?.[index]||retained?'file':undefined);if(format==='file'||format==='recording-audio-backup'||format?.startsWith('processor:'))sql.run('INSERT OR IGNORE INTO ig_file_revisions VALUES($user,?)',ack.id);const id=inputs?.[index]?.processingProfileId;if(id&&ack.original&&!ack.duplicate)bindProfile(ack.original.ref,id);}return result;
    },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index]||retained)?[[ack.original.ref,formats?.[index]??inputs?.[index]?.format??'file']]:[])));
   }
-  function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));forgetting.allowed(String(row.source_id),fileRevisionSchema.parse(JSON.parse(String(row.manifest))).item);if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
+  function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));forgetting.allowed(String(row.source_id),fileRevisionSchema.parse(JSON.parse(String(row.manifest))).item);if(row.authorization_epoch!==context.authorizationEpoch)throw conflict();if(Number(row.expires)<=Date.now()){if(!sql.get('SELECT upload_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',id))throw new PrivateDataError('upload_expired',409);throw conflict();}return row;}
   return Object.freeze(service);
  }
 }

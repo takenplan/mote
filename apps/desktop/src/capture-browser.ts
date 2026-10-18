@@ -7,9 +7,8 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
-import {accountCapturePreviews,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
-import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
-import {ingressKey} from './ingress-client';
+import {accountResponse,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
+import {DESKTOP_PROTOCOL_HEADERS} from './account';
 
 export type CaptureLocation = 'local' | 'central';
 export interface BrowseRequest { source?: 'screen'|'ui_page'; location: CaptureLocation; day: string; cursor?: string; grouping?: 'sessions' | 'records'; sessionId?: string }
@@ -44,6 +43,7 @@ function preview(event: Partial<CaptureEvent> & { hasImage?: boolean; textPrevie
 }
 async function request(config: Config, path: string): Promise<Response> {
   if (!connectionToken(config) || !config.serverUrl) throw new Error(moteText("请先连接中央节点；本机记录仍可查看"));
+  if (config.account) return accountResponse(config,path);
   const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { ...DESKTOP_PROTOCOL_HEADERS,'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
@@ -74,16 +74,6 @@ export async function browseCaptures(queue: Pick<DurableQueue,'sessionSamples'|'
   if (input.cursor !== undefined && (typeof input.cursor !== 'string' || input.cursor.length > 2048)) throw new Error(moteText("分页参数无效"));
   if (input.grouping !== undefined && !['sessions','records'].includes(input.grouping)) throw new Error(moteText("分组方式无效"));
   if (input.sessionId) validId(input.sessionId);
-  if(config.account&&input.location==='central'){
-    const query=ingressKey({range,source,grouping:input.grouping,sessionId:input.sessionId});let cursor:string|undefined;
-    if(input.cursor){let value:any;try{value=JSON.parse(Buffer.from(input.cursor,'base64url').toString());}catch{throw Error('Invalid account page cursor');}if(value.account!==accountKey(config)||value.query!==query||typeof value.cursor!=='string')throw Error('Invalid account page cursor');cursor=value.cursor;}
-    const rows=await accountCapturePreviews(config,{...range,source}),records=new Map(rows.map(row=>[row.id,{event:row,blobHash:row.hasImage?row.id:undefined,blobBytes:0,attempts:0,nextAttemptAt:0} as QueueRecord]));
-    // Reuse the original local/session presentation algorithms with a read-only
-    // projection of actual authorized server pages; no second queue is created.
-    const projection={sessionSamples:async()=>rows.map(row=>({id:row.id,deviceId:row.deviceId,appId:row.appId,appName:row.appName,capturedAt:row.capturedAt,hasImage:Boolean(row.hasImage)})),recordForBrowser:(id:string)=>records.get(id),pageForBrowser:async(_after:string,_before:string,offset:number,limit:number)=>({records:[...records.values()].slice(offset,offset+limit),total:records.size})};
-    const page=await browseCaptures(projection,config,{...input,location:'local',cursor});
-    return {...page,...(page.nextCursor?{nextCursor:Buffer.from(JSON.stringify({account:accountKey(config),query,cursor:page.nextCursor})).toString('base64url')}:{})};
-  }
   if (input.grouping === 'sessions' && source === 'screen') {
     if (input.location === 'central') {
       const params = new URLSearchParams({...range,deviceId:config.deviceId,limit:String(PAGE_SIZE),...(input.cursor?{cursor:input.cursor}:{}),...(input.sessionId?{sessionId:input.sessionId}:{})});
