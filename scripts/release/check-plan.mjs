@@ -93,7 +93,7 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
   // Emitting tsc builds already check exactly the workspace's tsconfig. Avoid
   // running tsc --noEmit a second time against the same unchanged inputs.
   for (const name of selected) if (!built.has(name)) npm(`typecheck:${name}`, 'typecheck', ['typecheck', '-w', name]);
-  if (selection.all) node('typecheck:scripts', 'typecheck', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.scripts.json']);
+  if (selection.all || selection.rootTests?.includes('scripts-types')) node('typecheck:scripts', 'typecheck', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.scripts.json']);
 
   const tested = new Set(selected);
   if (applications && byName.has('@mote/shared')) tested.add('@mote/shared');
@@ -107,9 +107,15 @@ export function checkPlan(selection, releaseTests, { directory = process.cwd(), 
     } else npm(`test:${name}`, 'test', ['test', '-w', name]);
   }
   if (late.length) node('release-integration', 'integration', ['--test', ...late]);
+  if (selection.all || selection.rootTests?.includes('backup')) {
+    node('root-tests', 'integration', ['--test',
+      ...(selection.all ? ['scripts/media-workers.test.mjs'] : []), 'scripts/security-tests.mjs',
+      ...(selection.all ? ['scripts/reset-mvp-vault.test.mjs', 'scripts/journey-network-proxy.test.mjs'] : [])]);
+    // Keep the existing root test batch unchanged; the driver runs update/rollback
+    // afterward rather than adding another concurrently eligible test file.
+    node('backup-update-tests', 'integration', ['--test', 'scripts/update-tests.mjs']);
+  }
   if (selection.all) {
-    node('root-tests', 'integration', ['--test', 'scripts/media-workers.test.mjs', 'scripts/security-tests.mjs',
-      'scripts/reset-mvp-vault.test.mjs', 'scripts/journey-network-proxy.test.mjs']);
     node('client-tests', 'integration', ['--import', 'tsx', '--test', 'scripts/client.test.ts']);
   }
   if (server || selection.all) node('central-runner', 'integration', ['scripts/test-central-runner.mjs']);
