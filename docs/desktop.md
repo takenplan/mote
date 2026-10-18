@@ -26,15 +26,17 @@ npm run start -w @mote/desktop
 npm run package -w @mote/desktop
 ```
 
-当前 DEV 包用 `MOTE_MAC_DEVELOPMENT=1 node scripts/release/mac-package.mjs` 生成；文件名按 `apps/desktop/package.json` 版本和当前架构生成，位于 `artifacts/release/`。普通 `npm run package -w @mote/desktop` 仍可生成本地 App。默认 ad-hoc 签名；Developer ID 与公证需配置 Apple 凭据，不能把本机构建当作已公证。当前公开发布只有 DEV ZIP，见 [发布流程](releasing.md)。
+当前 DEV 包用 `MOTE_BUILD_PROFILE=dev node scripts/release/mac-package.mjs` 生成；文件名按 `apps/desktop/package.json` 版本和当前架构生成，位于 `artifacts/release/`。普通 `npm run package -w @mote/desktop` 仍可生成本地 App。默认 ad-hoc 签名；Developer ID 与公证需配置 Apple 凭据，不能把本机构建当作已公证。Beta / 正式 Tag 使用 `MOTE_BUILD_PROFILE=prod` 构建正式身份 ZIP；Dev 从 Actions 下载按提交标识的 Artifact，见 [发布流程](releasing.md)。
 
 Windows/Linux 可编译 TypeScript、运行界面和队列逻辑，但采集按钮被禁用。MVP 尚未接入其可靠前台/可见窗口身份与 OCR，不能以无过滤截图代替。
 
 ## 当前更新与历史签名更新机制
 
-当前 DEV 版本从 GitHub Releases 手动下载覆盖安装，保留包外资料目录。签名清单与自更新事务实现仍在代码中，首次验收记录见下文历史 0.5.0 段落，但当前 DEV 发布不提供 `mote-release.json`，不能按下文假定能完成在线自更新。
+Dev 版本从对应 Actions workflow 按提交下载 Artifact；Beta / 正式版从对应组件 GitHub Release 下载 Prod ZIP。手动覆盖同身份 App，保留包外资料目录。签名清单与自更新事务实现仍在代码中，首次验收记录见下文历史 0.5.0 段落，但当前发布不提供 `mote-release.json`，不能按下文假定能完成在线自更新。
 
-原生采集窗口提供「应用更新」：选择稳定 / 预览渠道，点击「检查更新」，再下载、校验，最后「安装并重启」。只手动发起检查，不上传中央令牌、截图、笔记或路径。默认只信任 GitHub `utopiafar/mote` 的签名发布。首次提供该能力的版本为 0.5.0，旧版需先手动安装；没有可信发布清单时会显示暂不可用，不能把旧的普通 ZIP 当成应用内更新。
+Prod 的保留签名更新器提供「应用更新」：选择稳定 / 预览渠道，点击「检查更新」，再下载、校验，最后「安装并重启」。只手动发起检查，不上传中央令牌、截图、笔记或路径。默认只信任 GitHub `utopiafar/mote` 的签名发布。首次提供该能力的版本为 0.5.0，旧版需先手动安装；没有可信发布清单时会显示暂不可用，不能把旧的普通 ZIP 当成应用内更新。
+
+Dev build 的更新页隐藏签名更新控件，仅提供按提交查看 Actions Artifact 的入口；正式 build 选择 dev Profile 只改变本机凭据和诊断策略，不改变其 Prod 安装身份与更新器。
 
 App 内置发布公钥，使用 RSA-3072 / SHA-256 验证 `mote-release.json` 原始 payload 字节；清单绑定渠道、版本、仓库、架构、Bundle ID、安装包大小与 SHA-256。下载临时文件校验成功后才转为完整包。解压前拒绝路径穿越、跨目录/循环符号链接、不支持的 ZIP 格式和过大展开体积；解压后再次核验 ZIP 哈希，随后验证应用签名、版本、架构以及文件树摘要。安装前和旧进程退出后都重新检查文件树，校验后被篡改或被重新 ad-hoc 签名的包仍被拒绝。更新缓存限于一个下载批次，取消后重新下载；使用独立的更新缓存。
 
@@ -58,22 +60,24 @@ npm run test -w @mote/desktop -- updater update-archive update-install
 
 ## 环境隔离与启动 profile
 
-不设置 `MOTE_PROFILE` / `--profile` 时使用 **default**，继续使用原 Electron `userData` 路径。新安装创建格式 3；该路径存在旧格式数据时明确拒绝启动，保留原文件，要求先退出、备份并重置，不能通过改名 profile 隐藏旧数据。显式 `--profile=legacy` 已拒绝。首次默认节点为 47832，当前格式已有设置优先。开发命令 `npm run desktop:dev` 使用独立 dev；直接工作区 `npm run dev -w @mote/desktop` 也显式选 dev。
+正式 build 不设置 `MOTE_PROFILE` / `--profile` 时使用 **default**，继续使用原 Electron `userData` 路径。新安装创建格式 4；该路径存在旧格式数据时明确拒绝启动，保留原文件，要求先退出、备份并重置，不能通过改名 profile 隐藏旧数据。显式 `--profile=legacy` 已拒绝。正式 build 首次默认节点为 47832，当前格式已有设置优先。Dev build 无参数启动默认进入 dev，独立 App 名称与 Bundle ID 保证即使显式选择 prod/default 也不会复用正式 App 的数据根目录。开发命令 `npm run desktop:dev` 使用独立 dev；直接工作区 `npm run dev -w @mote/desktop` 也显式选 dev。
 
 命名 profile 使用 `<原 userData>-profiles/<短名>`，在 Electron 实例锁和 session 创建之前设置；dev 默认端口 47842，test 为 47852，prod 为 47832，其他命名环境为 47842。短名仅接受 1–32 个小写字母、数字、下划线和连字符。可同时运行不同 profile，同名进程只能有一个。窗口顶部、标题和菜单栏显示当前 profile，界面显示实际数据目录。
 
 ```sh
 # 由统一启动器读取选定环境，注入匹配的节点与令牌：
 node scripts/mote.mjs exec --profile dev -- npm run start -w @mote/desktop
-# 默认 profile 使用原 userData 路径（只接受当前格式 3）：
+# 默认 profile 使用原 userData 路径（只接受当前格式 4）：
 npm run start -w @mote/desktop -- --profile=default
 # 打包应用可以指定环境，不需要浏览器：
 open -n "apps/desktop/release/mac-arm64/Mote Collector.app" --args --profile=dev
 ```
 
-`--profile` 优先于 `MOTE_PROFILE`。命名环境仅在 `MOTE_PROFILE` 精确匹配时才接受启动器注入的 `MOTE_URL` / `MOTE_TOKEN`；缺 profile 的 ambient 节点/令牌或切换 CLI profile 后遗留的凭据均不继承。它们只用于新环境首次配置，已有节点和已加密凭据始终成对保留。统一启动器从选定 `mote.yaml` 派生连接信息，`MOTE_CONFIG_FILE` 选择中央文件；采集器的本机采集、隐私与队列设置仍独立保存，不并入中央 YAML，也不另行寻找 `.env`。dev/test 等非 default、非 prod 环境的自动配置拒绝回环 47832；确需连接另一节点，用户仍可在原生设置中显式填写地址与新令牌。
+`--profile` 优先于 `MOTE_PROFILE`。命名环境仅在 `MOTE_PROFILE` 精确匹配时才接受启动器注入的 `MOTE_URL` / `MOTE_TOKEN`；缺 profile 的 ambient 节点/令牌或切换 CLI profile 后遗留的凭据均不继承。它们只用于新环境首次配置，已有节点和同存储方式的凭据始终成对保留。统一启动器从选定 `mote.yaml` 派生连接信息，`MOTE_CONFIG_FILE` 选择中央文件；采集器的本机采集、隐私与队列设置仍独立保存，不并入中央 YAML，也不另行寻找 `.env`。dev/test 等非 default、非 prod 环境的自动配置拒绝回环 47832；确需连接另一节点，用户仍可在原生设置中显式填写地址与新令牌。
 
-每个 profile 独立保存设备 UUID、Keychain 加密令牌、原生草稿、队列、模型和数值/事件诊断。浏览器中央页面使用浏览器自己的登录会话。新环境不自动复制模型或用户资料，可手动导入公开模型。支持包不跨环境读取。普通启动不会自动把 dev 变成日常环境；Finder 无参数启动进入 default。
+每个 profile 独立保存设备 UUID、凭据、原生草稿、队列、模型和数值/事件诊断。Dev build 或显式 `--profile=dev` 在权限为 0600 的 `config.json` 中原子保存 `developmentToken`，配对恢复使用 0600 的 `connection-pending.json`；不查询、加密或解密系统 Keychain。Prod 继续使用系统加密令牌与 `connection-pending.enc`。会话登录不持久化 token，退出登录删除持久凭据；上述文件不进入支持包。Lark / DingTalk CLI 等第三方组件不受此规则影响。浏览器中央页面使用浏览器自己的登录会话。新环境不自动复制模型或用户资料，可手动导入公开模型。支持包不跨环境读取。正式 App 的 Finder 无参数启动进入 default；Dev App 无参数启动进入 dev。
+
+Dev 文件凭据与旧加密凭据不互读、不自动迁移；保留原目录，创建新的空 Dev 目录并重新登录。切换存储方式遇到旧字段或旧配对检查点时明确拒绝，原文件不修改；不能把旧密文直接改名为 JSON。正式 build 仅精确名称 `dev` 选择文件凭据；备份并移开旧 dev 目录后重建同名环境，`dev-new` 等自定义名称仍使用系统存储。独立 Dev build 可另选空的命名目录。
 
 default 以外的 profile 不注册系统默认登录项，避免 macOS 丢失启动参数后进入 default；界面给出提示。需使用明确带 profile 的启动命令。default 可使用登录项开关。该限制依据 [Electron 登录项文档](https://www.electronjs.org/docs/latest/api/app#appsetloginitemsettingssettings)：`args` 选项仅支持 Windows。本轮没有更改本机真实登录项。
 
@@ -96,7 +100,7 @@ default 以外的 profile 不注册系统默认登录项，避免 macOS 丢失�
 
 邀请仅接受固定 `deploymentId`、`userId`、origin、`purpose:device` 的 v2 格式；旧 v1 / owner 邀请拒绝。预览显示完整中央 origin（协议、域名、端口）、账号/实例 ID 与到期时间。核对后勾选确认，再点击「确认连接并安全保存」。这是原邀请生成同意的消费过程，不增加浏览器授权确认。远程只允许 HTTPS，HTTP 只允许 localhost / 127.0.0.1 / ::1；不接受 URL 用户名、密码、路径、查询参数或重定向。单次网络步骤有 15 秒超时。已有设备须在中央生成邀请时明确选择原设备 ID，不能用新设备邀请接管。
 
-确认后先用现有系统加密存储将邀请、固定设备元数据与 PKCE verifier 原子写入本机 `connection-pending.enc`，然后发送 redeem，并沿用 M01 poll / self / ACK。恢复文件逐步保存 request ID 与 grant，不进入支持包或诊断。fresh self 的 `account.credentialId`、账号/实例、设备 ID、有限期限、Wire2 / Ingress3 与设备能力必须和邀请、poll grant 精确对应；self 没有 `credential.id` 或 purpose 字段。purpose 从 poll 验证，self 再验证设备绑定和能力。ACK 前后各做 fresh self 后才发布配置与账号队列；未验证凭据不会替换旧连接。
+确认后先按 Profile 将邀请、固定设备元数据与 PKCE verifier 原子写入本机检查点（Dev 为私有 `connection-pending.json`，其它为系统加密的 `connection-pending.enc`），然后发送 redeem，并沿用 M01 poll / self / ACK。恢复文件逐步保存 request ID 与 grant，不进入支持包或诊断。fresh self 的 `account.credentialId`、账号/实例、设备 ID、有限期限、Wire2 / Ingress3 与设备能力必须和邀请、poll grant 精确对应；self 没有 `credential.id` 或 purpose 字段。purpose 从 poll 验证，self 再验证设备绑定和能力。ACK 前后各做 fresh self 后才发布配置与账号队列；未验证凭据不会替换旧连接。
 
 丢 redeem、poll、ACK 响应或退出后，可回到连接页点击「恢复中断的连接确认」，继续同一持久化 claim；应用重启不会自行切换账号。已保存 grant 不再 poll 已消耗请求。Central 重启或原请求过期后的 ACK `410 login_expired` 只有在 fresh self 仍精确有效时才能退休恢复记录，不能当作收到 ACK。撤销、禁用或身份不符时保留原配置并报告失败；新邀请可替换失效检查点。恢复只允许原连接或已经提交该精确 grant 的连接；切换账号、同地址换实例、旧页面和迟到网络回调不能借用新账号发布。
 
@@ -104,7 +108,7 @@ default 以外的 profile 不注册系统默认登录项，避免 macOS 丢失�
 
 可复现当前配对验收：`node --import tsx apps/desktop/scripts/multiuser-pairing-runner.mjs`（先构建 Desktop）。它运行真实 Electron main / preload / renderer 和生产 host，使用生成账号/资料，只有系统凭据、原生二维码/文件选择与网络 I/O 使用替身。它不验证真实 Keychain、Swift Vision、摄像头、公网 HTTPS 或模型。准确结果见 [Desktop v2 配对验收](validation/multiuser-desktop-pairing.md)。
 
-「本机统计」展示队列条目/容量/占比、采样间隔、图像尺寸和质量。开启「开发者诊断与资源优化」后，还显示累计保存/过滤/失败、文字规则识别耗时和上传请求体估算。CPU/RSS 仅为被采样主进程数值，电量为整台设备值；它们不等于整个 App 的功耗，上传请求体也不等于中央磁盘占用。诊断默认关闭，统计不读取更多个人内容。
+「本机统计」展示队列条目/容量/占比、采样间隔、图像尺寸和质量。开启「开发者诊断与资源优化」后，还显示累计保存/过滤/失败、文字规则识别耗时和上传请求体估算。CPU/RSS 仅为被采样主进程数值，电量为整台设备值；它们不等于整个 App 的功耗，上传请求体也不等于中央磁盘占用。Dev 新 Profile 默认开启诊断，其它默认关闭；已有显式选择保留，统计不读取更多个人内容。
 
 历史 0.6.0 验证使用生成数据、临时 profile 和独立真实中央进程，未访问个人屏幕、日历或真实 Keychain 项。桌面 109 项回归与 Swift / TypeScript 构建通过；原生界面 fixture 验证 JSON/URI/文件/二维码预览、确认、挂起时禁止假取消、失败保留设置、管理员令牌隔离、跨节点待传阻止及同源重新授权恢复。真实中央 fixture 验证设备绑定、权限隔离、撤销后笔记与来源队列重新授权恢复、原版本与正文保持及 ACK。可复现：
 

@@ -1,5 +1,10 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。": "DEV builds are stored by commit in GitHub Actions. Download the Artifact from the matching run and install it manually.",
+  "Dev 构建产物按 commit 保存在 GitHub Actions；请选择对应运行的 Artifact 下载并手动安装。": "Dev builds are stored in GitHub Actions by commit. Download the Artifact from the matching run and install it manually.",
+  "查看 Dev 构建产物": "View Dev builds",
+  "开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。": "Development uses a private local JSON file for credentials instead of system secret storage.",
+  "凭据存储方式与当前 Profile 不匹配；请保留原目录并使用新的 Profile 重新登录。": "Credential storage does not match this profile. Preserve the existing directory and sign in with a new profile.",
   "版本范围": "Version range",
   "实例运行设置与索引维护": "Instance runtime settings and index maintenance",
   "仅管理员可修改实例参数；此处不提供其他账号的资料或详细过程。": "Only administrators can change instance settings. Other accounts’ records and detailed traces are not available here.",

@@ -13,9 +13,9 @@
 
 ## 当前本机格式（2026-10-18）
 
-本机设置、队列与内容采用格式 4，中央为 epoch 5 多用户基线。新安装写入当前格式和明确的账号/节点归属；格式 3 或更早数据、缺少当前标记或格式不匹配时明确拒绝，提示“本机数据格式已退役，请清除应用存储后重新设置。”MVP 不自动迁移、补写旧配置或删除旧数据。清除应用存储会丢失尚未归档的本机内容，须先保留所需旧数据，并由用户明确操作；当前格式 4 的正常同代更新无需清空。跨代个人导出不能直接导入当前 version 3 便携归档，见[升级边界](updating.md)。
+本机设置、队列与内容采用格式 4，中央为 epoch 5 多用户基线。新安装写入当前格式和明确的账号/节点归属；格式 3 或更早数据、缺少当前标记或格式不匹配时明确拒绝，提示“本机数据格式已退役，请清除应用存储后重新设置。”MVP 不自动迁移、补写旧配置或删除旧数据。清除应用存储会丢失尚未归档的本机内容，须先保留所需旧数据，并由用户明确操作；当前格式 4 的正常同代更新无需清空；本次旧 Dev 加密凭据切换为文件密钥是明确例外，按下文“开发环境与日常版本隔离”处理。跨代个人导出不能直接导入当前 version 3 便携归档，见[升级边界](updating.md)。
 
-截图、事件、缩略图、来源、文件暂存、本机随手记草稿、扫描报告和待决定区使用原始 JSON/图片/文件字节，没有可选内容加密或批量解密工具。连接令牌、连接恢复文件、中央私有草稿和操作 ledger 仍单独使用 Keystore `SecretBox`；文件扩展名不改变这两类存储的边界。本机延迟 OCR 与 OCR 补上传已移除；本机原生 OCR 仍可用于当前隐私文字规则，完整截图 OCR 由中央生成。
+截图、事件、缩略图、来源、文件暂存、本机随手记草稿、扫描报告和待决定区使用原始 JSON/图片/文件字节，没有可选内容加密或批量解密工具。Prod / Test 的连接令牌、连接恢复文件、中央私有草稿和操作 ledger 使用 Keystore `SecretBox`；Dev 的 token 使用同一原子 MODE_PRIVATE 设置快照中的 JSON，SecretBox 的随机 AES 密钥保存到应用私有 JSON，恢复状态、私有草稿和 ledger 继续使用原有 AES-GCM 加密与认证，不初始化或访问 Keystore。文件扩展名不改变这两类存储的边界。本机延迟 OCR 与 OCR 补上传已移除；本机原生 OCR 仍可用于当前隐私文字规则，完整截图 OCR 由中央生成。
 
 ### 历史格式 3 清理验证（2026-10-04）
 
@@ -47,26 +47,28 @@ sdk.dir=/absolute/path/to/Android/sdk
 
 ```sh
 cd apps/android
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDevelopment :app:testDebugUnitTest :app:lintDevelopment
+adb install -r app/build/outputs/apk/development/app-development.apk
 ```
 
-APK 位置：`apps/android/app/build/outputs/apk/debug/app-debug.apk`。Debug APK 可直接侧载；release 需注入签名配置，覆盖现有安装必须保持同一证书，详见下方更新说明。中国大陆小米设备不依赖 Google Play 下载 OCR 模型：中英 OCR 模型随 APK 打包，但仍需实机验证设备上的 ML Kit 运行兼容性。
+上述 Dev APK 位于 `apps/android/app/build/outputs/apk/development/app-development.apk`，可直接侧载。`assembleDebug` 仅生成隔离 Test 包，位于 `apps/android/app/build/outputs/apk/debug/app-debug.apk`，不作日常安装；release 需注入签名配置，覆盖现有安装必须保持同一证书，详见下方更新说明。中国大陆小米设备不依赖 Google Play 下载 OCR 模型：中英 OCR 模型随 APK 打包，但仍需实机验证设备上的 ML Kit 运行兼容性。
 
 ## 开发环境与日常版本隔离
 
-日常 `debug` / `release` 使用 `dev.mote.collector` 包名；旧应用数据须按上面的格式 4 边界明确处理。`development` 构建类型名称为 **Mote Dev**，包名 `dev.mote.collector.dev`，可与日常版本同时安装。Android UID、Keystore、设备 ID、配置、草稿、队列、WorkManager 数据库、诊断和模型目录均由系统按应用隔离。Dev 初始没有账号凭据、草稿或模型；不能读取日常采集权限与数据，各权限需单独启用。
+Dev 文件凭据使用独立格式标记 1；旧 Dev 加密凭据、恢复文件、私有草稿和 ledger 不自动读取或转换。切换前保留旧安装及备份；首次采用新 Dev 格式须显式清除旧 Dev 应用存储再重新登录，不能清理日常包来代替。未上传资料会随清理丢失，先用旧程序处理或保留。Prod / Test 继续使用原有格式与 Keystore。fixture 变体均为 Test、独立包名且默认无中央地址。
+
+`release` 使用 Prod Profile 和 `dev.mote.collector` 包名；`debug` 仅用于 Test，包名为 `dev.mote.collector.test`、版本后缀 `-test`；旧应用数据须按上面的格式 4 边界明确处理。`development` 构建类型名称为 **Mote Dev**，包名 `dev.mote.collector.dev`，可与日常版本同时安装。Android UID、Keystore、设备 ID、配置、草稿、队列、WorkManager 数据库、诊断和模型目录均由系统按应用隔离。Dev 初始没有账号凭据、草稿或模型；不能读取日常采集权限与数据，各权限需单独启用。
 
 ```sh
 apps/android/gradlew -p apps/android :app:assembleDevelopment
 adb install -r apps/android/app/build/outputs/apk/development/app-development.apk
 ```
 
-Dev 默认节点 `http://127.0.0.1:47842`，本机调试仍需按当前账号登录或确认账号绑定的设备邀请。模拟器使用 `adb reverse tcp:47842 tcp:47842`；真机仍需填写可达的节点地址。日常版本保持原配置、首次地址为空。“设置 → 关于与更新 → 开发者选项”显示环境、包名与实际 `noBackupFilesDir`，方便判断正在操作哪个版本。不要用卸载或清除日常数据代替切换环境。
+Dev 默认节点 `http://127.0.0.1:47842`，本机调试仍需按当前账号登录或确认账号绑定的设备邀请。模拟器使用 `adb reverse tcp:47842 tcp:47842`；真机仍需填写可达的节点地址。日常版本保持原配置、首次地址为空。Dev 的“开发者选项”显示环境、包名与实际 `noBackupFilesDir`，默认开启数值诊断与详细运行事件。Prod 在既有“高级与维护”中保留“诊断与支持”，不显示开发者入口或调试 HTTP；本机图片批量去重保留在本机存储页。不要用卸载或清除日常数据代替切换环境。
 
 ## 当前更新与签名兼容
 
-当前公开发布只有 Android DEV APK，使用 GitHub 手动下载并同包覆盖安装。下文签名清单下载器属于保留的历史实现；当前 DEV 发布没有 `mote-release.json`，不使用该自动更新通道。
+Dev APK 从对应 Actions workflow 按提交下载 Artifact；Beta / 正式 Tag 发布 Prod APK，使用 GitHub Release 手动下载并同包覆盖安装。下文签名清单下载器属于保留实现；当前发布没有 `mote-release.json`，不使用该自动更新通道。
 
 从“设置 → 关于与更新”打开“应用更新”，保存发布仓库和渠道后检查。默认仓库 `utopiafar/mote`；稳定版 `stable` 查询正式发布，预览版 `preview` 查询预发布。检查与下载由用户发起，不会自动安装；下载默认等待非计费 Wi-Fi，可自行关闭这一下载约束。APK 下载由独立 WorkManager 任务执行，取消或中断保留断点，重新打开页面可以继续；后台时机仍由 Android 调度。
 
@@ -189,7 +191,7 @@ Android WorkManager 是可延期后台任务，15 分钟周期是最小周期，
 
 ## 数据、安全与可靠性
 
-- 应用私有 `noBackupFilesDir/queue`，格式 4 内容原样保存，凭据及账号私有中央草稿/操作 ledger 单独使用 Android Keystore SecretBox。关闭系统备份和设备迁移。卸载/清除应用数据会销毁未上传内容，不会自动恢复密钥。
+- 应用私有 `noBackupFilesDir/queue`，格式 4 内容原样保存，Prod / Test 的凭据及账号私有中央草稿/操作 ledger 使用 Android Keystore SecretBox；Dev 改用应用私有 JSON 凭据与文件 AES 密钥，私有正文仍加密。关闭系统备份和设备迁移。卸载/清除应用数据会销毁未上传内容，不会自动恢复密钥。
 - 图片按 SHA-256 内容寻址，同图多次观察共享一个 blob；每次观察仍保留单独事件与时间。JSON 元数据原样保存，先写临时文件并 fsync，再原子重命名；启动时只回收不被有效事件引用的临时/孤儿 blob。损坏事件报错，不默删。
 - 采样间隔默认 30 秒。持续显示且同一应用的连续采样才计入间隔，首次或应用切换计 0，最多计一个采样间隔；这不是用户注意力或精确前台使用时长。多设备的时间可重叠。
 - JPEG 缩放/质量、本机 blob 去重、容量上限降低空间成本。达到上限暂停，不覆盖最旧未确认数据。OCR 文本最大 100,000 字符。
@@ -208,7 +210,7 @@ Android WorkManager 是可延期后台任务，15 分钟周期是最小周期，
 
 “采集与存储”提供图片队列保存位置，支持应用内部空间和系统枚举的应用专用本机／存储卡空间，显示位置与容量。更改时复制并校验当前格式 4 记录和图片，外部介质缺失时报错暂停，不改为空队列。中央已归档图片不随客户端目录设置迁移。参见 [设置与图片位置](client-settings-and-storage.md)。
 
-开发者诊断默认关闭，采样间隔 15–3600 秒、默认 60 秒，在界面或采集服务运行时记录，最多保留 1440 条。内容为整机电量/充电状态、可用时的 chargeCounter、整机电量变化、队列/模型/诊断占用、入队/拦截/失败累计、最近推理/OCR 耗时、已确认上传 JSON 载荷字节。整机电量变化不能归因于 Mote。原生“导出数值诊断 JSON”使用系统保存文件选择器；不包含截图、OCR、笔记、token、prompt、模型reason、设备ID。关闭后停止新增采样，不为诊断单独拉活后台。
+Dev 新设置默认开启开发者诊断，Prod / Test 默认关闭；已有显式选择保持。采样间隔 15–3600 秒、默认 60 秒，在界面或采集服务运行时记录，最多保留 1440 条。内容为整机电量/充电状态、可用时的 chargeCounter、整机电量变化、队列/模型/诊断占用、入队/拦截/失败累计、最近推理/OCR 耗时、已确认上传 JSON 载荷字节。整机电量变化不能归因于 Mote。原生“导出数值诊断 JSON”使用系统保存文件选择器；不包含截图、OCR、笔记、token、prompt、模型reason、设备ID。关闭后停止新增采样，不为诊断单独拉活后台。
 
 诊断开关同时控制最多 500 条固定事件，阶段包括配置、模型、OCR、隐私、队列、上传、心跳、随手记和来源同步；只含时间、固定错误类别、可选耗时及 HTTP 状态。分类依据异常类型/协议状态，不保存原始异常消息。关闭后停止新增，已记内容保留。日志损坏会重新开始诊断，但不会删改采集队列。
 

@@ -61,10 +61,13 @@ async function host(label) {
   return value;
 }
 
-async function launch(initialHost, profile = join(directory, 'profile-' + (++fixtureNumber))) {
+async function launch(initialHost, profile = join(directory, 'profile-' + (++fixtureNumber)), developmentStorage = '') {
+  const profileRoot = profile;
   const running = spawn(electron, [resolve('apps/desktop/scripts/multiuser-pairing-native.cjs'), profile], {
-    cwd: process.cwd(), env: {...process.env, MOTE_PROFILE: 'default'}, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    cwd: process.cwd(), env: {...process.env, MOTE_PROFILE: 'default', MOTE_FIXTURE_DEV_STORAGE: developmentStorage}, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
+  if (developmentStorage === 'profile') profile = join(`${profileRoot}-profiles`, 'dev');
+  const pendingFile = join(profile, developmentStorage ? 'connection-pending.json' : 'connection-pending.enc');
   children.add(running);
   const calls = [], pending = new Map(), holds = new Set();
   let selectedHost = initialHost, next = 0, loaded = 0, exited = false, exitDescription = '', error = '', fault, failures = [], qrReads = 0;
@@ -94,8 +97,9 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
       assert.equal(url.origin, origin, 'invitation transport stays at explicitly confirmed origin');
       if (['/api/connections/redeem', '/api/login/poll', '/api/login/ack', '/api/connections/self'].includes(call.path)) assert.equal(message.redirect, 'error', 'pairing requests reject redirects');
       if (call.path === '/api/connections/redeem') {
-        assert.equal((await stat(join(profile, 'connection-pending.enc'))).mode & 0o777, 0o600, 'pending PKCE is private to this local profile');
-        const saved = JSON.parse(Buffer.from(await readFile(join(profile, 'connection-pending.enc'))).map(v => v ^ 90).toString());
+        assert.equal((await stat(pendingFile)).mode & 0o777, 0o600, 'pending PKCE is private to this local profile');
+        const bytes = await readFile(pendingFile);
+        const saved = JSON.parse((developmentStorage ? bytes : bytes.map(v => v ^ 90)).toString());
         const pkce = objectContaining(saved, item => typeof item.verifier === 'string');
         assert(pkce && /^[A-Za-z0-9_-]{43}$/.test(pkce.verifier), 'PKCE verifier is durable before redeem POST');
         assert.equal(sha(pkce.verifier), body.challenge, 'persisted PKCE matches actual claim');
@@ -126,7 +130,8 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
   });
   const rpc = (type, rest) => new Promise((resolve, reject) => {
     if (exited) return reject(Error('Desktop exited: ' + error));
-    const id = ++next; pending.set(id, {resolve, reject}); send({type, id, ...rest});
+    const id = ++next, timer = setTimeout(() => {pending.delete(id); reject(Error('Desktop fixture RPC timed out: ' + type));}, 25000);
+    pending.set(id, {resolve: value => {clearTimeout(timer); resolve(value);}, reject: cause => {clearTimeout(timer); reject(cause);}}); send({type, id, ...rest});
   });
   const js = code => rpc('execute', {code});
   const until = async (read, accept, label) => {
@@ -142,7 +147,7 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
   await until(() => Promise.resolve(loaded), value => value > 0, 'production Desktop document load');
   await until(() => js('Boolean(window.mote&&document.querySelector("#ask-login"))'), Boolean, 'production preload + renderer');
   const desktop = {
-    profile, running, js, until, calls, opened,
+    profile, profileRoot, running, js, until, calls, opened,
     get qrReads() {return qrReads;},
     status: () => js('window.mote.status()'),
     pending: () => js('window.mote.pendingConnection()'),
@@ -334,10 +339,49 @@ async function sameInvitationMetadataRetry(central) {
   report('same invitation changed-name retry fails locally without replacing encrypted PKCE, then explicit recovery publishes its original durable name');
 }
 
+async function developmentCredentialStorage(central) {
+  for (const policy of ['build', 'profile']) {
+    let desktop = await launch(central, undefined, policy);
+    const initial = await desktop.status();
+    assert.equal(initial.config.diagnosticsEnabled, true, 'development diagnostics are enabled for a fresh profile');
+    assert.equal(initial.credentialStorage, 'json');
+    assert.equal(initial.encryptedTokenStorage, false, 'development JSON must never be reported as OS encryption');
+    assert.match(await desktop.js('document.querySelector("#token-hint").textContent'), /JSON/);
+    if (policy === 'build') {
+      const updates = await desktop.js('window.mote.updateStatus()');
+      assert.equal(updates.manualDownload, true);
+      assert.equal(updates.notesUrl, 'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml');
+      assert.equal(updates.canInstall, false);
+    }
+    const loss = desktop.fault('/api/login/ack', 'loss');
+    await desktop.preview(await central.invite()); await desktop.confirm(); await desktop.faultHit(loss); await desktop.idle();
+    const journal = JSON.parse(await readFile(join(desktop.profile, 'connection-pending.json'), 'utf8'));
+    assert(journal.grant?.token && journal.verifier, 'development recovery checkpoints remain complete JSON before publication');
+    const profileRoot = desktop.profileRoot; await desktop.kill();
+    desktop = await launch(central, profileRoot, policy);
+    assert(await desktop.pending(), 'development recovery survives a real process restart without Keychain');
+    await desktop.recover(); const paired = await desktop.paired('a');
+    assert.equal(paired.config.diagnosticsEnabled, true, 'first account preferences inherit development diagnostics');
+    await queuedNote(desktop, 'Generated development JSON restart queue');
+    const configPath = join(desktop.profile, 'config.json'), saved = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.equal(saved.developmentToken, journal.grant.token); assert.equal(saved.encryptedToken, undefined);
+    assert.equal((await stat(configPath)).mode & 0o777, 0o600);
+    await desktop.close(); desktop = await launch(central, profileRoot, policy);
+    const restarted = await desktop.status();
+    assert.equal(restarted.config.tokenConfigured, true); assert.equal(restarted.queueDepth, 1);
+    assert.equal(restarted.config.deviceId, initial.config.deviceId); assert.equal(restarted.config.diagnosticsEnabled, true);
+    await desktop.js('void window.mote.ask("logout").catch(()=>{});true');
+    await desktop.until(desktop.status, value => !value.config.tokenConfigured, 'actual logout clears development credentials');
+    assert.equal((await readFile(configPath, 'utf8')).includes(journal.grant.token), false, 'logout clears the stored JSON credential');
+    await desktop.close();
+    report('development ' + policy + ' uses private JSON through actual pairing, lost ACK, process restart, queue recovery and logout with OS secret storage forbidden');
+  }
+}
+
 try {
   const central = await host('central');
-  const selectedCase = process.env.MOTE_PAIRING_CASE;
-  if (selectedCase && !['reauth-auth-timer', 'ui-cleanup', 'same-invitation-retry'].includes(selectedCase)) throw Error('Unknown generated Desktop pairing case');
+  const selectedCase = process.env.MOTE_PAIRING_CASE ?? process.argv.find(value => value.startsWith('--case='))?.slice('--case='.length);
+  if (selectedCase && !['reauth-auth-timer', 'ui-cleanup', 'same-invitation-retry', 'dev-storage'].includes(selectedCase)) throw Error('Unknown generated Desktop pairing case');
   if (selectedCase === 'reauth-auth-timer') {
     await reauthorizationAcrossAuthTimer(central);
     await explicitLogoutFencesPendingSelf(central);
@@ -345,6 +389,8 @@ try {
     await completedRecoveryUi(central);
   } else if (selectedCase === 'same-invitation-retry') {
     await sameInvitationMetadataRetry(central);
+  } else if (selectedCase === 'dev-storage') {
+    await developmentCredentialStorage(central);
   } else {
   // This is deliberately first: the old M14 consumer fails on production v2,
   // before any helper-only test could conceal its browser-login fallback.

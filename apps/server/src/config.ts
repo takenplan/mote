@@ -160,7 +160,7 @@ export function configDocumentDomains(config?: Config): ConfigDomainRegistration
     metadata(defaultValue, '');
     return { id, schema, defaultValue, restartRequired, fields,
       resolve: (value, document) => resolveDomainSecrets(id, id === 'processing' ? processingWithDefaults(value, config?.media)
-        : id === 'diagnostics' && value && typeof value === 'object' ? { traceEnabled: config?.agentTraceEnabled ?? config?.profile === 'dev', maxBytes: defaultLogMaxBytes((document?.server as { profile?: string } | undefined)?.profile ?? config?.profile), ...value } : value),
+        : id === 'diagnostics' && value && typeof value === 'object' ? { debug: ((document?.server as { profile?: string } | undefined)?.profile ?? config?.profile) === 'dev', traceEnabled: config?.agentTraceEnabled ?? config?.profile === 'dev', maxBytes: defaultLogMaxBytes((document?.server as { profile?: string } | undefined)?.profile ?? config?.profile), ...value } : value),
     };
   };
   return [
@@ -215,7 +215,7 @@ function normalizedDocument(saved: Record<string, unknown>, resolved: Record<str
   const domains = configDocumentDomains();
   if (Object.keys(saved).some(key => !['version', 'revision'].includes(key) && !domains.some(domain => domain.id === key))) throw new ConfigError('configuration');
   const diagnostics = resolved.diagnostics;
-  if (!diagnostics || typeof diagnostics === 'object' && !Array.isArray(diagnostics)) resolved = { ...resolved, diagnostics: { traceEnabled: (resolved.server as { profile?: string } | undefined)?.profile === 'dev', maxBytes: defaultLogMaxBytes((resolved.server as { profile?: string } | undefined)?.profile), ...(diagnostics as object | undefined) } };
+  if (!diagnostics || typeof diagnostics === 'object' && !Array.isArray(diagnostics)) resolved = { ...resolved, diagnostics: { debug: (resolved.server as { profile?: string } | undefined)?.profile === 'dev', traceEnabled: (resolved.server as { profile?: string } | undefined)?.profile === 'dev', maxBytes: defaultLogMaxBytes((resolved.server as { profile?: string } | undefined)?.profile), ...(diagnostics as object | undefined) } };
   for (const domain of domains) {
     try { result[domain.id] = domain.schema.parse(domain.id === 'processing' ? processingWithDefaults(resolved.processing, mediaConfigSchema.parse(resolved.media ?? {})) : resolved[domain.id] ?? {}); }
     catch (error) { throw new ConfigError([domain.id, ...(error instanceof z.ZodError ? error.issues[0]?.path ?? [] : [])].join('.'), 'Configuration validation failed; values are suppressed'); }
@@ -231,8 +231,8 @@ function normalizedDocument(saved: Record<string, unknown>, resolved: Record<str
     }
   }
   restore(saved, result);
-  // Omission is the owner's profile-default selection, not an explicit numeric override.
-  if (!Object.hasOwn((saved.diagnostics ?? {}) as object, 'maxBytes')) delete (result.diagnostics as Record<string, unknown>).maxBytes;
+  // Keep profile defaults derived, so unrelated saves do not turn them into overrides.
+  for (const field of ['debug', 'maxBytes']) if (!Object.hasOwn((saved.diagnostics ?? {}) as object, field)) delete (result.diagnostics as Record<string, unknown>)[field];
   return result;
 }
 export function parseConfigDocument(raw: string, env: NodeJS.ProcessEnv = process.env): ConfigDocument {
@@ -263,7 +263,7 @@ export function configFromDocument(document: ConfigDocument, file: string, priva
   // Service.current() already contains effective credentials. Environment values remain literal after one expansion.
   const effective = options.resolvedDocument ? normalizedDocument(structuredClone(document), structuredClone(document)) : resolveConfigDocument(document);
   const server = serverConfigSchema.parse(effective.server), storage = storageConfigSchema.parse(effective.storage), execution = executionConfigSchema.parse(effective.execution);
-  const diagnostics = diagnosticsConfigSchema.parse({ ...(effective.diagnostics as object), maxBytes: logRetentionFromDocument(effective).maxBytes });
+  const diagnostics = diagnosticsConfigSchema.parse({ debug: server.profile === 'dev', ...(effective.diagnostics as object), maxBytes: logRetentionFromDocument(effective).maxBytes });
   const models = modelDomainSchema.parse(effective.models), plugins = pluginsConfigSchema.parse(effective.plugins), updates = updatesConfigSchema.parse(effective.updates);
   const connectors = connectorsConfigSchema.parse(effective.connectors), media = mediaConfigSchema.parse(effective.media), model = models.deployment;
   const initializeCredentials = options.initializeCredentials !== false;
@@ -317,7 +317,7 @@ export function documentFromConfig(config: Config): ConfigDocument {
     storage: storageConfigSchema.parse({ dataDir: config.dataDir, maxStorageBytes: config.maxStorageBytes, maxExportBytes: config.maxExportBytes, retentionDays: config.retentionDays, dataKey: config.dataKey ?? '', contentEncryptionEnabled: config.contentEncryptionEnabled ?? false,
       kind: config.configuration?.storageKind ?? 'unknown', source: config.configuration?.storageSource ?? '', mount: config.configuration?.storageMount ?? '' }),
     execution: executionConfigSchema.parse({ interactiveConcurrency: config.interactiveConcurrency, agentConcurrency: config.agentConcurrency, llmConcurrency: config.llmConcurrency, memoryConcurrency: config.memoryConcurrency, insightIntervalHours: config.insightIntervalHours }),
-    diagnostics: diagnosticsConfigSchema.parse({ enabled: config.diagnosticsEnabled, debug: config.diagnosticsDebug, traceEnabled: config.agentTraceEnabled ?? config.profile === 'dev', level: config.logLevel,
+    diagnostics: diagnosticsConfigSchema.parse({ enabled: config.diagnosticsEnabled, debug: config.diagnosticsDebug ?? config.profile === 'dev', traceEnabled: config.agentTraceEnabled ?? config.profile === 'dev', level: config.logLevel,
       directory: config.logDirectory ?? '', maxBytes: config.logMaxBytes ?? defaultLogMaxBytes(config.profile), maxFiles: config.logMaxFiles, maxEntries: config.logMaxEntries }),
     models: modelDomainSchema.parse({ ...models, deployment: { ...defaults, provider: config.modelProvider ?? defaults.provider, protocol: config.modelProtocol ?? defaults.protocol, baseUrl: config.modelBaseUrl || modelProvider(config.modelProvider ?? defaults.provider)?.baseUrl || '', model: config.model, apiKey: config.apiKey,
       reasoningEffort: config.modelReasoningEffort ?? defaults.reasoningEffort, maxTokens: config.modelMaxTokens ?? defaults.maxTokens, modelRequestTimeoutMs: config.modelRequestTimeoutMs === undefined ? config.modelProtocol === 'codex-app-server' ? null : defaults.modelRequestTimeoutMs : config.modelRequestTimeoutMs,

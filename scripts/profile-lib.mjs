@@ -65,7 +65,7 @@ export async function initialize(paths, options = {}) {
       allowedOrigins: (paths.profile === 'test' ? ['http://localhost:5174', 'http://127.0.0.1:5174'] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
       tls: { enabled: false, domain: '', httpPort: 80, httpsPort: 443 } },
     storage: { dataDir: docker ? '/data' : options['data-dir'] ? dataDir : './data', kind: docker ? 'docker-volume' : 'local-directory', source: docker ? volume : dataDir, mount: docker ? '/data' : '' },
-    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', traceEnabled: paths.profile === 'dev' },
+    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', debug: paths.profile === 'dev', traceEnabled: false },
     models: { deployment: { provider: 'codex', protocol: 'codex-app-server', model: 'gpt-6.1-sol', reasoningEffort: 'high', serviceTier: 'fast' } },
     connectors: {}, plugins: {}, updates: {},
     media: { modelDirectory: docker ? '/models' : './models', python: docker ? '/opt/mote-media-venv/bin/python' : './media-venv/bin/python', asrPort, ocrPort,

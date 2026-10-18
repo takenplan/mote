@@ -29,6 +29,14 @@ test('KEEP instance execution and safe diagnostic writes have real administrator
   assert.equal((await f.request(f.a.token,path)).status,403);
  }
 });
+test('DEV debug defaults retain instance-safe diagnostics and personal trace opt-in through restart',async t=>{
+ const f=await keepFixture(t,undefined,{version:1,revision:0,server:{profile:'dev'}}),path='/api/admin/diagnostics-settings';
+ const initial=await f.request(f.admin.token,path);assert.equal(initial.status,200,initial.text);assert.equal(initial.json().debug,true);assert.equal(initial.json().traceEnabled,false);
+ const snapshot=(await f.request(f.admin.token,'/api/diagnostics')).json();assert.equal(snapshot.level,'debug');assert.equal(snapshot.agentTrace.enabled,false);assert.equal(snapshot.coverage.privateTraces,false);
+ for(const user of [f.a,f.b]){const personal=(await f.request(user.token,'/api/configuration')).json();assert.equal(personal.domains.find((domain:any)=>domain.id==='agentTrace').effective.traceEnabled,false);}
+ const saved=await f.request(f.admin.token,path,'PUT',{revision:initial.json().revision,enabled:true,debug:false,level:'silent',traceEnabled:false});assert.equal(saved.status,200,saved.text);
+ await f.restart();const restarted=(await f.request(f.admin.token,path)).json();assert.equal(restarted.debug,false);assert.equal(restarted.level,'silent');assert.equal((await f.request(f.admin.token,'/api/diagnostics')).json().enabled,false);
+});
 test('KEEP shared index maintenance has a real administrator HTTP contract',async t=>{
  const f=await keepFixture(t),r=await f.request(f.admin.token,'/api/admin/index');assert.equal(r.status,200,r.text);
  assert.equal((await f.request(f.a.token,'/api/admin/index')).status,403);

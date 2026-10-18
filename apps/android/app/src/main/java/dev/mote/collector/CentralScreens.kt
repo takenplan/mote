@@ -33,7 +33,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val ownerKey = ui.accountOwnerKey()
     fun ownsSelectedAccount() = ui.accountOwnerKey() == ownerKey
     val client get() = requireNotNull(ui.client).also { check(ownsSelectedAccount()) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") } }
-    private val cipher = SecretBox()
+    private val cipher = ui.secretBox()
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)

@@ -193,9 +193,11 @@ npm run test:profiles:container
 
 ## 调试与分享诊断
 
-每个中央环境默认开启有上限的结构化诊断，`diagnostics.debug: false`。需要调试时只修改正在测试的 `mote.yaml`；enabled/debug/traceEnabled/level 经校验热应用，日志目录与容量参数需要重启。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
+每个中央环境默认开启有上限的结构化诊断，Dev 的 `diagnostics.debug` 默认 `true`，其它 Profile 默认 `false`；显式配置优先。需要调试时只修改正在测试的 `mote.yaml`；enabled/debug/traceEnabled/level 经校验热应用，日志目录与容量参数需要重启。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
 
 原生 `logs/central.log` 默认只保存固定监督事件；未知 SDK/runtime 输出只保存类型与字节数。新 DEV 的 YAML 省略 `diagnostics.maxBytes`，每份最多 100 MiB、3 份；结构化 `central.N.ndjson` 与监督日志分别轮转，各最多 300 MiB。其它 profile 保留每份 2 MiB、3 份。已有 DEV 的显式数值保持不变，主动采用默认值见 [部署说明](deployment.md#dev-log-retention)。支持包、内存事件数和单条日志仍各有自身边界。
+
+Dev 客户端初始开启诊断；Mac Dev build 或 `--profile=dev` 使用 0600 JSON 凭据和配对恢复文件，Android Dev 使用 app-private JSON 设置及文件 AES 密钥，私有内容继续认证加密；均不读取系统密钥存储。Prod 保留原保护。新 Dev 不读取旧加密凭据，也不自动转换，先保留旧目录并创建新的空 Dev 目录（正式 Mac build 的名称仍选 dev），见 [更新说明](updating.md)。第三方 Lark / DingTalk CLI 不受此规则影响。Central 多用户正文 trace 仍由本人显式开启，实例日志只提供固定安全诊断。
 
 ## 独立版本与发布
 

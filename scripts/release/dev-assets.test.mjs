@@ -27,12 +27,12 @@ for(const component of ['central','desktop','android']) {
   }
  });
 }
-test('DEV installers reject production application identities and wrong Android code/certificates',t=>{
- const fixture=releaseFixture(t),android=fixtureAsset(fixture,'android',{packageName:'dev.mote.collector'}),verify=()=>verifiedReleaseAssets(android.directory,android.release,fixture.policy);
+test('production installers reject DEV identities and wrong Android code/certificates',t=>{
+ const fixture=releaseFixture(t),android=fixtureAsset(fixture,'android',{packageName:'dev.mote.collector.dev'}),verify=()=>verifiedReleaseAssets(android.directory,android.release,fixture.policy);
  assert.throws(verify,/Android identity/);
  fixtureAsset(fixture,'android',{versionCode:88});assert.throws(verify,/versionCode/);
  fixtureAsset(fixture,'android',{certificateSha256:'different-fixture-cert'});assert.throws(verify,/Android identity/);
- const macFixture=releaseFixture(t),mac=fixtureAsset(macFixture,'desktop',{bundleId:'dev.mote.collector'});
+ const macFixture=releaseFixture(t),mac=fixtureAsset(macFixture,'desktop',{bundleId:'dev.mote.collector.dev'});
  assert.throws(()=>verifiedReleaseAssets(mac.directory,mac.release,macFixture.policy),/Mac identity/);
  fixtureAsset(macFixture,'desktop',{signing:'developer-id'});
  assert.throws(()=>verifiedReleaseAssets(mac.directory,mac.release,macFixture.policy),/signing team/);
@@ -40,4 +40,10 @@ test('DEV installers reject production application identities and wrong Android 
  assert.throws(()=>verifiedReleaseAssets(mac.directory,mac.release,macFixture.policy),/signing team/);
  fixtureAsset(macFixture,'desktop',{signing:'developer-id',teamId:'FIXTURE123'});
  assert.deepEqual(verifiedReleaseAssets(mac.directory,mac.release,macFixture.policy),[mac.name]);
+});
+
+test('release verification rejects Dev-profile metadata even with a production filename',t=>{
+ const fixture=releaseFixture(t),asset=fixtureAsset(fixture,'desktop',{profile:'dev'});
+ assert.throws(()=>verifiedReleaseAssets(asset.directory,asset.release,fixture.policy),/prod build profile/);
+ assert.throws(()=>verifiedReleaseAssets(asset.directory,{...asset.release,profile:'dev'},fixture.policy),/Actions artifacts/);
 });

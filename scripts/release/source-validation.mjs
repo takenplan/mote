@@ -17,7 +17,7 @@ export async function verifySourceArchive(archive, release) {
     const extracted = await extractSourceArchive(archive, stage, `mote-${release.version}/`);
     const root = JSON.parse(await readFile(join(stage, 'package.json'), 'utf8'));
     if (root.name !== 'mote' || root.private !== true || root.version !== undefined || !Array.isArray(root.workspaces)) throw Error('Invalid private monorepo source package');
-    const archived = verifyComponent('central', { root: stage });
+    const archived = verifyComponent('central', { root: stage, profile: release.profile });
     if (archived.version !== release.version) throw Error('Archived central version differs');
     for (const app of ['server', 'web']) {
       const pkg = JSON.parse(await readFile(join(stage, `apps/${app}/package.json`), 'utf8'));

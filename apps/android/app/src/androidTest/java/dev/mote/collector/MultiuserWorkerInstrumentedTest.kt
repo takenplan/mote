@@ -118,7 +118,7 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals("uncertain",currentAction(id).getString("status"))
             val operation=approved.getString("operationId")
             val journal=File(app.accountDirectory(),"calendar-actions/"+SourceRules.hash(settings.read().server.trimEnd('/')+settings.deviceId)+"/"+operation)
-            assertEquals("attempting",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            assertEquals("attempting",String(app.secretBox().open(journal.readBytes()),Charsets.UTF_8))
             val previousCalls=native.calls;device.allowed=false
             assertThrows(IllegalStateException::class.java){client.execute(id)}
             assertEquals(previousCalls,native.calls);device.allowed=true
@@ -142,7 +142,7 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(2,recoveredNative.inserts)
             val completed=currentAction(id)
             assertEquals("succeeded",completed.getString("status"));assertEquals("101",completed.getString("externalId"))
-            assertEquals("101",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            assertEquals("101",String(app.secretBox().open(journal.readBytes()),Charsets.UTF_8))
             recovered.execute(id);assertEquals(2,recoveredNative.inserts)
         } finally {cancel(app);generated.delete()}
     }

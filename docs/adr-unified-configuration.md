@@ -151,3 +151,14 @@ redaction, and lifecycle cleanup. Domain-specific evidence includes
 model/processing/permission journeys. Final executed commands and remaining
 limitations are reported with the PR; this ADR does not label unexecuted live or
 container checks as passed.
+
+
+### Profile defaults after 2026-10-18
+
+The [Profile release decision](adr-profile-release-policy.md) changes omitted
+`diagnostics.debug` to true for Dev and false elsewhere. Explicit false and
+silent remain authoritative; unrelated saves preserve omission. New profile
+YAML initializes instance `traceEnabled` to false. Production multiuser paths
+continue to prohibit instance content traces and require personal opt-in.
+Central configuration and secrets retain their existing private YAML, database
+and file ownership; Dev does not introduce a second JSON authority.

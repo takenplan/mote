@@ -26,7 +26,7 @@ class FileSyncInstrumentedTest {
         org.junit.Assume.assumeTrue("Explicit isolated central fixture connection required", connectionFile.exists())
         val connection = JSONObject(connectionFile.readText())
         val base = connection.getString("server"); val token = connection.getString("token")
-        require(base == "http://127.0.0.1:57569" && token.length >= 32 && BuildConfig.MOTE_PROFILE == "dev")
+        require(base == "http://127.0.0.1:57569" && token.length >= 32 && RuntimeProfile.current.developerTools)
         val owner = connection.optString("ownerToken", token)
         val config = CollectorConfig(server = base, token = token, wifiOnly = false, debugHttp = true)
         val run = "run-${System.currentTimeMillis()}"

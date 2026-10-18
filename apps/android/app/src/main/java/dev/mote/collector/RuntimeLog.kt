@@ -5,7 +5,8 @@ import java.io.FileOutputStream
 import java.time.Instant
 
 /** Original runtime log, separate from transport payloads and opt-in diagnostic samples. */
-class RuntimeLog(private val file: File, private val limit: Int = 1000) {
+class RuntimeLog(private val file: File, private val limit: Int = 1000,
+                 private val detailed: Boolean = RuntimeProfile.current.detailedDiagnostics) {
     init { require(limit in 1..1000) }
     fun event(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null) =
         append(EventJournal.level(code), stage.name, code.name, elapsedMs, httpStatus)
@@ -18,11 +19,13 @@ class RuntimeLog(private val file: File, private val limit: Int = 1000) {
     /** Window identities, titles and contents are deliberately omitted. */
     fun captureDecision(windowCount: Int, unknownCount: Int, systemBarCount: Int, restrictedCount: Int,
                         trusted: Boolean, foreground: Boolean, protected: Boolean, mode: AppCollectionMode) {
+        if (!detailed) return
         require(listOf(windowCount, unknownCount, systemBarCount, restrictedCount).all { it >= 0 })
         append("INFO", "CAPTURE_DECISION", "windows=$windowCount unknown=$unknownCount systemBars=$systemBarCount restricted=$restrictedCount trusted=$trusted foreground=$foreground protected=$protected mode=${mode.wire}")
     }
     fun screenshotFailure(code: Int) { require(code >= 0); append("ERROR", "CAPTURE_API", "errorCode=$code") }
     private fun append(level: String, logger: String, message: String, elapsedMs: Long? = null, httpStatus: Int? = null) = synchronized(lock) {
+        if (level.equals("debug", ignoreCase = true) && !detailed) return@synchronized
         // Callers can supply enums and numbers only. Never persist captured content, tokens or exception text.
         val line = buildString {
             append(Instant.now()).append(' ').append(level.uppercase().padEnd(5))
