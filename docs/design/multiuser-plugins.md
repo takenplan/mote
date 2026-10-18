@@ -225,6 +225,9 @@ probe/attempt directories under M09. Each check is keyed by user and instance,
 then fenced by account authorization, configuration signature, generation and
 its M05 task grant. Probe directories are inside the existing deployment/user
 instance directory; failed or interrupted attempts retain their local receipts.
+Execution also requires the check row's admitted task ID. The original command
+remains idempotent; a new task operation using the same owned check ID is stale
+and cannot acquire a provider, issue a canary or publish into the old receipt.
 The HTTP check route returns the pending durable receipt immediately. Internal
 consumers such as connector enable await that exact check's completion before
 publishing their configuration; admission alone is not verification. Waiting
@@ -248,6 +251,9 @@ that ACK finishes the original check without opening a provider or creating
 another canary. An unfinished issuance or uncertain generic canary cleanup has
 no such result and remains blocked. This repair retains unknown outcomes; it
 does not add a supplier-specific remote reconciler or an erasure claim.
+The existing confirmed retry can also finish a lost local ACK when this complete
+proof exists. Recovery validates the original attempt and issuance key before
+using M05's late-completion port; an unfinished result cannot use that exception.
 The shared canary accepts only fenced provider/restart ports from
 `ScopedMemoryProviders`. Its exact import edge and contract-only dependencies
 are guarded; unrelated scoped hosts, legacy Store imports and direct file/SQL

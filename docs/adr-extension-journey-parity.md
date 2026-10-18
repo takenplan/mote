@@ -23,6 +23,8 @@ check cannot enable the configuration. Generation, account, configuration and
 model authorization still fence asynchronous probes and their publication.
 
 Capability checks use the existing M05 external-call ledger and checkpoints.
+Their executable authorization includes the exact task ID admitted for the
+owned check; copying a check ID into a different task cannot run another probe.
 The attempt ID, fixed package and creation time are durable before provider IO;
 the capability owner registers issuance after local configuration/credential
 validation and before dispatch. Generic canary namespace, body and operation IDs
@@ -36,7 +38,10 @@ evidence while reporting complete.
 A result becomes recoverable only after verification and local provider/worker
 cleanup have joined. Its checkpoint precedes the final external acknowledgement.
 Recovery can acknowledge and publish that exact completed result without another
-provider call. It cannot infer an outcome for an unfinished attempt. Generic
+provider call, including through the existing confirmed task retry after a local
+ACK transaction failure. A matching attempt and issuance key are required; the
+host's late-completion port settles only that fact and grants no new authority.
+Recovery cannot infer an outcome for an unfinished attempt. Generic
 canary cleanup requiring reconciliation remains unknown; closing a transport is
 never evidence that a remote effect rolled back. Unknown remote effects without
 completed proof remain retained; automatic supplier-specific reconciliation is

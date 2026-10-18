@@ -256,6 +256,22 @@ a new enable transition. The added scenario requires readable blocked status,
 working pause, no new canary and refusal to resume over the old unknown. The
 intermediate result and its RED are kept separately from the final freeze.
 
+Intermediate `23de17dd3cdc0949a36478390118aeb338120028` passed 71 focused tests.
+A seventh process scenario then injected a one-time local ACK transaction error
+after the completed result was durable. The conservative retry guard returned
+409 even with that proof. The existing confirmed task retry now settles only the
+matching attempt/issuance through M05's late-completion port and publishes the
+same result, with no new provider calls. Unfinished unknown attempts continue to
+reject that retry. Its original RED, the intermediate checks and final results
+remain separate evidence.
+
+The same HTTP process scenarios also replay the original M05 command and submit
+a new operation with its owned check ID. Before the task-ID guard, the new task
+succeeded and overwrote the check despite the old unknown. Execution now requires
+the check's exact admitted task ID: the original command returns its original
+receipt, the copied operation becomes stale before provider IO, and the old
+unknown remains visible. The pre-guard source snapshot and RED are retained.
+
 Only focused headless Node fixtures run in this repair. The new full 22-step
 affected plan remains for the driver after a new clean freeze; Q003 stays on
 hold until that handoff. Native/JVM/UI, real suppliers/models, physical devices
