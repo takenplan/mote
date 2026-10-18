@@ -80,6 +80,8 @@ export const scopedBackupSchema = Object.freeze({
  "ma_auto_windows":["user_id","id","policy_id","generation","state","through","plan","created_at"],
  "ma_automations":["user_id","id","generation","state","input","settings","sources","task_id","cursor","last_success","created_at"],
  "ma_conversations":["user_id","id","incarnation","scope","title","revision","summary","created_at","updated_at"],
+ "ma_embedding_events":["user_id","id","input"],
+ "ma_embeddings":["user_id","evidence_id","fingerprint","receipt","anchor_hash","model_key","embedding"],
  "ma_fragments":["user_id","run_id","id","task_id"],
  "ma_insight_snapshots":["user_id","run_id","series_id","version","manifest","json","memory_coverage"],
  "ma_meta":["singleton","cursor_key"],

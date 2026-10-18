@@ -44,6 +44,8 @@ export class IngressHost{
  private readonly active=new Set<string>();
  private readonly importCommits=new Map<string,Promise<unknown>>();
  private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void>();
+ private readonly published=new Set<(context:UserContext,material:Readonly<{id:string;revision:string}>)=>void>();
+ onMaterialPublished(receive:(context:UserContext,material:Readonly<{id:string;revision:string}>)=>void){this.published.add(receive);return ()=>{this.published.delete(receive);};}
  private fileRetirement?:(context:UserContext,refs:readonly string[])=>void;
  configureFileRetirement(retire:(context:UserContext,refs:readonly string[])=>void){this.fileRetirement=retire;}
  private fileProfiles?:{preflight:(context:UserContext,id:string)=>Promise<void>;bind:(context:UserContext,ref:string,id:string)=>void};
@@ -205,7 +207,7 @@ export class IngressHost{
     }
     const checkAttribution=(value:any)=>{if(value?.sourceDeclaration)source(value.sourceDeclaration.sourceId);for(const entry of [...(value?.sourceContextDeclarations??[]),...(value?.sourceContextStatements??[])])source(entry.sourceId);};
     checkAttribution(draft.attributionContext);for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext);
-    const result=data().publishMaterial(draft,expectedRevision);assert();return result;
+    const result=data().publishMaterial(draft,expectedRevision);assert();for(const receive of this.published)receive(context,result);assert();return result;
    }),
    withWorkspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>during(()=>originals.workspace(work)),
    beginUpload:(sourceId:string,value:unknown)=>sql.transaction(()=>{

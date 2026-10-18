@@ -2162,6 +2162,8 @@
       "table:ma_auto_windows",
       "table:ma_automations",
       "table:ma_conversations",
+      "table:ma_embedding_events",
+      "table:ma_embeddings",
       "table:ma_fragments",
       "table:ma_history_dependencies",
       "table:ma_history_materials",
@@ -2590,5 +2592,16 @@
       "task:execution.register:kind:'processing.image-backfill'"
     ],
     "notes": "Independent image settings and explicitly confirmed, owner/epoch-bound historical cursors adapt the existing M04/M05/M06 services."
+  },
+  "apps/server/src/scope/ask-retrieval.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Owner-bound new-intake embedding admission, fixed model leases, indexed candidates and publication fences; generated validation does not claim live semantic quality.",
+    "surfaces": [
+      "task:execution.register:kind:'ask.embedding'",
+      "task:execution.register:kind:'ask.embedding-query'",
+      "task:execution.register:kind:'ask.index-admit'"
+    ]
   }
 }
