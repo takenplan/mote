@@ -62,7 +62,7 @@
 | CONN / CONN-C01..C07 | [CONN开发](codex://threads/01a14e8f-6edd-7772-b552-f0ce79bb7c61) | `codex/parity-connectors-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | EXEC / EXEC-X01..X03、EXEC-S01 | [EXEC开发](codex://threads/01a14e8f-7094-7af3-880a-8580a9135ea1) | `codex/parity-execution-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
 | CONFIG / CONFIG-C01..C07、CONFIG-UX01 | [CONFIG开发](codex://threads/01a14e8f-7295-7c62-9d1d-d6f9a3e6a59e) | `codex/parity-configuration-20261018` / — | [独立验收](codex://threads/01a14e90-06cd-7242-96bb-349e5fdb83b3) | — | IN_PROGRESS；未冻结/未验收 |
-| DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收 |
+| DESKTOP / DESKTOP-D1..D4 | [DESKTOP开发](codex://threads/01a14e8f-745e-7330-8770-aed83a43077f) | `codex/parity-desktop-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `73c1115287fe07e1824526861ebc2e8ed3cf39fc` | CANDIDATE；affected/独验UNRUN，待槽 |
 | AND / AND-01..04、AND-D01 | [AND开发](codex://threads/01a14e8f-7620-73f0-8c0b-032e94f1a3e3) | `codex/parity-android-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收；D01偏好按账号独立已定 |
 | WEB / WEB-W01..W02 | [WEB开发](codex://threads/01a14e8f-77d9-7723-8762-9bb7b456da4d) | `codex/parity-web-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | `f8f684b6dee904d820b9952ead336da5a33f330f` | CANDIDATE；作者检查进行中，独验UNRUN |
 | EXT / EXT-E01..E03、EXT-ES01/ES02/EC01 | [EXT开发](codex://threads/01a14e8f-79dc-70b3-8d6c-608e696cb79d) | `codex/parity-extensions-20261018` / — | [独立验收](codex://threads/01a14e90-08cc-7631-b1bb-fe8b691c3e27) | — | IN_PROGRESS；未冻结/未验收 |
@@ -119,7 +119,7 @@
 
 | 排队号 | Owner / 候选 / base | dry-run 范围 / 命令 | 排期 / 锁 / 状态 | 回执 / 未执行 / 阻塞 |
 | --- | --- | --- | --- | --- |
-| R001 | AND / 起点2c78ca8d+在途Android输入 | 定向Gradle JVM/APK/testAPK、专用无窗口模拟器；1 worker | RUNNING，非完整gate | 首轮编译失败已修复重跑；日志`/tmp/mote-parity-android-jvm-focused-2.log`；D2依赖待SHA |
+| R001 | AND / 起点2c78ca8d+在途Android输入 | JVM22项、APK/testAPK及native capture冲突/日历/恢复页各1项作者报EXIT0；source暂停fixture未到断言 | 已释放；生成backend/reverse/emulator已清理，AVD留复验 | `/tmp/mote-parity-android-native-{conflict,calendar,recovery}.log`；后续代码已变不转记最终SHA，非独验 |
 | P001 | LIFE / Node26.11.1 ABI147 | native/Electron及两处SQLite probe EXIT0 | 已完成释放 | 准备非验收 |
 | P003 | CONN / Node24.22.0 ABI137 | 独立npm ci及两处SQLite预检EXIT0 | 已完成释放 | `/tmp/mote-connectors-npm-ci.log`；非业务验收 |
 | P004 | MEM | native及两处SQLite probe EXIT0 | 已完成释放 | Node26.11.1 ABI147，lock未改 |
@@ -127,7 +127,9 @@
 | P006 | FILE | native及两处SQLite预检EXIT0 | 已完成释放 | Node26.11.1 ABI147 |
 | P007 | DESKTOP | native/Electron及两处SQLite预检EXIT0 | 已完成释放 | Node26.11.1 ABI147；无UI/lock更改 |
 | P008 | ACTION | native/Electron及两处SQLite probe EXIT0 | 已完成释放 | Node26.11.1 ABI147；非业务PASS |
-| Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_SLOT；作者冻结定向/浏览器已报告完成 | 完整gate未运行；非独立PASS |
+| Q002 | WEB / `f8f684b6dee904d820b9952ead336da5a33f330f` / 起点2c78ca8d | Web-only/i18n；Node24.21.0 ABI137；最终dry-run已报 | WAIT_GLOBAL_SLOT；R001已释放，WEB仍idle不得提前唤醒 | 完整gate未运行；非独立PASS |
+| Q007 | DESKTOP / `73c1115287fe07e1824526861ebc2e8ed3cf39fc` / 起点2c78ca8d | Desktop+Server+Web；Android=false，D2另跨端联调 | WAIT_GLOBAL_SLOT；作者83项及29+1/类型/预检报告通过 | `/tmp/mote-parity-desktop-affected-plan-final.json`；完整gate/独验UNRUN |
+| R002 | CONN / C07 Kotlin/helper/JVM/instrumentation | 专用`dev.mote.collector.RecordingParityInstrumentedTest`；生成scoped后端smoke作者报告通过 | WAIT_INPUT_AND_SLOT；Gradle/emulator UNRUN | 精确完整输入/SHA与环境待回报，无当前运行授权 |
 | Q001 / Q003 / Q004 / Q005 / Q006 | FILE / EXT / LIFE / ASK / MEM | 范围预告，暂无最终冻结SHA | WAIT_CANDIDATE | 新增Android/shared影响按最终输入重选 |
 
 ## 全局对话槽位与待办（用户最新约束）
@@ -140,7 +142,7 @@
 | --- | --- | --- |
 | PM / driver | active / active | 范围监督 / 首阶段文档checkpoint与排队；两者计入总量 |
 | MEM / FILE / ASK / CONN / EXEC / CONFIG | 6 active存续 | 代码与定向收尾；需等前置/检查时登记后结束，不补子代理 |
-| DESKTOP / AND / EXT / ACTION / LIFE | 5 active存续 | R001 Android进行中；其余收尾/前置，等候时结束回合 |
+| DESKTOP / AND / EXT / ACTION / LIFE | 5 active存续 | R001已释放；Android继续D01及依赖准备，Desktop已冻等待Q007，其余收尾/前置 |
 | WEB | idle，CANDIDATE等待Q002 | 冻结定向12项及真实main隐藏浏览器作者报告EXIT0；不唤醒，gate/PR/独验均未完成 |
 | 领域 / 控制 / 客户端 / 最终验收chat | 4 idle，准备已完成 | 禁止为政策FYI唤醒；精确候选通知先排队，等总active<6再逐个释放 |
 
@@ -148,14 +150,20 @@
 | --- | --- | --- | --- |
 | G001 | WEB Q002 | 冻结f8f684b6定向/浏览器完成，R001释放重资源，且新执行回合有全局槽；运行affected后才PR/独验 | WAIT；不提前唤醒 |
 | G002 | CONN native C07 | 精确Kotlin/helper/JVM/instrumentation候选就绪，R001后单独资源窗，槽位允许；原backup固定true不增toggle | WAIT_CANDIDATE |
-| G003 | AND D2及Ask组合 | D2新part/commit upload_expired生产commit、Android与Ask消费者精确SHA冻结；临时组合而非PR夹带/正式合入 | WAIT_DEPENDENCY |
+| G003 | AND D2及Ask组合 | D2前置`5744d6a832117a9f9aec7affd37453ab15d455cf`（含早期1417及part/commit upload_expired补充），Android与Ask消费者精确SHA待冻；仅临时组合，非PR夹带/正式合入 | WAIT_DEPENDENCY |
 | G004 | 四独立验收chat | 排队传达已决L06/D01、精确PR/head/base/依赖与新消费者清单，闲置不唤醒；一次一项 | WAIT_GLOBAL_SLOT |
 | G005 | 所有完整affected请求 | Q001 FILE/Q003 EXT/Q004 LIFE/Q005 ASK/Q006 MEM及后续EXEC/ACTION/DESKTOP/CONFIG；最终dry-run+clean SHA齐备，资源/全局槽双重满足 | WAIT_CANDIDATE_OR_SLOT |
 
 已决政策立即适用于活跃owner；未运行验证仍UNRUN。任何新产品分歧仍送PM，政策已答项不再重复提问。
 
+## 已确认首启动与账号偏好边界
+
+AND-D01已由PM进一步明确：旧全局隐私/采集/同步值无可信owner快照，不能猜给当前登录账号、不能回填；保留旧私有值，不自动复制或删除。没有本人稳定deployment/account快照时使用既有CollectorConfig默认，运行采集停止、本人预览未确认。之后保存/恢复按账号，A→B→A恢复参数但换号运行态仍停止，snapshot.enabled不自动开采集。
+
+系统权限、SAF、device/debug、容量和外观仍设备级；设备SAF grant不能当另一账号source授权。origin不是主要身份。生成回归覆盖首启动、同账号重登、URL和凭据变更、同deployment/account换URL、A→B→A、旧Worker/迟到响应以及SAF持久授权与账号source授权分离；不做旧格式迁移。客户端组/最终组通知继续排G004，当前不唤醒。
+
 ## 最终验收与持续记录
 
 逐项矩阵的全部预期均是验收要求，不是通过声明。以生成资料从真实账户登录、生产 HTTP/应用启动、客户端持久队列/WorkManager、UI 与重启顺序验证；原算法 fixture 只作对照。每项包含同 ID 双用户负例、相关撤权/删除/取消/迟到结果；高风险持续积压与组合状态不能只做单分支测试。真实模型/供应商、物理设备、系统权限、前台焦点和部署分别记录，未做就保持未验，不采集真实个人截图。
 
-首阶段仅管理文档；仅WEB已报冻结候选，尚无独立验收、正式模块集成或最终完整检查。D2前置单commit单独登记，不视为模块验收。文档检查记录在[矩阵末尾](../validation/multiuser-parity-restoration-matrix.md#首阶段文档核查)，后续用真实候选证据逐项更新。
+首阶段仅管理文档；WEB与DESKTOP已报冻结候选，尚无独立验收、正式模块集成或最终完整检查。D2前置单commit单独登记，不视为模块验收。文档检查记录在[矩阵末尾](../validation/multiuser-parity-restoration-matrix.md#首阶段文档核查)，后续用真实候选证据逐项更新。

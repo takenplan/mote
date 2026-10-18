@@ -193,10 +193,11 @@
 | INV-FILE-02 / FILE-03/04 | FILE / AND、CONFIG、LIFE | list/owned扩展reference与归档旧head后，policy preview完整cancellation/proof形状、无preview500；可读归档不授当前processing权。canonical ig_file_heads与LIFE冻结owner/source/external/receipt/current/deleted/CAS/portable/backup及inventory，当前格式不静默失踪、无旧数据回填。原生CentralLibrary hasOriginal=false不得强读originalRef/size/sha。 | UNRUN；待FILE及Android消费者SHA |
 | INV-CONN-02 / CONN-C06 × FILE/LIFE | CONN / FILE、LIFE | PM授权最小host账号绑定assertFileAllowed复用forget事实，acquisition/publish前复核。forget后改selector零重下载/零重发布，在途forget迟到拒绝，B同external ID可正常备份；静态发现非已修PASS。 | 待实现/运行/独验；无新策略/历史扫描 |
 | INV-ASK-02 / ASK-A05 | ASK / EXT | browse原聚合导航collections、search稳定枚举、retrieve相关rank且拒cursor分别验，不因maxCharacters/hybrid修复自动判三mode恢复。 | 已纳scope；UNRUN |
-| INV-CONN-03 / CONN | CONN / EXEC、WEB | 控制组新增五分钟wake时序、held scan期间原selection及时保存/先撤旧epoch与原统计总览。静态疑点先动态核对，不直接提升confirmed。 | 调查；UNRUN |
+| INV-CONN-03 / CONN | CONN / EXEC、WEB | PM核旧周期clamp≤300000后每wake直接sync(false)，恢复实际5min周期。允许同一M05本地selection admission lane避开长sync物理资源，及时保存/撤旧epoch，保留durable取消、跨await持久epoch/forget/grant fence与physical join/erasure；不另建scheduler。须non-abort-compliant held scan验证及时返回、重启新范围、旧release不入库及双账号正例；原统计总览另验。 | 工程方向已定；独立运行UNRUN |
 | INV-LIFE-01 / LIFE-L01 | LIFE / FILE、DESKTOP、AND | PM要求沿原delete journal核对同owner同ID重传/个人merge不得复活已删内容；分别覆盖newID、另一账号、重启、retention与explicit forget差异和整实例恢复。不泛化禁所有import，无后续人类批准不得添EXCEPTION绕过journal。 | 已纳范围；待准入与生成回归 |
 | INV-EXEC-02 / EXEC-X01 | EXEC / AND、DESKTOP | 原生Android operation receipt仍硬编码task前缀；family恢复后与connector前缀保持精确账号hash/回执校验，待producer与consumer双SHA联调；Desktop并行核对。 | UNRUN；待EXEC/AND候选 |
 | FILE-PERCEPTION / FILE-02关联 | FILE领域/ports/API与历史preview-confirm；CONFIG专用Web/必要Kotlin；ASK查询消费 | PM确认静态能力缺口，待生产入口复现：旧图片独立auto/profile、外部OCR、allowQueryImages、日期/来源complete/recompute preview确认未接scope；通用processing页不等价。与自定义image/caption/readiness联合，不能挂global legacy或另造业务流。 | 调查；三owner已active接收，独验通知等G004槽 |
+| ASK-INTAKE-01 / ASK-A02 × MEM | ASK / MEM publication port | 作者新增真实生产fixture先红：noteCapture经MemoryHost captureMaterials→PrivateData直接publish，Ingress/M06 hooks未收到，canonical embedding为0。双方协调最小Material publication通知port，Ask订阅新发布输出；不改Memory语义、不做查询时历史扫描/backfill。作者报既有A01 16/A04 8/A05 HTTP4+MCP4/A02 24项定向通过，均在途、未附冻结SHA，不能覆盖新缺链。 | 作者生产fixture失败已报；修复后真实intake→发布通知→scoped embedding/检索及双用户/修订删除/重启待验，独立UNRUN |
 
 独立验收准备工件（不代表通过）：领域组v1.1.0，`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/acceptance-checklist-v1.1.json`，SHA256 `9ffd1c49834ca086c55a579b830b65fcb652c6b1b266f6e95701a170625bd1c2`；23主条目+13额外项，独立应用运行全部UNRUN。其Todo回执为owner实跑/验收chat审回执，非独立运行。
 
@@ -213,7 +214,8 @@
 
 | 前置 / 精确SHA | 所有者与报告结果（非独验） | 消费者与组合要求 | 正式集成状态 |
 | --- | --- | --- | --- |
-| Desktop D2 `1417e395dc4c5d0c6754e824243193aa69057e91`，base起点2c78ca8d | Desktop报告Ingress/snapshot29项、真实LocalSourceManager断part/丢ACK跨24h队列/backend重启通过；日志`/tmp/mote-desktop-d2-ingress.log`、`/tmp/mote-parity-desktop-source-retry-green2.log`。无wire变化，snapshot授权不续期。 | Android冻结consumer后组合，登记base+D2+Android精确head及组合SHA/tree；SourceUploadWorker半传/commit丢ACK>24h；不依赖GC。组合不能标成起点通过，也不让Android PR夹带Desktop改动。 | 尚未组合/独验/affected gate；未合正式integration |
+| Desktop D2 `5744d6a832117a9f9aec7affd37453ab15d455cf`，base起点2c78ca8d | 作者前置递进：1417e395 begin恢复→d77fa9c4过期错误码→5744d6a8类型声明。含begin后跨日part/commit upload_expired409暂态边界；不能只取早期1417。作者报告server typecheck、29项+explicitcontract1项、Desktop source-account14项通过，日志`/tmp/mote-parity-desktop-server-type-green.log`等；非独验/完整gate。snapshot授权不续期。 | Android冻结consumer后登记base+D2+Android精确head及组合SHA/tree；SourceUploadWorker半传/commit丢ACK/已有begin后跨24h均验，不依赖GC，不夹带Desktop改动进Android PR。新前置不沿用旧组合结果。 | 尚未组合/独验/affected gate；未合正式integration |
+| Desktop完整模块候选 `73c1115287fe07e1824526861ebc2e8ed3cf39fc`，base起点2c78ca8d | 作者报告5文件83项、Ingress/snapshot29+explicit expired1项、Server/Desktop类型与依赖预检通过；真实main/preload/startup/迟到ACK/换账号/旧read拒绝已包含。handoff=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-745e-7330-8770-aed83a43077f/desktop-parity-evidence/handoff.json`。 | 最终affected计划Desktop+Server+Web，Android=false；Android D2消费仍需与其冻结SHA临时组合。 | CANDIDATE；Q007等待全局槽；未运行完整gate/未PR/未独验/未正式集成 |
 
 ## 跨模块最终冻结旅程
 
@@ -251,3 +253,5 @@
 本集成chat未运行产品HTTP/应用测试、原生/模拟器/产品UI、真实模型/供应商/物理设备或部署。模块作者通过消息报告的WIP定向结果与独立验收UNRUN分开；无正式模块集成或最终完整gate。
 
 政策/并发增量核查：已记录L06重新登录按原开关继续、AND-D01偏好按账号及设备权限边界；只读全局快照13 active/5 idle，WEB候选等待Q002。新FILE-PERCEPTION调查独立编号，不变更66主行。格式/链接/编号与headless渲染再次核对；原文档回执保留为`document-check-3a9a9a15.json`，增量为`document-check-policy-slots.json`，同文档核查临时目录。文档-only dry-run与暂存diff检查通过；未运行任何应用检查。
+
+后续接缝增量：记录ASK-INTAKE-01作者真实生产fixture红、D2前置5744d6a8与CONN原5min/held scan方向、AND-D01首启动边界；核心66行不变。只做文档核对，回执`/tmp/mote-parity-doc-review-20261018/document-check-seams.json`；没有运行产品检查或通知idle验收组。
