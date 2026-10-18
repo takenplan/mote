@@ -16,7 +16,7 @@
 - 从真实 production HTTP/应用/客户端生命周期入口开始；同外部ID/设备ID/幂等键/相同字节双用户正负例；不能只调用内部组装路径或旧legacy fixture。
 - 相关flow至少覆盖正常、合法空、单项失败、retry/restart、暂停/取消、来源或账号撤权/删除、配置变化、迟到结果；保留成功兄弟与unknown事实。高风险积压、跨天、A→B→A等多状态组合单列，不能被pairwise删除。
 - 用户语义由模型解释，修复检索/上下文不加词表路由；不新增上限、手工恢复步骤、静默降级或自动付费历史处理。
-- 模块PR聚焦检查与check:affected先dry-run排期、按原范围执行；最终组合仅集成driver运行。隐藏UI/无窗口模拟器为默认，原生权限、前台交互、真实设备/模型另记。
+- 模块PR聚焦检查与check:affected先dry-run排期、按原范围执行；最终完整gate仅集成driver运行；准确临时组合的独立focused/API/UI/模型可按新资源规则并行。隐藏UI/无窗口模拟器为默认，原生权限、前台交互、真实设备/模型另记。
 
 用户新增的最终门槛适用于全部66跟踪行：Mac物理机真实UI；Android按用户最新“模拟器就行”以模拟器实际App/UI为本轮范围（无窗口ADB实际交互有效）；涉及真实LLM时统一用已盘点的本机Codex Server。当前实际设备App/UI与真实Codex结果均PENDING/UNRUN，fixture/API/unit/DOM/headless/模拟器仅作支持。逐场景绑定设备UI锁、隔离测试profile/数据库、生成数据、实际入口/交互/预期与精确源码；同一设备或profile/DB独占，不同独立设备/后端可并行，完整checks仍单driver串行。交互前说明窗口和权限影响；缺设备/授权给PM具体清单后处理，不部署、不重跑个人资料、不采集个人截图。MCP私人能力访问需用户鉴权，协议初始化由客户端完成；外部公开匿名源保留原合同，额外手工session/source步骤仍需证据。客户端v2已准备66/66+22风险=88case，执行全UNRUN；旧v1保留，Android实体手机/OEM未验不阻批准范围，ENV01待driver模拟器窗。未启动Mote UI或真实模型调用。
 
@@ -107,7 +107,7 @@
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
 | DESKTOP-D1 | C+N / P1 | 文件逐项 ACK/拒绝/暂时失败 | FILE / EXEC | source scan→同批 ok/409/410/暂时失败/later；已成功逐项结清、永久拒绝按版本隔离、无关项继续；重启不丢 ACK，不改 ID/前驱覆盖中央。 | D1；生产 sendBatch 合成 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
-| DESKTOP-D2 | C / P1 | 跨24小时会话与 durable ACK 恢复 | FILE / LIFE | 真实客户端与 Ingress 上传未commit/commit但ACK丢失→模拟超过24h且无GC→同版本重启重试恢复 ACK 或新合法 attempt；无手工GC/改文件步骤，字节与owner校验保留。 | D2；静态跨端状态链 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
+| DESKTOP-D2 | C / P1 | 会话过期与 durable ACK 恢复 | FILE / LIFE | 真实客户端与Ingress上传未commit/commit但ACK丢失→退出重启→原入口重试恢复ACK或合法新attempt；原会话过期/无GC回归保留，无额外模拟或等待24h专项；字节与owner校验保留。 | D2；静态跨端状态链 | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 | DESKTOP-D3 | C+N / P2 | 服务端分页与首屏 | FILE / ASK | 生成长历史与整日截图，真实浏览入口每页只消费原 limit/cursor、后续页失败不阻首屏；翻页/头部插入不靠本地 offset 全量扫描；账号/device/query绑定。 | D3；capturePages 1000行 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 | DESKTOP-D4 | C+N / P2 | 中央原始 sizeBytes 显示 | FILE | 有OCR/无OCR中央截图分别保留 server sizeBytes，2MiB不变14字节/0；本机记录原大小算法不回退，真实隐藏 renderer 验显示。 | D4；preview 生产函数 seam | OPEN；模块当前候选/阻塞见下方登记；完整独立旅程UNRUN |
 
@@ -227,7 +227,7 @@
 
 | 前置 / 精确SHA | 所有者与报告结果（非独验） | 消费者与组合要求 | 正式集成状态 |
 | --- | --- | --- | --- |
-| Desktop D2 `5744d6a832117a9f9aec7affd37453ab15d455cf`，base起点2c78ca8d | 作者前置递进：1417e395 begin恢复→d77fa9c4过期错误码→5744d6a8类型声明。含begin后跨日part/commit upload_expired409暂态边界；不能只取早期1417。作者报告server typecheck、29项+explicitcontract1项、Desktop source-account14项通过，日志`/tmp/mote-parity-desktop-server-type-green.log`等；非独验/完整gate。snapshot授权不续期。 | Android冻结consumer后登记base+D2+Android精确head及组合SHA/tree；SourceUploadWorker半传/commit丢ACK/已有begin后跨24h均验，不依赖GC，不夹带Desktop改动进Android PR。新前置不沿用旧组合结果。 | 尚未组合/独验/affected gate；未合正式integration |
+| Desktop D2 `5744d6a832117a9f9aec7affd37453ab15d455cf`，base起点2c78ca8d | 作者前置递进：1417e395 begin恢复→d77fa9c4过期错误码→5744d6a8类型声明。含begin后跨日part/commit upload_expired409暂态边界；不能只取早期1417。作者报告server typecheck、29项+explicitcontract1项、Desktop source-account14项通过，日志`/tmp/mote-parity-desktop-server-type-green.log`等；非独验/完整gate。snapshot授权不续期。 | Android冻结consumer后登记base+D2+Android精确head及组合SHA/tree；SourceUploadWorker半传/commit丢ACK/已有begin后失效重试保留既有回归（无额外24h专项），不依赖GC，不夹带Desktop改动进Android PR。新前置不沿用旧组合结果。 | 尚未组合/独验/affected gate；未合正式integration |
 | Desktop完整模块候选 `73c1115287fe07e1824526861ebc2e8ed3cf39fc`，base起点2c78ca8d | 作者报告5文件83项、Ingress/snapshot29+explicit expired1项、Server/Desktop类型与依赖预检通过；真实main/preload/startup/迟到ACK/换账号/旧read拒绝已包含。handoff=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-745e-7330-8770-aed83a43077f/desktop-parity-evidence/handoff.json`。 | 最终affected计划Desktop+Server+Web，Android=false；Android D2消费仍需与其冻结SHA临时组合。 | CANDIDATE；Q007等待全局槽；未运行完整gate/未PR/未独验/未正式集成 |
 | Files部分head `67b28439cac04942911eacd4cf3118a4fbe51586`，base2c78ca8d | 作者已推送/clean；restore提交`980674f6`；67b284为最小Perception只读port供ASK review消费。冻结部分head的HTTP30项/类型/scope/i18n作者EXIT0，receipt=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6b10-7001-b7d6-84ba844a5604/parity-files-evidence/receipt.json`；同目录perception-next-contract.json为PROPOSED未交付。完整独立image/history与managed MediaAssets仍OPEN。当前ALL6 TS+Android/root scope预检缺Electron/Java环境，Server/Mem0 Node26 ABI147已报PASS；native源码/测试已落盘但UNRUN。 | ASK只消费该精确最小port；FILE其余功能完成后重新冻结、重选检查。当前部分定向与port不能关闭FILE-PERCEPTION或原生验收。 | Q001 WAIT_FEATURE；P009/R004后续窗口排队，非最终READY，无PR/merge |
 | Ask历史部分core `f2b44331479fc6ca60f62ab0732493b93f76fda7` | 含fixture-only c94e9e9及精准Material发布seam ac3533c1（cherry b66527d3），不含其父Memory业务。真实noteCapture→发布通知/上传→M06→向量worker→Context/Ask fresh引用等固定core54项作者EXIT0，证据仅绑定f2。 | 已由下方最终e23候选接Files最小port/allowQueryImages取代；该core不关闭完整FILE-PERCEPTION，也不等于Memory原任务验证。 | SUPERSEDED；历史定向结果保留，当前Q005按新9d重选/检查 |
@@ -323,6 +323,18 @@ Web独立物理Mac可见Chrome子范围R007完成：exactf8/tree9ef0c14368bbcace
 
 R007 driver核report/manifest768dc2d7全部48文件hash、234个既有dist和6个startup source/runtime hash，查看Home A/Device after/B late后三张关键图；driver verification=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/web-f8f684b6-visible-driver-verification.json` SHA25642e58fc4281ff071e1fffb0b55c9f21fafd2f45efe1deb6212319a11692344e2。manifest有20PNG但只有11为最终成功图，其余历史诊断不得冒final20；旧失败图路径覆盖限制/选择器计数修正/末尾33498ms并非离页独立窗口已在报告披露，正式离页断言31501ms。R006仅用于samehead234artifact字节provenance，不继承actualUI通过。driver另核backend67439/child67440消失、49170关闭、physicalMac锁释放。Draft170已仅改metadata并核f8/Draft/Open/unmerged；source未改不重跑required。模型latestInsight/扩展安装卸载-source动态/producer-semantic完整性/OS隐藏可见/MacCollector-TCC-native-background/Android/最终Exec组合仍未验，生成Ingress不充当原生采集证明，不给整体READY/正式汇总。客户端已交接并释放；下一具体Android262+Exec070生成后端前置单独派发，无build/native/model且不抢File374重窗。
 
+最新人类范围与资源修订已落实（PM human turn01a14fbc-993e-7c33-ae56-b42211f634e5）：取消额外模拟>24h或真实等24h专项、所有依赖等待/排期与完成下限；保留现有session expiry/durable ACK/restart及正常suite回归。scope overlay=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/acceptance-scope-revision-20261019.json` SHA2561a866ba5cde37330135d2a57bda0a4ba8ae11740a71f9ec56b09a594e31abab2，原v2 06c4b288及88case文件不修改，仅覆盖PHYS-DESKTOP-D2/PHYS-S01额外时长条件；driver没有owned24h wait。唯一full/check锁及被检源码、同库/UI/serial保持互斥；独立后端/账号/DB/port/目录的focused/API/MacUI/Android实际交互/localCodex可以与full并行，构建/冷启峰值只交短窗。此前“所有runtime/UI等整轮full”的笼统等待规则已被替代；不免除任何必要完整门禁。
+
+Memory新83562440df8b4c14193a045794abb49c9145cb11/tree7d7f1191bb76a54ffbf1865e5dd50fee06e9a364（parent855），clean本地未push/PR；driver核manifest5e548a254359b83d0bf00c2641bbed756b3b156641728c7bd718018bd42a9f08/report94ea4af51858c0f52623137964b1270ba815c303ebafde2770745d4935669fba/classification50599b76280edff405d65d3598be535153a00e56ff8de9591b661d9fcb3e87b7及20artifact。唯一production scripts/backup.ts只将running lease归零但保当前charged attempt关联fence，canonical recovery精确退款后清除，原authority仍无效；engine/host/task/requiredschema/scopedrestore/inventory与855未改。新增真实engine claim→实际backup/restore RED4!=3/GREEN含旧fence失效、未charged不退旧失败、零重复退款/重放。原52分类46旧完成谓词+1crossuser旧键+1pause旧重入+2capacity旧kind+1correction未terminal前置+1实际backup关联/人工账本；所有最终隐私/409/零调用/unknown断言保留。作者24+55+24+1=104执行含重复嵌套，不冒104独立case；新22仍UNRUN，旧855 fullFAILED原件保留。
+
+新临时core已由原resolver合为27a2232bdeafd13a45ee2f996798de6963fcec8e/treeb2781b59c3f7cc0ffd515e7b4de667352f0d49e8，parents=f22+835；新增0冲突、11文件+80/-16自动合并，旧9区/4文件不改，source正式释放。packet=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8f-6977-7fa3-8145-0b3696ae413c/runtime-combination-memory835-rebind/manifest.json` SHA25646a7077e21551b399799da9e8cbf76d6e1c0895bbe68fd4afa6aed2c0662012a，report2d30d1d14003ca73eb5661c304952d4c06fc833066a4db8dc301bdc22f068298。driver核HEAD/tree/parents/clean；54结构核对不是runtime。领域线独立读835 delta后已获16:25:07→16:35:07Z最小工作区依赖/按需native/shared-agent构建短窗，再以本树tsx真实启动；不链接别树artifact冒27a运行，新27a所有运行结论另绑准确输入，不等待12模块full。
+
+首个真实本机Codex最小链在独立Exec070/tree2f91ef81323fbaa9427f3e3fc8e23f79cb811c9f的62030实例完成，非27a：实际CLI初始化/管理员与A-B登录→现有本机CLI0.162.1/stdio app-server、实际catalog/probe→M03生成A/B不同资料→显式M06两processing succeeded→真实Ask1938a6f9-ef97-4dd7-a3a6-3762d8690503 completed；实际search_context+evidence/1citation回答Wednesday14:30与CORE_A无CORE_B，Ausage2/B0。receipt=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e90-04ae-70c0-92a5-3f2a24a3bf0c/parity-acceptance/live-core-20261019/exec070-connectivity/producer-query-receipt.json` SHA256247edf1a5e80e1e6d600cd32fee415af09330958a28221576ae32927e335b05a，driver实际读核；最初关闭自动处理后直接Ask无context的语义失败单列保留，修正真实M06前置后成功，不当产品bug或借作27a通过。真实模型gpt-6.1-sol/high/fast；无个人资料，无假设Codex HTTP port。
+
+Android实际执行已转交专人：backend070的49171/PID81228生成A/B/admin前置report16e204bf、manifest65c38166（仅READY_BACKEND_ONLY）。客户端独占stock5582，16:20:52→16:25:52Z短峰值内19.723s完成真实boot、22.477s总含准确APK安装及reverse49171，16:22:44按token退peak并保设备lease。App262实际MainActivity冷启1063ms并树bounds tap设置/连接；正常screencap确认FLAG_SECURE使App像素黑屏。PM明确实际Activity/tap/input/权限/SAF/Worker与UI树、独立持久效果可构成功能交互证据，但黑屏不证明布局/可见错误态，像素项UNRUN/受secure限制；不改flag/重build/新增用户操作。系统permission/SAF可见界面另实证，当前功能链尚未整体PASS。
+
+Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6692af58b8ddf38c061b842aa644a336f4473dc4aee757fc99741400；14PASS/Server3164=3160PASS2FAIL0cancel2skip/后7UNRUN，Android未跑。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-3740e89c-required-gate-failed.json` SHA256f148b8814c3c5e44979d13f3497cba2ad4bf450f530e2e74c8c7f6331edfba9d；原log/receipt/plan保留。sameHEAD/clean/cleanupConfirmed/锁释放/PID71644 gone后已恢复原File owner一次：capture-browser83:160 OCR发布409external_result_unknown、multiuser-memory226:125 Hindsight503memory_provider_unavailable，根因待查，不凭状态归fixture/生产bug。新File源须后续重绑core；当前27a实际结果不自动替新源通过。driver随后已于16:33:42.275Z启动Ext544 fresh22，runb851c1f4-9437-46de-8761-de51e75c6e28/PID91038，Node26ABI147/JDK21/Gradle1/hidden；初始build/type结束进入测试后已退短peak，common完整锁继续，普通独立API/UI/model并行。当前Ext结果RUNNING，正式汇总/main未释放。
+
 ## 跨模块最终冻结旅程
 
 这些旅程与逐行验收互补；只在单一最终集成 SHA 执行并记录结果。依赖模块尚未释放，不启动完整套件。
@@ -334,7 +346,7 @@ R007 driver核report/manifest768dc2d7全部48文件hash、234个既有dist和6�
 | 模型/Memory积压→发布/聊天 | 背景Insight持续占用、交互lane、动态并发、跨池Memory及时保存、双域/observation层级、Operation业务类型与父子变化通知。 | — / UNRUN / 全部 |
 | 配置→真实执行→用量/界面 | 个人草稿/秘密确认/每功能模型、固定生成Codex runtime、普通编辑快照与真正撤权、归属/价格快照/过滤分页、专用控件原路径。 | — / UNRUN / 全部 |
 | Actions→人审→设备日历 | 完整语义与原文分支、同批合并去重、成功检查点、改名、设置/重登后真实WorkManager重新调度；unknown/取消/停用迟到ACK不重写。 | — / UNRUN / 全部 |
-| 双端离线/切账号→恢复 | reference逐项409/410/暂时失败、capture冲突隔离、超过24h未commit与ACK丢失、A→B→A及同账号换凭据、队列/草稿/恢复UI状态与旧响应隔离。 | — / UNRUN / 全部 |
+| 双端离线/切账号→恢复 | reference逐项409/410/暂时失败、capture冲突隔离、未commit与ACK丢失及原会话失效恢复、A→B→A及同账号换凭据、队列/草稿/恢复UI状态与旧响应隔离。 | — / UNRUN / 全部 |
 | 删除/保留/容量→导出/恢复 | 原实例retention与逻辑容量507、客户端队列保留、自动GC活动pin/unknown；A导出时B写入、中央副本遗忘失效、空目标恢复不重授旧权限/重放未知。L06用户已选重新登录按原开关继续未来任务；原authority不复活。 | — / UNRUN / 全部 |
 | 原首页/设备/插件/MCP | 原首页最近记录/Insight/入口/Home slot、30秒设备刷新、核验/停用退役卸载、reference元数据、真实SDK协议候选与原单次操作。 | — / UNRUN / 全部 |
 
