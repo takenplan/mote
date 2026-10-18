@@ -196,3 +196,26 @@ consumers and 36 Desktop multi-user cases (198 executed cases, zero failures or
 cancellations). Server no-emit, scope/import and bilingual checks also passed.
 The new full 22-check plan remains unrun here; native UI, emulator and real local
 Codex validation are assigned separately. The original Q001-R1 gate stays failed.
+
+## Q001-R2: File374 required-gate follow-up
+
+The fresh required run on `3740e89c` also **failed**: 14 steps passed; Server
+ran 3164 cases with 3160 passed, two failed and two skipped. Its later seven
+steps, including Android, were unrun. This result and the earlier Files873
+failure remain separate immutable evidence; author-focused passes replace neither.
+
+| Failure | Confirmed cause and repair |
+| --- | --- |
+| Central OCR raw detail / before-LIMIT filter / device updates | The consumer assumed `processing.automatic:false` prevented image intake. Independent Perception defaults now admit a durable image task anyway. A second explicit operation races that task's issued OCR and correctly returns `external_result_unknown`. A held real HTTP request makes the old 200 expectation RED. The consumer now keeps image processing enabled, selects OCR-only Perception, waits for its actual intake task and verifies the overlapping explicit request is exactly 409. Each of the three actual intakes publishes once. All raw detail, filter, canonical-byte, device-permission, numeric-cursor, restart, reconstruction, pagination and deletion assertions remain. |
+| Native Hindsight first A search | A production lifecycle race allowed native maintenance and a newly cached Entry to open the same control directory. The original journey reproduced `provider-control.json.pending` rename `ENOENT` at the same 503 assertion. The separate shared repair `26438597` retains native namespace ownership through maintenance close, with a held native HTTP cleanup/read-bank regression and B positive control. See [native namespace lifecycle regression](native-memory-namespace-lifecycle-2026-10-19.md). |
+
+The repair adds no unknown-result bypass, fallback provider, migration, new
+permission, product limit or automatic processing policy. The OCR test follows
+the already accepted independent-image contract; the shared native repair restores
+serialization across engine incarnations. Exact final source, narrow results,
+RED/GREEN logs and hashes are bound in the external Q001-R2 manifest.
+
+A fresh required gate belongs to the new frozen File head. The temporary
+combined core and other branches do not automatically acquire either this source
+or its validation. Physical UI, Android UI, real native service/model and combined
+runtime checks remain outside these generated fixtures.
