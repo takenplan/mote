@@ -116,6 +116,8 @@ export function checkProductionImports(directory=root){
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
     [sourceRoot+'/scope/processing.ts',new Set([sourceRoot+'/processor-admission.ts',sourceRoot+'/media-execution-facts.ts'])],
     [sourceRoot+'/scope/model-query.ts',new Set([sourceRoot+'/memory-validation.ts'])],
+    // Recording recipe definitions import pure prompt contracts, never a legacy host.
+    [sourceRoot+'/scope/memory.ts',new Set([sourceRoot+'/connectors/recording-memory.ts'])],
     [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
   ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];

@@ -50,7 +50,7 @@ export class ScopedRecordingAdapter {
  private async init(){await(this.initialized??=this.file.read().then(saved=>{if(saved){if(saved.version!==1||!z.string().uuid().safeParse(saved.epoch).success)throw new ConnectorError('recording_state_invalid',503);recordingSelectionSchema.parse(saved.selection);this.saved=saved;}}));this.assert();}
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
  private async fence(){this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(this.signal.aborted)throw new ConnectorError('recording_cancelled',409);const current=await this.provider.account(this.signal);this.assert();if(current.id!==this.saved.account.id)throw new ConnectorError('recording_account_changed',409);}
- async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=row.value.stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),...(this.saved.account?.name?{accountName:this.saved.account.name}:{}),environment:this.ledger.get('environment','status'),selection:this.saved.selection,counts:{pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
+ async status(){await this.init();const receipts=this.ledger.rows<Work>(this.saved.epoch,'work:').flatMap(row=>{const current=row.value.stages;return [current.metadata,...(current.metadata.state==='succeeded'?[current.transcript,...(this.saved.selection.backupAudio?[current.media]:[])]:[])];});return {provider:this.provider.id,connected:Boolean(this.saved.account),...(this.saved.account?.name?{accountName:this.saved.account.name}:{}),environment:this.ledger.get('environment','status'),selection:this.saved.selection,counts:{...(this.saved.account?this.ctx.recordingArchiveCounts?.(this.sourceId()):{transcripts:0,audio:0,empty:0}),pending:receipts.filter(stage=>['waiting','running'].includes(stage.state)).length,failed:receipts.filter(stage=>['blocked','failed','stale'].includes(stage.state)).length}};}
  /** Read the existing current-selection journal; no provider probe or task is
   * admitted. Archived files outside this selection remain in canonical M03. */
  async recordingPage(limit:number,position:(epoch:string)=>string|undefined){
@@ -91,34 +91,53 @@ export class ScopedRecordingAdapter {
   await this.larkRunner({kind:'configure',...larkConfigureSchema.parse(value)},{signal:this.signal});this.assert();return this.check();
  }
  async login(progress:(value:unknown)=>void){await this.init();await this.authorize!(progress);this.assert();await this.check();return this.connect();}
- async connect(){await this.init();const account=await this.provider.account(this.signal);this.assert();if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}await this.file.write(this.saved);this.ctx.sources.register({id:this.sourceId(),name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:this.sourceId(),platform:'import',retention:'archive',enabled:true});return this.status();}
- async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);await this.fence();if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
+ private async memoryDefault(sourceId:string){
+  if(this.ctx.recordingMemoryDefault&&this.ledger.get<boolean>('recording-memory-default',sourceId)){await this.ctx.recordingMemoryDefault(sourceId);this.assert();this.ledger.drop('recording-memory-default',sourceId);}
+ }
+ async connect(){
+  await this.init();const account=await this.provider.account(this.signal);this.assert();
+  if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}
+  await this.file.write(this.saved);const sourceId=this.sourceId(),isNew=!this.ctx.sources.listSources().some(source=>source.id===sourceId);
+  // Keep the new-source initialization intent before publishing the source, so
+  // a restart or configuration conflict cannot silently lose its default.
+  if(isNew)this.ledger.set('recording-memory-default',sourceId,true);
+  this.ctx.sources.register({id:sourceId,name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:sourceId,platform:'import',retention:'archive',enabled:true});
+  await this.memoryDefault(sourceId);
+  return this.status();
+ }
+ async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
  async disconnect(){await this.init();this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
  async sync(automatic=false,retryOnly=false){
   await this.init();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);
-  const assertCollection=()=>{this.assert();this.signal.throwIfAborted();if(!this.ctx.sources.getSource(this.sourceId()).enabled)throw new ExecutionFailure('blocked','recording_paused');};
-  assertCollection();await this.fence();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);
-  const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch,revisions=new RecordingRevisions(this.ctx.sources,source,this.provider.id);
+  const selectedEpoch=this.saved.epoch;
+  const assertCollection=()=>{this.assert();this.signal.throwIfAborted();this.ctx.recordingEpochCurrent?.(selectedEpoch);if(!this.ctx.sources.getSource(this.sourceId()).enabled)throw new ExecutionFailure('blocked','recording_paused');};
+  assertCollection();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);await this.fence();
+  const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch,revisions=new RecordingRevisions(this.ctx.sources,source);
+  // A successful source registration can precede a failed default transaction.
+  // Any first sync finishes that same intent before freezing Memory intake.
+  await this.memoryDefault(source);assertCollection();
   let imported=0,duplicates=0;
-  const publish=async(item:SourceItem,bytes:Buffer,format?:Extract<IngressOriginalFormat,`processor:${string}`|'recording-audio-backup'>)=>{assertCollection();await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex');item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};const receipt=await this.ctx.publishFile(source,revisions.revision(item),bytes,assertCollection,this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
+  const publish=async(item:SourceItem,bytes:Buffer,format?:Extract<IngressOriginalFormat,`processor:${string}`|'recording-audio-backup'>)=>{assertCollection();this.ctx.assertFileAllowed?.(source,item.externalId);await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex');item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};const receipt=await this.ctx.publishFile(source,revisions.revision(item),bytes,assertCollection,this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
   const flow=new RecordingFlow(this.provider,this.saved.account!,selection,{signal:this.signal,assertCurrent:assertCollection,
    seenCursor:(job,cursor)=>(this.ledger.get<string[]>(epoch,'seen:'+hash([Date.parse(String(job.input.start)),Date.parse(String(job.input.end))]))??[]).includes(cursor),
    archive:{
     transcript:async(value,authorize)=>{
-     const {metadata,rawText,transcript}=value,corpusTime=metadata.recordedAt??metadata.createdAt;authorize();
+     const {metadata,rawText}=value,corpusTime=metadata.recordedAt??metadata.createdAt;authorize();
      const original:SourceItem={externalId:metadata.id+':export',revision:hash(rawText),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),...(metadata.uri?{uri:metadata.uri}:{}),text:'',kind:'file',layer:'original',mimeType:this.provider.id==='dingtalk'?'application/json':'text/plain',deleted:false,document:{contentRole:'other',timeBasis:corpusTime?'recorded':'unknown',...(corpusTime?{recordedAt:corpusTime}:{}),originalMetadata:{provider:this.provider.id,recordingId:metadata.id,durationMs:metadata.durationMs,formatError:value.formatError??'',empty:value.state==='empty'}}};
-     const receipt=await publish(original,Buffer.from(rawText),`processor:connector.${this.provider.id}-transcript`);
-     const segments:SourceItem[]=[];
-     // Empty and unsupported raw exports remain originals, never synthetic speech.
-     // Only the provider's successfully decoded speech creates segment evidence.
-     if(value.state==='ready')for(const [index,segment] of transcript!.segments.entries()){
-      const item:SourceItem={externalId:metadata.id+':segment:'+index,revision:hash([segment,metadata]),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),...(metadata.uri?{uri:metadata.uri}:{}),text:segment.text,kind:'file',layer:'snapshot',mimeType:'text/plain',deleted:false,document:{contentRole:'other',timeBasis:corpusTime?'recorded':'unknown',...(corpusTime?{recordedAt:corpusTime}:{}),originalMetadata:{provider:this.provider.id,recordingId:metadata.id,segment:index,speaker:segment.speaker??'',startMs:segment.startMs,endMs:segment.endMs,untimed:segment.untimed??false,uncertain:segment.uncertain??false}}};
-      segments.push(item);
-     }
-     await revisions.replaceSegments(metadata.id,segments,original,authorize,()=>this.fence());
-     return receipt;
+     // The retained provider export is the single canonical speech input. Its
+     // fixed local decoder publishes the complete transcript and exact segment
+     // locators as one Material; publishing each segment as another SourceItem
+     // would duplicate the same speech and fragment recording Memory context.
+     return publish(original,Buffer.from(rawText),`processor:connector.${this.provider.id}-transcript`);
     },
-    existingMedia:()=>undefined,
+    existingMedia:id=>{
+     assertCollection();const item=this.ctx.sources.getItem(source,id+':audio'),metadata=item?.document?.originalMetadata;
+     if(!item||item.deleted||item.kind!=='file'||item.layer!=='original'||!item.mimeType?.startsWith('audio/')||metadata?.provider!==this.provider.id||metadata.recordingId!==id||metadata.role!=='original-audio'||typeof metadata.bodyHash!=='string'||!/^[a-f0-9]{64}$/.test(metadata.bodyHash))return;
+     // Selection epochs only authorize work; they do not erase a confirmed
+     // archive fact. Reuse requires the exact current owner/source head and
+     // retained original, never an old successful execution receipt alone.
+     const existing=this.ctx.retainedFile?.(source,item.externalId);return existing?.id===item.captureId?existing:undefined;
+    },
     media:async(metadata,media,authorize)=>{authorize();return publish({externalId:metadata.id+':audio',revision:createHash('sha256').update(media.bytes).digest('hex'),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),text:'',kind:'file',layer:'original',mimeType:media.mimeType,deleted:false,document:{contentRole:'other',timeBasis:'unknown',originalMetadata:{provider:this.provider.id,recordingId:metadata.id,role:'original-audio'}}},media.bytes,'recording-audio-backup');},
    },
   });
@@ -131,6 +150,7 @@ export class ScopedRecordingAdapter {
    const ready=current[phase];if(ready.state!=='waiting'||ready.availableAt>Date.now())return;
    current[phase]={...ready,state:'running',attempts:ready.attempts+1};delete current[phase].error;save(key,work);
    try{
+    if(phase!=='metadata')this.ctx.assertFileAllowed?.(source,work.id+(phase==='transcript'?':export':':audio'));
     const result=await flow.execute(job);this.assert();
     if(result.phase==='metadata')work.metadata=result.metadata;
     current[phase]={state:'succeeded',attempts:current[phase].attempts,availableAt:0};save(key,work);return result;

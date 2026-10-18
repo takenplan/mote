@@ -36,7 +36,8 @@ seam. It skips discovery and already archived transcript/media checkpoints. The
 empty retry payload's existing reset-only behavior is unchanged.
 
 Current-selection checkpoints use M15's signed opaque cursor and display the
-separate transcript/audio facts. They are not history. Recording history uses
+separate metadata/transcript/audio facts, including each phase's error and next
+retry time through the original recording step presentation. They are not history. Recording history uses
 canonical source IDs with the existing Files opaque pages; the original capture
 entry reaches `FileDetail`, including authenticated M03 bytes, corrections,
 speaker names, acoustic clips and the existing full tar export. No current page is

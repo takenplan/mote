@@ -1510,6 +1510,7 @@
       "table:connector_secrets",
       "table:connector_sources",
       "table:connector_timers",
+      "task:execution.register:kind:SELECT_TASK",
       "task:execution.register:kind:TASK"
     ]
   },

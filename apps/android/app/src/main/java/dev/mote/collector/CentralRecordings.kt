@@ -7,6 +7,8 @@ import android.os.Looper
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.DateFormat
+import java.util.Date
 
 /** Original recording controls use saved M10 connections and the existing M05
  * command journal. The central connector remains the only scheduler/executor. */
@@ -49,6 +51,9 @@ internal class CentralRecordings(private val screens: CentralScreens) {
                 val card = ui.card()
                 ui.text(id + " · " + connection.getString("provider"), NativeFontRole.SECTION, card)
                 ui.text(MoteI18n.text(if (value.getBoolean("connected")) "已连接" else "尚未授权"), parent = card)
+                val counts = value.getJSONObject("counts")
+                ui.text(MoteI18n.text("已归档转写 {0} 条，音频 {1} 条；等待 {2} 步，需处理 {3} 步。", counts.getInt("transcripts"), counts.getInt("audio"), counts.getInt("pending"), counts.getInt("failed")), parent = card)
+                if (counts.getInt("empty") > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", counts.getInt("empty")), parent = card)
                 value.optJSONObject("counts")?.let { CentralAdmin(screens).values(it, card) }
                 val previous = work.optJSONObject(id)
                 val task = previous?.optString("taskId")?.takeIf(String::isNotBlank)
@@ -95,7 +100,7 @@ internal class CentralRecordings(private val screens: CentralScreens) {
                 ui.button(MoteI18n.text("立即同步"), true, card) { command("sync") }
                 ui.button(MoteI18n.text("重试失败步骤"), parent = card) { operation("retry", JSONObject().put("resume", true)) }
                 ui.button(MoteI18n.text("断开连接"), parent = card) { command("disconnect") }
-                ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { if (active()) checkpoints(id, generation, true) }
+                ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { if (active()) checkpoints(id, generation) }
                 ui.button(MoteI18n.text("最近归档的录音"), parent = card) { if (active()) archive(id, generation) }
             }
         }
@@ -120,31 +125,32 @@ internal class CentralRecordings(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("取消")) { if (active()) show() }
     }
-    private fun checkpoints(id: String, generation: Long, steps: Boolean, cursor: String? = null) {
+    private fun checkpoints(id: String, generation: Long, cursor: String? = null) {
         close(); visible = false
         ui.work(MoteI18n.text("正在读取…"), { verify(id, generation); api.get(path(id) + "/recordings?limit=30" + (cursor?.let { "&cursor=" + CentralScreens.encode(it) } ?: "")) }) { page ->
             if (!current()) return@work
             val stamp = ++render; body.removeAllViews()
             fun active() = current() && stamp == render
             ui.button(MoteI18n.text("返回")) { if (active()) show() }
+            ui.text(MoteI18n.text("同步步骤与状态"), NativeFontRole.TITLE_MOBILE)
             ui.text(MoteI18n.text("以下检查点属于当前同步范围；历史原件仍可在资料库查看。"))
             for (row in rows(page.getJSONArray("items"))) {
-                val card = ui.card(); ui.text(row.optString("title", row.getString("id")), NativeFontRole.SECTION, card)
-                for ((phase, title) in listOf("transcript" to "文字", "audio" to "音频文件")) {
-                    val checkpoint = row.getJSONObject(phase)
-                    val state = when { checkpoint.getBoolean("archived") -> "原件已保存"; checkpoint.getBoolean("blocked") -> "需要处理"; else -> "等待处理" }
-                    ui.text(MoteI18n.text(title) + " · " + MoteI18n.text(state), parent = card)
-                    if (steps) CentralAdmin(screens).values(checkpoint, card)
+                val card = ui.card().apply { tag = "recording-checkpoint:" + row.getString("id") }; ui.text(row.optString("title", row.getString("id")), NativeFontRole.SECTION, card)
+                for (phase in CentralRecordingPresentation.phases(row, System.currentTimeMillis())) {
+                    val phaseCard = ui.card(card).apply { tag = "recording-phase:" + phase.key }
+                    ui.text(MoteI18n.text(phase.title) + " · " + MoteI18n.text(phase.stateLabel) + " · " + MoteI18n.text("尝试 {0} 次", phase.attempts), NativeFontRole.ROW, phaseCard)
+                    phase.error?.let { ui.text(it, NativeFontRole.SUPPORT, phaseCard) }
+                    phase.nextAttemptAt?.let { at -> ui.text(MoteI18n.text("下次可运行时间") + " · " + DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT, MoteI18n.locale()).format(Date(at)), NativeFontRole.SUPPORT, phaseCard) }
+                    if (phase.state == "failed") ui.text(MoteI18n.text("自动重试已停止，请核对原因后手动重试"), NativeFontRole.SUPPORT, phaseCard)
                 }
-                row.optString("error").takeIf(String::isNotBlank)?.let { ui.text(it, parent = card) }
                 if (row.optBoolean("empty")) ui.text(MoteI18n.text("采集完成，暂无文字"), parent = card)
                 if (row.optBoolean("unsupported")) ui.text(MoteI18n.text("厂商转写格式尚不支持"), parent = card)
                 row.optString("transcriptCaptureId").takeIf(String::isNotBlank)?.let { capture -> ui.button(MoteI18n.text("查看原文依据"), parent = card) { if (active()) library.file(capture) } }
                 row.optString("audioCaptureId").takeIf(String::isNotBlank)?.let { capture -> ui.button(MoteI18n.text("播放录音"), parent = card) { if (active()) library.playFile(capture, card) } }
             }
             if (page.getJSONArray("items").length() == 0) ui.text(MoteI18n.text("暂无记录"))
-            CentralScreens.next(page)?.let { next -> ui.button(MoteI18n.text("下一页")) { if (active()) checkpoints(id, generation, steps, next) } }
-            if (cursor != null) ui.button(MoteI18n.text("返回第一页")) { if (active()) checkpoints(id, generation, steps) }
+            CentralScreens.next(page)?.let { next -> ui.button(MoteI18n.text("下一页")) { if (active()) checkpoints(id, generation, next) } }
+            if (cursor != null) ui.button(MoteI18n.text("返回第一页")) { if (active()) checkpoints(id, generation) }
             ui.button(MoteI18n.text("中央资料库")) { if (active()) ui.navigate("files") }
         }
     }

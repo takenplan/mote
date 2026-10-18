@@ -135,8 +135,24 @@ Gmail envelope-only changes such as `historyId` retain the canonical original of
 an unchanged semantic revision. New semantic revisions supply new provider bytes;
 the generic M03 conflicting-original check remains strict.
 
+Each recording has one canonical export SourceItem. The fixed recording decoder
+turns its retained raw bytes into one complete transcript Material with exact
+segment/speaker/time locators; segments are not additional SourceItems or parallel
+Memory producers. New sources bind the existing recording extraction and
+independent review recipe before first intake. Existing explicit source recipes
+remain authoritative. This does not migrate or reprocess historical records.
+An audio backup may be reused across selection epochs only when the exact current
+owner/source/provider/recording head still has its confirmed retained original.
+Changing the external account creates a different source and cannot adopt that
+backup or its execution authority.
+
 One M05 task records the durable next polling instant; repeated manual sync does
-not multiply polling chains. Pause closes future timer admission while admitted
+not multiply polling chains. Each admitted sync preserves its successor before
+provider acquisition, so a terminal failure of one cycle does not stop later
+discovery. The saved Lark/recording selection's original `autoSync` switch and
+the connection's intake authority both gate background provider calls. Lark
+polls retain `automatic:true`: previewing a changed document scope never confirms
+its body collection. Pause closes future timer admission while admitted
 work drains. Resume schedules one future poll; stop/removal/account/lease fences
 reject old callbacks. Recording ledgers preserve exact bounded scan windows,
 pagination tokens and separate transcript/media checkpoints. Audio failure does
@@ -145,6 +161,18 @@ and retains an already confirmed audio backup. Failed transcript/media work keep
 its finite five-attempt transient budget and backoff across polls and restarts;
 blocked or exhausted work requires the owner's explicit `retry` operation.
 Reference-retention sources reject supplied original bytes before any write.
+
+Recording selection is a local control step in the same M05 executor. It does
+not wait for an old physical provider read to finish: admission cancels the old
+due sync, and the local `connector.select` handler persists the new saved epoch
+under its own selection resource. Every old recording acquisition/publication
+checks that current persisted epoch as well as its task, source and file-forget
+authority. Physical provider joins and erasure journals remain independent of
+the selection acknowledgement. A provider that ignores abort can finish, but
+cannot publish against the retired epoch. No old task is automatically retried
+as a new selection. The original recording tick ceiling remains five minutes;
+the original tick directly requested discovery rather than maintaining a
+separate slower discovery deadline.
 
 OAuth exchanges and CLI authorization have M05 external issuance journals. A lost
 outcome is not replayed automatically. Connector deletion returns `result_unknown`
@@ -250,11 +278,19 @@ timer, provider runtime or lifecycle state is introduced.
 The response is `{sourceId?,items,nextCursor}`. `sourceId` is the canonical M03
 source mapped by owner+connection+local source ID, never an adapter-local path.
 Each item keeps its provider recording `id`, optional actual metadata title/time,
-`transcript:{archived,blocked,attempts,nextAttemptAt?}` and
-`audio:{required,archived,blocked,attempts,nextAttemptAt?}`. Optional `error` is the
+and independent metadata, transcript and audio phase receipts with
+`{state,archived,blocked,attempts,error?,nextAttemptAt?}`. Audio also has `required`.
+The original recording step renderer presents each phase's own error and next
+retry time; a failed sibling never changes a successful phase. Optional `error` is the
 existing sanitized ledger code; `transcriptCaptureId`/`audioCaptureId` identify
 the exact current canonical source heads. Known raw-export `empty`/`unsupported`
 markers are preserved without inferring processing, indexing or Memory success.
+The original transcript/audio/empty archive totals are read from current owned
+canonical heads and trusted original formats; pending/error counts remain
+current-selection stage facts. Both Web and the native Android recording page
+show that original summary and the independent phase explanation. Audio backup
+remains fixed on, as in the old native form and the current selection schema;
+this does not introduce a new backup toggle.
 Account/connection retirement is rechecked after adapter cleanup.
 
 This is the current-selection checkpoint reader, not a replacement for canonical
