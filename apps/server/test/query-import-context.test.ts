@@ -12,8 +12,12 @@ import type {Config} from '../src/config.js';
 type ImportHost=Awaited<ReturnType<typeof buildApp>>;
 const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return {promise,resolve};};
 async function importPhase(node:ImportHost,id:string,expected:'awaiting_confirmation'|'completed'){
-  for(let attempt=0;attempt<100&&node.imports.get(id).status!==expected;attempt++)await setTimeout(10);
-  assert.equal(node.imports.get(id).status,expected);
+  // HTTP 202 admits asynchronous work; it makes no one-second completion
+  // promise. Observe that exact route-launched task, including its durable
+  // terminal projection/cleanup, within the server test runner's existing bound.
+  await node.featureServices.importTasks.get(id);
+  const job=node.imports.get(id);
+  assert.equal(job.status,expected,JSON.stringify({status:job.status,error:job.error,progress:job.progress,execution:job.execution}));
 }
 
 for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain readable through native Ask and current correction fences'+(delayedCommit?' with delayed source persistence':''),async t=>{
@@ -71,7 +75,7 @@ for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain
     if(!held){held=true;sourceEntered.resolve();await sourceRelease.promise;}
     return upsert(...args);
   });}
-  t.after(async()=>{sourceEntered.resolve();await releaseTask;sourceRelease.resolve();await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
+  t.after(async()=>{sourceEntered.resolve();try{await releaseTask;}finally{sourceRelease.resolve();try{await node.app.close();}finally{rmSync(dataDir,{recursive:true,force:true});}}});
   const headers={authorization:'Bearer '+token};
   const created=await node.app.inject({method:'POST',url:'/api/imports',headers,payload:{instruction,files:[{name:'generated.custom',dataBase64:Buffer.from('Generated independent diary fixture').toString('base64')}]}});
   assert.equal(created.statusCode,202,created.body);
@@ -86,8 +90,8 @@ for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain
     const pending=node.imports.get(importId),step=node.executor.get(node.imports.confirmationIdentity(importId));
     assert.equal(pending.status,'importing');assert.equal(pending.progress.processed,0);assert.equal(step?.state,'running');assert.equal(node.imports.hasActiveWorker(importId),true);
     t.diagnostic(JSON.stringify({heldPersistence:{status:pending.status,processed:pending.progress.processed,taskState:step?.state,workerActive:node.imports.hasActiveWorker(importId)}}));
-    sourceRelease.resolve();
-  })();
+  })().finally(()=>sourceRelease.resolve());
+  if(releaseTask)void releaseTask.catch(()=>{});
   await importPhase(node,importId,'completed');await releaseTask;
   assert.deepEqual(node.imports.get(importId).progress,{total:2,processed:2,imported:2,duplicates:0});
   assert.equal(node.executor.get(node.imports.confirmationIdentity(importId))?.state,'succeeded');

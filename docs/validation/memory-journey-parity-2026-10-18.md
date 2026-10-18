@@ -49,3 +49,24 @@ affected-check receipt. Preliminary WIP successes are not relabeled as frozen
 candidate validation.
 Physical devices, live models, real SDK/provider accounts and deployment remain
 UNRUN. No personal screenshots or production data were collected or replayed.
+
+
+## Import/Ask consumer completion observation
+
+The retained `query-import-context.test.ts` consumer journey starts at HTTP import,
+explicitly confirms its preview, then checks native Ask declaration paging and
+original-citation isolation. A current Material correction must reject the
+already-reading query; the next query must read the corrected attribution and the
+same maximum-length import note.
+
+The Q006 gate exposed a fixture assumption: two `100 × 10 ms` loops treated
+asynchronous import admission as a one-second completion contract. A generated
+source-persistence gate reproduces `importing` with zero committed records while
+the original commit task and worker are still running. Releasing that gate lets
+the same job finish normally; it requires no retry or additional confirmation.
+The fixture now observes the exact route-launched `importTasks` promise and still
+asserts successful terminal status, both committed records, completed executor
+state and worker cleanup before all existing Ask/correction assertions. It uses
+the existing server test-runner bound; product timeouts and import behavior are
+unchanged. Frozen before/after SHA, logs and the fresh full-gate result belong in
+the external validation receipt; the failed Q006 run remains failed.
