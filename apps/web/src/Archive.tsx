@@ -7,7 +7,6 @@ import { captureDateRange, localDateInput, ocrPresentation } from './capture-pre
 import { CollectionContent } from './features/runtime';
 import { webFeatures } from './features/runtime';
 import { LibraryBrowseLayout } from './LibraryBrowse';
-const CaptureSessions = React.lazy(() => import('./CaptureSessions').then(module => ({ default: module.CaptureSessions })));
 import { sourceLabels } from './Metadata';
 import { CaptureCard, Empty, ErrorNotice, Spinner } from './shell-components';
 import { confirmNavigation } from './unsaved';
@@ -65,17 +64,6 @@ class LibraryCollectionBoundary extends React.Component<{
     state = { failed: false };
     static getDerivedStateFromError() { return { failed: true }; }
     render() { return this.state.failed ? <p role="status">{moteText('专用视图暂不可用，请查看资料库或重试。')}</p> : this.props.children; }
-}
-export function Timeline(props: {
-    api: Api;
-    devices: Device[];
-    onOpen: (id: string) => void;
-    revision: number;
-    embedded?: boolean;
-}) {
-    const Heading = props.embedded ? 'h2' : 'h1';
-    const [view, setView] = useState(props.embedded ? 'records' : 'sessions');
-    return <><div className="filter-bar" role="group" aria-label={moteText("记录视图")}><button className={'button ' + (view === 'sessions' ? 'primary' : '')} onClick={() => setView('sessions')}>{moteText("片段 / 应用分组")}</button><button className={'button ' + (view === 'records' ? 'primary' : '')} onClick={() => setView('records')}>{moteText("全部记录")}</button></div>{view === 'sessions' ? <><div className="page-heading timeline-heading"><div className="eyebrow">{moteText("沿着连续的记录回看")}</div><Heading>{moteText("片段")}</Heading><p>{moteText("先看一段，再展开其中的截图与上下文。")}</p></div><CaptureSessions {...props}/></> : <RecordTimeline {...props}/>}</>;
 }
 export function RecordTimeline({ api, devices, onOpen, revision, library = false, selectedReference, onBrowseChanged, }: {
     api: Api;

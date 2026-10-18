@@ -138,7 +138,6 @@ export interface DesktopApi {
   centralContentDetail(id:string,offset?:number,image?:boolean): Promise<import('./sync-content').SyncContent>;
   localContent(offset?:number): Promise<import('./content-library').LocalContentPage>;
   localContentDetail(key:string, image?:boolean): Promise<import('./content-library').ContentDetail|import('./sync-content').SyncContent>;
-  chooseSourceFiles(mode: 'files' | 'directory', options: import('./source-types').SourceOptions): Promise<{ canceled: boolean }>;
   authorizeCalendar(): Promise<import('./source-types').CalendarChoice[]>;
   connectCalendarActions(): Promise<{deviceId:string}>;
   deliverCalendarActions(): Promise<void>;
@@ -155,7 +154,6 @@ export interface DesktopApi {
   exportSupport(hours?:number): Promise<{ canceled: boolean }>;
   exportDiagnostics(): Promise<{ canceled: boolean }>;
   readRawEvents(): Promise<string>;
-  readEvents(): Promise<import('./support').SupportEvent[]>;
   sampleDiagnostics(): Promise<Status>;
   configure(update: ConfigUpdate): Promise<Status>;
   start(): Promise<Status>;
@@ -164,7 +162,6 @@ export interface DesktopApi {
   approveReview(id:string): Promise<void>;
   rejectReview(id:string): Promise<void>;
   retry(): Promise<Status>;
-  openPermissions(): Promise<void>;
   openDataFolder(): Promise<void>;
   exportMetadata(): Promise<void>;
   exportQueue(): Promise<{ canceled: boolean; path?: string }>;
