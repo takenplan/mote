@@ -210,3 +210,14 @@ test('MEM-M08: a reviewed batch is searchable while later model requests and add
  assert.ok(phases.some(call=>call.phase==='review'),'an independent review precedes publication');verify();held.resolve();await f.wait(f.a,submitted.id);verify();
  assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,materials.length);
 });
+
+test('MEM-M03: an incomplete batch retains reviewed gaps without opening an owner question before evaluation completes',async t=>{
+ const f=await scopedMemoryFixture(t);await batchSettings(f,12000);const first=await f.publish(f.a,'A','same-source','mixed-first','GENERATED_MIXED_INCOMPLETE_TARGET'),second=await f.publish(f.a,'A','same-source','mixed-second','GENERATED_MIXED_OWNER_QUESTION_TARGET');let incomplete=true;
+ const verify=script(f,'A',(res,body,value)=>{
+  const members=value.untrustedTaskContext.memoryWork.members;assert.equal(members.length,2);
+  const rows=incomplete?members.map((member,index)=>index===0?{key:member.key,state:'incomplete',candidateIndexes:[],reason:'Generated target has not been fully assessed.'}:{key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Which generated participant does this declaration describe?',choices:[],evidence:[{id:member.id,quote:value.untrustedEvidence.find(record=>record.id===member.id)!.ocrText}],reason:'Generated consequential attribution gap.'}}):coverage(members);
+  reply(res,{memories:[],coverage:rows},body.messages.length);
+ });
+ const submitted=await f.submit(f.a,[first.id,second.id]);await until(()=>job(f,f.a,submitted.id),value=>Boolean(failureTask(value)),'the entire incomplete batch remains blocked');verify();assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM oq_questions WHERE user_id=?').get(f.a.userId))!.n,0,'an unfinished batch cannot create an actionable owner continuation');
+ incomplete=false;const retry=await f.request(f.a.token,'/api/memory/jobs/'+submitted.id+'/retry','POST',{});assert.equal(retry.statusCode,200,retry.body);await f.wait(f.a,submitted.id);verify();assert.equal(f.requests.length,3,'retry preserves the valid extraction and reruns only the unfinished reviewer');
+});
