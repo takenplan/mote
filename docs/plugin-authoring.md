@@ -52,6 +52,8 @@ export function createMotePlugin(configuration) {
 
 运行时代码返回的每个组件必须与 release manifest 声明的 ID、version、surface、
 capability 一致。`invoke` 是实际回调，不能仅返回一份组件列表来替代实现。
+组件按 ID 匹配，清单顺序与运行时注册顺序可以不同；重复 ID、缺失或额外组件，以及
+version、surface 或 capability 的变化仍会使检查失败。
 `configuration` 来自用户配置实例，模型字段使用已有的 opaque 引用，不能填写 API key。
 
 ### 当前调用方法
@@ -168,7 +170,7 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 | --- | --- |
 | pause / disable | 关闭新快照准入；已授权快照中的工作按现有排空语义继续 |
 | stop | 撤销实例 generation，拒绝旧调用的发布，退休相应 worker |
-| 取消单个 task | 撤销该任务的继续执行与提交权；基线 worker 尚未转发单次调用的 AbortSignal，合作式取消是已复现的待修项 |
+| 取消单个 task | 撤销该任务的继续执行与提交权；宿主把取消传到对应调用的 AbortSignal，其他并行调用继续运行 |
 | 更新配置或安装新版本 | 新快照使用新配置与固定包；保留旧快照引用的准确版本 |
 | 释放 snapshot | `DELETE /api/plugin-snapshots/:id`，结束其读写引用 |
 | 卸载 package | 先解除实例和在途快照引用；历史资料删除是另一项操作 |
@@ -178,6 +180,13 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 不要在插件中建立第二套队列、用户身份或发布权威。插件可以复用宿主已授权的
 回调；跨源读写仍须逐个来源授权。子进程运行的是受信代码，拥有宿主进程用户的
 文件和网络权限，安装者需信任发布方。
+
+回调应监听 `signal`，及时结束它拥有的等待、I/O 和计算。单次取消不会关闭同一
+worker 的其他调用；取消后的新宿主回调被拒绝。worker 保持运行时，单次取消会等待
+已接收的宿主回调结束，并保留其真实失败。worker 丢失或整个 scope 关闭时，调用可能
+返回需要恢复的未知结果；该返回不能证明宿主回调或远程写入已经结束。
+插件忽略信号时，实例 stop / 宿主关闭仍负责退休整个 worker。
+取消不把远程已提交的写入回滚；外部结果继续服从领域原有的恢复规则。
 
 ## 6. 本地生成数据验收
 
