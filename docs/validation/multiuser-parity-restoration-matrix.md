@@ -335,7 +335,7 @@ Android实际执行已转交专人：backend070的49171/PID81228生成A/B/admin�
 
 Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6692af58b8ddf38c061b842aa644a336f4473dc4aee757fc99741400；14PASS/Server3164=3160PASS2FAIL0cancel2skip/后7UNRUN，Android未跑。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-3740e89c-required-gate-failed.json` SHA256f148b8814c3c5e44979d13f3497cba2ad4bf450f530e2e74c8c7f6331edfba9d；原log/receipt/plan保留。sameHEAD/clean/cleanupConfirmed/锁释放/PID71644 gone后已恢复原File owner一次：capture-browser83:160 OCR发布409external_result_unknown、multiuser-memory226:125 Hindsight503memory_provider_unavailable，根因待查，不凭状态归fixture/生产bug。新File源须后续重绑core；当前27a实际结果不自动替新源通过。driver随后已于16:33:42.275Z启动Ext544 fresh22，runb851c1f4-9437-46de-8761-de51e75c6e28/PID91038，Node26ABI147/JDK21/Gradle1/hidden；初始build/type结束进入测试后已退短peak，common完整锁继续，普通独立API/UI/model并行。当前Ext结果RUNNING，正式汇总/main未释放。
 
-## 当前证据登记（2026-10-19 08:26，历史段落不代表当前状态）
+## 当前证据登记（2026-10-19 09:07，历史段落不代表当前状态）
 
 当前候选和完整证据见[计划登记](../design/multiuser-parity-restoration-plan.md#模块所有权与候选登记)与其当前检查点。66主行/22跨域场景不变，整体NOT_READY；13个Draft170–182均未合，正式integration只有管理文档，main未纳本轮业务、未部署。fixture、原生UI、物理设备、真实模型分列，新结果不回填旧SHA。
 
@@ -367,12 +367,14 @@ Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6
 | R3原Web与own Desktop构建 | Client报告A/B历史与citation真实点击、B跨A URL404；两文本Memory及image失败态可见；Core生成API target原UI批准仅claimed0。own Desktop18构建工件root4dffc1d2核齐、workspace esbuild重现实际bundle | UI完整包待封/root核；Core审批非OS写入；Desktop renderer/preload/D1–D4/TCC/采集仍另验，二进制/Node与Electron ABI结果不代替行为 |
 | 图片Memory B09/C唯一新输入 | B09 final18P/Server语义/scope、独审f4653e9c及43工件/8源1595outputs root核齐。C按PM217e与明确contextdelta一次新image→真实OCR→COMMITTED1，实际visual1+OCR3，public54/private9完整capture包rootea417eda核齐、post源8/产物1595/locks不变 | priorCards0vs原2/整图vs原crop，成功只新输入NONREPRO；原8d988/原缺review结果/rootcauseUNKNOWN红保。normalCLI还自动venv/pip74包，下载来源/量UNKNOWN，非脚本无pip就无安装；不第二case |
 | fixed Source Pack新源46fe / PM770a2ccf | 生产四conditional+comment KEEP；38whole7+8files56P、currentpolicy successor/grant/unknown安全路径已到达。46type-only擦除JS同38，最终strictnoEmit/whole7P17.075s/source-noEmit全P，manifest75586430/rootafb930e0 | 56保38来源，38类型20FAIL及48的6P1F/更早partial全保；完整19未单独跑，等PM批准新联合完整计划，不更新176/不冒单branch全绿 |
-| 新Ask582f624e接纳身份 / 独审中 | 当前epoch/source与原件/Material incarnation proof纳入event去重和消费fence，M05旧grant拒绝保；3新完整公开入口regression/helper/doc已准备，parent9c03只4路径 | 无install/type/test，13只是父delta计划，模块2c78完整范围23另列；原179不更新，journal与精确图断言待独审/必要修，不能靠准备宣称401修复 |
+| 新Ask582→084 / 独审退回 | 582 own正常安装/语义/scope20.981s/1595outputs保原输入；084持久receipt-time proof、逐record核资格，独立已知图精确oracle已静态闭合；公开F03逐byte同549746af且enabled | Control e1473e11仍CHANGES_REQUESTED：异步child submit退役中断兄弟、两新fixture DELETE后同ID200违反410。root23e24dd3核4报告/6source/8packet；新child返修中，084未build/test，完整公开成功须Ask+M07组合，原179不改 |
+| 新M07 66a576fd / 首轮81=76P5F | Domain fe921d72仅static无新反例；own ci/Node26 ABI147/libs/Server语义/scope通过，三whole files148.642s实际76P5F/0skip-cancel，root42a743cd。新backup/portable三top+五nested及processing68共76P | 五newM07例全红：journal总数1!=0、两duplicate part409、公开reset stale/grant_revoked、reset heldASR commit401。原owner新test-only分类，不能全归Ask；完整公开流程保持待真实组合。raw DB人为缺表启动及capture/erase新case/paid process边界仍列，177不改 |
 | 新Actionsd09执行状态 / 有限覆盖 | 既有reviewCurrent绑定exactapproval/operation后的execution独立facet，snapshot不变；own安装/libs/ServerWeb语义P，原Serverwhole13P；root官方Webcwd3whole8P19.120s+scope/i18nP | 首rootcwd四file21=14P7F(classic JSX)保留；13+8是21唯一，不累22/不冒新单21命令；实际新组合UI与完整consumer gate未验，181仍旧head |
-| Desktop→Web ticket引文首次路径 | fresh-document B首次就到原文；旧A页在B认证后退登录。A验收先开base再同文档hashhandoff则ticket成功但overlay丢失，reload恢复；原件分别保 | 同页hash是确定窄差异，不泛称默认Desktop全失败；原Web轻prepare source/regression未运行，禁止加手工reload/跨号旧cache，D1–D4/D2/实体权限仍分范围 |
+| Desktop ownR3与ticket首次路径 | 原main/preload/renderer/IPC+live HTTP，A/B历史/citation/restart/ABA，fresh B/最终A首次原文；manifest02972081 publicFiles62项rootdc9d2c85核齐。同页A overlay丢失原件保 | 背景fixture非TCC/打包startup/全部D1–D4。Client正准备新no-model隔离profile的D1–D4/D2真实Sources/spool/ACK/restart/分页/error/bytes回归，尚未执行；不加用户reload/跨号cache |
+| Web d6→473→5c89 / 旧失败保留 | 473四production blob同d6；准确Web9 runbab5646e共6stepsP、Web615=613P2F/115.610s、后2项UNRUN。另首次Central build12.524sP后browser无结果挂起，root316.019s SIGTERM本人6PID/全gone/退token，review4b9f7adf纠正raw natural误称 | 新test-only5c89保production：真实导出owner tasks终态、最终页IDs/cursor/非loading UI完成、有界首window/CDP/neutral frame，root有限核后own依赖/两whole消费者/显式browser首次在途。两红确切witness/cursor及旧hang原因UNKNOWN，不能拼旧9PASS或冒页面已验，170不改 |
 | CHECK-SCOPE be096 / Draft173 | 正常2/2、独审52infra/24实际CLI/542绑定，精确3helper并保原消费者/security/update/类型/diagnostics及unknown/rename/mixed | Server4/runner串行不改，无理论步数当实测收益 |
 
-旧模块common已自然完成；Native76/Core25已root核，File46有限scope与Actionsd09有限消费者通过，原图片失败仍红、唯一C新输入仅NONREPRO；新Ask401修复与同页Webhandoff仍未验，未整体READY。PM准新全源联合完整检查，正式最终尚未放行/豁免。正式assembly/final仍须PM另释真实integration SHA重新选完整scope；单testdelta plan13不冒完整组合scope。各旧FAIL/UNRUN保准确输入，fixture/native/实体/actual model分列；条件时间沿原锚点，无额外24h等待或heartbeat平移。
+旧模块common已自然完成；Native76/Core25已root核，File46与Actionsd09各有限scope通过；原图片失败仍红、唯一C仅NONREPRO。新Ask084独审退回、M07新66首轮76P5F待分类、Web473两红及browser挂起保留而新5c89有限检查在途，未整体READY。PM准新全源联合完整检查，新增backup/schema按真实PR义务保并集，正式assembly/final仍HOLD且精确最终full未豁免。原01:25锚点保，旧09:30 Draft下界已因新增工作撤回，条件主收敛09:45–10:30/Draft10:30–12:00；前置闭合后两full与汇总/独验硬串行80–116min，不把未测选择器收益或FAIL/UNRUN计节省，无额外24h等待。
 
 ## 跨模块最终冻结旅程
 
