@@ -83,6 +83,8 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   );
   const [sessionLifetime, setSessionLifetime] = useState<SessionLifetime>(readSessionLifetime);
   const connectionGeneration = useRef(0);
+  // Navigation retirement is separate from the ticket exchange's own auth announcements.
+  const navigationIntent = useRef(0);
   const activeApi=useRef<Api|null>(null);
   const [clientLogin,setClientLogin]=useState(loginRequestId);
   const [verified, setVerified] = useState(Boolean(initialConnection));
@@ -101,12 +103,13 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
       if (location.hash !== currentHash.current && !confirmNavigation()) {
         history.replaceState(null, '', currentHash.current); return;
       }
+      navigationIntent.current++;
       currentHash.current=location.hash;
       setClientLogin(loginRequestId());
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    const remember=()=>{currentHash.current=location.hash;};
+    const remember=()=>{navigationIntent.current++;currentHash.current=location.hash;};
     window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
     return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
   }, []);
@@ -126,6 +129,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   const [revision, setRevision] = useState(0);
   const [evidenceId, updateEvidenceId] = useState<string | null>(()=>readEvidenceRoute(location.hash));
   const setEvidenceId = useCallback((id:string|null) => {
+    navigationIntent.current++;
     updateEvidenceId(changeEvidenceRoute(window,id));
     currentHash.current=location.hash;
   }, []);
@@ -157,22 +161,33 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   useEffect(()=>{
     const handoff=()=>{
       if(!new URLSearchParams(location.hash.split('?')[1]??'').has('loginTicket'))return;
-      clearConnection();const generation=connectionGeneration.current;
-      void consumeLoginTicket().then(value=>{
-        if(value)setConnection(value);
-      }).catch(()=>{if(generation===connectionGeneration.current)setShowConnect(true);});
+      clearConnection();
+      const intent=++navigationIntent.current;
+      let target=location.hash;
+      const current=()=>intent===navigationIntent.current&&location.hash===target;
+      // Ticket removal uses replaceState, so it does not emit another hashchange.
+      const pending=consumeLoginTicket(current);
+      target=location.hash;
+      currentHash.current=target;
+      void pending.then(value=>{
+        if(!value||!current())return;
+        setConnection(value);
+        setShowConnect(false);
+        updateEvidenceId(readEvidenceRoute(target));
+      }).catch(()=>{if(current())setShowConnect(true);});
     };
     window.addEventListener('hashchange',handoff);
-    return()=>window.removeEventListener('hashchange',handoff);
+    return()=>{navigationIntent.current++;window.removeEventListener('hashchange',handoff);};
   },[clearConnection]);
   useEffect(()=>{
     const changed=()=>clearConnection();
-    const storage=(event:StorageEvent)=>{if(event.key===authChangeKey)changed();};
+    const storage=(event:StorageEvent)=>{if(event.key===authChangeKey){navigationIntent.current++;changed();}};
     window.addEventListener(authChangeEvent,changed);
     window.addEventListener('storage',storage);
     return()=>{window.removeEventListener(authChangeEvent,changed);window.removeEventListener('storage',storage);};
   },[clearConnection]);
   const disconnect = useCallback(() => {
+    navigationIntent.current++;
     if(connection&&isWebConnection(connection))void logoutWeb(connection).catch(()=>{});
     clearConnection();
     setEvidenceId(null);
@@ -279,6 +294,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     const target=canonicalDestination(next,archiveTabRef.current,collectionIds());
     if(!webFeatures.page(target.page)){setNotice(moteText('当前服务未提供此入口'));return;}
     if ((target.page !== page || (target.page==='archive'&&target.collection!==archiveTabRef.current)) && !confirmNavigation()) return;
+    navigationIntent.current++;
     history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
     currentHash.current=location.hash;
     archiveTabRef.current=target.collection; updateArchiveTab(target.collection);
@@ -288,6 +304,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   }
   function setArchiveTab(next:ArchiveTab) {
     if(next!==archiveTabRef.current&&!confirmNavigation())return;
+    navigationIntent.current++;
     archiveTabRef.current=next; updateArchiveTab(next);
     if(pageRef.current==='archive') {
       history.pushState(null,'',workspaceHash(routes.archive,next,location.hash));
@@ -295,6 +312,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     }
   }
   function connected(value: Connection, lifetime: SessionLifetime = sessionLifetime) {
+    navigationIntent.current++;
     activeApi.current?.close?.();
     connectionGeneration.current++;
     saveSessionLifetime(lifetime);
@@ -462,7 +480,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
         <LoginDialog
           destination={pageLabels[page]??moteText("当前服务未提供此入口")}
           onConnected={connected}
-          onClose={() => setShowConnect(false)}
+          onClose={() => {navigationIntent.current++;setShowConnect(false);}}
         />
       )}
       {evidenceId && api && verified && (
