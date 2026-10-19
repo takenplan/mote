@@ -1,5 +1,9 @@
 # 社区扩展：接入既有处理链
 
+> 当前多用户 Central 的外部插件入口见 [插件开发指南](plugin-authoring.md)。
+> 本文以下的 Cordis 模块路径与 `/api/processing/workflows` 示例属于旧运行入口；
+> `buildScopedApp` 未加载这些模块配置。保留本文用于领域设计与旧实现参考。
+
 中央媒体导入已共享 Android 文件处理链，支持容器、格式、原生输出类型、处理阶段和版本 DAG 的 Cordis 扩展；统一模块配置、示例及状态契约见 [中央媒体导入与插件切面](media-import-pipelines.md)。
 
 > Coding 接入已切换为 Cordis source pipeline：原始事件只存文件归档，会话发布后才索引和送入模型。此路径不再走下文的原始 capture 整理链；新配置、MVP 切换与验收边界见 [Source pipelines](source-pipelines.md)。普通记录来源保留原链路。
