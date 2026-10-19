@@ -1,0 +1,12 @@
+{
+  "phase": "final",
+  "startedAt": "2026-10-19T19:47:57.379Z",
+  "completedAt": "2026-10-19T19:48:35.930Z",
+  "verification": {
+    "verified": true,
+    "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+    "files": 521
+  },
+  "code": 0,
+  "signal": null
+}

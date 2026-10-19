@@ -1,0 +1,77 @@
+{
+  "createdAt": "2026-10-19T19:21:55.605Z",
+  "runDir": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/boundaries-1792437712941",
+  "results": [
+    {
+      "id": "HOST_CAPABILITY_DISCOVERY",
+      "status": "PASS",
+      "anonymousStatus": 401,
+      "schemaVersion": 1,
+      "runtime": "worker",
+      "factoryExports": [
+        "createMotePlugin",
+        "createMemoryProvider"
+      ],
+      "invocationCapabilities": [
+        {
+          "id": "source",
+          "registered": true
+        },
+        {
+          "id": "processor",
+          "registered": true
+        },
+        {
+          "id": "repository",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "retrieval",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "engine",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "model",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "ui",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        }
+      ]
+    },
+    {
+      "id": "P04_HARNESS",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "attempt": "Pinned apply(ctx) native module packaged unchanged; supported worker install succeeded and actual check rejected absent worker factory.",
+      "nativeSha256": "7009bf8045f33f6193f5c3070d238c43a2c3629f48fd95add50742ed37ee7cf5",
+      "packageDigest": "8e8df8057d05de20f6942dd1a7e12b9f08dd5bf3c85802de36accd2f8f339fd7",
+      "checkStatus": 502,
+      "checkBody": {
+        "error": "execution_unavailable"
+      },
+      "byteIdentity": true,
+      "nativeToolExecuted": false
+    },
+    {
+      "id": "P06_TRIGGER",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "attempt": "Public durable automation admission with extension-owned policy/component",
+      "statusCode": 400,
+      "body": {
+        "error": "invalid_request"
+      },
+      "pluginCallbackExecuted": false
+    }
+  ]
+}
