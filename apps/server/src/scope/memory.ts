@@ -250,7 +250,13 @@ export class MemoryHost {
   if(!job.review||JSON.parse(job.review).coverage?.notAssessed?.length){
    if(!job.draft)throw missing();
    const origin=input.binding.kind==='plugin'&&(await this.providers.descriptor(run.context,input.binding)).adapter==='mote.hindsight@1'?'native-engine':'mote';
-   const reviewed=await reviewMemory(base,result(job.draft),args=>this.query(run,input,args),{draftOrigin:origin,deletions:data.deletionReview(),strategy:integrated?.review??selected?.review});assert();const receipt=memoryReviewReceipt(reviewed);if(receipt)receipt.model=run.model!.lease.model;const coverage=members?readMemoryWorkCoverage(reviewed,members,undefined,id=>records.find(record=>record.id===id)?.ocrText,input.strategy!.workContract):undefined;
+   const validDraft=result(job.draft),reviewOptions:NonNullable<Parameters<typeof reviewMemory>[3]>={draftOrigin:origin,deletions:data.deletionReview(),strategy:integrated?.review??selected?.review};let reviewed:QueryResult|undefined,lastReview:QueryResult=validDraft,reviewInput:Parameters<typeof reviewMemory>[0]=base;
+   // Preserve the original pipeline's bounded repair of the same valid draft.
+   for(let reviewAttempt=0;reviewAttempt<2;reviewAttempt++){
+    assert();try{reviewed=await reviewMemory(reviewInput,validDraft,async args=>{lastReview=await this.query(run,input,args);return lastReview;},reviewOptions);assert();break;}
+    catch(error){assert();if(!(error instanceof MemoryOutputValidationError)||reviewAttempt===1)throw error;this.recordValidationFailure(run,input,error,lastReview);assert();reviewInput={...base,memoryReviewRepair:error.repairInstruction+' Re-review the same valid draft and all supplied original target ranges.'+(members?' Preserve the complete member coverage'+(input.strategy?.workContract?' contract.':' and capacity contract.'):'')};}
+   }
+   if(!reviewed)throw missing();const receipt=memoryReviewReceipt(reviewed);if(receipt)receipt.model=run.model!.lease.model;const coverage=members?readMemoryWorkCoverage(reviewed,members,undefined,id=>records.find(record=>record.id===id)?.ocrText,input.strategy!.workContract):undefined;
    run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_job_batches SET review=? WHERE user_id=$user AND job_id=? AND id=?',JSON.stringify({result:reviewed,receipt,...(coverage?{coverage}:{})}),input.jobId,input.batchId!);});run.checkpoint.write('output',input.jobId);if(coverage?.notAssessed.length){run.grant.commit(()=>{data.sql.run("UPDATE mm_job_batches SET state='incomplete' WHERE user_id=$user AND job_id=? AND id=?",input.jobId,input.batchId!);data.sql.run("UPDATE mm_jobs SET state='incomplete' WHERE user_id=$user AND id=?",input.jobId);});throw new ExecutionFailure('blocked','memory_evaluation_incomplete');}
   }
   job=this.assertJob(run.context,input);run.checkpoint.write('phase','publish');

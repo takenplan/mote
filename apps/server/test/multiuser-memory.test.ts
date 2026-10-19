@@ -1,3 +1,4 @@
+import {ExecutionFailure} from '../src/execution-engine.js';
 import {defaultPerceptionConfiguration} from '../src/perception-configuration.js';
 import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import {scopedMemoryFixture as fixture} from './fixtures/scoped-memory-host.js';
@@ -405,6 +406,29 @@ for(const mutation of ['tail','cancel','source'] as const)test('scoped image rev
   release.resolve();await finished.promise;assert.notEqual(await f.terminal(job.tasks.batch.id),'succeeded');
   assert.deepEqual(calls,{extract:1,review:1});assert.deepEqual(delivered,{extract:1,review:0});assert.equal(metadataCalls,2);assert.equal(cropCalls,2,'both phases execute real Sharp crop awaits');assert.equal(readErrors.length,1);assert.equal((readErrors[0] as {code:string}).code,'image_unavailable');assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,0,'no late reviewed Memory is committed');
  }finally{release.resolve();sharp.prototype.metadata=metadata;sharp.prototype.toBuffer=toBuffer;host.readImage=read;host.query=query;}
+});
+
+for(const outcome of ['repair','twice','cancel','tail','epoch','unknown'] as const)test('scoped review restores bounded post-review repair: '+outcome,async t=>{
+ const f=await fixture(t),settings=defaultMemorySettings();settings.automatic=false;settings.integration=false;await f.replace(f.a.token,'memory',settings);
+ const png=await sharp({create:{width:2,height:2,channels:3,background:'#dd2211'}}).png().toBuffer(),hash=createHash('sha256').update(png).digest('hex'),region={x:0,y:0,width:1,height:2},wholeView=createHash('sha256').update(JSON.stringify([hash,'encoded-raster-pixels-v1',null,'original-bytes@1'])).digest('hex'),cropView=createHash('sha256').update(JSON.stringify([hash,'encoded-raster-pixels-v1',region,'crop-encoded-raster-png@1'])).digest('hex'),material=await imageMaterial(t,f,f.a,'A',png),tail=await f.publish(f.a,'A','generated-repair-tail','tail','Generated unrequested repair pin.'),data=await f.data(f.a);data.materialEvidence(material);
+ const anchor=String(f.read(db=>db.prepare('SELECT id FROM mm_images WHERE user_id=?').get(f.a.userId))!.id),context=await f.node.authority.authenticate(f.a.token),admin=await f.node.authority.authenticate(f.admin.token),host=f.node.memory as any,query=host.query.bind(host),record=host.recordValidationFailure.bind(host),execute=host.execute.bind(host),frames:any[]=[],failures:any[]=[],endErrors:any[]=[],counts={extract:0,review:0},unknown=new ExecutionFailure('blocked','external_result_unknown');
+ let phase:'extract'|'review'='extract',step=0,members:any[]=[],cancelled:Promise<unknown>|undefined;
+ host.query=async(run:any,input:any,args:any)=>{phase=args.traceContext?.phase==='review'?'review':'extract';counts[phase]++;step=0;members=args.taskContext?.memoryWork?.members??[];if(phase==='review')frames.push({question:args.question,draft:structuredClone(args.taskContext.untrustedMemoryDraft)});const value=await query(run,input,args);if(phase==='review'&&outcome==='unknown')throw unknown;return value;};
+ host.recordValidationFailure=(run:any,input:any,error:any,value:any)=>{record(run,input,error,value);if(error.code!=='image_evidence')return;failures.push({error,value});if(outcome==='cancel')cancelled=host.forUser(context).cancel(input.jobId);if(outcome==='tail')data.privateData.correctMaterialContext(tail.id,tail.revision,'owner');if(outcome==='epoch')f.node.accounts!.disable(admin,f.node.authority,f.a.userId,true);};
+ host.execute=async(run:any)=>{try{return await execute(run);}catch(error){endErrors.push(error);throw error;}};
+ f.responses.set('A',res=>{const cropped=phase==='review'&&(counts.review===1||outcome!=='repair');if(++step===1){writeMessagesResponse(res,{stage:f.requests.length,tool:{name:'read_image',args:{id:anchor,view:'image',...(cropped?{expectedImageSha256:hash,region}:{})}}});return;}
+  writeMessagesResponse(res,{stage:f.requests.length,text:JSON.stringify({answer:JSON.stringify({memories:[{title:'Generated visible repair observation',statement:'The generated image shows a red patch. ['+anchor+']',uncertainty:'Generated pixels only; owner identity unknown',admission:{layer:'observation',reason:'Exact generated pixel observation',scope:'This generated original only',attribution:'observed'},evidenceIds:[anchor],evidence:[{id:anchor,image:{originalSha256:hash,viewId:cropped?cropView:wholeView}}]}],coverage:members.map(member=>({key:member.key,state:member.id===anchor?'checked':'no_candidates',candidateIndexes:member.id===anchor?[0]:[]}))}),citationIds:[anchor]})});
+ });
+ try{
+  const job=await f.submit(f.a,[material,tail.id]);if(outcome==='repair')await f.wait(f.a,job.id);else assert.notEqual(await f.terminal(job.tasks.batch.id),'succeeded');await cancelled;
+  assert.equal(counts.extract,1,'repair never re-extracts the valid draft');assert.equal(counts.review,outcome==='repair'||outcome==='twice'?2:1);assert.equal(failures.length,outcome==='unknown'?0:1,'only the first post-review proof failure requests a repair');
+  if(frames.length===2){assert.deepEqual(frames[0].draft,frames[1].draft);assert.ok(frames[1].question.includes(failures[0].error.repairInstruction+' Re-review the same valid draft and all supplied original target ranges. Preserve the complete member coverage contract.'));}
+  const count=f.read(db=>Number(db.prepare('SELECT count(*) n FROM mm_records WHERE user_id=?').get(f.a.userId)!.n));assert.equal(count,outcome==='repair'?1:0);
+  if(outcome==='repair'){assert.equal(endErrors.length,0);const stored=f.read(db=>db.prepare('SELECT review,prepared FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,job.id))!;assert.ok(stored.review);assert.ok(stored.prepared);const reviewed=JSON.parse(String(stored.review)).result;assert.equal(reviewed.imageReadReceipts.length,1,'the accepted independent run has its own pixel receipt');assert.equal(reviewed.imageReadReceipts[0].imageView.viewId,wholeView);assert.notEqual(reviewed.runId,failures[0].value.runId);}
+  else if(outcome==='twice')assert.equal(endErrors[0].code,'image_evidence','second semantic failure terminates unchanged');
+  else if(outcome==='unknown')assert.equal(endErrors[0],unknown,'unknown transport state is not a semantic repair');
+  else assert.notEqual(endErrors[0].code,'image_evidence','inter-attempt revocation wins before another model call');
+ }finally{host.query=query;host.recordValidationFailure=record;host.execute=execute;}
 });
 
 test('native Hindsight integration observes a completed consolidation after a lost response instead of replaying inference',async t=>{
