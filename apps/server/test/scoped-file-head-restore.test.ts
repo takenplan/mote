@@ -12,9 +12,8 @@ import {waitForScopedState} from './fixtures/scoped-process.js';
 type Fixture=Awaited<ReturnType<typeof scopedFilesFixture>>;
 const captureId=(source:string,external:string,revision:string)=>{const hash=createHash('sha256').update(JSON.stringify([source,external,revision])).digest('hex');return hash.slice(0,8)+'-'+hash.slice(8,12)+'-5'+hash.slice(13,16)+'-a'+hash.slice(17,20)+'-'+hash.slice(20,32);};
 async function exportPortable(f:Fixture){
- const id=randomUUID();await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:id});
- await waitForScopedState(async()=>{const state=await f.checked(f.a.token,'/api/portable/exports/'+id);if(state.state==='failed')assert.fail(JSON.stringify(state));return state.state==='completed';},()=>'generated head export missing',15000);
- return f.checked(f.a.token,'/api/portable/exports/'+id+'/content');
+ const response=await f.request(f.a.token,'/api/export');assert.equal(response.statusCode,200,response.body);assert.equal(response.headers['content-type'],'application/json; charset=utf-8');
+ const archive=response.json();assert.equal(archive.version,3);assert.equal(archive.deploymentId,f.host.deploymentId);assert.equal(archive.userId,f.a.userId);return archive;
 }
 async function mergePortable(f:Fixture,archive:unknown){
  const id=randomUUID();await f.checked(f.a.token,'/api/portable/imports','POST',{operationId:id,archive});
