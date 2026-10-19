@@ -31,7 +31,8 @@ publication-to-original relationship. Mapping requires the original single-head
 member contract: every member is that head or its validated file attachment; a
 mixed-member generated fixture retains literal anchor metadata. Canonical
 evidence IDs, bytes and hashes
-remain unchanged. A mixed or unproved head is not guessed from prose. The old and
+remain unchanged. Native `source`/SDK `kind` retain the canonical original identity
+used by their selectors; trusted `sourceType` describes the proven head separately. A mixed or unproved head is not guessed from prose. The old and
 current source-item version 13 both use plain text plus metadata; the old reader
 only decoded presentations for earlier versions 11/12. This change invents no
 v13 decoder, publisher proof or compatibility migration, and starts no OCR.

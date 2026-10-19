@@ -103,7 +103,9 @@ export class AskEvidence{
   }else if(record.provenance)current=this.data.sourceItem(record.provenance.sourceId,record.provenance.externalId)?.captureId===record.id;
   // Current source-item v13 is plain text plus metadata, just as in the old
   // reader. A block looking like JSON cannot mint a presentation declaration.
-  return {...view,ref:'capture:'+record.id,...(typed?{sourceType:view.source}:{}),...(record.provenance?{revisionState:current?'current':'historical'}:{})};
+  // Native kind/source selectors identify the canonical original; sourceType
+  // separately describes the proven source head represented by this view.
+  return {...view,source:record.source,ref:'capture:'+record.id,...(typed?{sourceType:view.source}:{}),...(record.provenance?{revisionState:current?'current':'historical'}:{})};
  }
  evidence(ids:readonly string[],range:ContextRange&{sourceId?:string}={}):CaptureRecord[]{
   this.assert();return [...new Set(ids)].map(id=>{
