@@ -213,7 +213,24 @@ export class IngressHost{
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
     if(manifest.sourceId!==sourceId||manifest.item.kind!=='file'||manifest.item.text||binding.retention==='reference'&&manifest.item.layer!=='reference'||binding.retention!=='reference'&&manifest.item.layer==='reference')throw conflict();
     forgetting.allowed(sourceId,manifest.item);declaration(sourceId,input.importDeclaration);const digest=identityHash(input.importDeclaration===undefined?manifest:{manifest,importDeclaration:input.importDeclaration}),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
-    if(previous){if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch||Number(previous.expires)<=Date.now())throw conflict();if(previous.receipt)checkReceipt(JSON.parse(String(previous.receipt)));return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(previous.receipt?{receipt:JSON.parse(String(previous.receipt))}:{})};}
+    if(previous&&(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch))throw conflict();
+    // A collected transport receipt is not the canonical business ACK. Ordinary
+    // archive retries can prove the current immutable input without reopening
+    // part authority, retaining receipt history, or adopting a retired grant.
+    if(!previous&&binding.retention==='archive'&&manifest.item.layer==='original'&&!manifest.item.deleted&&manifest.sha256&&!manifest.processingProfileId&&input.importDeclaration===undefined){
+     const head=data().sourceItem(sourceId,manifest.item.externalId);
+     if(head?.revision===manifest.item.revision){
+      const ack=data().matchSourceRevision(sourceId,fileRevisionItem(manifest));
+      if(ack&&ack.id===head.captureId){
+       const retainedRow=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,ack.id);if(!retainedRow)throw missing();
+       const retained=original('original:'+retainedRow.id);
+       if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
+       originals.readObject(retained.hash);assert();
+       return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};
+      }
+     }
+    }
+    if(previous){if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch||!previous.receipt&&Number(previous.expires)<=Date.now())throw conflict();if(previous.receipt)checkReceipt(JSON.parse(String(previous.receipt)));return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(previous.receipt?{receipt:JSON.parse(String(previous.receipt))}:{})};}
     const id=randomUUID();sql.run('INSERT INTO ig_uploads VALUES($user,?,?,?,?,?,?,?,NULL)',id,sourceId,input.batchId,digest,JSON.stringify(manifest),context.authorizationEpoch,Date.now()+86400000);
     if(input.importDeclaration)sql.run('INSERT INTO ig_upload_imports VALUES($user,?,?)',id,JSON.stringify(input.importDeclaration));return {id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[]};
    }),

@@ -126,6 +126,17 @@ export class PrivateData{
     const {originalImage,ingressSourceId:_,...input}=json<StoredCapture>(row);
     return {...input,receivedAt:String(row!.received_at),blobHash:originalImage?.hash??null,imageMime:originalImage?.mime??null,indexingStatus:originalImage?'pending':'indexed'};
   }
+  /** Read-only canonical intake match for M03. Reuse M02's normalized source
+   * fingerprint; this neither inserts a capture nor grants processing work. */
+  matchSourceRevision(sourceId:string,raw:unknown){
+    const source=this.source(sourceId);if(!source.enabled)throw conflict();
+    const input=sourceItemSchema.parse(raw),item=source.retention==='archive'?{...input,text:''}:input;
+    const {observedAt,...semantic}=item,previous=this.sql.get('SELECT id,fingerprint FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? AND revision=?',sourceId,item.externalId,item.revision);
+    if(!previous)return null;
+    const record=this.capture(String(previous.id));
+    if(previous.fingerprint!==hash(semantic)||Date.parse(record.capturedAt)!==Date.parse(observedAt))throw conflict();
+    return {id:record.id,sourceId,externalId:item.externalId,revision:item.revision,duplicate:true as const};
+  }
   sourceItem(sourceId:string,externalId:string):SourceItemRecord|null{
     this.source(sourceId);const row=this.sql.get('SELECT capture_id FROM pd_source_heads WHERE user_id=$user AND source_id=? AND external_id=?',sourceId,externalId);
     return row?this.item(String(row.capture_id),true):null;
