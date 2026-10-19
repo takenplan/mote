@@ -6,6 +6,13 @@
 
 ## 1. 先确认能力通过哪条路径提供
 
+登录后，先调用 `GET /api/plugins/host-capabilities`。这一步不需要安装包、创建实例
+或执行插件。返回 `factoryExports` 以及 `invocationCapabilities`，后者的
+`registered` 来自当前实际注册的宿主领域 adapter；未提供的领域返回
+`scoped_domain_unavailable`。`modelFeature` 仅在该 adapter 声明模型准入时出现。
+这份结果描述通用 worker invoke 路径；Memory 的领域绑定和平台 UI 构建使用各自入口。
+实例仍需独立配置、核验、授权和启用。
+
 | 需求 | 当前公开接入路径 | 执行范围 |
 | --- | --- | --- |
 | 接收、读取获授权来源，发布正式资料 | 固定 release 中的 `createMotePlugin`，`source` 组件 | 当前用户、实例快照及 `grants.sourceIds` |
