@@ -222,11 +222,15 @@ export class IngressHost{
      if(head?.revision===manifest.item.revision){
       const ack=data().matchSourceRevision(sourceId,fileRevisionItem(manifest));
       if(ack&&ack.id===head.captureId){
-       const retainedRow=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,ack.id);if(!retainedRow)throw new PrivateDataError('not_found',410);
-       const retained=original('original:'+retainedRow.id);
-       if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
-       try{originals.readObject(retained.hash);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')throw new PrivateDataError('not_found',410);throw error;}assert();
-       return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};
+       const retainedRow=sql.get('SELECT r.id FROM ig_originals r JOIN ig_objects o ON o.user_id=r.user_id AND o.hash=r.hash WHERE r.user_id=$user AND r.source_id=? AND r.capture_id=?',sourceId,ack.id);
+       if(retainedRow){
+        const retained=original('original:'+retainedRow.id);
+        if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
+        let resident=false;try{originals.readObject(retained.hash);resident=true;}catch(error){if(error instanceof ScopeError)throw error;}
+        // An unavailable/corrupt local object cannot establish this fast ACK.
+        // Continue the existing upload/resupply path; do not invent a new410.
+        if(resident){assert();return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};}
+       }
       }
      }
     }
