@@ -81,3 +81,48 @@ are now explicit prepared cases. Authentication A→B→A replacement, controlle
 expiry, actual second-tab Cookie mutation/storage delivery/Web Locks ordering,
 and original Desktop/IAB reacceptance remain **UNKNOWN / UNRUN**. Neither d6's
 finite static review nor this child preparation is a runtime PASS.
+
+
+## First 473 runtime outcomes and finite test preparation (UNRUN child)
+
+The first exact nine-check run at 47390050 ended naturally with Web 615 cases:
+613 passed and two failed, without skips/cancellations. Shared tests and release
+integration were UNRUN. Those failures remain failures; this preparation does
+not rerun or reclassify them as passed.
+
+- The portable-import UI test requested export immediately after Ingress. Source
+  inspection confirms Ingress admits asynchronous `memory.materials` and
+  `ask.index-admit` work, Material publication admits further index work, and
+  export rechecks exact owner-qualified data and execution metadata. The new
+  fixture observes the exporting owner's complete task pages until its Material
+  task succeeds and all admitted tasks are terminal, before that owner's single
+  export. It does not retry `archive_changed`, disable work or weaken import
+  lost-ACK, account-switch or cancellation assertions. The exact witness that
+  changed in the original failed run remains UNKNOWN; a failure after this
+  legitimate completed-fixture precondition still requires domain investigation.
+- The recording UI test observed 24 files in the API while its retained first
+  UI page could still contain 20 of an earlier 23-file set. Source uses independent
+  polling and keyset cursors; cardinality alone does not identify the cursor's
+  collection. The new barrier observes the UI resource's exact final ordered IDs
+  and cursor, then flushes its React commit before clicking Next. Both the real
+  final API page and the UI must still contain four remaining items, using that
+  exact cursor. Previous-page, source/owner cursor scope, restart, pause, stop,
+  disconnect, archive preservation and original-detail assertions remain.
+
+The separate first explicit source-bound browser run completed its normal
+Central build, then produced no browser business result or recorded JS phase.
+Root's bounded stop released only its proven owned descendants. Its corrected
+classification is `BOUNDED_BROWSER_HANG_NO_BUSINESS_RESULT`, not a natural case
+failure or a main behavior result. The controller's original signal-exit record
+and corrected review remain separate evidence.
+
+The unbounded pre-first-load CDP sequence is a source-level hang candidate, not
+an established runtime cause. This child initializes a neutral `about:blank`
+frame before CDP; the ticket URL is still the first product document, with no
+product reload or added user step. First-window creation, neutral frame, CDP
+attach/enable/observer installation and product load now have bounded stages
+using the existing 25-second fixture deadline. Progress contains fixed stage
+enums and booleans only; failure metadata includes no URL, ticket, arbitrary DOM
+or credential. No running first-run window or process was inspected or changed
+by this preparation. All new setup/barriers, syntax/import/build checks and
+runtime cases remain UNRUN pending the driver's finite delta review and slot.

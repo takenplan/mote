@@ -16,19 +16,30 @@ const node=process.env.MOTE_WEB_FIXTURE_NODE??execFileSync('/usr/bin/which',['no
 const candidate=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim();
 const buildReceipt=process.env.MOTE_WEB_HANDOFF_BUILD_RECEIPT??join(repo,'.mote/evidence-handoff-build.json');
 mkdirSync(output,{recursive:true});app.setPath('userData',join(temporary,'browser'));app.on('window-all-closed',()=>{});
-const windows=[],events=[],pending=new Map(),checks=[],settlements=[];let host,metadata,next=0,finishing=false;
+const windows=[],events=[],pending=new Map(),checks=[],settlements=[],stages=[];let lastStage='initial';let host,metadata,next=0,finishing=false;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(read,label){const end=Date.now()+25000;while(Date.now()<end){if(await read())return;await delay(30);}throw Error('Timed out: '+label);}
+async function stage(name,work){
+ lastStage=name;const record={stage:name,entered:true,completed:false,failed:false};stages.push(record);console.log(JSON.stringify({stage:name,entered:true}));let timer;
+ try{const value=await Promise.race([Promise.resolve().then(work),new Promise((_,reject)=>{timer=setTimeout(()=>{const error=Error('Generated fixture stage deadline');error.code='FIXTURE_STAGE_DEADLINE';reject(error);},25000);})]);record.completed=true;console.log(JSON.stringify({stage:name,completed:true}));return value;}
+ catch(error){record.failed=true;console.log(JSON.stringify({stage:name,failed:true}));throw error;}
+ finally{clearTimeout(timer);}
+}
 function command(command,extra={}){return new Promise((resolve,reject)=>{const id=++next,timer=setTimeout(()=>{pending.delete(id);reject(Error('Generated fixture command timeout'));},30000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value);},reject:error=>{clearTimeout(timer);reject(error);}});host.send({id,command,...extra});});}
 // Do not include evaluated source, URLs or auth response bodies in diagnostics.
 const js=(window,code)=>window.webContents.executeJavaScript(code);
 const capture='6d477b3e-fb43-4657-818d-c143ad76430f',reference='context:capture:'+capture;
 async function ticketHash(owner){const ticket=await command('ticket',{owner});return '#/ask?'+new URLSearchParams({evidence:reference,loginTicket:ticket.code});}
 async function open(hash){
- const window=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false}});windows.push(window);
- window.webContents.debugger.attach('1.3');await window.webContents.debugger.sendCommand('Page.enable');
- await window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:'('+observeHandoffSettlement.toString()+')()'});
- await window.loadURL(metadata.url+'/'+hash);return window;
+ const window=await stage('window-created',()=>{const value=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false}});windows.push(value);return value;});
+ // Initialize a neutral test frame before waiting for renderer CDP domains.
+ // No product page or authentication is loaded here; the ticket URL below is
+ // still the first product document, not a reload recovery or an auth barrier.
+ await stage('neutral-frame-loaded',()=>window.loadURL('about:blank'));
+ await stage('cdp-attached',()=>window.webContents.debugger.attach('1.3'));
+ await stage('cdp-page-enabled',()=>window.webContents.debugger.sendCommand('Page.enable'));
+ await stage('cdp-observer-installed',()=>window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:'('+observeHandoffSettlement.toString()+')()'}));
+ await stage('product-document-loaded',()=>window.loadURL(metadata.url+'/'+hash));return window;
 }
 async function authMark(window){const state=await js(window,'window.__moteHandoffObservation.snapshot()');assert.equal(state.supported,true,'local Web Locks observation is required; unsupported environments do not pass silently');return state.requests.length;}
 async function settled(window,mark,count=1){
@@ -49,12 +60,12 @@ async function noPrivate(window){assert.equal(await js(window,`Boolean(document.
 async function run(){
  assert.ok(existsSync(node)&&existsSync(join(repo,'apps/web/dist/index.html')),'Prepare matching runtime and built Web before this runner');
  if(process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD)assert.equal(candidate,process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD);
- const binding=verifyBuild(repo,buildReceipt,candidate);
+ const binding=await stage('build-binding-verified',()=>verifyBuild(repo,buildReceipt,candidate));
  const hostRuntime=JSON.parse(execFileSync(node,['-p',"JSON.stringify({version:process.version,abi:process.versions.modules,platform:process.platform,arch:process.arch})"],{encoding:'utf8'}));assert.deepEqual(hostRuntime,binding.buildRuntime,'Host uses the exact Node runtime/ABI used for preparation');
- await app.whenReady();host=fork(join(__dirname,'fixtures/multiuser-host.ts'),[],{cwd:repo,execPath:node,execArgv:['--import','tsx'],stdio:['ignore','ignore','ignore','ipc']});
+ await stage('app-ready',()=>app.whenReady());host=fork(join(__dirname,'fixtures/multiuser-host.ts'),[],{cwd:repo,execPath:node,execArgv:['--import','tsx'],stdio:['ignore','ignore','ignore','ipc']});
  host.on('message',message=>{if(message.id){const request=pending.get(message.id);pending.delete(message.id);message.error?request?.reject(Error('Generated fixture operation failed')):request?.resolve(message.result);}else{events.push(message);if(message.event==='ready')metadata=message;}});
- await until(()=>metadata,'scoped generated host');
- const firstTicketHash=await ticketHash('a'),window=await open(firstTicketHash);await evidence(window,'a');await settled(window,0);const documentStart=await js(window,'performance.timeOrigin');checks.push('new document consumes one-time ticket before main mounts and opens owned typed context without reload');
+ await stage('generated-host-ready',()=>until(()=>metadata,'scoped generated host'));
+ const firstTicketHash=await stage('first-ticket-minted',()=>ticketHash('a')),window=await open(firstTicketHash);await evidence(window,'a');await settled(window,0);const documentStart=await js(window,'performance.timeOrigin');checks.push('new document consumes one-time ticket before main mounts and opens owned typed context without reload');
  let mark=await authMark(window);await navigate(window,firstTicketHash);await settled(window,mark);await retired(window,'#/ask?'+new URLSearchParams({evidence:reference}));checks.push('immediate reuse of the actual previously consumed ticket cannot adopt connection or evidence');
  await navigate(window,'#/preferences');await page(window,'about');await noPrivate(window);
  await hold();await navigate(window,await ticketHash('a'));await entered();await noPrivate(window);await release();await evidence(window,'a');assert.equal(await js(window,'performance.timeOrigin'),documentStart);checks.push('same document hash handoff retires old private tree, exchanges once, restores current typed context without reload');
@@ -74,7 +85,7 @@ async function run(){
  mark=await authMark(window);await navigate(window,'#/ask?'+new URLSearchParams({evidence:reference,loginTicket:'x'.repeat(43)}));await settled(window,mark);await until(()=>js(window,`Boolean(document.querySelector('.connect-modal'))`),'nonexistent ticket exposes existing login entry');await retired(window,'#/ask?'+new URLSearchParams({evidence:reference}));checks.push('well-formed nonexistent ticket clears private UI and nonce; does not claim expiry or replay coverage');
  if(process.env.MOTE_WEB_FIXTURE_EXPECTED_HEAD)assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),candidate);
  verifyBuild(repo,buildReceipt,candidate);
- writeFileSync(join(output,'result.json'),JSON.stringify({candidate,sourceTree:binding.source.tree,sourceSha256:binding.source.sha256,buildReceiptSha256:binding.receiptSha256,webIndexSha256:binding.artifacts['apps/web/dist/index.html'],hostRuntime,electron:process.versions.electron,chromium:process.versions.chrome,passed:true,checks,settlements,actualWebMain:true,actualScopedHost:true,generatedOnly:true,modelCalls:false,desktopIabR3Reproduced:false,unknown:['expired ticket with controlled time','real cross-tab Cookie/Web Locks ordering','authentication A-to-B-to-A replacement'],barrier:'native authentication lock Promise observed without replacing it; original reaction queue drained; passive React pending work empty'},null,2));console.log('PASS generated Web login/evidence lifecycle '+checks.length);
+ writeFileSync(join(output,'result.json'),JSON.stringify({candidate,sourceTree:binding.source.tree,sourceSha256:binding.source.sha256,buildReceiptSha256:binding.receiptSha256,webIndexSha256:binding.artifacts['apps/web/dist/index.html'],hostRuntime,electron:process.versions.electron,chromium:process.versions.chrome,passed:true,checks,settlements,stages,actualWebMain:true,actualScopedHost:true,generatedOnly:true,modelCalls:false,desktopIabR3Reproduced:false,unknown:['expired ticket with controlled time','real cross-tab Cookie/Web Locks ordering','authentication A-to-B-to-A replacement'],barrier:'native authentication lock Promise observed without replacing it; original reaction queue drained; passive React pending work empty'},null,2));console.log('PASS generated Web login/evidence lifecycle '+checks.length);
 }
 async function finish(code){if(finishing)return;finishing=true;for(const window of windows)if(!window.isDestroyed())window.destroy();if(host&&host.exitCode===null){const exit=new Promise(resolve=>host.once('exit',(code,signal)=>resolve({code,signal})));try{await command('close');assert.deepEqual(await Promise.race([exit,delay(20000).then(()=>null)]),{code:0,signal:null});}catch{host.kill('SIGKILL');code=1;}}rmSync(temporary,{recursive:true,force:true});app.exit(code);}
-run().then(()=>finish(0)).catch(()=>{console.error('FAIL generated Web login/evidence lifecycle; no auth material logged');void finish(1);});
+run().then(()=>finish(0)).catch(error=>{writeFileSync(join(output,'failure.json'),JSON.stringify({candidate,lastRecordedStage:lastStage,stages,classification:error?.code==='FIXTURE_STAGE_DEADLINE'?'BOUNDED_FIXTURE_STAGE_DEADLINE':'RUNNER_OR_CASE_FAILURE_UNCLASSIFIED',passed:false},null,2));console.error(JSON.stringify({stage:lastStage,failed:true}));void finish(1);});
