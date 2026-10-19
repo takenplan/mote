@@ -47,3 +47,43 @@ The Context DAG uses the same engine. Domain code validates input fingerprints, 
 ## Trusted delegated lanes (2026-10-10)
 
 The existing delegated-agents pool derives lanes from host-registered coordinator profiles; children inherit their parent lane. Background effective capacity is min(agentConcurrency,32), interactive capacity is interactiveConcurrency, with no borrowing/preemption. Claims count leases by lane inside the same SQLite transaction, including other connections. Durable query recovery preserves successful child artifacts and a bounded workspace; citation permission still requires fresh delivery. Capacity cooldowns do not consume failed-processing attempts; typed actual failures retain their registered finite policy. See [ADR](adr-system-refactor.md).
+
+
+The scoped production composition binds the existing `ask.models` pool to trusted
+interactive/background lanes and binds `memory.models` to the live instance
+Memory concurrency setting. A settings publication wakes durable queued work;
+a reduction leaves running work to settle normally. Physical harness gates,
+account fairness, resource locks and commit fences remain in place. See the
+[scoped parity supersession and regression matrix](validation/execution-parity-2026-10-18.md).
+
+## Continuous scoped batches
+
+A host-registered continuous batch may choose `modelAdmission: 'per-call'`.
+It remains one durable Execution task and retains its immutable M04 snapshot;
+each `withModel` invocation independently enters the existing account-fair
+physical gates and creates its own measured usage receipt. Capacity waits do not
+start the task's first physical attempt or consume a call protection budget.
+Subsequent calls receive their own protection budget inside admission.
+
+The host-only `TaskRun.withResource` port derives the owner from the current
+context. It shares the engine's static resource locks through a fence-bound
+`execution_dynamic_resources` reservation, acquiring only for an actual effect.
+Acquisition waits retain the running continuation, recheck the grant and hold no
+resource. Static publishers in other processes see the same reservation. Release,
+cancellation and lease recovery cannot leave a current lock behind; reservations
+and pending requests from expired fences are reaped. Durable resource requests
+share account/operation turns with ready static publishers. These turns use the
+existing engine fairness tables and one consistent order across resource keys;
+new arrivals cannot win by racing a local polling timer. A static peer must pass
+the same `capacityAvailable` predicate as tick and transactional admission,
+including live limits, durable leases and unsettled local work. An already
+running continuation does not acquire another pool slot. Reacquiring a released
+static resource restores visible ownership for that effect and then its released
+state. A fence-bound attempt-charge receipt prevents interruption of an unstarted
+call from refunding an older failure. These current tables are required by stopped
+backup admission as well as the source inventory. Resource names and owners are never model or
+client capabilities. Domain source/configuration checks still run after waiting
+and before every external effect and fenced commit.
+
+This port restores Memory's original single `memory.batch` continuation; it does
+not add a domain scheduler or require model stages to reenter the task workflow.

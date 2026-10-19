@@ -17,7 +17,7 @@ import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import type {ScopedRuntime} from './http.js';
 import type {UserContext} from './context.js';
 import type {IngressHost} from './ingress.js';
-import type {TaskExecution,TaskRun} from './task-execution.js';
+import {TaskError,type TaskExecution,type TaskRun} from './task-execution.js';
 import type {PrivateData} from './private-data.js';
 import type {ImportIntakeRegistry} from '../import-intake.js';
 import {ScopedImportAttribution} from './import-attribution.js';
@@ -26,6 +26,7 @@ import {identityHash} from './originals.js';
 import {projectImportProgress} from './processing-import-progress.js';
 import type {MemoryHost} from './memory.js';
 import {archiveRelativePath,MAX_FILE_BYTES} from '../archive-contract.js';
+import {hostImportDirectory,readImportParts,ImportInputError} from '../import-host-directory.js';
 
 const taskInput=z.object({jobId:z.string().uuid(),generation:z.number().int().nonnegative(),phase:z.enum(['prepare','commit']),manifest:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 type Input=z.infer<typeof taskInput>;
@@ -45,17 +46,18 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
  const save=(sql:PrivateSql,job:Job)=>{job.updatedAt=stamp();sql.run('UPDATE mp_import_jobs SET json=? WHERE user_id=$user AND id=?',JSON.stringify(job),job.id);};
  const bound=(context:UserContext,input:Input)=>{const sql=sqlFor(context),job=load(sql,input.jobId);if(job.generation!==input.generation||job.authorizationEpoch!==context.authorizationEpoch||(input.phase==='prepare'?!['queued','preparing'].includes(job.status):job.status!=='importing'||!job.manifest||job.manifest!==input.manifest||job.confirmed!==input.manifest))throw conflict();return {sql,job};};
  const owner=(context:UserContext)=>{runtime.authority.assert(context);if(runtime.authority.isTask(context))throw conflict();};
- const contentFiles=(job:Job)=>job.files.filter(file=>!job.containers?.[file.id]&&!job.media?.some(item=>item.fileId===file.id)&&!job.excludedFiles?.some(item=>item.fileId===file.id));
+ // Fixed packs own the mapping of every supplied original, including containers and media.
+ const contentFiles=(job:Job)=>job.sourcePackId?job.files:job.files.filter(file=>!job.containers?.[file.id]&&!job.media?.some(item=>item.fileId===file.id)&&!job.excludedFiles?.some(item=>item.fileId===file.id));
  const deterministic=(job:Job)=>Object.values(job.containers??{}).some(pin=>!pin.expanded)||!contentFiles(job).length||!!job.sourcePackId||job.processing==='automatic'&&!job.instruction.trim()&&!job.sourcePackId&&contentFiles(job).every(file=>plain(file.name));
  const submit=(context:UserContext,job:Job,phase:Input['phase'])=>{
   const sql=sqlFor(context),input:Input={jobId:job.id,generation:job.generation,phase,...(phase==='commit'?{manifest:job.manifest}:{})};bound(context,input);
-  const value=execution.forUser(context).submitSync({kind:'processing.import-'+phase,operationId:'import:'+job.id+':'+job.generation+':'+phase,input});
+  const value=execution.forUser(context).submitSync({kind:'processing.import-'+phase,operationId:'import:'+job.id+':'+job.generation+':'+phase,input},{parentOperationId:'import:'+job.id,generation:{slot:phase,version:String(job.generation)}});
   if(phase==='prepare')job.prepareTask=value.id;else job.commitTask=value.id;save(sql,job);return value;
  };
  const submitPrepare=async(context:UserContext,job:Job)=>{
   const sql=sqlFor(context),input:Input={jobId:job.id,generation:job.generation,phase:'prepare'};bound(context,input);
   try{
-   const value=await execution.forUser(context).submit({kind:deterministic(job)?'processing.import-decode':'processing.import-prepare',operationId:'import:'+job.id+':'+job.generation+':prepare',input});
+   const value=await execution.forUser(context).submit({kind:deterministic(job)?'processing.import-decode':'processing.import-prepare',operationId:'import:'+job.id+':'+job.generation+':prepare',input},undefined,{parentOperationId:'import:'+job.id,generation:{slot:'prepare',version:String(job.generation)}});
    bound(context,input);job.prepareTask=value.id;save(sql,job);
   }catch(error){bound(context,input);job.status='needs_configuration';job.processingStatus='blocked';job.error=error instanceof ExecutionFailure?error.code:'import_model_unavailable';save(sql,job);}
  };
@@ -81,7 +83,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
     for(const child of expanded.files){
      run.signal.throwIfAborted();run.grant.assert();bound(run.context,input);const name=archiveRelativePath(prefix+child.name),bytes=readFileSync(child.path);if(bytes.length!==child.bytes)throw conflict();
      const retained=await ingress.retainArchive(run.context,name,bytes,child.mimeType,run.signal);run.grant.assert();bound(run.context,input);
-     run.grant.commit(()=>{const prior=job.files.find(file=>file.relativePath===name);if(prior&&(prior.id!==retained.id||prior.hash!==retained.hash))throw conflict();if(!prior){job.files.push(retained);job.archive.files++;job.archive.bytes+=retained.sizeBytes;job.archive.expandedFiles++;sql.run('INSERT INTO mp_import_files VALUES($user,?,?)',job.id,retained.id);const format=intake.format({file:retained,prefix:bytes.subarray(0,4096)});if(format?.excluded)(job.excludedFiles??=[]).push({fileId:retained.id,reason:format.reason});else if(format)(job.media??=[]).push({fileId:retained.id,format});}save(sql,job);});
+     run.grant.commit(()=>{const prior=job.files.find(file=>file.relativePath===name);if(prior&&(prior.id!==retained.id||prior.hash!==retained.hash))throw conflict();if(!prior){job.files.push(retained);job.archive.files++;job.archive.bytes+=retained.sizeBytes;job.archive.expandedFiles++;sql.run('INSERT INTO mp_import_files VALUES($user,?,?)',job.id,retained.id);const format=job.sourcePackId?undefined:intake.format({file:retained,prefix:bytes.subarray(0,4096)});if(format?.excluded)(job.excludedFiles??=[]).push({fileId:retained.id,reason:format.reason});else if(format)(job.media??=[]).push({fileId:retained.id,format});}save(sql,job);});
     }
     run.grant.commit(()=>{pin.expanded=true;save(sql,job);});
    }
@@ -107,7 +109,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    const validated=join(root,'validated.jsonl'),checked=await formatWork({kind:'manifest',workspace:root,path:manifest,output:validated,inputs,dispositions:true},run.signal);run.grant.assert();bound(run.context,input);records=readRecords(validated);
    run.grant.commit(()=>{
     bound(run.context,input);for(const [position,record] of records.entries())sql.run('INSERT INTO mp_import_records VALUES($user,?,?,?,?)',job.id,job.generation,position,JSON.stringify(record));
-    job.manifest=identityHash(records);job.preview={count:checked.count+(job.media?.length??0),samples:checked.samples};job.progress.total=job.preview.count;job.summary=summary;job.warnings=[...warnings,...checked.warnings].slice(0,200);job.dispositions=checked.dispositions;const extra=[...(job.media??[]).map(item=>({fileId:item.fileId,path:job.files.find(file=>file.id===item.fileId)!.relativePath,status:'processing' as const,reason:item.format.reason})),...Object.keys(job.containers??{}).map(fileId=>({fileId,path:job.files.find(file=>file.id===fileId)!.relativePath,status:'container' as const,reason:'Container original retained; members accounted separately'})),...(job.excludedFiles??[]).map(item=>({fileId:item.fileId,path:job.files.find(file=>file.id===item.fileId)!.relativePath,status:'excluded' as const,reason:item.reason}))];if(extra.length){const base=job.dispositions??{counts:{parsed:0,attachment:0,container:0,excluded:0,unsupported:0},items:[]};job.dispositions={counts:{...base.counts,processing:job.media?.length??0,container:Object.keys(job.containers??{}).length,excluded:base.counts.excluded+(job.excludedFiles?.length??0)},items:[...base.items,...extra]};}job.reviewDecision=decision;job.reviewGate=importReviewGate(job,decision,deterministic(job)&&!job.sourcePackId&&!partial);job.status='awaiting_confirmation';job.processingStatus='preview_ready';save(sql,job);
+    job.manifest=identityHash(records);job.preview={count:checked.count+(job.media?.length??0),samples:checked.samples};job.progress.total=job.preview.count;job.summary=summary;job.warnings=[...warnings,...checked.warnings].slice(0,200);job.dispositions=checked.dispositions;const extra=[...(job.media??[]).map(item=>({fileId:item.fileId,path:job.files.find(file=>file.id===item.fileId)!.relativePath,status:'processing' as const,reason:item.format.reason})),...(!job.sourcePackId?Object.keys(job.containers??{}):[]).map(fileId=>({fileId,path:job.files.find(file=>file.id===fileId)!.relativePath,status:'container' as const,reason:'Container original retained; members accounted separately'})),...(job.excludedFiles??[]).map(item=>({fileId:item.fileId,path:job.files.find(file=>file.id===item.fileId)!.relativePath,status:'excluded' as const,reason:item.reason}))];if(extra.length){const base=job.dispositions??{counts:{parsed:0,attachment:0,container:0,excluded:0,unsupported:0},items:[]};job.dispositions={counts:{...base.counts,processing:job.media?.length??0,container:Object.keys(job.containers??{}).length,excluded:base.counts.excluded+(job.excludedFiles?.length??0)},items:[...base.items,...extra]};}job.reviewDecision=decision;job.reviewGate=importReviewGate(job,decision,deterministic(job)&&!job.sourcePackId&&!partial);job.status='awaiting_confirmation';job.processingStatus='preview_ready';save(sql,job);
     if(job.reviewGate.decision==='automatic'){job.confirmed=job.manifest;job.status='importing';job.processingStatus='saving';save(sql,job);submit(run.context,job,'commit');}
    });return {jobId:job.id,generation:job.generation,manifest:job.manifest};
   }));
@@ -121,6 +123,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    if(media.captureId)continue;run.signal.throwIfAborted();run.grant.assert();bound(run.context,input);if(!intake.available(media.format))throw new ExecutionFailure('blocked','import_media_intake_changed');
    const file=originals.archivedFile(media.fileId),bytes=originals.archivedBytes(file.id),revision=createHash('sha256').update(JSON.stringify([file.hash,media.format.mimeType])).digest('hex');
    const receipt=run.grant.commit(()=>{bound(run.context,input);const receipt=originals.receiveSourceItemsWithOriginals(job.sourceId,'import-media:'+job.id+':'+job.generation+':'+file.id,[{externalId:'file:'+file.relativePath,revision,observedAt:job.createdAt,title:file.name,text:'',kind:'file',layer:'original',mimeType:media.format.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown'}}],[{bytes,mime:media.format.mimeType,format:'file',...(media.format.mimeType.startsWith('image/')&&job.imageProfileId?{processingProfileId:job.imageProfileId}:{})}]),ack=receipt.captures[0];
+    execution.forUser(run.context).linkParent('import:'+job.id,'file:'+ack.id);execution.forUser(run.context).linkParent('import:'+job.id,'capture:'+ack.id);
     originals.attachArchivedFiles(ack.id,[file.id]);media.captureId=ack.id;if(ack.duplicate)job.progress.duplicates++;else{new ScopedImportAttribution(sql).bind(ack.id,declaration);job.progress.imported++;job.captureIds.push(ack.id);}job.progress.processed++;if(!ack.duplicate)for(const item of receipt.captures)if(item.original)publishParsed(run.context,item.original.ref,'import:'+job.id+':'+job.generation+':'+item.id);save(sql,job);return receipt;
    });
   }
@@ -130,6 +133,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
     bound(run.context,input);const receipt=originals.receiveSourceItems(job.sourceId,'import:'+job.id+':'+job.generation+':'+index,[record.item]),ack=receipt.captures[0];
     for(const fileId of [...record.evidencePaths,...record.attachments]){if(!job.files.some(file=>file.id===fileId))throw conflict();}
     originals.attachArchivedFiles(ack.id,[...new Set([...record.evidencePaths,...record.attachments])]);
+    execution.forUser(run.context).linkParent('import:'+job.id,'file:'+ack.id);execution.forUser(run.context).linkParent('import:'+job.id,'capture:'+ack.id);
     if(ack.duplicate)job.progress.duplicates++;else{new ScopedImportAttribution(sql).bind(ack.id,declaration);job.progress.imported++;job.captureIds.push(ack.id);}
     job.recordsProcessed=index+1;job.progress.processed=index+1+(job.media?.filter(item=>item.captureId).length??0);if(!ack.duplicate)for(const item of receipt.captures)if(item.original)publishParsed(run.context,item.original.ref,'import:'+job.id+':'+job.generation+':'+item.id);save(sql,job);return receipt;
    });
@@ -151,7 +155,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
  const forUser=(context:UserContext)=>{const sql=sqlFor(context),get=(id:string)=>{const job=publicJob(updateFromTask(context,load(sql,id)));return {...job,...projectImportProgress(sql,job,execution.forUser(context),runtime.services.forUser(context).get<ReturnType<MemoryHost['forUser']>>('memory'),ref=>readProcessing(context,ref))};};return Object.freeze({
   capabilities:()=>intake.list(),sourcePacks:()=>({items:sourcePackSpecs.map(({id,version,description})=>({id,version,...(description?{description}:{})}))}),get,list:()=>({items:sql.all('SELECT id FROM mp_import_jobs WHERE user_id=$user ORDER BY rowid DESC LIMIT 100').map(row=>get(String(row.id)))}),
   create:async(raw:unknown)=>{
-   owner(context);const request=importRequestSchema.parse(raw);if(request.directory)throw new PrivateDataError('invalid_data',403);if(request.sourcePackId&&!sourcePacks.has(request.sourcePackId))throw new PrivateDataError('invalid_data',422);
+   owner(context);const request=importRequestSchema.parse(raw);if(request.directory)runtime.authority.assertAdministrator(context);if(request.sourcePackId&&!sourcePacks.has(request.sourcePackId))throw new PrivateDataError('invalid_data',422);
    const fingerprint=identityHash(request),id=request.requestId??randomUUID(),existing=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(existing){if(existing.fingerprint!==fingerprint)throw conflict();return get(id);}
    let archivedFileIds=request.archivedFileIds;
    if(request.files){const service=ingress.forUser(context);archivedFileIds=[];let total=0;
@@ -160,13 +164,27 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
      const hash=identityHash(['inline-import',context.userId,id,index]),uploadId=hash.slice(0,8)+'-'+hash.slice(8,12)+'-5'+hash.slice(13,16)+'-a'+hash.slice(17,20)+'-'+hash.slice(20,32);service.beginImportUpload({id:uploadId,name:file.name,sizeBytes:bytes.length,...(file.mimeType?{mimeType:file.mimeType}:{})});for(let offset=0;offset<bytes.length;offset+=FILE_PART_BYTES)service.importUploadPart(uploadId,offset/FILE_PART_BYTES,bytes.subarray(offset,offset+FILE_PART_BYTES));archivedFileIds.push((await service.commitImportUpload(uploadId)).id);
     }
    }
+   if(request.directory){
+    // The SQLite connection is opened by the host from its admitted vault;
+    // neither request JSON nor a staged job chooses the protected directory.
+    const vault=db.location('main');if(!vault)throw new PrivateDataError('scope_unavailable',503);
+    const assert=()=>{sqlFor(context);owner(context);runtime.authority.assertAdministrator(context);};
+    const entries=await hostImportDirectory(request.directory,dirname(vault),assert).catch(error=>{if(error instanceof ImportInputError)throw new TaskError(error.code,error.statusCode);throw error;}),service=ingress.forUser(context);archivedFileIds=[];
+    if(!entries.length)throw new PrivateDataError('invalid_data');
+    for(const [index,file] of entries.entries()){
+     assert();const hash=identityHash(['directory-import',context.userId,id,index]),uploadId=hash.slice(0,8)+'-'+hash.slice(8,12)+'-5'+hash.slice(13,16)+'-a'+hash.slice(17,20)+'-'+hash.slice(20,32);
+     service.beginImportUpload({id:uploadId,name:file.name,sizeBytes:file.sizeBytes});let part=0;
+     for(const bytes of readImportParts(file.path,file.identity,assert))service.importUploadPart(uploadId,part++,bytes);
+     archivedFileIds.push((await service.commitImportUpload(uploadId)).id);assert();
+    }
+   }
    const job=sql.transaction(()=>{
    owner(context);const prior=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(prior){if(prior.fingerprint!==fingerprint)throw conflict();return load(sql,id);}
    const files=archivedFileIds!.map(id=>ingress.forUser(context).archivedFile(id));if(new Set(files.map(file=>file.relativePath)).size!==files.length||files.reduce((size,file)=>size+file.sizeBytes,0)>256*1024*1024)throw new PrivateDataError('invalid_data',413);
    // Preserve the original source/dedup identity, independent of request ID.
    const sourceId='import.'+createHash('sha256').update(JSON.stringify(files.map(file=>[file.relativePath,file.hash]).sort())).digest('hex').slice(0,32),at=stamp();
    const job:Job={id,name:request.name??files[0].name,instruction:request.instruction,sourceId,...(request.sourcePackId?{sourcePackId:request.sourcePackId,sourcePackRevision:sourcePacks.get(request.sourcePackId)!.revision}:{}),...(request.imageProfileId?{imageProfileId:request.imageProfileId}:{}),processing:request.processing,generation:0,authorizationEpoch:context.authorizationEpoch,recordsProcessed:0,sourceFileIds:files.map(file=>file.id),status:'queued',processingStatus:'archived',createdAt:at,updatedAt:at,files,summary:'',warnings:[],archive:{files:files.length,bytes:files.reduce((n,f)=>n+f.sizeBytes,0),expandedFiles:0},progress:{total:0,processed:0,imported:0,duplicates:0},captureIds:[]};
-   for(const file of files){const prefix=ingress.forUser(context).archivedBytes(file.id).subarray(0,4096),container=intake.container({file,prefix});if(container){(job.containers??={})[file.id]={id:container.id,version:container.version,expanded:false};continue;}const pin=intake.format({file,prefix});if(pin?.excluded)(job.excludedFiles??=[]).push({fileId:file.id,reason:pin.reason});else if(pin)(job.media??=[]).push({fileId:file.id,format:pin});}
+   for(const file of files){const prefix=ingress.forUser(context).archivedBytes(file.id).subarray(0,4096),container=intake.container({file,prefix});if(container){(job.containers??={})[file.id]={id:container.id,version:container.version,expanded:false};continue;}const pin=job.sourcePackId?undefined:intake.format({file,prefix});if(pin?.excluded)(job.excludedFiles??=[]).push({fileId:file.id,reason:pin.reason});else if(pin)(job.media??=[]).push({fileId:file.id,format:pin});}
    sql.run('INSERT INTO mp_import_jobs VALUES($user,?,?,?)',id,fingerprint,JSON.stringify(job));for(const file of files)sql.run('INSERT INTO mp_import_files VALUES($user,?,?)',id,file.id);return job;
   });if(job.status==='queued'&&!job.prepareTask)await submitPrepare(context,job);return get(job.id);},
   confirm:(id:string)=>sql.transaction(()=>{owner(context);const job=load(sql,id);if(['completed','importing'].includes(job.status))return publicJob(job);if(job.status!=='awaiting_confirmation'||!job.manifest)throw conflict();job.confirmed=job.manifest;job.status='importing';job.processingStatus='saving';save(sql,job);submit(context,job,'commit');return publicJob(job);}),
@@ -182,9 +200,9 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
   delete:(id:string)=>{const deleted=sql.transaction(()=>{
    owner(context);const job=load(sql,id);if(active.has(identityHash([context.userId,id])))throw conflict();
    for(const taskId of [job.prepareTask,job.commitTask])if(taskId&&['waiting','running'].includes(execution.forUser(context).get(taskId).state))throw conflict();
-   const retainedSharedSource=!!sql.get("SELECT id FROM mp_import_jobs WHERE user_id=$user AND id<>? AND json_extract(json,'$.sourceId')=? LIMIT 1",id,job.sourceId),captures=sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=?',job.sourceId).length;
-   if(!retainedSharedSource&&sql.get('SELECT id FROM pd_sources WHERE user_id=$user AND id=?',job.sourceId))runtime.services.forUser(context).get<PrivateData>('private-data').deleteSource(job.sourceId);
-   sql.run('DELETE FROM mp_import_jobs WHERE user_id=$user AND id=?',id);const removed=ingress.forUser(context).removeArchivedFiles(job.files.map(file=>file.id));return {deleted:true,captures:retainedSharedSource?0:captures,retainedSharedSource,...removed};
+   const retainedSharedSource=!!sql.get("SELECT id FROM mp_import_jobs WHERE user_id=$user AND id<>? AND json_extract(json,'$.sourceId')=? LIMIT 1",id,job.sourceId),captures=sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=?',job.sourceId);
+   if(!retainedSharedSource&&sql.get('SELECT id FROM pd_sources WHERE user_id=$user AND id=?',job.sourceId)){const data=runtime.services.forUser(context).get<PrivateData>('private-data');for(const capture of captures)data.deleteCapture(String(capture.id));data.deleteSource(job.sourceId);}
+   sql.run('DELETE FROM mp_import_jobs WHERE user_id=$user AND id=?',id);const removed=ingress.forUser(context).removeArchivedFiles(job.files.map(file=>file.id));return {deleted:true,captures:retainedSharedSource?0:captures.length,retainedSharedSource,...removed};
   });if(db.isTransaction||deleted.garbagePending)return {...deleted,garbagePending:true};try{ingress.forUser(context).gc();return deleted;}catch{return {...deleted,garbagePending:true};}},
   cancel:(id:string)=>sql.transaction(()=>{owner(context);const job=load(sql,id);if(['completed','cancelled'].includes(job.status))return publicJob(job);for(const taskId of [job.prepareTask,job.commitTask])if(taskId){const task=execution.forUser(context).get(taskId);if(['waiting','running','blocked'].includes(task.state))execution.forUser(context).cancel(taskId);}job.status='cancelled';save(sql,job);return publicJob(job);}),
  });};

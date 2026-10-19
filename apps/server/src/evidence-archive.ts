@@ -10,6 +10,7 @@ export type ArtifactOutput=z.infer<typeof artifactOutput>;
 export type ArtifactMaterialInput={ref:string;offset:number;length:number};
 export type Artifact={id:string;revision:string;kind:string;processor:string;processorVersion:string;configFingerprint:string;generatedAt:string;firstAt:string;lastAt:string;deviceId:string;appId:string;source:string;members:string[];representatives:string[];contentHash:string;metadata:Record<string,unknown>;parents?:{id:string;revision:string}[];materialInputs?:ArtifactMaterialInput[]};
 import {observationKey} from './observation-key.js';
+import {partitionExactSegments,describeExactSegment} from './exact-segments.js';
 export {observationKey} from './observation-key.js';
 export class EvidenceArchive {
   constructor(readonly store:Store){
@@ -100,19 +101,8 @@ export class EvidenceArchive {
       // A 5-minute bucket may contain a replay burst: page on identity, bound every artifact.
       const ids=db.prepare('SELECT o.id FROM context_observations o JOIN captures c ON c.id=o.id WHERE o.group_key=? ORDER BY c.captured_at,o.id LIMIT 1001').all(group.group_key);
       if(ids.length>1000){db.prepare("UPDATE context_dirty SET error='group_member_limit' WHERE group_key=? AND generation=?").run(group.group_key,group.generation);continue;}
-      const parts:CaptureRecord[][]=[];let part:CaptureRecord[]=[],characters=0;const texts=new Set<string>();
-      for(const row of ids){
-        if(!this.store.isCurrentEvidence(String(row.id)))continue;
-        const record=this.store.evidence([String(row.id)])[0];if(!record)continue;
-        // Field pages have a dedicated, original-preserving Material organizer.
-        if(record.metadata?.uiPage?.version===2)continue;
-        const text=record.ocrText;
-        // Large originals remain directly pageable; segments carry a bounded preview and mark it.
-        const cost=texts.has(text)?0:Math.min(text.length,12000);
-        if(part.length&&(part.length>=100||characters+cost>12000)){parts.push(part);part=[];characters=0;texts.clear();}
-        part.push(record);if(!texts.has(text)){characters+=Math.min(text.length,12000);texts.add(text);}
-      }
-      if(part.length)parts.push(part);
+      const currentRecords=ids.flatMap(row=>{if(!this.store.isCurrentEvidence(String(row.id)))return [];const record=this.store.evidence([String(row.id)])[0];return record?[record]:[];});
+      const parts=partitionExactSegments(currentRecords);
       db.exec('BEGIN IMMEDIATE');
       try{
         // The member snapshot was assembled outside the write transaction. A
@@ -127,20 +117,13 @@ export class EvidenceArchive {
         const retained=new Set<string>();
         for(const records of parts){
           records.sort((a,b)=>a.capturedAt.localeCompare(b.capturedAt)||a.id.localeCompare(b.id));
-          const entries=new Map<string,{text:string;ids:string[];firstAt:string;lastAt:string;complete:boolean}>();
-          for(const record of records){
-            const contentHash=hash(record.ocrText),entry=entries.get(contentHash)??{text:record.ocrText.slice(0,12000),ids:[],firstAt:record.capturedAt,lastAt:record.capturedAt,complete:record.ocrText.length<=12000};
-            entry.ids.push(record.id);entry.lastAt=record.capturedAt;entries.set(contentHash,entry);
-            db.prepare('INSERT OR IGNORE INTO context_contents VALUES(?,?)').run(contentHash,JSON.stringify({text:record.ocrText}));
-            db.prepare('UPDATE context_observations SET content_hash=? WHERE id=?').run(contentHash,record.id);
-          }
+          const {text,metadata,representativeIds}=describeExactSegment(records);
+          for(const record of records){const contentHash=hash(record.ocrText);db.prepare('INSERT OR IGNORE INTO context_contents VALUES(?,?)').run(contentHash,JSON.stringify({text:record.ocrText}));db.prepare('UPDATE context_observations SET content_hash=? WHERE id=?').run(contentHash,record.id);}
           if(!records.some(r=>r.ocrText.length))continue;
           const inputs=records.map(r=>({id:r.id,fingerprint:this.fingerprint(r.id)!}));
-          const text=[...entries.values()].map(e=>e.text).filter(Boolean).join('\n\n').slice(0,12000);
-          const metadata={grouping:'fixed_time_and_explicit_identity',semanticGrouping:false,observationCount:records.length,uniqueTexts:entries.size,complete:[...entries.values()].every(e=>e.complete)&&[...entries.values()].reduce((n,e)=>n+e.text.length+2,0)<=12002,entries:[...entries.values()].map(({text,...e})=>({...e,characters:text.length})),originalCharacters:records.reduce((n,r)=>n+r.ocrText.length,0),characters:text.length};
           const revision=hash([inputs,'mote.exact-segment','1',metadata]),id=hash([group.group_key,records[0].id]);retained.add(id);
           if(db.prepare('SELECT 1 FROM context_artifacts WHERE id=? AND revision=?').get(id,revision))continue;
-          this.save(id,String(group.group_key),revision,{kind:'segment',text,metadata},inputs,'mote.exact-segment','1',hash({windowMs:300000,maxCharacters:12000,maxMembers:100}),[...entries.values()].map(e=>e.ids[0]));
+          this.save(id,String(group.group_key),revision,{kind:'segment',text,metadata},inputs,'mote.exact-segment','1',hash({windowMs:300000,maxCharacters:12000,maxMembers:100}),representativeIds);
         }
         for(const row of db.prepare("SELECT id FROM context_artifacts WHERE group_key=? AND kind='segment'").all(group.group_key))if(!retained.has(String(row.id)))db.prepare('DELETE FROM context_artifacts WHERE id=?').run(row.id);
         db.prepare('DELETE FROM context_dirty WHERE group_key=? AND generation=?').run(group.group_key,group.generation);

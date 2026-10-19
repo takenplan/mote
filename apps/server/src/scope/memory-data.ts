@@ -3,6 +3,8 @@ import {unknownAttributionContext,type QueryResult,type CaptureRecord} from '@mo
 import {z} from 'zod';
 import type {QueryInput} from '@mote/agent';
 import {readMemoryWorkCoverage,type MemoryWorkMember} from '../memory-work-contract.js';
+import {assertMemoryTargetSupport,memoryReadRanges} from '../memory-read-context.js';
+import {MemoryOutputValidationError} from '../memory-errors.js';
 import {reviewMemoryDeletionCandidates} from '../memory-deletion-review.js';
 import {materialDependencyStatus} from '../material-readiness.js';
 import {memorySchema,type Memory} from '../memory-schema.js';
@@ -82,10 +84,10 @@ export class ScopedMemoryData {
   const state=this.state();if(input.ownerParentJobId&&this.sql.get('SELECT job_id FROM mm_owner_cancellations WHERE user_id=$user AND job_id=?',input.ownerParentJobId))throw new PrivateDataError('conflict',409);if(state.generation!==input.generation||memoryHash(this.binding())!==memoryHash(input.binding)||input.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
   if(input.automatic&&input.integrationWindowId){const window=this.sql.get('SELECT revoked FROM mm_integration_windows WHERE user_id=$user AND id=?',input.integrationWindowId);if(!window||window.revoked)throw new PrivateDataError('conflict',409);}
   else if(input.automatic){if(!input.intakeIds?.length)throw new PrivateDataError('conflict',409);for(const id of input.intakeIds){const receipt=this.sql.get('SELECT revoked FROM mm_intakes WHERE user_id=$user AND id=?',id);if(!receipt||receipt.revoked)throw new PrivateDataError('conflict',409);}}
-  for(const pin of input.materialPins??[]){const current=this.privateData.material(pin.id);if(current.revision!==pin.revision)throw new PrivateDataError('conflict',409);const version=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',pin.id,pin.revision);if(!version||!materialDependencyStatus(materialDraftSchema.parse(JSON.parse(String(version.json))),pin.required).ready)throw new PrivateDataError('conflict',409);}
-  const evidence=this.evidence(input.inputs.map(pin=>pin.id));for(const pin of input.inputs)if(memoryEvidenceFingerprint(evidence.find(item=>item.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);
+  for(const pin of input.materialPins??[]){if(input.evidenceReadRanges&&!input.inputs.some(evidence=>this.sql.get('SELECT material_id FROM mm_evidence WHERE user_id=$user AND id=?',evidence.id)?.material_id===pin.id))continue;const current=this.privateData.material(pin.id);if(current.revision!==pin.revision)throw new PrivateDataError('conflict',409);const version=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',pin.id,pin.revision);if(!version||!materialDependencyStatus(materialDraftSchema.parse(JSON.parse(String(version.json))),pin.required).ready)throw new PrivateDataError('conflict',409);}
+  const pins=input.inputs,evidence=this.evidence(pins.map(pin=>pin.id));for(const pin of pins)if(memoryEvidenceFingerprint(evidence.find(item=>item.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);
   for(const pin of input.related){const row=this.row(pin.id);if(row.version!==pin.version||row.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);this.assertCurrentRecord(row);}
-  return evidence;
+  return evidence.filter(record=>input.inputs.some(pin=>pin.id===record.id));
  }
  row(id:string):MemoryRow{this.state();const row=this.sql.get('SELECT * FROM mm_records WHERE user_id=$user AND id=?',id);if(!row)throw missing();return row as MemoryRow;}
  assertCurrentRecord(row:MemoryRow){
@@ -98,9 +100,29 @@ export class ScopedMemoryData {
  }
  ranges(input:ScopedMemoryTask){return input.ranges??this.assertInputs(input).map(record=>({id:record.id,offset:0,length:record.ocrText.length}));}
  members(input:ScopedMemoryTask):MemoryWorkMember[]{const records=this.assertInputs(input);return this.ranges(input).map(range=>{const record=records.find(item=>item.id===range.id);if(!record||range.offset+range.length>record.ocrText.length)throw missing();const evidence=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',record.id)!;return {materialRef:'material:'+evidence.material_id+'@'+evidence.material_revision,key:memoryHash([range,memoryEvidenceFingerprint(record),input.strategy]),...range,fingerprint:memoryEvidenceFingerprint(record),sourceId:record.provenance?.sourceId,attributionContext:record.attributionContext,contextTime:record.capturedAt,state:'pending' as const,memoryIds:[]};});}
- options(input:ScopedMemoryTask):MemoryExtractOptions{return {workContract:input.strategy?.workContract,strategy:input.strategy,integration:input.integration,profile:input.profile,tier:input.phase==='integrate'?'consolidated':'episode',relatedMemoryIds:input.related.map(pin=>pin.id),expectedFingerprints:Object.fromEntries(input.inputs.map(pin=>[pin.id,pin.hash])),evidenceRanges:[...this.ranges(input),...input.contextRanges??[]]};}
+ readInputs(input:ScopedMemoryTask,ids:readonly string[]=input.inputs.map(pin=>pin.id)){this.assertInputs(input);return this.readPinnedInputs(input,ids);}
+ /** Only this synchronous ordered read shares a successful whole-input check.
+  * Neither the validation nor its selected-read capability escapes this call. */
+ readInputsInOrder(input:ScopedMemoryTask,ids:readonly string[]):MemoryRecord[]{
+  let validated=false;const records:MemoryRecord[]=[];
+  for(const id of ids){
+   try{if(!validated){this.assertInputs(input);validated=true;}records.push(...this.readPinnedInputs(input,[id]));}
+   catch(error){if(input.inputs.some(pin=>pin.id===id))throw error;}
+  }
+  return records;
+ }
+ private readPinnedInputs(input:ScopedMemoryTask,ids:readonly string[]){const authorized=[...input.inputs,...input.readInputs??[]];if(ids.some(id=>!authorized.some(pin=>pin.id===id)))throw missing();const records=this.evidence(ids);for(const record of records){if(memoryEvidenceFingerprint(record)!==authorized.find(pin=>pin.id===record.id)!.hash)throw new PrivateDataError('conflict',409);const evidence=this.sql.get('SELECT material_id FROM mm_evidence WHERE user_id=$user AND id=?',record.id)!,pins=input.materialPins?.filter(pin=>pin.id===evidence.material_id)??[];for(const pin of pins){const material=this.privateData.material(pin.id);if(material.revision!==pin.revision)throw new PrivateDataError('conflict',409);const version=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',pin.id,pin.revision);if(!version||!materialDependencyStatus(materialDraftSchema.parse(JSON.parse(String(version.json))),pin.required).ready)throw new PrivateDataError('conflict',409);}}return records;}
+ assertReadReceipt(input:ScopedMemoryTask,result:QueryResult){return this.readInputs(input,memoryReadRanges(result,[...this.ranges(input),...input.contextRanges??[]],input.evidenceReadRanges).map(range=>range.id));}
+ options(input:ScopedMemoryTask,result?:QueryResult):MemoryExtractOptions{const ranges=result?memoryReadRanges(result,[...this.ranges(input),...input.contextRanges??[]],input.evidenceReadRanges):[...this.ranges(input),...input.contextRanges??[]],ids=new Set(ranges.map(range=>range.id));return {workContract:input.strategy?.workContract,strategy:input.strategy,integration:input.integration,profile:input.profile,tier:input.phase==='integrate'?'consolidated':'episode',relatedMemoryIds:input.related.map(pin=>pin.id),expectedFingerprints:Object.fromEntries([...input.inputs,...input.readInputs??[]].filter(pin=>ids.has(pin.id)).map(pin=>[pin.id,pin.hash])),evidenceRanges:ranges};}
  validate(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]=[]){
-  const options=this.options(input),records=this.assertInputs(input);if(input.strategy?.workContract)readMemoryWorkCoverage(result,this.members(input),undefined,id=>records.find(record=>record.id===id)?.ocrText,input.strategy.workContract);return validateMemoryExtraction(result,options,{readEvidence:ids=>{if(ids.some(id=>!input.inputs.some(pin=>pin.id===id)))throw missing();return records.filter(record=>ids.includes(record.id));},imageLocator:id=>{const image=this.image(id);return image?{sha256:String(image.hash)}:undefined;},isCurrentEvidence:id=>{try{return this.evidence([id]).length===1;}catch{return false;}},get:id=>{const memory=related.find(item=>item.id===id);if(!memory)throw missing();return memory;}});
+  const options=this.options(input,result),records=this.readInputs(input,Object.keys(options.expectedFingerprints!)),members=input.strategy?.workContract?this.members(input):undefined;
+  // Shape/declarations, then exact evidence, then quote-backed ownership. A bad
+  // quote must retain its actionable quote code instead of becoming coverage.
+  if(members)readMemoryWorkCoverage(result,members,undefined,undefined,input.strategy!.workContract);
+  const claims=validateMemoryExtraction(result,options,{readEvidence:ids=>{if(ids.some(id=>!Object.hasOwn(options.expectedFingerprints!,id)))throw missing();return records.filter(record=>ids.includes(record.id));},imageLocator:id=>{const image=this.image(id);return image?{sha256:String(image.hash)}:undefined;},isCurrentEvidence:id=>{try{return this.evidence([id]).length===1;}catch{return false;}},get:id=>{const memory=related.find(item=>item.id===id);if(!memory)throw missing();return memory;}});
+  if(input.evidenceReadRanges)assertMemoryTargetSupport(result,this.ranges(input),id=>records.find(record=>record.id===id)?.ocrText);
+  if(members){const coverage=readMemoryWorkCoverage(result,members,undefined,id=>records.find(record=>record.id===id)?.ocrText,input.strategy!.workContract);if(coverage.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied target requires coverage',{workContract:input.strategy!.workContract});}
+  return claims;
  }
  private claimFingerprint(claim:ReturnType<ScopedMemoryData['validate']>[number],input:ScopedMemoryTask){return memoryHash([input.phase,input.strategy??null,input.integration??null,claim.admission,claim.coding??null,claim.relations??null,claim.validFrom??null,claim.validUntil??null,claim.statement,[...claim.evidenceIds].sort(),claim.evidence]);}
  duplicateIds(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]){return this.validate(result,input,related).flatMap(claim=>{const prior=this.sql.get('SELECT id FROM mm_records WHERE user_id=$user AND fingerprint=? AND json_extract(json,\'$.status\')=\'published\'',this.claimFingerprint(claim,input));return prior?[String(prior.id)]:[];});}
@@ -120,7 +142,7 @@ export class ScopedMemoryData {
   });return {at:createdAt,resultHash:receipt.resultHash!,items,changed:[...changed.values()],expected,deletionSnapshot:input.deletionSnapshot};
  }
  assertPrepared(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){
-  this.assertInputs(input);if(prepared.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
+  this.assertInputs(input);for(const memory of prepared.items)this.readInputs(input,memory.evidenceIds);if(prepared.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
   for(const [id,hash] of Object.entries(prepared.expected)){const row=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',id);if((row?memoryHashAnswer(String(row.json)):null)!==hash)throw new PrivateDataError('conflict',409);}
  }
  commit(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){return this.sql.transaction(()=>{
@@ -130,7 +152,7 @@ export class ScopedMemoryData {
    this.sql.run('INSERT INTO mm_records VALUES($user,?,?,?,?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET version=excluded.version,fingerprint=excluded.fingerprint,body_digest=excluded.body_digest,binding=excluded.binding,json=excluded.json',memory.id,memory.version,memory.fingerprint,memoryBodyDigest(memory),JSON.stringify(input.binding),JSON.stringify(memory),memory.createdAt);
    this.sql.run('INSERT OR IGNORE INTO mm_versions VALUES($user,?,?,?,?)',memory.id,memory.version,memory.fingerprint,JSON.stringify(memory));
    this.sql.run('INSERT OR IGNORE INTO mm_version_bindings VALUES($user,?,?,?,?)',memory.id,memory.version,JSON.stringify(input.binding),memoryBodyDigest(memory));
-   for(const id of memory.evidenceIds){const pin=input.inputs.find(item=>item.id===id);if(!pin)throw missing();this.sql.run('INSERT OR IGNORE INTO mm_dependencies VALUES($user,?,?,?)',memory.id,id,pin.hash);}
+   for(const id of memory.evidenceIds){const pin=[...input.inputs,...input.readInputs??[]].find(item=>item.id===id);if(!pin)throw missing();this.sql.run('INSERT OR IGNORE INTO mm_dependencies VALUES($user,?,?,?)',memory.id,id,pin.hash);}
   }
   const batch=input.batchId?this.sql.get('SELECT review FROM mm_job_batches WHERE user_id=$user AND job_id=? AND id=?',input.jobId,input.batchId):undefined,state=batch?.review&&JSON.parse(String(batch.review)).coverage?.incomplete?'awaiting_context':'committed';
   if(input.batchId)this.sql.run("UPDATE mm_job_batches SET state=? WHERE user_id=$user AND job_id=? AND id=?",state,input.jobId,input.batchId);if(!this.sql.get("SELECT 1 FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state!='committed'",input.jobId))this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);else if(!this.sql.get("SELECT id FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state NOT IN ('committed','awaiting_context')",input.jobId))this.sql.run("UPDATE mm_jobs SET state='awaiting_context' WHERE user_id=$user AND id=?",input.jobId);return prepared.items;

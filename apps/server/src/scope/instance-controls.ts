@@ -11,9 +11,16 @@ const diagnostic=diagnosticsSettingsSchema.omit({traceEnabled:true}).extend({tra
  * and publication still belong to M05; these gates bound physical model loops. */
 export function registerInstanceControls(runtime:ScopedRuntime,configuration:Configurations,execution:TaskExecution){
  const gates={agents:new ConcurrencyGate(8),models:new ConcurrencyGate(4),interactive:new ConcurrencyGate(2),memory:new ConcurrencyGate(3)};
- const apply=(next:ExecutionSettingsValue)=>{gates.agents.configure(next.agentConcurrency);gates.models.configure(next.llmConcurrency);gates.interactive.configure(next.interactiveConcurrency);gates.memory.configure(next.memoryConcurrency);};
- apply(executionSettingsSchema.strip().parse(configuration.instance.current('execution')));
- configuration.instance.setHandler<ExecutionSettingsValue>('execution',(next,previous)=>({apply:()=>{},publish:()=>apply(next),rollback:()=>apply(previous)}));
+ let settings=executionSettingsSchema.strip().parse(configuration.instance.current('execution'));
+ // Configure the existing durable scheduler before business handlers register.
+ // A background Insight must not occupy an interactive reservation, and the
+ // persisted pool must use the same live settings as the physical model gates.
+ execution.engine.configurePool('ask.models',{concurrency:{background:()=>settings.agentConcurrency,interactive:()=>settings.interactiveConcurrency},lane:step=>step.kind==='ask.chat'||step.kind==='ask.compact'?'interactive':'background'});
+ execution.engine.configurePool('memory.models',{concurrency:{background:()=>settings.memoryConcurrency,interactive:()=>settings.memoryConcurrency},lane:()=> 'background'});
+ const apply=(next:ExecutionSettingsValue)=>{settings=next;gates.agents.configure(next.agentConcurrency);gates.models.configure(next.llmConcurrency);gates.interactive.configure(next.interactiveConcurrency);gates.memory.configure(next.memoryConcurrency);};
+ apply(settings);
+ const publish=(next:ExecutionSettingsValue)=>{apply(next);queueMicrotask(()=>{void execution.tick().catch(()=>{});});};
+ configuration.instance.setHandler<ExecutionSettingsValue>('execution',(next,previous)=>({apply:()=>{},publish:()=>publish(next),rollback:()=>publish(previous)}));
  execution.bindModelAdmission((run,work)=>{
   const guarded=()=>{run.grant.assert();return work();},key=run.context.userId;
   if(['ask.chat','ask.compact'].includes(run.task.kind))return gates.interactive.run(guarded,run.signal,key);

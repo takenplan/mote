@@ -11,12 +11,12 @@ export function registerConfigurationRoutes(runtime:ScopedRuntime,configuration:
   runtime.services.registerInstance('model-resources',{scope:'instance',service:configuration.instance});
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/configuration',service:'configuration',handle:({services})=>services.get<UserConfigurationService>('configuration').view()});
   registerUserRoute(runtime,{scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration',handle:({services,request})=>{
-    const input=z.object({revision,patches:z.record(z.unknown())}).strict().parse(request.body);
-    return services.get<UserConfigurationService>('configuration').update(input.patches,input.revision);
+    const input=z.object({revision,patches:z.record(z.unknown()),allowCredentialReuse:z.boolean().optional(),preserveRedactedSecrets:z.boolean().default(false)}).strict().parse(request.body);
+    return services.get<UserConfigurationService>('configuration').update(input.patches,input.revision,input.allowCredentialReuse,input.preserveRedactedSecrets);
   }});
   registerUserRoute(runtime,{scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration',handle:({services,request})=>{
-    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false)}).strict().parse(request.body),domain=z.object({domain:z.string().regex(/^[a-z][a-zA-Z0-9_-]*$/)}).strict().parse(request.params).domain;
-    return services.get<UserConfigurationService>('configuration').replace(domain,input.value,input.revision,input.preserveRedactedSecrets);
+    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false),allowCredentialReuse:z.boolean().optional()}).strict().parse(request.body),domain=z.object({domain:z.string().regex(/^[a-z][a-zA-Z0-9_-]*$/)}).strict().parse(request.params).domain;
+    return services.get<UserConfigurationService>('configuration').replace(domain,input.value,input.revision,input.preserveRedactedSecrets,input.allowCredentialReuse);
   }});
   registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/configuration/reload',service:'configuration',handle:({services,request})=>{z.object({}).strict().parse(request.body??{});return services.get<UserConfigurationService>('configuration').reload();}});
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/models',service:'configuration',handle:({services})=>services.get<UserConfigurationService>('configuration').models()});
@@ -27,14 +27,15 @@ export function registerConfigurationRoutes(runtime:ScopedRuntime,configuration:
     const feature=z.object({feature:z.enum(MODEL_FEATURES)}).strict().parse(request.params).feature;
     return services.get<UserConfigurationService>('configuration').selection(feature);
   }});
-  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/usage',service:'configuration',handle:({services})=>services.get<UserConfigurationService>('configuration').usage()});
+  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/usage',service:'configuration',handle:({services,request})=>{const service=services.get<UserConfigurationService>('configuration');return Object.keys(request.query as object).length?service.usageSummary(request.query):service.usage();}});
+  registerUserRoute(runtime,{scope:'user',method:'PUT',url:'/api/usage/prices',service:'configuration',handle:({services,request})=>services.get<UserConfigurationService>('configuration').setUsagePrice(request.body)});
   // Instance administration only exposes the deployment resource domain. The
   // general private endpoint above always stays bound to the admin's own user.
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/admin/configuration/models',administrator:true,handle:()=>{
     const view=configuration.instance.view();return {version:view.version,revision:view.revision,domains:view.domains.filter(d=>d.id==='models'),lastError:view.lastError};
   }});
   registerAuthenticatedRoute(runtime,{method:'PUT',url:'/api/admin/configuration/models',administrator:true,handle:(context,request)=>{
-    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false)}).strict().parse(request.body);
-    return (input.preserveRedactedSecrets?configuration.instance.replaceView('models',input.value,input.revision,()=>runtime.authority.assertAdministrator(context)):configuration.instance.replace('models',input.value,input.revision,()=>runtime.authority.assertAdministrator(context))).then(view=>({version:view.version,revision:view.revision,domains:view.domains.filter(d=>d.id==='models'),lastError:view.lastError}));
+    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false),allowCredentialReuse:z.boolean().optional()}).strict().parse(request.body);
+    return configuration.replaceSharedModels(context,input.value,input.revision,input.preserveRedactedSecrets,input.allowCredentialReuse).then(view=>({version:view.version,revision:view.revision,domains:view.domains.filter(d=>d.id==='models'),lastError:view.lastError}));
   }});
 }

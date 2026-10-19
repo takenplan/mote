@@ -53,29 +53,20 @@ class MultiuserWorkerInstrumentedTest {
                 fun button(label:String):android.widget.Button? {var result:android.widget.Button?=null;scenario.onActivity {activity->result=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}};return result}
                 fun click(label:String) {waitFor {button(label)!=null};val target=button(label)!!;instrumentation.runOnMainSync {target.performClick()}}
                 waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
-                click("中央资料与附件导出")
-                waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
-                waitFor {if(button("下载")!=null)true else {val refresh=button("刷新");if(refresh!=null)instrumentation.runOnMainSync {refresh.performClick()};false}}
                 monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
-                val oldDownload=button("下载")!!;click("下载")
+                val oldDownload=button("中央资料与附件导出")!!;click("中央资料与附件导出")
                 waitFor {output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
                 val bytes=output.readBytes();val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(settings.read().account()!!.userId,archive.getString("userId"));assertEquals(3,archive.getInt("version"))
                 assertEquals(1,monitor!!.hits);assertFalse(String(bytes,Charsets.UTF_8).contains(token("a")))
-                val page=CentralPortable(CentralAccess.requireClient(app)).list();val id=page.getJSONArray("items").getJSONObject(0).getString("id")
-                assertEquals(Ingress3Client.hash(bytes),CentralPortable(CentralAccess.requireClient(app)).read(id).getString("sha256"))
-                // Reopen through normal native navigation before the independent cancellation case.
-                scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看详情")
-                waitFor {button("下载")!=null}
+                // The original action can be repeated without a central download-history step.
+                output.delete();click("中央资料与附件导出")
+                waitFor {monitor!!.hits==2&&output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+                assertEquals(archive.getString("userId"),JSONObject(output.readText()).getString("userId"))
                 val sentinel="Generated existing document must survive a retired export"
                 output.writeText(sentinel)
-                CentralPortable(CentralAccess.requireClient(app)).control(id,"cancel")
-                click("下载")
-                waitFor {monitor!!.hits==2}
-                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
-                assertEquals(sentinel,output.readText())
                 login(app,"b");scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
-                scenario.onActivity {activity->oldDownload.performClick();assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(id)})}
-                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
+                scenario.onActivity {oldDownload.performClick()}
+                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText())
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
@@ -314,9 +305,8 @@ class MultiuserWorkerInstrumentedTest {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val api=CentralAccess.requireClient(app);val defaults=api.get("/api/configuration").toString();val note=QuickNotes.save(app,"Generated portable import original "+java.util.UUID.randomUUID(),"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
-        val portable=CentralPortable(api);val export=portable.start(java.util.UUID.randomUUID().toString());var receipt=export
-        waitFor {receipt=portable.read(export.getString("id"));receipt.getString("state")=="completed"}
-        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()};portable.save(receipt,app.cacheDir) {file.outputStream()}
+        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()}
+        api.downloadStaged("/api/export",{file.outputStream()},app.cacheDir)
         val uri=android.provider.DocumentsContract.buildDocumentUri(app.packageName+".file-fixtures","native-portable.json")
         val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
@@ -979,6 +969,46 @@ class MultiuserWorkerInstrumentedTest {
         }} finally {control("/generated/release-model-catalog")}
     }
 
+    @Test fun nativePersonalModelDraftsAndFeatureModelsPreserveOriginalJourney() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralClient(endpoint(),token("a"));val b=CentralClient(endpoint(),token("b"));val bBefore=b.get("/api/configuration").toString()
+        fun models():JSONObject {val rows=a.get("/api/configuration").getJSONArray("domains");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="models"}.getJSONObject("saved")}
+        val before=models();val oldSettings=before.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings");val base=oldSettings.getString("baseUrl")
+        val admin=CentralClient(endpoint(),token("admin"));val instance=admin.get("/api/admin/configuration/models");val shared=instance.getJSONArray("domains").getJSONObject(0).getJSONObject("saved")
+        shared.getJSONArray("profiles").put(JSONObject().put("id","generated-native-shared").put("name","Generated native shared").put("settings",JSONObject(oldSettings.toString()).put("apiKey","GENERATED_SHARED_KEY").put("headers",JSONObject()).put("extraBody",JSONObject())))
+        admin.put("/api/admin/configuration/models",JSONObject().put("revision",instance.getLong("revision")).put("value",shared).put("preserveRedactedSecrets",true))
+        fun state()=control("/generated/model-state")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun dialog():android.app.AlertDialog {
+            @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return dialogs.mapNotNull {it.get()}.single {it.isShowing}
+        }
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun fill(label:String,value:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.contentDescription==label}.setText(value)}}
+            fun shown(label:String):Boolean {var result=false;scenario.onActivity {activity->result=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==label}};return result}
+            fun confirm(positive:Boolean){scenario.onActivity {dialog().getButton(if(positive)android.app.AlertDialog.BUTTON_POSITIVE else android.app.AlertDialog.BUTTON_NEGATIVE).performClick()}}
+            ready();press("模型配置");ready();press("编辑");ready();fill("模型 ID","generated-unsaved-native")
+            press("可用模型");ready();press("generated-a-two");fill("模型 ID","generated-unsaved-native");press("测试连接");ready()
+            assertEquals("Catalog and probe cannot save an editing draft",before.toString(),models().toString())
+            val calls=state().getJSONArray("requests");assertTrue((0 until calls.length()).map(calls::getJSONObject).any {it.getString("method")=="POST"&&it.optString("model")=="generated-unsaved-native"})
+            fill("服务地址",base+"/changed");val count=state().getJSONArray("requests").length();press("可用模型");scenario.onActivity {assertTrue(dialog().isShowing)};assertEquals(count,state().getJSONArray("requests").length());confirm(false);assertEquals(before.toString(),models().toString())
+            press("可用模型");confirm(true);ready();assertEquals(before.toString(),models().toString());fill("服务地址",base);press("保存设置");ready()
+            assertEquals("generated-unsaved-native",models().getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").getString("model"))
+            press("功能默认模型");ready()
+            for((feature,model)in listOf("chat" to "generated-native-chat","memory" to "generated-native-memory")){
+                scenario.onActivity {activity->val fields=views(activity.window.decorView);val spinner=fields.filterIsInstance<android.widget.Spinner>().single {it.contentDescription=="功能默认模型 · "+feature};spinner.setSelection((0 until spinner.count).single {spinner.getItemAtPosition(it).toString()==before.getJSONArray("profiles").getJSONObject(0).getString("name")})};InstrumentationRegistry.getInstrumentation().waitForIdleSync();fill("模型 ID（可选覆盖） · "+feature,model)
+            }
+            press("保存设置");ready();assertEquals("generated-native-chat",a.get("/api/models/selection/chat").getString("model"));assertEquals("generated-native-memory",a.get("/api/models/selection/memory").getString("model"));assertEquals(before.getJSONArray("profiles").length(),models().getJSONArray("profiles").length());assertEquals(bBefore,b.get("/api/configuration").toString())
+            press("功能默认模型");ready();scenario.onActivity {activity->val spinner=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.contentDescription=="功能默认模型 · memory"};spinner.setSelection((0 until spinner.count).single {spinner.getItemAtPosition(it).toString()=="Generated native shared"})};InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            scenario.onActivity {activity->val input=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.contentDescription=="模型 ID（可选覆盖） · memory"};assertFalse(input.isEnabled);assertEquals("",input.text.toString())};press("保存设置");ready();val fixed=models().getJSONObject("selections").getJSONObject("memory");assertEquals("shared",fixed.getString("kind"));assertFalse(fixed.has("model"))
+            press("编辑");ready();control("/generated/hold-model-probe");press("测试连接");waitFor {state().getBoolean("probeEntered")};scenario.onActivity {it.navigate("settings")};control("/generated/release-model-probe");ready();assertTrue(shown("模型配置"));assertFalse(shown("编辑草稿与实际生效配置分开显示；测试连接不保存草稿。"))
+            press("模型配置");ready();press("编辑");ready();fill("名称","Generated saved while navigation retires response");control("/generated/hold-model-save");press("保存设置");waitFor {state().getBoolean("modelSaveEntered")};scenario.onActivity {it.navigate("settings")};control("/generated/release-model-save");ready();assertTrue(shown("模型配置"));assertFalse(shown("编辑草稿与实际生效配置分开显示；测试连接不保存草稿。"));assertEquals("Generated saved while navigation retires response",models().getJSONArray("profiles").getJSONObject(0).getString("name"));assertEquals(bBefore,b.get("/api/configuration").toString())
+        }} finally {control("/generated/release-model-probe");control("/generated/release-model-save")}
+    }
+
     @Test fun originalNativeFileProcessingEditorKeepsNamedGraphAndDoesNotSaveAnUnconfiguredPreview() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -1566,7 +1596,7 @@ class MultiuserWorkerInstrumentedTest {
     }
 
     @Test fun actualNativeModelSettingsUseTheOwnedDomainAndPreserveMaskedCredentials() {
-        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val bBefore=bApi.get("/api/configuration")
         fun models(view:JSONObject):JSONObject {val domains=view.getJSONArray("domains");return (0 until domains.length()).map {domains.getJSONObject(it)}.single {it.getString("id")=="models"}.getJSONObject("saved")}
@@ -1575,8 +1605,8 @@ class MultiuserWorkerInstrumentedTest {
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
             fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
             fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
-            ready();click("模型配置");ready()
-            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().firstOrNull {it.hint.toString()=="profiles · 高级 JSON"};assertNotNull("Native models must use the owned M04 configuration",field);val profiles=org.json.JSONArray(field!!.text.toString());profiles.getJSONObject(0).put("name",name);field.setText(profiles.toString())}
+            ready();click("模型配置");ready();click("编辑");ready()
+            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="名称"};field.setText(name)}
             click("保存设置");ready()
             val after=models(api.get("/api/configuration"));assertEquals(name,after.getJSONArray("profiles").getJSONObject(0).getString("name"));assertEquals(before.getJSONObject("selections").toString(),after.getJSONObject("selections").toString())
             assertEquals(before.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString(),after.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString())

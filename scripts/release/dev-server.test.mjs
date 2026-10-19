@@ -58,7 +58,8 @@ async function ready(run){
 async function stop(run){if(run.child.exitCode===null&&run.child.signalCode===null)run.child.kill('SIGTERM');const result=await run.done;assert.equal(result.code,0,result.output);}
 function accounts(p){
  const db=new DatabaseSync(join(p.dataDir,'mote.sqlite'),{readOnly:true});
- try{return db.prepare('SELECT * FROM auth_accounts ORDER BY user_id').all();}finally{db.close();}
+ // Match the live server's existing bounded SQLite contention handling.
+ try{db.exec('PRAGMA busy_timeout=5000');return db.prepare('SELECT * FROM auth_accounts ORDER BY user_id').all();}finally{db.close();}
 }
 async function request(p,path,body,token){
  const response=await fetch(p.url+path,{method:body===undefined?'GET':'POST',headers:{...protocol,...(body===undefined?{}:{'content-type':'application/json'}),...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(10000)});

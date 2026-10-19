@@ -1,5 +1,40 @@
 # M14 Desktop capability ledger
 
+## Queue and central browse parity (2026-10-18)
+
+The account transport preserves the original SourceSync outbox transitions.
+Each validated file ACK is settled even if a later request loses its response or
+the cooperative transport slice yields. A permanent 400/409/410/413/422 rejection
+quarantines only that immutable version; retryable statuses, including 507,
+retain that version while unrelated records continue. A 409 also rechecks source
+registration so a central pause retains pending work rather than quarantining it.
+Credential, account, deployment and source fences remain in the transport.
+Transport expiry after begin is a retryable upload_expired response, retaining
+that revision; SyncHistory retains original interruption and failure diagnostics.
+
+Central content, records and Sessions consume one existing scoped server page
+with limit 30 and its signed cursor. Local records keep their existing queue and
+Session algorithms. Central screenshots use the server's original-plus-text
+`sizeBytes`, including images with no text. A 401/403 from account confirmation or
+archive reading returns the existing authorization-denied presentation contract;
+the content UI clears central detail and invalidates delayed reads.
+
+Normal file uploads may resume after the temporary upload session expires:
+current authorization and the identical immutable manifest recover a valid durable
+receipt, or create a fresh uncommitted transport attempt. This does not renew a
+snapshot byte deadline or an expired snapshot recovery grant. The exact server
+boundary is described in [Ingress](multiuser-ingress.md); generated queue,
+restart, paging and authorization coverage is in the
+[parity validation record](../validation/desktop-parity-2026-10-18.md).
+
+| Disposition | Current contract |
+| --- | --- |
+| KEEP | Account directories, stable origin/deployment/user identity, credentials, source/head CAS, original spools, local queue/session algorithms, privacy controls and main/renderer late-response fences. |
+| CHANGE | The account adapter reports per-version file results; normal transport expiry no longer blocks an unchanged upload; central readers consume existing bounded server pages. |
+| REMOVE | Whole-history central traversal, local offset wrappers, fake QueueRecord blob metadata and whole-batch loss of earlier ACKs. |
+| EXCEPTION | Snapshot recovery grants and original byte availability retain their separate nonrenewable boundary; logout, deletion, pause and revoked authority still reject. |
+| UNKNOWN | Physical capture/permissions, live providers/models and device lifecycle behavior require separate validation. |
+
 ## Resumed native Actions boundary
 
 The parent supplied the fixed, delivered PR140/PR141 composition
@@ -89,7 +124,7 @@ owns any future conflict with the original discussion or ADR direction.
 | Credential rotation and a reused URL cannot identify a private owner. | Keep stable origin/deployment/user ownership; confirm the current deployment before each private request. Reuse existing account confirmation and captured-client fences. | Extra identity reads, no owner migration, token retention or new runtime. The request admission adapter is reversible; relaxing ownership is not an approved option. | Actual same-URL deployment replacement 3 RED → 3 GREEN. [Multi-user ADR: Clients and Supersession](../adr-multiuser-scope.md#supersession), [public contracts: authorization and read proofs](multiuser-public-contracts.md). |
 | Old account-unbound local files cannot establish ownership. | Reject unsupported local format before writes and retain existing bytes. Do not adopt, reset or delete user data. | A separate current-format account directory is required; no compatibility reader. | Actual queue/config startup and unchanged-file tests. [Multi-user ADR: New baseline and write admission](../adr-multiuser-scope.md#new-baseline-and-write-admission), [MVP baseline: Supersession](../adr-mvp-baseline.md#supersession). |
 | Export/import/delete progress must not become a second task engine or expose another account. | Project the durable M16 journal through its live owner/epoch or administrator metadata receipt. Use semantic progress; preserved domains are excluded, import has no artifact. | Read-only Activity composition, no private BLOB/grant access or new scheduling. M16 remains the import/backup engine owner; no personal point-in-time recovery promise. | Actual lifecycle Activity 6/6, composed import/Activity 20/20, real main/preload export and import handoff. [Multi-user ADR: Storage and recovery](../adr-multiuser-scope.md#decision-and-provenance), [client ADR: Content and progress](../adr-client-action-first.md#content-and-progress). Same-account merge/dedup is the parent's later explicitly approved M16 scope. |
-| Immutable intake OCR cannot reflect current central extraction; source names are not receipt identity. | Archive previews consume M13's exact raw projection. Detail/original lookup uses actual owned source inventory and exact M03 capture/source descriptors; never assume an internal field is exposed or guess the source from a device ID. | Additional read-only source metadata traversal for captures without provenance; existing local/session algorithms and immutable intake remain. No new route, grant or classification rule. | List RED → GREEN; explicit/default source 2/2 GREEN includes original image, before/after real M06 and B same-ID isolation. [Client ADR: Content and progress](../adr-client-action-first.md#content-and-progress), [Central file evidence ADR](../adr-central-file-evidence.md), [scoped raw reader contract](multiuser-capture-browser.md). |
+| Immutable intake OCR cannot reflect current central extraction; source names are not receipt identity. | Archive previews consume M13's exact raw projection. Detail/original lookup uses actual owned source inventory and exact M03 capture/source descriptors; never assume an internal field is exposed or guess the source from a device ID. | Additional read-only source metadata traversal for captures without provenance; existing local algorithms, scoped server Session pages and immutable intake remain. No new route, grant or classification rule. | Explicit/default source cases include original image, real automatic M06 OCR while file automatic is off, and same-ID B with its own central state and unchanged immutable intake. [Client ADR: Content and progress](../adr-client-action-first.md#content-and-progress), [Central file evidence ADR](../adr-central-file-evidence.md), [scoped raw reader contract](multiuser-capture-browser.md). |
 | Canonical Ask evidence may have no raw capture; temporary originals can span processing stages. | Preserve the explicitly declared M08 context reader, without error-driven raw/context fallback. Reuse M03/M06 exact pins/recovery and existing source queue; an ordinary retry does not renew released authority. | Existing Ask navigation and original recovery remain; no second reader authority or endpoint processing runtime. | Actual main/preload and native citation click, M08 A200/B404/raw404; snapshot OCR/image-stage RED/GREEN and real queue recovery. [System refactor ADR](../adr-system-refactor.md), [task recovery ADR: Failure handling](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [public contracts](multiuser-public-contracts.md). |
 
 There is no pending user question or approval in M14. The original pause and

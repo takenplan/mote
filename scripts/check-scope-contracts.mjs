@@ -72,7 +72,7 @@ export function checkProductionImports(directory=root){
   // these helpers construct no Store and register no legacy routes.
   for(const path of ['concurrency.ts','execution-settings.ts'])allowed.add(sourceRoot+'/'+path);
   // M04 uses the original configuration and pure model/usage contracts.
-  for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','usage-query.ts','usage-summary.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
   // M09's adapted package catalog and worker/Cordis lifecycle have no private
   // Store dependency. Only ScopedPluginHost exposes their user capabilities.
   for(const path of ['plugin-center.ts','plugin-release.ts','plugin-runtime.ts','backend-plugin-scope.ts','execution-policy.ts'])allowed.add(sourceRoot+'/'+path);
@@ -84,21 +84,21 @@ export function checkProductionImports(directory=root){
   allowed.add(sourceRoot+'/connectors/recording-flow.ts');
   // M07 reuses these pure Memory contracts and exact-output/review/publication
   // validators; none constructs a legacy Store, scheduler or provider runtime.
-  for(const path of ['coding-dialogue-projection.ts','observation-key.ts','memory-feedback.ts','owner-question-contract.ts','owner-question-replies.ts','material-organizer-contract.ts','memory-image-proof.ts','memory-owner-correction.ts','capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['semantic-products.ts','memory-profiles.ts','conversation-products.ts','memory-read-context.ts','connectors/recording-memory.ts','coding-dialogue-projection.ts','observation-key.ts','memory-feedback.ts','owner-question-contract.ts','owner-question-replies.ts','material-organizer-contract.ts','memory-image-proof.ts','memory-owner-correction.ts','capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
   // M08 shares pure evidence scope, presentation, measurement, report and control contracts.
   // Every private repository remains behind its context-bound ScopedServices facade.
-  for(const path of ['working-memory-plan.ts','source-catalog-path.ts','text-window.ts','activity-measurement.ts','media-activity.ts','context-query-core.ts','context-navigation.ts','evidence-range.ts','delegation-controls.ts','delegation-protocol.ts','insights.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['working-memory-plan.ts','source-catalog-path.ts','text-window.ts','activity-measurement.ts','media-activity.ts','context-query-core.ts','context-navigation.ts','source-context-identity.ts','evidence-range.ts','delegation-controls.ts','delegation-protocol.ts','insights.ts'])allowed.add(sourceRoot+'/'+path);
   // M06 constructs only the existing shared processor registry and uses pure
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
-  for(const path of ['base64.ts','python-source-pack-executor.ts','import-review.ts','import-record.ts','import-disposition-validation.mjs','archive-contract.ts','file-export-tar.ts','file-review-contract.ts','file-processors.ts','file-recipes.ts','file-dialogue.ts','format-work.ts','file-configuration.ts','file-policy-validation.ts','processor-parameters.ts','local-http.ts','image-understanding.ts','evidence-image.ts','image-recipes.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['media-assets.ts','media-configuration.ts','perception-configuration.ts','base64.ts','python-source-pack-executor.ts','import-review.ts','import-host-directory.ts','import-record.ts','import-disposition-validation.mjs','archive-contract.ts','file-export-tar.ts','file-review-contract.ts','file-processors.ts','file-recipes.ts','file-dialogue.ts','format-work.ts','file-configuration.ts','file-policy-validation.ts','processor-parameters.ts','local-http.ts','image-understanding.ts','evidence-image.ts','image-recipes.ts'])allowed.add(sourceRoot+'/'+path);
   // M13's public static assets helper opens no private Store or user service.
   allowed.add(sourceRoot+'/web-assets.ts');
   // M11 uses only the existing pinned-address HTTP transport and fixed error
   // type. Neither constructs a legacy Store or connector service.
   for(const path of ['connectors/network.ts','connectors/types.ts'])allowed.add(sourceRoot+'/'+path);
   // M12 moves existing pure field/output contracts out of the retired Store hosts.
-  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts','exact-segments.ts','semantic-products.ts','memory-profiles.ts'])allowed.add(sourceRoot+'/'+path);
   // M16 reuses the bounded diagnostics implementation behind a metadata-only
   // projection, and the read-only signed-release checker. Neither opens a
   // private Store or executes updater commands; owner route registration is unused.
@@ -113,10 +113,26 @@ export function checkProductionImports(directory=root){
   // projects vendor authorization URLs. These exact imports grant no runtime
   // access to legacy stores and are not allowances for other scoped callers.
   const hostHelpers=new Map([
+    // M16 reuses transactional logical payload accounting, not a private legacy Store.
+    [sourceRoot+'/scope/storage-capacity.ts',new Set([sourceRoot+'/storage-ledger.ts'])],
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
     [sourceRoot+'/scope/processing.ts',new Set([sourceRoot+'/processor-admission.ts',sourceRoot+'/media-execution-facts.ts'])],
     [sourceRoot+'/scope/model-query.ts',new Set([sourceRoot+'/memory-validation.ts'])],
+    // M08 owns the embedding grant/model/usage fence and supplies only private
+    // owner-bound SQL to the existing read-only worker. Shared helpers never
+    // construct the retired Indexer or global Store.
+    [sourceRoot+'/scope/ask-retrieval.ts',new Set([sourceRoot+'/embedding-request.ts',sourceRoot+'/evidence-retrieval.ts',sourceRoot+'/vector-work.ts'])],
+    // Recording recipe definitions import pure prompt contracts, never a legacy host.
+    [sourceRoot+'/scope/memory.ts',new Set([sourceRoot+'/connectors/recording-memory.ts'])],
     [sourceRoot+'/scope/connector-recordings.ts',new Set([sourceRoot+'/connectors/authorization-output.ts'])],
+    // The generated provider canary receives only the Memory host's fenced
+    // provider/restart ports, without an account context or legacy Store.
+    [sourceRoot+'/scope/memory-providers.ts',new Set([sourceRoot+'/memory-provider-probe.ts'])],
+  ]);
+  // Keep this allowance bounded if the shared canary changes: direct file/SQL
+  // access, provider construction and legacy hosts must remain in its caller.
+  const portHelperImports=new Map([
+    [sourceRoot+'/memory-provider-probe.ts',new Set(['node:crypto','./memory-schema.js','./memory-provider-contract.js'])],
   ]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
@@ -133,6 +149,8 @@ export function checkProductionImports(directory=root){
       // expression is the sole retained exception, pending M06/M09 adaptation.
       const processorLoader=relative(directory,path)==='apps/server/src/file-processors.ts'&&node.getText(tree)==='import(isAbsolute(specifier)?pathToFileURL(specifier).href:specifier)';
       if(dynamic&&(!specifier||!ts.isStringLiteralLike(specifier))&&!processorLoader)failures.push(`computed production import: ${relative(directory,path)}`);
+      const portImports=portHelperImports.get(relative(directory,path));
+      if(portImports&&specifier&&ts.isStringLiteralLike(specifier)&&!portImports.has(specifier.text))failures.push(`unreviewed capability probe import: ${relative(directory,path)} -> ${specifier.text}`);
       if(specifier&&ts.isStringLiteralLike(specifier)&&specifier.text.startsWith('.')){
         const candidates=[specifier.text.replace(/\.mjs$/,'.mts').replace(/\.cjs$/,'.cts').replace(/\.js$/,'.ts'),specifier.text];
         const target=relative(directory,candidates.map(value=>resolve(path,'..',value)).find(value=>existsSync(value))??resolve(path,'..',candidates[0]));
@@ -159,6 +177,11 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
+  // Fixed host lifecycle adapters own account inventory, trigger installation
+  // and the shared instance ledger. User reads/writes still go through their
+  // fixed PrivateSql owner; no request supplies a database, path or owner.
+  if(['apps/server/src/scope/archive-maintenance.ts','apps/server/src/scope/lifecycle-export-retention.ts','apps/server/src/scope/storage-capacity.ts','apps/server/src/scope/restore-future.ts'].includes(path))return [];
+
   if(path==='apps/server/src/scope/actions-schema.ts'||path==='apps/server/src/scope/todo-schema.ts'||path==='apps/server/src/scope/owner-question-schema.ts'||path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts'||path==='apps/server/src/scope/mcp-schema.ts'||path==='apps/server/src/scope/ask-schema.ts'||path==='apps/server/src/scope/memory-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){

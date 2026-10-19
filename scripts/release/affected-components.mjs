@@ -21,6 +21,9 @@ const rootScriptOwners = new Map([
     'scripts/fixture-language-preload.cjs',
   ].map(path => [path, ['@mote/web', '@mote/desktop']]),
 ]);
+const backupInputs = new Set([
+  'scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs',
+]);
 
 export function workspaceGraph(directory = '.') {
   return ['apps', 'packages'].flatMap(parent => readdirSync(resolve(directory, parent), { withFileTypes: true })
@@ -93,6 +96,13 @@ function inputSelection(paths, graph) {
     if (rootScriptOwners.has(path)) {
       for (const owner of rootScriptOwners.get(path)) selectWorkspace(owner);
       result.tooling = true;
+      continue;
+    }
+    if (backupInputs.has(path)) {
+      // Operator instance backup is consumed by Server and its HTTP client.
+      // Root CLI/profile restore and update regressions are separate obligations.
+      selectWorkspace('@mote/server'); rootTests.add('backup'); result.tooling = true;
+      if (path === 'scripts/backup.ts') rootTests.add('scripts-types');
       continue;
     }
     if (path === 'scripts/check-scope-contracts.mjs') {

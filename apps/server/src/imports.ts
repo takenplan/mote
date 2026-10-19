@@ -2,9 +2,10 @@ import {importReviewGate as reviewGate} from './import-review.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import { moteText } from './i18n.js';
 import {randomUUID} from 'node:crypto';
-import {readdir,lstat} from 'node:fs/promises';
-import {constants,closeSync,createReadStream,createWriteStream,existsSync,fstatSync,lstatSync,openSync,readSync,readFileSync,realpathSync,renameSync,rmSync,writeFileSync} from 'node:fs';
-import {basename,dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
+import {constants,openSync,createReadStream,createWriteStream,existsSync,readFileSync,realpathSync,renameSync,rmSync,writeFileSync} from 'node:fs';
+import {basename,dirname,join,relative,resolve} from 'node:path';
+import {hostImportDirectory,readImportParts as readParts,MAX_IMPORT_INPUT_BYTES as MAX_INPUT_BYTES,MAX_IMPORT_FILES as MAX_FILES} from './import-host-directory.js';
+export {ImportInputError} from './import-host-directory.js';
 import {formatWork} from './format-work.js';
 import {createInterface} from 'node:readline';
 import {importRecordSchema,type PreparedRecord} from './import-record.js';
@@ -29,17 +30,13 @@ import {withExecutionCancellation} from './execution-cancellation.js';
 import {importMemoryProgress} from './import-memory-progress.js';
 import {ImportAttributionStore} from './import-attribution.js';
 
-const MAX_INPUT_BYTES=256*1024*1024,MAX_EXPANDED_BYTES=512*1024*1024,MAX_FILES=4000;
-export class ImportInputError extends StoreError {
-  constructor(public code:'import_directory_missing'|'import_directory_unreadable'|'import_directory_required',message:string){super(message,422);}
-}
+const MAX_EXPANDED_BYTES=512*1024*1024;
 export type ImportPreparation={operationId?:string;signal?:AbortSignal;workspace:string;inputPaths:string[];instruction:string;previous?:{summary:string;error?:string}};
 export type ImportPreparationResult={summary:string;recordsPath?:string;warnings?:string[];reviewDecision?:ImportReviewDecision};
 export type ImportRuntime={executor?:ExecutionEngine;intake?:ImportIntakeRegistry;fileStore?:FileStore;prepare?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;sourcePacks?:ReadonlyMap<string,{revision:string;prepare:(input:ImportPreparation)=>Promise<ImportPreparationResult>}>;onImported?:(captureIds:string[],importJobId:string)=>Promise<{memoryJobId?:string}>};
 type InternalJob=ImportJob&{resourceWait?:'prepare'|'commit';excludedFiles?:{fileId:string;reason:string}[];containerIds?:string[];recordsProcessed:number;processing:'automatic'|'preview';sourcePackRevision?:string;archiveWarnings?:string[];createFingerprint?:string;preparationRevision:number;originalsPending?:boolean;expansion?:{originalIds:string[];completedIds:string[];pins?:Record<string,{id:string;version:string}>};parserMode?:'plain';workspace:string;inputs:{path:string;fileId:string}[];manifestHash?:string;failurePhase?:'prepare'|'import';memoryNotified?:boolean;blockedArchive?:boolean};
 const responseSchema=z.object({summary:z.string().max(20000),recordsPath:z.string().max(4000).optional(),warnings:z.array(z.string().max(2000)).max(200).optional(),reviewDecision:importReviewDecisionSchema.optional()}).strict();
 const message=(error:unknown)=>error instanceof Error?error.message.slice(0,2000):'Import failed';
-const inside=(root:string,path:string)=>{const rel=relative(root,path);return rel===''||(!rel.startsWith(`..${sep}`)&&rel!=='..'&&!isAbsolute(rel));};
 
 
 /** Deterministic formats decode locally; models map unfamiliar structures into reviewed records. */
@@ -162,24 +159,7 @@ export class ImportStore {
     }else if(request.files){
       for(const file of request.files){if(!validBase64(file.dataBase64))throw new StoreError('Invalid file base64');add(file.name,Buffer.from(file.dataBase64,'base64'),file.mimeType);}
     }else{
-      try{
-      const source=realpathSync(resolve(request.directory!)),vault=realpathSync(this.store.directory);
-      if(inside(source,vault)||inside(vault,source))throw new StoreError('Choose a directory outside the Mote data directory');
-      if(!lstatSync(source).isDirectory())throw new ImportInputError('import_directory_required',moteText('该路径不是目录，请填写中央服务器上可读取的目录。'));
-      const walk=async(directory:string,depth:number):Promise<void>=>{this.lifetime.signal.throwIfAborted();if(depth>30)throw new StoreError('Directory nesting exceeds 30 levels',413);for(const name of (await readdir(directory)).sort()){
-        this.lifetime.signal.throwIfAborted();
-        const path=join(directory,name),info=await lstat(path,{bigint:true});if(info.isSymbolicLink())throw new StoreError('Directory imports cannot follow symbolic links');
-        if(info.isDirectory())await walk(path,depth+1);else if(info.isFile()){
-          const size=Number(info.size);if(size>MAX_FILE_BYTES||total+size>MAX_INPUT_BYTES||entries.length>=MAX_FILES)throw new StoreError('Directory exceeds import size limits',413);
-          const name=archiveRelativePath(relative(source,path).split(sep).join('/'));entries.push({name,path,sizeBytes:size,identity:fileIdentity(info)});total+=size;
-        }
-      }};await walk(source,0);
-      }catch(error){
-        const code=(error as NodeJS.ErrnoException).code;
-        if(code==='ENOENT'||code==='ENOTDIR')throw new ImportInputError('import_directory_missing',moteText('中央服务器上的目录不存在或文件已移动，请检查路径后重新提交。'));
-        if(code==='EACCES'||code==='EPERM')throw new ImportInputError('import_directory_unreadable',moteText('中央服务器无法读取该目录，请检查访问权限后重新提交。'));
-        throw error;
-      }
+      entries.push(...await hostImportDirectory(request.directory!,this.store.directory,()=>this.lifetime.signal.throwIfAborted()));
     }
     this.lifetime.signal.throwIfAborted();
     if(!entries.length)throw new StoreError('No files were supplied');
@@ -529,11 +509,4 @@ export class ImportStore {
     const retained=new Set(otherJobs.flatMap(other=>other.files.map(file=>file.id))),removed=this.files.removeUnreferenced(job.files.map(file=>file.id),retained);
     return {deleted:true,captures,files:removed.files,bytes:removed.bytes,retainedSharedSource};
   }
-}
-
-const fileIdentity=(info:import('node:fs').BigIntStats)=>[info.dev,info.ino,info.size,info.mtimeNs,info.ctimeNs].join(':');
-function* readParts(path:string,expected?:string){
- const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW),buffer=Buffer.alloc(4*1024*1024);
- const check=()=>{const info=fstatSync(fd,{bigint:true});if(!info.isFile()||expected&&(fileIdentity(info)!==expected||realpathSync(path)!==path))throw new StoreError('Original file changed during import',409);};
- try{check();let size:number;while((size=readSync(fd,buffer,0,buffer.length,null))>0)yield buffer.subarray(0,size);check();}finally{closeSync(fd);}
 }

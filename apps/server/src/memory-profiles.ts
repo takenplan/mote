@@ -1,5 +1,5 @@
 import type {CaptureRecord} from '@mote/shared';
-import {MEMORY_EXTRACTION_PROMPT,MEMORY_SKILL_VERSION,MEMORY_ADMISSION_PROMPT} from './memory.js';
+import {MEMORY_EXTRACTION_PROMPT,MEMORY_SKILL_VERSION,MEMORY_ADMISSION_PROMPT} from './memory-contract.js';
 
 /** Input grouping follows source provenance. The model selects each output domain; provider never determines meaning. */
 export function memoryProfile(record:CaptureRecord){

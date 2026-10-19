@@ -77,7 +77,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         require(receipt.getBoolean("queued") && Regex("[a-f0-9]{64}").matches(receipt.getString("taskId")))
         val task = api.get("/api/tasks/" + receipt.getString("taskId"))
         val operation = "file-retry:" + SourceRules.hash(JSONArray().put(intent.getString("originalRef")).put(operationId).toString())
-        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "task:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
+        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "file-retry:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
         require(task.getString("kind") == if (request.getString("stage") == "summary") "processing.derivatives" else "processing.pipeline")
         check(ownsSelectedAccount() && ui.client === api)
         clearFileRetry(id, operationId)
@@ -94,14 +94,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
     fun submitFileDelete(api: CentralClient, row: JSONObject): JSONObject {
         check(ownsSelectedAccount() && ui.client === api)
-        val id = row.getString("captureId"); UUID.fromString(id)
-        val rawGeneration = row.get("originalGeneration")
-        require(rawGeneration is Number && rawGeneration.toDouble() >= 0 && rawGeneration.toDouble() < 9007199254740991.0 && rawGeneration.toDouble() == rawGeneration.toLong().toDouble())
-        val generation = rawGeneration.toLong()
-        val descriptor = JSONObject().put("captureId", id).put("sourceId", row.getString("sourceId"))
-            .put("externalId", row.getJSONObject("item").getString("externalId")).put("originalRef", row.getString("originalRef"))
-            .put("originalGeneration", generation)
-        require(Regex("original:[a-f0-9]{64}").matches(descriptor.getString("originalRef")))
+        val descriptor = CentralFileView.deleteDescriptor(row)
+        val id = descriptor.getString("captureId"); val generation = descriptor.getLong("originalGeneration")
         val intent = CentralDraftWrites.barrier {
             check(ownsSelectedAccount() && ui.client === api)
             val all = fileDeletes.read(); val previous = all.optJSONObject(id)

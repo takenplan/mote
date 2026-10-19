@@ -13,7 +13,8 @@ async function fixture(t:any){
 }
 const base:ExecutionHandler={kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
-test('ready Memory stages rotate within each user despite arriving extraction backlog and cancelled work',async t=>{
+// These generated stages test the engine's generic fairness API, not Memory's task graph.
+test('ready workflow stages rotate within each user despite arriving extraction backlog and cancelled work',async t=>{
  const {engine}=await fixture(t),started:string[]=[],ids:string[]=[];let release!:()=>void,enter!:()=>void,arrivals=0;
  const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
  const add=(user:string,kind:string,n:number)=>{const id=engine.enqueue(user+':'+kind+':'+n,kind,{n},{ownership:{userId:user,authorizationEpoch:1}});ids.push(id);return id;};

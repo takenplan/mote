@@ -1,16 +1,12 @@
 import {moteText} from '@mote/shared/i18n';
 import type {Api} from './api';
 
-export type LifecycleReceipt={id:string;kind:'export'|'delete'|'import';userId:string;deploymentId:string;state:string;phase:string;scope:{kind:'account'};progress:{mode:'semantic'};domains:{domain:string;state:string}[];createdAt:string;updatedAt:string;error?:string;logicalAccessRevoked?:boolean;format?:string;version?:number;coverage?:{domains?:string[];importedDomains?:string[];preservedDomains?:string[];credentials:false;activeAuthorization:false;instanceBackup:false};bytes?:number;sha256?:string;filename?:string;contentType?:string};
+export type LifecycleReceipt={id:string;kind:'delete'|'import';userId:string;deploymentId:string;state:string;phase:string;scope:{kind:'account'};progress:{mode:'semantic'};domains:{domain:string;state:string}[];createdAt:string;updatedAt:string;error?:string;logicalAccessRevoked?:boolean;format?:string;version?:number;coverage?:{domains?:string[];importedDomains?:string[];preservedDomains?:string[];credentials:false;activeAuthorization:false;instanceBackup:false};bytes?:number;sha256?:string;filename?:string;contentType?:string};
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-export function lifecycleReceipt(api:Api,value:unknown,kind:'export'|'delete'|'import',userId:string,id?:string):LifecycleReceipt{
+export function lifecycleReceipt(api:Api,value:unknown,kind:'delete'|'import',userId:string,id?:string):LifecycleReceipt{
  const r=value as LifecycleReceipt,invalid=()=>{throw Error(moteText('服务返回的操作回执与当前账号不一致。'));};
  if(api.connection?.mode!=='web'||!r||typeof r!=='object'||!uuid.test(r.id)||id!==undefined&&r.id!==id||r.kind!==kind||r.userId!==userId||r.deploymentId!==api.connection.deploymentId||r.scope?.kind!=='account'||r.progress?.mode!=='semantic'||!['working','completed','cancelled','failed','pending','result_unknown','blocked'].includes(r.state)||typeof r.phase!=='string'||!Array.isArray(r.domains)||r.domains.some(d=>!d||typeof d.domain!=='string'||typeof d.state!=='string')||!Number.isFinite(Date.parse(r.createdAt))||!Number.isFinite(Date.parse(r.updatedAt)))invalid();
  if(kind==='delete'&&r.logicalAccessRevoked!==true)invalid();
- if(kind==='export'){
-  if(r.format!=='mote-portable'||r.version!==3||!Array.isArray(r.coverage?.domains)||r.coverage.domains.some(d=>typeof d!=='string')||r.coverage.credentials!==false||r.coverage.activeAuthorization!==false||r.coverage.instanceBackup!==false)invalid();
-  if(r.state==='completed'&&(!Number.isSafeInteger(r.bytes)||r.bytes!<=0||!/^[a-f0-9]{64}$/.test(r.sha256??'')||r.filename!==`mote-portable-${r.id}.json`||r.contentType!=='application/json; charset=utf-8'))invalid();
- }
  if(kind==='import'){
   const imported=r.coverage?.importedDomains,preserved=r.coverage?.preservedDomains,required=['private-data','ingress','processing','memory','ask'];
   if(r.format!=='mote-portable'||r.version!==3||!['working','failed','completed','cancelled'].includes(r.state)||r.phase!==(r.state==='working'?'validating':r.state)||!Array.isArray(imported)||!Array.isArray(preserved)||[...imported,...preserved].some(domain=>typeof domain!=='string'||!domain)||required.some(domain=>!imported.includes(domain))||r.coverage?.credentials!==false||r.coverage.activeAuthorization!==false||r.coverage.instanceBackup!==false)invalid();

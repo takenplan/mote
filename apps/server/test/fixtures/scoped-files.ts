@@ -33,6 +33,10 @@ export async function scopedFilesFixture(t: TestContext,options:Pick<Parameters<
   const uploadBytes = async (token: string, externalId: string, bytes: Buffer, mimeType: string) => {
     const hash = bytesHash(bytes);
     const input = await checked(token, '/api/ingress/sources/same-source/uploads', 'POST', {batchId: externalId, revision: {sourceId: 'same-source', previousRevision: null, sizeBytes: bytes.length, sha256: hash, relativePath: externalId + (mimeType.startsWith('audio/') ? '.wav' : '.txt'), item: {externalId, revision: 'same-r1', observedAt: '2026-10-16T00:00:00Z', title: externalId, text: '', kind: 'file', layer: 'original', mimeType}}});
+    if(input.receipt){
+      const context=await host.authority.authenticate(token),receipt=input.receipt;assert.equal(receipt.version,3);assert.equal(receipt.state,'received');assert.equal(receipt.deploymentId,context.deploymentId);assert.equal(receipt.userId,context.userId);assert.equal(receipt.sourceId,'same-source');assert.equal(receipt.batchId,externalId);assert.equal(receipt.captures.length,1);assert.deepEqual(input.parts,[]);
+      const ack=receipt.captures[0];assert.equal(ack.sourceId,'same-source');assert.equal(ack.externalId,externalId);assert.equal(ack.revision,'same-r1');assert.equal(typeof ack.duplicate,'boolean');assert.equal(ack.original.captureId,ack.id);assert.equal(ack.original.sourceId,'same-source');assert.equal(ack.original.hash,hash);assert.equal(ack.original.bytes,bytes.length);assert.equal(ack.original.mime,mimeType);assert.equal(ack.original.retention,'archive');return ack;
+    }
     await checked(token, '/api/ingress/uploads/' + input.id + '/parts/0', 'PUT', {bytes: bytes.toString('base64'), checksum: hash});
     return (await checked(token, '/api/ingress/uploads/' + input.id + '/commit', 'POST', {})).captures[0];
   };

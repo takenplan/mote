@@ -1,4 +1,4 @@
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createServer} from 'node:http';
@@ -7,16 +7,33 @@ import {randomUUID} from 'node:crypto';
 import {buildApp} from '../../server/src/app.js';
 import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
-import {generatedScopedPluginRelease} from '../../server/test/fixtures/scoped-plugin-release.js';
+import {generatedScopedPluginRelease,generatedScopedPluginSource} from '../../server/test/fixtures/scoped-plugin-release.js';
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
-const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease():undefined;
+const pluginHold=join(directory,'generated-plugin-check-hold'),pluginEntered=join(directory,'generated-plugin-check-entered'),pluginChecks={a:0,b:0,other:0};
+const gatedPlugin=generatedScopedPluginSource.replace('export async function createMotePlugin(configuration){',`export async function createMotePlugin(configuration){
+ const fixtureHeld=()=>readFile(${JSON.stringify(pluginHold)}).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
+ if(await fixtureHeld()){await writeFile(${JSON.stringify(pluginEntered)},'generated worker entered');while(await fixtureHeld())await new Promise(resolve=>setTimeout(resolve,10));}
+`);
+const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease('1',gatedPlugin):undefined;
 const node=await buildApp({dataDir:directory},releaseFixture?{pluginReleaseTransport:releaseFixture.transport}:undefined);
 const archiveReads:{owner:string;path:string;status:number}[]=[];
+const fixtureOwners=new Map<string,string>();
+// Test-only transport controls. Product routes, ownership checks and durable
+// receipt writes still run before a response is held or its connection drops.
+const ingressRequests:{owner:string;method:string;path:string;status:number}[]=[];
+let holdUpload:'begin'|'part'|'commit'|undefined,heldUploadId:string|undefined,dropNextCommit=false,droppedCommitId:string|undefined;
 let holdNext=false,entered=false,release:(()=>void)|undefined;
 node.app.addHook('onSend',async(request,reply,payload)=>{
- if(request.method==='GET'&&request.url.startsWith('/api/capture-browser'))archiveReads.push({owner:request.headers.authorization==='Bearer '+a.token?'a':request.headers.authorization==='Bearer '+b.token?'b':'other',path:request.url,status:reply.statusCode});
+ const owner=fixtureOwners.get(String(request.headers.authorization))??'other';
+ if(request.method==='POST'&&/^\/api\/plugin-instances\/[^/]+\/check$/.test(request.url))pluginChecks[owner]++;
+ if(request.url.startsWith('/api/ingress/')||request.url==='/api/sources')ingressRequests.push({owner,method:request.method,path:request.url,status:reply.statusCode});
+ if(request.method==='GET'&&request.url.startsWith('/api/capture-browser'))archiveReads.push({owner,path:request.url,status:reply.statusCode});
  if(reply.statusCode>=400)process.stderr.write(JSON.stringify({method:request.method,path:request.url,status:reply.statusCode,response:payload})+'\n');
  if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
+ if(reply.statusCode===200&&request.method==='POST'&&/^\/api\/ingress\/sources\/[^/]+\/uploads$/.test(request.url)&&holdUpload==='begin'){const begun=JSON.parse(String(payload));if(!/^[a-f0-9-]{36}$/.test(begun.id))throw Error('Generated upload begin response missing ID');holdUpload=undefined;heldUploadId=begun.id;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
+ const upload=/^\/api\/ingress\/uploads\/([a-f0-9-]{36})\/(parts\/0|commit)$/.exec(request.url);
+ if(reply.statusCode===200&&upload&&holdUpload===(upload[2]==='commit'?'commit':'part')){holdUpload=undefined;heldUploadId=upload[1];entered=true;await new Promise<void>(resolve=>{release=resolve;});}
+ if(reply.statusCode===200&&upload?.[2]==='commit'&&dropNextCommit){dropNextCommit=false;droppedCommitId=upload[1];reply.raw.destroy();}
  return payload;
 });
 const password='Generated-M15-fixture-only-01';
@@ -29,6 +46,7 @@ for(const username of ['generated-a','generated-b']){
  if(response.statusCode!==200)throw new Error(response.body);
 }
 const a=await login('generated-a'),b=await login('generated-b');
+fixtureOwners.set('Bearer '+a.token,'a');fixtureOwners.set('Bearer '+b.token,'b');
 let retiredTokenStatus:number|undefined;
 if(process.argv.includes('--relogin')){
  const old=a.token,auth={...headers,authorization:'Bearer '+old};
@@ -36,6 +54,7 @@ if(process.argv.includes('--relogin')){
  const logout=await node.app.inject({url:'/api/auth/logout',method:'POST',headers:auth,payload:{}});if(logout.statusCode!==200)throw Error('Generated actual logout failed '+logout.statusCode);
  retiredTokenStatus=(await node.app.inject({url:'/api/connections/self',headers:auth})).statusCode;if(retiredTokenStatus!==401)throw Error('Generated old credential was not retired');
  Object.assign(a,await login('generated-a'));
+ fixtureOwners.set('Bearer '+a.token,'a');
 }
 
 const ocr=process.argv.includes('--ocr')?createServer(async(request,response)=>{
@@ -62,7 +81,16 @@ const control=createServer((request,response)=>{void(async()=>{
  if(request.url==='/archive-reads/reset'){archiveReads.length=0;}
  else if(request.url==='/archive-reads'){}
  else if(request.url==='/hold-next'){entered=false;holdNext=true;}
+ else if(request.url==='/ingress/reset'){ingressRequests.length=0;}
+ else if(request.url==='/uploads/hold-begin'){entered=false;heldUploadId=undefined;holdUpload='begin';}
+ else if(request.url==='/uploads/hold-part'){entered=false;heldUploadId=undefined;holdUpload='part';}
+ else if(request.url==='/uploads/hold-commit'){entered=false;heldUploadId=undefined;holdUpload='commit';}
+ else if(request.url==='/uploads/drop-commit'){droppedCommitId=undefined;dropNextCommit=true;}
+ else if(request.url?.startsWith('/uploads/expire/')){const id=request.url.slice('/uploads/expire/'.length);if(!/^[a-f0-9-]{36}$/.test(id))throw Error('Invalid generated upload ID');const db=new DatabaseSync(join(directory,'mote.sqlite'));try{const changed=db.prepare('UPDATE ig_uploads SET expires=? WHERE id=?').run(Date.now()-86400001,id);if(Number(changed.changes)!==1)throw Error('Generated upload session not found');}finally{db.close();}}
+ else if(request.url==='/uploads/state'){}
  else if(request.url==='/release'){release?.();release=undefined;}
+ else if(request.url==='/plugin-check/hold'){rmSync(pluginEntered,{force:true});writeFileSync(pluginHold,'generated fixture hold');}
+ else if(request.url==='/plugin-check/release'){rmSync(pluginHold,{force:true});}
  else if(request.url==='/network/off'){node.app.server.closeAllConnections();await new Promise<void>((resolve,reject)=>node.app.server.close(error=>error?reject(error):resolve()));}
  else if(request.url==='/network/on'){await new Promise<void>((resolve,reject)=>{node.app.server.once('error',reject);node.app.server.listen(port,'127.0.0.1',()=>{node.app.server.removeListener('error',reject);resolve();});});}
  else if(request.url?.startsWith('/ocr/')&&ocr){
@@ -72,10 +100,11 @@ const control=createServer((request,response)=>{void(async()=>{
  }
  else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
- response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads}));
+ let uploads:unknown[]|undefined;if(request.url==='/uploads/state'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{uploads=db.prepare('SELECT id,user_id AS userId,source_id AS sourceId,expires,receipt IS NOT NULL AS committed FROM ig_uploads ORDER BY id').all().map(row=>({...row,parts:db.prepare('SELECT part,bytes,checksum FROM ig_upload_parts WHERE upload_id=? ORDER BY part').all(String(row.id))}));}finally{db.close();}}
+ response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads,ingressRequests,heldUploadId,droppedCommitId,uploads,pluginCheckEntered:existsSync(pluginEntered),pluginChecks}));
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;
 process.stdout.write(JSON.stringify({address,controlAddress,admin,a,b,password,pid:process.pid,pluginPackageId,retiredTokenStatus})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;release?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;release?.();rmSync(pluginHold,{force:true});control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

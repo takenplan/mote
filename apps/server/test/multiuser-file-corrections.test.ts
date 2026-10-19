@@ -80,9 +80,7 @@ test('confirmed speaker names belong to the actual exact artifact and retain ano
   await f.checked(f.b.token, '/api/files/' + id + '/speakers', 'POST', {artifactId:bArtifact,names:{SPEAKER_0:'Generated B confirmed person'}});
   const bConfirmed=await f.checked(f.b.token, '/api/files/' + id + '/chunks');
   const operationId=randomUUID();
-  await f.checked(f.a.token, '/api/portable/exports', 'POST', {operationId});
-  await waitForScopedState(async () => (await f.checked(f.a.token, '/api/portable/exports/' + operationId)).state === 'completed', () => 'actual canonical export did not complete');
-  const exported=await f.checked(f.a.token, '/api/portable/exports/' + operationId + '/content');
+  const exported=await f.checked(f.a.token,'/api/export');
   const annotations=exported.domains.find((domain:any)=>domain.domain==='processing').payload.annotations;
   assert.equal(annotations.length,1);assert.equal(annotations[0].artifact_id,input.artifactId);
   assert.equal(JSON.parse(annotations[0].json).SPEAKER_0.name,input.names.SPEAKER_0);

@@ -76,6 +76,7 @@ export const english: Readonly<Record<string, string>> = {
   "等待清除确认": "Awaiting erasure confirmation",
   "外部结果待确认": "External outcome awaiting confirmation",
   "归档校验失败，请重新读取操作回执。": "Archive verification failed. Reload the operation receipt.",
+  "归档校验失败，请重新导出。": "Archive verification failed. Export again.",
   "仅导出当前账号的规范资料；凭据、执行授权和实例备份不包含在内。": "Exports canonical records for the current account only. Credentials, execution authority and instance backups are excluded.",
   "覆盖范围与处理状态": "Coverage and processing status",
   "下载归档": "Download archive",
@@ -8640,5 +8641,8 @@ export const english: Readonly<Record<string, string>> = {
   "模型输出未通过校验，请查看任务中的原因码。": "The model output failed validation. Check the reason code in the task.",
   "本次模型工具调用未完成，请查看任务诊断。": "This model tool call did not complete. Check the task diagnostics.",
   "本次模型请求超时，请查看任务状态。": "This model request timed out. Check the task status.",
-  "执行未完成，请查看任务诊断。": "Execution did not complete. Check the task diagnostics."
+  "执行未完成，请查看任务诊断。": "Execution did not complete. Check the task diagnostics.",
+  "仅管理员可安装本机模型。": "Only administrators can install models on the Central node.",
+  "图片处理并发": "Concurrent image processing",
+  "正在核验": "Checking capabilities"
 };

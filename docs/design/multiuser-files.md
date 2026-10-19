@@ -34,13 +34,51 @@ cursor key is passed only through trusted composition to PrivateCursor.
 
 | Entry | Contract |
 | --- | --- |
-| `GET /api/files` | Optional sourceId, query (original title), mimePrefix and limit1–100; signed opaque nextCursor binds deployment/user/full query/limit. Current enabled source heads only. No other account's rows or cursor. |
+| `GET /api/files` | Optional sourceId, query (title or literal relative path), mimePrefix and limit1–100; signed opaque nextCursor binds deployment/user/full query/limit. Enabled owned sources; current metadata heads and the last non-deleted file when its origin disappears. Historical owned originals remain readable by capture ID. The retained non-deleted head is an account/source/external-ID projection, preserved in current portable archives. No other account's rows or cursor. |
 | `GET /api/files/:captureId` | Owned original capture, sourceId, originalRef, exact size/hash/availability, item metadata, actual M06 saved/processed/indexed/derivations in `processing`, and actual admitted M05 `job` or null. No synthetic legacy queue/summary counts. |
 | `GET /api/files/:captureId/chunks?offset=N` | Current extraction's complete structured segments, 100 per page with nextOffset. Existing Capture-style text and fileEvidence preserve artifact/chunk identity, timing, anonymous speaker/uncertainty/overlap and document/image location. M06 artifact IDs are64hex; shared schema retains UUIDs for existing algorithm fixtures and accepts those actual scoped IDs. |
 | `POST /api/files/:captureId/playback {}` | Delegates to M03's account/credential/epoch-bound play ticket. Returned URL is the authenticated Ingress3 original reader, preserving byte Range. Fetch with the original Api/native credential and required protocol headers; renderer audio/image uses the authenticated bytes/Blob. The URL alone does not remove M03 auth. |
 | `GET /api/files/:captureId/export` | Current transcript JSON/Markdown/CSV, current available derivations and exact original/artifact manifest in the existing USTAR+gzip format. Pure existing formatting/tar code is extracted once for legacy and scoped consumers, with an authority check at stream boundaries. Existing64MiB export bound remains. No raw original, credential or other account's content is included. |
 
-This read checkpoint does **not** close reference-only catalog files, proposed review,
+The current catalog includes reference/Shadow metadata with `hasOriginal:false`,
+`processingRequired:false` and no original capability. Native revision paths and
+sizes are retained in existing document/file metadata before upload staging is
+collected. This supersedes the reference-only catalog gap at this checkpoint.
+Exact snapshot recovery compares the same manifest-derived path and size
+projection used at upload publication. Recovery still requires the current
+owned original, exact bytes, unchanged item metadata and its existing recovery
+identity; canonicalization does not renew a recovery grant.
+
+Ordinary archive upload retries recover a canonical business ACK after expired
+transport staging is collected. M02 validates the exact current revision's
+normalized source metadata and observation time; M03 validates its retained
+original hash, size, MIME, archive retention and actual local bytes. A retained
+upload receipt keeps its initial JSON, including `duplicate:false`; a collected
+receipt is reconstructed with `duplicate:true`, the same business capture and
+original identity, and `parts:[]`. Its top-level upload ID is only a locator:
+there is no new upload row, part authority, processing intent or adopted grant.
+The current account, source, device and deletion checks still precede the read.
+
+This fast path is limited to ordinary `archive`/`original` file revisions with
+no explicit `processingProfileId` or `importDeclaration`. Those explicit flows
+retain their existing admission and transport behavior because their complete
+committed override manifest is not persisted in the canonical capture. Snapshot
+input expiry/recovery, missing or deleted originals, reference files and
+uncommitted attempts keep their separate existing rules; no TTL or GC policy
+changes. See [canonical ACK regression](../validation/canonical-file-ack-2026-10-19.md)
+for the source-only candidate and pending validation matrix.
+
+Automatic intake admits one task for the current original incarnation and
+attachment binding. A different transport batch carrying the same acknowledged
+input does not create another processing intent or renew a retired grant.
+Explicit retry/recompute and a new allow-again/attachment incarnation retain
+their existing flows. Local media admission also retains a known still-running
+HTTP listener after its publishing task is cancelled or forgotten: M05 supplies
+that candidate's already-issued opaque physical keys, and M06 waits until its
+actual transport settles. No original bytes or another owner's task rows are
+exposed by this host-only resource metadata port.
+
+This read checkpoint does **not** close proposed review,
 acoustic override/sample assets,
 cancel/retry/forget or complete original legacy recording export outcomes. Those
 remain explicit shared Files work; neither the current transcript export nor a
@@ -113,6 +151,18 @@ Ordinary import must not regain shell/host-path authority. Administrator-only
 host import stays separate. Model interpretation uses existing M04 leases/M05
 tasks and generated external transports in validation; no semantic keyword rules.
 
+An explicitly selected, configured SHA-pinned Python Source Pack receives every
+supplied analysis input: original containers and their expanded members, including
+media and metadata. The fixed pack accounts for these originals in its validated
+dispositions and attachment indexes. Container expansion remains host-owned, but
+the host does not also classify those pack inputs as independent media or append
+duplicate container dispositions. Imports without a fixed pack retain the
+existing host media/metadata partition. The fixed pack retains its script pin.
+Both paths use bounded workspaces, manifest validation, owner/current-generation
+checks and exact preview confirmation. Attachment processing still requires the
+current parent's declaration and real retained archive link; a declaration alone
+grants no bytes.
+
 The joint thread owns this shared backend adaptation. M13/M14/M15 own their
 original thin UI/native consumers and final acceptance. They were notified to
 avoid a second backend projection. Until a tested shared freeze is published,
@@ -131,7 +181,7 @@ delivered M12/M16 ancestors, and excludes later peer WIP and independent theme.
 | Original user entry | Scoped contract and authority |
 | --- | --- |
 | Upload originals | POST `/api/import-uploads` with stable optional UUID `id`, relative `name`, `sizeBytes`, optional `mimeType`; PUT `/:id/parts/:part` raw exact4MiB parts; POST `/:id/commit` returns `ArchivedFile`. Replay the same upload ID/bytes after ACK loss. One-day staging/64MiB file bounds remain. |
-| Prepare private import | POST `/api/imports` with stable `requestId`, archived file IDs or inline name/mimeType/dataBase64 files, instruction, automatic/preview and optional configured SourcePack. Returns202 ImportJob. Same ID/body resumes; changed body409; host directory403. |
+| Prepare private import | POST `/api/imports` with stable `requestId`, archived file IDs or inline name/mimeType/dataBase64 files, instruction, automatic/preview and optional configured SourcePack. Returns202 ImportJob. Same ID/body resumes; changed body409; host directories require a current administrator session and use the same preview/confirmation workflow. |
 | Read original workflow | GET `/api/imports`, `/:id`, `/api/import-capabilities`, `/api/import-source-packs`, `/api/archived-files/:id` and `/content`. These are account client/web routes, not collector/device/plugin upload aliases. |
 | Preview and owner decision | POST `/:id/prepare` with optional instruction; `/confirm`, `/cancel`, `/retry` with empty objects. Models map only admitted original readers into private validated rows; no query evidence is published before confirmation, except the existing deterministic automatic review rule. |
 | Confirmed publication | Exact manifest/current epoch/owner generation binds original M03 receipts, immutable attribution and archived file links, followed by existing M06/M05 processing and M08 intake. No new runtime/executor or implicit owner. |
@@ -422,6 +472,14 @@ settings generation and non-cancelled file; execution still requires enabled
 settings. Enabling processing uses a fresh coordinator/grant for unfinished work,
 while completed results and explicit per-file cancellation remain intact. This
 uses the existing executor/journal, with no synthetic task state or new queue.
+
+Automatic intake records that current incarnation's coordinator even when a
+retired incarnation still has live or unknown physical I/O. This does not grant
+another physical request: the enabled coordinator waits for live I/O and blocks
+on an unconfirmed unknown result before admitting a child. Public/manual
+submissions retain their existing physical-call and confirmation checks, and
+another transport batch cannot renew the same incarnation's retired intent.
+
 Files now preserves M05's actual admission error when no attempt failure exists.
 
 
@@ -442,3 +500,62 @@ attachments is removed; no second generation table or route is introduced.
 Identical source IDs, parent UUIDs, attachment descriptors and retained archive
 bytes cannot revive an older unadmitted request. Re-registering a source keeps
 that metadata counter, while a new explicit current request remains valid.
+
+
+## File parity restoration (2026-10-18 candidate)
+
+The [file parity regression matrix](../validation/parity-files-2026-10-18.md)
+records the current candidate and its limits. Formal extraction/derived Materials
+retain the capture's device and authoritative content time. An image's immutable
+applied processing plan, rather than original retention, decides archive-only
+composition and which named OCR/understanding products the parent awaits.
+
+Files catalog reads include metadata-only entries and retained originals after a
+deleted or reference-only revision. A deleted origin is a location observation;
+central forgetting remains the existing all-revision removal/deny boundary.
+Historical extraction can be browsed and exported without restoring its current
+query visibility or processing authority. Semantic derivations and calendar links
+keep their existing visibility/context fences. Policy preview skips metadata-only
+and non-current originals before proof or batch admission.
+
+Administrator host-directory intake uses the same structural traversal and exact
+file identity checks as the isolated algorithm fixture, then the existing M03
+archive ports and ImportJob prepare/confirm stages. Ordinary accounts have no
+host-path authority. No source bytes, historical processing or grants are migrated.
+
+
+Existing epoch-5 data with an already-deleted source head and no durable retained
+file-head identity is outside this restoration's data-repair scope. The catalog
+must not guess that identity from rowid, UUID or timestamp ordering. Its known
+capture IDs remain directly readable and live heads remain exact. This change
+performs no historical scan or backfill; fresh writes and new portable archives
+carry the authoritative retained head.
+
+## Image controls and instance media restoration candidate
+
+The [image/media adaptation decision](../adr-scoped-image-and-managed-media.md)
+restores the original `GET/PUT /api/perception` and explicit
+`POST /api/perception/ocr/historical-preview` / `historical-process` flows.
+The settings DTO derives `profileId`, `ocrProcessorId` and `ocrEndpoint` from the
+actual global image policy and M04 reference. Image execution flags are account
+configuration; query-image permission is consumed through the existing asynchronous
+read port. Profile changes affect future images, while unfinished images retain
+their applied plan. Historical completion/recomputation is explicit and uses
+existing M05/M06 admission, receipt reuse and current-evidence checks. Backfill status exposes only its own
+job ID, task state, queued count and fixed error code; internal SQLite cursors and
+watermarks stay private.
+
+`GET /api/media-models` and `/api/perception/media-models` expose authenticated
+instance health. Original `/api/media-models/:role/{install,cancel,import}` and
+`/api/admin/media-models/:role/...` mutations require an administrator. Supported
+roles and pinned downloads remain those of MEDIA_CATALOG. Installation, local
+bundles, cancellation and restart share one installer with per-role filesystem
+exclusion and atomic verified publication. The existing managed-worker supervisor
+is retained. A selected exact managed binding receives the private instance worker
+credential at actual processing, without copying it into account configuration.
+The existing genuine recheck handoff resumes model-missing unfinished work after
+installation; it creates no account selection or historical replay.
+
+Source tests and adapter implementation are separate from the pending combined
+Config/Ask/native/full affected validation. No live model or physical-device
+acceptance follows from the generated transports.

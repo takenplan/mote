@@ -2,7 +2,7 @@ import {DatabaseSync,backup} from 'node:sqlite';
 import {scopedBackupSchema} from './scoped-backup-schema.mjs';
 import {constants,createWriteStream} from 'node:fs';
 import {open,lstat,realpath,mkdir,mkdtemp,readdir,readFile,writeFile,copyFile,chmod,rm,rename,rmdir} from 'node:fs/promises';
-import {createHash,createDecipheriv} from 'node:crypto';
+import {createHash,createDecipheriv,randomUUID} from 'node:crypto';
 import {pipeline} from 'node:stream/promises';
 import {join,resolve,relative,dirname,basename,isAbsolute,sep} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -37,7 +37,17 @@ function metadata(db){
  if(!row||row.epoch!==5||row.format!=='mote-private-users-v1'||!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(row.deployment_id)||db.prepare('PRAGMA user_version').get().user_version!==5)throw Error('Unsupported backup storage epoch');
  return {deploymentId:row.deployment_id};
 }
-function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);validateCaptureUpdates(db);return meta;}
+function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);validateCaptureUpdates(db);validateFileHeads(db);return meta;}
+// The last retained file is a canonical pointer, never inferred from capture
+// insertion order. A stopped native snapshot must preserve that identity.
+function validateFileHeads(db){
+ if(db.prepare(`SELECT 1 FROM ig_file_heads f LEFT JOIN pd_captures c ON c.user_id=f.user_id AND c.id=f.capture_id
+  LEFT JOIN pd_source_heads h ON h.user_id=f.user_id AND h.source_id=f.source_id AND h.external_id=f.external_id
+  LEFT JOIN pd_captures head ON head.user_id=h.user_id AND head.id=h.capture_id
+  WHERE c.id IS NULL OR head.id IS NULL OR c.source_id IS NOT f.source_id OR c.external_id IS NOT f.external_id
+  OR json_extract(c.json,'$.source') IS NOT 'file' OR COALESCE(json_extract(c.json,'$.provenance.deleted'),0)<>0
+  OR (json_extract(head.json,'$.source')='file' AND COALESCE(json_extract(head.json,'$.provenance.deleted'),0)=0 AND f.capture_id<>h.capture_id) LIMIT 1`).get())throw Error('Incomplete or corrupt file head projection');
+}
 // This journal's high-water counter cannot be inferred from surviving events:
 // a deleted highest capture is valid, but a missing/rewound counter is not.
 function validateCaptureUpdates(db){
@@ -168,16 +178,33 @@ export async function stageScopedRestore(checked,stage,target){
  stage=await realpath(stage);await ordinary(stage,true);
  const rechecked=await verifiedScopedBackup(checked.directory);if(identity(rechecked.manifest)!==identity(checked.manifest))throw Error('Backup changed before restoration');
  for(const name of checked.manifest.directories)await mkdir(join(stage,name),{recursive:true,mode:0o700});for(const name of checked.names){await copy(join(checked.directory,name),join(stage,name));if(await sha(join(stage,name))!==checked.checksums[name])throw Error('Backup changed while restoring');}
- if(target){const path=join(stage,'instance.yaml'),{savedDocument}=parseConfigDocument(await readFile(path,'utf8'),{});savedDocument.actions={...savedDocument.actions,enabled:false};savedDocument.storage={...savedDocument.storage,dataDir:target,...(target!=='/data'?{kind:'local-directory',source:target,mount:''}:{})};savedDocument.diagnostics={...savedDocument.diagnostics,directory:join(target,'logs')};await writeFile(path,serializeConfigDocument(savedDocument),{mode:0o600});}
- // Retain canonical configuration and secret references, but retire admitted
- // background/extension permission in both its YAML source and SQL mirrors.
- for(const name of checked.names.filter(name=>/^configuration\/users\/[^/]+\/mote.yaml$/.test(name))){const path=join(stage,name),{savedDocument}=parseConfigDocument(await readFile(path,'utf8'),{});if(savedDocument.pluginInstances?.instances)savedDocument.pluginInstances.instances=savedDocument.pluginInstances.instances.map(instance=>({...instance,desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}));if(savedDocument.processing)savedDocument.processing.automatic=false;if(savedDocument.memory)savedDocument.memory.automatic=false;if(savedDocument.actions)savedDocument.actions.enabled=false;if(savedDocument.mcpConnections?.connections)savedDocument.mcpConnections.connections=savedDocument.mcpConnections.connections.map(connection=>({...connection,enabled:false}));savedDocument.revision++;await writeFile(path,serializeConfigDocument(savedDocument),{mode:0o600});}
- const db=new DatabaseSync(join(stage,'mote.sqlite'));try{db.exec('PRAGMA foreign_keys=ON; BEGIN IMMEDIATE');const now=Date.now();db.prepare('UPDATE auth_credentials SET revoked_at=? WHERE revoked_at IS NULL').run(now);db.exec('UPDATE auth_accounts SET authorization_epoch=authorization_epoch+1; UPDATE task_authorizations SET revoked=1;');
+ if(target){const path=join(stage,'instance.yaml'),{savedDocument}=parseConfigDocument(await readFile(path,'utf8'),{});savedDocument.storage={...savedDocument.storage,dataDir:target,...(target!=='/data'?{kind:'local-directory',source:target,mount:''}:{})};savedDocument.diagnostics={...savedDocument.diagnostics,directory:join(target,'logs')};await writeFile(path,serializeConfigDocument(savedDocument),{mode:0o600});}
+ // Future processing/Memory/Actions/MCP settings are policy intent. Keep them
+ // while retiring old execution epochs and grant-bearing extension authority
+ // in both its YAML source and SQL mirrors. No task is admitted by restore.
+ for(const name of checked.names.filter(name=>/^configuration\/users\/[^/]+\/mote.yaml$/.test(name))){const path=join(stage,name),{savedDocument}=parseConfigDocument(await readFile(path,'utf8'),{});if(savedDocument.pluginInstances?.instances)savedDocument.pluginInstances.instances=savedDocument.pluginInstances.instances.map(instance=>({...instance,desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}));savedDocument.revision++;await writeFile(path,serializeConfigDocument(savedDocument),{mode:0o600});}
+ const db=new DatabaseSync(join(stage,'mote.sqlite'));try{db.exec('PRAGMA foreign_keys=ON; BEGIN IMMEDIATE');const now=Date.now(),restorationId=randomUUID();
+  if(has(db,'lifecycle_future_scopes'))db.exec('DELETE FROM lifecycle_future_scopes');
+  // Retain declarative future scopes separately from revoked runtime grants.
+  // Only a subsequent password login may admit the current-epoch coordinator.
+  db.exec("CREATE TABLE IF NOT EXISTS lifecycle_future(user_id TEXT PRIMARY KEY,restoration_id TEXT NOT NULL,epoch INTEGER NOT NULL,payload TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL DEFAULT 'pending')");
+  for(const account of db.prepare('SELECT user_id,authorization_epoch FROM auth_accounts').all()){
+   const prior=db.prepare('SELECT restoration_id,payload,state FROM lifecycle_future WHERE user_id=?').get(account.user_id),saved=prior&&prior.state!=='completed'?JSON.parse(prior.payload):{plugins:[],connectors:[]};
+   const plugins=new Map((saved.plugins??[]).map(item=>[item.id,item]));
+   for(const row of db.prepare('SELECT id,json,removed FROM plugin_user_instances WHERE user_id=?').all(account.user_id)){const value=JSON.parse(row.json);if(row.removed){plugins.delete(row.id);continue;}if(value.desired)plugins.set(row.id,{id:value.id,configurationHash:digest(JSON.stringify([value.packageId,value.configuration])),scopeIntent:value.grants});else if(value.revocation!=='restored'&&value.revocation!==prior?.restoration_id)plugins.delete(row.id);}
+   const connectors=new Map((saved.connectors??[]).map(item=>[item.id,item]));for(const row of db.prepare('SELECT id,generation,removed,settings,sync_authorized FROM connector_connections WHERE user_id=?').all(account.user_id)){const settings=JSON.parse(row.settings);if(row.removed||!settings.autoSync||!row.sync_authorized&&connectors.get(row.id)?.generation!==row.generation)connectors.delete(row.id);else if(row.sync_authorized)connectors.set(row.id,{id:row.id,generation:row.generation});}
+   const through=Number(db.prepare('SELECT COALESCE(MAX(seq),0) n FROM ma_auto_events WHERE user_id=?').get(account.user_id).n),ask=[];
+   for(const row of db.prepare('SELECT id,state FROM ma_automations WHERE user_id=?').all(account.user_id)){const generation=randomUUID();db.prepare('UPDATE ma_automations SET generation=?,task_id=NULL,cursor=MAX(cursor,?) WHERE user_id=? AND id=?').run(generation,through,account.user_id,row.id);if(row.state==='active')ask.push({id:row.id,generation,through});}
+   const payload={plugins:[...plugins.values()],connectors:[...connectors.values()],ask,actions:{captures:Number(db.prepare('SELECT COALESCE(MAX(rowid),0) n FROM pd_captures WHERE user_id=?').get(account.user_id).n),materials:Number(db.prepare("SELECT COALESCE(MAX(seq),0) n FROM ma_auto_events WHERE user_id=? AND kind='insights'").get(account.user_id).n)}};
+   db.prepare("INSERT INTO lifecycle_future VALUES(?,?,?,?,NULL,'pending') ON CONFLICT(user_id) DO UPDATE SET restoration_id=excluded.restoration_id,epoch=excluded.epoch,payload=excluded.payload,task_id=NULL,state='pending'").run(account.user_id,restorationId,Number(account.authorization_epoch)+1,JSON.stringify(payload));
+  }
+  db.prepare('UPDATE auth_credentials SET revoked_at=? WHERE revoked_at IS NULL').run(now);db.exec('UPDATE auth_accounts SET authorization_epoch=authorization_epoch+1; UPDATE task_authorizations SET revoked=1;');
   if(has(db,'execution_steps'))db.exec("UPDATE execution_steps SET lease_until=0,fence=NULL,state=CASE WHEN state IN ('waiting','running') THEN 'blocked' ELSE state END,error=CASE WHEN state IN ('waiting','running') THEN 'restore_authorization_required' ELSE error END");
   if(has(db,'plugin_user_snapshots'))db.exec('UPDATE plugin_user_snapshots SET released=1');if(has(db,'plugin_user_instances'))for(const row of db.prepare('SELECT user_id,id,json FROM plugin_user_instances').all()){const instance=JSON.parse(row.json);db.prepare('UPDATE plugin_user_instances SET generation=generation+1,verified_hash=NULL,json=? WHERE user_id=? AND id=?').run(JSON.stringify({...instance,desired:false,revocation:'restored',grants:{capabilities:[],sourceIds:[],history:false}}),row.user_id,row.id);}
-  if(has(db,'mm_state'))db.exec("UPDATE mm_state SET desired=0,generation=generation+1,settings=json_set(settings,'$.automatic',json('false'))");if(has(db,'mp_state'))db.exec("UPDATE mp_state SET generation=generation+1,settings=json_set(settings,'$.automatic',json('false'))");
-  if(has(db,'ac_state'))db.exec("UPDATE ac_state SET generation=generation+1,authorization_revision=authorization_revision+1,settings=json_set(settings,'$.enabled',json('false')),review_devices='[]',policy_id=NULL,policy_task=NULL; DELETE FROM ac_targets; UPDATE ac_operations SET revoked=1");
-  if(has(db,'connector_connections'))db.exec('UPDATE connector_connections SET sync_authorized=0');if(has(db,'ma_automations'))db.exec("UPDATE ma_automations SET state='paused' WHERE state='active'");
+  if(has(db,'mm_state'))db.exec("UPDATE mm_state SET generation=generation+1");if(has(db,'mp_state'))db.exec("UPDATE mp_state SET generation=generation+1");
+  if(has(db,'ac_state'))db.exec("UPDATE ac_state SET generation=generation+1,authorization_revision=authorization_revision+1,review_devices='[]',policy_id=NULL,policy_task=NULL; DELETE FROM ac_targets; UPDATE ac_operations SET revoked=1");
+  if(has(db,'connector_connections'))db.exec('UPDATE connector_connections SET sync_authorized=0');if(has(db,'connector_oauth'))db.exec("UPDATE connector_oauth SET status='revoked' WHERE status IN('pending','ready')");
+  if(has(db,'lifecycle_exports'))db.exec('DELETE FROM lifecycle_exports');
   if(has(db,'lifecycle_operations'))db.exec("UPDATE lifecycle_operations SET state='failed',error='restore_authorization_required' WHERE kind='export' AND state='working'");
   db.exec('COMMIT');if(db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Restored instance consistency failed');
  }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}finally{db.close();}

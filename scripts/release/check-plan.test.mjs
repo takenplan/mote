@@ -9,6 +9,48 @@ const release = readdirSync('scripts/release').filter(name => name.endsWith('.te
 const plan = (...paths) => checkPlan(affectedChecks(paths, graph), release);
 const ids = steps => steps.map(step => step.id);
 
+test('backup plans keep complete Server/Web suites, CLI/profile security and update regressions', () => {
+  for (const path of ['scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs']) {
+    const steps = plan(path), names = ids(steps);
+    for (const id of ['build:@mote/shared', 'build:@mote/agent', 'build:@mote/server', 'build:@mote/web',
+      'test:@mote/shared', 'test:@mote/server', 'test:@mote/web', 'scope-contracts', 'central-runner']) {
+      assert.ok(names.includes(id), `${path}: ${id}`);
+    }
+    assert.deepEqual(steps.find(step => step.id === 'test:@mote/server').args, ['run', 'test', '-w', '@mote/server']);
+    assert.deepEqual(steps.find(step => step.id === 'test:@mote/web').args, ['run', 'test', '-w', '@mote/web']);
+    assert.deepEqual(steps.find(step => step.id === 'root-tests').args,
+      ['--test', 'scripts/security-tests.mjs']);
+    assert.deepEqual(steps.find(step => step.id === 'backup-update-tests').args, ['--test', 'scripts/update-tests.mjs']);
+    assert.ok(names.indexOf('root-tests') < names.indexOf('backup-update-tests'));
+    for (const regression of ['dev-log-retention', 'profile-config', 'profile-proxy', 'storage-owner']) {
+      assert.ok(steps.find(step => step.id === 'release-integration').args.includes(`scripts/release/${regression}.test.mjs`), regression);
+    }
+    for (const id of ['test:@mote/diagnostics', 'typecheck:@mote/desktop', 'test:@mote/desktop', 'android-unit', 'client-tests']) {
+      assert.ok(!names.includes(id), `${path}: ${id}`);
+    }
+    assert.equal(names.includes('typecheck:scripts'), path === 'scripts/backup.ts', path);
+    assert.equal(names.includes('build:@mote/diagnostics'), path === 'scripts/backup.ts', path);
+    if (path === 'scripts/backup.ts') assert.ok(names.indexOf('build:@mote/diagnostics') < names.indexOf('typecheck:scripts'));
+  }
+});
+
+test('mixed backup plans retain native consumers and deduplicate complete root obligations', () => {
+  const kotlin = ids(plan('scripts/scoped-backup.mjs', 'apps/android/app/src/main/java/Collector.kt'));
+  assert.ok(kotlin.includes('android-unit'));
+  const desktop = ids(plan('scripts/scoped-backup-schema.mjs', 'apps/desktop/src/main.ts'));
+  for (const id of ['test:@mote/desktop', 'build:@mote/diagnostics', 'test:@mote/server']) assert.ok(desktop.includes(id), id);
+  for (const path of ['packages/shared/src/connection.ts', 'protocol/wire.json', 'unknown-input.mjs']) {
+    const steps = plan('scripts/backup.ts', path), names = ids(steps);
+    for (const workspace of graph) assert.ok(names.includes(`test:${workspace.name}`), workspace.name);
+    assert.equal(names.filter(id => id === 'typecheck:scripts').length, 1);
+    assert.equal(names.filter(id => id === 'root-tests').length, 1);
+    const root = steps.filter(step => ['root-tests', 'backup-update-tests'].includes(step.id)).flatMap(step => step.args);
+    for (const entry of ['scripts/media-workers.test.mjs', 'scripts/security-tests.mjs', 'scripts/update-tests.mjs',
+      'scripts/reset-mvp-vault.test.mjs', 'scripts/journey-network-proxy.test.mjs']) assert.equal(root.filter(arg => arg === entry).length, 1, entry);
+    assert.ok(names.includes('android-unit'));
+  }
+});
+
 test('Web-only plans retain real fixture prerequisites without the full Server suite', () => {
   const steps = plan('apps/web/src/App.tsx'), names = ids(steps);
   for (const name of ['build:@mote/shared', 'build:@mote/agent', 'build:@mote/web', 'test:@mote/web', 'test:@mote/shared']) assert.ok(names.includes(name), name);

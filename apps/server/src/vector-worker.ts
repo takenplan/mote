@@ -13,7 +13,8 @@ process.once('message',(task:VectorTask)=>{
   db.exec('BEGIN');
   for(const query of task.queries){
    const best:{id:string;score:number;embedding:string}[]=[];let scanned=0,invalid=0;
-   for(const row of db.prepare(query.sql).iterate(...query.values)){
+   const statement=db.prepare(query.sql),rows=query.boundOwner?statement.iterate({$user:query.boundOwner},...query.values):statement.iterate(...query.values);
+   for(const row of rows){
     scanned++;let vector:unknown;try{vector=JSON.parse(String(row.embedding));}catch{invalid++;continue;}
     if(!Array.isArray(vector)||vector.length!==task.vector.length||!vector.every(Number.isFinite)){invalid++;continue;}
     let product=0,squared=0;for(let i=0;i<vector.length;i++){product+=vector[i]*task.vector[i];squared+=vector[i]*vector[i];}

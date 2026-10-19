@@ -1,3 +1,4 @@
+import {archiveRead} from './archive-read-set.js';
 import {createHash} from 'node:crypto';
 import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
@@ -8,7 +9,7 @@ import type {ModelFeature,ModelSettings} from '@mote/shared/models';
 import type {TaskModelHost,TaskModelLease,TaskModelConfiguration,TaskModelRun} from './task-model.js';
 import {EXECUTION_POLICIES,type ExecutionPolicy} from '../execution-policy.js';
 import {randomUUID} from 'node:crypto';
-import {linkOperation} from '../operation-projection.js';
+import {linkOperation,linkOperationParent} from '../operation-projection.js';
 import {Operations} from '../operations.js';
 import type {ExecutionStorage} from '../execution-storage.js';
 import {ScopeError} from './baseline.js';
@@ -24,6 +25,16 @@ export class TaskError extends Error {constructor(readonly code:string,readonly 
 const id=z.string().min(1).max(256);
 const submitSchema=z.object({kind:id,operationId:id,input:z.record(z.unknown()),dependencies:z.array(id).max(100).default([])}).strict();
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+/** Business family is presentation metadata, never authority. Keep the original
+ * change-feed contract while hiding every business identifier behind its owner. */
+const privateOperationId=(userId:string,businessId:string)=>{
+ id.parse(businessId);
+ const family=businessId.startsWith('workflow:actions:')?'workflow:actions':businessId.match(/^([a-z][a-z0-9-]*):/)?.[1]??'task';
+ const digest=hash([userId,businessId]),encoded=family+':'+digest;
+ // Preserve the admitted business-ID range and the existing public-ID bound.
+ return id.safeParse(encoded).success?encoded:'task:'+digest;
+};
+export type TaskParent={parentTaskId?:string;parentOperationId?:string;generation?:{slot:string;version?:string}};
 const json=(value:unknown)=>{const result=JSON.stringify(value);if(result===undefined||Buffer.byteLength(result)>32768)throw new TaskError('task_metadata_invalid',413);return result;};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>[key,canonical(value)])):value;
 /** Only branded host failures cross the M04 callback boundary. Reconstruct
@@ -46,12 +57,15 @@ export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['for
  /** Register only abort-controlled local runtimes and their complete workspace
   * cleanup. Remote effects and arbitrary handler promises must stay outside. */
  localWork<T>(work:()=>Promise<T>):Promise<T>;
+ withResource<T>(resource:{scope:'user'|'shared';key:string},work:()=>Promise<T>):Promise<T>;
  checkpoint:{read<T=unknown>(key:string):T|undefined;write(key:string,value:unknown):void};
  progress(value:unknown):void;
  external:{begin(key:string,onIssued?:(issuanceId:string)=>unknown):string;complete():void};
 };
 export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;policy:ExecutionPolicy;
  modelFeature?:ModelFeature;
+ /** Continuous domain batches wait for physical model capacity per call. */
+ modelAdmission?:'per-call';
  /** Host-only immutable parent snapshot fork; JSON/API callers cannot install this callback. */
  leaseModel?:(context:UserContext,input:Record<string,unknown>,operationId:string)=>Promise<TaskModelLease>;
  parseInput:(input:unknown)=>Record<string,unknown>;
@@ -74,6 +88,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  /** Domain-owned bodies live in its scoped artifact store; task receipts can
   * retain a bounded locator without copying a report into task metadata. */
  publicResult?:(result:unknown)=>unknown;
+ /** Pure public metadata projection, also applied to already persisted progress.
+  * Retirement removes execution, not this read-only privacy boundary. */
+ publicProgress?:(progress:unknown)=>Readonly<Record<string,unknown>>|null;
  classify?:(error:unknown)=>ExecutionFailure;
  /** Portable input must be explicitly credential-free; otherwise export omits
   * the payload and portable recovery stays unavailable for that task kind. */
@@ -96,6 +113,7 @@ export class TaskExecution {
 
  readonly engine:ExecutionEngine;
  private readonly handlers=new Map<string,UserTaskHandler>();
+ private readonly progressViews=new Map<string,NonNullable<UserTaskHandler['publicProgress']>>();
  private readonly storage:ExecutionStorage;
  private readonly processors:ProcessorAdmission;
  private modelHost:TaskModelHost|undefined;
@@ -177,35 +195,44 @@ export class TaskExecution {
   }finally{if(this.modelRecovery.get(step.id)===fence)this.modelRecovery.delete(step.id);}
   grant.assert();this.authority.assert(context);return context;
  }
+ /** Host-only physical admission metadata, already pinned by a real M04 task
+  * lease. This exposes no model settings, rows, owner selector or new grant. */
+ processingResourceKeys(step:ExecutionStep){
+  this.assertTask(step);return this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>JSON.parse(String(row.resource_key)) as unknown).flatMap(value=>Array.isArray(value)&&value.length===2&&value[0]==='shared'&&typeof value[1]==='string'&&/^processor:[a-f0-9]{64}$/.test(value[1])?[value[1]]:[]);
+ }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
-  this.handlers.set(handler.kind,handler);
-  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall,
+  this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
+  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>[...(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),...this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>String(row.resource_key))],
    admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile)return new ExecutionFailure('blocked','external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
    execute:async(step,signal,grant)=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
-    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
+    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,codex:this.modelHost.codex(),withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
      grant.assert();try{
       // M04 still cleans arbitrary callback exceptions and performs its own
       // post-callback lease assertion before a safe failure reaches the engine.
-      const outcome=await this.modelHost!.withModel(lease,async(settings,configuration)=>{
+      const physical=()=>this.modelHost!.withModel(lease,async(settings,configuration)=>{
        try{return {ok:true as const,value:await work(settings,configuration)};}
        catch(error){const failure=modelFailure(error);if(!failure)throw error;return {ok:false as const,failure};}
       });
+      const outcome=await (handler.modelAdmission==='per-call'&&this.modelAdmission?this.modelAdmission(run,()=>grant.withBudget(physical)):handler.modelAdmission==='per-call'?grant.withBudget(physical):physical()) as Awaited<ReturnType<typeof physical>>;
       if(!outcome.ok)throw outcome.failure;return outcome.value as T;
      }finally{grant.assert();}
     },startUsage:(options?:Parameters<TaskModelHost['startUsage']>[1])=>{const meter=grant.commit(()=>this.modelHost!.startUsage(lease,options));return Object.freeze({id:meter.id,issued:()=>grant.commit(()=>meter.issued()),update:(tokens:Parameters<typeof meter.update>[0])=>grant.commit(()=>meter.update(tokens)),interrupt:()=>meter.interrupt(),finish:(status:Parameters<typeof meter.finish>[0],facts?:Parameters<typeof meter.finish>[1])=>{try{return grant.commit(()=>meter.finish(status,facts));}catch(error){try{meter.interrupt();}catch{/* Receipt cleanup cannot restore the task grant. */}throw error;}}});},recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
-    const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,localWork:work=>this.localWork(step,signal,grant,work),
+    const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,withResource:(resource,work)=>{
+      if(!['user','shared'].includes(resource.scope)||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');
+      return grant.withResource(JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',context.userId,resource.key]),()=>grant.withBudget(work));
+     },localWork:work=>this.localWork(step,signal,grant,work),
      checkpoint:{read:<T>(key:string)=>{grant.assert();const values=JSON.parse(this.row(step.id)!.checkpoints);return Object.hasOwn(values,key)?values[key] as T:undefined;},write:(key,value)=>{id.parse(key);write(()=>{const checkpoints=JSON.parse(this.row(step.id)!.checkpoints);Object.defineProperty(checkpoints,key,{value,enumerable:true,writable:true,configurable:true});this.db.prepare('UPDATE user_tasks SET checkpoints=? WHERE task_id=?').run(json(checkpoints),step.id);});}},
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
      external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
     };
     await handler.reconcile?.(run);grant.assert();
-    const work=()=>{grant.startBudget();return handler.execute(run);};
-    const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure('blocked','external_result_unknown');return {value:result,run};
+    const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
+    const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure('blocked','external_result_unknown');return {value:result,run};
    },
    commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
@@ -247,27 +274,35 @@ export class TaskExecution {
     if(this.row(taskId))return;
     const grant=this.grants.issueProcessingRecheck(intent.id,taskId);this.enabled(grant.userId);
     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,user_position) SELECT ?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,grant.userId,grant.grantId,json(input),grant.userId);
-    this.engine.enqueue('task:'+hash([grant.userId,operation]),handler.kind,input,{id:taskId,ownership:grant});
+    this.engine.enqueue(privateOperationId(grant.userId,operation),handler.kind,input,{id:taskId,ownership:grant});
    });
   }
  }
  forUser(context:UserContext){
   const assert=()=>{this.authority.assert(context);this.enabled(context.userId);};
   const owned=(taskId:string)=>{assert();const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);return row;};
+  const taskOperation=(taskId:string)=>{owned(taskId);return this.engine.get(taskId)!.operationId;};
+  const parent=(childOperationId:string,options:TaskParent={},taskId:string)=>{
+   // A domain may already submit directly into its canonical parent operation.
+   // That membership is complete without adding a self ancestry edge.
+   if(options.parentTaskId){const parentId=taskOperation(options.parentTaskId);if(parentId!==childOperationId)linkOperationParent(this.storage,parentId,childOperationId);}
+   if(options.parentOperationId){const parentId=privateOperationId(context.userId,options.parentOperationId),generation=options.generation?{slot:options.generation.slot,version:options.generation.version??taskId}:undefined;if(parentId!==childOperationId)linkOperationParent(this.storage,parentId,childOperationId,{generation});else if(generation)linkOperation(this.storage,parentId,taskId,{generation});}
+  };
   const prepare=(value:unknown,allowModels=true)=>{
     assert();const request=submitSchema.parse(value);if(request.kind==='processing.recheck')throw new TaskError('task_handler_unavailable',503);const handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
-    const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=json(input),operationId='task:'+hash([context.userId,request.operationId]),taskId=hash([context.userId,request.operationId,request.kind,input]);
+    const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=json(input),operationId=privateOperationId(context.userId,request.operationId),taskId=hash([context.userId,request.operationId,request.kind,input]);
     handler.authorizeInput?.(context,input);
     return {request,handler,input,encoded,operationId,taskId};
   };
-  const admit=(prepared:ReturnType<typeof prepare>,modelLease?:TaskModelLease,onAdmitted?:(task:{id:string})=>void,modelResources:{scope:'shared';key:string}[]=[])=>{
+  const admit=(prepared:ReturnType<typeof prepare>,modelLease?:TaskModelLease,onAdmitted?:(task:{id:string})=>void,modelResources:{scope:'shared';key:string}[]=[],options?:TaskParent)=>{
     const {request,handler,input,encoded,operationId,taskId}=prepared;
-    return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);const view=this.view(prior);onAdmitted?.(view);return view;}
+    return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);parent(operationId,options,taskId);const view=this.view(prior);onAdmitted?.(view);return view;}
      for(const dependency of request.dependencies)owned(dependency);
      const grantId=this.grants.issue(context,taskId);
      this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,snapshotId:modelLease.snapshotId,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model}):null,context.userId);
      for(const resource of modelResources){if(resource.scope!=='shared'||!/^processor:[a-f0-9]{64}$/.test(resource.key))throw new TaskError('task_resource_invalid');this.db.prepare('INSERT INTO task_model_resources VALUES(?,?)').run(taskId,JSON.stringify(['shared',resource.key]));}
      this.engine.enqueue(operationId,handler.kind,input,{id:taskId,dependencies:request.dependencies,ownership:{userId:context.userId,authorizationEpoch:context.authorizationEpoch,grantId}});
+     parent(operationId,options,taskId);
      if(modelLease)this.modelLeases.set(taskId,modelLease);
      const view=this.view(this.row(taskId)!);onAdmitted?.(view);return view;
     });
@@ -276,13 +311,17 @@ export class TaskExecution {
    /** Host domains use this only for no-model intake inside a publication
     * transaction. All normal authorization/dependency/idempotency checks apply.
     * Async model lease acquisition is deliberately rejected before any writes. */
-   submitSync:(value:unknown)=>{const prepared=prepare(value,false);return admit(prepared);},
-   submit:async(value:unknown,onAdmitted?:(task:{id:string})=>void)=>{
+   submitSync:(value:unknown,options?:TaskParent)=>{const prepared=prepare(value,false);return admit(prepared,undefined,undefined,[],options);},
+   submit:async(value:unknown,onAdmitted?:(task:{id:string})=>void,options?:TaskParent)=>{
     const prepared=prepare(value),{handler,operationId,taskId}=prepared;let modelLease:TaskModelLease|undefined;
     if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=handler.leaseModel?await handler.leaseModel(context,prepared.input,operationId):await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
     const resources=modelLease&&handler.modelResources?await this.modelHost!.withModel(modelLease,async settings=>handler.modelResources!(settings)):[];
-    assert();return admit(prepared,modelLease,onAdmitted,resources);
+    assert();return admit(prepared,modelLease,onAdmitted,resources,options);
    },
+   /** Host-only attribution: no HTTP body can install parent links or choose an
+    * owner. It changes progress membership, not execution/cancellation policy. */
+   linkParent:(parentBusinessId:string,childBusinessId:string,membership:{generation?:{slot:string;version:string}}={})=>this.transaction(()=>{assert();linkOperationParent(this.storage,privateOperationId(context.userId,parentBusinessId),privateOperationId(context.userId,childBusinessId),membership);}),
+   linkTaskParent:(parentTaskId:string,childTaskId:string)=>this.transaction(()=>{assert();linkOperationParent(this.storage,taskOperation(parentTaskId),taskOperation(childTaskId));}),
    get:(taskId:string)=>this.view(owned(taskId)),
    observe:(taskId:string)=>{const row=owned(taskId),task=this.view(row),step=this.engine.get(taskId)!,hasAuthority=this.valid(step)&&this.handlers.has(task.kind);return {id:task.id,kind:task.kind,state:task.state,attempts:task.attempts,availableAt:task.availableAt,reason:task.failure?.code??task.error,externalUnresolved:task.externalUnresolved,confirmUnknownRequired:['issued','unknown'].includes(task.externalState),allowedActions:[...(hasAuthority&&['failed','blocked','cancelled'].includes(task.state)?['retry' as const]:[]),...(!['succeeded','cancelled','stale'].includes(task.state)?['cancel' as const]:[])]};},
    contextSteps:(key:string,raw:unknown)=>contextStepPage(this.db,context,key,raw,assert,row=>{
@@ -295,7 +334,7 @@ export class TaskExecution {
    operations:()=>{assert();const operations=new Operations(this.storage,context.userId);return {page:(args:Parameters<Operations['page']>[0])=>{assert();return operations.page(args);},detail:(taskId:string,cursor?:number,limit?:number)=>{assert();return operations.detail(taskId,cursor,limit);},changes:(since:number)=>{assert();return operations.changes(since);}};},
   });
  }
- private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
+ private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
  /** Host domain's explicit replacement operation may acknowledge old unknown
@@ -354,13 +393,13 @@ export class TaskExecution {
  }
  lifecycle():DomainLifecycle{return {
   importUser:false,
- exportUser:async subject=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');return this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');const tasks=this.db.prepare('SELECT * FROM user_tasks WHERE user_id=? ORDER BY task_id').all(subject.userId) as TaskRow[];return {domain:EXECUTION_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-tasks-v1',coverage:{metadata:true,credentials:false,activeAuthorization:false,portableInputs:'registered-handlers-only',excluded:['checkpoints','progress','results','failure-receipts','model-snapshots','external-journal-details']},tasks:tasks.map(row=>{const step=this.engine.get(row.task_id)!,handler=this.handlers.get(step.kind);return {id:step.id,operationId:step.operationId,kind:step.kind,pool:step.pool,state:step.state,attempts:step.attempts,authorizationEpoch:step.ownership!.authorizationEpoch,externalState:this.db.prepare("SELECT 1 FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown') LIMIT 1").get(row.task_id,row.user_id)?'unknown':row.external_state,...(handler?.portableInput?{input:handler.portableInput(step.input)}:{inputOmitted:true}),dependencies:this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=?').all(step.id).map(row=>String(row.dependency_id))};})}};});},
+ exportUser:async subject=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');return archiveRead(subject.userId,()=>this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');const tasks=this.db.prepare('SELECT * FROM user_tasks WHERE user_id=? ORDER BY task_id').all(subject.userId) as TaskRow[];return {domain:EXECUTION_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-tasks-v1',coverage:{metadata:true,credentials:false,activeAuthorization:false,portableInputs:'registered-handlers-only',excluded:['checkpoints','progress','results','failure-receipts','model-snapshots','external-journal-details']},tasks:tasks.map(row=>{const step=this.engine.get(row.task_id)!,handler=this.handlers.get(step.kind);return {id:step.id,operationId:step.operationId,kind:step.kind,pool:step.pool,state:step.state,attempts:step.attempts,authorizationEpoch:step.ownership!.authorizationEpoch,externalState:this.db.prepare("SELECT 1 FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown') LIMIT 1").get(row.task_id,row.user_id)?'unknown':row.external_state,...(handler?.portableInput?{input:handler.portableInput(step.input)}:{inputOmitted:true}),dependencies:this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=?').all(step.id).map(row=>String(row.dependency_id))};})}};}));},
   deleteUser:async(subject,operationId)=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');const ids=this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.db.prepare('INSERT INTO task_lifecycle_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);const rows=this.db.prepare('SELECT task_id,external_state FROM user_tasks WHERE user_id=?').all(subject.userId);for(const row of rows){this.engine.cancel(String(row.task_id),false);this.grants.revoke(String(row.task_id));}return rows;});for(const row of ids){this.engine.abortLocal(String(row.task_id));this.modelLeases.delete(String(row.task_id));}const unknown=ids.some(row=>['issued','unknown'].includes(String(row.external_state)))||Boolean(this.db.prepare("SELECT 1 FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown') LIMIT 1").get(subject.userId));if(unknown)return {status:'result_unknown',operationId};this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');for(const row of ids)this.db.prepare('DELETE FROM execution_dependencies WHERE step_id=? OR dependency_id=?').run(row.task_id,row.task_id);for(const row of ids){this.db.prepare('DELETE FROM execution_steps WHERE id=?').run(row.task_id);this.db.prepare('DELETE FROM user_tasks WHERE task_id=?').run(row.task_id);this.db.prepare('DELETE FROM task_authorizations WHERE task_id=?').run(row.task_id);}const operations=this.db.prepare('SELECT id FROM operation_progress WHERE user_id=?').all(subject.userId);for(const operation of operations){this.db.prepare('DELETE FROM operation_generations WHERE operation_id=?').run(operation.id);this.db.prepare('DELETE FROM operation_parents WHERE parent_id=? OR child_id=?').run(operation.id,operation.id);this.db.prepare('DELETE FROM execution_fairness WHERE operation_id=?').run(operation.id);}this.db.prepare('DELETE FROM operation_progress WHERE user_id=?').run(subject.userId);for(const table of ['operation_changes','operation_user_sequences','execution_user_sequence','execution_user_fairness','execution_stage_fairness','task_restore_journal'])this.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
   restoreUser:async(subject,archive,operationId)=>this.restore(subject,archive,operationId),
  };}
  private async restore(subject:UserDataSubject,archive:UserExport,operationId:string){
   this.services.assertSubject(subject,EXECUTION_DOMAIN,'restore');
-  const task=z.object({id:z.string().regex(/^[a-f0-9]{64}$/),operationId:z.string().regex(/^task:[a-f0-9]{64}$/),kind:id,pool:id,authorizationEpoch:z.number().int().safe().nonnegative(),state:z.enum(['waiting','running','blocked','succeeded','failed','cancelled','stale']),attempts:z.number().int().nonnegative(),externalState:z.enum(['none','issued','unknown','succeeded']),input:z.record(z.unknown()).optional(),inputOmitted:z.literal(true).optional(),dependencies:z.array(id)}).strict();
+  const task=z.object({id:z.string().regex(/^[a-f0-9]{64}$/),operationId:id.regex(/^[a-z][a-z0-9-]*(?::actions)?:[a-f0-9]{64}$/),kind:id,pool:id,authorizationEpoch:z.number().int().safe().nonnegative(),state:z.enum(['waiting','running','blocked','succeeded','failed','cancelled','stale']),attempts:z.number().int().nonnegative(),externalState:z.enum(['none','issued','unknown','succeeded']),input:z.record(z.unknown()).optional(),inputOmitted:z.literal(true).optional(),dependencies:z.array(id)}).strict();
   const payload=z.object({format:z.literal('mote-user-tasks-v1'),coverage:z.object({metadata:z.literal(true),credentials:z.literal(false),activeAuthorization:z.literal(false),portableInputs:z.literal('registered-handlers-only'),excluded:z.tuple([z.literal('checkpoints'),z.literal('progress'),z.literal('results'),z.literal('failure-receipts'),z.literal('model-snapshots'),z.literal('external-journal-details')])}).strict(),tasks:z.array(task)}).strict().parse(archive.payload);
   if(archive.domain!==EXECUTION_DOMAIN||archive.version!==1||archive.userId!==subject.userId||archive.deploymentId!==subject.deploymentId)throw new TaskError('task_archive_invalid');
   // Restoring history never renews an account epoch, external-call authority or

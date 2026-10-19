@@ -8,7 +8,7 @@ const hash=z.string().regex(/^[a-f0-9]{64}$/),name=z.string().regex(/^[a-z][a-z0
 export const imageProductSchema=z.object({format:z.literal('mote-image-product-v1'),interpretation:imageInterpretationSchema,original:z.object({sha256:hash,width:z.number().int().positive(),height:z.number().int().positive(),mime:z.string().regex(/^image\//)}).strict()}).strict().superRefine((value,ctx)=>{if(value.interpretation.regions.some(region=>region.x+region.width>value.original.width||region.y+region.height>value.original.height))ctx.addIssue({code:'custom',message:'Image region outside original'});});
 export type ImageProduct=z.infer<typeof imageProductSchema>;
 export const processingArtifactSchema=z.union([transcriptSchema,diarizationSchema,imageProductSchema]);
-export const imageRecipeInputSchema=processingInputSchema.extend({imageStep:z.object({recipe:component,fingerprint:hash,name,dependencies:z.record(hash)}).strict()}).strict();
+export const imageRecipeInputSchema=processingInputSchema.extend({imageStep:z.object({recipe:component,fingerprint:hash,name,kind:z.enum(['ocr','understanding','derived']),dependencies:z.record(hash)}).strict()}).strict();
 export type ImageRecipeInput=z.infer<typeof imageRecipeInputSchema>;
 export const imageUnderstandingInputSchema=processingInputSchema.extend({ocrArtifactId:hash.optional()}).strict();
 export const imageStepKey=(planId:string,fingerprint:string,stepName:string,dependencies?:Readonly<Record<string,string>>)=>'image:'+planId+':'+fingerprint+':'+stepName+(dependencies?':'+createHash('sha256').update(JSON.stringify(Object.entries(dependencies).sort(([a],[b])=>a.localeCompare(b)))).digest('hex'):'');

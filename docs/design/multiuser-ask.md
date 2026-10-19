@@ -54,7 +54,11 @@ Pins retain their first exact snapshot; a later read cannot overwrite it. Artifa
 also pin their run and conversation lifetime, and apply the requested source scope.
 Conversation summaries, Memory cards and child prose are fallible context. Only
 originals disclosed in that model attempt can authorize a citation. Images require
-explicit expansion and real M03 pixels. Traces, errors and usage omit secrets and
+explicit expansion, real M03 pixels and the current account's original
+`perception.allowQueryImages` permission. That permission defaults off and is
+rechecked before and after asynchronous pixel preparation. Existing text and
+captions stay readable. Explicit dialogue uploads retain their independent
+attachment grant, as in the original flow. Traces, errors and usage omit secrets and
 private payload prose. No legacy global vector index or fake Memory fallback is used.
 
 ## Working memory, children and durable recovery
@@ -129,3 +133,103 @@ A passing narrow case is not whole-module acceptance. CI remains disabled and
 unrun. No deployment, real credentials, user data or live external model call is
 part of this work. Client account/UI integration and instance restore orchestration
 remain the M13+ and M16 responsibilities.
+
+## Retrieval and directory parity
+
+The parity restoration keeps source discovery by literal name or owner-written
+description, a 300-character matching preview, and a separate exact-description
+read. Direct source, device and context-directory reads accumulate host-only
+configuration receipts immediately. Stable configuration and exact declaration
+versions are checked before subsequent provider sends, artifacts and final
+conversation publication. A normal sync status or `lastSyncAt` change does not
+invalidate these receipts. Metadata never authorizes an original citation.
+
+The optional account-selected `embedding` feature uses the same embedding
+transport, vector worker and reciprocal rank fusion as the original reader.
+New accepted originals and published Materials admit owner-bound M05 indexing;
+only current readable candidates can enter either rank channel. Source scope,
+all transitive Material sources, privacy, exact projection and original receipts
+are applied before the worker ranks candidates and again before disclosure.
+Internal Ask and external ranked retrieval share this path and report lexical,
+hybrid and degraded outcomes, including empty degraded results. Historical
+content is not automatically re-embedded at installation, startup or selection.
+
+| Supersession | Contract |
+| --- | --- |
+| KEEP | Original discovery, exact descriptions, semantic/hybrid ranking, degradation reports, failed-question history and retry, and three public Context modes. |
+| CHANGE | Host-owned source receipts, vector candidates, model snapshots, cache, usage and durable indexing are bound to the authenticated account and current authority. |
+| REMOVE | Directory reads without dependencies, lexical-only replacement of configured semantic retrieval, always-completed history projection and ignored public response budgets. |
+| EXCEPTION | Internal Ask has no approximate result quota. The existing embedding transport prefix, public Context response paging, cancellation and invalid-grant publication boundaries remain separate contracts. No automatic paid history backfill is admitted. |
+| UNKNOWN | Generated loopback fixtures establish lifecycle and isolation contracts; live embedding/model quality, provider behavior and physical clients require separate evidence. |
+
+Deterministic failures retain the user's question, scope and safe error in the
+canonical conversation. They remain visible after navigation and restart and can
+be asked again with the existing UI. They do not become assistant context or
+working-memory increments. Explicit same-run retry retains the prior failure and
+can append the completed turn. Expired, cancelled or revoked executions cannot
+publish a late failed or completed answer.
+
+## Public Context response paging
+
+External Context HTTP and MCP calls retain their response-size contract. Browse
+and search enumerate canonical owned entities with resumable cursors, apply the
+explicit `maxCharacters` response size, and report `truncated` consistently with
+`nextCursor` and coverage. The existing accepted range is 1,000–24,000 characters;
+the effective response cap and default remain 16,000 characters. Status reports
+the effective cap. The first card can use the established compact preview; if its
+metadata still cannot fit, the call returns an explicit 413 response.
+
+The public browse mode returns source or project navigation collections. It
+consumes duplicate members of the collections already emitted before advancing
+to the next page, and preserves the typed navigation reference and search scope.
+Its existing 200-candidate scan window retains a resumable cursor when exhausted.
+Search enumerates canonical candidates without browse aggregation. Ranked
+retrieval retains relevance order and per-call retrieval/degradation metadata,
+reports omitted suffix cards through `truncated`, and rejects pagination cursors.
+Its existing UTF-8 response-byte boundary also remains in force.
+
+Cursors authenticate the user, deployment, source capability, mode, complete
+query, requested limit and response size. Durable host checkpoints keep a minimum
+response page usable and survive a normal server restart. A card omitted because
+of response capacity is available at the next cursor. These public response
+limits do not apply to the internal Ask tools or original reads.
+
+## Optional semantic retrieval
+
+The account's optional `embedding` model selection uses the same private/shared
+reference, immutable model/price snapshot, credential revocation and measured
+usage contracts as other features. It sends standard `/embeddings` requests to
+the selected connection. An absent selection keeps the existing literal path;
+it never borrows the chat model or another account's connection.
+
+New accepted captures and new ready Material publications admit scoped M05
+indexing work. Each vector retains the exact original fingerprint, incarnation
+receipt and selected model transport identity. Restart, changing a selection and
+querying retained data do not start a historical paid reindex. Existing vectors
+remain a private disposable projection and are omitted from portable Ask exports.
+Ask deletion removes the account's vectors and index intents.
+
+Stopped instance backups retain both index tables and require every current
+column before copying or publishing a restore. `ma_embedding_events` is the
+durable input dependency for admitted indexing tasks, including intake while no
+embedding model is selected. A missing table or column is an incomplete current
+archive; startup must not turn it into an empty repaired journal. This native
+archive contract is distinct from the data-only portable Ask export. Restoring
+index data does not renew old tasks or grants, replay pending events, or admit a
+historical paid reindex; fresh authorized intake uses the ordinary producer.
+
+Both the Agent's `search_context` and public Context ranked retrieval use the
+shared optional vector scan and reciprocal rank fusion. Literal matches keep the
+existing newest-first channel; cosine order supplies the semantic channel. The
+owner, complete source capability, current ready canonical block, original
+privacy, time and device scope constrain vector metadata before Top-K. Only the
+bounded returned originals are loaded and pinned. After the asynchronous provider
+and scan, current vector metadata and exact original receipts are rechecked.
+
+The existing embedding transport prefix policy (20,000 UTF-16 code units), two
+concurrent indexing/query calls and 1,200 ms ranked lookup deadline are retained.
+The prefix is reported as semantic-index coverage with full-text literal fallback;
+it is independent of the removed internal Ask result quotas. Per-call metadata
+retains hybrid/literal mode, vector scan coverage and explicit degradation even
+when a result is empty. Provider or vector failure leaves current literal results
+available; caller cancellation and revoked authority still fail the read.

@@ -39,5 +39,14 @@ export interface LarkLedger {
 }
 export interface LarkContext extends AdapterContext {
  ledger:LarkLedger;
+ /** Confirm an exact owner-bound archived original, without fetching provider bytes. */
+ retainedFile?(sourceId:string,externalId:string):{id:string}|undefined;
+ /** Preserve explicit per-file forget intent before provider acquisition. */
+ assertFileAllowed?(sourceId:string,externalId:string):void;
+ /** Fence an in-flight recording against the current persisted selection. */
+ recordingEpochCurrent?(epoch:string):void;
+ recordingArchiveCounts?(sourceId:string):{transcripts:number;audio:number;empty:number};
+ /** Install a new recording source's existing Memory default before first intake. */
+ recordingMemoryDefault?(sourceId:string):Promise<void>;
  publishFile(sourceId:string,item:SourceItem,bytes:Buffer,authorize:()=>void,signal:AbortSignal,format?:`processor:${string}`|'recording-audio-backup'):Promise<{id:string;duplicate:boolean}>;
 }

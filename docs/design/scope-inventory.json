@@ -369,6 +369,9 @@
       "table:execution_operation_steps",
       "table:execution_resource_releases",
       "table:execution_resources",
+      "table:execution_dynamic_resources",
+      "table:execution_resource_waits",
+      "table:execution_attempt_charges",
       "table:execution_sequence",
       "table:execution_stage_fairness",
       "table:execution_stage_groups",
@@ -376,7 +379,7 @@
       "table:execution_user_fairness",
       "table:execution_user_sequence"
     ],
-    "notes": "M05 owns host-declared stage service history and attempt-fenced physical resource releases. These scheduling rows contain no private evidence or model authorization."
+    "notes": "M05 owns host-declared stage service history, attempt-fenced physical resource releases and running-grant dynamic reservations shared with static publishers. These scheduling rows contain no private evidence or model authorization."
   },
   "apps/server/src/execution-settings-routes.ts": {
     "scope": "legacy-quarantined",
@@ -1213,6 +1216,7 @@
       "table:execution_projection_meta",
       "table:operation_changes",
       "table:operation_generations",
+      "table:operation_parent_generations",
       "table:operation_parents",
       "table:operation_progress",
       "table:operation_user_sequences"
@@ -1439,14 +1443,15 @@
       "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/configuration/models'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/configuration',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/profiles/:id/copy',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/catalog',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/probe',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models/selection/:feature',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/usage',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/configuration/reload',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/catalog',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/probe',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/profiles/:id/copy',service:'configuration'",
       "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/usage/prices',service:'configuration'",
       "extension:runtime.services.registerInstance:'model-resources'",
       "extension:runtime.services.registerUser:'configuration'"
     ]
@@ -1510,7 +1515,9 @@
       "table:connector_secrets",
       "table:connector_sources",
       "table:connector_timers",
-      "task:execution.register:kind:TASK"
+      "task:execution.register:kind:SELECT_TASK",
+      "task:execution.register:kind:TASK",
+      "task:execution.register:kind:recordingTaskKind(phase)"
     ]
   },
   "apps/server/src/scope/http.ts": {
@@ -1570,8 +1577,10 @@
       "table:ig_capture_updates",
       "table:ig_devices",
       "table:ig_file_forget_operations",
-      "table:ig_file_generations",
       "table:ig_file_forgets",
+      "table:ig_file_heads",
+      "table:ig_file_generations",
+      "table:ig_file_revisions",
       "table:ig_import_parts",
       "table:ig_import_uploads",
       "table:ig_meta",
@@ -1641,19 +1650,23 @@
     "scope": "mixed",
     "module": "M09",
     "surfaces": [
+      "directory:attempts",
       "directory:directory",
       "directory:path",
       "directory:probeRoot",
+      "directory:probes",
       "extension:options.services.registerInstance:'plugin-catalog'",
       "extension:options.services.registerUser:PLUGINS_DOMAIN",
       "extension:registry.install:id:pkg.manifest.id",
       "extension:scope.install:ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));}",
       "extension:this.catalog.install:input",
+      "table:plugin_user_checks",
       "table:plugin_user_events",
       "table:plugin_user_instances",
       "table:plugin_user_restore",
       "table:plugin_user_snapshots",
       "table:plugin_user_state",
+      "task:this.options.execution.register:kind:'plugin.check'",
       "task:this.options.execution.register:{kind,pool:'plugin-user',concurrency:()=>4,policy:modelFeature?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.control,...(modelFeature?{modelFeature}:{}), parseInput:input=>invokeSchema.parse(input),authorizeInput:(context,input)=>{const value=this.authorized(context,String(input.snapshotId),String(input.componentId));if(this.adapter(value.component.capability).modelFeature!==modelFeature)throw new StoreError('Use the domain model task admission',403);}, validate:task=>{try{const snapshot=this.snapshot(String(task.input.snapshotId));return snapshot.user_id===task.ownership?.userId&&this.currentSnapshot(snapshot);}catch{return false;}}, execute:run=>this.execute(run),commit:(run,value)=>{const invocation=this.invocations.get(run);if(!invocation)throw new ScopeError('invalid_identity',401);invocation.assertCurrent();this.adapter(invocation.component.capability).commit?.(value,invocation);invocation.assertCurrent();}, classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_operation_requires_attention'), }"
     ]
   },
@@ -1693,6 +1706,7 @@
     "scope": "mixed",
     "module": "M02",
     "surfaces": [
+      "table:pd_capture_deletions",
       "table:pd_capture_imports",
       "table:pd_captures",
       "table:pd_fts",
@@ -1734,7 +1748,8 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports/:id'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports'",
-      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action"
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action",
+      "extension:registerPerceptionRoutes:runtime"
     ]
   },
   "apps/server/src/scope/processing-schema.ts": {
@@ -1759,11 +1774,13 @@
       "table:mp_file_review_inputs",
       "table:mp_file_reviews",
       "table:mp_file_steps",
+      "table:mp_image_backfills",
       "table:mp_import_files",
       "table:mp_import_jobs",
       "table:mp_import_records",
       "table:mp_media_calls",
       "table:mp_original_formats",
+      "table:mp_perception_state",
       "table:mp_publications",
       "table:mp_restore",
       "table:mp_state",
@@ -1815,7 +1832,7 @@
       "table:task_model_resources",
       "table:task_restore_journal",
       "table:user_tasks",
-      "task:this.engine.enqueue:'task:'+hash([grant.userId,operation])",
+      "task:this.engine.enqueue:privateOperationId(grant.userId,operation)",
       "task:this.engine.enqueue:operationId",
       "task:this.engine.register:kind:handler.kind"
     ],
@@ -2043,6 +2060,7 @@
     "module": "M07",
     "status": "implemented",
     "surfaces": [
+      "table:mm_batch_artifacts",
       "table:mm_binding_locks",
       "table:mm_binding_preparations",
       "table:mm_capture_intakes",
@@ -2061,6 +2079,7 @@
       "table:mm_jobs",
       "table:mm_meta",
       "table:mm_native_cleanup",
+      "table:mm_organizer_origins",
       "table:mm_owner_cancellations",
       "table:mm_provider_config",
       "table:mm_provider_descriptors",
@@ -2078,7 +2097,7 @@
     "status": "implemented",
     "surfaces": [
       "extension:runtime.services.registerUser:MEMORY_DOMAIN",
-      "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.batch'",
       "task:execution.register:kind:'memory.admit'",
       "task:execution.register:kind:'memory.correct'",
       "task:execution.register:kind:'memory.reconcile'"
@@ -2153,6 +2172,8 @@
       "table:ma_auto_windows",
       "table:ma_automations",
       "table:ma_conversations",
+      "table:ma_embedding_events",
+      "table:ma_embeddings",
       "table:ma_fragments",
       "table:ma_history_dependencies",
       "table:ma_history_materials",
@@ -2329,15 +2350,10 @@
     "surfaces": [
       "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/admin/accounts/:id'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/account-deletions/:id'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/export'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports/:id'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports/:id/cancel'"
     ]
@@ -2390,6 +2406,7 @@
     "module": "M12",
     "surfaces": [
       "task:host.execution.register:kind:'actions.extract'",
+      "task:host.execution.register:kind:'actions.prepare'",
       "task:host.execution.register:kind:'actions.watch'"
     ]
   },
@@ -2415,11 +2432,14 @@
     "module": "M12",
     "surfaces": [
       "table:ac_dependencies",
+      "table:ac_discovery_state",
       "table:ac_jobs",
       "table:ac_meta",
       "table:ac_operations",
       "table:ac_proposals",
       "table:ac_restore",
+      "table:ac_semantic_dependencies",
+      "table:ac_semantic_products",
       "table:ac_sources",
       "table:ac_state",
       "table:ac_targets"
@@ -2553,6 +2573,80 @@
     "notes": "M04 owns user-qualified numeric usage fragments and host-owner recovery metadata. An existing meter may only interrupt its own retained fragment after revocation; it cannot add samples, recreate deleted rows or recover business/model authority.",
     "surfaces": [
       "table:user_model_usage_owners"
+    ]
+  },
+  "apps/server/src/scope/media-assets.ts": {
+    "scope": "mixed",
+    "module": "M06",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/import'",
+      "api:registerAuthenticatedRoute:method:'POST',url:prefix+'/:role/install'",
+      "directory:root",
+      "extension:assets.install:role",
+      "extension:runtime.services.registerInstance:'managed-media'"
+    ],
+    "notes": "Instance-only assets and fixed managed worker credentials; mutations require an administrator, while model selection and processing remain user bound."
+  },
+  "apps/server/src/scope/processing-perception.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:'processing',method:'GET',url:'/api/perception'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/:id/retry'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/ocr/historical-preview'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'POST',url:'/api/perception/ocr/historical-process'",
+      "api:registerUserRoute:scope:'user',service:'processing',method:'PUT',url:'/api/perception'",
+      "task:execution.register:kind:'processing.image-backfill'"
+    ],
+    "notes": "Independent image settings and explicitly confirmed, owner/epoch-bound historical cursors adapt the existing M04/M05/M06 services."
+  },
+  "apps/server/src/scope/ask-retrieval.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Owner-bound new-intake embedding admission, fixed model leases, indexed candidates and publication fences; generated validation does not claim live semantic quality.",
+    "surfaces": [
+      "task:execution.register:kind:'ask.embedding'",
+      "task:execution.register:kind:'ask.embedding-query'",
+      "task:execution.register:kind:'ask.index-admit'"
+    ]
+  },
+  "apps/server/src/scope/action-semantic-products.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.understand'"
+    ]
+  },
+  "apps/server/src/scope/storage-capacity.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "table:scoped_storage_capacity",
+      "table:scoped_storage_evictions",
+      "table:scoped_storage_prepared_imports"
+    ]
+  },
+  "apps/server/src/scope/storage-settings.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/storage-settings'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/storage-settings'"
+    ]
+  },
+  "apps/server/src/scope/restore-future.ts": {
+    "scope": "user",
+    "module": "M16",
+    "status": "implemented",
+    "surfaces": [
+      "table:lifecycle_future",
+      "table:lifecycle_future_scopes",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>configuration.instance.current<{agentConcurrency:number}>('execution').agentConcurrency,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>input.parse(raw),resources:()=>[{scope:'user',key:kind}],authorizeInput:(context,raw)=>{const row=this.sql(context).get('SELECT restoration_id,epoch FROM lifecycle_future WHERE user_id=$user');if(!row||row.restoration_id!==raw.restorationId||row.epoch!==context.authorizationEpoch)throw new PrivateDataError('conflict',409);},execute:run=>this.resume(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','restore_future_requires_attention')}"
     ]
   }
 }

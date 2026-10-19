@@ -38,7 +38,7 @@ internal object CentralMemoryJobPresentation {
         else when (state(job)) { "paused" -> listOf("resume" to "继续", "cancel" to "取消"); "waiting", "running" -> listOf("pause" to "暂停", "cancel" to "取消"); "failed", "blocked" -> listOf("retry" to "重试", "cancel" to "取消"); "needs_input" -> listOf("cancel" to "取消"); else -> emptyList() }
     fun results(job: JSONObject): List<String> {
         val tasks = job.getJSONObject("tasks")
-        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("publish") }.flatMap { stage ->
+        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("batch") }.flatMap { stage ->
             val task = tasks.getJSONObject(stage); val ids = if (task.optString("state") == "succeeded") task.optJSONObject("result")?.optJSONArray("memoryIds") else null
             if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also { value -> UUID.fromString(value) } }
         }.distinct().toList()
@@ -58,10 +58,11 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private var larkConnection: CentralLarkConnection? = null
     private var larkChoices = emptyList<JSONObject>()
     private var larkCalendarMode = false
+    private val mediaHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val larkHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val larkPoll = Runnable { lark() }
-    fun close() { plugins.close(); connectorPage?.close(); recordingPage?.close(); larkHandler.removeCallbacks(larkPoll) }
-    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; recordingPage?.close(); recordingPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
+    fun close() { mediaHandler.removeCallbacksAndMessages(null); plugins.close(); connectorPage?.close(); recordingPage?.close(); larkHandler.removeCallbacks(larkPoll) }
+    fun clearPrivateState() { mediaHandler.removeCallbacksAndMessages(null); plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; recordingPage?.close(); recordingPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
     fun resume() { plugins.resume(); connectorPage?.resume(); recordingPage?.resume(); if (larkConnection != null) lark() }
     fun resumeConnections() { connectorPage?.resume(); recordingPage?.resume() }
 
@@ -162,7 +163,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     reads[key] = { JSONArray(field.text.toString()) }
                 }
                 else -> {
-                    val choices = enums[key]
+                    val choices = enums[key]?.let { if (raw.toString() in it) it else it + raw.toString() }
                     if (choices != null) {
                         ui.text(caption, NativeFontRole.SUPPORT, target)
                         val spinner = Spinner(ui).apply { adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, if (key == "serviceTier") choices.map { if (it == "fast") "Fast" else "Standard" } else choices)
@@ -206,10 +207,12 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("模型配置")) { models() }
         ui.button(MoteI18n.text("并发与执行设置")) { instanceSettingOwnership(MoteI18n.text("并发与执行设置")) { screens.refresh() } }
         ui.button(MoteI18n.text("处理设置")) { fileSettings() }
+        ui.button(MoteI18n.text("文字识别设置")) { perceptionSettings() }
         ui.button(MoteI18n.text("记忆设置")) { memorySettings() }
         ui.button(MoteI18n.text("来源与外部应用")) { connectors() }
         val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { configuration ->
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to api.get("/api/auth/self") }) { (configuration, identity) ->
+            if (identity.getBoolean("administrator")) ui.button(MoteI18n.text("保留与容量")) { storageSettings() }
             val groups = configuration.optJSONArray("groups") ?: JSONArray()
             for (i in 0 until groups.length()) {
                 val group = groups.getJSONObject(i)
@@ -229,18 +232,131 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
         ui.text(MoteI18n.text("实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"))
     }
+    private fun perceptionSettings(back: () -> Unit = { screens.refresh() }) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), {
+            JSONObject().put("image", api.get("/api/perception")).put("policy", api.get("/api/file-processing"))
+                .put("media", api.get("/api/media-models")).put("identity", api.get("/api/auth/self")).put("sources", api.get("/api/sources"))
+        }) { loaded ->
+            val view = loaded.getJSONObject("image"); val saved = JSONObject(view.getJSONObject("settings").toString())
+            body.removeAllViews(); screens.setBack(back); ui.text(MoteI18n.text("文字识别设置"), NativeFontRole.TITLE_MOBILE)
+            val navigation = ui.navigationRevision; fun current() = navigation == ui.navigationRevision && screens.ownsSelectedAccount() && client === api
+            val controls = ui.card(); val flags = linkedMapOf<String, CheckBox>()
+            for ((key, title) in listOf("enabled" to "自动处理新图片", "understandingEnabled" to "后台理解画面与来源上下文", "allowExternalProcessing" to "允许图片发往已选择的远程 OCR 服务", "allowQueryImages" to "允许查询模型按需读取已发现记录的原图（可能发往所选模型服务）")) {
+                flags[key] = CheckBox(ui).apply { text = MoteI18n.text(title); contentDescription = MoteI18n.text(title); isChecked = saved.getBoolean(key) }.also(controls::addView)
+            }
+            val policy = loaded.getJSONObject("policy"); val processors = policy.getJSONArray("processors")
+            val profiles = policy.getJSONObject("policy").getJSONArray("profiles").let { rows -> (0 until rows.length()).map(rows::getJSONObject).filter { profile ->
+                profile.getString("processorId") == "archive" || profile.has("imageRecipe") || (0 until processors.length()).map(processors::getJSONObject).any { processor ->
+                    processor.getString("id") == profile.getString("processorId") && processor.getString("stage") == "extract" && processor.getJSONArray("mediaTypes").let { types -> (0 until types.length()).any { types.getString(it).startsWith("image/") } }
+                }
+            } }.toMutableList()
+            val selectedId = saved.optString("profileId")
+            if (profiles.none { it.getString("id") == selectedId }) profiles.add(JSONObject().put("id", selectedId).put("name", MoteI18n.text("不可用") + " · " + selectedId))
+            ui.text(MoteI18n.text("中央图片方案"), parent = controls)
+            val profile = Spinner(ui).apply { contentDescription = MoteI18n.text("中央图片方案"); adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, profiles.map { it.getString("name") }); setSelection(profiles.indexOfFirst { it.getString("id") == selectedId }.coerceAtLeast(0)) }; controls.addView(profile)
+            ui.text(MoteI18n.text("文字识别服务") + " · " + saved.optString("ocrEndpoint").ifBlank { MoteI18n.text("仅保存原件") }, parent = controls)
+            ui.text(MoteI18n.text("内容理解使用中央文件分析模型：{0}", view.optJSONObject("model")?.optString("model") ?: MoteI18n.text("未配置")), parent = controls)
+            val concurrency = ui.field(MoteI18n.text("图片处理并发"), saved.getInt("concurrency").toString(), parent = controls).apply { inputType = InputType.TYPE_CLASS_NUMBER }
+            val version = ui.field(MoteI18n.text("处理模型／配置版本"), saved.getString("providerRevision"), parent = controls)
+            val history = ui.card(); ui.text(MoteI18n.text("补处理已有图片"), NativeFontRole.SECTION, history)
+            val after = ui.field(MoteI18n.text("开始日期"), parent = history); val before = ui.field(MoteI18n.text("结束日期"), parent = history)
+            val sources = loaded.getJSONObject("sources").getJSONArray("items").let { rows -> (0 until rows.length()).map(rows::getJSONObject) }
+            val source = Spinner(ui).apply { contentDescription = MoteI18n.text("来源"); adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("全部来源")) + sources.map { it.getString("name") }) }; history.addView(source)
+            val mode = Spinner(ui).apply { contentDescription = MoteI18n.text("处理方式"); adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("补齐未完成步骤"), MoteI18n.text("重新计算已有结果"))) }; history.addView(mode)
+            val confirmation = ui.card(history)
+            fun dirty(): Boolean = flags.any { saved.getBoolean(it.key) != it.value.isChecked } || concurrency.text.toString() != saved.getInt("concurrency").toString() || version.text.toString() != saved.getString("providerRevision") || profiles[profile.selectedItemPosition].getString("id") != selectedId
+            ui.button(MoteI18n.text("保存图片设置"), true, parent = controls) {
+                if (!current()) return@button
+                val values = JSONObject(); flags.forEach { (key, field) -> values.put(key, field.isChecked) }
+                val limit = concurrency.text.toString(); val revision = version.text.toString(); val selected = profiles[profile.selectedItemPosition].getString("id")
+                ui.work(MoteI18n.text("正在保存…"), { check(current()); api.put("/api/perception", CentralResourceSettings.perceptionRequest(view.getLong("revision"), saved, values, limit, revision, selected)) }) { if (current()) { perceptionSettings(back); ui.notice(MoteI18n.text("已保存")) } }
+            }
+            ui.button(MoteI18n.text("预览处理范围"), parent = history) {
+                if (!current()) return@button
+                if (dirty()) { ui.notice(MoteI18n.text("有未保存修改")); return@button }
+                val start = after.text.toString(); val end = before.text.toString(); val sourceId = if (source.selectedItemPosition == 0) "" else sources[source.selectedItemPosition - 1].getString("id"); val selectedMode = if (mode.selectedItemPosition == 0) "complete" else "recompute"
+                ui.work(MoteI18n.text("正在读取…"), { check(current()); api.post("/api/perception/ocr/historical-preview", CentralResourceSettings.historicalRequest(start, end, sourceId, selectedMode)) }) { preview ->
+                    if (current()) {
+                        confirmation.removeAllViews(); ui.text(MoteI18n.text("范围内共 {0} 张图片", preview.getInt("count")), parent = confirmation)
+                        if (preview.getInt("count") > 0) ui.button(MoteI18n.text("安排全部图片"), true, parent = confirmation) {
+                            if (!current() || dirty() || after.text.toString() != start || before.text.toString() != end || source.selectedItemPosition != (if (sourceId.isBlank()) 0 else sources.indexOfFirst { it.getString("id") == sourceId } + 1) || mode.selectedItemPosition != (if (selectedMode == "complete") 0 else 1)) { confirmation.removeAllViews(); return@button }
+                            ui.work(MoteI18n.text("正在处理…"), { check(current()); api.post("/api/perception/ocr/historical-process", JSONObject().put("token", preview.getString("token"))) }) { if (current()) perceptionSettings(back) }
+                        }
+                    }
+                }
+            }
+            val backfills = view.getJSONArray("backfills")
+            for (index in 0 until backfills.length()) { val job = backfills.getJSONObject(index); ui.text(MoteI18n.text("已安排 {0} 张图片", job.getInt("queued")) + " · " + operationState(job), parent = history); job.optString("error").takeIf(String::isNotBlank)?.let { ui.text(it, parent = history) } }
+            ui.text(MoteI18n.text("处理状态"), NativeFontRole.SECTION); values(view.getJSONArray("jobs"), ui.card())
+            managedMedia(api, loaded.getJSONObject("media"), loaded.getJSONObject("identity").getBoolean("administrator"), listOf("ocr"), body)
+        }
+    }
+    private fun managedMedia(api: CentralClient, snapshot: JSONObject, administrator: Boolean, roles: List<String>, target: LinearLayout) {
+        val card = ui.card(target); val navigation = ui.navigationRevision
+        fun current() = navigation == ui.navigationRevision && screens.ownsSelectedAccount() && client === api
+        var poll: Runnable? = null
+        fun render(media: JSONObject) {
+            if (!current()) return
+            poll?.let(mediaHandler::removeCallbacks); poll = null
+            card.removeAllViews(); var updating = false
+            for (role in roles) {
+                val model = media.getJSONObject(role); val state = model.getString("state"); val active = state in listOf("downloading", "verifying", "installing")
+                updating = updating || active || state == "ready" && !model.getBoolean("runtimeReady")
+                val title = when (role) { "ocr" -> "本地 OCR 模型："; "dialogue" -> "本地转写与说话人模型："; else -> "可选 WeSpeaker 中文声纹模型" }
+                ui.text(MoteI18n.text(title) + MoteI18n.text(CentralResourceSettings.modelState(state)), NativeFontRole.SECTION, card)
+                if (state == "ready") ui.text(MoteI18n.text(if (model.getBoolean("runtimeReady")) if (role == "ocr") "OCR Worker 已就绪" else "已就绪" else if (role == "ocr") "模型已安装，正在准备本地 OCR 服务；就绪后会自动处理" else "等待音频 Worker"), parent = card)
+                if (role == "dialogue" && state == "ready") model.optJSONArray("missingDependencies")?.let { missing -> if (missing.length() > 0) ui.text(MoteI18n.text("模型已安装，服务缺少运行依赖：{0}", (0 until missing.length()).joinToString(", ") { missing.getString(it) }), parent = card) }
+                if (active) ui.text(model.getLong("bytes").toString() + " / " + model.getLong("totalBytes"), parent = card)
+                model.optString("error").takeIf(String::isNotBlank)?.let { ui.text(it, parent = card) }
+                if (role == "speaker-wespeaker") ui.text(MoteI18n.text("仅选用此插件的录音使用此模型；下载不会更改默认方案。"), parent = card)
+                if (!administrator && state != "ready") ui.text(MoteI18n.text("仅管理员可安装本机模型。"), NativeFontRole.SUPPORT, card)
+                if (administrator && state != "ready") {
+                    val action = if (active) "cancel" else "install"
+                    val label = if (active) "取消下载" else when (role) { "ocr" -> "下载并安装 OCR 模型"; "dialogue" -> "下载并安装本地音频模型"; else -> "安装可选声纹模型" }
+                    ui.button(MoteI18n.text(label), parent = card) {
+                        if (!current()) return@button
+                        val payload = if (active) JSONObject() else JSONObject().put("source", if (role == "speaker-wespeaker") "official" else "auto")
+                        ui.work(MoteI18n.text("正在处理…"), { check(current()); api.post("/api/admin/media-models/$role/$action", payload); api.get("/api/media-models") }) { render(it) }
+                    }
+                }
+            }
+            ui.button(MoteI18n.text("刷新"), parent = card) { if (current()) ui.work(MoteI18n.text("正在读取…"), { api.get("/api/media-models") }) { render(it) } }
+            if (updating) { poll = Runnable { if (current()) ui.work(MoteI18n.text("正在读取…"), { check(current()); api.get("/api/media-models") }) { render(it) } }; mediaHandler.postDelayed(poll!!, 2000) }
+        }
+        render(snapshot)
+    }
+    private fun storageSettings() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/admin/storage-settings") }) { view ->
+            body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("保留与容量"), NativeFontRole.TITLE_MOBILE)
+            val navigation = ui.navigationRevision; fun current() = navigation == ui.navigationRevision && screens.ownsSelectedAccount() && client === api
+            val saved = view.getJSONObject("saved"); val effective = view.getJSONObject("effective")
+            val days = ui.field(MoteI18n.text("自定义保留天数"), saved.getLong("retentionDays").toString()).apply { inputType = InputType.TYPE_CLASS_NUMBER }
+            val capacity = ui.field(MoteI18n.text("自定义容量（MiB）"), CentralResourceSettings.capacityMiB(saved.getLong("maxStorageBytes"))).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL }
+            ui.text(MoteI18n.text("当前生效值"), NativeFontRole.SECTION)
+            ui.text(MoteI18n.text("历史记录保留") + " · " + effective.getLong("retentionDays") + " " + MoteI18n.text("天"))
+            ui.text(MoteI18n.text("资料容量上限") + " · " + CentralResourceSettings.capacityMiB(effective.getLong("maxStorageBytes")) + " MiB")
+            if (view.getString("status") == "restart-required") ui.text(MoteI18n.text("重启后生效"))
+            if (view.getString("status") == "invalid") ui.text(MoteI18n.text("配置应用失败"))
+            ui.button(MoteI18n.text("保存设置"), true) {
+                if (!current()) return@button
+                val retention = days.text.toString(); val limit = capacity.text.toString()
+                ui.work(MoteI18n.text("正在保存…"), { check(current()); api.put("/api/admin/storage-settings", CentralResourceSettings.storageRequest(view.getLong("revision"), retention, limit)) }) { if (current()) storageSettings() }
+            }
+        }
+    }
     private fun models() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to CentralModels.inventory(api) }) { (view, inventory) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
-            ui.text(MoteI18n.text("请先保存修改，再检查已保存的连接。"))
+            val navigation = ui.navigationRevision
+            fun current() = ui.navigationRevision == navigation && client === api
+            ui.text(MoteI18n.text("编辑草稿与实际生效配置分开显示；测试连接不保存草稿。"))
             ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(api, view, inventory) }
-            val domains = view.getJSONArray("domains")
-            val configuration = (0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved")
-            val collect = form(configuration, ui.card(), emptySet()); val revision = view.getLong("revision")
-            ui.button(MoteI18n.text("保存设置"), true) {
-                val payload = JSONObject().put("revision", revision).put("value", collect()).put("preserveRedactedSecrets", true)
-                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
+            val configuration = CentralModels.configuration(view); val revision = view.getLong("revision")
+            ui.button(MoteI18n.text("创建预设")) {
+                modelEditor(api, revision, configuration, "preset-" + UUID.randomUUID().toString().take(8), MoteI18n.text("新 Provider 预设"), CentralModels.newSettings())
             }
             val rows = inventory.getJSONArray("profiles").let { values -> (0 until values.length()).map(values::getJSONObject) }
                 .sortedBy { CentralModels.reference(it.getString("id"))!!.getString("kind") != "personal" }
@@ -255,16 +371,32 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 val stamp = selection.incrementAndGet(); selected.removeAllViews()
                 val row = rows[position]; val reference = CentralModels.reference(row.getString("id"))!!; val name = row.getString("name")
                 val card = ui.card(selected); ui.text(name, NativeFontRole.SECTION, card)
-                if (reference.getString("kind") == "personal") ui.button(MoteI18n.text("复制为新预设"), parent = card) {
-                    if (selection.get() != stamp) return@button
-                    edit(MoteI18n.text("复制为新预设"), "/api/models/profiles/" + enc(reference.getString("id")) + "/copy",
-                        JSONObject().put("revision", revision).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", name + " copy").put("includeCredentials", true),
-                        "POST", back = { models() }, completed = { models() })
+                if (reference.getString("kind") == "personal") {
+                    val profiles = configuration.getJSONArray("profiles")
+                    val profile = (0 until profiles.length()).map(profiles::getJSONObject).single { it.getString("id") == reference.getString("id") }
+                    ui.button(MoteI18n.text("编辑"), parent = card) { selection.incrementAndGet(); modelEditor(api, revision, configuration, profile.getString("id"), name, profile.getJSONObject("settings")) }
+                    val selections = configuration.getJSONObject("selections")
+                    val inUse = selections.keys().asSequence().any { selections.getJSONObject(it).let { ref -> ref.getString("kind") == "personal" && ref.getString("id") == profile.getString("id") } }
+                    if (inUse) ui.text(MoteI18n.text("该配置仍是某项功能的默认模型，请先修改功能默认值。"), parent = card)
+                    ui.button(MoteI18n.text("删除"), parent = card) {
+                        if (inUse || !current() || selection.get() != stamp) return@button
+                        screens.confirm(MoteI18n.text("删除"), MoteI18n.text("删除后无法恢复。")) {
+                            val next = JSONObject(configuration.toString()); next.put("profiles", JSONArray((0 until profiles.length()).map(profiles::getJSONObject).filter { it.getString("id") != profile.getString("id") }))
+                            ui.work(MoteI18n.text("正在删除…"), { api.put("/api/configuration/models", CentralModels.saveRequest(revision, next)) }) { models() }
+                        }
+                    }.isEnabled = !inUse
+                    ui.button(MoteI18n.text("复制为新预设"), parent = card) {
+                        if (selection.get() != stamp) return@button
+                        selection.incrementAndGet()
+                        edit(MoteI18n.text("复制为新预设"), "/api/models/profiles/" + enc(reference.getString("id")) + "/copy",
+                            JSONObject().put("revision", revision).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", name + " copy").put("includeCredentials", true),
+                            "POST", back = { models() }, completed = { models() })
+                    }
                 } else ui.text(MoteI18n.text("共享连接保持只读；连接地址和凭据不能复制为个人预设。"), parent = card)
                 val output = ui.card(card)
                 fun inspect(path: String, catalog: Boolean) {
                     if (selection.get() != stamp) return
-                    val payload = JSONObject().put("revision", revision).put("reference", JSONObject(reference.toString()))
+                    val payload = CentralModels.inspectRequest(revision, reference)
                     ui.work(MoteI18n.text("正在读取…"), { check(selection.get() == stamp); api.post(path, payload) }) { result ->
                         if (selection.get() == stamp) { output.removeAllViews(); if (catalog) modelCatalogPage(result, output) else values(result, output) }
                     }
@@ -278,6 +410,59 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
+    private fun modelEditor(api: CentralClient, revision: Long, configuration: JSONObject, id: String, name: String, previous: JSONObject) {
+        body.removeAllViews(); screens.setBack { models() }; ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
+        val navigation = ui.navigationRevision
+        fun current() = ui.navigationRevision == navigation && client === api
+        ui.text(MoteI18n.text("编辑草稿与实际生效配置分开显示；测试连接不保存草稿。"))
+        val target = ui.card(); val title = ui.field(MoteI18n.text("名称"), name, parent = target)
+        val parameters = JSONObject(previous.toString()).apply { remove("model"); listOf("apiKey", "headers", "extraBody").forEach(::remove) }
+        val collect = form(parameters, target, emptySet()); val model = ui.field(MoteI18n.text("模型 ID"), previous.getString("model"), parent = target)
+        val credentials = listOf("apiKey", "headers", "extraBody").associateWith { key ->
+            val field = ui.field(label(key) + if (key == "apiKey") "" else " · " + MoteI18n.text("高级 JSON"), multiline = key != "apiKey", password = true, parent = target)
+            val clear = CheckBox(ui).apply { text = MoteI18n.text(if (key == "apiKey") "清除已保存的密钥" else "清除已保存的值") }; target.addView(clear)
+            field to clear
+        }
+        fun draft() = collect().put("model", model.text.toString()).apply {
+            credentials.forEach { (key, fields) ->
+                val input = fields.first.text.toString()
+                put(key, if (fields.second.isChecked) { if (key == "apiKey") "" else JSONObject() }
+                    else if (input.isBlank()) previous.get(key) else if (key == "apiKey") input else JSONObject(input))
+            }
+        }
+        fun withDecision(next: JSONObject, action: (Boolean) -> Unit) {
+            if (CentralModels.needsCredentialReuse(previous, next)) screens.confirm(MoteI18n.text("模型配置"), MoteI18n.text("服务商、协议或地址已改变，请确认复用已有凭据，或替换、清除已有凭据。")) { action(true) }
+            else action(false)
+        }
+        val reference = JSONObject().put("kind", "personal").put("id", id); val output = ui.card()
+        fun inspect(catalog: Boolean) {
+            val next = draft()
+            withDecision(next) { allow ->
+                if (!current()) return@withDecision
+                val payload = CentralModels.inspectRequest(revision, reference, next, allow)
+                ui.work(MoteI18n.text("正在读取…"), { check(current()); api.post(if (catalog) "/api/models/catalog" else "/api/models/probe", payload) }) { result ->
+                    if (current() && runCatching { draft().toString() == next.toString() }.getOrDefault(false)) {
+                        output.removeAllViews()
+                        if (catalog) {
+                            modelCatalogPage(result, output, onSelect = { chosen -> model.setText(chosen); output.removeAllViews() })
+                        } else values(result, output)
+                    }
+                }
+            }
+        }
+        ui.button(MoteI18n.text("可用模型")) { inspect(true) }
+        ui.button(MoteI18n.text("测试连接")) { inspect(false) }
+        ui.text(MoteI18n.text("连接测试会发送生成内容，可能产生模型费用；测试不会保存编辑草稿。"))
+        ui.button(MoteI18n.text("保存设置"), true) {
+            val next = draft(); val nextName = title.text.toString(); withDecision(next) { allow ->
+                if (!current()) return@withDecision
+                val value = CentralModels.replaceProfile(configuration, id, nextName, next)
+                ui.work(MoteI18n.text("正在保存…"), { check(current()); api.put("/api/configuration/models", CentralModels.saveRequest(revision, value, allow)) }) {
+                    if (current() && title.text.toString() == nextName && runCatching { draft().toString() == next.toString() }.getOrDefault(false)) models()
+                }
+            }
+        }
+    }
     private fun modelDefaults(api: CentralClient, view: JSONObject, inventory: JSONObject) {
         val domains = view.getJSONArray("domains")
         val configuration = JSONObject((0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved").toString())
@@ -285,7 +470,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         val raw = inventory.getJSONArray("features"); val features = (0 until raw.length()).map(raw::getString)
         require(features.isNotEmpty() && features.distinct().size == features.size && features.all(String::isNotBlank))
         body.removeAllViews(); screens.setBack { models() }; ui.text(MoteI18n.text("功能默认模型"), NativeFontRole.TITLE_MOBILE)
-        val rows = inventory.getJSONArray("profiles"); val fields = linkedMapOf<String, Pair<Spinner, List<JSONObject?>>>()
+        val navigation = ui.navigationRevision
+        fun currentPage() = ui.navigationRevision == navigation && client === api
+        val rows = inventory.getJSONArray("profiles"); val fields = linkedMapOf<String, Triple<Spinner, List<JSONObject?>, EditText>>()
         for (feature in features) {
             val choices = mutableListOf<Pair<String, JSONObject?>>(MoteI18n.text("未配置") to null)
             for (index in 0 until rows.length()) { val row = rows.getJSONObject(index); choices.add(row.getString("name") to CentralModels.reference(row.getString("id"))) }
@@ -297,34 +484,58 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val spinner = Spinner(ui).apply {
                 contentDescription = MoteI18n.text("功能默认模型") + " · " + feature
                 adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, choices.map { it.first }); setSelection(selected)
-            }; body.addView(spinner); fields[feature] = spinner to choices.map { it.second }
+            }; body.addView(spinner)
+            val model = ui.field(MoteI18n.text("模型 ID（可选覆盖）"), current?.optString("model").orEmpty())
+            model.contentDescription = MoteI18n.text("模型 ID（可选覆盖）") + " · " + feature
+            var previousChoice = spinner.selectedItemPosition
+            fun updateModel() {
+                if (spinner.selectedItemPosition != previousChoice) model.setText("")
+                previousChoice = spinner.selectedItemPosition
+                model.isEnabled = choices[spinner.selectedItemPosition].second?.optString("kind") == "personal"
+            }
+            spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, field: android.view.View?, position: Int, id: Long) { updateModel() }
+            }; updateModel()
+            fields[feature] = Triple(spinner, choices.map { it.second }, model)
         }
         ui.button(MoteI18n.text("保存设置"), true) {
             val next = JSONObject(selections.toString())
-            for ((feature, field) in fields) { val reference = field.second[field.first.selectedItemPosition]; if (reference == null) next.remove(feature) else next.put(feature, JSONObject(reference.toString())) }
+            for ((feature, field) in fields) {
+                val reference = field.second[field.first.selectedItemPosition]
+                if (reference == null) next.remove(feature) else {
+                    val fixed = pick(reference, "kind", "id")
+                    next.put(feature, CentralModels.featureReference(fixed, if (fixed.getString("kind") == "personal") field.third.text.toString() else ""))
+                }
+            }
             configuration.put("selections", next)
             val payload = JSONObject().put("revision", view.getLong("revision")).put("value", configuration).put("preserveRedactedSecrets", true)
-            ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
+            ui.work(MoteI18n.text("正在保存…"), { check(currentPage()); api.put("/api/configuration/models", payload) }) { if (currentPage()) models() }
         }
     }
-    private fun modelCatalogPage(result: JSONObject, target: LinearLayout, offset: Int = 0) {
+    private fun modelCatalogPage(result: JSONObject, target: LinearLayout, offset: Int = 0, onSelect: ((String) -> Unit)? = null) {
         target.removeAllViews(); val metadata = JSONObject(result.toString()).apply { remove("items") }; values(metadata, target)
         val items = result.getJSONArray("items"); if (items.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
-        for (index in offset until minOf(offset + 100, items.length())) values(items.getJSONObject(index), ui.card(target))
-        if (offset != 0) ui.button(MoteI18n.text("返回第一页"), parent = target) { modelCatalogPage(result, target) }
-        if (offset + 100 < items.length()) ui.button(MoteI18n.text("下一页"), parent = target) { modelCatalogPage(result, target, offset + 100) }
+        for (index in offset until minOf(offset + 100, items.length())) {
+            val item = items.getJSONObject(index)
+            if (onSelect == null) values(item, ui.card(target)) else ui.button(item.optString("name", item.getString("id")), parent = target) { onSelect(item.getString("id")) }
+        }
+        if (offset != 0) ui.button(MoteI18n.text("返回第一页"), parent = target) { modelCatalogPage(result, target, onSelect = onSelect) }
+        if (offset + 100 < items.length()) ui.button(MoteI18n.text("下一页"), parent = target) { modelCatalogPage(result, target, offset + 100, onSelect) }
     }
     fun fileSettings() {
         val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
+        ui.work(MoteI18n.text("正在读取…"), { Triple(api.get("/api/file-processing"), api.get("/api/media-models"), api.get("/api/auth/self")) }) { (value, media, identity) ->
             val settings = JSONObject(value.getJSONObject("settings").toString())
             if (value.getBoolean("policyConfigured")) {
                 edit(MoteI18n.text("处理设置"), "/api/file-processing", JSONObject().put("revision", value.getString("revision"))
                     .put("settings", settings).put("policy", JSONObject(value.getJSONObject("policy").toString())))
+                managedMedia(api, media, identity.getBoolean("administrator"), listOf("dialogue", "speaker-wespeaker"), body)
                 return@work
             }
             val revision = value.getString("revision").toLong(); require(revision in 0..9_007_199_254_740_991L)
             body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("处理设置"), NativeFontRole.TITLE_MOBILE)
+            managedMedia(api, media, identity.getBoolean("administrator"), listOf("dialogue", "speaker-wespeaker"), body)
             val collect = form(settings, ui.card())
             ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = JSONObject().put("revision", revision).put("value", collect())
@@ -630,7 +841,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun extensions() {
         read("/api/features")
         ui.button(MoteI18n.text("处理设置")) { processingSettings() }
-        ui.button(MoteI18n.text("文字识别设置")) { configuration(MoteI18n.text("文字识别设置"), "/api/perception") { it.getJSONObject("settings") } }
+        ui.button(MoteI18n.text("文字识别设置")) { perceptionSettings { extensions() } }
         library.paged("/api/processing?limit=20", ui.card()) { row, card ->
             values(row, card)
             ui.button(MoteI18n.text("重试"), parent = card) { action("/api/processing/" + enc(row.getString("id")) + "/retry") }
@@ -648,49 +859,16 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("查询")) { load() }; load()
     }
-    private fun vault(cursor: String? = null, previous: List<String?> = emptyList()) {
-        val api = client; val exports = CentralPortable(api)
-        val pending = ui.accountPreferences("central-portable")
+    private fun vault() {
         ui.text(MoteI18n.text("个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。"))
         ui.button(MoteI18n.text("中央资料与附件导出"), true) {
-            val id = pending.getString("operationId", null) ?: UUID.randomUUID().toString().also { check(pending.edit().putString("operationId", it).commit()) }
-            ui.work(MoteI18n.text("正在导出中央资料…"), { try { exports.start(id).also { check(pending.edit().remove("operationId").commit()) } }
-                catch (failure: CentralFailure) { if (failure.code == "archive_authorization_changed") check(pending.edit().remove("operationId").commit()); throw failure } }) { portableExport(it.getString("id")) }
+            ui.saveCentral("/api/export", "mote-portable.json", "application/json")
         }
         ui.button(MoteI18n.text("中央元数据导出")) {}.isEnabled = false
         ui.text(MoteI18n.text("元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。"))
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
-        val target = ui.card()
-        ui.work(MoteI18n.text("正在读取…"), { exports.list(cursor) }) { result ->
-            val rows = result.getJSONArray("items")
-            if (rows.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
-            for (i in 0 until rows.length()) {
-                val row = rows.getJSONObject(i); val card = ui.card(target)
-                ui.text(row.getString("createdAt") + " · " + portableState(row.getString("state")), parent = card)
-                ui.button(MoteI18n.text("查看详情"), parent = card) { portableExport(row.getString("id")) }
-            }
-            if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { body.removeAllViews(); vault(previous.last(), previous.dropLast(1)) }
-            if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { body.removeAllViews(); vault(result.getString("nextCursor"), previous + cursor) }
-        }
     }
     private fun portableState(state: String) = MoteI18n.text(mapOf("working" to "正在处理…", "completed" to "已完成", "failed" to "失败", "cancelled" to "已取消").getValue(state))
-    private fun portableExport(id: String) {
-        body.removeAllViews(); screens.setBack { screens.refresh() }
-        val exports = CentralPortable(client)
-        ui.button(MoteI18n.text("刷新")) { portableExport(id) }
-        ui.work(MoteI18n.text("正在读取…"), { exports.read(id) }) { receipt ->
-            ui.text(portableState(receipt.getString("state")), NativeFontRole.SECTION)
-            ui.text(receipt.getString("createdAt"))
-            ui.disclosure(MoteI18n.text("元数据")) { values(receipt, it) }
-            if (receipt.getString("state") == "completed") ui.button(MoteI18n.text("下载"), true) { ui.savePortable(receipt) }
-            if (receipt.getString("state") == "failed") ui.button(MoteI18n.text("重试")) {
-                ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "retry") }) { portableExport(id) }
-            }
-            if (receipt.getString("state") != "cancelled") ui.button(MoteI18n.text("取消")) {
-                screens.confirm(MoteI18n.text("取消"), MoteI18n.text("取消后将不能下载这份导出文件。")) { ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "cancel") }) { portableExport(id) } }
-            }
-        }
-    }
     private fun diagnostics() {
         ui.button(MoteI18n.text("诊断设置")) { instanceSettingOwnership(MoteI18n.text("诊断设置")) { diagnostics() } }
         read("/api/diagnostics")
@@ -1134,6 +1312,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "speakerMin" to "说话人数下限", "speakerMax" to "说话人数上限", "maxAudioMinutes" to "最长录音时长（分钟）", "timeoutMs" to "处理超时（毫秒）",
             "chat" to "问一问", "memory" to "记忆", "insight" to "洞察", "import" to "导入", "file" to "文件", "ocr" to "文字识别", "asr" to "转写", "title" to "标题", "name" to "名称", "includeCredentials" to "包含凭据", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
             "provider" to "服务商", "protocol" to "协议", "baseUrl" to "服务地址", "model" to "模型", "reasoningEffort" to "推理强度",
+            "headers" to "自定义请求头", "extraBody" to "高级请求参数",
             "serviceTier" to "速度模式",
             "maxTokens" to "最大生成 token", "apiKey" to "API Key（留空保留）", "modelRequestTimeoutMs" to "模型请求超时（毫秒）",
             "agentTimeoutMs" to "Agent 超时（毫秒）", "interactiveConcurrency" to "交互并发", "agentConcurrency" to "Agent 并发",

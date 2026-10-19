@@ -37,7 +37,7 @@ try{
    for(const id of ['same-source','other-source'])await request(token,'/api/ingress/sources','POST',{id,name:'Generated source',kind:'custom',deviceId:'same-device',platform:'import',retention:'snapshot'});
    const current=await request(token,'/api/plugins');
    await request(token,'/api/plugin-instances','POST',{expectedRevision:current.revision,instance:{id:'same-instance',packageId,name:'Generated process instance',configuration:{label},desired:false,grants:{capabilities:['processor','source','ui'],sourceIds:['same-source'],history:false}}});
-   await request(token,'/api/plugin-instances/same-instance/check','POST',{});
+   await wait(token,(await request(token,'/api/plugin-instances/same-instance/check','POST',{})).taskId);
    const checked=await request(token,'/api/plugins');await request(token,'/api/plugin-instances/same-instance/enable','POST',{expectedRevision:checked.revision});
   }
   const snapshot=await request(a.token,'/api/plugin-instances/same-instance/snapshots','POST',{}),bSnapshot=await request(b.token,'/api/plugin-instances/same-instance/snapshots','POST',{});saved={a,b,snapshot,bSnapshot};
