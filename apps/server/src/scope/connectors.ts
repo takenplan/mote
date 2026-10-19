@@ -97,7 +97,13 @@ export class ScopedConnectors {
   const {row}=this.binding(context,input);if(input.action!=='recording'||input.recordingPhase!==phase||!input.recordingKey||!['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ConnectorError('recording_job_binding_invalid',409);
   const job=this.ledger(context,row.id,()=>this.binding(context,input)).get<{epoch:string;job:{phase:RecordingPhase};requests:string[]}>('recording-jobs',input.recordingKey),saved=this.vault(context,row.id,()=>this.binding(context,input)).read<{epoch:string}>('recordings.json');if(!job||job.job.phase!==phase||!job.requests?.length)throw new ConnectorError('recording_job_binding_invalid',409);if(job.epoch!==saved?.epoch)throw new ExecutionFailure('stale','recording_selection_changed');if(job.requests.every(id=>['cancelled','stale'].includes(this.options.execution.forUser(context).get(id).state)))throw new ExecutionFailure('stale','recording_request_cancelled');
  }
- private startRecordingSync(context:UserContext,id:string,operationId:string,parent?:TaskParent){return this.submit(context,id,{action:'sync',recurring:true},operationId,()=>{this.assert(context);this.options.db.prepare('UPDATE connector_connections SET sync_authorized=1 WHERE user_id=? AND id=?').run(context.userId,id);},parent);}
+ private startRecordingSync(context:UserContext,id:string,operationId:string,parent?:TaskParent){
+  this.assert(context);const provider=connectionSchema.parse(JSON.parse(this.row(context.userId,id).settings)).provider;
+  // Restore the recording business group without changing its admitted command
+  // or task identity. Existing task-parent links carry every real stage here.
+  const recording=['feishu-recordings','dingtalk-recordings'].includes(provider),attribution=recording?{...parent,parentOperationId:'recording-sync:'+hash([id,operationId])}:parent;
+  return this.submit(context,id,{action:'sync',recurring:true},operationId,()=>{this.assert(context);this.options.db.prepare('UPDATE connector_connections SET sync_authorized=1 WHERE user_id=? AND id=?').run(context.userId,id);},attribution);
+ }
  private prepare(user:string,values:ConnectionSettings[]){
   for(const value of values)if(!this.packages.has(value.provider))throw new ConnectorError('connector_provider_unavailable');
   const db=this.options.db,before=db.prepare('SELECT * FROM connector_connections WHERE user_id=?').all(user) as Row[];let published=false;
@@ -295,7 +301,13 @@ export class ScopedConnectors {
  }
  private async submit(context:UserContext,id:string,value:Partial<ConnectorTask>&{payload?:Record<string,unknown>},operationId:string,onAdmitted?:(task:{id:string})=>void,parent?:TaskParent){
   this.assert(context);const row=this.row(context.userId,id),created=!value.snapshotId,fingerprint=hash(canonical([row.generation,context.authorizationEpoch,value])),prior=()=>this.options.db.prepare('SELECT input_hash,task_id FROM connector_commands WHERE user_id=? AND instance_id=? AND operation_id=?').get(context.userId,id,operationId);
-  const existing=prior();if(existing){if(existing.input_hash!==fingerprint)throw new ConnectorError('connector_command_conflict',409);const task=this.options.execution.forUser(context).get(String(existing.task_id));if(parent?.parentTaskId)this.options.execution.forUser(context).linkTaskParent(parent.parentTaskId,task.id);if(value.action==='recording')onAdmitted?.(task);return task;}
+  const existing=prior();if(existing){
+   if(existing.input_hash!==fingerprint)throw new ConnectorError('connector_command_conflict',409);
+   const tasks=this.options.execution.forUser(context),task=tasks.get(String(existing.task_id));
+   if(parent?.parentTaskId)tasks.linkTaskParent(parent.parentTaskId,task.id);
+   if(parent?.parentOperationId)tasks.linkParent(parent.parentOperationId,'connector:'+id+':'+operationId,parent.generation?{generation:{slot:parent.generation.slot,version:parent.generation.version??task.id}}:{});
+   if(value.action==='recording')onAdmitted?.(task);return task;
+  }
   let snapshotId=value.snapshotId;if(!snapshotId)snapshotId=(await this.options.plugins.forUser(context).admit(pluginId(id))).id;
   try{const {payload,...publicValue}=value,payloadRef=payload&&Object.keys(payload).length?randomUUID():undefined,input=connectorTask.parse({connectionId:id,generation:row.generation,snapshotId,...publicValue,payloadRef});this.binding(context,input);return await this.options.execution.forUser(context).submit({kind:value.action==='recording'?recordingTaskKind(value.recordingPhase!):value.action==='operation'&&value.operation==='select'&&['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider)?SELECT_TASK:TASK,operationId:'connector:'+id+':'+operationId,input},task=>{
    const current=prior();if(current)throw new ConnectorError(current.input_hash===fingerprint?'connector_command_exists':'connector_command_conflict',409);onAdmitted?.(task);if(payloadRef)this.vault(context,id,()=>this.binding(context,input)).write('operation:'+payloadRef,{taskId:task.id,operation:input.operation,generation:input.generation,snapshotId:input.snapshotId,payload});this.options.db.prepare('INSERT INTO connector_commands VALUES(?,?,?,?,?)').run(context.userId,id,operationId,fingerprint,task.id);

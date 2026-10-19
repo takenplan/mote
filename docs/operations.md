@@ -42,3 +42,12 @@ Scoped production Operations retain business prefixes with opaque, user-bound
 identifiers. Canonical Import, File, Query and Insight parents receive their child
 progress and change events atomically. Parent links do not create execution or
 cancellation authority. See the [execution parity contract and generated journeys](validation/execution-parity-2026-10-18.md).
+
+Recording selection and explicit sync attach the existing Connector task to a
+`recording-sync` business parent through M05's account-bound parent API. Actual
+discovery, metadata, transcript and media descendants contribute their real states
+to that parent. Connector command identities, task identities and existing
+`connector` detail links remain stable. Reading the same saved command receipt
+restores its parent membership without replaying acquisition. This does not scan
+or reclassify historical commands that are never revisited; ordinary non-recording
+connectors retain their existing operation family.
