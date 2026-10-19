@@ -61,12 +61,34 @@ capability 一致。`invoke` 是实际回调，不能仅返回一份组件列表
 | 所有 invoke 组件 | `emit` | 一个 JSON 进度对象；这项使用对象本身，非参数数组 |
 
 `readOriginal` 的 `bytes` 经 JSON RPC 表达为 `{type: 'Buffer', data: [...]}`。
-可以用 `Buffer.from(result.bytes.data)` 恢复生成数据。分页必须处理返回游标；
+可以用 `Buffer.from(result.bytes.data)` 恢复生成数据。显式 `length` 是准确长度，
+必须不大于 `totalBytes - offset`，不会自动截到末尾。未知总长时，省略 `length`，
+累计实际返回的字节数作为下一次 `offset`，直到读满 `totalBytes`。
+分页必须处理返回游标；
 若业务要覆盖全部授权原件，不能把一页当作全部。
 
 `processor` 的最终返回值必须通过该领域的 `{artifactId}` 校验。
 `stageExtraction` 仅提交 Transcript 类产物，复杂资料聚合应使用相应正式资料合同。
 宿主负责成功事务中的发布、输入失效和任务状态。
+
+例如，已读取并处理的简短文本可以这样提交。`originalRef` 必须来自授权原件，
+`text` 是本次处理的输出；示例没有进行语义推断：
+
+```js
+return host.call('stageExtraction', [originalRef, {
+  durationMs: 0,
+  coverage: 'full',
+  engine: 'example-text-normalizer-v1',
+  segments: [{startMs: 0, endMs: 0, untimed: true, text}],
+}]);
+```
+
+成功任务的 `result.artifactId` 对应
+`GET /api/processing/artifacts/:artifactId` 的 `originalRef` 和 `payload`。
+Transcript 的文本在 `payload.segments[].text`。资料列表返回 `{items, ...}`；
+`GET /api/materials/:id/read` 返回 `text` 与含证据成员的 `spans`；
+`GET /api/materials/:id/members` 的 `items` 包含 `{kind: 'capture', ref: 'capture:<id>'}`。
+验证时比较实际文本和原件关系，不能只检查任务状态。
 
 ## 3. 打包和安装
 
@@ -107,10 +129,12 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 `GET /api/admin/plugins` 的 revision。随后向 `/api/plugins/install` 提交：
 
 ```json
-{"previewId":"<预览 ID>","expectedRevision":0,"operationId":"<本次安装的唯一 ID>"}
+{"previewId":"<预览 ID>","expectedRevision":0,"operationId":"<本次安装生成的 UUID>"}
 ```
 
-`expectedRevision` 使用刚读取的实际数值。安装异步进行，继续读取管理员 catalog，
+安装的 `operationId` 必须是 UUID，例如 `crypto.randomUUID()` 的结果；普通调用的
+操作 ID 使用该调用自己的合同。`expectedRevision` 使用刚读取的实际数值。
+安装异步进行，继续读取管理员 catalog，
 直到包的状态为 `installed` 或终止失败。`/enable`、`/disable`、`/stop` 的请求体为
 `{"expectedRevision":<当前用户配置 revision>}`；断线重试沿用原来的操作身份和请求。
 
@@ -141,6 +165,8 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 | 更新配置或安装新版本 | 新快照使用新配置与固定包；保留旧快照引用的准确版本 |
 | 释放 snapshot | `DELETE /api/plugin-snapshots/:id`，结束其读写引用 |
 | 卸载 package | 先解除实例和在途快照引用；历史资料删除是另一项操作 |
+
+停用实例后的新快照请求返回 `409`；stop 后使用已撤销快照返回 `401`。
 
 不要在插件中建立第二套队列、用户身份或发布权威。插件可以复用宿主已授权的
 回调；跨源读写仍须逐个来源授权。子进程运行的是受信代码，拥有宿主进程用户的
