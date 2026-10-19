@@ -83,7 +83,11 @@ export class RestoreFutureAuthority{
      taskId=scopeRow(key)?.probe_task_id as string|undefined;if(!taskId)await service.configure(candidate,view.revision);current();
     });
     if(!candidate)return;
-    if(!taskId){const result=await service.check(selected.id) as {taskId?:string};current();if(result.taskId){taskId=result.taskId;sql.run('UPDATE lifecycle_future_scopes SET probe_task_id=? WHERE user_id=$user AND restoration_id=? AND scope_key=?',taskId,restorationId,key);}}
+    if(!taskId){const result=await service.startCheck(selected.id,admittedTaskId=>{
+     if(!current().plugins.some(value=>value.id===selected.id))throw new PrivateDataError('conflict',409);
+     const definition=this.plugins.restorationDefinition(run.context,selected.id);if(definition.revocation!==restorationId||identityHash([definition.packageId,definition.configuration])!==selected.configurationHash||identityHash(definition.grants)!==identityHash(selected.scopeIntent))throw new PrivateDataError('conflict',409);
+     if(!sql.run('UPDATE lifecycle_future_scopes SET probe_task_id=? WHERE user_id=$user AND restoration_id=? AND scope_key=?',admittedTaskId,restorationId,key).changes)throw new PrivateDataError('conflict',409);
+    });current();taskId=result.taskId;}
     if(taskId){const task=this.execution.forUser(run.context).get(taskId);if(['waiting','running'].includes(task.state))throw new ExecutionFailure('waiting','restore_future_verification_waiting',50,{executionStarted:false});if(task.state!=='succeeded')throw new ExecutionFailure('blocked','restore_future_verification_failed');}
     await mutate(async()=>{const checked=await service.view();current();if(!current().plugins.some(value=>value.id===selected.id))return;if(!checked.instances.find(value=>value.id===selected.id)?.checked)throw new ExecutionFailure('blocked','restore_future_verification_failed');await service.action(selected.id,'enable',checked.revision);current();});
    });

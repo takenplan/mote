@@ -13,6 +13,8 @@ export type ExecutionLane='background'|'interactive';
 /** Trusted host configuration. Lane is derived from existing product identity,
  * never from model-authored input or a new persistent authority field. */
 export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane;
+ /** Optional host physical-lifetime gate. false leaves work queued without admission or fairness/state changes. */
+ available?:(step:ExecutionStep)=>boolean;
  /** Host-defined capacity shared across pools. A coordinator and its exact
   * physical child may share one unit; input cannot install this callback. */
  partition?:(step:ExecutionStep)=>{key:string;unit:string;concurrency:number}|undefined;
@@ -144,6 +146,7 @@ export class ExecutionEngine {
  }
  private capacityAvailable(step:ExecutionStep,now=this.now()){
   if(this.active.has(step.id))return false;
+  if(this.admissions.get(step.pool)?.available?.(step)===false)return false;
   const capacity=this.capacity(step),units=new Set<string>();
   const pools=capacity.partitioned?[...this.admissions].filter(([,admission])=>admission.partition).map(([pool])=>pool):[step.pool];
   const count=(current:ExecutionStep)=>{const value=this.capacity(current);if(value.key===capacity.key)units.add(value.unit);};
@@ -241,6 +244,8 @@ export class ExecutionEngine {
  /** Cancellation revokes the durable grant before local transport cleanup ends. */
  isActiveStep(id:string){return this.active.has(id);}
  /** Several completions in one turn need only one admission pass. */
+ /** Host capacity release notification; use the original coalesced admission path. */
+ wake(){this.scheduleTick();}
  private scheduleTick(){
   if(this.stopping||this.scheduled)return;
   this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
@@ -291,7 +296,7 @@ export class ExecutionEngine {
  tick(){
   if(this.stopping)return Promise.resolve();
   if(this.pumping){this.pumpAgain=true;return Promise.resolve();}
-  this.pumping=true;const started:Promise<void>[]=[];
+  this.pumping=true;const started:Promise<void>[]=[],unclaimed=new Set<string>();
   try{
    this.recover();
    this.store.db.prepare("DELETE FROM execution_resource_waits WHERE NOT EXISTS(SELECT 1 FROM execution_steps e WHERE e.id=execution_resource_waits.step_id AND e.fence=execution_resource_waits.fence AND e.state='running' AND e.lease_until>?)").run(this.now());
@@ -304,10 +309,18 @@ export class ExecutionEngine {
     for(const lane of lanes){
     for(;;){
      const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_user_fairness u ON u.pool=e.pool AND u.user_id=e.user_id LEFT JOIN execution_stage_groups g ON g.step_id=e.id LEFT JOIN execution_stage_fairness s ON s.pool=e.pool AND s.user_id=e.user_id AND s.group_key=g.group_key LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence)) ORDER BY coalesce(u.last_started,0),coalesce(s.last_started,0),coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
-     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.capacityAvailable(view(candidate as Row))&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
+     let row:Row|undefined;for(const candidate of candidates){if(!unclaimed.has(String(candidate.id))&&!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane&&this.capacityAvailable(view(candidate as Row))&&this.staticResourceTurn(view(candidate as Row))){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
-     const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
+     let admission:ReturnType<ExecutionEngine['claim']>;
+     try{admission=this.claim(row,handler);}
+     catch(error){unclaimed.add(row.id);started.push(Promise.reject(error));continue;}
+     // A rejected transactional recheck owns no local slot. Skip it only for
+     // this pass so an unchanged waiting head cannot spin or hide eligible work.
+     if(!admission||!('launch' in admission)){unclaimed.add(row.id);if(admission)started.push(admission.pause);continue;}
+     const controller=new AbortController();let completed=true;const task=Promise.resolve().then(()=>admission.launch(controller)).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
+     // Claim first, reserve locally second, then launch on the next microtask.
+     // Handler IO never escapes before cancellation/capacity can find its owner.
      this.active.set(row.id,{controller,task,pool,kind:row.kind,lane,step:view(row)});started.push(task);
     }
     }
@@ -315,7 +328,7 @@ export class ExecutionEngine {
   }finally{this.pumping=false;if(this.pumpAgain){this.pumpAgain=false;this.scheduleTick();}}
   return Promise.all(started).then(()=>{});
  }
- private async execute(row:Row,handler:ExecutionHandler,controller:AbortController){
+ private claim(row:Row,handler:ExecutionHandler):{launch:(controller:AbortController)=>Promise<void>}|{pause:Promise<void>}|undefined{
   const db=this.store.db,now=this.now(),fence=randomUUID(),policy=this.policy(handler,view(row)),timeout=policy.timeoutMs;
   db.exec('BEGIN IMMEDIATE');
   try{
@@ -330,7 +343,7 @@ export class ExecutionEngine {
     // A short retry can become due again while the backlog is being checked.
     // Yield after the durable decision, with no transaction or running lease,
     // so both background completion wakes and explicit drains allow timers.
-    if(admission.category==='waiting')await yieldTurn();return;
+    return admission.category==='waiting'?{pause:yieldTurn()}:undefined;
    }
    const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+?,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(handler.deferAttempts?0:1,fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}
@@ -342,6 +355,10 @@ export class ExecutionEngine {
    db.prepare('INSERT INTO execution_fairness(pool,operation_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,operation_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.operation_id,sequence);
    this.project(row.id);db.exec('COMMIT');
   }catch(error){if(db.isTransaction)db.exec('ROLLBACK');db.prepare("UPDATE execution_steps SET state='blocked',error=?,updated_at=? WHERE id=? AND state='waiting'").run(error instanceof StoreError&&error.statusCode===507?'storage_full':'admission_failed',this.now(),row.id);this.project(row.id);return;}
+  return {launch:controller=>this.execute(row,handler,controller,fence,policy)};
+ }
+ private async execute(row:Row,handler:ExecutionHandler,controller:AbortController,fence:string,policy:ExecutionPolicy){
+  const db=this.store.db,timeout=policy.timeoutMs;
   // Dispose deadlines when work settles. Composed AbortSignal.timeout sources
   // can remain strongly retained by Node until a long deadline actually fires.
   const step=this.get(row.id)!,signal=controller.signal;

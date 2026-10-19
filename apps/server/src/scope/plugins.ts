@@ -28,6 +28,7 @@ import {PLUGINS_DOMAIN,PLUGIN_CONFIGURATION_DOMAIN,componentSchema,instanceSchem
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone=<T>(value:T):T=>structuredClone(value);
 const signature=(i:UserPluginInstance)=>digest([i.packageId,i.configuration,i.grants]);
+type RestorationProbePurpose={userId:string;instanceId:string;epoch:number;restorationId:string;coordinatorId:string;checkId:string;generation:number;signature:string};
 type InstanceRow={user_id:string;id:string;generation:number;removed:number;json:string;verified_hash:string|null};
 type Snapshot={id:string;user_id:string;instance_id:string;generation:number;account_epoch:number;binding_revision:number;mode:'task'|'history';released:number;json:string};
 type Fixed={instance:UserPluginInstance;components:PluginComponent[];packageId:string;version:string;digest:string};
@@ -58,6 +59,8 @@ export class ScopedPluginHost {
  private readonly disposeTasks:Array<()=>Promise<void>>=[];
  private readonly bundled=new Map<string,StoredPackage>();
  private readonly instanceListeners=new Set<(event:{userId:string;instanceId:string;context?:UserContext;action?:string})=>void|Promise<void>>();
+ private readonly probeFlights=new Map<string,{userId:string;instanceId:string;taskId:string;epoch:number;readonly budget:'ordinary'|'restoration';readonly restoration?:RestorationProbePurpose;settled:boolean;done:Promise<void>}>();
+ private readonly probeAdmissions=new Map<string,RestorationProbePurpose>();
  private closed=false;
  private closing?:Promise<void>;
  constructor(private readonly options:PluginHostOptions){
@@ -77,6 +80,10 @@ export class ScopedPluginHost {
   options.services.registerInstance('plugin-catalog',{scope:'instance',service:{forAdministrator:(context:UserContext)=>this.forAdministrator(context)}});
   this.installTask('plugin.invoke');
   this.installCheckTask();
+  // Ordinary/direct checks, installation and other controls retain base1.
+  // Only a current, exact trusted restoration receipt selects the extra budget.
+  execution.engine.configurePool('plugin-control',{lane:()=> 'background',concurrency:{background:()=>1,interactive:()=>1},partition:step=>this.probePartition(step),available:step=>this.probeAdmissionAvailable(step)});
+  const detachProbeCapacity=configuration.instance.onChange(()=>execution.engine.wake());this.disposeTasks.push(async()=>{detachProbeCapacity();});
  }
  private packageReferences(packageId:string,owner?:string){
   const db=this.options.db;
@@ -90,10 +97,15 @@ export class ScopedPluginHost {
   this.assert(context);const row=this.options.db.prepare('SELECT * FROM plugin_user_checks WHERE user_id=? AND instance_id=? AND id=?').get(context.userId,input.instanceId,input.id) as CheckRow|undefined,instance=this.instance(context.userId,input.instanceId);
   if(!row||row.generation!==instance.generation||row.signature!==signature(JSON.parse(instance.json)))throw new ScopeError('invalid_identity',401);return {row,instance};
  }
- private async beginCheck(context:UserContext,id:string){
-  await this.configuration(context);this.assert(context);const instance=this.instance(context.userId,id),value=JSON.parse(instance.json) as UserPluginInstance;this.validate(value,true);if(this.unknownProbe(context.userId,id))throw new StoreError('Plugin check outcome requires reconciliation',409);const checkId=randomUUID();this.options.db.prepare('INSERT INTO plugin_user_checks VALUES(?,?,?,?,?,NULL,NULL) ON CONFLICT(user_id,instance_id) DO UPDATE SET id=excluded.id,generation=excluded.generation,signature=excluded.signature,task_id=NULL,result=NULL').run(context.userId,id,checkId,instance.generation,signature(value));
-  const task=await this.options.execution.forUser(context).submit({kind:'plugin.check',operationId:'plugin-check:'+checkId,input:{instanceId:id,id:checkId}},task=>{this.checkRow(context,{instanceId:id,id:checkId});this.options.db.prepare('UPDATE plugin_user_checks SET task_id=? WHERE user_id=? AND instance_id=? AND id=?').run(task.id,context.userId,id,checkId);});this.checkRow(context,{instanceId:id,id:checkId});
-  return {checkId,taskId:task.id};
+ private async beginCheck(context:UserContext,id:string,onAdmitted?:(taskId:string)=>void){
+  await this.configuration(context);this.assert(context);
+  return this.transaction(()=>{
+   this.assert(context);const instance=this.instance(context.userId,id),value=JSON.parse(instance.json) as UserPluginInstance;this.validate(value,true);if(this.unknownProbe(context.userId,id))throw new StoreError('Plugin check outcome requires reconciliation',409);const checkId=randomUUID();this.options.db.prepare('INSERT INTO plugin_user_checks VALUES(?,?,?,?,?,NULL,NULL) ON CONFLICT(user_id,instance_id) DO UPDATE SET id=excluded.id,generation=excluded.generation,signature=excluded.signature,task_id=NULL,result=NULL').run(context.userId,id,checkId,instance.generation,signature(value));
+   // This control task has no model lease. Admission and any purpose-bound
+   // recovery receipt participate in this same SQLite transaction.
+   const task=this.options.execution.forUser(context).submitSync({kind:'plugin.check',operationId:'plugin-check:'+checkId,input:{instanceId:id,id:checkId}});this.checkRow(context,{instanceId:id,id:checkId});this.options.db.prepare('UPDATE plugin_user_checks SET task_id=? WHERE user_id=? AND instance_id=? AND id=?').run(task.id,context.userId,id,checkId);onAdmitted?.(task.id);
+   return {checkId,taskId:task.id};
+  });
  }
  private reconcileCheck(run:TaskRun){
   const task=this.options.execution.forUser(run.context).get(run.task.id);if(!task.externalUnresolved)return;
@@ -104,11 +116,80 @@ export class ScopedPluginHost {
   // an ordinary confirmed retry. It grants no new provider or task authority.
   this.options.execution.bindExternalCompletion(run.context,run.task.id,String(calls[0].issuance_id))();
  }
+ // Reuse the approved existing scalar and existing background ceiling.
+ private probeLimit(){return Math.max(1,Math.min(32,Math.floor(this.options.configuration.instance.current<{agentConcurrency:number}>('execution').agentConcurrency)));}
+ private probeWorkers(userId:string,instanceId:string){return [...this.workers].some(record=>record.userId===userId&&record.instanceId===instanceId&&Boolean(record.probeDetach||record.probeDirectory||record.probeCleanup));}
+ private reapProbeFlights(){
+  let released=false;
+  for(const [key,flight] of this.probeFlights)if(flight.settled&&!this.probeWorkers(flight.userId,flight.instanceId)){this.probeFlights.delete(key);this.probeAdmissions.delete(flight.taskId);released=true;}
+  for(const [taskId] of this.probeAdmissions)if(![...this.probeFlights.values()].some(flight=>flight.taskId===taskId)&&!['waiting','running'].includes(this.options.execution.engine.get(taskId)?.state??''))this.probeAdmissions.delete(taskId);
+  // Wake is coalesced, never inline/reentrant, and a stopped engine ignores it.
+  if(released)this.options.execution.engine.wake();
+ }
+ private restorationProbe(step:TaskRun['task']):RestorationProbePurpose|undefined{
+  if(step.kind!=='plugin.check'||!step.ownership?.grantId)return;
+  const parsed=checkInputSchema.safeParse(step.input);if(!parsed.success)return;const input=parsed.data;
+  try{
+   if(Number(this.options.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name IN ('lifecycle_future','lifecycle_future_scopes')").get()?.n)!==2)return;
+   const row=this.options.db.prepare(`SELECT f.restoration_id,f.task_id coordinator_id,f.epoch,c.id check_id,c.generation,c.signature,i.json instance_json,i.generation instance_generation,f.payload
+    FROM lifecycle_future_scopes s JOIN lifecycle_future f ON f.user_id=s.user_id AND f.restoration_id=s.restoration_id
+    JOIN execution_steps e ON e.id=s.probe_task_id AND e.user_id=s.user_id AND e.kind='plugin.check' AND e.authorization_epoch=f.epoch
+    JOIN user_tasks u ON u.task_id=e.id AND u.user_id=e.user_id AND u.grant_id=e.grant_id
+    JOIN task_authorizations g ON g.grant_id=u.grant_id AND g.task_id=e.id AND g.user_id=e.user_id AND g.authorization_epoch=f.epoch AND g.revoked=0
+    JOIN plugin_user_checks c ON c.user_id=e.user_id AND c.task_id=e.id AND c.instance_id=? AND c.id=json_extract(e.input,'$.id')
+    JOIN plugin_user_instances i ON i.user_id=c.user_id AND i.id=c.instance_id AND i.removed=0
+    JOIN execution_steps r ON r.id=f.task_id AND r.user_id=f.user_id AND r.kind='lifecycle.future' AND r.authorization_epoch=f.epoch AND r.state IN ('waiting','running') AND json_extract(r.input,'$.restorationId')=f.restoration_id
+    JOIN user_tasks ru ON ru.task_id=r.id AND ru.user_id=r.user_id AND ru.grant_id=r.grant_id
+    JOIN task_authorizations rg ON rg.grant_id=ru.grant_id AND rg.task_id=r.id AND rg.user_id=r.user_id AND rg.authorization_epoch=f.epoch AND rg.revoked=0
+    JOIN auth_accounts a ON a.user_id=f.user_id AND a.authorization_epoch=f.epoch AND a.disabled=0
+    WHERE s.user_id=? AND s.scope_key=? AND s.probe_task_id=? AND s.state IN ('working','waiting') AND f.state='authorized' AND f.epoch=? AND g.grant_id=? AND c.id=? AND json_extract(e.input,'$.instanceId')=?
+    AND NOT EXISTS(SELECT 1 FROM auth_account_deletions d WHERE d.user_id=f.user_id)`).get(input.instanceId,step.ownership.userId,'plugin:'+input.instanceId,step.id,step.ownership.authorizationEpoch,step.ownership.grantId,input.id,input.instanceId);
+   if(!row||Number(row.generation)!==Number(row.instance_generation))return;
+   const instance=instanceSchema.parse(JSON.parse(String(row.instance_json))),payload=JSON.parse(String(row.payload)),selected=Array.isArray(payload.plugins)?payload.plugins.find((value:{id?:unknown})=>value.id===input.instanceId):undefined;
+   if(instance.revocation!==row.restoration_id||row.signature!==signature(instance)||!selected||selected.configurationHash!==digest([instance.packageId,instance.configuration])||digest(selected.scopeIntent)!==digest(instance.grants))return;
+   return {userId:step.ownership.userId,instanceId:input.instanceId,epoch:step.ownership.authorizationEpoch,restorationId:String(row.restoration_id),coordinatorId:String(row.coordinator_id),checkId:input.id,generation:Number(row.generation),signature:String(row.signature)};
+  }catch{return;}
+ }
+ private qualifiedRestorationProbe(step:TaskRun['task']){
+  const current=this.restorationProbe(step),prior=this.probeAdmissions.get(step.id);
+  if(!current||prior&&digest(prior)!==digest(current))return;
+  if(!prior)this.probeAdmissions.set(step.id,current);return current;
+ }
+ private probePartition(step:TaskRun['task']){
+  if(step.kind!=='plugin.check')return;
+  // An actual flight keeps its original budget even when stop/epoch changes
+  // delete its receipt. This is accounting, never continued authorization.
+  const flight=[...this.probeFlights.values()].find(value=>value.taskId===step.id);
+  const restoration=flight?flight.budget==='restoration':Boolean(this.qualifiedRestorationProbe(step));
+  return restoration?{key:'plugin-restoration-probes',unit:step.id,concurrency:this.probeLimit()}:undefined;
+ }
+ private probeAdmissionAvailable(step:TaskRun['task']){
+  this.reapProbeFlights();
+  const ordinary=[...this.probeFlights.values()].filter(flight=>flight.budget==='ordinary').length;
+  if(step.kind!=='plugin.check')return ordinary===0;
+  if(this.closed)return false;
+  const parsed=checkInputSchema.safeParse(step.input);if(!parsed.success)return ordinary===0;
+  const key=digest([this.options.authority.deploymentId,step.ownership?.userId,parsed.data.instanceId]);if(this.probeFlights.has(key))return false;
+  const restoration=this.qualifiedRestorationProbe(step);
+  // Base holders block ordinary checks AND installation/Memory controls, but
+  // never consume the independent restoration budget. The converse also holds.
+  return restoration?[...this.probeFlights.values()].filter(flight=>flight.budget==='restoration').length<this.probeLimit():ordinary===0;
+ }
+ private runProbe(run:TaskRun){
+  const input=checkInputSchema.parse(run.task.input);this.checkRow(run.context,input);this.reapProbeFlights();const key=digest([this.options.authority.deploymentId,run.context.userId,input.instanceId]),prior=this.probeFlights.get(key),expected=this.probeAdmissions.get(run.task.id),restoration=this.qualifiedRestorationProbe(run.task);
+  if(expected&&!restoration)throw new ExecutionFailure('stale','plugin_authority_revoked');
+  if(prior)throw new ExecutionFailure(prior.settled?'blocked':'waiting',prior.settled?'plugin_check_requires_attention':'plugin_check_waiting',undefined,{executionStarted:false});
+  const budget=restoration?'restoration' as const:'ordinary' as const,limit=restoration?this.probeLimit():1;
+  if([...this.probeFlights.values()].filter(flight=>flight.budget===budget).length>=limit)throw new ExecutionFailure('waiting','plugin_check_waiting',undefined,{executionStarted:false});
+  const flight={userId:run.context.userId,instanceId:input.instanceId,taskId:run.task.id,epoch:run.context.authorizationEpoch,budget,...(restoration?{restoration}:{}),settled:false,done:Promise.resolve()};this.probeFlights.set(key,flight);
+  const work=Promise.resolve().then(()=>this.probe(run));flight.done=work.then(()=>{},()=>{}).then(()=>{flight.settled=true;this.reapProbeFlights();});
+  return work.finally(()=>flight.done);
+ }
  private installCheckTask(){
-  this.disposeTasks.push(this.options.execution.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,parseInput:raw=>checkInputSchema.parse(raw),authorizeInput:(context,input)=>{this.checkRow(context,checkInputSchema.parse(input));},validate:task=>{try{const input=checkInputSchema.parse(task.input),row=this.options.db.prepare('SELECT * FROM plugin_user_checks WHERE user_id=? AND instance_id=? AND id=?').get(task.ownership?.userId??'',input.instanceId,input.id) as CheckRow|undefined,instance=row&&this.instance(row.user_id,row.instance_id);return Boolean(row&&instance&&row.task_id===task.id&&row.generation===instance.generation&&row.signature===signature(JSON.parse(instance.json)));}catch{return false;}},
+  this.disposeTasks.push(this.options.execution.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,parseInput:raw=>checkInputSchema.parse(raw),resources:input=>[{scope:'user',key:'plugin-check:'+String(input.instanceId)}],authorizeInput:(context,input)=>{this.checkRow(context,checkInputSchema.parse(input));},validate:task=>{try{const input=checkInputSchema.parse(task.input),row=this.options.db.prepare('SELECT * FROM plugin_user_checks WHERE user_id=? AND instance_id=? AND id=?').get(task.ownership?.userId??'',input.instanceId,input.id) as CheckRow|undefined,instance=row&&this.instance(row.user_id,row.instance_id);return Boolean(row&&instance&&row.task_id===task.id&&row.generation===instance.generation&&row.signature===signature(JSON.parse(instance.json)));}catch{return false;}},
    prepareRetry:(context,task)=>{const current=this.options.execution.forUser(context).get(task.id);if(current.externalUnresolved&&!current.checkpoints.includes('plugin-probe-result'))throw new StoreError('Plugin check outcome requires reconciliation',409);},
    reconcile:async run=>this.reconcileCheck(run),
-   execute:run=>this.probe(run),commit:(run,raw)=>{run.grant.assert();const {row,instance}=this.checkRow(run.context,checkInputSchema.parse(run.task.input)),result=checkResultSchema.parse(raw),checked=!result.issues.length&&result.capabilities.some(capability=>capability.state==='verified');this.options.db.prepare('UPDATE plugin_user_checks SET result=? WHERE user_id=? AND instance_id=? AND id=?').run(JSON.stringify({...result,...(checked?{observed:'ready'}:{})}),run.context.userId,row.instance_id,row.id);this.options.db.prepare('UPDATE plugin_user_instances SET verified_hash=? WHERE user_id=? AND id=? AND generation=?').run(checked?signature(JSON.parse(instance.json)):null,run.context.userId,row.instance_id,row.generation);},classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_check_requires_attention'),
+   execute:run=>this.runProbe(run),commit:(run,raw)=>{run.grant.assert();const {row,instance}=this.checkRow(run.context,checkInputSchema.parse(run.task.input)),result=checkResultSchema.parse(raw),checked=!result.issues.length&&result.capabilities.some(capability=>capability.state==='verified');this.options.db.prepare('UPDATE plugin_user_checks SET result=? WHERE user_id=? AND instance_id=? AND id=?').run(JSON.stringify({...result,...(checked?{observed:'ready'}:{})}),run.context.userId,row.instance_id,row.id);this.options.db.prepare('UPDATE plugin_user_instances SET verified_hash=? WHERE user_id=? AND id=? AND generation=?').run(checked?signature(JSON.parse(instance.json)):null,run.context.userId,row.instance_id,row.generation);},classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_check_requires_attention'),
   }));
  }
  private async probe(run:TaskRun){
@@ -248,7 +329,7 @@ export class ScopedPluginHost {
    configure:async(raw:unknown,expectedRevision:number,preserveRedactedSecrets=false)=>{await this.configuration(context);this.assert(context);const value=instanceSchema.parse(raw),current=this.values(context.userId),index=current.instances.findIndex(i=>i.id===value.id);
     if(preserveRedactedSecrets&&index>=0&&current.instances[index].packageId===value.packageId){for(const field of this.package(value.packageId).manifest.configuration)if(field.type==='secret-reference'&&!Object.hasOwn(value.configuration,field.id)&&Object.hasOwn(current.instances[index].configuration,field.id))value.configuration[field.id]=current.instances[index].configuration[field.id];}
     this.validate(value);if(index<0)current.instances.push(value);else current.instances[index]=value;await this.options.configuration.forUser(context).replace(PLUGIN_CONFIGURATION_DOMAIN,current,expectedRevision);this.assert(context);return this.forUser(context).view();},
-   startCheck:async(id:string)=>{const {taskId}=await this.beginCheck(context,id);return {checked:false,observed:'checking',taskId};},
+   startCheck:async(id:string,onAdmitted?:(taskId:string)=>void)=>{const {taskId}=await this.beginCheck(context,id,onAdmitted);return {checked:false,observed:'checking',taskId};},
    check:async(id:string)=>{
     const {checkId,taskId}=await this.beginCheck(context,id);
     // Internal consumers need verification completion; HTTP clients retain the
@@ -301,7 +382,7 @@ export class ScopedPluginHost {
  private pruneSubscriptions(){for(const listener of this.subscriptions)try{this.owned(listener.context,listener.snapshotId);}catch{this.subscriptions.delete(listener);}}
  private closeWorker(record:WorkerRecord){
   if(record.closing)return record.closing;
-  const result=(async()=>{record.probeDetach?.();record.probeAbort?.();await Promise.all((record.probeCleanup??[]).map(close=>close()));await record.worker.close();await record.scope.close();if(record.probeDirectory)await rm(record.probeDirectory,{recursive:true,force:true});this.workers.delete(record);})();record.closing=result;
+  const result=(async()=>{record.probeDetach?.();record.probeAbort?.();await Promise.all((record.probeCleanup??[]).map(close=>close()));await record.worker.close();await record.scope.close();if(record.probeDirectory)await rm(record.probeDirectory,{recursive:true,force:true});this.workers.delete(record);this.reapProbeFlights();})();record.closing=result;
   void result.catch(()=>{record.closing=undefined;});return result;
  }
  private async closeWorkers(predicate:(record:WorkerRecord)=>boolean){const results=await Promise.allSettled([...this.workers].filter(predicate).map(record=>this.closeWorker(record)));return results.every(result=>result.status==='fulfilled');}
@@ -323,6 +404,6 @@ export class ScopedPluginHost {
   pluginConfigurationSchema.parse({instances});for(const instance of instances)this.validate(instance);
   this.transaction(()=>{this.options.services.assertSubject(subject,PLUGINS_DOMAIN,'restore');const hash=digest(value),prior=this.options.db.prepare('SELECT payload_hash FROM plugin_user_restore WHERE user_id=? AND operation_id=?').get(subject.userId,operationId);if(prior){if(prior.payload_hash!==hash)throw new StoreError('Plugin restore identity conflict',409);return;}if(this.values(subject.userId).instances.length)throw new StoreError('Plugin restore requires an empty target domain',409);this.options.db.prepare('INSERT INTO plugin_user_restore VALUES(?,?,?,?,0)').run(subject.userId,operationId,hash,JSON.stringify({instances}));this.options.db.prepare('INSERT INTO plugin_user_state VALUES(?,0) ON CONFLICT(user_id) DO UPDATE SET deleted=0').run(subject.userId);});return Promise.resolve();
  }
- close(){if(this.closing)return this.closing;this.closed=true;this.subscriptions.clear();return this.closing=(async()=>{if(!await this.closeWorkers(()=>true))throw new StoreError('Plugin workers require shutdown reconciliation',503);await this.retireRevoked();for(const dispose of this.disposeTasks)await dispose();await this.catalog.close();await this.root.fiber.dispose();})();}
+ close(){if(this.closing)return this.closing;this.closed=true;this.subscriptions.clear();return this.closing=(async()=>{if(!await this.closeWorkers(()=>true))throw new StoreError('Plugin workers require shutdown reconciliation',503);await Promise.all([...this.probeFlights.values()].map(flight=>flight.done));await this.retireRevoked();for(const dispose of this.disposeTasks)await dispose();await this.catalog.close();await this.root.fiber.dispose();})();}
 }
 export type UserPluginService=ReturnType<ScopedPluginHost['forUser']>;
