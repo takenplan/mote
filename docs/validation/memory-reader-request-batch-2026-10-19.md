@@ -117,3 +117,34 @@ independent reviewer's real Sharp crop await. Changing an unrequested tail
 Material, cancelling the job or retiring its source must each reject late
 review pixels with `image_unavailable` and prevent Memory publication. These
 checks complement the original metadata-await and A/B isolation scenarios.
+
+## Ask consumption and workspace boundaries
+
+The Ask consumer separates its logical run/request/conversation/schedule fence
+from complete retained-history, evidence, Material and Memory-card proof. Existing
+`current` callers still require history. A full proof checks that history once at
+its explicit boundary; selected Memory checks do not inject the same history
+through every private SQL statement. All SQL keeps current owner, authorization
+epoch and host-closure checks.
+
+Memory `readPin`, `read`, `readVersion`, `page` and `bindRead` invoke caller
+currentness explicitly at logical entry and disclosure boundaries. Descriptor,
+provider, body and search suspensions check fresh selected/caller/provider proof
+on success and error; the caller also checks at its own await continuation.
+The complete page catalog is still checked after all awaited reads, so an earlier
+entry cannot survive retirement during a later read. No successful authorization
+is cached across an await.
+
+Ask passes logical currentness to its Ingress workspace, with full proof before
+and after the model/workspace/directory suspensions, working preparation, model
+authorization, tool disclosure, result handling and publication. The generic
+Ingress and SQL implementations are unchanged.
+
+[`ask-memory-proof-boundaries.test.ts`](../../apps/server/test/ask-memory-proof-boundaries.test.ts)
+holds the normal working preparation inside a live workspace after two opening
+cards have been pinned. Source retirement, Material pin changes, deletion of the other pinned card,
+account epoch change, conversation deletion and foreground request cancellation
+must settle without an Ask model request or answer artifact. Existing actual
+provider page, historical Memory, owner/isolation and canonical source-span
+regressions remain consumers. Instrumented same-shape measurements are reported
+separately from fixture correctness, physical devices and live-model acceptance.

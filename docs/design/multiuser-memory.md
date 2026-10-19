@@ -36,8 +36,10 @@ Callers must explicitly adapt any transport's different all-sources convention.
 The allowlist is copied, normalized and frozen at binding. All transitive
 pd_material_sources must fit it before SQL ordering/LIMIT, provider keys and
 semantic ranking. Cursors bind the complete allowlist and query filters.
-Parent request/grant checks apply before and after provider awaits and every SQL
-access. A current-evidence assertion does not claim external provider availability.
+Parent request/grant checks apply at logical read entry, after provider awaits
+and before returning a capability. Every SQL access independently checks the
+current owner, authorization epoch and host closure; it does not replay the
+caller-wide Ask history or snapshot proof. A current-evidence assertion does not claim external provider availability.
 Read/search always use the actual active external provider and verified body
 hash; failure never falls back to the SQL body mirror.
 
