@@ -26,6 +26,9 @@ by earlier [M16 checkpoints](design/multiuser-lifecycle.md).
 | REMOVE | Export start/history/content/retry HTTP endpoints and download artifacts attached to old receipts. Remove blanket disabling of future processing/Memory/Actions/MCP settings and mandatory per-domain reapproval after restored password relogin. |
 | EXCEPTION | Explicit capture deletion, retention and final Imports deletion journal same-vault capture IDs. Source removal does not acquire a new journal policy. File forgetting retains its separate blocked/generation/allow-again contract. |
 | EXCEPTION | Paused/stopped/disabled policies and newer explicit user choices remain authoritative. Restore retires old credentials, grants, leases, target/device authority and plugin snapshots; old pending/unknown work and OAuth flows are never replayed. |
+| CHANGE | Give only trusted restoration checks an independent bounded probe budget. Preserve ordinary checks and actual shared `plugin-control` peers at their original serial capacity. |
+| REMOVE | An expanded budget for every scoped/manual check and capacity release based only on durable cancellation or worker disappearance. |
+| EXCEPTION | Physical probe accounting retains the original purpose until the whole callback and cleanup settle; this never preserves revoked authority. Independent pools, including scoped Memory publication, stay independent. |
 | UNKNOWN | Production-scale cost, physical devices, live providers and composed deployment behavior need their own evidence. Generated fixture results do not establish them. |
 
 ## Responsibilities and consequences
@@ -67,11 +70,43 @@ an old native effect, retry an old unknown request or grant device/target rights
 Each future scope records its own completion, wait or failure. A held or failed
 plugin check does not delay unrelated successful scopes or their connector
 timers. Configuration mutations serialize, while actual verification proceeds
-independently within the existing execution concurrency setting. Failed scopes
+independently under the restoration-only budget described below. Failed scopes
 remain visible in task progress; another trusted password login retries only
 those fresh recovery scopes. Completed scopes are not readmitted. A concurrent
 configuration publication preserves a newly obtained check only when its live
 generation and current signature still match.
+
+The owner selected a restoration-only budget (B), superseding the proposal to
+expand every scoped check (A). Its bound uses the existing instance
+`execution.agentConcurrency` and the existing background ceiling of 32. This
+is an independent restoration budget, not an aggregate Agent budget. A configured
+value of one serializes restoration checks; reductions do not preempt active
+physical work and prevent further entries until capacity becomes available.
+No configuration key, default, minimum, approval or user step is added.
+
+Only the trusted host can qualify a restoration check. Check admission and its
+scope receipt commit atomically. Qualification binds the current owner and
+account epoch, restoration/coordinator task and grants, exact child task/check
+identity, plugin generation/signature and saved configuration/grant intent.
+Caller JSON, a restoration-looking instance name or a detached receipt cannot
+select this budget. Receipt withdrawal before entry grants no restoration
+capacity. Ordinary/manual checks and actual peers of the original shared
+`plugin-control` pool, including installation, retain serial capacity one.
+Scoped Memory's `memory.publication` pool remains independent; this decision
+does not put all Memory work into `plugin-control`.
+
+Once a physical probe enters, its original ordinary/restoration budget stays
+charged through cancellation, stop, receipt removal or an epoch change until
+the whole callback and cleanup settle. This accounting conveys no authority:
+original revocation, publication and unknown-result fences remain effective.
+The same owner/instance cannot enter another physical probe across purposes.
+An unsettled ordinary probe also holds its original shared base against its
+actual peers. Releasing the physical hold explicitly wakes the original
+executor through its coalesced scheduler. A missing optional host gate preserves
+other pools' behavior; a denied candidate stays queued without consuming an
+attempt or a fairness turn. Cleanup failure and unknown external outcomes
+remain visible and cannot be treated as successful settlement or replayed.
+
 The [current design](design/multiuser-lifecycle.md) and
 [validation ledger](validation/parity-lifecycle.md) record implementation and
 journey coverage separately from this decision.

@@ -105,8 +105,9 @@ pending windows, OAuth flows and unknown external requests are never requeued.
 Successful canonical cursors and last-success times survive.
 
 `lifecycle_future_scopes` records per-restoration scope outcomes and any current
-verification task identity. Checks for separate plugins proceed independently
-within the existing execution concurrency setting; configuration writes use
+verification task identity. Only trusted restoration checks proceed independently
+under the existing instance Agent concurrency scalar and background ceiling of 32;
+this is a separate restoration budget, not aggregate Agent capacity. Configuration writes use
 current revisions in a serialized queue. A successful connector plugin can admit
 its own future timer while another verifier is still held. Failed scopes remain
 visible through bounded task progress, and a later trusted password login
@@ -114,6 +115,33 @@ retries the failed fresh scope without repeating completed scopes. Stopped
 restore clears these operational outcomes before recording a new restoration
 identity. The exact Extensions asynchronous-check composition remains a separate
 integration check.
+
+The restoration check task and exact scope receipt are admitted in one SQLite
+transaction. The host derives purpose from the current owner/epoch,
+restoration/coordinator identity and grants, check task/nonce,
+plugin generation/signature and saved configuration/grant intent. HTTP JSON
+cannot supply purpose. Missing or changed associations confer no special
+capacity, and a withdrawal between selection and entry cannot change budgets.
+
+Ordinary/manual checks retain the original serial `plugin-control` base of one,
+as do actual peers in that pool such as installation. Scoped Memory publication
+uses its existing independent pool and is not coupled to these controls.
+A physical probe retains its original budget until both its callback and cleanup
+settle, even if its durable task is cancelled, its worker closes, its receipt is
+removed by stop or its account epoch changes. The same owner/instance stays
+exclusive across purposes. A live reduction is nonpreemptive; a configured
+value of one admits at most one restoration probe. No new setting, minimum,
+approval or user step is introduced.
+
+A cancelled ordinary probe with unsettled physical work holds the original
+shared base against its actual peers. Releasing a whole probe explicitly wakes
+the original executor. The optional host gate leaves denied work queued with
+no attempt/fairness change and leaves unbound pools unchanged. These accounting
+rules do not renew revoked grants or permit late publication. Cleanup failures
+and unknown external results retain their original reconciliation/no-replay
+contract. The owner selected this restoration-only behavior (B); the earlier
+all-check expansion (A) is superseded. Source and generated regression proposals
+alone do not establish runtime verification.
 
 Processing and Memory retain their automatic/desired settings and admit new
 input through their ordinary generation-fenced intake. Outbound MCP retains
