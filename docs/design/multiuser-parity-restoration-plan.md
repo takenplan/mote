@@ -224,7 +224,7 @@ AND-D01已由PM进一步明确：旧全局隐私/采集/同步值无可信owner�
 - L04：当前完整导出直接响应下载，中央永久完整副本/下载历史移除；必要暂存按完成/失败/取消/断流/重启与原重试处理。无latest-only/TTL/次数政策或额外下载步骤；不操作真实历史副本。
 - 实际运行证据：Q002仅Web模块required affected门禁由driver实跑9/9通过；不是独验/原生/最终集成。原Operation family、增量刷新、Work父子进度和设备30秒刷新互不替代；D2最新5744d6a跨端组合仍另验。
 
-## 当前验收检查点（2026-10-19 16:01，覆盖历史运行快照）
+## 当前验收检查点（2026-10-19 16:56，覆盖历史运行快照）
 
 66主行与22跨域场景仍未整体READY。13个Draft #170–182均OPEN/Draft/未合，正式integration仅管理文档，main未纳本轮业务、未部署。当前独立业务合成候选为3efdec1b48b37a6c8a0405dacc1d3b4bb2bd22ab/treeef7c7822ee8368140b60a7c16e814e79b16b5bb6，其准确parent cd0/tree25b518原工作树继续冻结供实际领域验收。3ef仅两处Web测试观察修正，production0、其余3224条mode/type/blob不变；cd0仅摘要测试exact replacement drain+成功断言，父88d5保B生产实现及budget consumer10P。Root分别核3ef22工件/3225当前blobs/实际祖先与源桥，并在新树正常own ci和normal9全部通过；该结果与原cd0失败批、祖先Server组件baseline分列，不称新whole23或实模/原生通过，历史695/f5/6875/88/cd0失败均保。
 
@@ -375,6 +375,14 @@ Memory独立诊断工程首批与源码审查。原MEM仅在独立managed cd0诊
 P/C观察器第三次实际批仍FAILED。v1 source8010df48经f3dd8e69 BLOCK；v2只改完整lease/deadline、UNKNOWN分类与bounded私有清理并有75有限合同，High62709fed仅余PID未完整观察门槛；v3只加not observed(pid)，14聚焦有限合同P，Root5ab1c2fd直接核12source与实际工具/四镜像/APK/config/currentcd0后，fresh ffcbf725允许单次sameAVD批。07:51:45.277→07:52:12.984Z/controller5031 exit1：H OS/user/Binder P，P path1/空与userlist0/空F；确实继续C0，但getType calendars返回0加821byte UnknownURL stderr，C0F，exact C query/D无baseline UNRUN。91件actual manifest463faa0c/report10fc9935/rawf50dc133经Root逐SHA核；唯一svc shutdown255/无timeout、PowerDown marker与emu0不冒durability。原cleanup仍UNKNOWN（PG5034残row5103/ports占用）且保设备lease；Root07:53:14.757Z另只读核精确PID/PGgone/noLISTEN/实际bindfree，fullpayload/rawSHA/devino匹配仅移除owner/parent保留，late proof55d7d660，Root named record acceptance d92d5346不改原批。
 
 P/C源后查明观察器MIME门槛不适用，未证明Provider查询不健康。source followup3b13f2c2四件Root核；固定官方CalendarProvider38e4d453的getType无CALENDARS分支而query支持该表，实际stderr与既有OS log启动Provider相符，exact GooglePlay binary未比对。P settings保version100/User0 installed=true/同旧codePath但pkg=null，仅证明parsed package不可用，APK字节丢失/确因仍UNKNOWN。原三个实际失败与旧AVD均保留，无第四boot/修复重装/重seed。原Client仅备新生成AVD的两阶段输入/入口：一次正常初装与真APK/独立query基线，未来许可下最多一次新unique calendar seed后query，不依赖insert stdout URI；一次svc关机/闭合后另fresh GO同盘重启无installer/seed读回。此新输入/改变关机和查询入口用来取得持久化新证据，尚未执行，不阻独立Domain/Memory；App/target/claim/事件WRITE仍UNRUN。
+
+最新补充：Android新生成AVD两阶段环境已限定接受，旧AVD三次失败完整保留。v2 source53592b32含25新聚焦合同P；stage1于08:19:50.063→08:20:37.390Z一次正常安装APK cc1883dd、一次unique LOCAL calendar seed后exact query，H/I/P/S/C全P。独立fresh GO的stage2于08:26:59.461→08:27:44.554Z同盘重启，H/P/C及APK/Calendar retention全P，无重装、重seed、App启动或权限预授。两阶段均一次svc shutdown255、PowerDown、emu0及自然PID/PG/ports闭合；Root核stage1的93件/80条raw与stage2的80件/70条raw，并重解析真实P/C/D。Root fc7fddbb只接受新输入的APK身份与Calendar行保留，不推旧失败因果、全文件系统flush或App产品交付。App登录/账号偏好/OS权限/target/WorkManager owner/claim/事件WRITE/ACK仍UNRUN；新只读plan独审1d382974准窄observer准备，WorkManager2.10.2的V1 owner单字符串与closed RO DB/WAL快照须先补有限合同。
+
+最新补充：Domain接续实际批次FAILED。peak-race修正c3a091ba经Root 6bce1dda核24件/14生成fixture及旧8操作不变，fresh GO698a0ae6单次08:41:14.032→08:41:18.285Z执行；environment_ready与normal_cleanup共2P，pending_actions在A登录失败1F，后续6项因环境未确立UNRUN。config token及revision确已正常CAS轮换，A/B OCR key同步及新旧token健康检查未到达。原task blocked/attempt0/model_shared_resource_revoked；新增usage为空、未观察到新issuance，不推零provider请求或旧费用。源码确认login漏x-mote-protocol-version:2，实际HTTP状态/响应未留存，426只为同源hook推断。normalstop/进程/三端口/四phase租约闭合；peak因normal_finally_stop释放，非首issuance。manifest78032fda/report40898831及44绑定件经Root核，具名失败证据8743c260接受；新stopped handoff2cdbef2f以已轮换config/新DB为权威，不复用旧GO。原owner仅补正常请求与脱敏错误观测source child/有限合同，实际重启仍NO_GO。
+
+最新补充：Chrome cd0零模型原13子场景首批FAILED。source106d75b0经独审dabd5aa3准、Root核28件与实际3225源码/1628编译/179工具后，fresh GOc5302f7f单次08:50:49.076→08:50:59.808Z执行。W01-empty P，W01-notes因unexpected background task kind memory.intake F，11项UNRUN；原batch3ce2578c/manifestfbcbdcdf及cleanupUNKNOWN不改。Notes截图显示已同步；Root亲看两生成图，核45件/26完整raw streams。正常Browser.close、CLIstop0及进程/四端口闭合；Root另一次单SQLite只读事务确认usage0/externalcalls0/mm_jobs0/operations0/targets0，tasks4为materials成功1、index-admit成功2、intake等待1，无receipt/issuance。晚闭合proofbf59af96精确匹配原lease全payload/SHA/devino后仅释放余5owner并保parent，不倒改原cleanup或称13通过。唯一source owner仅补完整生成Notes/Material/intake链及反例、失败后的独立forensic，不放任意task或改自动策略；新delta独审/fresh批次待验，Android未获runtime许可。
+
+最新补充：Memory外部production-component诊断仍未运行Host或实模。原028e独审add766 BLOCK后，新child f72335a4封24件、6新纯边界合同P及11非执行syntaxP；独审a9d66147核24新件/11旧件，确认四组字节透传、绝对预算、thread/turn绑定及真实guard/smoke前置已补，但controller和guard结果判定漏firstFailure，仍BLOCK。原owner仅修两PASS谓词与新首失败聚焦合同。真实5case relay子进程组和正常HTTP零job生命周期冒烟均UNRUN；通过并封存真实cleanup/同有限组回执后，仍须独立有界实模GO。2b原26合同、历史首失败与原图片失败原因UNKNOWN分别保留，无新增CLI注入、环境flag、默认策略或业务writer，正式assembly/final仍HOLD。
 
 ## 最终验收与持续记录
 
