@@ -1,0 +1,240 @@
+{
+  "startedAt": "2026-10-19T19:28:20.503Z",
+  "liveModelCalls": 0,
+  "developmentTokens": null,
+  "developmentCost": null,
+  "baselineCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+  "coreChanges": 0,
+  "privateRuntimeImports": 0,
+  "hostAdaptersAdded": 0,
+  "coverage": "actual-process loopback HTTP through buildScopedApp",
+  "accountIsolation": {
+    "distinctActualAccounts": true,
+    "sameInstanceId": "same-instance",
+    "sameSourceId": "source-bank"
+  },
+  "preinstallHostCapabilities": {
+    "schemaVersion": 1,
+    "runtime": "worker",
+    "factoryExports": [
+      "createMotePlugin",
+      "createMemoryProvider"
+    ],
+    "invocationCapabilities": [
+      {
+        "id": "source",
+        "registered": true
+      },
+      {
+        "id": "processor",
+        "registered": true
+      },
+      {
+        "id": "repository",
+        "registered": false,
+        "reason": "scoped_domain_unavailable"
+      },
+      {
+        "id": "retrieval",
+        "registered": false,
+        "reason": "scoped_domain_unavailable"
+      },
+      {
+        "id": "engine",
+        "registered": false,
+        "reason": "scoped_domain_unavailable"
+      },
+      {
+        "id": "model",
+        "registered": false,
+        "reason": "scoped_domain_unavailable"
+      },
+      {
+        "id": "ui",
+        "registered": false,
+        "reason": "scoped_domain_unavailable"
+      }
+    ]
+  },
+  "fullE01": {
+    "status": "FAIL",
+    "reason": "NO_EXTENSION_POINT",
+    "detail": "Default generic worker has no model adapter or external automatic insight admission; source Material alone is not full E01."
+  },
+  "customTrigger": {
+    "status": "FAIL",
+    "reason": "NO_EXTENSION_POINT",
+    "admission": {
+      "status": 400,
+      "body": {
+        "error": "invalid_request"
+      }
+    },
+    "actualCallbackExecuted": false
+  },
+  "nativeHarness": {
+    "status": "FAIL",
+    "reason": "NO_EXTENSION_POINT",
+    "archiveSha256": "38169570656f36929bc3601f13800327ad389c0b511e1ed09ef2e9593dc5af7c",
+    "nativeFileSha256": "706914d8e891359057a47f3abaa87a81bdd06a623140d26a1cc6d9eb391e14d8",
+    "check": {
+      "status": 502,
+      "body": {
+        "error": "execution_unavailable"
+      }
+    },
+    "supportedFactoryExports": [
+      "createMotePlugin",
+      "createMemoryProvider"
+    ],
+    "toolExecuted": false,
+    "scope": "apply-only worker ABI boundary, not native Harness execution"
+  },
+  "installOnly": {
+    "semanticCalls": 0,
+    "historyScans": 0,
+    "sourceIntakeViaRealWorker": true
+  },
+  "firstSuccessAt": "2026-10-19T19:28:43.284Z",
+  "firstSuccessElapsedMs": 22780,
+  "source": {
+    "status": "PASS",
+    "taskId": "1e0d13171baf15fbe5675b89a5c966e124c76d4b4acdaa09184c47738acfb050",
+    "materialId": "mat_e27ed03493c554614928661f6514ebfa755a16031b428af95a96d095ef60115e",
+    "revision": "37f2b96648f2dca870d8ada4d39dbc9727c6a4f41df457f027758b7c5619f7e3",
+    "statistics": {
+      "totalObservations": 43,
+      "normalizedObservations": 39,
+      "uniqueTransactions": 23,
+      "noiseObservations": 4,
+      "repeatedObservations": 16,
+      "monthlyCharges": 19,
+      "monthlyRefunds": 2
+    },
+    "totals": {
+      "grossCents": 89335,
+      "refundCents": 6000,
+      "netCents": 83335
+    },
+    "pagesBySource": {
+      "source-bank": 3,
+      "source-email": 2,
+      "source-notice": 3
+    },
+    "formalMembers": 43,
+    "modelFixtureRequests": 43,
+    "allInputHashesMatch": true,
+    "exactOriginalRefsRetained": true,
+    "idempotentTask": true,
+    "idempotentMaterial": true
+  },
+  "isolation": {
+    "status": "PASS",
+    "foreignTask": {
+      "status": 404,
+      "body": {
+        "error": "task_not_found"
+      }
+    },
+    "foreignSnapshot": {
+      "status": 404,
+      "body": {
+        "error": "not_found"
+      }
+    },
+    "foreignOriginalState": "blocked",
+    "ungrantedSourceState": "blocked",
+    "administratorForeignPrivateReads": 0,
+    "aNet": 83335,
+    "bNet": 987654321
+  },
+  "processor": {
+    "status": "PASS",
+    "taskId": "1cb052d5d6440df8a93af6bbe56ada16320161ee8bf9dba383a53fd5a0eb1ba7",
+    "artifactId": "2e13febc32cb6009a9874a8797b60e2e1e6bafc1120a8f54a3065fdcb4c48c03",
+    "originalRef": "original:11591529ac2d6680c915844ca2664bda4a54d7674a0a40761fdb40a4407d52a0",
+    "materialId": "mat_f57c422524a9f12162fe638d4f874e3ca1690e365362d8fc780232492b6c185f",
+    "text": "transactionId,postedAt,amountCents,currency,transactionType,refundOf\nP01,2026-09-02T12:00:00Z,5234,USD,charge,",
+    "qualityClaim": false
+  },
+  "upgrade": {
+    "status": "PASS",
+    "before": {
+      "snapshot": {
+        "id": "472636a3-97f6-4f29-9258-51cd8698118a",
+        "packageId": "benchmark.final-finance@75e8fbec177df8238dde833125ae7100d70feaf53ef1136b9289f22b190fc4ca",
+        "version": "1.0.0",
+        "digest": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9",
+        "mode": "task",
+        "bindingRevision": 1
+      },
+      "taskId": "75500abdf7486b41621e0b434f379b629c413c42132d24b9b2a51f2dac0e1200",
+      "resultVersion": "1.0.0"
+    },
+    "after": {
+      "snapshot": {
+        "id": "375ad4ef-c4f1-4e2f-8208-b04d8d835c6b",
+        "packageId": "benchmark.final-finance@a1ddf8938bc42ef674049605f84f4c55b58d28781af34d55d328fd4d201fcf68",
+        "version": "1.1.0",
+        "digest": "835706709a116180c0088da971043e59f99fd644434b0e623338a745edf67682",
+        "mode": "task",
+        "bindingRevision": 1
+      },
+      "taskId": "72cea23a9510a8842a654ac13f76ab4e1a2b3eea471e5ba57ec9eae71adc70c1",
+      "resultVersion": "1.1.0"
+    },
+    "oldTaskRunningAtUpgrade": true,
+    "oldVersionHistoryReadable": true
+  },
+  "disable": {
+    "status": "PASS",
+    "newAdmissionHttp": 409,
+    "authorizedDrainCompleted": true,
+    "lawfulHistoryReadable": true,
+    "siblingProcessorCompleted": true,
+    "implicitGapBackfill": 0
+  },
+  "cancel": {
+    "status": "PASS",
+    "cancelledTask": "172a679e497e736c8a3f63dc2e24fc584e71698d8df4416bee06ac984892ae18",
+    "sameWorkerSiblingTask": "c06f63d9eaad84d4daffb542f49434a982c9d545f9dab3da0f3b1ef09469609a",
+    "latePublication": 0
+  },
+  "sourceRevocation": {
+    "status": "PASS",
+    "revokedTask": "4094a96e015aa4cf49435c525b23ffbd69d40e13db5f2824bafb7f38091ca192",
+    "latePublication": 0,
+    "oldSnapshotHttp": 401
+  },
+  "stop": {
+    "status": "PASS",
+    "staleTask": "f921a1f5f4bafcc2cc1f5e6e684d906d5fa723561dabbd464796fe9fda38445e",
+    "bConcurrentTask": "cbb370f1990fdd623f32facfb50d4c5ac0cc0358222821159ab2a0f175b2742f",
+    "latePublication": 0,
+    "siblingProcessorCompleted": true
+  },
+  "restart": {
+    "status": "PASS",
+    "oldPid": 24020,
+    "newPid": 24447,
+    "taskIdentityRetained": true,
+    "historyReadable": true,
+    "oldSnapshotVersion": "1.0.0",
+    "inFlightCrashRecovery": "NOT RUN"
+  },
+  "uninstall": {
+    "status": "PASS",
+    "referencedUninstallHttp": 409,
+    "releasedThenUninstalled": true,
+    "lawfulHistorySurvived": true
+  },
+  "finishedAt": "2026-10-19T19:29:04.980Z",
+  "elapsedMs": 44476,
+  "remaining": [
+    "Full E01 insight/query/UI",
+    "E08 image semantic products",
+    "E10 in-flight crash recovery",
+    "E11 model-resource/export branch",
+    "Native/browser/live-model quality"
+  ]
+}

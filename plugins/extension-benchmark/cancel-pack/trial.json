@@ -1,0 +1,511 @@
+{
+  "schemaVersion": 1,
+  "round": 4,
+  "role": "fresh independent Iterator",
+  "candidateCommit": "b3d956189ba81e4843e9ceacdec06bb7f30a352e",
+  "recordedAt": "2026-10-19T19:14:01.082111+00:00",
+  "timestamps": {
+    "startedAt": "2026-10-19T19:02:57Z",
+    "firstSourceSuccessAt": "2026-10-19T19:11:02.969Z",
+    "focusedRunCompletedAt": "2026-10-19T19:11:08.219Z",
+    "firstDeliveryAt": "2026-10-19T19:11:33Z"
+  },
+  "firstDelivery": {
+    "submission": 1,
+    "evaluatorFeedbackCycles": 0,
+    "independentEvaluatorVerdict": "PENDING",
+    "runtimeFrozen": true
+  },
+  "hashes": {
+    "plugin.zip": "f4e054fa8211acc8a2eb2bf47baea1be1c52ac74b47646399bdb7bcd15605c0e",
+    "mote-plugin.json": "4d14f2ce1abc463f9636b16f9995ed6228f5b7cc8bf09e3013607dd1380a3011",
+    "plugin.mjs": "805edc0b90867f5efb5c348e8cca572609c21c22d2478a5734419eaffacf3b1f",
+    "source.mjs": "9c69a05c52cb805a3e6f995c64ff32f40e6df9fd8955581260dcbd1cc39f916b",
+    "processor.mjs": "4ec9e5f0b91c21ea8e96d6b9d3b29a6c551229b7bee017a3f99ba3f3863779f5",
+    "data.mjs": "28a6ee2bd178dfd1687a89546d1c79544865f335672a5be488afc8c6ca73e6ad",
+    "observations.mjs": "e6da7ec825d90476cb3aafe2aa9607a8061b9369ff7b41e091817a2f9812a2e6",
+    "native-apply.mjs": "e0f4a5007121c96f969b8d375a01697c919e5ec210960b0aca7f6480d938f28f",
+    "package-release.mjs": "e1b3c7169566fcb832734747b40044b175205a57aaa245e4a6945fb57d9ba769",
+    "README.md": "aa98d795b87edfd4017fe33cbb767ebf86479b4a57c8f2b6a941e5a91bb3da2a",
+    "apps/server/test/extension-benchmark-cancel.test.ts": "75dbabbee6b01610d47725f57849d8a88b2b1729922fa18f96cb4d7751ba7826",
+    "frozenCases": "9abd71fb674ff111e3b5e82ce016e6fdc992752a972ab3da1bb2a3c7f332fba5",
+    "iteratorRunReport": "ccb3cf5ed9ab778ce0baf6dd3c23dabdff8c72af20f8541ff81eded6ef786d04"
+  },
+  "commands": [
+    {
+      "command": "npm run build:libs",
+      "exitCode": 0
+    },
+    {
+      "command": "MOTE_CANCEL_REPORT_PATH=/tmp/mote-round4-initial-run.json node --import tsx --test apps/server/test/extension-benchmark-cancel.test.ts",
+      "exitCode": 1,
+      "startedAt": "2026-10-19T19:10:15.474Z",
+      "elapsedMs": 4700,
+      "classification": "Iterator test discovery error",
+      "reason": "Assumed Material detail includes members; actual public contract uses /members. Corrected only the new test; plugin bytes unchanged."
+    },
+    {
+      "command": "MOTE_CANCEL_REPORT_PATH=/tmp/mote-round4-run2.json node --import tsx --test apps/server/test/extension-benchmark-cancel.test.ts",
+      "exitCode": 0,
+      "startedAt": "2026-10-19T19:10:57.929Z",
+      "testDurationMs": 10293.707667,
+      "runnerDurationMs": 11593.712986
+    }
+  ],
+  "scope": {
+    "runtime": "real child process invokes buildScopedApp and listens on loopback; shipped index.ts launcher NOT RUN",
+    "mocked": [
+      "fixed generated release download transport only"
+    ],
+    "data": "generated SourceItem text; no secrets or personal captures",
+    "models": "no model configured or invoked; deterministic structured-text extraction",
+    "coreBusinessFilesChanged": 0,
+    "privateHostImportsInRuntime": 0,
+    "customHostAdapters": 0,
+    "duplicatedAuthorityQueues": 0,
+    "fullCaseSuccesses": 0
+  },
+  "focusedAssertions": {
+    "preinstallCapabilities": "PASS",
+    "modularReverseOrder": "PASS",
+    "sourceThreeRecordsTwoPagesPublication": "PASS",
+    "processorStageArtifactMaterialOriginalEvidence": "PASS",
+    "selectiveTaskCancellationCleanupAndCallbackRejection": "PASS",
+    "sameWorkerSiblingPublishesAndPidUnchanged": "PASS",
+    "otherUserUnaffectedAndPrivateSelectorsRejected": "PASS",
+    "stopAndCloseRetireWorkers": "PASS",
+    "distinctHostRestartReadsExistingHistory": "PASS",
+    "referencedUninstallRejected": "PASS",
+    "nativeApplyOnly": "FAIL: NO_EXTENSION_POINT",
+    "customTrigger": "FAIL: NO_EXTENSION_POINT"
+  },
+  "hardGatesForDeclaredFocus": {
+    "G1_FUNCTIONAL": "PASS for supported focused assertions; native/trigger are explicit capability FAIL",
+    "G2_CORE_ZERO": "PASS: zero tracked core diff, runtime imports only own modules and Node built-ins",
+    "G3_AUTHORIZATION": "PASS for tested source/task/snapshot A/B boundaries",
+    "G4_LIFECYCLE": "PASS for selective cancellation, stop, close, actual process restart history; wider lifecycle NOT RUN",
+    "G5_REGRESSION": "NOT RUN by Iterator: integration driver owns existing regression execution",
+    "G6_REAL_EXECUTION": "PASS for source/processor and cancellation probes"
+  },
+  "fullCases": {
+    "E01": "PARTIAL",
+    "E02": "NOT RUN",
+    "E03": "NOT RUN",
+    "E04": "FAIL: NO_EXTENSION_POINT",
+    "E05": "NOT RUN",
+    "E06": "FAIL: NO_EXTENSION_POINT",
+    "E07": "NOT RUN",
+    "E08": "PARTIAL",
+    "E09": "NOT RUN",
+    "E10": "PARTIAL",
+    "E11": "PARTIAL",
+    "E12": "NOT RUN"
+  },
+  "observations": {
+    "preinstallCapabilities": {
+      "schemaVersion": 1,
+      "runtime": "worker",
+      "factoryExports": [
+        "createMotePlugin",
+        "createMemoryProvider"
+      ],
+      "invocationCapabilities": [
+        {
+          "id": "source",
+          "registered": true
+        },
+        {
+          "id": "processor",
+          "registered": true
+        },
+        {
+          "id": "repository",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "retrieval",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "engine",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "model",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "ui",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        }
+      ]
+    },
+    "source": {
+      "pages": [
+        {
+          "count": 2,
+          "nextCursor": "63401f6fdd61323a4bf1ab36197ca0f3871f659c06cca5b03cd8db2e8e15cd53"
+        },
+        {
+          "count": 1,
+          "nextCursor": null
+        }
+      ],
+      "originals": [
+        {
+          "ref": "original:2e1d3c1feb550eea0c517e5819eba0403bb3ce0a57aa608f3c9c38d243837ef9",
+          "sourceId": "shared-source",
+          "captureId": "eb857f0a-d2f9-5839-a9ab-44a075490a02",
+          "hash": "9dc8d61fc2046b2f610ef12a9a5f7d2fae3e9a78d1721f8ec474ac676cf7c519",
+          "bytes": 218,
+          "mime": "application/json",
+          "retention": "archive",
+          "available": true
+        },
+        {
+          "ref": "original:63401f6fdd61323a4bf1ab36197ca0f3871f659c06cca5b03cd8db2e8e15cd53",
+          "sourceId": "shared-source",
+          "captureId": "2ed2e75e-34d3-5ab5-a1d1-fe32b0034414",
+          "hash": "5ff91d7744f1464964c4a03e9c5bf497c9dc6fb154f80ff0b46244caab8bfd14",
+          "bytes": 218,
+          "mime": "application/json",
+          "retention": "archive",
+          "available": true
+        },
+        {
+          "ref": "original:9ae81660fb0175f75a6f7ec47155fb36804a67238d0d12de5c5832723d2d5ddd",
+          "sourceId": "shared-source",
+          "captureId": "4f6124c7-d100-5cdc-a24c-a7339f3fec19",
+          "hash": "14bf51734348c58f29306549a8324b47a46078ddc2ab922ee525f4d10620de9b",
+          "bytes": 218,
+          "mime": "application/json",
+          "retention": "archive",
+          "available": true
+        }
+      ],
+      "materialId": "mat_7e58a1bc0533ba2a86070aae4545af4085351bd24664d5ea920e3adfda0a3aff",
+      "read": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_7e58a1bc0533ba2a86070aae4545af4085351bd24664d5ea920e3adfda0a3aff",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "Generated evidence initial",
+          "origin": {
+            "sourceId": "shared-source",
+            "externalId": "cancel-pack:initial"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "fidelity": {
+            "state": "derived",
+            "limitations": []
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "f670d367e5ba5e87ba5866d5b1178af74c758568323dfa819c8a193f30ccb08d",
+          "ref": "material:mat_7e58a1bc0533ba2a86070aae4545af4085351bd24664d5ea920e3adfda0a3aff@f670d367e5ba5e87ba5866d5b1178af74c758568323dfa819c8a193f30ccb08d",
+          "sequence": 1,
+          "createdAt": "2026-10-19T19:11:02.779Z",
+          "updatedAt": "2026-10-19T19:11:02.779Z",
+          "blockCount": 1,
+          "memberCount": 3,
+          "textLength": 143,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "ALPHA-GENERATED-6201\nALPHA-GENERATED-6201 / row 1 / amount 29\nALPHA-GENERATED-6201 / row 0 / amount 17\nALPHA-GENERATED-6201 / row 2 / amount 43",
+        "spans": [
+          {
+            "blockId": "body",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0",
+              "evidence-1",
+              "evidence-2"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 143
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 143
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 143,
+          "nextOffset": null
+        }
+      },
+      "pid": 16938
+    },
+    "processor": {
+      "taskId": "dc21e5e12354ada553f9052f090512dffd20f45379ecbe79bc34c09f425fd7bd",
+      "artifact": {
+        "id": "4052e31ca82f2610212f0e392530704cfed3877a6676ca3d3ec175d79be4d725",
+        "originalRef": "original:2e1d3c1feb550eea0c517e5819eba0403bb3ce0a57aa608f3c9c38d243837ef9",
+        "payload": {
+          "durationMs": 0,
+          "segments": [
+            {
+              "startMs": 0,
+              "endMs": 0,
+              "text": "Extracted: ALPHA-GENERATED-6201 / row 1 / amount 29\nSHA256: 9dc8d61fc2046b2f610ef12a9a5f7d2fae3e9a78d1721f8ec474ac676cf7c519"
+            }
+          ],
+          "coverage": "full",
+          "engine": "cancel-pack.generated-text-v1"
+        }
+      },
+      "materialId": "mat_638139f48edaee21a72dfcf651152a907583d053fd3f5e6754576ef8d1dd0d21",
+      "read": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_638139f48edaee21a72dfcf651152a907583d053fd3f5e6754576ef8d1dd0d21",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "Generated row 1",
+          "origin": {
+            "sourceId": "shared-source",
+            "externalId": "processed:eb857f0a-d2f9-5839-a9ab-44a075490a02"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "artifacts": [
+            {
+              "key": "extraction",
+              "state": "ready",
+              "revision": "4052e31ca82f2610212f0e392530704cfed3877a6676ca3d3ec175d79be4d725",
+              "blockIds": [
+                "text-0-0"
+              ]
+            }
+          ],
+          "fidelity": {
+            "state": "lossless",
+            "limitations": []
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "9ca5ec1636ca74810c5b9bfdd073c3411ef97cfdd6cb0d01a9b42142876d3f0d",
+          "ref": "material:mat_638139f48edaee21a72dfcf651152a907583d053fd3f5e6754576ef8d1dd0d21@9ca5ec1636ca74810c5b9bfdd073c3411ef97cfdd6cb0d01a9b42142876d3f0d",
+          "sequence": 2,
+          "createdAt": "2026-10-19T19:11:03.135Z",
+          "updatedAt": "2026-10-19T19:11:03.135Z",
+          "blockCount": 1,
+          "memberCount": 1,
+          "textLength": 124,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "Extracted: ALPHA-GENERATED-6201 / row 1 / amount 29\nSHA256: 9dc8d61fc2046b2f610ef12a9a5f7d2fae3e9a78d1721f8ec474ac676cf7c519",
+        "spans": [
+          {
+            "blockId": "text-0-0",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "original"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 124
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 124
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 124,
+          "nextOffset": null
+        }
+      },
+      "marker": {
+        "pid": 16938,
+        "originalRef": "original:2e1d3c1feb550eea0c517e5819eba0403bb3ce0a57aa608f3c9c38d243837ef9",
+        "sha256": "9dc8d61fc2046b2f610ef12a9a5f7d2fae3e9a78d1721f8ec474ac676cf7c519",
+        "artifactId": "4052e31ca82f2610212f0e392530704cfed3877a6676ca3d3ec175d79be4d725"
+      }
+    },
+    "cancellation": {
+      "taskId": "c172a6e1aece8571326240a99150b1a62a6dc146d59d4ec673a309a2f3c9bf5d",
+      "siblingTaskId": "384ea0ea056693beba1c1669aef6ab5e737ec16161a71d0cde28e65f7ca4a2a6",
+      "otherTaskId": "ce04e88835c2293c7271902990bdc274ab8b856286b1d4559e01ac464f9f5a80",
+      "started": {
+        "pid": 16938,
+        "action": "hold-cancel",
+        "materialId": "mat_00872fe3c81b489a15f9554f51404d5fe4917a03dc3e26eec89fcfff668f0cf5"
+      },
+      "cleanup": {
+        "pid": 16938,
+        "signalAborted": true,
+        "cleanup": {
+          "aborted": true,
+          "timerCleared": true,
+          "listenerRemoved": true,
+          "pendingWaits": 0
+        },
+        "attempts": [
+          {
+            "method": "publishMaterial",
+            "succeeded": false,
+            "error": "AbortError"
+          },
+          {
+            "method": "emit",
+            "succeeded": false,
+            "error": "AbortError"
+          }
+        ],
+        "materialId": "mat_00872fe3c81b489a15f9554f51404d5fe4917a03dc3e26eec89fcfff668f0cf5"
+      },
+      "siblingMaterialId": "mat_41a73384a4ec838c4da7c00233ac7e09333dbd1481271dd57027878b878cf729",
+      "otherMaterialId": "mat_bc225336d7f0d571b5dbcca2912905ed2af976f89c4e97bd99217f489f878fa6",
+      "laterPid": 16938
+    },
+    "isolation": {
+      "sameSourceId": "shared-source",
+      "sameInstanceId": "shared-instance",
+      "privateSnapshotRejected": true,
+      "privateTaskRejectedForAdmin": true,
+      "foreignReadState": "blocked",
+      "alphaWorker": 16938,
+      "betaWorker": 16945
+    },
+    "nativeHarness": {
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "entry": "unchanged native-apply.mjs exports apply only",
+      "check": {
+        "status": 502,
+        "body": {
+          "error": "execution_unavailable"
+        }
+      },
+      "archiveSha256": "ec96dd92dd5cc5384454bb727eee1ece9a5e9902f1c8e4b2ee4c09cada2116d7",
+      "harnessSession": "NOT RUN: no supported native loading admission"
+    },
+    "customTrigger": {
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "manifest": {
+        "status": 400,
+        "body": {
+          "error": "invalid_request"
+        }
+      },
+      "policy": {
+        "status": 400,
+        "body": {
+          "error": "invalid_request"
+        }
+      },
+      "workerRpc": {
+        "state": "blocked",
+        "failure": {
+          "stepId": "1c7c53d8631d410debf863735e4f026e74a40a82449a98df223e1a05799a2db1",
+          "operationId": "task:76a7c9a3a20dab881a1b4e0e9030537d937addc38667b597b582e03c08b0a671",
+          "kind": "plugin.invoke",
+          "state": "blocked",
+          "category": "blocked",
+          "code": "plugin_operation_requires_attention",
+          "attempt": 1,
+          "at": "2026-10-19T19:11:06.178Z"
+        }
+      }
+    },
+    "lifecycle": {
+      "stoppedWorkerPid": 16938,
+      "retiredOnStop": true,
+      "retiredOnClose": true,
+      "firstHostPid": 16903,
+      "restartedHostPid": 16979,
+      "historyReadback": true,
+      "processorArtifactReadback": true,
+      "referencedUninstall": 409,
+      "inFlightRecovery": "NOT RUN: history and absence of stale publication are checked; no recovery outcome claim",
+      "pluginVersionUpgrade": "NOT RUN"
+    }
+  },
+  "notRun": [
+    "shipped index.ts process launcher",
+    "plugin version upgrade",
+    "disable/drain and gap backfill",
+    "task recovery after crash",
+    "all complete E01-E12 business journeys",
+    "Memory",
+    "query insight",
+    "UI/browser",
+    "Mac native",
+    "Android native/emulator/device",
+    "live model/provider quality",
+    "native CPU/memory/power"
+  ],
+  "friction": {
+    "wallMsToFirstSourceSuccess": 485969,
+    "wallMsToFirstDelivery": 516000,
+    "developmentTokens": null,
+    "modelTokens": null,
+    "timedDiscoveryConfigurationBreakdown": null,
+    "preDeliveryTestFailures": 1,
+    "submittedRepairCycles": 0,
+    "businessLoc": 97,
+    "runtimeAssemblyLoc": 11,
+    "diagnosticLoc": 28,
+    "testLoc": 296,
+    "nativeSpecimenLoc": 9,
+    "manifestLoc": 42,
+    "documentationLoc": 134,
+    "adapterLoc": 0,
+    "coreFilesChanged": 0,
+    "coreLinesChanged": 0
+  }
+}

@@ -1,0 +1,888 @@
+{
+  "schemaVersion": 1,
+  "title": "Mote extension benchmark independent Round 3 and Round 4 receipts",
+  "report": "round-03-04-evaluator.md",
+  "originalBaseline": "2c78ca8d52a7d17fae20962cf68d09a717ffc73a",
+  "runtime": {
+    "nodeVersion": "v24.19.0",
+    "nodeBinary": "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node"
+  },
+  "executionPolicy": {
+    "normalComposition": "buildScopedApp without verifier-only composition, private adapters or injected worker factories",
+    "shippedProcessEntry": "apps/server/src/index.ts",
+    "releaseTransport": "Generated pinned remote-release bytes only; actual verification, extraction, installation, worker execution, task admission and persistence run normally",
+    "semanticModelFixture": "Finance uses an explicitly labeled deterministic in-package semantic replacement. Semantic transport was NOT EXECUTED and full E01 remains FAIL/NO_EXTENSION_POINT.",
+    "liveModelCalls": 0,
+    "nativeUIAndPhysicalDevices": "NOT RUN",
+    "completeRegressionGateOwner": "root integration driver",
+    "evaluatorCompleteRegressionClaim": false
+  },
+  "sharedFrozenArtifacts": {
+    "apps/server/test/extension-benchmark-evaluator.test.ts": {
+      "sha256": "72ea75cab74504149779eda671968902d9758f3d542b4b00fc6aeacd6d149c2d",
+      "postExecution": "identical on R3 and R4"
+    },
+    "apps/server/test/extension-benchmark-finance.test.ts": {
+      "sha256": "0083a6f6bfbf7590a0b2a1c8c329ab4b01c32f43f7d45d9c560deeb380466f37",
+      "postExecution": "identical on R3 and R4"
+    },
+    "apps/server/test/extension-benchmark-meeting.test.ts": {
+      "sha256": "74600482dec872d44a5f985e6ea447785c190b95be1d55a48d89d10f9983482f",
+      "postExecution": "identical on R3 and R4"
+    },
+    "apps/server/test/extension-benchmark-reading.test.ts": {
+      "sha256": "8dd270b6a3e9ad3546908855067a223154848d05a1b10ad0d64075d657a55436",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/case-input.mjs": {
+      "sha256": "5eb79b3a6ff2fdd3dc38002896085f7410e28269a073e2eafeea9863a37c5ab3",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/fixtures.mjs": {
+      "sha256": "740d692a8e7f10be270a107c52609a57b09384034997f6b638bbc13b5d1cbdf6",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/oracle.mjs": {
+      "sha256": "d3488b6a32021c949aefaebaa0f71d559d6d1865a56d377d4901952c3bffb752",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/plugin.mjs": {
+      "sha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/release.mjs": {
+      "sha256": "e136175376096aaad529167a3276afbcedde31cca6f364c0dd8d05a11dad17eb",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/finance/semantic-mock.mjs": {
+      "sha256": "f7a16d94530609a2c42a739d4fb94415dd461b9fd6f4f61e69dfd63eef168be4",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/control-mote-plugin.json": {
+      "sha256": "5b8ab0a19fdc1307ce93ebf594120a3ba206f0ba629e1969b81b49a67953fc3f",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/mote-plugin.json": {
+      "sha256": "f536c157169d0af86d7e2804bd0c0f389f205469e4a42639530b45955a5debbf",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/notes.mjs": {
+      "sha256": "4115df02efc17f327ea639e685c06741d7f11a50fa9376c4c66db81de70a3e66",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/plugin.mjs": {
+      "sha256": "aea907275f5105bd58fbf9e3d94d52964914e62851ef1afb1f45feeca3084216",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/plugin.zip": {
+      "sha256": "f62d7ead953e6ce15ca917391c7397fbdc2d309d6d524204522e437d6acfb67a",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/references.mjs": {
+      "sha256": "e6616b15ea0655f573d269d545ff4a8d1d2eea6165bef6b6cba8027a4da975a1",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/meeting-pack/source-summary.mjs": {
+      "sha256": "89b277a4126e1f0b67643bf4b02496fff69892a6b5bfa0ac124b7154dc4fb5c9",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/reading-pack/build-release.mjs": {
+      "sha256": "bbf34909e183975d69102afcdb0cc0ebb6577b14dbcced11d21f2136222ebd28",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/reading-pack/mote-plugin.json": {
+      "sha256": "71e21d6887ca407b8783fb0df5da0888e9eb1c8cf80be438314516a71474c7f8",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/reading-pack/plugin.mjs": {
+      "sha256": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/reading-pack/reading-pack.zip": {
+      "sha256": "bb6522b7e41dbd82a7af44e94ebc62c60c8c1ce56242d242187fc69dea3711a5",
+      "postExecution": "identical on R3 and R4"
+    },
+    "plugins/extension-benchmark/reading-pack/release-fixture.mjs": {
+      "sha256": "81eb68714244433a9fb5d79ceebc84590a8184d4ac5ac9d2e92941a5e6acd69e",
+      "postExecution": "identical on R3 and R4"
+    },
+    "docs/validation/plugin-extension-benchmark/plan.md": {
+      "sha256": "3bdb82893a91ef8dc65afdb26562cbf659e6df31b88ed9315dc3770a8d037136",
+      "postExecution": "identical on R3 and R4"
+    },
+    "docs/validation/plugin-extension-benchmark/cases.json": {
+      "sha256": "9abd71fb674ff111e3b5e82ce016e6fdc992752a972ab3da1bb2a3c7f332fba5",
+      "postExecution": "identical on R3 and R4"
+    }
+  },
+  "rounds": [
+    {
+      "round": 3,
+      "sourceCandidate": "28792141303a5b74257906d7cde0545f90b51dfd",
+      "trackedSourcePatchSha256AtFreeze": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "submittedArtifactInventorySha256AtFreeze": "2cedff2656caf7b9d3dd50e1a187b9e72ef9936ba6489f26e5cf1b99d0382c39",
+      "executions": [
+        {
+          "id": "R3-MR",
+          "executionCheckout": "mote-round3",
+          "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test --test-concurrency=1 apps/server/test/extension-benchmark-meeting.test.ts apps/server/test/extension-benchmark-reading.test.ts",
+          "exitCode": 0,
+          "runner": {
+            "tests": 4,
+            "pass": 4,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 14410.534376
+          },
+          "rawLogSha256": "6b19db454075d00b660e5c474f4df538dc0ef3256cf7ad5b87063e8e23055457",
+          "rawLogName": "r3-baseline.log",
+          "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+        },
+        {
+          "id": "R3-REG",
+          "executionCheckout": "mote-round3",
+          "command": "MOTE_FINANCE_REPORT=/workspace/scratch/8d97506698dc/evaluator-r34/r3-finance-trial.json /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test --test-concurrency=1 apps/server/test/extension-benchmark-evaluator.test.ts apps/server/test/extension-benchmark-finance.test.ts",
+          "exitCode": 0,
+          "runner": {
+            "tests": 12,
+            "pass": 12,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 65000.47344
+          },
+          "rawLogSha256": "ebe0a4079d67cfca19d8111cffd314193c7af2a1d20afdaf6335a91797bdeb86",
+          "rawLogName": "r3-released-regression.log",
+          "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+        }
+      ],
+      "meeting": {
+        "strictCompositionRequired": false,
+        "independentCheckHttp": 409,
+        "independentOrderVerdict": "FAIL",
+        "independentExecution": "NOT RUN: check admission rejected",
+        "sameOrderControlVerdict": "PASS",
+        "expectedControlTotalsCents": {
+          "meeting": 5800,
+          "references": 3975
+        },
+        "firstControlReadback": {
+          "observedAt": "2026-10-19T19:05:34.923Z",
+          "elapsedMs": 3848,
+          "owner": "A",
+          "sourceId": "meeting-source",
+          "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+          "workerPid": 14763,
+          "actualHttp": true,
+          "scope": "Same-order control only; timestamp is successful HTTP readback, not exact commit time"
+        },
+        "originalSubmittedTrialSha256": "a69ea0f395e17847c9de6970d7062e0c4ee95063b8bcafa21c8e466c0664913f",
+        "evaluatorTrialSha256": "a2307d06522915ac758367831210529f3556a2ab14c4f858cbf74a59135b1c11",
+        "changedDuringMeetingReadingRun": [
+          "plugins/extension-benchmark/meeting-pack/trial.json"
+        ],
+        "manifestAndZipUnchanged": true,
+        "negativeAssertionInterpretation": "R3 expects the observed 409 and therefore passes a rejection assertion while composition capability remains FAIL. R4 explicitly requires 200 and both callbacks."
+      },
+      "releasedRegression": {
+        "inputProvenance": "Rerun of released R2 inputs on this exact candidate. The finance variant named heldout in the released test is already disclosed here.",
+        "changedArtifactFiles": [],
+        "observations": {
+          "EV-C01-C04": {
+            "evidence": "EV-C01-C04",
+            "specimenSha256": "f493ecf5d6c46bcac1c01012b27275143d3e73f06d58ff8f668b5b752bcd08ce",
+            "archiveSha256": "0f99fda31b0a18a8ec1faea93dd3f6631b6225cb7220de880f99eae9d991f52c",
+            "c01": "PASS",
+            "c02": {
+              "task": "succeeded",
+              "intendedPublication": false,
+              "functional": "FAIL",
+              "realExecution": "FAIL"
+            },
+            "c03": {
+              "persisted": 83335,
+              "expected": 1186,
+              "functional": "FAIL"
+            },
+            "c04": {
+              "specimenSha256": "bbe7669703e96b67e26fc17e3d370232a82b6aac24d39cfc5d25b8abf0261919",
+              "coreZero": "FAIL",
+              "core": [
+                "apps/server/src/scope/app.ts"
+              ]
+            }
+          },
+          "EV-C05-C06": {
+            "evidence": "EV-C05-C06",
+            "foreignOriginal": "blocked",
+            "foreignSnapshot": 404,
+            "administratorPrivateSelection": false,
+            "pauseDrain": "succeeded",
+            "stopLateTask": "stale",
+            "latePublications": 0,
+            "bContinues": true
+          },
+          "EV-INPUT-FENCES": {
+            "evidence": "EV-INPUT-FENCES",
+            "deletedOriginalTask": "blocked",
+            "revokedSourceTask": "stale",
+            "lateMaterials": 0,
+            "oldSnapshotHttp": 401,
+            "newlyNarrowedOriginalRead": "blocked"
+          },
+          "EV-P04-P06": {
+            "evidence": "EV-P04-P06",
+            "nativeBytesSha256": "cef385399221e0906343652be39a5acc41c104c1852d792b6e2e28102e26355d",
+            "nativeFactoryCheckHttp": 502,
+            "nativeFailure": {
+              "error": "execution_unavailable"
+            },
+            "nativeHarnessCapability": "FAIL/NO_EXTENSION_POINT",
+            "genericTriggerHttp": 503,
+            "customAutomationHttp": 400,
+            "extraCallbackOnBuiltInHttp": 400,
+            "workerRegisterTrigger": "blocked",
+            "triggerCapability": "FAIL/NO_EXTENSION_POINT"
+          },
+          "EV-SHIPPED-RESTART": {
+            "evidence": "EV-SHIPPED-RESTART",
+            "entry": "apps/server/src/index.ts",
+            "actualProcessHttp": true,
+            "termination": "SIGKILL",
+            "fixedTaskId": "592fb12bb8cffbb228ee0aa7b1ffa109e75cfbc6d26bf3f400aa5f17f63bd2ff",
+            "duplicatePublications": 0,
+            "foreignOriginal": "blocked",
+            "referencedUninstallHttp": 409,
+            "modelCalls": 0,
+            "inFlightRecovery": "NOT RUN"
+          },
+          "EV-FINANCE-VISIBLE": {
+            "evidence": "EV-FINANCE-VISIBLE",
+            "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+            "inputSha256": "4fb0da2b1eb69e25339b9416612c28ee909fd89e18ec61b0cd7a6001b0d23910",
+            "mockSha256": "a127d9f602aedb203785a2a1f6182866f8d6fe201723438a4022982575638e33",
+            "originalCount": 43,
+            "uniqueTransactions": 23,
+            "totals": {
+              "2026-10": 9999,
+              "2026-09": 83335,
+              "2026-08": 1234
+            },
+            "exactEvidence": true,
+            "missingRefundLinks": [],
+            "productionModelPath": "blocked",
+            "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+            "fullE01": "FAIL/NO_EXTENSION_POINT",
+            "sourcePublication": "PASS"
+          },
+          "EV-FINANCE-HELDOUT": {
+            "evidence": "EV-FINANCE-HELDOUT",
+            "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+            "inputSha256": "0e8de8eb8be6167d8090156dc665f301251753614b31a235529c777910b03351",
+            "mockSha256": "8c858f854ba02adc8ceb9fd02dd3715d44ee7433c15d82478d148c27f7236434",
+            "originalCount": 43,
+            "uniqueTransactions": 23,
+            "totals": {
+              "2026-10": 10857,
+              "2026-09": 83331,
+              "2026-08": 1330
+            },
+            "exactEvidence": true,
+            "missingRefundLinks": [],
+            "productionModelPath": "blocked",
+            "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+            "fullE01": "FAIL/NO_EXTENSION_POINT",
+            "sourcePublication": "PASS"
+          },
+          "EV-READING": {
+            "evidence": "EV-READING",
+            "pluginSha256": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+            "fixtureSha256": "98e37f3da0374e4f14b0df3b7786ada307af483866b159abe69ec17e16aa32ee",
+            "originalCount": 5,
+            "pages": 3,
+            "exactArtifacts": 5,
+            "duplicatePublications": 0,
+            "wrongSourceAndOwner": "blocked",
+            "processorSubprobe": "PASS",
+            "fullImageProvider": "NOT RUN",
+            "modelCalls": 0
+          },
+          "EV-COMPOSITION": {
+            "evidence": "EV-COMPOSITION",
+            "independentPackages": 2,
+            "financeSourceScan": "succeeded",
+            "readingProcessor": "succeeded",
+            "stoppedFinanceSnapshotHttp": 401,
+            "readingAfterSiblingStop": "succeeded",
+            "packageUpgrade": "NOT RUN",
+            "inFlightUpgrade": "NOT RUN"
+          }
+        }
+      },
+      "primaryProbeVerdicts": {
+        "P01_SOURCE": "PASS for declared source-publication unit",
+        "P02_PROCESSOR": "PASS for declared text-extraction unit",
+        "P10_LIFECYCLE": "PARTIAL",
+        "P11_ISOLATION": "PARTIAL",
+        "P04_HARNESS": "FAIL/NO_EXTENSION_POINT",
+        "P06_TRIGGER": "FAIL/NO_EXTENSION_POINT"
+      },
+      "fullCaseVerdicts": {
+        "E01": "FAIL/NO_EXTENSION_POINT",
+        "E02": "NOT RUN",
+        "E03": "NOT RUN",
+        "E04": "FAIL/NO_EXTENSION_POINT",
+        "E05": "NOT RUN",
+        "E06": "FAIL/NO_EXTENSION_POINT",
+        "E07": "NOT RUN",
+        "E08": "NOT RUN",
+        "E09": "NOT RUN",
+        "E10": "PARTIAL",
+        "E11": "PARTIAL",
+        "E12": "NOT RUN"
+      },
+      "metrics": {
+        "fullCaseNISR": {
+          "numerator": 0,
+          "denominator": 5,
+          "value": 0,
+          "validAttempted": [
+            "E01",
+            "E04",
+            "E06",
+            "E10",
+            "E11"
+          ],
+          "notRun": [
+            "E02",
+            "E03",
+            "E05",
+            "E07",
+            "E08",
+            "E09",
+            "E12"
+          ],
+          "notRunCount": 7,
+          "rule": "No image inputs or new image provider were attempted. Text-only P02 is a separate bounded probe and is not an E08 full-case attempt."
+        },
+        "primaryFunctionalCoverage": {
+          "numerator": 2,
+          "denominator": 6,
+          "successfulUnits": [
+            "P01_SOURCE",
+            "P02_PROCESSOR"
+          ],
+          "isCompleteGateNISR": false,
+          "scope": "Two narrowed source-publication/text-extraction slices; not complete frozen requiredAssertionIds."
+        },
+        "completeGateProbeNISR": null,
+        "completeGateProbeNISRReason": "This round has focused G5 evidence only. P01/P02 describe narrowed publication/text slices rather than all frozen durable-insight/image assertions; final G5 cannot fill those functional omissions."
+      },
+      "runnerTotals": {
+        "tests": 16,
+        "pass": 16,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "round": 4,
+      "sourceCandidate": "b3d956189ba81e4843e9ceacdec06bb7f30a352e",
+      "trackedSourcePatchSha256AtFreeze": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "submittedArtifactInventorySha256AtFreeze": "2cedff2656caf7b9d3dd50e1a187b9e72ef9936ba6489f26e5cf1b99d0382c39",
+      "executions": [
+        {
+          "id": "R4-MR",
+          "executionCheckout": "mote-optimizer",
+          "command": "MOTE_MEETING_REQUIRE_COMPOSITION=1 /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test --test-concurrency=1 apps/server/test/extension-benchmark-meeting.test.ts apps/server/test/extension-benchmark-reading.test.ts",
+          "exitCode": 0,
+          "runner": {
+            "tests": 4,
+            "pass": 4,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 14334.099247
+          },
+          "rawLogSha256": "b99ae84482bb1d7696c47087452e235d70064fcd9a624916b2270b71ad71297c",
+          "rawLogName": "r4-composition.log",
+          "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+        },
+        {
+          "id": "R4-REG",
+          "executionCheckout": "mote-optimizer",
+          "command": "MOTE_FINANCE_REPORT=/workspace/scratch/8d97506698dc/evaluator-r34/r4-finance-trial.json /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test --test-concurrency=1 apps/server/test/extension-benchmark-evaluator.test.ts apps/server/test/extension-benchmark-finance.test.ts",
+          "exitCode": 0,
+          "runner": {
+            "tests": 12,
+            "pass": 12,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 64582.099181
+          },
+          "rawLogSha256": "6984bd4aa2e5e0ee355aa5ccc2fe90f5f6d4c3708d41c821b03c8cdc5c3a52ee",
+          "rawLogName": "r4-released-regression.log",
+          "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+        }
+      ],
+      "meeting": {
+        "strictCompositionRequired": true,
+        "independentCheckHttp": 200,
+        "independentOrderVerdict": "PASS",
+        "independentExecution": [
+          {
+            "componentId": "meeting.notes.summary",
+            "taskState": "succeeded",
+            "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+            "publicReadbackText": "A planning\nd1: Reserve the blue meeting room. [owner: Morgan]\nAmount (cents): 4200\nA review\nd2: Move the generated launch to Thursday. [owner: Sam]\nAmount (cents): 990\nA handoff\nd3: Record the alternate supplier in the notes. [owner: Lee]\nAmount (cents): 610\nSource total (cents): 5800"
+          },
+          {
+            "componentId": "meeting.references.summary",
+            "taskState": "succeeded",
+            "materialId": "mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f",
+            "publicReadbackText": "A reference sheet\nr1: The generated venue has forty seats.\nr2: The projector deposit is refundable.\nAmount (cents): 3975\nSource total (cents): 3975"
+          }
+        ],
+        "sameOrderControlVerdict": "PASS",
+        "expectedControlTotalsCents": {
+          "meeting": 5800,
+          "references": 3975
+        },
+        "firstControlReadback": {
+          "observedAt": "2026-10-19T19:05:35.594Z",
+          "elapsedMs": 3522,
+          "owner": "A",
+          "sourceId": "meeting-source",
+          "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+          "workerPid": 14793,
+          "actualHttp": true,
+          "scope": "Same-order control only; timestamp is successful HTTP readback, not exact commit time"
+        },
+        "originalSubmittedTrialSha256": "a69ea0f395e17847c9de6970d7062e0c4ee95063b8bcafa21c8e466c0664913f",
+        "evaluatorTrialSha256": "666ac6209dde10d7584479fe3c0d69a76ee5ee421b59a76425275b88959ed194",
+        "changedDuringMeetingReadingRun": [
+          "plugins/extension-benchmark/meeting-pack/trial.json"
+        ],
+        "manifestAndZipUnchanged": true,
+        "negativeAssertionInterpretation": "R3 expects the observed 409 and therefore passes a rejection assertion while composition capability remains FAIL. R4 explicitly requires 200 and both callbacks."
+      },
+      "releasedRegression": {
+        "inputProvenance": "Rerun of released R2 inputs on this exact candidate. The finance variant named heldout in the released test is already disclosed here.",
+        "changedArtifactFiles": [],
+        "observations": {
+          "EV-C01-C04": {
+            "evidence": "EV-C01-C04",
+            "specimenSha256": "f493ecf5d6c46bcac1c01012b27275143d3e73f06d58ff8f668b5b752bcd08ce",
+            "archiveSha256": "0f99fda31b0a18a8ec1faea93dd3f6631b6225cb7220de880f99eae9d991f52c",
+            "c01": "PASS",
+            "c02": {
+              "task": "succeeded",
+              "intendedPublication": false,
+              "functional": "FAIL",
+              "realExecution": "FAIL"
+            },
+            "c03": {
+              "persisted": 83335,
+              "expected": 1186,
+              "functional": "FAIL"
+            },
+            "c04": {
+              "specimenSha256": "bbe7669703e96b67e26fc17e3d370232a82b6aac24d39cfc5d25b8abf0261919",
+              "coreZero": "FAIL",
+              "core": [
+                "apps/server/src/scope/app.ts"
+              ]
+            }
+          },
+          "EV-C05-C06": {
+            "evidence": "EV-C05-C06",
+            "foreignOriginal": "blocked",
+            "foreignSnapshot": 404,
+            "administratorPrivateSelection": false,
+            "pauseDrain": "succeeded",
+            "stopLateTask": "stale",
+            "latePublications": 0,
+            "bContinues": true
+          },
+          "EV-INPUT-FENCES": {
+            "evidence": "EV-INPUT-FENCES",
+            "deletedOriginalTask": "blocked",
+            "revokedSourceTask": "stale",
+            "lateMaterials": 0,
+            "oldSnapshotHttp": 401,
+            "newlyNarrowedOriginalRead": "blocked"
+          },
+          "EV-P04-P06": {
+            "evidence": "EV-P04-P06",
+            "nativeBytesSha256": "cef385399221e0906343652be39a5acc41c104c1852d792b6e2e28102e26355d",
+            "nativeFactoryCheckHttp": 502,
+            "nativeFailure": {
+              "error": "execution_unavailable"
+            },
+            "nativeHarnessCapability": "FAIL/NO_EXTENSION_POINT",
+            "genericTriggerHttp": 503,
+            "customAutomationHttp": 400,
+            "extraCallbackOnBuiltInHttp": 400,
+            "workerRegisterTrigger": "blocked",
+            "triggerCapability": "FAIL/NO_EXTENSION_POINT"
+          },
+          "EV-SHIPPED-RESTART": {
+            "evidence": "EV-SHIPPED-RESTART",
+            "entry": "apps/server/src/index.ts",
+            "actualProcessHttp": true,
+            "termination": "SIGKILL",
+            "fixedTaskId": "304b3c8112a1d36800b487c307f33a25c36d3d41fdb9cada6e388f63695f4bf5",
+            "duplicatePublications": 0,
+            "foreignOriginal": "blocked",
+            "referencedUninstallHttp": 409,
+            "modelCalls": 0,
+            "inFlightRecovery": "NOT RUN"
+          },
+          "EV-FINANCE-VISIBLE": {
+            "evidence": "EV-FINANCE-VISIBLE",
+            "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+            "inputSha256": "4fb0da2b1eb69e25339b9416612c28ee909fd89e18ec61b0cd7a6001b0d23910",
+            "mockSha256": "a127d9f602aedb203785a2a1f6182866f8d6fe201723438a4022982575638e33",
+            "originalCount": 43,
+            "uniqueTransactions": 23,
+            "totals": {
+              "2026-10": 9999,
+              "2026-09": 83335,
+              "2026-08": 1234
+            },
+            "exactEvidence": true,
+            "missingRefundLinks": [],
+            "productionModelPath": "blocked",
+            "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+            "fullE01": "FAIL/NO_EXTENSION_POINT",
+            "sourcePublication": "PASS"
+          },
+          "EV-FINANCE-HELDOUT": {
+            "evidence": "EV-FINANCE-HELDOUT",
+            "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+            "inputSha256": "0e8de8eb8be6167d8090156dc665f301251753614b31a235529c777910b03351",
+            "mockSha256": "8c858f854ba02adc8ceb9fd02dd3715d44ee7433c15d82478d148c27f7236434",
+            "originalCount": 43,
+            "uniqueTransactions": 23,
+            "totals": {
+              "2026-10": 10857,
+              "2026-09": 83331,
+              "2026-08": 1330
+            },
+            "exactEvidence": true,
+            "missingRefundLinks": [],
+            "productionModelPath": "blocked",
+            "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+            "fullE01": "FAIL/NO_EXTENSION_POINT",
+            "sourcePublication": "PASS"
+          },
+          "EV-READING": {
+            "evidence": "EV-READING",
+            "pluginSha256": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+            "fixtureSha256": "98e37f3da0374e4f14b0df3b7786ada307af483866b159abe69ec17e16aa32ee",
+            "originalCount": 5,
+            "pages": 3,
+            "exactArtifacts": 5,
+            "duplicatePublications": 0,
+            "wrongSourceAndOwner": "blocked",
+            "processorSubprobe": "PASS",
+            "fullImageProvider": "NOT RUN",
+            "modelCalls": 0
+          },
+          "EV-COMPOSITION": {
+            "evidence": "EV-COMPOSITION",
+            "independentPackages": 2,
+            "financeSourceScan": "succeeded",
+            "readingProcessor": "succeeded",
+            "stoppedFinanceSnapshotHttp": 401,
+            "readingAfterSiblingStop": "succeeded",
+            "packageUpgrade": "NOT RUN",
+            "inFlightUpgrade": "NOT RUN"
+          }
+        }
+      },
+      "primaryProbeVerdicts": {
+        "P01_SOURCE": "PASS for declared source-publication unit",
+        "P02_PROCESSOR": "PASS for declared text-extraction unit",
+        "P10_LIFECYCLE": "PARTIAL",
+        "P11_ISOLATION": "PARTIAL",
+        "P04_HARNESS": "FAIL/NO_EXTENSION_POINT",
+        "P06_TRIGGER": "FAIL/NO_EXTENSION_POINT"
+      },
+      "fullCaseVerdicts": {
+        "E01": "FAIL/NO_EXTENSION_POINT",
+        "E02": "NOT RUN",
+        "E03": "NOT RUN",
+        "E04": "FAIL/NO_EXTENSION_POINT",
+        "E05": "NOT RUN",
+        "E06": "FAIL/NO_EXTENSION_POINT",
+        "E07": "NOT RUN",
+        "E08": "NOT RUN",
+        "E09": "NOT RUN",
+        "E10": "PARTIAL",
+        "E11": "PARTIAL",
+        "E12": "NOT RUN"
+      },
+      "metrics": {
+        "fullCaseNISR": {
+          "numerator": 0,
+          "denominator": 5,
+          "value": 0,
+          "validAttempted": [
+            "E01",
+            "E04",
+            "E06",
+            "E10",
+            "E11"
+          ],
+          "notRun": [
+            "E02",
+            "E03",
+            "E05",
+            "E07",
+            "E08",
+            "E09",
+            "E12"
+          ],
+          "notRunCount": 7,
+          "rule": "No image inputs or new image provider were attempted. Text-only P02 is a separate bounded probe and is not an E08 full-case attempt."
+        },
+        "primaryFunctionalCoverage": {
+          "numerator": 2,
+          "denominator": 6,
+          "successfulUnits": [
+            "P01_SOURCE",
+            "P02_PROCESSOR"
+          ],
+          "isCompleteGateNISR": false,
+          "scope": "Two narrowed source-publication/text-extraction slices; not complete frozen requiredAssertionIds."
+        },
+        "completeGateProbeNISR": null,
+        "completeGateProbeNISRReason": "This round has focused G5 evidence only. P01/P02 describe narrowed publication/text slices rather than all frozen durable-insight/image assertions; final G5 cannot fill those functional omissions."
+      },
+      "freshCancellation": {
+        "sourceCandidate": "b3d956189ba81e4843e9ceacdec06bb7f30a352e",
+        "executionCheckout": "mote-round4",
+        "seed": {
+          "committedAt": "2026-10-19T19:05:04.962334+00:00",
+          "sha256": "85d768e3c76aef33116a0824197f182835e2fddf5fd361ec4fb7bf088d819aa0",
+          "iteratorFirstDeliveryAt": "2026-10-19T19:11:33Z",
+          "freshPluginBytesCapturedAt": "2026-10-19T19:12:26.898837+00:00",
+          "releasedIn": "apps/server/test/extension-benchmark-r34-evaluator.test.ts",
+          "mayBeReusedAsUndisclosedLater": false
+        },
+        "frozenArtifacts": {
+          "apps/server/test/extension-benchmark-cancel.test.ts": {
+            "sha256": "75dbabbee6b01610d47725f57849d8a88b2b1729922fa18f96cb4d7751ba7826",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/data.mjs": {
+            "sha256": "28a6ee2bd178dfd1687a89546d1c79544865f335672a5be488afc8c6ca73e6ad",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/mote-plugin.json": {
+            "sha256": "4d14f2ce1abc463f9636b16f9995ed6228f5b7cc8bf09e3013607dd1380a3011",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/native-apply.mjs": {
+            "sha256": "e0f4a5007121c96f969b8d375a01697c919e5ec210960b0aca7f6480d938f28f",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/observations.mjs": {
+            "sha256": "e6da7ec825d90476cb3aafe2aa9607a8061b9369ff7b41e091817a2f9812a2e6",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/package-release.mjs": {
+            "sha256": "e1b3c7169566fcb832734747b40044b175205a57aaa245e4a6945fb57d9ba769",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/plugin.mjs": {
+            "sha256": "805edc0b90867f5efb5c348e8cca572609c21c22d2478a5734419eaffacf3b1f",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/plugin.zip": {
+            "sha256": "f4e054fa8211acc8a2eb2bf47baea1be1c52ac74b47646399bdb7bcd15605c0e",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/processor.mjs": {
+            "sha256": "4ec9e5f0b91c21ea8e96d6b9d3b29a6c551229b7bee017a3f99ba3f3863779f5",
+            "postExecution": "identical"
+          },
+          "plugins/extension-benchmark/cancel-pack/source.mjs": {
+            "sha256": "9c69a05c52cb805a3e6f995c64ff32f40e6df9fd8955581260dcbd1cc39f916b",
+            "postExecution": "identical"
+          }
+        },
+        "independentTestSha256": "55138e5e20d5524a212451e528e51f633684bc1c317852ecb9dc2cef01730353",
+        "independentFixtureSha256": "107757aeae379049e70043173b82c3eb02ac3cf6e0f60471961ac1024995deeb",
+        "postExecutionChangedFiles": [],
+        "executions": [
+          {
+            "id": "R4-CANCEL-SUBMITTED",
+            "executionCheckout": "mote-round4",
+            "command": "MOTE_CANCEL_REPORT_PATH=/workspace/scratch/8d97506698dc/evaluator-r34/r4-cancel-submitted-trial.json /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test apps/server/test/extension-benchmark-cancel.test.ts",
+            "exitCode": 0,
+            "runner": {
+              "tests": 1,
+              "pass": 1,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0,
+              "duration_ms": 12509.6832
+            },
+            "rawLogSha256": "e74b0a9dc3ef33c475f2ed8c5ead014974d1b28e5b1f64944cf1287aa1b4aae1",
+            "rawLogName": "r4-cancel-submitted.log",
+            "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+          },
+          {
+            "id": "R4-CANCEL-INDEPENDENT",
+            "executionCheckout": "mote-round4",
+            "command": "MOTE_R34_EVALUATOR_REPORT=/workspace/scratch/8d97506698dc/evaluator-r34/r4-independent-cancel-trial.json /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx --test apps/server/test/extension-benchmark-r34-evaluator.test.ts",
+            "exitCode": 0,
+            "runner": {
+              "tests": 1,
+              "pass": 1,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0,
+              "duration_ms": 13486.507979
+            },
+            "rawLogSha256": "1fe46fac6b1bd5874a6aa41c444398ebbc74b9e8890e462b52870d51aad641d9",
+            "rawLogName": "r4-independent-cancel.log",
+            "countInterpretation": "Runner tests include nested tests, calibration and negative assertions; they are not feature-success counts."
+          }
+        ],
+        "submitted": {
+          "startedAt": "2026-10-19T19:12:44.024Z",
+          "finishedAt": "2026-10-19T19:12:55.369Z",
+          "firstSuccessAt": "2026-10-19T19:12:49.409Z",
+          "focusedRun": "PASS",
+          "composition": "real child process calling buildScopedApp and listening on loopback; not the shipped index.ts launcher",
+          "nativeHarnessCheckHttp": 502,
+          "customTriggerManifestHttp": 400,
+          "customTriggerPolicyHttp": 400,
+          "customTriggerWorkerState": "blocked"
+        },
+        "independent": {
+          "startedAt": "2026-10-19T19:18:16.818Z",
+          "finishedAt": "2026-10-19T19:18:28.207Z",
+          "fixture": {
+            "ownerAOriginals": 5,
+            "ownerBOriginals": 3,
+            "ownerAIsAdministrator": true,
+            "unicodeAndMixedLineEndings": true,
+            "sameSourceInstancePublicationAndOperationIdsAcrossUsers": true,
+            "ownerASourcePageCounts": [
+              2,
+              2,
+              1
+            ]
+          },
+          "timing": {
+            "siblingDelayMs": 1747,
+            "otherDelayMs": 2066,
+            "cancellationOffsetMs": 88
+          },
+          "cancellation": {
+            "taskId": "9481b8b10ad91576525c8c483a2a8e58ef2e81d97c29e0ece78cb7cbaf79fe02",
+            "cancelled": {
+              "pid": 18774,
+              "signalAborted": true,
+              "cleanup": {
+                "aborted": true,
+                "timerCleared": true,
+                "listenerRemoved": true,
+                "pendingWaits": 0
+              },
+              "attempts": [
+                {
+                  "method": "publishMaterial",
+                  "succeeded": false,
+                  "error": "AbortError"
+                },
+                {
+                  "method": "emit",
+                  "succeeded": false,
+                  "error": "AbortError"
+                }
+              ],
+              "materialId": "mat_243033245c987e0fe498ea4efb05343319bb3b29e8d9b9867bc818bbb14b75f1"
+            },
+            "observationLatencyMs": 29,
+            "siblingTaskId": "64da4f738c0ad1469079fb5574554c45e029aba3e51a3c2a04caab3524f138dc",
+            "otherTaskId": "dd31d678efbbc3535901ccd77020eefaf5144738fc873ba5e26c02186dd52fde",
+            "aPid": 18774,
+            "bPid": 18781,
+            "sameWorkerSurvived": true,
+            "lateMaterials": 0,
+            "forbiddenEvents": 0,
+            "sourceReadbackTextSha256": "54d4c81b99f9e899c7f9847f0cb3a493cd846cc6c228222f4618f4dce05b0056",
+            "exactOwnerSourceReadback": true
+          },
+          "processor": {
+            "taskId": "851777b2c6d0830b8d33f975cef6f263605701b584e8cc3b18bc62c54c1569b9",
+            "originalSha256": "7dda8bcfe110b2e0ae3bdb084f45b470bb722534fdd346926b5d805ab4fbeb2f",
+            "artifactId": "646a1bd5b0893771e7a092b41dcc591267db4d15c899ee5009a8b75d2c3a8a71",
+            "materialId": "mat_ef35c0b794fb0ba5e0113d35287fe00583bbe3d5b5750ea2d91b2c4e3d048dda",
+            "exactTextSha256": "aad84d4a3db50e421a033f98b49b94e1fd550d2e339df4f06dd366ea52dc233a",
+            "exactArtifactAndMaterialReadback": true,
+            "oracle": "SHA-256 of actual original bytes, with decoded text checked against independently generated input; not the plugin-provided checksum."
+          },
+          "lifecycle": {
+            "disableDrainTask": "succeeded",
+            "stoppedTask": "stale",
+            "lateMaterialsAfterStop": 0,
+            "bWorkerSurvivedAStop": true,
+            "referencedUninstallHttp": 409,
+            "firstCentralPid": 18746,
+            "secondCentralPid": 18838,
+            "entry": "apps/server/src/index.ts",
+            "termination": "SIGTERM",
+            "cancelledTaskRetained": true,
+            "repeatedTaskId": "dd31d678efbbc3535901ccd77020eefaf5144738fc873ba5e26c02186dd52fde",
+            "completedTaskIdentityRetained": true,
+            "inFlightRecovery": "NOT RUN",
+            "packageUpgrade": "NOT RUN"
+          },
+          "verdict": "PASS for declared source, extraction, per-task cancellation and scoped lifecycle slices; full P10/P11 remain PARTIAL",
+          "modelCalls": 0,
+          "coreBusinessEdits": 0,
+          "pluginRepairs": 0,
+          "passAtFirstEvaluatorExecution": true
+        },
+        "limitations": [
+          "Exact package-version and in-flight upgrades NOT RUN",
+          "Recovery of interrupted work NOT RUN",
+          "Held processor task cancelled at final publication boundary NOT RUN; the separate released deleted-original fence remains proven",
+          "Plugin-owned cleanup markers are observations corroborated by source inspection, not native listener/memory measurements",
+          "Full model-resource/export branches NOT RUN"
+        ]
+      },
+      "runnerTotals": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    }
+  ],
+  "scoringCorrection": {
+    "fullE08": "NOT RUN",
+    "reason": "No image inputs or new image provider were attempted. Successful text P02 is preserved independently and excluded from the image full-case denominator.",
+    "changesRuntimeResultsOrTests": false
+  },
+  "persistedReceiptScope": "Compact source, command, artifact and outcome receipt. Raw scratch logs and full HTTP ledgers are not copied; their SHA-256 digests are retained.",
+  "scoringClarification": "Report-only clarification: P01/P02 PASS labels apply to their stated narrowed slices, not every requiredAssertionId in cases.json. No commands, runtime outcomes, hashes or full-case denominators changed."
+}

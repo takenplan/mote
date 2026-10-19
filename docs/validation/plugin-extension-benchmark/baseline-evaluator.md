@@ -5,7 +5,7 @@
 - Frozen production candidate: `2c78ca8d52a7d17fae20962cf68d09a717ffc73a`.
 - Evaluation date: 2026-10-19 UTC. Runtime: Node `v24.19.0` on Linux.
 - Evaluator focus: E02 presentation, E03 Central versus edge privacy/model boundaries, E04 native DSH plugins, and E10/E11 lifecycle and owner isolation.
-- The evaluator changed no production source and made no commit. Its reproducible probes and raw logs are in `/workspace/scratch/8d97506698dc/evaluator-r1/`.
+- The evaluator changed no production source and made no commit. The integration branch retains its [reproducible probe](../../../apps/server/test/fixtures/extension-baseline-probe.mts) and [original outcome receipt](baseline-probe-results.json). The archived probe only changes repository-relative imports and optional report output from the originally executed harness; its negative assertions are unchanged. Raw log names below identify the original local evaluation session.
 - Read-only baseline documentation refers to the frozen Git objects. Documentation changes made concurrently by the optimizer are excluded from these baseline conclusions.
 
 This is a capability audit with focused execution evidence. It is not a completed set of independent implementations for E02–E04. Full-case NISR, pass@1, token cost, and cost per successful extension are **NOT MEASURED** here. Successful assertions about a lower-level contract do not make a complete extension case pass.
@@ -123,7 +123,7 @@ All commands ran from the frozen repository root unless otherwise stated, using 
 | From `apps/desktop`: `../../node_modules/.bin/vitest run --maxWorkers=1 --testTimeout=15000 test/presentation.test.ts test/upload-gate.test.ts` | PASS 11/11 | `evaluator-r1/desktop-presentation.log` |
 | Named test `an explicit named image profile leases only its complete owned service without a global OCR fallback` in `multiuser-processing-policy-page.test.ts` | PASS 1/1 | `evaluator-r1/central-local-model.tap` |
 | Node test flags above, `apps/server/test/multiuser-ask-process.test.ts` | PASS 1/1, about 53.1 s | `evaluator-r1/ask-production-process.tap` |
-| `node --import tsx /workspace/scratch/8d97506698dc/evaluator-r1/probes.mts` | Three negative capability controls reproduced as expected; target capability outcomes are FAIL | `evaluator-r1/probes.log`, `probe-results.json` |
+| `node --import tsx apps/server/test/fixtures/extension-baseline-probe.mts` (archived portable entry) | Three negative capability controls reproduced as expected; target capability outcomes are FAIL | Original `evaluator-r1/probes.log`; retained [receipt](baseline-probe-results.json) |
 
 The final selected test runs contain **48 passing tests**. This is a focused regression count, not 48 successful extension trials or a full no-regression certification.
 

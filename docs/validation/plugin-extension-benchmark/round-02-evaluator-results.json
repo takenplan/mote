@@ -340,5 +340,119 @@
     "financeAfterCycle1": "PASS for source arithmetic/publication on visible and fresh held-out values",
     "readingCycles": 0
   },
-  "safety": "Generated synthetic data only; no credentials, model secrets, real screenshots or account tokens preserved."
+  "safety": "Generated synthetic data only; no credentials, model secrets, real screenshots or account tokens preserved.",
+  "fullCaseResults": [
+    {
+      "id": "E01",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E02",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E03",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E04",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E05",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E06",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E07",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E08",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E09",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E10",
+      "status": "PARTIAL"
+    },
+    {
+      "id": "E11",
+      "status": "PARTIAL"
+    },
+    {
+      "id": "E12",
+      "status": "NOT RUN"
+    }
+  ],
+  "primaryProbeResults": [
+    {
+      "id": "P01_SOURCE",
+      "status": "PASS",
+      "scope": "Bounded source publication with explicit in-package semantic replacement; no model lease/transport claim"
+    },
+    {
+      "id": "P02_PROCESSOR",
+      "status": "PASS",
+      "scope": "Archived text Transcript staging; no image-provider claim"
+    },
+    {
+      "id": "P10_LIFECYCLE",
+      "status": "PARTIAL",
+      "missing": [
+        "exact package-version in-flight upgrade",
+        "in-flight process recovery"
+      ]
+    },
+    {
+      "id": "P11_ISOLATION",
+      "status": "PARTIAL",
+      "missing": [
+        "model resource/export branch",
+        "combined A/B held callback and restart"
+      ]
+    },
+    {
+      "id": "P04_HARNESS",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "P06_TRIGGER",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    }
+  ],
+  "metrics": {
+    "fullCaseNISR": {
+      "numerator": 0,
+      "denominator": 5,
+      "notRun": 7,
+      "blocked": 0
+    },
+    "comparisonWarning": "Finance and reading are different authoring tasks, not matched docs-only statistical replicates.",
+    "primaryFunctionalCoverage": {
+      "numerator": 2,
+      "denominator": 6,
+      "blocked": 0,
+      "isCompleteGateNISR": false,
+      "scope": "Two narrowed source-publication/text-extraction slices; not complete frozen requiredAssertionIds."
+    },
+    "completeGateProbeNISR": null,
+    "completeGateProbeNISRReason": "Only focused G5 evidence exists for this round; durable insight and image-input/provider assertions also remain incomplete. Final G5 cannot promote those slices to complete frozen-probe PASS."
+  },
+  "scoringClarification": {
+    "change": "Report-only correction of G5 symbols and metric naming; all commands, execution counts, artifacts and full-case outcomes are unchanged.",
+    "frozenPrimaryScope": "P01/P02 PASS labels in primaryProbeResults refer only to each explicit scope field. They are not all-assertion PASS verdicts for frozen probes.",
+    "g5": "Focused regression evidence only; complete check belongs to root."
+  }
 }
