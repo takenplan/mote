@@ -222,10 +222,10 @@ export class IngressHost{
      if(head?.revision===manifest.item.revision){
       const ack=data().matchSourceRevision(sourceId,fileRevisionItem(manifest));
       if(ack&&ack.id===head.captureId){
-       const retainedRow=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,ack.id);if(!retainedRow)throw missing();
+       const retainedRow=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,ack.id);if(!retainedRow)throw new PrivateDataError('not_found',410);
        const retained=original('original:'+retainedRow.id);
        if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
-       originals.readObject(retained.hash);assert();
+       try{originals.readObject(retained.hash);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')throw new PrivateDataError('not_found',410);throw error;}assert();
        return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};
       }
      }
