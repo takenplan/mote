@@ -27,12 +27,18 @@ const activity=(f:Fixture,userId:string)=>read(f,db=>({
  models:db.prepare('SELECT task_id,model_receipt FROM user_tasks WHERE user_id=? AND model_receipt IS NOT NULL ORDER BY task_id').all(userId),
  usage:db.prepare('SELECT id,json FROM user_model_usage WHERE user_id=? ORDER BY id').all(userId),
 }));
-// Redeliver the same canonical revision in a NEW transport attempt. The shared
-// fixture's fixed batch reopens an already committed upload, whose part PUT is
-// correctly rejected; that does not exercise current-original deduplication.
+// Redeliver the same canonical revision with a fresh transport batch. M03 may
+// return its current canonical ACK directly; only an absent ACK opens the real
+// part/commit path. Neither path changes canonical input or M07 assertions.
 async function redeliver(f:Fixture,token:string,externalId:string,bytes:Buffer,mimeType:string){
- const checksum=createHash('sha256').update(bytes).digest('hex'),opened=await f.checked(token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'m07-redelivery:'+randomUUID(),revision:{sourceId:'same-source',previousRevision:null,sizeBytes:bytes.length,sha256:checksum,relativePath:externalId+(mimeType.startsWith('audio/')?'.wav':'.txt'),item:{externalId,revision:'same-r1',observedAt:'2026-10-16T00:00:00Z',title:externalId,text:'',kind:'file',layer:'original',mimeType}}});
- assert.equal(opened.receipt,undefined,'a fresh transport batch must not reopen a committed upload');await f.checked(token,'/api/ingress/uploads/'+opened.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum});const receipt=await f.checked(token,'/api/ingress/uploads/'+opened.id+'/commit','POST',{});assert.equal(receipt.state,'received');assert.equal(receipt.captures.length,1);assert.equal(receipt.captures[0].duplicate,true,'same source/external ID/revision/bytes must remain a canonical duplicate');return receipt.captures[0];
+ const batchId='m07-redelivery:'+randomUUID(),checksum=createHash('sha256').update(bytes).digest('hex'),opened=await f.checked(token,'/api/ingress/sources/same-source/uploads','POST',{batchId,revision:{sourceId:'same-source',previousRevision:null,sizeBytes:bytes.length,sha256:checksum,relativePath:externalId+(mimeType.startsWith('audio/')?'.wav':'.txt'),item:{externalId,revision:'same-r1',observedAt:'2026-10-16T00:00:00Z',title:externalId,text:'',kind:'file',layer:'original',mimeType}}});
+ if(opened.receipt){
+  const context=await f.host.authority.authenticate(token),receipt=opened.receipt;assert.equal(opened.deploymentId,context.deploymentId);assert.equal(opened.userId,context.userId);assert.equal(opened.sourceId,'same-source');assert.deepEqual(opened.parts,[]);
+  assert.equal(receipt.version,3);assert.equal(receipt.state,'received');assert.equal(receipt.deploymentId,context.deploymentId);assert.equal(receipt.userId,context.userId);assert.equal(receipt.sourceId,'same-source');assert.equal(receipt.batchId,batchId);assert.equal(receipt.id,digest([context.deploymentId,context.userId,'same-source',batchId]));assert.equal(receipt.captures.length,1);
+  const ack=receipt.captures[0];assert.equal(ack.sourceId,'same-source');assert.equal(ack.externalId,externalId);assert.equal(ack.revision,'same-r1');assert.equal(ack.duplicate,true);assert.match(ack.id,/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);assert.equal(opened.id,ack.id);
+  assert.match(ack.original.ref,/^original:[a-f0-9]{64}$/);assert.equal(ack.original.captureId,ack.id);assert.equal(ack.original.sourceId,'same-source');assert.equal(ack.original.hash,checksum);assert.equal(ack.original.bytes,bytes.length);assert.equal(ack.original.mime,mimeType);assert.equal(ack.original.retention,'archive');return ack;
+ }
+ await f.checked(token,'/api/ingress/uploads/'+opened.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum});const receipt=await f.checked(token,'/api/ingress/uploads/'+opened.id+'/commit','POST',{});assert.equal(receipt.state,'received');assert.equal(receipt.captures.length,1);assert.equal(receipt.captures[0].duplicate,true,'same source/external ID/revision/bytes must remain a canonical duplicate');return receipt.captures[0];
 }
 
 test('M07 host admission gives an unchanged exact publication fresh epoch authority without renewing old history (supplementary seam)',async t=>{
