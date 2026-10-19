@@ -14,7 +14,9 @@ equivalent proposed lifecycle; no proposal producer or job-derived fake card is
 added. Only selected detail records acquire durable navigation-purpose pins.
 Run, trace, reader and retained-history checks revalidate their status, immutable
 body and original/source authority, including explicit turn IDs distinct from run
-IDs. Hints do not authorize original citations.
+IDs. Delegated receipt rechecks use the same trusted view after canonical
+authorization, so exact fingerprint checks compare equivalent projections. Hints
+do not authorize original citations.
 Auxiliary context/status consumers retain their published-only port.
 
 Builtin search reuses the original pure literal query preparation. The existing
