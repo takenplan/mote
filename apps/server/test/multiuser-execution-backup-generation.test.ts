@@ -62,6 +62,19 @@ test('complete stopped backup and the real restore CLI retain parent generation 
   const checked=async(...args:Parameters<typeof request>)=>{const response=await request(...args);assert.equal(response.statusCode,200,response.body);return response.json();};
   assert.equal((await request(owners[0].account.token,'/api/auth/self')).statusCode,401);
   const [a,b]=await Promise.all(owners.map(async({username})=>checked(undefined,'/api/auth/login','POST',{username,password,mode:'client'})));
+  // A fresh password login admits each owner's real lifecycle.future work.
+  // Observe its terminal task and scopes before measuring later A/B isolation.
+  for(const [owner,login] of [[owners[0],a],[owners[1],b]] as const){
+   const context=await restored.authority.authenticate(login.token),recovery=read(target,db=>db.prepare('SELECT restoration_id,epoch,task_id FROM lifecycle_future WHERE user_id=?').get(owner.account.userId));assert.ok(recovery?.task_id);assert.equal(recovery.epoch,context.authorizationEpoch);
+   const recoveryId=String(recovery.task_id);let observed:unknown;
+   await waitForScopedState(async()=>{
+    const task=await checked(login.token,'/api/tasks/'+recoveryId),state=read(target,db=>({future:db.prepare('SELECT restoration_id,epoch,task_id,state FROM lifecycle_future WHERE user_id=?').get(owner.account.userId)!,scopes:db.prepare('SELECT scope_key,state,error,probe_task_id FROM lifecycle_future_scopes WHERE user_id=? AND restoration_id=? ORDER BY scope_key').all(owner.account.userId,recovery.restoration_id)}));
+    assert.equal(task.kind,'lifecycle.future');assert.equal(state.future.task_id,recoveryId);assert.equal(state.future.restoration_id,recovery.restoration_id);assert.equal(state.future.epoch,context.authorizationEpoch);
+    observed={owner:owner.account.userId,taskId:recoveryId,taskState:task.state,...state};
+    return ['succeeded','failed','blocked','stale','cancelled'].includes(task.state)&&state.scopes.every(scope=>['completed','failed'].includes(String(scope.state)));
+   },()=>JSON.stringify(observed));
+   t.diagnostic(JSON.stringify({phase:'fresh-restoration-terminal-before-isolation',observed}));
+  }
   assert.equal(calls.length,sourceCalls,'opening a restored vault must not replay completed or revoked work');
   assert.deepEqual(mappings(target),expected,'production startup must retain the mapping instead of recreating an empty table');
   const service=restored.execution!.forUser(await restored.authority.authenticate(a.token));
