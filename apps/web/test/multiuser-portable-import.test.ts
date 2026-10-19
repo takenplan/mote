@@ -16,16 +16,19 @@ configureLocale(()=> 'zh-CN');
 test('original Vault imports the real same-owner archive, retries its lost ACK and retires a late picker on B',async t=>{
  const f=await scopedCaptureFixture(t),input=captureBrowserRecord(1000,'generated-note',{source:'note',ocr:undefined,ocrText:'GENERATED_A_IMPORT'});await f.receive(f.a,[input]);await f.receive(f.b,[{...input,ocrText:'GENERATED_B_IMPORT'}]);
  // Ingress admits real asynchronous Material/index jobs before returning.
- // This journey exports a completed fixture; concurrent-export rejection has
+ // This journey exports after its already-admitted producers commit; concurrent-export rejection has
  // separate domain coverage. Do not retry or bypass an archive_changed reply.
+ // A future, unstarted Memory window is retained as scheduled metadata. It is
+ // not an outstanding producer write and must not be forced to execute here.
  const settledIntake=async(account:typeof f.a)=>{
-  let observed:{kind:string;state:string}[]=[];
+  type Task={kind:string;state:string;attempts:number;availableAt:number;failure?:{code?:string;executionStarted?:boolean}};
+  let observed:Task[]=[];
   await waitForScopedState(async()=>{
-   const rows:{kind:string;state:string}[]=[];let cursor:number|undefined;
+   const rows:Task[]=[];let cursor:number|undefined;
    do{const page=await f.request(account.token,'/api/tasks?'+new URLSearchParams({limit:'100',...(cursor===undefined?{}:{cursor:String(cursor)})}));assert.equal(page.statusCode,200,page.body);const value=page.json();rows.push(...value.items);cursor=value.nextCursor??undefined;}while(cursor!==undefined);
    observed=rows;
-   return rows.some(row=>row.kind==='memory.materials'&&row.state==='succeeded')&&rows.some(row=>row.kind==='ask.index-admit')&&rows.every(row=>['succeeded','failed','blocked','cancelled','stale'].includes(row.state));
-  },()=> 'Generated intake has not reached exportable terminal metadata: '+JSON.stringify(observed));
+   return rows.some(row=>row.kind==='memory.materials'&&row.state==='succeeded')&&rows.some(row=>row.kind==='ask.index-admit'&&row.state==='succeeded')&&rows.every(row=>['succeeded','failed','blocked','cancelled','stale'].includes(row.state)||(row.kind==='memory.intake'&&row.state==='waiting'&&row.attempts===0&&row.failure?.code==='memory_window_pending'&&row.failure.executionStarted===false&&row.availableAt>Date.now()));
+  },()=> 'Generated intake producers have not committed, or an unclassified writer remains: '+JSON.stringify(observed));
  };
  await settledIntake(f.a);
  const content=await f.request(f.a.token,'/api/export');assert.equal(content.statusCode,200,content.body);const archive=content.json();

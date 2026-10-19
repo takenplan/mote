@@ -3,7 +3,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {buildApp} from '../../../server/src/app.js';
-import {noteCapture} from '@mote/shared';
+import {noteCapture,parseEvidenceRef} from '@mote/shared';
 import assert from 'node:assert/strict';
 import {generatedWebProvider} from './multiuser-provider.js';
 import {defaultModelSettings} from '../../../server/src/model-settings.js';
@@ -17,6 +17,9 @@ const host=await buildApp({dataDir:root},{pluginReleaseTransport:pluginRelease.t
 let provider:Awaited<ReturnType<typeof generatedWebProvider>>|undefined;
 const gates=new Map<string,{entered:boolean;release:()=>void;promise:Promise<void>}>();
 const requests:{method:string;url:string;credentialId?:string;body?:unknown}[]=[];
+const readStatuses:{path:string;status:number}[]=[];
+const statusPaths:Record<string,string>={'/api/login/exchange':'login_exchange','/api/auth/self':'auth_self','/api/auth/login':'manual_login','/api/context/read':'context_read','/api/agent-view/materials':'material_catalog','/api/agent-view/material-read':'material_read'};
+host.app.addHook('onResponse',async(req,reply)=>{const path=statusPaths[req.url.split('?')[0]];if(path)readStatuses.push({path,status:reply.statusCode});});
 host.app.addHook('onSend',async(req,_reply,payload)=>{
  const key=[...gates.keys()].find(prefix=>(req.method+':'+req.url).startsWith(prefix));
  if(key){const gate=gates.get(key)!;if(!gate.entered){gate.entered=true;process.send?.({event:'entered',key});await gate.promise;gates.delete(key);}}
@@ -40,10 +43,30 @@ for(const owner of ['a','b']){
 }
 await host.app.listen({host:'127.0.0.1',port:0});const port=(host.app.server.address() as {port:number}).port;
 process.send?.({event:'ready',url:'http://'+fixtureHostname+':'+port,users:Object.fromEntries(Object.entries(users).map(([id,value])=>[id,{userId:value.userId,username:id==='admin'?'generated-admin':'generated-'+id}])),password});
+/** Resolve through the same public formal read used by query tools. Raw UUIDs
+ * stay identical across owners; canonical evidence UUIDs include owner/revision. */
+async function evidenceTargets(){
+ const sharedRaw='6d477b3e-fb43-4657-818d-c143ad76430f',deadline=Date.now()+25000,targets:Record<string,{reference:string;rawPublicId:string}>={};
+ for(const owner of ['a','b']){
+  const token=users[owner].token;let items:{ref:string}[]=[];
+  do{items=(await call(token,'/api/agent-view/materials?'+new URLSearchParams({sourceId:'same-source',limit:'30'}))).items;if(!items.length){assert.ok(Date.now()<deadline,'Generated formal producer has not published');await new Promise(resolve=>setTimeout(resolve,10));}}while(!items.length);
+  assert.equal(items.length,1,'Generated single-note source has one current formal object');
+  const page=await call(token,'/api/agent-view/material-read?'+new URLSearchParams({ref:items[0].ref,length:'12000'}));assert.equal(page.originalRefs?.length,1,'Public formal read must expose one canonical citation');
+  const citation=page.originalRefs[0],parsed=parseEvidenceRef(citation);assert.equal(parsed?.kind,'capture');assert.notEqual(parsed?.id,sharedRaw,'Formal evidence must not be guessed from raw UUID');
+  const read=await call(token,'/api/context/read','POST',{refs:[citation],offset:0,length:4000});assert.ok(read.items[0]?.text.includes('GENERATED_PRIVATE_'+owner.toUpperCase()),'Public citation must read its generated owner text');
+  const raw=await call(token,'/api/captures/'+sharedRaw);assert.equal(raw.id,sharedRaw);assert.ok(raw.ocrText.includes('GENERATED_PRIVATE_'+owner.toUpperCase()),'The same raw public ID remains owner-isolated');
+  targets[owner]={reference:'context:'+citation,rawPublicId:raw.id};
+ }
+ assert.equal(targets.a.rawPublicId,targets.b.rawPublicId);assert.notEqual(targets.a.reference,targets.b.reference,'Canonical identity includes its real owner and revision');
+ const foreign=await host.app.inject({url:'/api/context/read',method:'POST',headers:{'x-mote-protocol-version':'2',authorization:'Bearer '+users.b.token},payload:{refs:[targets.a.reference.slice('context:'.length)],offset:0,length:4000}});assert.equal(foreign.statusCode,404,'The same A public canonical citation must not read through B');
+ return {a:targets.a,b:targets.b,sameRawPublicId:true,crossOwnerCanonicalStatus:foreign.statusCode};
+}
 process.on('message',async(message:any)=>{
  try{
   let result:unknown;
-  if(message.command==='hold'){
+  if(message.command==='evidence-targets'){result=await evidenceTargets();
+  }else if(message.command==='read-statuses'){result=readStatuses.map(row=>({...row}));
+  }else if(message.command==='hold'){
    let release!:()=>void;const promise=new Promise<void>(done=>{release=done;});gates.set(message.key,{entered:false,release,promise});result=true;
   }else if(message.command==='release'){gates.get(message.key)?.release();result=true;
   }else if(message.command==='requests')result=requests.filter(request=>!message.prefix||request.url.startsWith(message.prefix)).slice(-(message.limit??requests.length));

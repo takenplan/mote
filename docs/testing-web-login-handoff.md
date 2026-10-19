@@ -93,10 +93,11 @@ not rerun or reclassify them as passed.
 - The portable-import UI test requested export immediately after Ingress. Source
   inspection confirms Ingress admits asynchronous `memory.materials` and
   `ask.index-admit` work, Material publication admits further index work, and
-  export rechecks exact owner-qualified data and execution metadata. The new
-  fixture observes the exporting owner's complete task pages until its Material
-  task succeeds and all admitted tasks are terminal, before that owner's single
-  export. It does not retry `archive_changed`, disable work or weaken import
+  export rechecks exact owner-qualified data and execution metadata. The
+  5c89e95f fixture observed the exporting owner's complete task pages until its
+  Material task succeeded and all admitted tasks were terminal, before that
+  owner's single export. That global terminal precondition was too broad for a
+  legitimate future Memory window; the next section supersedes it. It does not retry `archive_changed`, disable work or weaken import
   lost-ACK, account-switch or cancellation assertions. The exact witness that
   changed in the original failed run remains UNKNOWN; a failure after this
   legitimate completed-fixture precondition still requires domain investigation.
@@ -126,3 +127,54 @@ enums and booleans only; failure metadata includes no URL, ticket, arbitrary DOM
 or credential. No running first-run window or process was inspected or changed
 by this preparation. All new setup/barriers, syntax/import/build checks and
 runtime cases remain UNRUN pending the driver's finite delta review and slot.
+
+
+## Causal fixture follow-up to 5c89e95f (prepared, UNRUN)
+
+The driver's first 5c89e95f focused run completed both whole test files with 14
+cases: 13 passed and the portable-import case failed at its new task precondition.
+The recording journey passed. Material and index tasks had succeeded, while a
+legal `memory.intake` task remained waiting with zero attempts, a future
+`availableAt`, and `memory_window_pending` / `executionStarted: false`. The
+precondition must not require this window to execute. This child still reads all
+owner task pages and requires successful Material and index admission; the only
+nonterminal exception is that exact unstarted future-window state. Every other
+unclassified writer still prevents export. The single real export, its
+`archive_changed` assertion, window policy, consumers and time budgets remain.
+A later 409 still requires domain-owner investigation; this preparation neither
+retries export nor establishes that its underlying race is fixed.
+
+The separate source-bound 5c89e95f browser run exited naturally after 28.941 s.
+Its ten setup stages completed through `product-document-loaded`; no result was
+produced. Its first evidence-visible and authentication-settled operations were
+not separately recorded, so the failed business phase remains UNKNOWN. This
+child records `first-owner-evidence-visible` and `first-authentication-settled`
+separately. Bounded failure snapshots contain session/actor/modal/marker/ref
+comparison booleans, observer support/settled/drained/React-idle booleans and
+fixed auth-outcome enums. HTTP diagnostics include only fixed endpoint enums and
+status codes, capped at the latest 60 entries. Diagnostics issue no new auth,
+route mutation or reload, and persist no URL, ticket, token, credential, DOM
+text, reference value or arbitrary exception. Each diagnostic channel has a
+one-second bound; business deadlines are unchanged.
+
+Source inspection confirms a distinct fixture assumption: a raw ingress UUID is
+not a public canonical citation after formal Material publication. The current
+reader rejects raw evidence shadowed by a formal object; canonical identity
+includes owner, Material revision and block. This child resolves its generated
+single-note fixture through the real public Material catalog, Material read and
+context read before minting a ticket. It keeps the identical raw public UUID in
+A and B, checks its separate owner text through the raw public API, uses each
+owner's genuine typed canonical citation for positive dialogs, and checks the
+exact same A canonical citation under authenticated B returns context-read 404
+without private text. Canonical A/B IDs correctly differ under the current
+contract; no fake canonical IDs or internal database writes are introduced.
+This is a source-confirmed contract correction, not a proven attribution of the
+previous unclassified first business failure. Retention, formal processing,
+production reader behavior and the real auth settlement observer are unchanged.
+
+Only test/fixture/documentation files differ from 5c89e95f. All production blobs
+remain identical to d6adec8f. This new child's installs, syntax/import checks,
+application builds, focused tests, affected checks and explicit browser run are
+**UNRUN**. The dry-run plan is scheduling evidence only. Original Desktop/IAB,
+physical-device, live-model, expiry, true cross-tab and auth A→B→A checks retain
+their separate UNKNOWN / UNRUN status. No frozen PR or live source was updated.
