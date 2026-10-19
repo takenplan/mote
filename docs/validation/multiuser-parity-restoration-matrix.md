@@ -8,7 +8,7 @@
 
 每行继承计划的模块登记（owner chat / branch / PR / 独立验收 chat / 候选 SHA）；未填为尚无候选。`C/N/R/S/U/OLD` 见计划证据定义，均描述起点审计，不是本轮修复结果。每行末列同时保留本轮证据、未验证与阻塞，不能用 audit evidence 关闭。
 
-初态为OPEN；当前逐行状态与下方精确候选登记共同构成完整记录。WEB-W01/W02既有browser scope已由PM确认PASS，新增最终真机QA为PENDING；其余未以候选代码或作者定向结果自动关闭。每次更新须提供精确源码SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分；模块READY仍不代表最终跨模块验收或合入释放。
+初态为OPEN；当前逐行状态与下方精确候选登记共同构成完整记录。WEB-W01/W02已有browser及物理Mac可见Chrome子范围证据，跨域与完整产品验收仍待；其余未以候选代码或作者定向结果自动关闭。每次更新须提供精确源码SHA、实际命令/入口/输入、结果、回执/日志定位、消费者与未验部分；模块READY仍不代表最终跨模块验收或合入释放。
 
 ## 全部行共用的验收前置
 
@@ -18,7 +18,7 @@
 - 用户语义由模型解释，修复检索/上下文不加词表路由；不新增上限、手工恢复步骤、静默降级或自动付费历史处理。
 - 模块PR聚焦检查与check:affected先dry-run排期、按原范围执行；最终完整gate仅集成driver运行；准确临时组合的独立focused/API/UI/模型可按新资源规则并行。隐藏UI/无窗口模拟器为默认，原生权限、前台交互、真实设备/模型另记。
 
-用户新增的最终门槛适用于全部66跟踪行：Mac物理机真实UI；Android按用户最新“模拟器就行”以模拟器实际App/UI为本轮范围（无窗口ADB实际交互有效）；涉及真实LLM时统一用已盘点的本机Codex Server。当前实际设备App/UI与真实Codex结果均PENDING/UNRUN，fixture/API/unit/DOM/headless/模拟器仅作支持。逐场景绑定设备UI锁、隔离测试profile/数据库、生成数据、实际入口/交互/预期与精确源码；同一设备或profile/DB独占，不同独立设备/后端可并行，完整checks仍单driver串行。交互前说明窗口和权限影响；缺设备/授权给PM具体清单后处理，不部署、不重跑个人资料、不采集个人截图。MCP私人能力访问需用户鉴权，协议初始化由客户端完成；外部公开匿名源保留原合同，额外手工session/source步骤仍需证据。客户端v2已准备66/66+22风险=88case，执行全UNRUN；旧v1保留，Android实体手机/OEM未验不阻批准范围，ENV01待driver模拟器窗。未启动Mote UI或真实模型调用。
+用户新增的最终门槛适用于全部66跟踪行：Mac物理机真实UI；Android按最新“模拟器就行”以实际App/UI/OS权限/SAF/Worker及生命周期为本轮范围（无窗口ADB实际交互有效，实体手机/OEM未验不阻批准范围）；真实LLM使用现有本机Codex Server，由Mote子stdio app-server初始化，无已知HTTP服务端口。当前已有准确070/27a/73及262+070实际子范围证据，见下方当前检查点；不得将部分结果或fixture/API/unit/headless支持证据转记全部66行/88场景通过。场景绑定准确源码、设备UI锁、隔离profile/DB和生成数据；同设备/profile/DB独占，不同资源可并行，完整check单driver。交互前说明窗口/权限影响，不采集个人截图。MCP私人访问保留用户鉴权；匿名公开源保留原合同，额外手工session/source步骤未自动获批。FLAG_SECURE限制的App像素仍UNRUN，与实际功能交互分别报告。
 
 ## 核心58项
 
@@ -128,8 +128,8 @@
 
 | 编号 | 起点证据 / 优先级 | 原行为恢复目标 | 依赖 | 具体验收要求 | 审计证据定位（非本轮通过） | 本轮证据 / 未验证 / 阻塞 |
 | --- | --- | --- | --- | --- | --- | --- |
-| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | BROWSER_SCOPE_PASS：Q002/R006及旧PM确认保留；新增最终PHYSICAL_QA_PENDING，跨域/汇总待验 |
-| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | BROWSER_SCOPE_PASS：Q002/R006及旧PM确认保留；新增最终PHYSICAL_QA_PENDING，跨域/汇总待验 |
+| WEB-W01 | C+N / P2 | 原首页内容/入口/Home slot | FILE / ASK / EXT / MEM | 生成新/已有数据账号打开今天：原导入/新增来源/最近记录原文/最近Insight预览引文数/设备模型提示/扩展Home slot均按原层级可达；账号Api和晚响应隔离保留。 | W01；静态12项检查中的首页部分 | VISIBLE_MAC_SUBSCOPE_PASS：Q002/R006/R007准确f8证据保留；26实际交互/11最终图；模型Insight/扩展动态/native/最终组合未验，非整体READY |
+| WEB-W02 | C+N / P2 | 设备原30秒可见刷新 | EXEC / DESKTOP / AND | 页面保持可见，生成设备心跳/队列100→0/错误解除后按原30秒节奏更新；前后台/断线恢复不冻结；与 Operation family 修复独立验证。 | W02；静态timer→loader断链 | VISIBLE_MAC_SUBSCOPE_PASS：Q002/R006/R007准确f8证据保留；26实际交互/11最终图；模型Insight/扩展动态/native/最终组合未验，非整体READY |
 
 ### EXT
 
@@ -334,6 +334,52 @@ Memory新83562440df8b4c14193a045794abb49c9145cb11/tree7d7f1191bb76a54ffbf1865e5d
 Android实际执行已转交专人：backend070的49171/PID81228生成A/B/admin前置report16e204bf、manifest65c38166（仅READY_BACKEND_ONLY）。客户端独占stock5582，16:20:52→16:25:52Z短峰值内19.723s完成真实boot、22.477s总含准确APK安装及reverse49171，16:22:44按token退peak并保设备lease。App262实际MainActivity冷启1063ms并树bounds tap设置/连接；正常screencap确认FLAG_SECURE使App像素黑屏。PM明确实际Activity/tap/input/权限/SAF/Worker与UI树、独立持久效果可构成功能交互证据，但黑屏不证明布局/可见错误态，像素项UNRUN/受secure限制；不改flag/重build/新增用户操作。系统permission/SAF可见界面另实证，当前功能链尚未整体PASS。
 
 Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6692af58b8ddf38c061b842aa644a336f4473dc4aee757fc99741400；14PASS/Server3164=3160PASS2FAIL0cancel2skip/后7UNRUN，Android未跑。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-3740e89c-required-gate-failed.json` SHA256f148b8814c3c5e44979d13f3497cba2ad4bf450f530e2e74c8c7f6331edfba9d；原log/receipt/plan保留。sameHEAD/clean/cleanupConfirmed/锁释放/PID71644 gone后已恢复原File owner一次：capture-browser83:160 OCR发布409external_result_unknown、multiuser-memory226:125 Hindsight503memory_provider_unavailable，根因待查，不凭状态归fixture/生产bug。新File源须后续重绑core；当前27a实际结果不自动替新源通过。driver随后已于16:33:42.275Z启动Ext544 fresh22，runb851c1f4-9437-46de-8761-de51e75c6e28/PID91038，Node26ABI147/JDK21/Gradle1/hidden；初始build/type结束进入测试后已退短peak，common完整锁继续，普通独立API/UI/model并行。当前Ext结果RUNNING，正式汇总/main未释放。
+
+## 当前证据登记（2026-10-19 10:15，历史段落不代表当前状态）
+
+当前候选和完整证据见[计划登记](../design/multiuser-parity-restoration-plan.md#模块所有权与候选登记)与其当前检查点。66主行/22跨域场景不变，整体NOT_READY；13个Draft170–182均未合，正式integration只有管理文档，main未纳本轮业务、未部署。fixture、原生UI、物理设备、真实模型分列，新结果不回填旧SHA。
+
+| 输入 / 证据 | 实际已验 | 剩余 / 限制 |
+| --- | --- | --- |
+| FILE f29 / Draft176 | full19 PASS1446.428666s，Server3166P2skip/Desktop606/Web601/Shared198，bindingd44385af；post全真，正常push/78paths | Android25UPTODATE/0fresh，79旧XML377不重记；旧4c01/286结果保持；新523 C红及非图片/Memory/Ask组合另验 |
+| CONFIG 2aa / Draft180 | 批准common8 PASS181.04322s，Web606/JVM382 fresh80XML/25exec，binding9f17dbea；独审完整79paths/test-onlyprod0及29+32 | 15旧明确baseline+新8，不拼新23/Server；原ee42 FAILED/原signalUNKNOWN不改；current依赖/1546输出/fresh环境资格，无旧installed-lock归档冒证 |
+| ASK a021 / Draft179 | 批准9 PASS185.775725s，Web601/Shared198/JVM373 fresh78XML/25exec，binding50fc7117 | 原e427 fullFAILED/3188P3F2skip保持；本分支不等于523，原3红唯一诊断确认契约适配，独立R3新freeze/独审另列 |
+| CONN a562 / Draft178 | fresh四build1544输出dfb5b256后批准6 PASS166.674991s，Web604/JVM376 fresh79XML，binding92e13e19 | 原fdd FAILED/3159P1F2skip不洗；不是新full14/Server，native实际另验 |
+| MEM6f44 / Draft177 | full18 PASS1351.864914s，Server3222P2skip/Web602/JVM374 fresh78XML，binding0d0ef7c9 | 旧855失败保持，新组合/退款零重放/实际全journey另验 |
+| LIFE b30 / Draft174 | 批准13 PASS191.836518s/Web603/JVM372 fresh78XML，bindingc44810da | 原6cbd FAILED/Server3168P2skip仅baseline；非新22/全部UI；523容量原case红保留，PM已按双意图因果批准R3单意图前置修订 |
+| EXT5a / Draft175 | freshServerbuild1505输出+批准5项PASS428.868812s（整file80/38/26/16），bindingbcfb9d59/native20另列 | 原544 FAILED保持，不拼新22；523 C10 Ext9与R3独立Ext9另已验 |
+| 原24a / 2bccae89源批准 | 431basepaths/217delta/44冲突20files/schema216/310工件，本树build/tsc/ABI | 首动态bd81 NOT_QUALIFIED39P3F；唯一SDK诊断110.583s2P仅NONREPRO，无开销baseline；原2044各失败也保留 |
+| 新source523 / a88ee206 | 三新祖先/9delta路径/1prod/3188其余对象/68+8工件；本树正常安装build/语义tsc/SQLite-Sharp，1625outputs root核齐 | source接受不等runtime；没有cross-tree deps/dist或ignored install scripts；原24a物理树不改 |
+| 523原B/C及补C10 | 首次HOT2/Web6/File3均P；原C76=73P3F、总87=84P3F保持。后独立C10十组新增215P0F/0skip/cancel，review9b2b6c09/33工件root核齐67133e99 | 523原整体NOT_QUALIFIED/原未达断言不洗；新增十组无UNRUN，均exact523 scope；原HOT/Web/File/部分C10只按PM d78e有限baseline资格，不称R3新执行或full |
+| 523最小actual / 52c3b258与98400aeb | fresh空profile/DB/原CLI登录服务→现有Codex stdio→一个marker Ask turn/一个completed usage，13001in54out；SIGTERM0/49174退 | 仅连通；无archive tools/citations/evidence IDs，requests0report不推物理请求数；未Files→Memory/Ask3mode/Actions，不给C红或native前置借绿 |
+| 非图片六例80793736 / 独审9f799247 | 首次root独立6=5P1F/25.712s/0skip-cancel，8份WAV实收逐byte同fixture，F01/F02正确观察闭合；source/locks/1628产物前后不变，review803f4923 | 新epoch enabled例commit401invalid_identity，原5P1F不洗；Control三重hash命中旧Ask task为最强原因，无内部throwstack；原包不修改/重跑 |
+| core2044 / 1f7735e1与47e9afc2 | 60工件真实Files→Memory3→Ask/取消重启A16/B0；37工件文本Actions语义→人审claim40.673s/A新增2/B0 | 原HOT1P1F/Web1P5F/两rawscreen INCOMPLETE保持；无nativeWRITE，archive parity UNKNOWN，不转新head |
+| Android262+070已完成子范围 | 原App/Worker/SAF/切号冷启173；LOCAL两生成calendar事件READ88；D01 11键/33map恢复241；实际8完整JPEG/8ACK transport192 | 每组各自输入，模型usage0/READtrue-WRITEfalse；FLAG_SECURE App像素受限，非523；实体OEM未验不阻本轮批准范围 |
+| Android真实privacy / 7c461664 | 249工件root核齐/亲看生成mask；6新完整JPEG270609B/A200-B404；每图core130208全黑，Chrome排除16.575s负例+清规则2新ChromeACK | 全33-key maps/原OSAccessibilityOff/进程portsleases恢复；JPEG边缘2.8px不作exact-edge/2px PASS；其他app/OEM/race/模型质量/WRITE未验，不重复旧basic8/D01认绿 |
+| Native523 APK→R3实际首WRITE | 原APK输入资格与installedSHA保持cc1883dd；StageA61原件已核；原Web批准后自然Worker LOCAL2→3/ledger30B/ACKsucceeded3、App重启/A-B-A/两次Refresh均不重复；Native76+Core25工件rootf05808b5核齐 | 首HTTPbody未抓/mutationAllowed仅推论；非自然人或freshR3APK；inflight切号、uncertain崩溃、未claim前撤权/TTL/serverrestart UNRUN；审批详情waiting差异不抹OS结果 |
+| Desktop55 / Draft182 | full16 PASS1278.614416s，Desktop627/Server3129P2skip/Web601/Shared198，bindingc564b80d，post全真/正常push/27paths/实际PR base同16 | 未选Android；原73最小Mac UI不转55；原生D1–D4/TCC/capture/实际跨端D2和最终组合未验，继承标签P2非新回归 |
+| Actions2689 / Draft181 | full15 PASS1248.675337s，Server3160P2skip/Web601/Shared198，binding99b2f321，post全真/正常push/41paths/实际PR base同15 | 未选Android；旧2044文本Actions实际子范围不转本head；nativeWRITE/archive parity/新组合未验 |
+| 523唯一三红诊断 / 61ed58f7、c6f4db6e | 原3例9.249811s重现0P3F；文本三不同阶段organizer/单正式Material与publication，无model；容量自动+manual两parent/request各attempt1，held只1POST，皆拒绝无effect | nonce消费/不重复，owned进程/peak已退、source与1625outputs不变；原未达断言仍UNREACHED，PM批准测试契约修订而非523 READY |
+| R3 9c03修订/Control静态/作者范围 | 单parent523、1testfile33+/14-/production0，完整8graph/currentgrant/rollback/单意图原1→2+新双意图；独审fa05932b。作者focused4是whole77子集，不累81，27原件已核 | 首作者2P2F投影误用修正原log保留；其余3196源/1592build/common依赖同一。235extra installedentries不冒全环境同一，Diag3新产物无旧baseline |
+| R3 fresh环境/Web及有限闭包 | sixTS+Android环境+ownWebbuild6.402s PASS，Web33 SHA同523，bf0964；13组547源码保守包闭包235新增0可达/未解边双树同一，assessment116abe9c | PM d78e仅批准命名旧scope baseline保523来源，非syscall trace/任意插件保证；CLI子进程未覆盖边界在R3独立补32，不机械重完整Server |
+| R3独立五组109 / PM9aab802b | whole Ask/processing77/144.691s、Codex4/10.600s、Conn10/22.873s、MCP9/21.277s、Ext9/22.110s均P/0skip/cancel；25原件fd1a1618及1628产物/locks/PID0 root核齐e9b12c4c | 限定覆盖闭合、原未达安全断言本轮已到达；退峰后旧controller读owner异常EXIT1保留，已91自然结束、仅余18普通续体，无中断/重跑，不命名一次109命令或fullPASS |
+| R3实际Core / b6ba0c04、68e5f5ac | 真实CLI/Codex stdio，双账号文本Files→Memory独审保存2卡、A/B Ask当前原件引用审计，真实取消与30.481s重启无回放，OCR1事实184ms；Core84+Native语义43工件root4dffc1d2核齐 | 图片Memory extract/review逻辑completed后memory_output_image_evidence永久失败，attempt1/未prepared-save，具体reject分支/软件缺陷UNKNOWN，整体NOT_QUALIFIED；reported requests0不推物理0 |
+| R3原Web与own Desktop构建 | Client报告A/B历史与citation真实点击、B跨A URL404；两文本Memory及image失败态可见；Core生成API target原UI批准仅claimed0。own Desktop18构建工件root4dffc1d2核齐、workspace esbuild重现实际bundle | UI完整包待封/root核；Core审批非OS写入；Desktop renderer/preload/D1–D4/TCC/采集仍另验，二进制/Node与Electron ABI结果不代替行为 |
+| 图片Memory B09/C唯一新输入 | B09 final18P/Server语义/scope、独审f4653e9c及43工件/8源1595outputs root核齐。C按PM217e与明确contextdelta一次新image→真实OCR→COMMITTED1，实际visual1+OCR3，public54/private9完整capture包rootea417eda核齐、post源8/产物1595/locks不变 | priorCards0vs原2/整图vs原crop，成功只新输入NONREPRO；原8d988/原缺review结果/rootcauseUNKNOWN红保。normalCLI还自动venv/pip74包，下载来源/量UNKNOWN，非脚本无pip就无安装；不第二case |
+| fixed Source Pack新源46fe / PM770a2ccf | 生产四conditional+comment KEEP；38whole7+8files56P、currentpolicy successor/grant/unknown安全路径已到达。46type-only擦除JS同38，最终strictnoEmit/whole7P17.075s/source-noEmit全P，manifest75586430/rootafb930e0 | 56保38来源，38类型20FAIL及48的6P1F/更早partial全保；完整19未单独跑，等PM批准新联合完整计划，不更新176/不冒单branch全绿 |
+| 新Ask582→084 / 独审退回 | 582 own正常安装/语义/scope20.981s/1595outputs保原输入；084持久receipt-time proof、逐record核资格，独立已知图精确oracle已静态闭合；公开F03逐byte同549746af且enabled | Control e1473e11仍CHANGES_REQUESTED：异步child submit退役中断兄弟、两新fixture DELETE后同ID200违反410。root23e24dd3核4报告/6source/8packet；新child返修中，084未build/test，完整公开成功须Ask+M07组合，原179不改 |
+| 新M07 66a576fd / 首轮81=76P5F | Domain fe921d72仅static无新反例；own ci/Node26 ABI147/libs/Server语义/scope通过，三whole files148.642s实际76P5F/0skip-cancel，root42a743cd。新backup/portable三top+五nested及processing68共76P | 五newM07例全红：journal总数1!=0、两duplicate part409、公开reset stale/grant_revoked、reset heldASR commit401。原owner新test-only分类，不能全归Ask；完整公开流程保持待真实组合。raw DB人为缺表启动及capture/erase新case/paid process边界仍列，177不改 |
+| 新Actionsd09执行状态 / 有限覆盖 | 既有reviewCurrent绑定exactapproval/operation后的execution独立facet，snapshot不变；own安装/libs/ServerWeb语义P，原Serverwhole13P；root官方Webcwd3whole8P19.120s+scope/i18nP | 首rootcwd四file21=14P7F(classic JSX)保留；13+8是21唯一，不累22/不冒新单21命令；实际新组合UI与完整consumer gate未验，181仍旧head |
+| Desktop ownR3与ticket首次路径 | 原main/preload/renderer/IPC+live HTTP，A/B历史/citation/restart/ABA，fresh B/最终A首次原文；manifest02972081 publicFiles62项rootdc9d2c85核齐。同页A overlay丢失原件保 | 背景fixture非TCC/打包startup/全部D1–D4。Client正准备新no-model隔离profile的D1–D4/D2真实Sources/spool/ACK/restart/分页/error/bytes回归，尚未执行；不加用户reload/跨号cache |
+| Web d6→473→5c89 / 旧失败保留 | 473四production blob同d6；准确Web9 runbab5646e共6stepsP、Web615=613P2F/115.610s、后2项UNRUN。另首次Central build12.524sP后browser无结果挂起，root316.019s SIGTERM本人6PID/全gone/退token，review4b9f7adf纠正raw natural误称 | 新test-only5c89保production：真实导出owner tasks终态、最终页IDs/cursor/非loading UI完成、有界首window/CDP/neutral frame，后5c两whole14=13P1F（recordingsP、Vault合法future intake误等终态），browser自然29.066s失败；后续43/244分列。两红确切witness/cursor及旧hang原因UNKNOWN，不能拼旧9PASS或冒页面已验，170不改 |
+| Ask cbbc / M07 956独立有限覆盖 | cbbc真实M04异步退役/DELETE410/兄弟有效whole5P5.834s，Domain af21b0c4；956 test-only两seams2P4.093s，物理extract1且paid0，review7597bd41 | 原084/66失败保，公开reset成功须真实pair；不是两branch各完整gate |
+| 真实pair db1 / 首次四whole81 | cbbc+956零冲突真实tree58770858/root9199e70e；own环境/语义/scopeP，81=78P3F/148.164s，M07五例/siblings五例/F03P，reviewd5eae35e | 两Ask在B未终态snapshot处失败、旧A late-tail未达；rollback仅旧kind observer不识别envelope。原FAIL保，非81PASS |
+| 新pair 3b / 两受影响whole71 | 仅两tests+doc，prod/锁同db1；独审2c93a88a，own环境/语义/scope后Ask3+processing68=71P0F/0skip-cancel137.069s，总157.393s，review94733e9e；旧未达tail与增强B精确证明已达 | M07五例/siblings五例保持db1来源，不拼新81；1595编译SHA同db1/source-lock不变/记录PIDgone/退峰，联合full仍必需 |
+| Web43→244 / 新locator合同 | 43 whole Vault12P4.490s、browser在window前locator失败，值未记录/root e4db5072；244保d6prod/43Vault/5cRecordings，作者own环境+绑定build+实际公开locator30.805sP，A/B各2refs且唯一目标1、本人200/exact A ref在B404 | 旧43失败值UNKNOWN，不回填定因；prep71bb9d5f/precheckeda49c5e只作者合同预检。Domain5431f748有限审；Root同prepared树首次hidden built-main十项PASS5.297s自然0，reviewa0ffc236，source3202/1625编译/运行前后installed-lock不变、process group gone/退峰。作者installed-lock仅finalhash；不冒Web9 full/真实cross-tab/controlled expiry/原Desktop新fix通过 |
+| Client新独立backend/R3安全准备 | exact9c03 own normal环境/1628输出同旧metadata（非直接旧bytescmp）；R3不可变34+micro30工件、20实际micro checksP，Control fa77f19f有限关闭三NFR2，dummy7/toyHTTP3/JPEG2不作产品PASS | 新NFR3 orderly stop须实际exit0/signalnull；02:00:56首direct safety admin CLI退出1/invalid_request、未起HTTP，controller1/PIDsgone/49178free/匹配02:04:03退峰。R4仅合法默认endpoint/严格正常stop/保护旧包，Root af2d58d7核32+14inputs/五合同源/旧199public不变，已准一次新≤5min安全smoke。health/schema/restart/产品A-B实际仍待回执，runtime ACCEPT/GO HOLD |
+| CHECK-SCOPE be096 / Draft173 | 正常2/2、独审52infra/24实际CLI/542绑定，精确3helper并保原消费者/security/update/类型/diagnostics及unknown/rename/mixed | Server4/runner串行不改，无理论步数当实测收益 |
+
+旧模块common已自然完成；Native76/Core25、File46及Actionsd09各限定scope保持。新pair3b两whole71P但原db1三红保留，不拼新81；Web244独立built browser十项P、旧失败保；Client R3安全smoke首admin失败、新R4一次安全窗已准、产品A/B未执行。原图片失败仍红、唯一C仅NONREPRO，整体NOT_READY。PM准新全源联合完整检查，新增backup/schema按真实PR义务保并集；原Exec仅源合成与真实module/PR base-head/shipping依赖/ancestry/义务落地表在途，full前先冻结实际shipping祖先，不把含12模块临时头灌单模块PR。实际PR base为codex/parity-integration-20261018，按fetched ref/mergebase核而非陈旧baseRefOid。正式assembly/final仍HOLD且精确最终full未豁免。原01:25锚点保，旧10:30 Draft下界已因真实pair三红与Client R2安全缺口撤回，条件主收敛10:00–10:45/Draft11:00–12:30；前置闭合后两full与汇总/独验硬串行80–116min，不把未测选择器收益或FAIL/UNRUN计节省，无额外24h等待。
 
 ## 跨模块最终冻结旅程
 
