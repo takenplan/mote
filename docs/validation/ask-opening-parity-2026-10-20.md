@@ -13,7 +13,8 @@ weakening published-only usable Memory. Current writers still do not produce an
 equivalent proposed lifecycle; no proposal producer or job-derived fake card is
 added. Only selected detail records acquire durable navigation-purpose pins.
 Run, trace, reader and retained-history checks revalidate their status, immutable
-body and original/source authority. Hints do not authorize original citations.
+body and original/source authority, including explicit turn IDs distinct from run
+IDs. Hints do not authorize original citations.
 Auxiliary context/status consumers retain their published-only port.
 
 Builtin search reuses the original pure literal query preparation. The existing
@@ -37,4 +38,8 @@ build normally, check scope contracts and run the finite regression selection:
 opening recipe/projection; old FTS state and real restart; real Ask root/public/
 preview and selected pins; proposed navigation versus usable Memory; delegated
 children; trusted source metadata; and existing c03 proof/retirement consumers.
-Earlier candidate or live-model results are not results for this change.
+Earlier candidate or live-model results are not results for this change. The first
+source candidate failed compilation because its complete context view had a
+narrow return type; its successor compiled, then scope contracts rejected two
+unregistered pure imports. Both failures remain recorded; exact caller-bound
+helper allowances and the explicit-turn history regression require fresh checks.

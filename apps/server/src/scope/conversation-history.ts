@@ -11,7 +11,7 @@ const decode=<T>(value:unknown):T=>JSON.parse(String(value));
 /** Host-only receipts authorize retained dialogue, never original/tool reads or
  * citations. New evidence still uses AskEvidence.validate without relaxation. */
 export class ConversationHistory{
- constructor(private readonly sql:PrivateSql,private readonly reader:AskEvidence,private readonly validateMemory:(runId:string)=>void=()=>{}){}
+ constructor(private readonly sql:PrivateSql,private readonly reader:AskEvidence,private readonly validateMemory:(runId:string,turnInput?:string)=>void=()=>{}){}
  private source(id:string,roots:Map<string,Root>){this.reader.historySource(id);const row=this.sql.get('SELECT incarnation FROM ma_sources WHERE user_id=$user AND id=?',id);if(!row)throw missing();roots.set('source:'+id,{kind:'source',id,incarnation:String(row.incarnation)});}
  private capture(id:string,roots:Map<string,Root>,measurement=false){const row=this.sql.get('SELECT o.incarnation,c.json,c.source_id FROM pd_captures c JOIN ma_originals o ON o.user_id=c.user_id AND o.id=c.id WHERE c.user_id=$user AND o.user_id=$user AND c.id=?',id);if(!row)throw missing();const value=decode<{provenance?:{sourceId:string;deleted?:boolean};privacy?:{excluded?:boolean;redacted?:boolean};ingressSourceId?:string}>(row.json);if(value.provenance?.deleted||value.privacy?.excluded||!measurement&&value.privacy?.redacted)throw missing();const sourceId=value.provenance?.sourceId??value.ingressSourceId??row.source_id??this.sql.get('SELECT source_id FROM ig_capture_scopes WHERE user_id=$user AND capture_id=?',id)?.source_id;if(typeof sourceId!=='string')throw missing();this.source(sourceId,roots);const previous=roots.get('capture:'+id);roots.set('capture:'+id,{kind:'capture',id,incarnation:String(row.incarnation),...(measurement&&(!previous||previous.measurement)?{measurement:true as const}:{})});}
  private material(id:string,revision:string,roots:Map<string,Root>){
@@ -50,7 +50,7 @@ export class ConversationHistory{
   const saved=this.sql.get('SELECT proof,stale,deleted FROM ma_history_turns WHERE user_id=$user AND turn_id=?',String(row.id));
   if(!saved||saved.deleted)return {deleted:true as const,stale:false};
   const proof=decode<Proof>(saved.proof);try{this.validate(proof);}catch(error){if(!(error instanceof PrivateDataError))throw error;return {deleted:true as const,stale:false};}
-  let stale=Boolean(saved.stale);try{this.validateMemory(String(row.id));this.reader.validate(proof.pins,proof.materials);}catch(error){if(!(error instanceof PrivateDataError))throw error;stale=true;}
+  let stale=Boolean(saved.stale);try{this.validateMemory(String(row.id),String(row.input));this.reader.validate(proof.pins,proof.materials);}catch(error){if(!(error instanceof PrivateDataError))throw error;stale=true;}
   return {deleted:false as const,stale,proof};
  }
  combine(proofs:readonly HistoryRoots[]):HistoryRoots{const roots=new Map<string,Root>();for(const proof of proofs){this.validate(proof);for(const root of proof.roots){const key=root.kind+':'+root.id,prior=roots.get(key);if(prior&&prior.incarnation!==root.incarnation)throw missing();roots.set(key,prior&&!prior.measurement?prior:root);}}return {version:1,roots:[...roots.values()]};}

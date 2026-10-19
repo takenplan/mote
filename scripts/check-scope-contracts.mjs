@@ -113,6 +113,10 @@ export function checkProductionImports(directory=root){
   // projects vendor authorization URLs. These exact imports grant no runtime
   // access to legacy stores and are not allowances for other scoped callers.
   const hostHelpers=new Map([
+    // M08 reuses the unchanged opening recipe only through its fenced scoped
+    // reader; M07 shares pure literal query preparation with the retired host.
+    [sourceRoot+'/scope/ask.ts',new Set([sourceRoot+'/opening-memory.ts'])],
+    [sourceRoot+'/scope/memory-data.ts',new Set([sourceRoot+'/memory-search-query.ts'])],
     // M16 reuses transactional logical payload accounting, not a private legacy Store.
     [sourceRoot+'/scope/storage-capacity.ts',new Set([sourceRoot+'/storage-ledger.ts'])],
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
