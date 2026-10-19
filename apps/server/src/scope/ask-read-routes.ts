@@ -23,7 +23,7 @@ export function registerAskReadRoutes(runtime:ScopedRuntime,host:AskHost){
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/events',handle:({context,request})=>host.bind(context,{assertCurrent:()=>runtime.authority.assert(context)}).traceEvents(request.query)});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/agent-view/startup',handle:async({context,request})=>{
   const input=navigationScopeSchema.pick({after:true,before:true,deviceId:true}).extend({question:z.string().max(4000).default(''),timeZone:z.string().max(100).default('UTC')}).strict().parse(request.body),bound=reader(context),contextTime=new Date().toISOString();
-  const leads=await bound.opening({after:input.after,before:input.before,deviceId:input.deviceId});bound.assertCurrent();
+  const leads=await bound.opening({question:input.question,contextTime,after:input.after,before:input.before,deviceId:input.deviceId});bound.assertCurrent();
   const query={...input,language:requestLocale.getStore()??'zh-CN',contextTime,openingMemories:leads,toolContributions:bound.agent.contextTools?.()},tools=taskTools(query);
   return {kind:'new_conversation_preview',context:buildContextEnvelope(query,[]),system:systemInstructions(query,[]),tools,toolDefinitions:contextToolDefinitions(query).filter(([name])=>tools.includes(name)),modelCalls:0};
  }});

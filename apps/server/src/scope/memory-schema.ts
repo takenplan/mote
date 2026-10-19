@@ -6,6 +6,26 @@ import {RANGE_SELECTION_PERSONAL_RECIPE,RANGE_SELECTION_CODING_RECIPE,RANGE_SELE
 import {defaultMemoryIntegrationRecipe} from '../memory-integration-policy.js';
 import {lifecycleSettingsSchema,defaultLifecycleSettings} from '../memory-configuration.js';
 
+/** Current derived index projection; this is not a user-data or wire migration. */
+const memoryIndexText=(alias:string)=>['title','statement','uncertainty'].map(field=>`coalesce(json_extract(${alias}.json,'$.${field}'),'')`).join("||' '||");
+export function reconcileMemorySearchProjection(db:DatabaseSync){
+ const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+ try{
+  const statements=[
+   ['mm_index_insert',`AFTER INSERT ON mm_records BEGIN INSERT INTO mm_fts VALUES(new.user_id,new.id,${memoryIndexText('new')}); END`],
+   ['mm_index_update',`AFTER UPDATE ON mm_records BEGIN DELETE FROM mm_fts WHERE user_id=old.user_id AND id=old.id;INSERT INTO mm_fts VALUES(new.user_id,new.id,${memoryIndexText('new')}); END`],
+   ['mm_index_delete','AFTER DELETE ON mm_records BEGIN DELETE FROM mm_fts WHERE user_id=old.user_id AND id=old.id; END'],
+  ] as const;
+  for(const [name,body]of statements){const expected=`CREATE TRIGGER ${name} ${body}`,actual=db.prepare("SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?").get(name)?.sql;
+   if(String(actual??'').trim().replace(/;$/,'')!==expected){db.exec(`DROP TRIGGER IF EXISTS ${name}`);db.exec(expected);}
+  }
+  db.exec(`DELETE FROM mm_fts WHERE NOT EXISTS(SELECT 1 FROM mm_records r WHERE r.user_id=mm_fts.user_id AND r.id=mm_fts.id AND mm_fts.text=${memoryIndexText('r')});
+   DELETE FROM mm_fts WHERE rowid NOT IN(SELECT min(rowid) FROM mm_fts GROUP BY user_id,id);
+   INSERT INTO mm_fts(user_id,id,text) SELECT r.user_id,r.id,${memoryIndexText('r')} FROM mm_records r WHERE NOT EXISTS(SELECT 1 FROM mm_fts f WHERE f.user_id=r.user_id AND f.id=r.id);`);
+  if(own)db.exec('COMMIT');
+ }catch(error){if(own)db.exec('ROLLBACK');throw error;}
+}
+
 export const MEMORY_DOMAIN='memory';
 export class ScopedMemoryError extends Error{constructor(readonly code:'memory_provider_unavailable'|'memory_provider_invalid_record'|'memory_provider_result_unknown'|'memory_provider_unsupported_input',readonly statusCode=503){super(code);}}
 const revision=z.string().regex(/^[a-f0-9]{64}$/);
@@ -55,13 +75,11 @@ export function installScopedMemory(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS mm_commands(user_id TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS mm_restore(user_id TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE VIRTUAL TABLE IF NOT EXISTS mm_fts USING fts5(user_id UNINDEXED,id UNINDEXED,text,tokenize='trigram');
- CREATE TRIGGER IF NOT EXISTS mm_index_insert AFTER INSERT ON mm_records BEGIN INSERT INTO mm_fts VALUES(new.user_id,new.id,json_extract(new.json,'$.title')||' '||json_extract(new.json,'$.statement')); END;
- CREATE TRIGGER IF NOT EXISTS mm_index_update AFTER UPDATE ON mm_records BEGIN DELETE FROM mm_fts WHERE user_id=old.user_id AND id=old.id;INSERT INTO mm_fts VALUES(new.user_id,new.id,json_extract(new.json,'$.title')||' '||json_extract(new.json,'$.statement')); END;
- CREATE TRIGGER IF NOT EXISTS mm_index_delete AFTER DELETE ON mm_records BEGIN DELETE FROM mm_fts WHERE user_id=old.user_id AND id=old.id; END;
  CREATE TRIGGER IF NOT EXISTS mm_material_batch_deleted BEFORE DELETE ON pd_materials BEGIN UPDATE mm_job_batches SET state='stale',draft=NULL,review=NULL,prepared=NULL WHERE user_id=old.user_id AND EXISTS(SELECT 1 FROM mm_evidence e WHERE e.user_id=mm_job_batches.user_id AND e.material_id=old.id AND (EXISTS(SELECT 1 FROM json_each(mm_job_batches.input,'$.inputs') p WHERE json_extract(p.value,'$.id')=e.id) OR EXISTS(SELECT 1 FROM json_each(COALESCE(mm_job_batches.draft,'{}'),'$.evidenceReadRanges') p WHERE json_extract(p.value,'$.id')=e.id) OR EXISTS(SELECT 1 FROM json_each(COALESCE(mm_job_batches.review,'{}'),'$.result.evidenceReadRanges') p WHERE json_extract(p.value,'$.id')=e.id)));DELETE FROM mm_batch_artifacts WHERE user_id=old.user_id AND EXISTS(SELECT 1 FROM mm_job_batches b WHERE b.user_id=mm_batch_artifacts.user_id AND b.job_id=mm_batch_artifacts.job_id AND b.id=mm_batch_artifacts.batch_id AND b.state='stale'); END;
  CREATE TRIGGER IF NOT EXISTS mm_material_batch_changed AFTER UPDATE OF revision,min_visible_sequence ON pd_materials WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence BEGIN UPDATE mm_job_batches SET state='stale',draft=NULL,review=NULL,prepared=NULL WHERE user_id=old.user_id AND EXISTS(SELECT 1 FROM mm_evidence e WHERE e.user_id=mm_job_batches.user_id AND e.material_id=old.id AND (EXISTS(SELECT 1 FROM json_each(mm_job_batches.input,'$.inputs') p WHERE json_extract(p.value,'$.id')=e.id) OR EXISTS(SELECT 1 FROM json_each(COALESCE(mm_job_batches.draft,'{}'),'$.evidenceReadRanges') p WHERE json_extract(p.value,'$.id')=e.id) OR EXISTS(SELECT 1 FROM json_each(COALESCE(mm_job_batches.review,'{}'),'$.result.evidenceReadRanges') p WHERE json_extract(p.value,'$.id')=e.id)));DELETE FROM mm_batch_artifacts WHERE user_id=old.user_id AND EXISTS(SELECT 1 FROM mm_job_batches b WHERE b.user_id=mm_batch_artifacts.user_id AND b.job_id=mm_batch_artifacts.job_id AND b.id=mm_batch_artifacts.batch_id AND b.state='stale'); END;
  CREATE TRIGGER IF NOT EXISTS mm_material_deleted BEFORE DELETE ON pd_materials BEGIN UPDATE mm_records SET json=json_set(json,'$.status','stale','$.staleReason','evidence_changed') WHERE user_id=old.user_id AND id IN(SELECT d.memory_id FROM mm_dependencies d JOIN mm_evidence e ON e.user_id=d.user_id AND e.id=d.evidence_id WHERE d.user_id=old.user_id AND e.material_id=old.id); END;
  CREATE TRIGGER IF NOT EXISTS mm_material_changed AFTER UPDATE OF revision,min_visible_sequence ON pd_materials WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence BEGIN UPDATE mm_records SET json=json_set(json,'$.status','stale','$.staleReason','evidence_changed') WHERE user_id=new.user_id AND id IN(SELECT d.memory_id FROM mm_dependencies d JOIN mm_evidence e ON e.user_id=d.user_id AND e.id=d.evidence_id WHERE d.user_id=new.user_id AND e.material_id=new.id AND (e.material_revision!=new.revision OR new.sequence<new.min_visible_sequence)); END;`);
  db.prepare('INSERT OR IGNORE INTO mm_meta VALUES(1,1,?)').run(randomBytes(32).toString('hex'));
+ reconcileMemorySearchProjection(db);
  const meta=db.prepare('SELECT * FROM mm_meta WHERE id=1').get();if(meta?.version!==1||typeof meta.cursor_key!=='string'||!/^[a-f0-9]{64}$/.test(meta.cursor_key))throw new Error('Memory schema unavailable');return meta.cursor_key;
 }

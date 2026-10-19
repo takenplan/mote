@@ -1,3 +1,4 @@
+import {memorySearchQuery} from '../memory-search-query.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {unknownAttributionContext,type QueryResult,type CaptureRecord} from '@mote/shared';
 import {z} from 'zod';
@@ -25,6 +26,10 @@ export const memoryPageFields={query:z.string().trim().min(1).max(500).optional(
 export const memoryPageInputSchema=z.object(memoryPageFields).strict();
 const compatibleMemoryFilters=(value:{layer?:string;admissionLayer?:string;after?:string;before?:string})=>(!value.layer||!value.admissionLayer||value.layer===value.admissionLayer)&&(!value.after||!value.before||Date.parse(value.after)<Date.parse(value.before));
 export const memoryPageSchema=memoryPageInputSchema.refine(compatibleMemoryFilters,'Conflicting or invalid Memory filters');
+export const memoryOpeningPageInputSchema=memoryPageInputSchema.extend({status:z.enum(['published','proposed']).optional()});
+export const memoryOpeningPageSchema=memoryOpeningPageInputSchema.refine(compatibleMemoryFilters,'Conflicting or invalid Memory filters');
+export const memoryOpeningReadFiltersSchema=memoryOpeningPageInputSchema.omit({cursor:true,limit:true,id:true}).refine(compatibleMemoryFilters,'Conflicting or invalid Memory filters');
+export type MemoryOpeningReadFilters=z.input<typeof memoryOpeningReadFiltersSchema>;
 export const memoryReadFiltersSchema=memoryPageInputSchema.omit({cursor:true,limit:true,id:true}).refine(compatibleMemoryFilters,'Conflicting or invalid Memory filters');
 export type MemoryReadFilters=z.input<typeof memoryReadFiltersSchema>;
 
@@ -90,8 +95,10 @@ export class ScopedMemoryData {
   return evidence.filter(record=>input.inputs.some(pin=>pin.id===record.id));
  }
  row(id:string):MemoryRow{this.state();const row=this.sql.get('SELECT * FROM mm_records WHERE user_id=$user AND id=?',id);if(!row)throw missing();return row as MemoryRow;}
- assertCurrentRecord(row:MemoryRow){
-  const value=memorySchema.parse(JSON.parse(row.json));if(value.status!=='published')throw missing();
+ assertCurrentRecord(row:MemoryRow){return this.assertRecord(row,false);}
+ assertOpeningRecord(row:MemoryRow){return this.assertRecord(row,true);}
+ private assertRecord(row:MemoryRow,opening:boolean){
+  const value=memorySchema.parse(JSON.parse(row.json));if(value.status!=='published'&&(!opening||value.status!=='proposed'))throw missing();
   const dependencies=this.sql.all('SELECT evidence_id,hash FROM mm_dependencies WHERE user_id=$user AND memory_id=?',row.id);
   if(!dependencies.length)throw missing();
   const records=this.evidence(dependencies.map(item=>String(item.evidence_id)));
@@ -157,8 +164,9 @@ export class ScopedMemoryData {
   const batch=input.batchId?this.sql.get('SELECT review FROM mm_job_batches WHERE user_id=$user AND job_id=? AND id=?',input.jobId,input.batchId):undefined,state=batch?.review&&JSON.parse(String(batch.review)).coverage?.incomplete?'awaiting_context':'committed';
   if(input.batchId)this.sql.run("UPDATE mm_job_batches SET state=? WHERE user_id=$user AND job_id=? AND id=?",state,input.jobId,input.batchId);if(!this.sql.get("SELECT 1 FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state!='committed'",input.jobId))this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);else if(!this.sql.get("SELECT id FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state NOT IN ('committed','awaiting_context')",input.jobId))this.sql.run("UPDATE mm_jobs SET state='awaiting_context' WHERE user_id=$user AND id=?",input.jobId);return prepared.items;
  });}
- private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean,recordPins?:readonly {id:string;version:number;fingerprint:string}[],audit=false){
-  this.state();const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:audit?'memory-owner-filtered-audit':'memory',...query,...(recordPins?{recordPins:memoryHash(recordPins)}:{}),...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=[audit?"json_extract(r.json,'$.status')='stale'":"json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
+ private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean,recordPins?:readonly {id:string;version:number;fingerprint:string}[],audit=false,opening=false){
+  this.state();const {cursor,...query}=(opening?memoryOpeningPageSchema:memoryPageSchema).parse(raw),identity={collection:audit?'memory-owner-filtered-audit':opening?'memory-opening':'memory',...query,...(recordPins?{recordPins:memoryHash(recordPins)}:{}),...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=[audit?"json_extract(r.json,'$.status')='stale'":opening?"json_extract(r.json,'$.status') IN ('published','proposed')":"json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
+  if(opening&&query.status){conditions.push("json_extract(r.json,'$.status')=?");args.push(query.status);}
   conditions.push("json_array_length(r.json,'$.evidenceIds')>0 AND NOT EXISTS(SELECT 1 FROM json_each(r.json,'$.evidenceIds') proof WHERE NOT EXISTS(SELECT 1 FROM mm_evidence e WHERE e.user_id=$user AND e.id=proof.value))");
   // The complete transitive source set is restricted before FTS, ordering and
   // LIMIT. An empty host allowlist grants no records. It never means all sources.
@@ -180,12 +188,12 @@ export class ScopedMemoryData {
    if(times.length){conditions.push(`NOT EXISTS(SELECT 1 FROM mm_evidence e JOIN json_each(r.json,'$.evidenceIds') proof ON proof.value=e.id WHERE e.user_id=$user AND (${times.join(' OR ')}))`);if(query.after)args.push(query.after);if(query.before)args.push(query.before);}
   }
   if(!query.includeHistory){const at=query.asOf??new Date().toISOString();conditions.push("(json_extract(r.json,'$.supersededBy') IS NULL OR julianday(json_extract(r.json,'$.supersededAt'))>julianday(?)) AND (json_extract(r.json,'$.validFrom') IS NULL OR julianday(json_extract(r.json,'$.validFrom'))<=julianday(?)) AND (json_extract(r.json,'$.validUntil') IS NULL OR julianday(json_extract(r.json,'$.validUntil'))>julianday(?))");args.push(at,at,at);}
-  if(query.query){conditions.push("instr(lower(coalesce(json_extract(r.json,'$.title'),'')||' '||coalesce(json_extract(r.json,'$.statement'),'')),lower(?))>0");args.push(query.query);}
+  if(query.query){const {match,short}=memorySearchQuery(query.query);if(match){conditions.push('r.id IN(SELECT id FROM mm_fts WHERE mm_fts.user_id=$user AND mm_fts MATCH ?)');args.push(match);}for(const term of short){conditions.push('r.id IN(SELECT id FROM mm_fts WHERE mm_fts.user_id=$user AND instr(lower(text),lower(?))>0)');args.push(term);}}
   if(paginate&&position){conditions.push('(r.created_at<? OR (r.created_at=? AND r.id<?))');args.push(position.at,position.at,position.id);}
   return {query,identity,conditions,args};
  }
- page(raw:unknown={},sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
-  const {query,identity,conditions,args}=this.filters(raw,sourceIds,true,recordPins);if(recordPins){conditions.push("EXISTS(SELECT 1 FROM json_each(?) frozen WHERE json_extract(frozen.value,'$.id')=r.id AND json_extract(frozen.value,'$.version')=r.version AND json_extract(frozen.value,'$.fingerprint')=json_extract(r.json,'$.fingerprint'))");args.push(JSON.stringify(recordPins));}
+ page(raw:unknown={},sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[],opening=false){
+  const {query,identity,conditions,args}=this.filters(raw,sourceIds,true,recordPins,false,opening);if(recordPins){conditions.push("EXISTS(SELECT 1 FROM json_each(?) frozen WHERE json_extract(frozen.value,'$.id')=r.id AND json_extract(frozen.value,'$.version')=r.version AND json_extract(frozen.value,'$.fingerprint')=json_extract(r.json,'$.fingerprint'))");args.push(JSON.stringify(recordPins));}
   const rows=this.sql.all(`SELECT r.* FROM mm_records r WHERE r.user_id=$user AND ${conditions.join(' AND ')} ORDER BY r.created_at DESC,r.id DESC LIMIT ?`,...args,query.limit+1) as MemoryRow[],last=rows.slice(0,query.limit).at(-1);
   return {rows:rows.slice(0,query.limit),nextCursor:rows.length>query.limit&&last?this.cursor.encode(identity,{at:last.created_at,id:last.id}):null};
  }
@@ -197,12 +205,12 @@ export class ScopedMemoryData {
  }
  /** Literal host record only. Both page and exact/history reads use these same
   * SQL predicates before any external provider is given its exact key. */
- matches(memory:Memory,raw:unknown={},sourceIds?:readonly string[]){
-  const filters=memoryReadFiltersSchema.parse(raw),{conditions,args}=this.filters(filters,sourceIds,false);
+ matches(memory:Memory,raw:unknown={},sourceIds?:readonly string[],opening=false){
+  const filters=(opening?memoryOpeningReadFiltersSchema:memoryReadFiltersSchema).parse(raw),{conditions,args}=this.filters(filters,sourceIds,false,undefined,false,opening);
   return Boolean(this.sql.get(`SELECT r.id FROM (SELECT $user user_id,? id,? json,? created_at) r WHERE r.user_id=$user AND ${conditions.join(' AND ')}`,memory.id,JSON.stringify(memory),memory.createdAt,...args));
  }
- rankedPage(raw:unknown,ids:readonly string[],sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
-  const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory-provider',...query,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {}),...(recordPins?{recordPins:memoryHash(recordPins)}:{}),binding:this.binding(),ranked:memoryHash(ids)},position=cursor?this.cursor.decode(cursor,identity):undefined,start=position?Number(position.at):0;
+ rankedPage(raw:unknown,ids:readonly string[],sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[],opening=false){
+  const {cursor,...query}=(opening?memoryOpeningPageSchema:memoryPageSchema).parse(raw),identity={collection:opening?'memory-opening-provider':'memory-provider',...query,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {}),...(recordPins?{recordPins:memoryHash(recordPins)}:{}),binding:this.binding(),ranked:memoryHash(ids)},position=cursor?this.cursor.decode(cursor,identity):undefined,start=position?Number(position.at):0;
   if(!Number.isSafeInteger(start)||start<0||start>ids.length||position&&ids[start-1]!==position.id)throw new PrivateDataError('invalid_cursor');
   const end=Math.min(start+query.limit,ids.length),items=ids.slice(start,end);return {ids:items,nextCursor:end<ids.length?this.cursor.encode(identity,{at:String(end),id:ids[end-1]}):null};
  }

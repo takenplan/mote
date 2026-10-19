@@ -1,3 +1,4 @@
+import {memorySearchQuery} from './memory-search-query.js';
 import {ownerMemoryCorrectionSchema,prepareOwnerMemoryCorrection} from './memory-owner-correction.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -88,9 +89,9 @@ export class MemoryStore {
       conditions.push(`EXISTS(SELECT 1 FROM memory_dependencies d WHERE d.memory_id=memory_catalog.id) AND NOT EXISTS(SELECT 1 FROM memory_dependencies d LEFT JOIN captures c ON c.id=d.evidence_id ${materialJoin} WHERE d.memory_id=memory_catalog.id AND ${source}!=?)`);values.push(args.sourceId);
     }
     if(args.query?.trim()){
-      const terms=args.query.trim().split(/\s+/u).slice(0,12),long=terms.filter(t=>Array.from(t).length>=3);
-      if(long.length){conditions.push('id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)');values.push(long.map(t=>'"'+t.replaceAll('"','""')+'"').join(' AND '));}
-      for(const term of terms.filter(t=>Array.from(t).length<3)){conditions.push('id IN (SELECT id FROM memories_fts WHERE instr(lower(text),lower(?))>0)');values.push(term);}
+      const {match,short}=memorySearchQuery(args.query);
+      if(match){conditions.push('id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)');values.push(match);}
+      for(const term of short){conditions.push('id IN (SELECT id FROM memories_fts WHERE instr(lower(text),lower(?))>0)');values.push(term);}
     }
     if(args.deviceId||args.after||args.before){
       const mismatch:string[]=[];
