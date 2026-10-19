@@ -62,7 +62,8 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
     const phase=unfinished??(phaseFacts.length===steps.length?phaseFacts[0]:coordinator?{state:coordinator.state,error:coordinator.failure?.code??coordinator.error??undefined}:undefined);
     return phase?[{name,state:phase.state,error:phase.error,receipts:phaseFacts.flatMap(fact=>fact.receipt?[fact.receipt]:[])}]:[];
    }
-   const task=coordinator&&coordinator.state!=='succeeded'&&!tasks.some(t=>t.kind==='processing.ocr'&&t.state==='running')?coordinator:tasks.find(task=>name==='ocr'?task.kind==='processing.ocr':task.kind==='processing.analysis'&&task.mode==='image')??tasks.find(task=>task.kind==='processing.pipeline');
+   const phaseTask=tasks.find(task=>name==='ocr'?task.kind==='processing.ocr'||task.kind==='processing.image-stage'&&task.imageStep==='ocr':task.kind==='processing.analysis'&&task.mode==='image'||task.kind==='processing.image-understanding'||task.kind==='processing.image-stage'&&task.imageStep==='understanding');
+   const task=phaseTask??coordinator;
    return task?[{name,state:task.state,error:task.failure?.code??task.error??undefined}]:[];
   });
   const namedProducts=status.derivations.map(d=>({id:String(d.artifactId),materialId:String(d.materialId),kind:String(d.kind)})).filter(d=>d.kind==='image'||d.kind.startsWith('image:')||d.kind.startsWith('image-ocr:')).map(d=>({...d,stepName:d.kind.includes(':')?d.kind.slice(d.kind.indexOf(':')+1):undefined,name:d.kind.startsWith('image-ocr:')?'ocr':'understanding',kind:d.kind.startsWith('image-ocr:')?'ocr':'image'}));

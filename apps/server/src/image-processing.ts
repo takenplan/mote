@@ -8,7 +8,7 @@ import {FileProcessing} from './file-processing.js';
 import {processorSettingsFingerprint,processorContract} from './file-configuration.js';
 import type {AppliedFilePolicy} from './file-policy.js';
 import {ImageInputRegistry,ImageAttachmentIntake,installImageInputs,installImageSchema,type ImageInputRow,type ImageOriginal} from './image-inputs.js';
-import {DEFAULT_IMAGE_RECIPE,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
+import {DEFAULT_IMAGE_RECIPE,imageDependencyPermits,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
 import {linkOperationParent} from './operation-projection.js';
 import {imageOutput} from './evidence-image.js';
 import {writeFileTranscriptChunks} from './file-transcript-chunks.js';
@@ -280,7 +280,7 @@ export class ImageProcessing {
      const job=db.prepare('SELECT * FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,stage.name) as JobRow;
      if(['succeeded','cancelled'].includes(job.state)||job.attempts>=4||job.available_at>Date.now())continue;
      if(!settingsSchema.parse(this.settings()).enabled){db.prepare("UPDATE perception_jobs SET state='blocked',error='processing_disabled' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
-     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return dependency?.state==='succeeded'||stage.optionalDependencies?.includes(name)&&['blocked','failed','cancelled'].includes(String(dependency?.state));})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
+     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return imageDependencyPermits(String(dependency?.state??''),stage.optionalDependencies?.includes(name)??false);})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
      const fingerprint=this.fingerprint(row,stage),input={captureId:row.capture_id,hash:row.hash,name:stage.name,generation:row.generation,fingerprint,adapterVersion:this.inputs.get(row.adapter)?.version??'',stage:stage.stage};
      linkOperationParent(this.store,(row.adapter==='mote.file-image'?'file:':'capture:')+row.capture_id,'image:'+row.capture_id);
      const stepId=this.engine.enqueue('image:'+row.capture_id,'images.'+stage.kind,input,{generation:{slot:stage.name,version:sha256(JSON.stringify([row.generation,fingerprint]))}}),step=this.engine.get(stepId)!;

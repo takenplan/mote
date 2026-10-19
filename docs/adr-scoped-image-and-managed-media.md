@@ -85,6 +85,23 @@ and bound plan; unavailable workers remain durable waiting. This handoff does no
 revive cancelled/completed work, settle unknown calls, or create an ambient owner
 context. Instance media status exposes neither credentials nor host directories.
 
+Image understanding retains the original recipe's optional OCR semantics. A
+current, trusted blocked/failed/cancelled OCR child may lack a product; its
+optional consumer can still inspect the original. Pending/stale dependencies,
+unresolved external calls and retired root/source/account grants cannot grant
+that permission. The default successful OCR publication and automatic derivative
+flow stay intact; its missing-OCR path uses the existing scoped image-stage and
+understanding ports. Default interpretations keep `image`, and custom products
+keep `image:<step>`. Completion renews unfinished OCR while retaining accepted
+interpretations with their actual dependency receipts, including an originally
+absent optional OCR. The root retains the original unfinished OCR failure after
+independent interpretation publication, so Files and managed-readiness recheck
+keep their existing states and recovery authority. Late OCR does not
+retroactively become the interpretation's input. OCR seed
+evidence remains complete, range-accurate and untrusted; the model harness's
+existing hard limits remain explicit failures. See the
+[optional OCR regression record](validation/image-optional-ocr-2026-10-19.md).
+
 | Disposition | Boundary |
 | --- | --- |
 | KEEP | Original image defaults, future profile selection, explicit historical complete/recompute, receipt proof, current evidence fences, private account configuration, one M05 engine, pinned asset catalog and existing worker supervisor. |
