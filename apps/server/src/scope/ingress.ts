@@ -216,6 +216,27 @@ export class IngressHost{
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
     if(manifest.sourceId!==sourceId||manifest.item.kind!=='file'||manifest.item.text||binding.retention==='reference'&&manifest.item.layer!=='reference'||binding.retention!=='reference'&&manifest.item.layer==='reference')throw conflict();
     forgetting.allowed(sourceId,manifest.item);declaration(sourceId,input.importDeclaration);const digest=identityHash(input.importDeclaration===undefined?manifest:{manifest,importDeclaration:input.importDeclaration}),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
+    if(previous&&(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch))throw conflict();
+    // A collected transport receipt is not the canonical business ACK. Ordinary
+    // archive retries can prove the current immutable input without reopening
+    // part authority, retaining receipt history, or adopting a retired grant.
+    if(!previous&&binding.retention==='archive'&&manifest.item.layer==='original'&&!manifest.item.deleted&&manifest.sha256&&!manifest.processingProfileId&&input.importDeclaration===undefined){
+     const head=data().sourceItem(sourceId,manifest.item.externalId);
+     if(head?.revision===manifest.item.revision){
+      const ack=data().matchSourceRevision(sourceId,fileRevisionItem(manifest));
+      if(ack&&ack.id===head.captureId){
+       const retainedRow=sql.get('SELECT r.id FROM ig_originals r JOIN ig_objects o ON o.user_id=r.user_id AND o.hash=r.hash WHERE r.user_id=$user AND r.source_id=? AND r.capture_id=?',sourceId,ack.id);
+       if(retainedRow){
+        const retained=original('original:'+retainedRow.id);
+        if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
+        let resident=false;try{originals.readObject(retained.hash);resident=true;}catch(error){if(error instanceof ScopeError)throw error;}
+        // An unavailable/corrupt local object cannot establish this fast ACK.
+        // Continue the existing upload/resupply path; do not invent a new410.
+        if(resident){assert();return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};}
+       }
+      }
+     }
+    }
     if(previous){
      if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch)throw conflict();
      const received=previous.receipt?checkReceipt(JSON.parse(String(previous.receipt))):undefined;

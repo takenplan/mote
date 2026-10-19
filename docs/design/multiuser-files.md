@@ -49,6 +49,25 @@ projection used at upload publication. Recovery still requires the current
 owned original, exact bytes, unchanged item metadata and its existing recovery
 identity; canonicalization does not renew a recovery grant.
 
+Ordinary archive upload retries recover a canonical business ACK after expired
+transport staging is collected. M02 validates the exact current revision's
+normalized source metadata and observation time; M03 validates its retained
+original hash, size, MIME, archive retention and actual local bytes. A retained
+upload receipt keeps its initial JSON, including `duplicate:false`; a collected
+receipt is reconstructed with `duplicate:true`, the same business capture and
+original identity, and `parts:[]`. Its top-level upload ID is only a locator:
+there is no new upload row, part authority, processing intent or adopted grant.
+The current account, source, device and deletion checks still precede the read.
+
+This fast path is limited to ordinary `archive`/`original` file revisions with
+no explicit `processingProfileId` or `importDeclaration`. Those explicit flows
+retain their existing admission and transport behavior because their complete
+committed override manifest is not persisted in the canonical capture. Snapshot
+input expiry/recovery, missing or deleted originals, reference files and
+uncommitted attempts keep their separate existing rules; no TTL or GC policy
+changes. See [canonical ACK regression](../validation/canonical-file-ack-2026-10-19.md)
+for the source-only candidate and pending validation matrix.
+
 Automatic intake admits one task for the current original incarnation and
 attachment binding. A different transport batch carrying the same acknowledged
 input does not create another processing intent or renew a retired grant.
