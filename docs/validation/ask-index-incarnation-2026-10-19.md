@@ -72,11 +72,12 @@ still checked before consumption. This preserves valid per-record continuation;
 it adds no scan, backfill, old-format interpretation or grant renewal.
 
 Two generated mixed-batch regressions hold the real organizer/admission pools or
-actual embedding responses. They retire and recreate X through real M03 routes,
-then require Y's original event/proof and (when issued) original task/model/grant
-to finish. Old X must not publish replacement content under that event. Fresh X
-notifications retain their normal producer path. No listener is disabled and no
-journal/task/vector is hand-inserted. These tests remain unexecuted.
+actual embedding responses. They DELETE X through the real public route and
+require same-ID redelivery to return `410 capture_deleted`, with X still absent. They then require Y's original
+event/proof and (when issued) original task/model/grant to finish; deleted X must
+not publish its late result. Legal same-ID source-lifetime recreation remains in
+the separate original cases; it is not an ordinary-capture tombstone bypass. No
+listener is disabled and no journal/task/vector is hand-inserted. These tests remain unexecuted.
 
 The independent test oracle reads actual current epoch/incarnations and raw
 receipt fields but receives the known fixture graph from its caller; it never
@@ -88,3 +89,28 @@ newly measured M07 incident or a skipped/softened assertion.
 The environment/build PASS on the unchanged parent `582f624e` is not a build or
 runtime result for this child. Child source preparation, independent review,
 semantic checks, controlled F01 RED/GREEN and all consumer runs remain separate.
+
+## Child admission reauthorization follow-up
+
+Review A084-F01 identified another asynchronous boundary: M05 authorizes a child,
+awaits its real M04 fork, then authorizes it again before admission. A record can
+retire in that interval. The parent now handles only a `not_found/404` rejection
+whose same exact input is still invalid on recheck, after the parent grant,
+trusted context and original global model lease are reasserted. If the record
+is still current, or the original error is a model/configuration/scheduler/storage
+failure, that error still reaches the parent’s existing failure classification. This is not a general submit-error
+catch, retry, or grant renewal.
+
+A prepared regression holds the real returned M04 fork lease, verifies the exact
+X child operation after M05's first authorization, DELETEs X, preserves its 410
+redelivery fence, then releases the second authorization. Y must be admitted and
+complete from the original event. A companion changes the real model configuration
+to revoke credentials during that same hold; its global failure must remain
+visible as M05’s `stale/grant_revoked`, and neither child may issue a paid request. These are new unexecuted
+regressions, separate from parent-pool and HTTP-response timing barriers.
+
+The previously accepted independent proof oracle and exact processing graph
+assertions are unchanged. The complete enabled exact-revision public case remains
+byte-identical and requires composition with the separately reviewed M07
+`66a576fd` source (including its schema responsibility) before a joint public
+GREEN can be claimed. No unbound M07 overlay is included in this Ask child.

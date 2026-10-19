@@ -15,7 +15,7 @@ import type {Configurations,ModelLease} from './configuration.js';
 import type {TaskExecution,TaskRun} from './task-execution.js';
 import type {UserContext} from './context.js';
 import {askHash,installAskRetrieval,type AskScope} from './ask-schema.js';
-import {PrivateSql,missing} from './private-data-sql.js';
+import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import type {IngressReceipt} from './ingress.js';
 
 type EvidencePort={records:(args?:ContextQueryInput)=>{items:CaptureRecord[];nextCursor:string|null};evidence:(ids:readonly string[],args?:ContextQueryInput)=>CaptureRecord[];materialRecords:(id:string,revision?:string)=>CaptureRecord[];originalReceipt:(id:string)=>string;vectorQuery:(modelKey:string,args?:ContextQueryInput)=>VectorQuery};
@@ -78,8 +78,16 @@ export class ScopedAskRetrieval{
   try{records=event.kind==='material'?reader.materialRecords(event.id,event.revision):event.ids.flatMap(id=>{try{return reader.evidence([id]);}catch{run.grant.assert();return [];}});}catch{run.grant.assert();return {current:false};}
   records=records.filter(record=>{try{this.candidate(run.context,proof,record.id);return true;}catch{run.grant.assert();return false;}});if(!records.length)return {current:false};
   const operationId='embedding-index:'+eventId,lease=await this.configuration.lease(run.context,'embedding',operationId);run.grant.assert();let scheduled=0;
-  for(const record of records){run.grant.assert();let input:z.infer<typeof indexInput>;try{this.candidate(run.context,proof,record.id);input={eventId,id:record.id,fingerprint:memoryEvidenceFingerprint(record),receipt:reader.originalReceipt(record.id),anchorHash:this.anchorHash(run.context,record.id),sourceIds:event.sourceIds,model:{snapshotId:lease.snapshotId,operationId:lease.operationId}};}catch{run.grant.assert();continue;}await this.execution.forUser(run.context).submit({kind:'ask.embedding',operationId:'embedding-index:'+askHash(input),input});scheduled++;}
+  for(const record of records){run.grant.assert();let input:z.infer<typeof indexInput>;try{this.candidate(run.context,proof,record.id);input={eventId,id:record.id,fingerprint:memoryEvidenceFingerprint(record),receipt:reader.originalReceipt(record.id),anchorHash:this.anchorHash(run.context,record.id),sourceIds:event.sourceIds,model:{snapshotId:lease.snapshotId,operationId:lease.operationId}};}catch{run.grant.assert();continue;}try{await this.execution.forUser(run.context).submit({kind:'ask.embedding',operationId:'embedding-index:'+askHash(input),input});scheduled++;}catch(error){if(!this.retiredDuringAdmission(run,input,lease,error))throw error;}}
   return {scheduled};
+ }
+ /** M05 reauthorizes after its asynchronous model fork. A record may retire
+  * there, but global/model/scheduler failures must remain visible to the parent. */
+ private retiredDuringAdmission(run:TaskRun,input:z.infer<typeof indexInput>,lease:ModelLease,error:unknown){
+  if(!(error instanceof PrivateDataError)||error.code!=='not_found'||error.statusCode!==404)return false;
+  run.grant.assert();this.runtime.authority.assert(run.context);this.configuration.assertLease(lease);this.event(run.context,input.eventId);
+  try{this.indexCurrent(run.context,input);return false;}
+  catch(current){run.grant.assert();this.runtime.authority.assert(run.context);this.configuration.assertLease(lease);return current instanceof PrivateDataError&&current.code==='not_found'&&current.statusCode===404;}
  }
  private anchorHash(context:UserContext,id:string){const sql=this.sql(context),row=sql.get('SELECT hash FROM mm_evidence WHERE user_id=$user AND id=?',id)??sql.get('SELECT fingerprint hash FROM pd_captures WHERE user_id=$user AND id=?',id);if(!row)throw missing();return String(row.hash);}
  private indexCurrent(context:UserContext,input:z.infer<typeof indexInput>){const proof=this.event(context,input.eventId),event=proof.event;if(JSON.stringify(event.sourceIds)!==JSON.stringify(input.sourceIds))throw missing();if(event.kind==='captures'){if(!event.ids.includes(input.id))throw missing();}else if(!this.sql(context).get('WITH RECURSIVE tree(id,revision) AS(SELECT ?,? UNION SELECT p.input_material_id,p.input_revision FROM pd_material_inputs p JOIN tree t ON p.material_id=t.id AND p.revision=t.revision WHERE p.user_id=$user) SELECT 1 FROM mm_evidence e JOIN tree t ON t.id=e.material_id AND t.revision=e.material_revision WHERE e.user_id=$user AND e.id=?',event.id,event.revision,input.id))throw missing();this.candidate(context,proof,input.id);const reader=this.factory(context,{sourceIds:input.sourceIds,assertCurrent:()=>this.runtime.authority.assert(context)}),record=reader.evidence([input.id])[0];if(memoryEvidenceFingerprint(record)!==input.fingerprint||reader.originalReceipt(input.id)!==input.receipt||this.anchorHash(context,input.id)!==input.anchorHash)throw missing();return record;}
