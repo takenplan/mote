@@ -85,7 +85,7 @@ export class AskEvidence{
   return {items:page.map(row=>this.material(String(row.id))),nextCursor:rows.length>query.limit&&last?this.cursor.encode(identity,{at:String(last.updated_at),id:String(last.id)}):null};
  }
  /** Model-facing metadata is a view; canonical evidence hashes remain unchanged. */
- context(record:CaptureRecord):ContextRecord{
+ context(record:CaptureRecord):CaptureRecord&ContextRecord{
   this.assert();const anchor=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',record.id);let view=record,typed=!anchor,current=true;
   if(anchor){
    const material=this.material(String(anchor.material_id),String(anchor.material_revision)),origin=material.origin,sourceHead=this.data.sourceItem(origin.sourceId,origin.externalId),publication=sourceHead?undefined:this.sql.get('SELECT o.capture_id FROM mp_publications p JOIN ig_originals o ON o.user_id=p.user_id AND o.id=p.original_id WHERE p.user_id=$user AND o.user_id=$user AND p.material_id=? AND p.revision=?',material.id,material.revision),id=sourceHead?.captureId??(publication?String(publication.capture_id):undefined);
