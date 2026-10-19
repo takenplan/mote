@@ -2079,6 +2079,7 @@
       "table:mm_jobs",
       "table:mm_meta",
       "table:mm_native_cleanup",
+      "table:mm_organizer_origins",
       "table:mm_owner_cancellations",
       "table:mm_provider_config",
       "table:mm_provider_descriptors",

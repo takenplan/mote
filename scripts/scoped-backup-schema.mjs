@@ -111,6 +111,7 @@ export const scopedBackupSchema = Object.freeze({
  "mm_binding_locks":["user_id","operation_id"],
  "mm_binding_preparations":["user_id","id","source","target","catalog_hash","json","state","task_id"],
  "mm_capture_intakes":["user_id","capture_id","source_id","json","revoked"],
+ "mm_organizer_origins":["user_id","source_id","capture_id","incarnation"],
  "mm_commands":["user_id","id","fingerprint"],
  "mm_deletions":["user_id","id","json"],
  "mm_dependencies":["user_id","memory_id","evidence_id","hash"],
