@@ -43,28 +43,46 @@ for(const owner of ['a','b']){
 }
 await host.app.listen({host:'127.0.0.1',port:0});const port=(host.app.server.address() as {port:number}).port;
 process.send?.({event:'ready',url:'http://'+fixtureHostname+':'+port,users:Object.fromEntries(Object.entries(users).map(([id,value])=>[id,{userId:value.userId,username:id==='admin'?'generated-admin':'generated-'+id}])),password});
-/** Resolve through the same public formal read used by query tools. Raw UUIDs
- * stay identical across owners; canonical evidence UUIDs include owner/revision. */
+/** Fixture locator follows complete public pages and binds a canonical span to
+ * the known generated raw member AND exact generated body, never a first ref. */
+const locatorStages:{stage:string;[key:string]:string|number|boolean}[]=[];
+function locatorStage(stage:string,facts:Record<string,number|boolean>={}){const record={stage,...facts};locatorStages.push(record);process.send?.({event:'locator-stage',...record});}
+function locatorCheck(ok:unknown,stage:string,facts:Record<string,number|boolean>={}):asserts ok{locatorStage(stage,{...facts,passed:Boolean(ok)});if(!ok)throw Error('LOCATOR_CONTRACT_FAILED');}
 async function evidenceTargets(){
  const sharedRaw='6d477b3e-fb43-4657-818d-c143ad76430f',deadline=Date.now()+25000,targets:Record<string,{reference:string;rawPublicId:string}>={};
- for(const owner of ['a','b']){
-  const token=users[owner].token;let items:{ref:string}[]=[];
-  do{items=(await call(token,'/api/agent-view/materials?'+new URLSearchParams({sourceId:'same-source',limit:'30'}))).items;if(!items.length){assert.ok(Date.now()<deadline,'Generated formal producer has not published');await new Promise(resolve=>setTimeout(resolve,10));}}while(!items.length);
-  assert.equal(items.length,1,'Generated single-note source has one current formal object');
-  const page=await call(token,'/api/agent-view/material-read?'+new URLSearchParams({ref:items[0].ref,length:'12000'}));assert.equal(page.originalRefs?.length,1,'Public formal read must expose one canonical citation');
-  const citation=page.originalRefs[0],parsed=parseEvidenceRef(citation);assert.equal(parsed?.kind,'capture');assert.notEqual(parsed?.id,sharedRaw,'Formal evidence must not be guessed from raw UUID');
-  const read=await call(token,'/api/context/read','POST',{refs:[citation],offset:0,length:4000});assert.ok(read.items[0]?.text.includes('GENERATED_PRIVATE_'+owner.toUpperCase()),'Public citation must read its generated owner text');
-  const raw=await call(token,'/api/captures/'+sharedRaw);assert.equal(raw.id,sharedRaw);assert.ok(raw.ocrText.includes('GENERATED_PRIVATE_'+owner.toUpperCase()),'The same raw public ID remains owner-isolated');
-  targets[owner]={reference:'context:'+citation,rawPublicId:raw.id};
+ const read=async(owner:string,path:string,method='GET',payload?:unknown)=>{const response=await fetch('http://127.0.0.1:'+port+path,{method,headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',authorization:'Bearer '+users[owner].token,...(payload===undefined?{}:{'content-type':'application/json'})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});locatorCheck(response.status===200,'public-http-response',{status:response.status});return response.json();};
+ for(const [ownerIndex,owner] of ['a','b'].entries()){
+  locatorStage('owner-start',{ownerIndex});const marker='GENERATED_PRIVATE_'+owner.toUpperCase(),raw=await read(owner,'/api/captures/'+sharedRaw);
+  locatorCheck(raw.id===sharedRaw&&raw.ocrText===marker,'raw-current-owner',{ownerIndex,idMatches:raw.id===sharedRaw,markerMatches:raw.ocrText===marker});
+  const materials:any[]=[];let cursor:string|undefined;const cursors=new Set<string>();
+  do{let page:any;do{page=await read(owner,'/api/agent-view/materials?'+new URLSearchParams({sourceId:'same-source',limit:'30',...(cursor?{cursor}:{})}));locatorCheck(Array.isArray(page.items),'catalog-shape',{ownerIndex});if(!page.items.length&&!cursor){locatorCheck(Date.now()<deadline,'catalog-producer-deadline',{ownerIndex});await new Promise(resolve=>setTimeout(resolve,10));}}while(!page.items.length&&!cursor);
+   materials.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){locatorCheck(!cursors.has(cursor),'catalog-cursor-progress',{ownerIndex});cursors.add(cursor);}
+  }while(cursor);
+  locatorStage('catalog-complete',{ownerIndex,materials:materials.length});const matches=new Set<string>();
+  for(const material of materials){let offset=0;do{
+   const page=await read(owner,'/api/agent-view/material-read?'+new URLSearchParams({ref:material.ref,offset:String(offset),length:'12000'}));
+   locatorCheck(Array.isArray(page.originalRefs)&&Array.isArray(page.spans)&&Array.isArray(page.sourceSpans)&&typeof page.text==='string','material-read-shape',{ownerIndex,refs:Array.isArray(page.originalRefs)?page.originalRefs.length:0,spans:Array.isArray(page.spans)?page.spans.length:0,sourceSpans:Array.isArray(page.sourceSpans)?page.sourceSpans.length:0});
+   locatorCheck(page.material?.ref===material.ref&&page.originalRefsTruncated===false&&page.originalRefsTotal===page.originalRefs.length,'material-current-complete',{ownerIndex,current:page.material?.ref===material.ref,refsComplete:page.originalRefsTruncated===false&&page.originalRefsTotal===page.originalRefs.length});
+   for(const span of page.spans){if(!span.memberIds?.includes(sharedRaw)||page.text.slice(span.pageRange.start,span.pageRange.end)!==marker)continue;
+    for(const sourceSpan of page.sourceSpans){const record=sourceSpan.record;if(record?.provenance?.uri!==material.ref+'#'+span.blockId||record.ocrText!==marker||record.capturedAt!==raw.capturedAt)continue;
+     const citation=page.originalRefs.find((ref:string)=>{const parsed=parseEvidenceRef(ref);return parsed?.kind==='capture'&&parsed.id===record.id;});
+     locatorCheck(Boolean(citation)&&record.id!==sharedRaw,'canonical-member-binding',{ownerIndex,knownRawMember:true,markerMatches:true,sourceSpanMatches:true,typedCitationMatches:Boolean(citation),canonicalDiffersFromRaw:record.id!==sharedRaw});matches.add(citation);
+    }
+   }
+   const nextOffset=page.textRange?.nextOffset;locatorCheck(nextOffset===null||(Number.isInteger(nextOffset)&&nextOffset>offset),'material-window-progress',{ownerIndex,complete:nextOffset===null});if(nextOffset===null)break;offset=nextOffset;
+  }while(true);}
+  locatorCheck(matches.size===1,'unique-generated-target',{ownerIndex,matches:matches.size});const citation=[...matches][0],readback=await read(owner,'/api/context/read','POST',{refs:[citation],offset:0,length:4000});
+  locatorCheck(readback.items?.length===1&&readback.items[0]?.ref===citation&&readback.items[0]?.text===marker,'context-owner-readback',{ownerIndex,items:readback.items?.length??0,typedRefMatches:readback.items?.[0]?.ref===citation,markerMatches:readback.items?.[0]?.text===marker});targets[owner]={reference:'context:'+citation,rawPublicId:raw.id};
  }
- assert.equal(targets.a.rawPublicId,targets.b.rawPublicId);assert.notEqual(targets.a.reference,targets.b.reference,'Canonical identity includes its real owner and revision');
- const foreign=await host.app.inject({url:'/api/context/read',method:'POST',headers:{'x-mote-protocol-version':'2',authorization:'Bearer '+users.b.token},payload:{refs:[targets.a.reference.slice('context:'.length)],offset:0,length:4000}});assert.equal(foreign.statusCode,404,'The same A public canonical citation must not read through B');
- return {a:targets.a,b:targets.b,sameRawPublicId:true,crossOwnerCanonicalStatus:foreign.statusCode};
+ locatorCheck(targets.a.rawPublicId===targets.b.rawPublicId&&targets.a.reference!==targets.b.reference,'owner-identity-contract',{sameRawPublicId:targets.a.rawPublicId===targets.b.rawPublicId,distinctCanonical:targets.a.reference!==targets.b.reference});
+ const foreign=await fetch('http://127.0.0.1:'+port+'/api/context/read',{method:'POST',headers:{'x-mote-protocol-version':'2',authorization:'Bearer '+users.b.token,'content-type':'application/json'},body:JSON.stringify({refs:[targets.a.reference.slice('context:'.length)],offset:0,length:4000})});await foreign.arrayBuffer();locatorCheck(foreign.status===404,'exact-cross-owner-denied',{status:foreign.status});
+ return {a:targets.a,b:targets.b,sameRawPublicId:true,crossOwnerCanonicalStatus:foreign.status};
 }
 process.on('message',async(message:any)=>{
  try{
   let result:unknown;
   if(message.command==='evidence-targets'){result=await evidenceTargets();
+  }else if(message.command==='locator-diagnostics'){result=locatorStages.map(record=>({...record}));
   }else if(message.command==='read-statuses'){result=readStatuses.map(row=>({...row}));
   }else if(message.command==='hold'){
    let release!:()=>void;const promise=new Promise<void>(done=>{release=done;});gates.set(message.key,{entered:false,release,promise});result=true;
@@ -91,5 +109,5 @@ process.on('message',async(message:any)=>{
    for(const gate of gates.values())gate.release();provider?.release();await host.app.close();await provider?.close();rmSync(root,{recursive:true,force:true});process.send?.({id:message.id,result:true});process.disconnect();return;
   }else throw Error('Unknown fixture command');
   process.send?.({id:message.id,result});
- }catch(error){process.send?.({id:message.id,error:String(error)});}
+ }catch(error){process.send?.({id:message.id,error:message.command==='evidence-targets'?'LOCATOR_CONTRACT_FAILED':String(error)});}
 });

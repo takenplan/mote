@@ -178,3 +178,45 @@ application builds, focused tests, affected checks and explicit browser run are
 **UNRUN**. The dry-run plan is scheduling evidence only. Original Desktop/IAB,
 physical-device, live-model, expiry, true cross-tab and auth A→B→A checks retain
 their separate UNKNOWN / UNRUN status. No frozen PR or live source was updated.
+
+
+## Public locator contract follow-up to 43a64d01 (prepared, UNRUN child)
+
+The driver's first 43a64d01 run completed isolated install/native preparation
+and normal source-bound build. The whole Vault file passed 12 cases, including
+real import, lost ACK, account B and cancelled picker behavior. Its separate
+browser exited naturally before any window or ticket, at
+`public-evidence-targets-ready`; only catalog 200 and Material-read 200 were
+recorded. The failed helper assertion value was not recorded. These outcomes
+remain distinct from a browser main/auth result.
+
+The authored organizer currently creates a body text block and a metadata text
+block. The public Material reader returns canonical `originalRefs` for all
+records, plus `spans` (including member IDs and page ranges) and `sourceSpans`
+(including canonical records). Therefore the previous one-ref assertion is not
+part of that public contract. This child traverses complete catalog and Material
+text pages. It binds a target only when the public span names the known generated
+raw member, its text equals the known generated body, and its public sourceSpan
+record matches that block, timestamp and a typed returned citation. Exactly one
+such target is required; unrelated metadata refs are neither guessed nor chosen.
+A/B retain the same raw UUID, current owner readback and the exact A citation's
+B rejection. This corrects a source-confirmed contract assumption; it does not
+retroactively identify the unrecorded assertion that failed at 43a64d01.
+
+Locator progress contains fixed stage enums, structure counts and boolean
+checks only. No citation, URI, body, URL, credential or assertion text is emitted.
+The shared fixture locator now uses actual loopback public HTTP with the original
+generated account credentials. The explicit `login-evidence-locator-smoke.cjs`
+forks the same fresh port-0 host and invokes the locator once, then requests host
+closure and records natural exit/profile cleanup. It writes only safe stages and
+source identity, has no Electron or model calls, and cannot establish browser or
+Desktop/IAB acceptance. It requires a clean exact head and external output:
+
+```sh
+MOTE_WEB_FIXTURE_EXPECTED_HEAD=<frozen-head> MOTE_WEB_LOCATOR_OUTPUT=<external-dir> node apps/web/test/login-evidence-locator-smoke.cjs
+```
+
+The already-passed 43 Vault source and 5c recording source are unchanged, as are
+all d6 production blobs and other auth/route/settlement scenarios. This child's
+runtime statuses are recorded externally after freezing; preparation alone is
+UNRUN. A first smoke failure is retained without automatic repair or rerun.
