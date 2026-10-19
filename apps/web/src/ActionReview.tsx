@@ -14,11 +14,12 @@ const reviewed=z.object({
  targetDetails:z.object({deviceId:z.string().min(1).max(200),deviceName:z.string().min(1).max(200),calendar:calendarChoiceSchema.extend({accountId:z.string().min(1).max(1000).optional()})}).strict().optional(),related:related.optional(),
  evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000),fingerprint:z.string().regex(/^[a-f0-9]{64}$/),source:z.string(),capturedAt:z.string().datetime({offset:true})}).strict()).min(1).max(40),fingerprint:z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
-const reviewSchema=ownerQuestionSchema.extend({reviewedAction:reviewed}).strict();
+const reviewSchema=ownerQuestionSchema.extend({reviewedAction:reviewed,execution:z.object({operationId:z.string().uuid(),status:z.enum(['approved','executing','uncertain','succeeded'])}).strict().optional()}).strict();
 export type FixedActionReview=z.infer<typeof reviewSchema>;
 /** Presentation validation never reconstructs the server's grant or epochs. */
 export function readActionReview(value:unknown,actionId:string,questionId?:string):FixedActionReview{
  const result=reviewSchema.parse(value),action=result.reviewedAction;
+ if(Boolean(result.execution)!==(result.state==='closed'&&result.outcome==='approved'))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
  if(result.provider.id!=='actions.calendar'||result.provider.version!=='1'||result.workId!==actionId||action.id!==actionId||questionId!==undefined&&result.id!==questionId||result.choices.length!==2||new Set(result.choices.map(choice=>choice.id)).size!==2||!result.choices.every(choice=>['approve','dismiss'].includes(choice.id)))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
  const needsTarget=action.kind==='calendar.create'||Boolean(action.related?.externalId)&&['calendar.update','calendar.cancel'].includes(action.kind);
  if(Boolean(action.target)!==Boolean(action.targetDetails)||action.target&&(action.target.deviceId!==action.targetDetails!.deviceId||action.target.calendarId!==action.targetDetails!.calendar.id)||needsTarget&&!action.target)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
@@ -28,7 +29,13 @@ export function readActionReview(value:unknown,actionId:string,questionId?:strin
 const kindLabel=(kind:FixedActionReview['reviewedAction']['kind'])=>({'calendar.create':moteText('添加日程'),'calendar.update':moteText('更新日程'),'calendar.cancel':moteText('取消日程'),'calendar.complete':moteText('标记安排完成')})[kind];
 
 /** Shared by the original action dialog and the OwnerQuestions entry. */
-export function ActionReview({api,actionId,questionId,onOpen,onResolved}:{api:Api;actionId:string;questionId:string;onOpen:(ref:string)=>void;onResolved?:(value:OwnerQuestion)=>void}){
+type ActionReviewProps={api:Api;actionId:string;questionId:string;onOpen:(ref:string)=>void;onResolved?:(value:OwnerQuestion)=>void};
+export function ActionReview(props:ActionReviewProps){
+ const identity=useRef({...props,generation:0});
+ if(identity.current.api!==props.api||identity.current.actionId!==props.actionId||identity.current.questionId!==props.questionId)identity.current={...props,generation:identity.current.generation+1};
+ return <ActionReviewContent key={identity.current.generation} {...props}/>;
+}
+function ActionReviewContent({api,actionId,questionId,onOpen,onResolved}:ActionReviewProps){
  const path='/api/actions/'+encodeURIComponent(actionId)+'/reviews/'+encodeURIComponent(questionId),read=useResource<unknown>(api,path);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState<OwnerQuestion>();
  const identity=useRef({api,actionId,questionId});identity.current={api,actionId,questionId};
@@ -38,7 +45,9 @@ export function ActionReview({api,actionId,questionId,onOpen,onResolved}:{api:Ap
  let value:FixedActionReview|undefined,invalid:unknown;
  if(read.error===undefined&&read.data!==undefined)try{value=readActionReview(read.data,actionId,questionId);}catch(e){invalid=e;}
  const question=accepted??value,canReply=value&&question?.state==='open'&&read.error===undefined&&!invalid&&!busy;
- useEffect(()=>question?.state==='open'?resources(api).get(path).poll(3000):undefined,[api,path,question?.state]);
+ const execution=value?.execution,watch=read.error===undefined&&invalid===undefined&&(question?.state==='open'||question?.state==='closed'&&question.outcome==='approved'&&execution?.status!=='succeeded');
+ useEffect(()=>watch?resources(api).get(path).poll(3000):undefined,[api,path,watch]);
+ const executionLabel=execution?.status==='succeeded'?value?.reviewedAction.kind==='calendar.complete'?moteText('已在 Mote 中标记完成'):value?.reviewedAction.kind==='calendar.cancel'?moteText('已取消'):value?.reviewedAction.related&&!value.reviewedAction.related.externalId?moteText('已更新待确认的建议'):moteText('已写入已有日历 · #Mote'):execution?.status==='executing'?moteText('正在写入 / 等待回执'):execution?.status==='uncertain'?moteText('保存结果待核实'):execution?.status==='approved'?moteText('等待客户端写入'):moteText('正在读取…');
  async function reply(choice:'approve'|'dismiss'){
   if(!live()||running.current||!canReply||!value)return;
   const input={requestId:crypto.randomUUID(),expectedRevision:value.revision,action:'answer',choiceId:choice},key=JSON.stringify([value.id,value.revision,value.reviewedAction.fingerprint,choice]);
@@ -61,7 +70,7 @@ export function ActionReview({api,actionId,questionId,onOpen,onResolved}:{api:Ap
    {value.reviewedAction.targetDetails&&<p>{value.reviewedAction.targetDetails.deviceName} · {value.reviewedAction.targetDetails.deviceId} · {value.reviewedAction.targetDetails.calendar.title} · {value.reviewedAction.targetDetails.calendar.id}{value.reviewedAction.targetDetails.calendar.accountId&&<> · {value.reviewedAction.targetDetails.calendar.accountId}</>}</p>}
    <details open><summary>{moteText('查看原文依据（')}{value.reviewedAction.evidence.length}）</summary>{value.reviewedAction.evidence.map((evidence,index)=><blockquote key={index}><p>{evidence.quote}</p><button className="button subtle" onClick={()=>{if(live())onOpen('context:'+formatEvidenceRef('capture',evidence.id));}}>{evidence.source} · {moteText('查看原文')}</button></blockquote>)}</details>
    <p>{value.reviewedAction.kind==='calendar.complete'?moteText('确认后仅在 Mote 中标记完成。'):moteText('仅批准上方固定内容、证据、设备和日历；修改需要返回重新核对。')}</p>
-   {question?.state==='open'?<div className="action-toolbar"><button className="button primary" disabled={!canReply} onClick={()=>void reply('approve')}>{value.reviewedAction.kind==='calendar.create'?moteText('确认添加到此日历'):moteText('确认变更')}</button><button className="button subtle" disabled={!canReply} onClick={()=>void reply('dismiss')}>{moteText('忽略')}</button></div>:<p role="status">{question?.outcome==='approved'?moteText('等待客户端写入'):question?.outcome==='dismissed'?moteText('已忽略'):moteText('这个问题已更新，请查看最新内容后再回答。')}</p>}
+   {question?.state==='open'?<div className="action-toolbar"><button className="button primary" disabled={!canReply} onClick={()=>void reply('approve')}>{value.reviewedAction.kind==='calendar.create'?moteText('确认添加到此日历'):moteText('确认变更')}</button><button className="button subtle" disabled={!canReply} onClick={()=>void reply('dismiss')}>{moteText('忽略')}</button></div>:<p role="status">{question?.outcome==='approved'?executionLabel:question?.outcome==='dismissed'?moteText('已忽略'):moteText('这个问题已更新，请查看最新内容后再回答。')}</p>}
   </>}
  </section>;
 }

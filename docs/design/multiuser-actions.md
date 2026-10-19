@@ -41,6 +41,9 @@ owner 来自认证上下文，模型、HTTP body、原文均不能选择 owner�
 `GET /api/actions/:id/reviews/:questionId` 返回 OwnerQuestions 公共字段及 `reviewedAction`：
 `{id,version,kind,event,target?,targetDetails?,related?,evidence,fingerprint}`。
 弹窗应呈现该固定内容；targetDetails 包含已注册设备、日历和可选的外部 accountId。
+
+已批准且仍通过相同 approval hash、版本、账号和目标围栏的详情，另返回只读 `execution:{operationId,status}`，描述该次批准操作的当前执行事实。`reviewedAction` 继续保留批准时的版本、内容与 fingerprint；执行状态不替换快照，也不产生新的批准。Web 在 approved / executing / uncertain 时沿既有可见页面资源轮询刷新，succeeded 后停止轮询；不扫描分页列表寻找状态。
+
 批准 hash 绑定内容、版本、依赖、source 范围、账户代次、设备授权代次及目标 incarnation。
 来源或目标变化后旧问题返回冲突，重新启用来源不会恢复旧批准。
 
