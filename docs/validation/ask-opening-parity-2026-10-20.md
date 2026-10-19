@@ -49,3 +49,15 @@ source candidate failed compilation because its complete context view had a
 narrow return type; its successor compiled, then scope contracts rejected two
 unregistered pure imports. Both failures remain recorded; exact caller-bound
 helper allowances and the explicit-turn history regression require fresh checks.
+
+The later `884c5c9a` affected run passed both kind contracts, but its Server suite
+failed in the generated M06/Memory image setup before Memory or pixels were read:
+a second manual `/api/processing` intent received `409 external_result_unknown`
+while upload had already admitted image processing. The fixture now consumes the
+existing automatic M06 product. Its positive A/B journey holds the genuine OCR
+transport, verifies the existing live-call guard rejects the second intent without
+a new coordinator, releases it and retains the original eight-call independent
+pixel/reviewer/hash/isolation assertions. Production guards and unknown-result
+semantics are unchanged. All consumers of the shared image helper need focused
+verification, including the six bounded review-repair outcomes and visual refusal.
+The owner-only image-anchor selector is a separate risk, not this failure's cause.
