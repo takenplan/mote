@@ -64,11 +64,14 @@ the integration driver reports those checks separately.
 ## Image-read full guard callbacks
 
 The separate image path keeps its full task-current assertion before creating
-its internal data reader, at each existing explicit assertion, for scoped
-original reads, and in every image-output permission callback. Its internal
-SQL reader retains account authority, closed-state and owner binding without
-re-entering that full task guard for every SQL statement. No validation result
-is cached across the image metadata or crop awaits.
+its internal data reader, before each original chunk, in every image-output
+permission callback and after awaiting the final image result. The source
+capability is consumed synchronously into local buffers. Its nested callbacks
+check current selected evidence and source membership; the internal SQL
+readers retain account authority, closed-state and owner binding. They do not
+re-enter the full task guard for each synchronous original SQL or file check.
+Original hash/MIME, source, attachment, file ownership and checksum checks
+remain. No validation result is cached across metadata or crop awaits.
 
 A single existing scoped 2×2 generated-image fixture on `93faf97b` observed
 185 full job-guard calls for each image read. An extractor read performed 185
@@ -86,3 +89,31 @@ After the await, the original permission callback still rejects the image
 with `image_unavailable`; no pixels or Memory can be published. The existing
 A/B equal-byte image case continues to require each account's own original
 and independent extraction/reviewer pixel delivery.
+
+A same-scale independent-review measurement on `7c359b5c` used 31 unique
+inputs, 39 read/range entries (eight repeated IDs), 25 unique Material pins
+and intake rows, and a 31-member catalog over 24 Materials. Its own validated
+52,001-byte draft contained 13 candidates, 29 citations, 31 read ranges and
+two image receipts. One instrumented reviewer crop performed 37 full job
+checks, including 30 nested Ingress callbacks, 74 full-input validations,
+37 catalog checks and 37 draft receipt checks. Synchronous exclusive work
+accounted for about 6.45 seconds of its 6.47-second wall time; Sharp metadata
+and crop promise waits were about 10 milliseconds each. Inclusive subtree
+times overlap and must not be summed. Instrumentation overhead was not
+separately calibrated; the generated 4×4 pixels do not represent an actual
+large-image decode benchmark.
+
+The successor keeps the seven existing explicit whole-task boundaries,
+including fresh draft receipt validation. A single same-scale comparison
+checks the complete synchronous prefix and image-read wall time, both real
+awaits, returned byte/view hashes and natural review/prepared settlement.
+The expected lower guard count alone is not a performance pass. Its fresh
+fixture journal and nonmodel bridge do not validate ordinary automatic
+startup, the production SDK, a physical device or a live model.
+
+The `scoped image review crop currentness rejects ...` cases additionally
+let extraction produce a real image proof and durable draft, then hold the
+independent reviewer's real Sharp crop await. Changing an unrequested tail
+Material, cancelling the job or retiring its source must each reject late
+review pixels with `image_unavailable` and prevent Memory publication. These
+checks complement the original metadata-await and A/B isolation scenarios.

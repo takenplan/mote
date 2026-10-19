@@ -382,6 +382,31 @@ for(const mutation of ['initial-pin','await-pin','await-cancel'] as const)test('
  }finally{release.resolve();sharp.prototype.metadata=metadata;host.readImage=read;}
 });
 
+for(const mutation of ['tail','cancel','source'] as const)test('scoped image review crop currentness rejects '+mutation+' without delivering stale pixels',async t=>{
+ const entered=deferred(),release=deferred(),finished=deferred();t.signal.addEventListener('abort',()=>release.resolve(),{once:true});
+ const f=await fixture(t),settings=defaultMemorySettings();settings.automatic=false;settings.integration=false;await f.replace(f.a.token,'memory',settings);
+ const png=await sharp({create:{width:2,height:2,channels:3,background:'#dd2211'}}).png().toBuffer(),hash=createHash('sha256').update(png).digest('hex'),region={x:0,y:0,width:1,height:1},viewId=createHash('sha256').update(JSON.stringify([hash,'encoded-raster-pixels-v1',region,'crop-encoded-raster-png@1'])).digest('hex'),material=await imageMaterial(t,f,f.a,'A',png),tail=await f.publish(f.a,'A','generated-review-tail-source','unrequested-tail','Generated unrequested review task pin.'),data=await f.data(f.a);data.materialEvidence(material);
+ const anchor=String(f.read(db=>db.prepare('SELECT id FROM mm_images WHERE user_id=?').get(f.a.userId))!.id),host=f.node.memory as any,read=host.readImage.bind(host),query=host.query.bind(host),reading=new AsyncLocalStorage<'extract'|'review'>(),readErrors:unknown[]=[],calls={extract:0,review:0},delivered={extract:0,review:0},providerCalls={extract:0,review:0};
+ let phase:'extract'|'review'='extract',members:any[]=[],metadataCalls=0,cropCalls=0,held=false;
+ host.query=(run:any,input:any,args:any)=>{phase=args.traceContext?.phase==='review'?'review':'extract';members=args.taskContext?.memoryWork?.members??[];return query(run,input,args);};
+ host.readImage=(context:any,args:any,scope:any)=>{const current=phase;return reading.run(current,async()=>{calls[current]++;try{const value=await read(context,args,scope);delivered[current]++;return value;}catch(error){readErrors.push(error);throw error;}finally{if(current==='review')finished.resolve();}});};
+ const metadata=sharp.prototype.metadata,toBuffer=sharp.prototype.toBuffer;
+ sharp.prototype.metadata=function(...args:any[]):any{if(reading.getStore())metadataCalls++;return Reflect.apply(metadata,this,args);};
+ sharp.prototype.toBuffer=function(...args:any[]):any{const value=Reflect.apply(toBuffer,this,args),current=reading.getStore();if(!current)return value;cropCalls++;if(current!=='review'||held)return value;held=true;return value.then(async(bytes:Buffer)=>{entered.resolve();await release.promise;return bytes;});};
+ f.responses.set('A',res=>{const step=++providerCalls[phase];if(step===1){writeMessagesResponse(res,{stage:f.requests.length,tool:{name:'read_image',args:{id:anchor,view:'image',expectedImageSha256:hash,region}}});return;}if(phase==='review'){res.statusCode=422;res.end('Generated terminal review crop fixture');return;}
+  writeMessagesResponse(res,{stage:f.requests.length,text:JSON.stringify({answer:JSON.stringify({memories:[{title:'Generated visible observation',statement:'The generated image shows a red patch. ['+anchor+']',uncertainty:'Generated pixel observation; authorship and owner identity unknown',admission:{layer:'observation',reason:'Exact visible fixture context',scope:'This generated image only',attribution:'observed'},evidenceIds:[anchor],evidence:[{id:anchor,image:{originalSha256:hash,viewId}}]}],coverage:members.map(member=>({key:member.key,state:member.id===anchor?'checked':'no_candidates',candidateIndexes:member.id===anchor?[0]:[]}))}),citationIds:[anchor]})});
+ });
+ try{
+  const job=await f.submit(f.a,[material,tail.id]);await entered.promise;
+  const stored=f.read(db=>db.prepare('SELECT draft,review,prepared FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,job.id))!;assert.ok(stored.draft,'the mutation occurs during independent review of a durable draft');assert.equal(stored.review,null);assert.equal(stored.prepared,null);
+  if(mutation==='tail'){const response=await f.request(f.a.token,'/api/materials/'+tail.id+'/context','PATCH',{expectedRevision:tail.revision,ownerRelation:'owner'});assert.equal(response.statusCode,200,response.body);}
+  else if(mutation==='cancel'){const response=await f.request(f.a.token,'/api/memory/jobs/'+job.id+'/cancel','POST',{});assert.equal(response.statusCode,200,response.body);assert.equal(response.json().cancelled,true);}
+  else {const response=await f.request(f.a.token,'/api/sources/same-source','DELETE');assert.equal(response.statusCode,200,response.body);}
+  release.resolve();await finished.promise;assert.notEqual(await f.terminal(job.tasks.batch.id),'succeeded');
+  assert.deepEqual(calls,{extract:1,review:1});assert.deepEqual(delivered,{extract:1,review:0});assert.equal(metadataCalls,2);assert.equal(cropCalls,2,'both phases execute real Sharp crop awaits');assert.equal(readErrors.length,1);assert.equal((readErrors[0] as {code:string}).code,'image_unavailable');assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,0,'no late reviewed Memory is committed');
+ }finally{release.resolve();sharp.prototype.metadata=metadata;sharp.prototype.toBuffer=toBuffer;host.readImage=read;host.query=query;}
+});
+
 test('native Hindsight integration observes a completed consolidation after a lost response instead of replaying inference',async t=>{
  const native=await hindsightHttpFixture();t.after(()=>native.close());const f=await fixture(t,generatedHindsightRelease(),native.runtimeFactory),pkg=await f.install();await f.plugin(f.a,pkg,['same-source'],{modelProfileId:'personal:same-model'},['engine']);await f.bind(f.a,'same-instance');const material=await f.publish(f.a,'A');await f.wait(f.a,(await f.submit(f.a,[material.id])).id);const parent=(await f.request(f.a.token,'/api/memories')).json().items[0];native.faults.consolidateAfterCommit=true;
  const submitted=await f.request(f.a.token,'/api/memory/jobs','POST',{operationId:randomUUID(),materialIds:[material.id],memoryIds:[parent.id],phase:'integrate'});assert.equal(submitted.statusCode,200,submitted.body);assert.equal(await f.terminal(submitted.json().tasks.batch.id),'blocked');const initial=native.events.filter(event=>event.path==='/consolidate').length;
