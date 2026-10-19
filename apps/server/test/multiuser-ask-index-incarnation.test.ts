@@ -39,6 +39,8 @@ for(const bumpEpoch of [false,true])test('Ask accepts same-ID source recreation 
  const file=await f.checked(current.token,'/api/files/'+replacement.id),material=await f.checked(current.token,'/api/materials/'+file.processing.materialId+'/read');assert.match(material.text,/GENERATED_CURRENT_A/);assert.doesNotMatch(material.text,/GENERATED_RETIRED_A|GENERATED_CURRENT_B/);assert.equal(calls.filter(owner=>owner==='A').length,2);assert.equal((await f.checked(f.b.token,'/api/materials/'+(await f.checked(f.b.token,'/api/files/'+other.id)).processing.materialId+'/read')).text.includes('GENERATED_CURRENT_B'),true);
 });
 
+// Full public M06 -> M07 -> Ask closure remains outstanding on the separately
+// owned M07 same-revision/old-epoch collision. Keep this case intact and enabled.
 test('the same exact Material revision admits fresh reset authority and remains idempotent within that authority',async t=>{
  const f=await scopedFilesFixture(t);await configure(f,f.a.token);const capture=(await upload(f,f.a.token,Buffer.from('GENERATED_CANONICAL_TEXT'),'text/plain')).captures[0];await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/files/'+capture.id)).processing.indexed,()=>'initial text publication missing',10000);await settled(f,f.a.userId);
  const publication=()=>read(f,db=>db.prepare('SELECT material_id,revision FROM mp_publications WHERE user_id=?').get(f.a.userId)!);const original=publication(),prior=admissions(f,f.a.userId),fresh=await reset(f);

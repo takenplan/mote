@@ -1,3 +1,4 @@
+import {expectedIndexProof} from './fixtures/ask-index-proof.js';
 import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,7 +66,11 @@ async function publishedIntakeTasks(f:Awaited<ReturnType<typeof fixture>>){await
  const currentEpoch=db.prepare('SELECT authorization_epoch FROM auth_accounts WHERE user_id=?').get(f.a.userId)!.authorization_epoch;
  for(const row of rows){const grant=db.prepare('SELECT user_id,authorization_epoch,revoked FROM task_authorizations WHERE task_id=? AND grant_id=?').get(row.id,row.grant_id)!;assert.deepEqual({...grant},{user_id:f.a.userId,authorization_epoch:currentEpoch,revoked:0});assert.equal(row.model_receipt,null);}
  const events=rows.filter(row=>row.kind==='ask.index-admit').map(row=>{
-  const {eventId}=JSON.parse(String(row.input)),eventRow=db.prepare('SELECT input FROM ma_embedding_events WHERE user_id=? AND id=?').get(f.a.userId,eventId)!;assert.ok(eventRow);const event=JSON.parse(String(eventRow.input));assert.match(eventId,/^[a-f0-9]{64}$/);assert.notEqual(eventId,digest(event),'admission identity includes authority and original incarnation, not only stable IDs');assert.equal(row.operation_id,'ask-index:'+digest([f.a.userId,'ask-index:'+eventId]));assert.equal(row.model_receipt,null);
+  const {eventId}=JSON.parse(String(row.input)),eventRow=db.prepare('SELECT input FROM ma_embedding_events WHERE user_id=? AND id=?').get(f.a.userId,eventId)!;assert.ok(eventRow);const proof=JSON.parse(String(eventRow.input));
+  assert.ok(['captures','material'].includes(proof.event?.kind));const event=proof.event.kind==='captures'?{kind:'captures',ids:[capture.capture_id],sourceIds:[capture.source_id]}:{kind:'material',id:publication.material_id,revision:publication.revision,sourceIds:[capture.source_id]};
+  assert.equal(db.prepare('SELECT count(*) n FROM pd_material_inputs WHERE user_id=? AND material_id=? AND revision=?').get(f.a.userId,publication.material_id,publication.revision)!.n,0,'this fixture has one known root and no transitive Material');
+  const expected=expectedIndexProof(db,f.a.userId,Number(currentEpoch),event,{sourceIds:[String(capture.source_id)],materials:proof.event.kind==='material'?[{id:String(publication.material_id),revision:String(publication.revision)}]:[],originalIds:[String(capture.capture_id)]});assert.deepEqual(proof,expected);assert.equal(eventId,digest(expected));
+  const operation='ask-index:'+eventId;assert.equal(row.operation_id,'ask-index:'+digest([f.a.userId,operation]));assert.equal(row.id,digest([f.a.userId,operation,'ask.index-admit',{eventId}]));assert.equal(row.model_receipt,null);
   const grant=db.prepare('SELECT user_id,revoked FROM task_authorizations WHERE task_id=? AND grant_id=?').get(row.id,row.grant_id)!;assert.deepEqual({...grant},{user_id:f.a.userId,revoked:0});return event;
  });
  assert.deepEqual(events.sort((a,b)=>a.kind.localeCompare(b.kind)),[{kind:'captures',ids:[capture.capture_id],sourceIds:[capture.source_id]},{kind:'material',id:publication.material_id,revision:publication.revision,sourceIds:[capture.source_id]}]);
