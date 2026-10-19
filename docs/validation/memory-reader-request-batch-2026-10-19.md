@@ -60,3 +60,29 @@ remain consumers. Fixture checks do not establish physical-device or live-model
 acceptance. Normal shipping still requires the same-profile Memory→Ask journey,
 negative isolation/cancellation cases and the existing visual proof strength;
 the integration driver reports those checks separately.
+
+## Image-read full guard callbacks
+
+The separate image path keeps its full task-current assertion before creating
+its internal data reader, at each existing explicit assertion, for scoped
+original reads, and in every image-output permission callback. Its internal
+SQL reader retains account authority, closed-state and owner binding without
+re-entering that full task guard for every SQL statement. No validation result
+is cached across the image metadata or crop awaits.
+
+A single existing scoped 2×2 generated-image fixture on `93faf97b` observed
+185 full job-guard calls for each image read. An extractor read performed 185
+full-input validations; the independent reviewer performed 370 because the
+existing draft also requires fresh receipt validation. This confirms repeated
+work in that path; it does not establish that an earlier production timeout
+actually executed `read_image`.
+
+The `scoped image currentness rejects ...` cases in
+[`multiuser-memory.test.ts`](../../apps/server/test/multiuser-memory.test.ts)
+cover an initially changed unrequested Material pin, a pin changed while the
+real image metadata await is held, and cancellation during that same await.
+The initial failure propagates its original exception before image output.
+After the await, the original permission callback still rejects the image
+with `image_unavailable`; no pixels or Memory can be published. The existing
+A/B equal-byte image case continues to require each account's own original
+and independent extraction/reviewer pixel delivery.

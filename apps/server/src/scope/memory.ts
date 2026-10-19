@@ -204,7 +204,7 @@ export class MemoryHost {
   });
  }
  private async readImage(context:UserContext,args:ImageReadInput,scope:MemoryReadScope){
-  const data=this.data(context,scope.assertCurrent),assert=()=>{scope.assertCurrent();data.evidence([args.id]);if(scope.sourceIds)data.assertSources([args.id],scope.sourceIds);};assert();if(args.attachmentId||!this.ingress)throw missing();const image=data.image(args.id);if(!image)throw missing();
+  scope.assertCurrent();const data=this.data(context),assert=()=>{scope.assertCurrent();data.evidence([args.id]);if(scope.sourceIds)data.assertSources([args.id],scope.sourceIds);};assert();if(args.attachmentId||!this.ingress)throw missing();const image=data.image(args.id);if(!image)throw missing();
   const source=this.ingress.bindSource(context,[String(image.source_id)],assert),ref='original:'+image.original_id,parts:Buffer[]=[];let offset=0;for(;;){assert();const part=source.readOriginal(ref,{offset});if(part.hash!==image.hash||part.mime!==image.mime)throw missing();parts.push(part.bytes);if(part.nextOffset===null)break;offset=part.nextOffset;}
   const result=await imageOutput(Buffer.concat(parts),String(image.mime),args,()=>{assert();return data.image(args.id)?.hash===image.hash;});assert();return result;
  }

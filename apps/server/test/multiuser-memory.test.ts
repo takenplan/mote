@@ -11,6 +11,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {setTimeout as delay} from 'node:timers/promises';
 import {LifecycleAuthority} from '../src/scope/lifecycle.js';
 import {openScopeStorage} from '../src/scope/storage.js';
@@ -346,6 +347,40 @@ test('actual M06 image originals require independent Memory pixel delivery for b
  assert.equal(f.requests.length,8,'each extractor and independent reviewer obtains its own pixels');for(const [user,label] of [[f.a,'A'],[f.b,'B']] as const){const memory=(await f.request(user.token,'/api/memories')).json().items[0];assert.equal(memory.evidence[0].image.original.sha256,hash);assert.equal(memory.evidence[0].id,anchors.get(label));for(const request of f.requests.filter(request=>request.key.includes('_'+label+'_')))assert.ok(!request.raw.includes(anchors.get(label==='A'?'B':'A')!));}
 });
 
+
+for(const mutation of ['initial-pin','await-pin','await-cancel'] as const)test('scoped image currentness rejects '+mutation+' without delivering stale pixels',async t=>{
+ const release=deferred(),entered=deferred(),finished=deferred();t.signal.addEventListener('abort',()=>release.resolve(),{once:true});
+ const f=await fixture(t),settings=defaultMemorySettings();settings.automatic=false;settings.integration=false;await f.replace(f.a.token,'memory',settings);
+ const png=await sharp({create:{width:2,height:2,channels:3,background:'#dd2211'}}).png().toBuffer(),material=await imageMaterial(t,f,f.a,'A',png),tail=await f.publish(f.a,'A','generated-tail-source','unrequested-tail','Generated unrequested image task pin.'),data=await f.data(f.a);data.materialEvidence(material);
+ const anchor=String(f.read(db=>db.prepare('SELECT id FROM mm_images WHERE user_id=?').get(f.a.userId))!.id),host=f.node.memory as any,read=host.readImage.bind(host),reading=new AsyncLocalStorage<boolean>(),scopeErrors:unknown[]=[],readErrors:unknown[]=[];
+ let delivered=0,readCalls=0,metadataCalls=0;
+ const changeTail=async()=>{const response=await f.request(f.a.token,'/api/materials/'+tail.id+'/context','PATCH',{expectedRevision:tail.revision,ownerRelation:'owner'});assert.equal(response.statusCode,200,response.body);};
+ host.readImage=(context:any,args:any,scope:any)=>reading.run(true,async()=>{
+  readCalls++;const guarded={...scope,assertCurrent:()=>{try{return scope.assertCurrent();}catch(error){scopeErrors.push(error);throw error;}}};
+  try{if(mutation==='initial-pin')await changeTail();const value=await read(context,args,guarded);delivered++;return value;}
+  catch(error){readErrors.push(error);throw error;}finally{finished.resolve();}
+ });
+ const metadata=sharp.prototype.metadata;let held=false;
+ sharp.prototype.metadata=function(...args:any[]):any{const value=Reflect.apply(metadata,this,args);if(!reading.getStore())return value;metadataCalls++;if(held)return value;held=true;return value.then(async(meta:any)=>{entered.resolve();await release.promise;return meta;});};
+ // The existing real Agent/bridge runs, but the external language model is only
+ // this generated loopback script. A terminal refusal prevents repair/retry.
+ f.responses.set('A',(res,raw)=>{if(!raw.includes('tool_result')){writeMessagesResponse(res,{stage:f.requests.length,tool:{name:'read_image',args:{id:anchor,view:'image'}}});return;}res.statusCode=422;res.end('Generated terminal image currentness fixture');});
+ try{
+  const job=await f.submit(f.a,[material,tail.id]);
+  if(mutation!=='initial-pin'){
+   await entered.promise;
+   if(mutation==='await-pin')await changeTail();
+   else {const cancelled=await f.request(f.a.token,'/api/memory/jobs/'+job.id+'/cancel','POST',{});assert.equal(cancelled.statusCode,200,cancelled.body);assert.equal(cancelled.json().cancelled,true);}
+   release.resolve();
+  }
+  await finished.promise;
+  const state=await f.terminal(job.tasks.batch.id);assert.notEqual(state,'succeeded');assert.equal(readCalls,1);assert.equal(delivered,0);
+  assert.equal(readErrors.length,1);assert.ok(scopeErrors.length);
+  if(mutation==='initial-pin'){assert.equal(metadataCalls,0,'an initially stale grant never reaches image output');assert.equal(readErrors[0],scopeErrors[0],'the initial full guard preserves its original exception');}
+  else {assert.equal(metadataCalls,1,'the mutation happens inside the real image-output metadata await');assert.equal((readErrors[0] as {code:string}).code,'image_unavailable','the original permitted callback still maps revocation to image_unavailable');}
+  assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,0,'no stale image draft is published');
+ }finally{release.resolve();sharp.prototype.metadata=metadata;host.readImage=read;}
+});
 
 test('native Hindsight integration observes a completed consolidation after a lost response instead of replaying inference',async t=>{
  const native=await hindsightHttpFixture();t.after(()=>native.close());const f=await fixture(t,generatedHindsightRelease(),native.runtimeFactory),pkg=await f.install();await f.plugin(f.a,pkg,['same-source'],{modelProfileId:'personal:same-model'},['engine']);await f.bind(f.a,'same-instance');const material=await f.publish(f.a,'A');await f.wait(f.a,(await f.submit(f.a,[material.id])).id);const parent=(await f.request(f.a.token,'/api/memories')).json().items[0];native.faults.consolidateAfterCommit=true;
