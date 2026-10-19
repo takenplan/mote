@@ -114,3 +114,38 @@ assertions are unchanged. The complete enabled exact-revision public case remain
 byte-identical and requires composition with the separately reviewed M07
 `66a576fd` source (including its schema responsibility) before a joint public
 GREEN can be claimed. No unbound M07 overlay is included in this Ask child.
+
+
+## Pair test observation follow-up
+
+The driver's first four-file run on pair `db1ff614` (tree `58770858`) ended
+naturally with 78 passes and three failures. This is evidence for that exact
+pair, not for the later test-only child. All five M07 cases, all five sibling
+cases and the complete Ask exact-revision case passed in that run.
+
+Both Ask source-incarnation variants failed while comparing B's admission rows:
+the snapshot retained a `waiting` task that legitimately became `succeeded`.
+Its ID, input, grant and epoch were unchanged. File indexing had finished, but
+B's independent Ask admissions had not been awaited before the snapshot. The
+prepared correction waits for all actual B admissions to succeed using the
+existing bounded state barrier. It preserves full row/state comparison and adds
+final equality of B's grants, exact journal proofs and complete Material read
+after A's original release/late-result assertions. It adds no fixed sleep,
+budget increase, subscriber suppression or forced scheduler state. A's late
+assertions were unreached in the failed pair run and remain unverified here.
+
+The processing rollback case reached its failing hook and verified rollback of
+child tasks, task authorizations, Material and publication, with committed intake
+retained. Its final legacy observation read top-level `kind`; the current private
+proof uses `event.kind`. The prepared assertion keeps exactly one capture event
+and one Ask admission, compares the full current proof to the independent known
+raw-capture graph oracle, and checks its digest and exact owner-bound task,
+operation, input, grant epoch and absence of model authority. All original
+rollback negatives remain. No old-format compatibility path is introduced.
+
+Only the two test files and this validation note change. The full enabled F03
+body remains byte-identical (`549746af…`). This child has not been installed,
+built, typechecked or tested. Root owns the bounded three-case first run and the
+later complete new-source union validation, including whole processing and all
+consumers; the parent's 78 passes cannot be combined with three later passes to
+claim a new 81-case whole-file pass.
