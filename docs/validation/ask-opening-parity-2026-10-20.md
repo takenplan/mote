@@ -25,7 +25,10 @@ providers retain their actual search path and namespace checks.
 
 Model-facing source type and revision metadata come from authorized captures or
 proven current source-head/Material membership, including the existing M06
-publication-to-original relationship. Canonical evidence IDs, bytes and hashes
+publication-to-original relationship. Mapping requires the original single-head
+member contract: every member is that head or its validated file attachment; a
+mixed-member generated fixture retains literal anchor metadata. Canonical
+evidence IDs, bytes and hashes
 remain unchanged. A mixed or unproved head is not guessed from prose. The old and
 current source-item version 13 both use plain text plus metadata; the old reader
 only decoded presentations for earlier versions 11/12. This change invents no

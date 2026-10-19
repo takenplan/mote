@@ -1,5 +1,6 @@
 import {samples as stateSamples} from '@mote/shared/state-series';
 import {exactProofs} from './ask-proof.js';
+import {attachmentBinding} from './ingress-attachments.js';
 import {z} from 'zod';
 import type {ContextReader,ContextRange,ContextRecord} from '@mote/agent';
 import type {CaptureRecord,InsightSnapshot} from '@mote/shared';
@@ -89,7 +90,11 @@ export class AskEvidence{
   this.assert();const anchor=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',record.id);let view=record,typed=!anchor,current=true;
   if(anchor){
    const material=this.material(String(anchor.material_id),String(anchor.material_revision)),origin=material.origin,sourceHead=this.data.sourceItem(origin.sourceId,origin.externalId),publication=sourceHead?undefined:this.sql.get('SELECT o.capture_id FROM mp_publications p JOIN ig_originals o ON o.user_id=p.user_id AND o.id=p.original_id WHERE p.user_id=$user AND o.user_id=$user AND p.material_id=? AND p.revision=?',material.id,material.revision),id=sourceHead?.captureId??(publication?String(publication.capture_id):undefined);
-   if(id&&this.sql.get('SELECT capture_id FROM pd_material_captures WHERE user_id=$user AND material_id=? AND revision=? AND capture_id=?',material.id,material.revision,id)){
+   // As in the original materialHead contract, every member must belong to
+   // this one head (or its validated file attachment). One matching member is
+   // not authority to label the other blocks of a mixed Material.
+   const draft=materialDraftSchema.parse(JSON.parse(String(this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision)!.json))),singleHead=id&&draft.members.some(member=>member.kind==='capture'&&member.ref==='capture:'+id)&&draft.members.every(member=>{if(member.kind!=='capture'||!member.ref.startsWith('capture:'))return false;const captureId=member.ref.slice(8);if(captureId===id)return true;try{return attachmentBinding(this.sql,captureId)?.parentId===id;}catch(error){if(error instanceof PrivateDataError&&error.code==='not_found')return false;throw error;}});
+   if(singleHead&&id&&this.sql.get('SELECT capture_id FROM pd_material_captures WHERE user_id=$user AND material_id=? AND revision=? AND capture_id=?',material.id,material.revision,id)){
     const head=this.data.capture(id),p=head.provenance;
     if(p&&p.sourceId===origin.sourceId&&!p.deleted&&this.data.sourceItem(p.sourceId,p.externalId)?.captureId===id){
      typed=true;view={...record,deviceId:head.deviceId,deviceName:head.deviceName,platform:head.platform,capturedAt:head.capturedAt,durationMs:head.durationMs,source:head.source,appId:head.appId,appName:head.appName,windowTitle:material.title,privacy:head.privacy,provenance:{sourceId:p.sourceId,externalId:p.externalId,revision:p.revision,layer:'derived',deleted:false,uri:record.provenance?.uri,...(p.calendar?{calendar:p.calendar}:{}),...(p.document?{document:p.document}:{})}};
