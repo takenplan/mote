@@ -96,7 +96,7 @@ test('ordinary retry after more than a day replaces only the expired uncommitted
  // manifest or either owner's retained part. Startup GC owns the later lifetime.
  const conflictBody={batchId:'same-key',revision:revision('same-source',Buffer.from('Generated conflicting expired revision'))};
  assert.equal((await f.request(f.alice.token,'/api/ingress/sources/same-source/uploads','POST',conflictBody)).statusCode,409);assert.deepEqual(resident(f.a.userId,a.id),aBefore);assert.deepEqual(resident(f.b.userId,b.id),bBefore);
- await f.restart();
+ await f.restart();await f.node.app.ready();
  assert.equal(resident(f.a.userId,a.id).upload,undefined,'real startup GC removed the expired attempt and its manifest binding');
  const resumed=await f.begin(f.alice.token,bytes);assert.notEqual(resumed.id,a.id);assert.deepEqual(resumed.parts,[]);assert.equal(resumed.userId,f.a.userId);assert.equal(resumed.sourceId,'same-source');
  assert.equal(resumed.receipt,undefined,'a snapshot still requires its original parts/commit path');assert.deepEqual(resident(f.b.userId,b.id),bBefore);
