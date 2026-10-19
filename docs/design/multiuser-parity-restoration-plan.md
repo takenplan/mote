@@ -227,7 +227,7 @@ AND-D01已由PM进一步明确：旧全局隐私/采集/同步值无可信owner�
 - L04：当前完整导出直接响应下载，中央永久完整副本/下载历史移除；必要暂存按完成/失败/取消/断流/重启与原重试处理。无latest-only/TTL/次数政策或额外下载步骤；不操作真实历史副本。
 - 实际运行证据：Q002仅Web模块required affected门禁由driver实跑9/9通过；不是独验/原生/最终集成。原Operation family、增量刷新、Work父子进度和设备30秒刷新互不替代；D2最新5744d6a跨端组合仍另验。
 
-## 当前验收检查点（2026-10-19 17:44，覆盖历史运行快照）
+## 当前验收检查点（2026-10-19 18:23，覆盖历史运行快照）
 
 66主行与22跨域场景仍未整体READY。13个Draft #170–182均OPEN/Draft/未合，正式integration仅管理文档，main未纳本轮业务、未部署。当前独立业务合成候选为3efdec1b48b37a6c8a0405dacc1d3b4bb2bd22ab/treeef7c7822ee8368140b60a7c16e814e79b16b5bb6，其准确parent cd0/tree25b518原工作树继续冻结供实际领域验收。3ef仅两处Web测试观察修正，production0、其余3224条mode/type/blob不变；cd0仅摘要测试exact replacement drain+成功断言，父88d5保B生产实现及budget consumer10P。Root分别核3ef22工件/3225当前blobs/实际祖先与源桥，并在新树正常own ci和normal9全部通过；该结果与原cd0失败批、祖先Server组件baseline分列，不称新whole23或实模/原生通过，历史695/f5/6875/88/cd0失败均保。
 
@@ -398,6 +398,8 @@ P/C源后查明观察器MIME门槛不适用，未证明Provider查询不健康�
 最新补充：Native WorkManager离线observer parent71cc525c及tinychild f2ed51e9已Root核106+7件，126旧生成断言与一个新深JSON反例分开，High 5bc9e9ae及Root ea56d954只接受source。实际App/WorkManager DB未运行。concrete runner4dd32b7e的High 57d7a60b阻塞四组：取得实例的精确停止权限、实际源码/有效配置身份、逐资源独立清理、从启动起有界排空日志。唯一Client正做source-only最小child及新有限合同；没有启动App、ADB、后端或接续claim/WRITE。未来仍须同Domain正常停止后的原账户/profile/DB与fresh GO。
 
 交付约束补充：多用户改造以隔离为边界，原单用户完整大链路的真实入口、配方、有效配置语义、调用顺序、图像理解/提取与独立审核、持久产物均须逐段对照。OCR-only只为阶段性生成诊断前置，不能替代原automatic旅程或放宽产品readiness/权限/默认。各新source/fixture的P不抵消原actual FAILED/UNRUN；正式assembly、最终完整checks与独立验收继续HOLD。
+
+最新补充：开工前独立技术方案门禁与越界闭合表已在治理提交17bc6c64落地（AGENTS/开发指南/正式入口/66行12组）；两既有独审分别bf61c1d4和866b4376限定APPROVE治理方案9d30d8c4，不批准业务源码或runtime，也不追认先前预审。Source资格分列：Memory8546 B1/B2 BLOCK、Chrome8530 B1 BLOCK、Domain966两个BLOCK；原作者下一批小方案先审，Chrome f06ad5获0e674efb、Domain f2d04获24d28b4d、Native eligible-work 2d309获22ff6718，仅准各自最小实施并须另审新source。Native端口先plan5730后tiny7P/Root63c8，Actions-all-off前置不符原状态的修复保留现有开关。原开关/配方/领域完整链保留，只修具名harness差异；所有实际未到项保持UNRUN，正式业务汇总/最终full/UI/live/final独验仍HOLD。
 
 ## 最终验收与持续记录
 

@@ -75,12 +75,12 @@
 
 | 当前项 | 准确方案/既有证据 | 下一步边界 |
 | --- | --- | --- |
-| Memory资料准备诊断 | 独立bc89bd14/2beb5bcc及PM限定scope批准可在准确范围复用：正常intake一次、默认recipe、本地OCR真实publication/current Material/image pin、独立30s与精确OCR基线 | 不代替原automatic/image-understanding；outer覆盖缺口等新delta须明确审查。已运行source自然封存；后续新实现批先独审APPROVE，actual另freshGO，同profile资格不转移 |
-| Chrome M1–M4 | 独立ea6e812f/4862d3b2及PM准确批准可复用；正常CLI、role归属、sticky safety、共同setup、一次正常cleanup；S4固定短入口已批准范围 | 新包先S0–S3真实seam合同/差异复核，freshGO才S4，再distinctGO原13；不以测试selector删原旅程 |
-| Native v2及端口delta | ebc21740的79新生成合同一次P；源码独审921ebcd1确认原四机制闭合，但同profile端口禁用冲突仍BLOCK | 当前仅原Client提交最小端口delta方案；独立APPROVE后才实现tinychild，新79/旧127不重复；没有App/runtime许可 |
-| Domain用量基线delta | a58首次实际FAILED；Root99ae2cae接受44refs与当前停止态。新source在本指令到达前已运行 | 正常封存，不能追认为开工前方案批准；保HTTP可见与完整raw各基线/实际脱敏集合/隐藏行观测边界，后续改动先独审delta。无第二runtimeGO |
+| Memory资料准备诊断 | 原bc89bd14资料准备方案可在准确范围复用；8546e799新source的9pure P、Root核55件/父33字节及7source/1595build/两locks | bf61c1d4独审B1/B2 BLOCK：成功后持久worker清理凭据不是未结算工作，requestId须绑定真实M06请求/发行/接受产物。原owner先tiny plan→独立批准→修witness/合同；不删ledger，不替代原automatic；同profile actual continuation仍未实现 |
+| Chrome M1–M4 | ea6e812f方案可复用；v58530ebeb/67件经Root核，独审866b4376确认M1–M3/原13接线及52+3各自输入，B1关闭子预算仍BLOCK | 原作者f06ad5a4 plan已获独立0e674efb开工前批准，仅恢复原close上限及截止门禁/新late-hang合同；实施后另窄审源码。S4 90+75、S5 300+75均UNRUN/freshGO，原13不删，不把52说成最终两模块重跑 |
+| Native前置delta | 端口plan d3450de4先经独立573017d2批准，tinychild b3e0e93f仅新7P、Root63c86191核15+25件及计划一致；原79/127不重跑 | 同Domain A开关保留enabled而blanket gate要求全off仍不符。原Client eligible-work plan 2d3090d3已获独立22ff6718开工前批准，仅精确已消费coordination watch及正常目标注册例外；不关业务开关/重建权限，实施后另审。App/runtime仍NO_GO |
+| Domain用量基线delta | 96608397仅新21P；独审12c81a5d确认同watchdog线程同步SQL及unknown column ID两个source BLOCK。原owner随后先提交f2d04ad0三段plan，独立24d28b4d已批准最小实施 | 新child仅隔离sampler、SQL内先验known ID与相应有限合同，独立绝对watchdog/未证reader退出UNKNOWN保；保HTTP/raw基线分离及原11+cleanup。966不追认预审，新实现后还需源码/实际资格，无第二runtimeGO |
 
-本治理方案与闭合表本身尚待现有两位独审按关联范围复核；不是对所有未恢复业务delta的实施总授权。不得恢复Final或新建一批常驻actor填流程。独审只核新增边界/证据映射/最小任务，不重审全库存、不重跑昂贵检查。已有准确范围的独立验收自然进展，不为补流程中断或追认。
+治理方案已获两位既有独审的限定APPROVE：Memory域链报告bf61c1d4/JSON ef4c345f，Chrome客户端段报告866b4376/JSON 2b5d3a51，均绑定17bc6c64与原方案SHA9d30d8c4。只批准治理门禁、关联边界及最小后续任务，不批准业务包、runtime或追认历史开工前审查。本次台账只补准确回执和工程状态，不扩大这些批准范围。Final仍HOLD；不新建常驻actor、不重审不变库存、不重跑昂贵检查，已有准确独立验收自然进展。
 
 ## 验收与交付判据
 
