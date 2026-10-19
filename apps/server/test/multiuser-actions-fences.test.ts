@@ -78,3 +78,21 @@ test('explicit Actions restoration after domain deletion restores history while 
  assert.deepEqual(await receive({operationId:approved.operationId,status:'succeeded',externalId:'generated-after-delete'}),{acknowledged:true,published:false});assert.equal((await f.request(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'})).statusCode,403);
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),1);
 });
+
+
+test('a fixed review keeps its approved snapshot while its exact execution advances to succeeded',async t=>{
+ const f=await proposed(t),id=f.aProposal.id,q=await f.ok(f.a.token,'/api/actions/'+id+'/review','POST',f.input),path='/api/actions/'+id+'/reviews/'+q.id;
+ const snapshot=structuredClone(q.reviewedAction);assert.equal(q.execution,undefined);
+ await f.ok(f.a.token,'/api/owner-questions/'+q.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:q.revision,action:'answer',choiceId:'approve'});
+ const approved=await f.ok(f.a.token,path),operationId=approved.execution.operationId;
+ assert.deepEqual(approved.execution,{operationId,status:'approved'});assert.deepEqual(approved.reviewedAction,snapshot);
+ await f.ok(f.a.token,'/api/actions/'+id+'/claim','POST',{deviceId:target.deviceId});
+ assert.deepEqual((await f.ok(f.a.token,path)).execution,{operationId,status:'executing'});
+ await f.ok(f.a.token,'/api/actions/'+id+'/receipt','POST',{deviceId:target.deviceId,operationId,status:'uncertain'});
+ assert.deepEqual((await f.ok(f.a.token,path)).execution,{operationId,status:'uncertain'});
+ await f.ok(f.a.token,'/api/actions/'+id+'/receipt','POST',{deviceId:target.deviceId,operationId,status:'succeeded',externalId:'generated-ui-regression-event'});
+ const settled=await f.ok(f.a.token,path);assert.deepEqual(settled.execution,{operationId,status:'succeeded'});assert.deepEqual(settled.reviewedAction,snapshot);
+ assert.equal((await f.request(f.b.token,path)).statusCode,404);
+ await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:target.deviceId,deviceName:'Generated replacement',calendars:[{id:target.calendarId,title:'Generated replacement',accountId:'replacement-account'}]});
+ assert.equal((await f.request(f.a.token,path)).statusCode,409,'revoked target binding cannot return a current execution facet');
+});
