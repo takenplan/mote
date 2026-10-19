@@ -5,6 +5,12 @@ import type {PluginCapabilityProbe} from '../src/scope/plugin-contract.js';
 import {scopedProbeHost,probeDeferred,probeUntil} from './fixtures/scoped-probe-host.js';
 
 const verified={capabilities:[{id:'generated.model',state:'verified' as const}],issues:[]};
+async function authorizeRestoredManualProbe(f:Awaited<ReturnType<typeof scopedProbeHost>>,user:any,packageId:string,id:string){
+ const retired=(await f.view(user)).instances.find((instance:any)=>instance.id===id);assert.ok(retired);assert.equal(retired.desired,false);assert.equal(retired.revocation,'restored');assert.deepEqual(retired.grants,{capabilities:[],sourceIds:[],history:false},'an originally disabled definition keeps retired authority after password login');
+ const future=f.read(db=>db.prepare('SELECT payload FROM lifecycle_future WHERE user_id=?').get(user.userId)!);assert.ok(!JSON.parse(String(future.payload)).plugins.some((intent:any)=>intent.id===id),'this manual-only definition must not acquire a trusted restoration scope');
+ await f.configure(user,packageId,id); // Explicit current-owner HTTP authorization, still disabled; no old grant or enable is reused.
+ const current=(await f.view(user)).instances.find((instance:any)=>instance.id===id);assert.equal(current.packageId,packageId);assert.equal(current.desired,false);assert.equal(current.checked,false);assert.deepEqual(current.grants,{capabilities:['model'],sourceIds:[],history:false});
+}
 for(const limit of [1,4])test(`ordinary HTTP and direct checks share the real installer base1 at configured Agent ${limit}; scoped Memory retains its own lane`,{timeout:60000},async t=>{
  let active=0,peak=0;const entered:string[]=[];
  const f=await scopedProbeHost(t,async input=>{active++;peak=Math.max(peak,active);entered.push(input.context.userId+':'+input.instance.id);try{await gate.promise;input.assertCurrent();return verified;}finally{active--;}}),gate=f.hold();
@@ -48,7 +54,7 @@ test('real restored owner-equal-ID probes use only trusted independent capacity 
  await f.configure(f.a,pkg,'manual-only');gates.set(f.a.userId+':manual-only',f.hold());
  await f.restore();restoring=true;const a=await f.login('generated-a'),b=await f.login('generated-b');
  await probeUntil(()=>entered.length===3,()=>({entered,scopes:f.read(db=>db.prepare('SELECT * FROM lifecycle_future_scopes').all())}));assert.ok(entered.some(key=>key.startsWith(a.userId+':'))&&entered.some(key=>key.startsWith(b.userId+':')),'a waiting owner makes progress within the restored-only capacity');
- const manual=await f.check(a,'manual-only');await probeUntil(()=>entered.includes(a.userId+':manual-only'),()=>entered);assert.equal(entered.length,4,'one base manual callback coexists with three trusted restored callbacks');
+ await authorizeRestoredManualProbe(f,a,pkg,'manual-only');const manual=await f.check(a,'manual-only');await probeUntil(()=>entered.includes(a.userId+':manual-only'),()=>entered);assert.equal(entered.length,4,'one base manual callback coexists with three trusted restored callbacks');
  await f.capacity(1);const activeRestore=entered.filter(key=>!key.endsWith(':manual-only'));gates.get(activeRestore[0])!.resolve();gates.get(activeRestore[1])!.resolve();await probeUntil(()=>activeRestore.slice(0,2).every(key=>{const [owner,id]=key.split(':');return f.read(db=>db.prepare('SELECT e.state FROM plugin_user_checks c JOIN execution_steps e ON e.id=c.task_id WHERE c.user_id=? AND c.instance_id=?').get(owner,id)?.state)==='succeeded';}),()=>({entered,activeRestore}));await f.quietTurn();assert.equal(entered.length,4,'lowered restored budget admits no new probe while one prior restored callback remains');
  gates.get(activeRestore[2])!.resolve();await probeUntil(()=>entered.length===5,()=>entered);assert.equal(new Set(entered).size,5,'each actual restored scope enters once, including the queued equal-ID other-owner scope');
  for(const gate of gates.values())gate.resolve();await f.succeeded(a,manual.taskId);
@@ -61,7 +67,7 @@ test('real restored owner-equal-ID probes use only trusted independent capacity 
 test('configured restored capacity1 remains serial while a separate manual owner uses base1',{timeout:60000},async t=>{
  let restoring=false;const entered:string[]=[];const f=await scopedProbeHost(t,async input=>{if(restoring){entered.push(input.context.userId+':'+input.instance.id);await gates.get(input.context.userId+':'+input.instance.id)!.promise;}input.assertCurrent();return verified;}),gates=new Map<string,ReturnType<typeof probeDeferred>>();
  await f.capacity(1);const pkg=await f.installed();for(const id of ['a-first','z-next']){await f.configure(f.a,pkg,id);const check=await f.check(f.a,id);await f.succeeded(f.a,check.taskId);await f.enable(f.a,id);gates.set(f.a.userId+':'+id,f.hold());}await f.configure(f.b,pkg,'a-first');gates.set(f.b.userId+':a-first',f.hold());
- await f.restore();restoring=true;const a=await f.login('generated-a'),b=await f.login('generated-b');await probeUntil(()=>entered.length===1,()=>entered);const manual=await f.check(b,'a-first');await probeUntil(()=>entered.length===2,()=>entered);assert.equal(entered.filter(key=>key.startsWith(a.userId+':')).length,1);await f.quietTurn();assert.equal(entered.length,2);
+ await f.restore();restoring=true;const a=await f.login('generated-a'),b=await f.login('generated-b');await probeUntil(()=>entered.length===1,()=>entered);await authorizeRestoredManualProbe(f,b,pkg,'a-first');const manual=await f.check(b,'a-first');await probeUntil(()=>entered.length===2,()=>entered);assert.equal(entered.filter(key=>key.startsWith(a.userId+':')).length,1);await f.quietTurn();assert.equal(entered.length,2);
  const first=entered.find(key=>key.startsWith(a.userId+':'))!;gates.get(first)!.resolve();await probeUntil(()=>entered.length===3,()=>entered);for(const gate of gates.values())gate.resolve();await f.succeeded(b,manual.taskId);await probeUntil(()=>f.read(db=>db.prepare('SELECT state FROM lifecycle_future WHERE user_id=?').get(a.userId)?.state)==='completed',()=>entered);assert.equal(new Set(entered).size,3);
 });
 
