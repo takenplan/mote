@@ -189,7 +189,12 @@ test('independent KEEP all four live limits reach actual Memory and Ask HTTP pro
  try{
   await configure({...limits,agentConcurrency:1,llmConcurrency:1,memoryConcurrency:1});
   const aj=await request(f.a,'/api/memory/jobs','POST',{materialIds:[a.id],operationId:randomUUID()}),bj=await request(f.b,'/api/memory/jobs','POST',{materialIds:[b.id],operationId:randomUUID()});
-  await until(async()=>{const q=(await view()).queues;return requests.length===1&&q.memory.active===1&&f.node.execution!.engine.list({kind:'memory.extract',state:'waiting'}).items.length===1;});
+  const manualBatchIds=new Set<string>();
+  for(const job of [aj,bj]){assert.equal(job.automatic,false);const tasks=Object.values(job.tasks) as {id:string}[];assert.equal(tasks.length,1);manualBatchIds.add(tasks[0].id);}
+  assert.equal(manualBatchIds.size,2,'each owner has its own manual batch task');
+  // Capacity waits in the current continuous batch, not the retired extract stage.
+  // Bind the durable queue proof to these HTTP-admitted manual jobs, not automatic work.
+  await until(async()=>{const q=(await view()).queues;return requests.length===1&&q.memory.active===1&&f.node.execution!.engine.list({kind:'memory.batch',state:'waiting'}).items.filter(task=>manualBatchIds.has(task.id)).length===1;});
   assert.equal((await view()).queues.memory.waiting,0,'capacity waiting stays in the durable Memory pool before acquiring physical gates');
   await configure({...limits,agentConcurrency:1,llmConcurrency:1,memoryConcurrency:2});
   await until(async()=>{const q=(await view()).queues;return q.memory.active===2&&q.agents.active===1&&q.agents.waiting===1;});assert.equal(requests.length,1);
