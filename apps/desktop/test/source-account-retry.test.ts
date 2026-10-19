@@ -8,9 +8,9 @@ import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
 import {defaultConfig} from '../src/config';
 import {DesktopAccountStorage} from '../src/account-storage';
-import {SourceSync} from '../src/source-sync';
+import {SourceSync,sourceHash} from '../src/source-sync';
 import {SyncHistory} from '../src/sync-history';
-import {ingressRequest} from '../src/ingress-client';
+import {ingressRequest,requireAccountReceipt} from '../src/ingress-client';
 import {LocalSourceManager} from '../src/source-manager';
 import {DEFAULT_SOURCE_OPTIONS,type ScannedItem,type SourceDefinition,type SourceRequest} from '../src/source-types';
 
@@ -103,13 +103,66 @@ it.each(['reference','archive'] as const)('retains an unchanged %s revision when
 });
 
 it.each(['part','commit'] as const)('restores an ordinary archive after a lost %s response, >24h and actual source/backend restart without duplicate intake',async point=>{
- const f=await fixture(),config=f.config(f.a),directory=join(f.directory,'local-sources'),input=join(f.directory,'generated-archive.txt');await writeFile(input,Buffer.alloc(4*1024*1024+19,65));
+ const f=await fixture(),config=f.config(f.a),directory=join(f.directory,'local-sources'),input=join(f.directory,'generated-archive.txt'),original=Buffer.alloc(4*1024*1024+19,65);
+ await writeFile(input,original);
  let sources=new LocalSourceManager(directory,config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive',syncContinuously:false});await sources.sync(true);
- const pending=sources.pendingContent();expect(pending).toHaveLength(1);let failed=false;
- vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const path=new URL(String(input)).pathname;if(!failed&&(point==='part'?path.endsWith('/parts/1'):path.endsWith('/commit'))){failed=true;if(point==='commit'){const response=await f.fetcher(input,init);expect(response.status).toBe(200);}throw Error('Generated dropped '+point+' response');}return f.fetcher(input,init);});
+ const pending=sources.pendingContent();expect(pending).toHaveLength(1);const queued=pending[0].item,sourceId=pending[0].source.id;
+ type Phase='initial'|'retry'|'resync';
+ type Wire={phase:Phase;kind:'begin'|'part'|'commit';path:string;body:any;status?:number;response?:any;dropped?:boolean};
+ const wire:Wire[]=[];let phase:Phase='initial',failed=false;
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{
+  const path=new URL(String(input)).pathname,kind=init.method==='POST'&&path.endsWith('/uploads')?'begin':init.method==='PUT'&&/\/parts\/\d+$/.test(path)?'part':init.method==='POST'&&path.endsWith('/commit')?'commit':undefined;
+  if(!kind)return f.fetcher(input,init);
+  expect(new Headers(init.headers).get('authorization')).toBe('Bearer '+f.a.token);
+  // Restore the consumed stream for the actual transport. Retain part metadata,
+  // not another base64 copy of the generated original, in the wire evidence.
+  const body=await inspect(init),part=kind==='part'?Number(path.split('/').at(-1)):undefined,bytes=kind==='part'?Buffer.from(body.bytes,'base64'):undefined;
+  const observed:Wire={phase,kind,path,body:bytes?{part,bytes:bytes.length,checksum:body.checksum,actualHash:sourceHash(bytes)}:body};wire.push(observed);
+  if(!failed&&point==='part'&&kind==='part'&&part===1){failed=true;observed.dropped=true;throw Error('Generated dropped part response');}
+  const response=await f.fetcher(input,init);observed.status=response.status;observed.response=await response.clone().json();
+  if(!failed&&point==='commit'&&kind==='commit'){expect(response.status).toBe(200);failed=true;observed.dropped=true;throw Error('Generated dropped commit response');}
+  return response;
+ });
  await expect(sources.flushPending(new AbortController().signal)).rejects.toThrow('dropped');expect(failed).toBe(true);expect(sources.pendingContent().map(value=>value.item)).toEqual(pending.map(value=>value.item));
- const old=f.sql(db=>db.prepare('SELECT id,request_key FROM ig_uploads WHERE user_id=?').get(f.a.userId)!);f.sql(db=>db.prepare('UPDATE ig_uploads SET expires=expires-? WHERE user_id=?').run(25*3600000,f.a.userId));
- await sources.close();await f.restart();vi.stubGlobal('fetch',f.fetcher);sources=new LocalSourceManager(directory,config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.sync(true);expect(sources.pendingContent().map(value=>value.item)).toEqual(pending.map(value=>value.item));await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
- const current=f.sql(db=>db.prepare('SELECT id,request_key FROM ig_uploads WHERE user_id=?').get(f.a.userId)!);expect(current.request_key).toBe(old.request_key);expect(current.id===old.id).toBe(point==='commit');expect((await f.request(f.a,'/api/captures')).json().items).toHaveLength(1);expect((await f.request(f.b,'/api/captures')).json().items).toHaveLength(0);
- await sources.sync(true);await sources.flushPending(new AbortController().signal);expect((await f.request(f.a,'/api/captures')).json().items).toHaveLength(1);
+ const initialBegin=wire.find(value=>value.kind==='begin')!;expect(initialBegin.status).toBe(200);expect(initialBegin.body.revision).toMatchObject({sourceId,sizeBytes:original.length,sha256:sourceHash(original),item:{externalId:queued.externalId,revision:queued.revision}});
+ const old=f.sql(db=>db.prepare('SELECT id,request_key FROM ig_uploads WHERE user_id=?').get(f.a.userId)!);expect(old.request_key).toBe(initialBegin.body.batchId);expect(old.id).toBe(initialBegin.response.id);
+ const firstCommit=wire.find(value=>value.kind==='commit');
+ const validate=(receipt:any)=>{
+  const [ack]=requireAccountReceipt(receipt,config,sourceId,initialBegin.body.batchId,[queued]);
+  expect(receipt).toMatchObject({version:3,state:'received',deploymentId:config.account.deploymentId,userId:f.a.userId,sourceId,batchId:initialBegin.body.batchId});
+  expect(ack).toMatchObject({externalId:queued.externalId,revision:queued.revision,original:{sourceId,captureId:ack.id,hash:sourceHash(original),bytes:original.length,retention:'archive',available:true}});
+  return ack;
+ };
+ const firstAck=point==='commit'?validate(firstCommit!.response):undefined;if(firstAck)expect(firstAck.duplicate).toBe(false);
+ f.sql(db=>db.prepare('UPDATE ig_uploads SET expires=expires-? WHERE user_id=?').run(25*3600000,f.a.userId));
+ await sources.close();await f.restart();phase='retry';sources=new LocalSourceManager(directory,config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.sync(true);expect(sources.pendingContent().map(value=>value.item)).toEqual(pending.map(value=>value.item));await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
+ const retry=wire.filter(value=>value.phase==='retry'),begins=retry.filter(value=>value.kind==='begin'),parts=retry.filter(value=>value.kind==='part'),commits=retry.filter(value=>value.kind==='commit');
+ if(point==='commit')expect(begins).toHaveLength(1);else expect(begins.length).toBeGreaterThanOrEqual(2);for(const begin of begins){expect(begin.status).toBe(200);expect(begin.body).toEqual(initialBegin.body);expect(begin.response.id).toBe(begins[0].response.id);}
+ let recovered:any;
+ if(point==='commit'){
+  // A transport UUID may be swept at startup. Its canonical business receipt
+  // must recover at begin without retransmitting any original part or commit.
+  expect(parts).toHaveLength(0);expect(commits).toHaveLength(0);expect(begins[0].response.receipt).toBeDefined();recovered=begins[0].response.receipt;
+ }else{
+  // The 4 MiB part's JSON envelope yields the existing bounded slice; the
+  // second begin resumes that fresh attempt and skips its acknowledged part.
+  expect(begins[0].response.id).not.toBe(initialBegin.response.id);for(const begin of begins)expect(begin.response.receipt).toBeUndefined();expect(parts).toHaveLength(2);expect(commits).toHaveLength(1);
+  for(const [index,part] of parts.entries()){
+   const bytes=original.subarray(index*4194304,(index+1)*4194304);expect(part.path).toBe('/api/ingress/uploads/'+begins[0].response.id+'/parts/'+index);expect(part.status).toBe(200);expect(part.body).toEqual({part:index,bytes:bytes.length,checksum:sourceHash(bytes),actualHash:sourceHash(bytes)});
+  }
+  expect(parts.reduce((sum,value)=>sum+value.body.bytes,0)).toBe(original.length);expect(commits[0]).toMatchObject({path:'/api/ingress/uploads/'+begins[0].response.id+'/commit',body:{},status:200});recovered=commits[0].response;
+ }
+ const recoveredAck=validate(recovered);
+ if(firstAck){
+  expect(recovered.id).toBe(firstCommit!.response.id);
+  expect({...recoveredAck,duplicate:false}).toEqual(firstAck);
+  // A retained transport replays the original receipt; a fresh canonical
+  // lookup acknowledges an existing capture. Neither fixes the transport UUID.
+  expect(recoveredAck.duplicate).toBe(begins[0].response.id===initialBegin.response.id?firstAck.duplicate:true);
+ }else expect(recoveredAck.duplicate).toBe(false);
+ const captures=(await f.request(f.a,'/api/captures')).json().items;expect(captures).toHaveLength(1);expect(captures[0].id).toBe(recoveredAck.id);expect((await f.request(f.b,'/api/captures')).json().items).toHaveLength(0);
+ const originalId=recoveredAck.original.ref.slice(9),ticket=await f.request(f.a,'/api/ingress/originals/'+originalId+'/tickets','POST',{mode:'download'});expect(ticket.statusCode,ticket.body).toBe(200);
+ const downloaded=await f.request(f.a,'/api/ingress/originals/'+originalId+'/content?ticket='+encodeURIComponent(ticket.json().ticket));expect(downloaded.statusCode).toBe(200);expect(downloaded.rawPayload).toEqual(original);expect(sourceHash(downloaded.rawPayload)).toBe(initialBegin.body.revision.sha256);
+ expect((await f.request(f.b,'/api/ingress/originals/'+originalId+'/tickets','POST',{mode:'download'})).statusCode).toBe(404);
+ phase='resync';await sources.sync(true);await sources.flushPending(new AbortController().signal);expect(wire.filter(value=>value.phase==='resync')).toHaveLength(0);expect((await f.request(f.a,'/api/captures')).json().items).toHaveLength(1);expect((await f.request(f.b,'/api/captures')).json().items).toHaveLength(0);
 },20000);
