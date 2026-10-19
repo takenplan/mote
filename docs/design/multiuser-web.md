@@ -248,3 +248,33 @@ error and last-capture facts without remounting the selected device details.
 The original immutable Api, credential-keyed tree, per-Api caches and stable
 account draft namespaces remain the account boundary. The parity supersession
 and regression matrix is in [Web background refresh](../testing-web-background-refresh.md#multiuser-home-device-parity).
+
+
+## Same-document ticket evidence handoff (R3 follow-up, prepared)
+
+The supported hashchange handoff must clear the old private tree immediately,
+then restore the current typed evidence route only after its one-time ticket
+exchange and authenticated self-read succeed. A navigation intent and the
+post-ticket-removal hash fence adoption; navigation, manual login/logout,
+external-tab authentication changes and unmount retire an older attempt. Local
+authentication announcements still clear the old Api and caches. They do not
+turn that same in-progress exchange into a different navigation. Ticket removal
+also updates the remembered route, so rejected later navigation cannot restore
+a consumed ticket in the URL. No new login or reload step is introduced.
+
+This is a prepared correction, not a new R3 PASS. In the original Client R3
+check, A first loaded the Core base page and then changed the same document's
+hash to the minted ticket URL: authentication succeeded but evidence was absent;
+a manual reload then displayed retained A evidence. B used a fresh document and
+displayed its own evidence immediately. The failure is therefore the existing
+same-document branch, not a claim that default external browser startup always
+fails. The production bootstrap still exchanges before mounting App.
+
+KEEP: typed context readers, one-time exchange/credential identity checks,
+immediate old-account retirement, original snapshots and permissions. CHANGE:
+restore only the successfully authenticated navigation's typed route. REMOVE:
+connection-only adoption that leaves the consumed route without its detail.
+EXCEPTION: explicit cancellation or authentication replacement never resumes the
+retired attempt. UNKNOWN: this prepared source has not been built or exercised;
+Desktop/IAB R3 reacceptance remains separate. See the
+[handoff regression matrix](../testing-web-login-handoff.md).
