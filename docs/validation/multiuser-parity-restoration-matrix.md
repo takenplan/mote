@@ -2,6 +2,8 @@
 
 日期：2026-10-18。管理、owner/branch/PR/候选/依赖接缝与检查排队见[集成计划](../design/multiuser-parity-restoration-plan.md)。这是验收合同和当前空台账，不是通过记录。
 
+原行为、必要隔离/例外、准确候选与正式目标、恢复证据和未闭合项见[越界恢复与方案门禁](../design/multiuser-parity-boundary-restoration-plan.md)；本矩阵仍是全部66行的验收合同。
+
 ## 数量、状态与证据
 
 核心 58 项：MEM 8、FILE 6、ASK 5、CONN 7、EXEC 3、CONFIG 7、DESKTOP 4、AND 4、WEB 2、EXT 3、ACTION 4、LIFE 5。补充 6 项：EXEC-S01、EXT-ES01/ES02/EC01、LIFE-L06、AND-D01。另列 FILE-07 旧缺陷与 CONFIG-UX01 原未编号体验差异，共 66 个唯一跟踪行；后两项不偷换58项范围。

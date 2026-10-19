@@ -12,6 +12,9 @@
 
 ## 行为合同与取代检查
 
+最新开工门禁：[Technical plan review](../development.md#technical-plan-review)；[boundary restoration plan](multiuser-parity-boundary-restoration-plan.md)记录原行为、必要隔离、已恢复证据和未闭合项。
+
+
 依据 [AGENTS](../../AGENTS.md)、[开发指南](../development.md)、[多用户作用域 ADR](../adr-multiuser-scope.md)和[共享业务流程 ADR](../adr-shared-business-flows.md)。除登录及必要账号资源/权限隔离外，原 A→B→C→产出、输入范围、时序、失败/重试、提示/配方、用户操作与体验保持。单账号和多账号共享领域实现，宿主只适配已绑定账号的 ports。新测试或新设计记录不能自行批准产品变化。
 
 | 取代分类 | 本轮必须落实 |
