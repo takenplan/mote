@@ -98,7 +98,7 @@ test('startup and the hourly callback clean expired transport while preserving a
 test('a real ambiguous processing call protects expired pins until observed physical settlement, across restart and another owner GC',async t=>{
  let calls=0;const endpoint=await media(t,(_request,response)=>{calls++;response.writeHead(503);response.end('Generated unknown processing outcome');}),f=await processingFixture(t);
  await f.models(f.alice.token,endpoint,'GENERATED_UNKNOWN_PROCESSING');const bytes=Buffer.from('Generated processing-original bytes'),a=(await f.upload(f.alice.token,bytes,'image/png')).captures[0],b=(await f.upload(f.bob.token,bytes,'image/png')).captures[0];
- const ingress=f.node.ingress.forUser(await f.node.authority.authenticate(f.alice.token));ingress.holdOriginal(a.original.ref);await f.submit(f.alice.token,a.original.ref);
+ const ingress=f.node.ingress.forUser(await f.node.authority.authenticate(f.alice.token));ingress.holdOriginal(a.original.ref);await f.intake(f.alice.token,a.original.ref);
  await until(()=>f.read(db=>!!db.prepare("SELECT 1 FROM mp_activity WHERE user_id=? AND state='unknown'").get(f.a.userId)),'generated ambiguous media response did not retain its real physical journal');assert.equal(calls,1);
  const root=(user:any)=>join(f.directory,'originals',identityHash([f.node.deploymentId,user.userId])),object=(user:any)=>join(root(user),'objects',bytesHash(bytes));
  f.read(db=>{db.prepare('UPDATE ig_pins SET expires=0 WHERE user_id=?').run(f.a.userId);assert.equal(db.prepare('SELECT count(*) n FROM ig_activity WHERE user_id=?').get(f.a.userId)!.n,0,'this hold is the processing journal, not an ingress workspace');});
