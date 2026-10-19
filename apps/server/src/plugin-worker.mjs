@@ -10,6 +10,7 @@ const send=value=>process.stdout.write(JSON.stringify(value)+'\n');
 const input=createInterface({input:process.stdin,crlfDelay:Infinity});
 input.on('line',async line=>{
  let message;try{message=JSON.parse(line);}catch{return;}
+ if(Number.isSafeInteger(message?.cancel)&&message.cancel>0){pending.get(message.cancel)?.abort();return;}
  if(message?.hostResult){const call=hostPending.get(message.hostResult);if(!call)return;hostPending.delete(message.hostResult);message.error?call.reject(Error('host_capability_rejected')):call.resolve(message.result);return;}
  if(!message||typeof message.id!=='number')return;
  try{
@@ -28,7 +29,7 @@ input.on('line',async line=>{
   if(message.method==='invoke'){
    const component=runtime.components?.find(component=>component.id===message.params.componentId);
    if(typeof component?.invoke!=='function')throw Error('component_unavailable');
-   const host=Object.freeze({call:(method,params)=>new Promise((resolve,reject)=>{const id=++hostSequence;hostPending.set(id,{resolve,reject});send({id:message.id,hostCall:{id,method,params}});})});
+   const host=Object.freeze({call:(method,params)=>new Promise((resolve,reject)=>{controller.signal.throwIfAborted();const id=++hostSequence;hostPending.set(id,{resolve,reject});send({id:message.id,hostCall:{id,method,params}});})});
    result=await component.invoke(message.params.input,host,controller.signal);
   }else{
    if(!['health','put','read','remove','search','export','close','lifecycle'].includes(message.method)||typeof runtime[message.method]!=='function')throw Error('method_unavailable');

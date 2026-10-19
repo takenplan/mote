@@ -24,6 +24,12 @@ import {PLUGINS_DOMAIN,PLUGIN_CONFIGURATION_DOMAIN,pluginCapability,componentSch
 
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone=<T>(value:T):T=>structuredClone(value);
+// Components are addressed by identity, never by their declaration order.
+// Compare the complete descriptor and reject duplicate registrations explicitly.
+const sameComponents=(actual:PluginComponent[],expected:PluginComponent[])=>{
+ const declared=new Map(expected.map(component=>[component.id,component])),seen=new Set<string>();
+ return actual.length===expected.length&&declared.size===expected.length&&actual.every(component=>{const fixed=declared.get(component.id);if(!fixed||seen.has(component.id))return false;seen.add(component.id);return component.version===fixed.version&&component.surface===fixed.surface&&component.capability===fixed.capability;});
+};
 const signature=(i:UserPluginInstance)=>digest([i.packageId,i.configuration,i.grants]);
 type InstanceRow={user_id:string;id:string;generation:number;removed:number;json:string;verified_hash:string|null};
 type Snapshot={id:string;user_id:string;instance_id:string;generation:number;account_epoch:number;binding_revision:number;mode:'task'|'history';released:number;json:string};
@@ -143,7 +149,7 @@ export class ScopedPluginHost {
   const pkg=this.package(fixed.packageId);if(pkg.view.source.digest!==fixed.digest||pkg.view.version!==fixed.version)throw new StoreError('Pinned provider unavailable',503);
   const directory=join(this.directory(subject.userId),digest([fixed.instance.id,fixed.packageId,fixed.instance.configuration]));
   return Object.freeze({instanceId:snapshot.instance_id,namespace:this.namespace(snapshot),configuration:Object.freeze(clone(fixed.instance.configuration)),adapter:pkg.hostAdapter,directory,assertCurrent:assert,
-   runtime:async()=>{assert();const worker=new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory);try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));assert();if(digest(actual.components)!==digest(fixed.components))throw new StoreError('Pinned maintenance provider differs',409);}catch(error){await worker.close();throw error;}return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assert();if(!(purpose==='delete'?['remove','read']:['read','export']).includes(method))throw new ScopeError('invalid_identity',403);const value=await worker.call(method,params);assert();return value;},close:()=>worker.close()});},
+   runtime:async()=>{assert();const worker=new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory);try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));assert();if(!sameComponents(actual.components,fixed.components))throw new StoreError('Pinned maintenance provider differs',409);}catch(error){await worker.close();throw error;}return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assert();if(!(purpose==='delete'?['remove','read']:['read','export']).includes(method))throw new ScopeError('invalid_identity',403);const value=await worker.call(method,params);assert();return value;},close:()=>worker.close()});},
   });
  }
  forAdministrator(context:UserContext){
@@ -188,7 +194,7 @@ export class ScopedPluginHost {
   const directory=probe?join(probeRoot,digest(key)):join(root,digest([fixed.instance.id,fixed.packageId,fixed.instance.configuration]));privateDirectory(directory);
   const worker=factory?factory(Object.freeze({userId,instanceId:fixed.instance.id,generation,directory,configuration:Object.freeze(clone(fixed.instance.configuration))})):new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory),scope=new BackendPluginScope(this.root),registry=new FeatureRegistry<Runtime['registry'] extends FeatureRegistry<infer T>?T:never>();
   const record:WorkerRecord={scope,worker,userId,instanceId:fixed.instance.id,generation,...(factory?{factory,factoryId:pkg.hostAdapter}:{}),...(probe?{probeDirectory:directory}:{})};this.workers.add(record);
-  try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));if(digest(actual.components)!==digest(fixed.components))throw new StoreError('Actual plugin registration differs from the pinned manifest',409);
+  try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));if(!sameComponents(actual.components,fixed.components))throw new StoreError('Actual plugin registration differs from the pinned manifest',409);
    if(this.closed||this.instance(userId,fixed.instance.id).generation!==generation)throw new ScopeError('invalid_identity',401);
    await scope.install(ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));});
    return {record,worker,scope,registry};
