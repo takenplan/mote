@@ -335,7 +335,7 @@ Android实际执行已转交专人：backend070的49171/PID81228生成A/B/admin�
 
 Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6692af58b8ddf38c061b842aa644a336f4473dc4aee757fc99741400；14PASS/Server3164=3160PASS2FAIL0cancel2skip/后7UNRUN，Android未跑。binding=`/Users/utopiafar/.codex/visualizations/2026/10/18/01a14e8d-8f73-7ac2-a490-27ac73d5f6ba/parity-integration/files-3740e89c-required-gate-failed.json` SHA256f148b8814c3c5e44979d13f3497cba2ad4bf450f530e2e74c8c7f6331edfba9d；原log/receipt/plan保留。sameHEAD/clean/cleanupConfirmed/锁释放/PID71644 gone后已恢复原File owner一次：capture-browser83:160 OCR发布409external_result_unknown、multiuser-memory226:125 Hindsight503memory_provider_unavailable，根因待查，不凭状态归fixture/生产bug。新File源须后续重绑core；当前27a实际结果不自动替新源通过。driver随后已于16:33:42.275Z启动Ext544 fresh22，runb851c1f4-9437-46de-8761-de51e75c6e28/PID91038，Node26ABI147/JDK21/Gradle1/hidden；初始build/type结束进入测试后已退短peak，common完整锁继续，普通独立API/UI/model并行。当前Ext结果RUNNING，正式汇总/main未释放。
 
-## 当前证据登记（2026-10-19 16:56，历史段落不代表当前状态）
+## 当前证据登记（2026-10-19 17:44，历史段落不代表当前状态）
 
 当前候选和完整证据见[计划登记](../design/multiuser-parity-restoration-plan.md#模块所有权与候选登记)与其当前检查点。66主行/22跨域场景不变，整体NOT_READY；13个Draft170–182均未合，正式integration只有管理文档，main未纳本轮业务、未部署。fixture、原生UI、物理设备、真实模型分列，新结果不回填旧SHA。
 
@@ -431,6 +431,12 @@ Files374 fresh22已于16:28:30.815Z失败，run9233d0f2/1388.326s/inputcd85d12a6
 | Domain接续 / 实际2P1F6UNRUN | c3a091ba修正后freshGO698a0ae6单次08:41:14→08:41:18Z；environment_ready与cleanup P，A login F，6依赖UNRUN；正常token/revision CAS已实际完成 | manifest78032fda/report40898831，Root44绑定件核/8743c260具名失败接受；无新增usage/issuance，task blocked attempt0/shared_resource_revoked；漏wire2 header确认，HTTP状态未存/426仅源码推断。OCRkey CAS未到，current handoff2cdbef2f，不复用GO |
 | Chrome cd0首13 / 实际1P1F11UNRUN | source106d75b0/Highdabd5aa3；freshGOc5302f7f后W01-empty P、Notes F于memory.intake guard；batch3ce2578c与原cleanupUNKNOWN不改，Root45件/26raw及两generated图已核 | normalCLIstop0/Browser.close/进程四端口闭合；独立RO usage/externalcalls/jobs/ops/targets0、tasks4无receipt/issuance；Root晚闭合bf59af96匹配释放余5owner。source owner补完整生成lineage/反例，不任意放task；11UNRUN/完整WEB/Android仍待 |
 | Memory外部f723 / 新delta BLOCK | 24新件/11旧件独审a9d66147，四原修正闭合；6新纯合同与11syntax P，两个结果谓词未检查firstFailure仍可报P | 仅新tinychild修predicate/首失败合同；真实5case relay与零job HTTP lifecycle smoke均UNRUN，后独立实际模型GO，不借2b旧26。原UNKNOWN/FAILED、业务默认与正式HOLD不变 |
+| Memory component / 非模型P、实际FAILED | 1be19679/High4ea963d4；真实relay+HTTP smoke 2P，Root129引用/21进程归属核6a694d48；单张actual421.178s到期，capture POST1/Memory POST0，0 sessions/turns/usage | manifest3303d270/Root a6113d74只接受FAILED/INCOMPLETE；原图两Material但OCR publication未达。outer提前disarm覆盖缺口保，原automatic原因UNKNOWN；旧f723 BLOCK历史不洗 |
+| Memory ready / 独审后source-only | RO0757169a八件及新review bc89bd14；PM准独立30s正常本地OCR前置外部child，双域effective配置、真实publication/complete Material/current image pin/settle | OCR精确收据单独baseline，零LLM不等于总usage0；不复制profile资格/改recipe/DB。新小合同与现有reviewer delta后freshGO，实模另GO，原完整automatic/image理解链仍必需 |
+| Chrome v4 / 实际1P9F3UNRUN | source3a688eeb/High4adbcbe4；首listener未证明归属而被guard heal，goto未达、八次blank导航超时；整批FAILED | Root53件/26完整raw及frozen/32RO counts、四ports六owner、同SHA九图中一张亲看，f08bcfa1具名失败接受；环境不合格/角色PID确因UNKNOWN。normalcleanup CLOSED不改原矛盾，新增review最小方案中 |
+| Domain独立零模型 / 实际2P1F9UNRUN | a58ee8cf/High2c29e837/Root69426813与GO5486e988；environment_ready P、normal_start usage_set_changed F、cleanup P；九case未到 | 源码确认HTTP可见usage过滤而guard用raw6；实际items数量未存。owner严格停止基线原6/5receipts等未变，无新增usage/issuance发现；封存中，无重启/rotate/凭据CAS，旧FAILED保 |
+| Native App前置 / source BLOCK4 | 离线observer106+7件/High5bc9e9ae/Root ea56d954，仅源码；concrete4dd32b7e独审57d7a60b列取得实例归属、源码有效配置、逐资源清理、实时有界排空四阻塞 | 唯一Client补source child与有限新合同，不重跑旧127；实际App/OS权限/WorkManager/target/claim/WRITE均UNRUN，需同Domain停止profile及freshGO；新AVD环境限定P不外推 |
+| 原单用户完整链 / KEEP | 多用户只做隔离；原真实入口、默认recipe/有效配置语义、顺序、图像理解/提取/独审/持久产物逐段对照 | OCR-only为诊断前置，不替代原automatic路径，不以简化输入或fixture P冒完整交付；正式assembly/final checks/独验仍HOLD |
 | 最新人类批次策略 / 执行约束 | 固定head/tree/build/env/生成输入完整journey组；caseFAIL继续安全独立case，dependency阻塞UNRUN+因果；未知startup/隔离/cleanup只停受影响分支/环境；批末统一结果/command/exit/cleanup/manifest | 任一FAIL整批FAILED，原断言/结果不洗，同输入不盲重跑；正常failfast自然终态后仅支持入口续原独立UNRUN，不overlay/任意白名单；新输入按实际delta重验 |
 | CHECK-SCOPE be096 / Draft173 | 正常2/2、独审52infra/24实际CLI/542绑定，精确3helper并保原消费者/security/update/类型/diagnostics及unknown/rename/mixed | Server4/runner串行不改，无理论步数当实测收益 |
 

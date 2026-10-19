@@ -224,7 +224,7 @@ AND-D01已由PM进一步明确：旧全局隐私/采集/同步值无可信owner�
 - L04：当前完整导出直接响应下载，中央永久完整副本/下载历史移除；必要暂存按完成/失败/取消/断流/重启与原重试处理。无latest-only/TTL/次数政策或额外下载步骤；不操作真实历史副本。
 - 实际运行证据：Q002仅Web模块required affected门禁由driver实跑9/9通过；不是独验/原生/最终集成。原Operation family、增量刷新、Work父子进度和设备30秒刷新互不替代；D2最新5744d6a跨端组合仍另验。
 
-## 当前验收检查点（2026-10-19 16:56，覆盖历史运行快照）
+## 当前验收检查点（2026-10-19 17:44，覆盖历史运行快照）
 
 66主行与22跨域场景仍未整体READY。13个Draft #170–182均OPEN/Draft/未合，正式integration仅管理文档，main未纳本轮业务、未部署。当前独立业务合成候选为3efdec1b48b37a6c8a0405dacc1d3b4bb2bd22ab/treeef7c7822ee8368140b60a7c16e814e79b16b5bb6，其准确parent cd0/tree25b518原工作树继续冻结供实际领域验收。3ef仅两处Web测试观察修正，production0、其余3224条mode/type/blob不变；cd0仅摘要测试exact replacement drain+成功断言，父88d5保B生产实现及budget consumer10P。Root分别核3ef22工件/3225当前blobs/实际祖先与源桥，并在新树正常own ci和normal9全部通过；该结果与原cd0失败批、祖先Server组件baseline分列，不称新whole23或实模/原生通过，历史695/f5/6875/88/cd0失败均保。
 
@@ -383,6 +383,18 @@ P/C源后查明观察器MIME门槛不适用，未证明Provider查询不健康�
 最新补充：Chrome cd0零模型原13子场景首批FAILED。source106d75b0经独审dabd5aa3准、Root核28件与实际3225源码/1628编译/179工具后，fresh GOc5302f7f单次08:50:49.076→08:50:59.808Z执行。W01-empty P，W01-notes因unexpected background task kind memory.intake F，11项UNRUN；原batch3ce2578c/manifestfbcbdcdf及cleanupUNKNOWN不改。Notes截图显示已同步；Root亲看两生成图，核45件/26完整raw streams。正常Browser.close、CLIstop0及进程/四端口闭合；Root另一次单SQLite只读事务确认usage0/externalcalls0/mm_jobs0/operations0/targets0，tasks4为materials成功1、index-admit成功2、intake等待1，无receipt/issuance。晚闭合proofbf59af96精确匹配原lease全payload/SHA/devino后仅释放余5owner并保parent，不倒改原cleanup或称13通过。唯一source owner仅补完整生成Notes/Material/intake链及反例、失败后的独立forensic，不放任意task或改自动策略；新delta独审/fresh批次待验，Android未获runtime许可。
 
 最新补充：Memory外部production-component诊断仍未运行Host或实模。原028e独审add766 BLOCK后，新child f72335a4封24件、6新纯边界合同P及11非执行syntaxP；独审a9d66147核24新件/11旧件，确认四组字节透传、绝对预算、thread/turn绑定及真实guard/smoke前置已补，但controller和guard结果判定漏firstFailure，仍BLOCK。原owner仅修两PASS谓词与新首失败聚焦合同。真实5case relay子进程组和正常HTTP零job生命周期冒烟均UNRUN；通过并封存真实cleanup/同有限组回执后，仍须独立有界实模GO。2b原26合同、历史首失败与原图片失败原因UNKNOWN分别保留，无新增CLI注入、环境flag、默认策略或业务writer，正式assembly/final仍HOLD。
+
+最新补充：Memory外部component诊断的前置与首个实际尝试分开登记。tinychild 1be19679经High 4ea963d4准，四个新firstFailure合同P；旧26/17/6不重跑。真实5case relay与正常HTTP零job lifecycle smoke共2P，Root逐核129引用、21进程归属/端口和原source/build，限定接受6a694d48。另一个fresh GO 5d5eea56的单张生成图片实际于09:19:07Z运行预算到期，421.178s、selection_not_ready/INCOMPLETE、exit1；capture POST1而Memory POST0，Codex sessions/turns、usage与diagnostic events均0，提取和复核未到达。manifest3303d270的29引用经Root核，a6113d74只接受具名失败观察，不称NONREPRO或修复。normal app.close/进程/端口已闭合；outer在晚peak闭合前disarm，覆盖缺口单列，不能冒称全程资源保护。
+
+最新补充：Memory canonical readiness只读8件0757169a及新增独审bc89bd14确认原图和两current Material存在，但无M06 OCR publication；screen/capture coverage pending，processing_disabled阻断且effective understanding受perception覆盖。原automatic图像审核原因仍UNKNOWN。PM只准原MEM准备外部source child：上传前固定processing enabled/summarize false及perception enabled/understanding false/external false，以正常intake一次真实本地OCR，独立30s有界preflight证明publication/current complete Material/精确image pin/selection ready与settle；本地OCR收据独立基线，零LLM不能称总usage为空。新包/有限新合同须现有独审复核再fresh GO，actual仍NO_GO；不同profile的ready资格不转移。watchdog须资源/产物/postcheck闭合后再disarm，原失败和清理缺口保留。
+
+最新补充：Chrome v4 source3a688eeb经High 4adbcbe4准，fresh GO e6897036单次09:23:11.112→09:24:47.866Z实际1P9F3UNRUN、整批FAILED。首次W01-empty的assigned listener is not owned发生在goto前；guard再查却标healthy，八个后续case在同一blank页导航超时，不计独立产品导航覆盖。原entryOutcome PASS/healthy true与safety空数组矛盾原样保留；角色/PID/确因UNKNOWN。Root核53件/26完整closed及frozen streams、当前PID/PG/四端口/六owner、32项RO counts，亲看九张同SHA中的空白截图；f08bcfa1只接受具名失败，环境不合格。normal Browser.close/CLIstop0、cleanup/processClosure CLOSED和零模型账本仅其限定事实。r9报告4a21bde4与新增Chrome独审只做最小sticky安全失败、角色归属和共同goto/login前置方案；原作者待方案后source-only修，不重跑旧批。Root停止提醒晚于自然闭合，没有实际中断/信号/补清理。
+
+最新补充：Domain新的独立零新增模型批次a58ee8cf经High 2c29e837准、26新纯合同P；Root核29件/27sourceMap/4934内容及同一停止profile/DB，资格69426813、fresh GO5486e988只准11case与cleanup。单次实际exit1：environment_ready P、normal_start守卫zero_model_usage_set_changed F、九项UNRUN、normal_cleanup P。源码确认公共usage SQL仅返回issuedAt非空且executionStarted非0的行，guard却与原始六行比较；HTTP实际items数量未留存，不能追记。owner停止后严格原六usage/五opaque snapshot/任务等基线未变，未发现新增usage/issuance；配置4dd不变，DB同inode新SHA bce2fbff。当前仍封存中，无新GO、凭据CAS未到，旧两次失败均保留。
+
+最新补充：Native WorkManager离线observer parent71cc525c及tinychild f2ed51e9已Root核106+7件，126旧生成断言与一个新深JSON反例分开，High 5bc9e9ae及Root ea56d954只接受source。实际App/WorkManager DB未运行。concrete runner4dd32b7e的High 57d7a60b阻塞四组：取得实例的精确停止权限、实际源码/有效配置身份、逐资源独立清理、从启动起有界排空日志。唯一Client正做source-only最小child及新有限合同；没有启动App、ADB、后端或接续claim/WRITE。未来仍须同Domain正常停止后的原账户/profile/DB与fresh GO。
+
+交付约束补充：多用户改造以隔离为边界，原单用户完整大链路的真实入口、配方、有效配置语义、调用顺序、图像理解/提取与独立审核、持久产物均须逐段对照。OCR-only只为阶段性生成诊断前置，不能替代原automatic旅程或放宽产品readiness/权限/默认。各新source/fixture的P不抵消原actual FAILED/UNRUN；正式assembly、最终完整checks与独立验收继续HOLD。
 
 ## 最终验收与持续记录
 
