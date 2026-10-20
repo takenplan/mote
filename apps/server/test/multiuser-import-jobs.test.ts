@@ -36,6 +36,19 @@ test('mapped imports retain empty originals without authorizing zero-length evid
  assert.equal((await f.request(f.a.token,'/api/archived-files/'+files[0].id+'/content')).rawPayload.length,0);assert.equal((await f.request(f.b.token,'/api/archived-files/'+files[0].id+'/content')).statusCode,404);
 });
 
+test('mapped import disposition conflicts reach the existing output correction loop before host manifest validation',async t=>{
+ for(const incomplete of [true,false])await t.test(incomplete?'partial disposition coverage':'preserved empty original contradicts its disposition',async t=>{
+  const f=await scopedFilesFixture(t),bytes=Buffer.from('Generated complete original remains verbatim.\n'),files=[];
+  for(const [name,body] of [['empty.md',Buffer.alloc(0)],['body.md',bytes]] as const){const id=randomUUID();await f.checked(f.a.token,'/api/import-uploads','POST',{id,name,sizeBytes:body.length,mimeType:'text/markdown'});if(body.length)assert.equal((await f.request(f.a.token,'/api/import-uploads/'+id+'/parts/0','PUT',body,{'content-type':'application/octet-stream'})).statusCode,200);files.push(await f.checked(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{}));}
+  const dispositions=[{fileId:files[0].id,status:'excluded',reason:'The generated original has no text.'},{fileId:files[1].id,status:'parsed',reason:'The complete generated text is retained.'}],base={summary:'Generated reviewed original mapping',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated originals are explicitly accounted for.'}};let answers=0;
+  const model=await importModel(t,f,files[1],bytes,{mapped:()=>++answers===1?{...base,preserveAll:true,dispositions:incomplete?[dispositions[0]]:dispositions}:{...base,preserve:[1],dispositions}});
+  const created=await f.request(f.a.token,'/api/imports','POST',{requestId:randomUUID(),archivedFileIds:files.map(file=>file.id),processing:'preview',instruction:'Preserve the complete supplied original and account for the empty original.'});assert.equal(created.statusCode,202,created.body);const id=created.json().id;
+  await waitForScopedState(async()=>{const job=await f.checked(f.a.token,'/api/imports/'+id);if(['failed','needs_configuration'].includes(job.status))assert.fail(JSON.stringify(job));return job.status==='awaiting_confirmation';},()=>'corrected original mapping did not reach preview',15000);
+  const preview=await f.checked(f.a.token,'/api/imports/'+id);assert.equal(answers,2,'the inconsistent first proposal is corrected inside the original model run');assert.equal(model.requests.length,3,'one evidence read, first proposal and corrected proposal');assert.equal(preview.preview.count,1);assert.equal(preview.preview.samples[0].text,bytes.toString());assert.equal(preview.dispositions.counts.excluded,1);assert.equal(preview.dispositions.counts.parsed,1);assert.equal(preview.files.length,2);assert.equal(preview.progress.imported,0);assert.equal(preview.captureIds.length,0);
+  assert.equal((await f.request(f.a.token,'/api/archived-files/'+files[0].id+'/content')).rawPayload.length,0);assert.deepEqual((await f.request(f.a.token,'/api/archived-files/'+files[1].id+'/content')).rawPayload,bytes);
+ });
+});
+
 test('a ZIP Finder metadata member remains archived while the real import publishes only its text member',async t=>{
  const {zipSync}=await import('fflate'),f=await scopedFilesFixture(t),metadata=Buffer.alloc(68,0xff);metadata.writeUInt32BE(1,0);metadata.write('Bud1',4,'ascii');metadata.writeUInt32BE(32,8);metadata.writeUInt32BE(32,12);metadata.writeUInt32BE(32,16);
  const bytes=Buffer.from(zipSync({'.DS_Store':metadata,'body.txt':Buffer.from('Generated ZIP body.')}));
