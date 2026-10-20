@@ -163,9 +163,14 @@ try {
   const restartPayload={...payload,sourceIds:Object.values(restartVariant.sources),operationId:'restart-'+randomUUID()},restartOperation=randomUUID();
   const restartAdmission=(await runtime.invoke(a,as2.id,'final.finance.source',restartPayload,restartOperation)).body;
   const restartPublication=await waitPublication(a,beforeRestartIds);
+  const beforeKillTask=await runtime.task(a,restartAdmission.id,{terminal:false}),beforeKillObservedAt=new Date().toISOString();
   await runtime.stop('SIGKILL');await runtime.start();
+  const firstTaskAfterStart=await runtime.task(a,restartAdmission.id,{terminal:false}),afterStartObservedAt=new Date().toISOString();
   const restartRead=await runtime.material(a,restartPublication.id);assertFinanceBody(restartRead.body,restartVariant,restartBindings);
-  let restartTask=await runtime.task(a,restartAdmission.id);
+  // A killed executor can retain its existing 30s lease; allow that plus the ordinary 20s task observation.
+  const restartWaitStarted=Date.now();
+  let restartTask=await runtime.task(a,restartAdmission.id,{timeoutMs:50000});
+  const restartWaitElapsedMs=Date.now()-restartWaitStarted;
   if(restartTask.state!=='succeeded'){
     await runtime.request(a,'POST','/api/tasks/'+restartAdmission.id+'/retry',{confirmUnknown:true},200);
     restartTask=await runtime.task(a,restartAdmission.id);
@@ -180,7 +185,7 @@ try {
   const bRestartRead=await runtime.material(b.token,bMaterial.material.id);assert.equal(bRestartRead.body.totals.netCents,987654321);
   const aRestartRead=await runtime.material(a,material.material.id);assertFinanceBody(aRestartRead.body,variant,aBindings);
   assert(new Set(runtime.processes.map(p=>p.pid)).size>=2);
-  record({id:'ACTUAL_PROCESS_RESTART',status:'PASS',phase:'after real Material publication and before first task result GET',taskId:restartTask.id,materialId:restartPublication.id,distinctProcessIds:runtime.processes.map(p=>p.pid),sameTaskAfterReplay:true,sameMaterialRevision:true,bHistoryReadable:true});
+  record({id:'ACTUAL_PROCESS_RESTART',status:'PASS',phase:'after real Material publication',taskId:restartTask.id,materialId:restartPublication.id,distinctProcessIds:runtime.processes.map(p=>p.pid),sameTaskAfterReplay:true,sameMaterialRevision:true,bHistoryReadable:true,taskObservation:{budgetMs:50000,elapsedMs:restartWaitElapsedMs,beforeKill:{observedAt:beforeKillObservedAt,state:beforeKillTask.state,attempts:beforeKillTask.attempts},firstAfterStart:{observedAt:afterStartObservedAt,state:firstTaskAfterStart.state,attempts:firstTaskAfterStart.attempts},finalState:restartTask.state}});
 
   // Disable drains previously admitted work while rejecting every new snapshot.
   semantic.arm(sourceIds[0]);
