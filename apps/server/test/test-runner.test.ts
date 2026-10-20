@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test, { type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkDriverPaths } from '../../../scripts/release/check-driver.mjs';
-import { MAX_TEST_WORKERS, testArguments, testWorkerCount } from './run.mjs';
+import { MAX_TEST_WORKERS, PERFORMANCE_REPORTER, testArguments, testWorkerCount } from './run.mjs';
 
 const launcher = fileURLToPath(new URL('./run.mjs', import.meta.url));
 const driver = new URL('../../../scripts/release/check-driver.mjs', import.meta.url).href;
@@ -45,9 +45,9 @@ function fixture(t: TestContext) {
     await Promise.allSettled(runs.map(run => run.done));
     rmSync(root, { recursive: true, force: true });
   });
-  function start(entry: string, args: string[] = []) {
+  function start(entry: string, args: string[] = [], environment: NodeJS.ProcessEnv = {}) {
     const child = spawn(process.execPath, [entry, ...args], {
-      cwd: directory, env: nestedEnvironment(), stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: directory, env: { ...nestedEnvironment(), ...environment }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
     for (const stream of [child.stdout!, child.stderr!]) stream.on('data', part => { output += part; });
@@ -64,9 +64,62 @@ test('Server launcher bounds its CPU default and leaves native CLI overrides aft
   for (const parallelism of [1, 2, 4, 6, 18, 128]) {
     assert.equal(testWorkerCount(parallelism), Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS)));
   }
-  assert.deepEqual(testArguments({ parallelism: 18, args: ['--test-concurrency=1', '--test-name-pattern=generated'] }),
+  assert.deepEqual(testArguments({ parallelism: 18, nodeOptions: '', args: ['--test-concurrency=1', '--test-name-pattern=generated'] }),
     ['--import', 'tsx', '--test', `--test-concurrency=${testWorkerCount(18)}`, '--test-timeout=120000',
+      `--test-reporter=${PERFORMANCE_REPORTER}`,
       '--test-concurrency=1', '--test-name-pattern=generated', 'test/*.test.ts']);
+});
+
+test('Server launcher leaves native reporter/destination arrays and NODE_OPTIONS aliases intact', () => {
+  for (const flag of ['--test-reporter', '--test_reporter', '--test-reporter-destination', '--test_reporter_destination']) {
+    for (const args of [[`${flag}=tap`], [flag, 'tap']]) {
+      const result = testArguments({ args, nodeOptions: '' });
+      assert.deepEqual(result.slice(-args.length - 1), [...args, 'test/*.test.ts']);
+      assert.ok(!result.includes(`--test-reporter=${PERFORMANCE_REPORTER}`));
+    }
+    for (const nodeOptions of [`${flag}=tap`, `"${flag}" "tap"`, `"${flag}=tap"`]) {
+      assert.ok(!testArguments({ nodeOptions }).includes(`--test-reporter=${PERFORMANCE_REPORTER}`));
+    }
+  }
+  for (const nodeOptions of [
+    '--import=/generated/--test-reporter=hook.mjs',
+    '--import="/generated/ --test-reporter=hook.mjs"',
+    '"--import=/generated/ --test_reporter=hook.mjs"',
+    '--import="/generated/escaped\\\" --test-reporter=hook.mjs"',
+  ]) assert.ok(testArguments({ nodeOptions }).includes(`--test-reporter=${PERFORMANCE_REPORTER}`));
+});
+
+test('real Server launcher emits advisory performance evidence with its default spec output', async t => {
+  const f = fixture(t);
+  writeFileSync(join(f.directory, 'test/generated.test.ts'), "import test from 'node:test';test('GENERATED_DEFAULT_REPORT',()=>{});\n");
+  const result = await f.start(launcher, [], { NODE_OPTIONS: '' }).done;
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /GENERATED_DEFAULT_REPORT/);
+  assert.match(result.output, /\[test-performance\] 1 observed file summaries/);
+  assert.match(result.output, /0 files over budget; 0 cases over reminder/);
+  assert.doesNotMatch(result.output, /No overall run summary/);
+  const hook = join(f.root, 'generated --test-reporter=hook.mjs');
+  writeFileSync(hook, '// Generated no-op import whose path is not a reporter option.\n');
+  const imported = await f.start(launcher, [], { NODE_OPTIONS: `--import=${JSON.stringify(hook)}` }).done;
+  assert.equal(imported.code, 0, imported.output);
+  assert.match(imported.output, /\[test-performance\] 1 observed file summaries/);
+});
+
+test('real Server launcher preserves custom native reporter destinations and quoted NODE_OPTIONS', async t => {
+  const f = fixture(t);
+  writeFileSync(join(f.directory, 'test/generated.test.ts'), "import test from 'node:test';test('GENERATED_NATIVE_TAP',()=>{});\n");
+  const destination = join(f.directory, 'generated.tap');
+  const selected = await f.start(launcher, ['--test_reporter', 'tap', '--test_reporter_destination', destination], { NODE_OPTIONS: '' }).done;
+  assert.equal(selected.code, 0, selected.output);
+  assert.match(readFileSync(destination, 'utf8'), /TAP version 13[\s\S]*GENERATED_NATIVE_TAP/);
+  assert.doesNotMatch(selected.output, /GENERATED_NATIVE_TAP|\[test-performance\]/);
+  const inherited = await f.start(launcher, [], { NODE_OPTIONS: '"--test_reporter" "tap"' }).done;
+  assert.equal(inherited.code, 0, inherited.output);
+  assert.match(inherited.output, /TAP version 13[\s\S]*GENERATED_NATIVE_TAP/);
+  assert.doesNotMatch(inherited.output, /\[test-performance\]/);
+  const invalid = await f.start(launcher, ['--test-reporter=spec', '--test-reporter=tap'], { NODE_OPTIONS: '' }).done;
+  assert.notEqual(invalid.code, 0, invalid.output);
+  assert.match(invalid.output, /must match the number/);
 });
 
 test('Server launcher discovers all top-level suites and honors a native concurrency override', async t => {
@@ -92,6 +145,7 @@ test('Server launcher preserves native test failures and invalid CLI argument fa
   const failed = await f.start(launcher).done;
   assert.equal(failed.code, 1, failed.output); assert.equal(failed.signal, null);
   assert.match(failed.output, /GENERATED_LAUNCHER_FAILURE/);
+  assert.match(failed.output, /\[test-performance\]/);
   const invalid = await f.start(launcher, ['--generated-invalid-test-option']).done;
   assert.notEqual(invalid.code, 0); assert.match(invalid.output, /generated-invalid-test-option/);
   assert.doesNotMatch(invalid.output, /GENERATED_LAUNCHER_FAILURE/);

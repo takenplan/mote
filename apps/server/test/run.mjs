@@ -4,14 +4,36 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MAX_TEST_WORKERS = 6;
+export const PERFORMANCE_REPORTER = fileURLToPath(new URL('./performance-reporter.mjs', import.meta.url));
+
+function nodeOptionTokens(value) {
+  const tokens = [];
+  let token = '', quoted = false;
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    if (character === '\\' && quoted && index + 1 < value.length) token += value[++index];
+    else if (character === '"') quoted = !quoted;
+    else if (character === ' ' && !quoted) {
+      if (token) tokens.push(token);
+      token = '';
+    } else token += character;
+  }
+  if (token) tokens.push(token);
+  return tokens;
+}
 
 export function testWorkerCount(parallelism = availableParallelism()) {
   return Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS));
 }
 
-export function testArguments({ args = [], parallelism = availableParallelism() } = {}) {
+export function testArguments({ args = [], parallelism = availableParallelism(), nodeOptions = process.env.NODE_OPTIONS ?? '' } = {}) {
+  // Native reporter arrays have paired destinations. Leave explicit selections
+  // entirely to Node, including its underscore aliases and NODE_OPTIONS quoting.
+  const explicitReporter = [...args, ...nodeOptionTokens(nodeOptions)]
+    .some(arg => /^--test[-_]reporter(?:[-_]destination)?(?:=|$)/.test(arg));
   return ['--import', 'tsx', '--test', `--test-concurrency=${testWorkerCount(parallelism)}`,
-    '--test-timeout=120000', ...args, 'test/*.test.ts'];
+    '--test-timeout=120000', ...(!explicitReporter ? [`--test-reporter=${PERFORMANCE_REPORTER}`] : []),
+    ...args, 'test/*.test.ts'];
 }
 
 export async function runTests(args = []) {

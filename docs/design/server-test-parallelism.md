@@ -202,3 +202,63 @@ can breach existing physical-call deadlines; those failures remain in the
 [validation record](../validation/server-test-parallelism-2026-10-20.md).
 The historical 27m26s Server / 29m51s whole-gate figures are references with
 unproved matching complete inputs, not controlled speedup attribution.
+
+## P7: advisory performance budgets
+
+Plan identity: **P7**, base/head before implementation
+`54aea060f4731ed8300779dfdcc9002382622f04`. The owner selected option B:
+documented budgets plus automatic warnings, without a timing-based failure gate.
+Before implementation, `/root/plan_review` (Sol High) explicitly **APPROVED**
+P7 at that exact base/head. The reviewed preimplementation section SHA-256 was
+`5a97e24f12f349c4bdc62dfb35291f7867c83fe79a7db07700aa3cbe6b26285a`.
+Acceptance includes native dash/underscore option aliases and quoted
+`NODE_OPTIONS`, preserved stream errors and accurate partial-evidence labeling.
+
+- **KEEP:** the actual npm → launcher → native Node/tsx entry, six-worker cap,
+  discovery, file isolation, all test bodies/assertions/scales/deadlines, native
+  failure and signal propagation, common-driver ownership and cleanup. There is
+  no additional test execution, scheduling policy or lifecycle change.
+- **CHANGE:** add a default native reporter which feeds the same events through
+  Node's built-in `spec` reporter and then appends an advisory timing summary.
+  Use native per-file `test:summary.duration_ms`, never sums of nested cases;
+  individual completed tests use `details.duration_ms`, excluding suites and
+  skipped/TODO cases. Ordinary-file budget is 60 seconds; individual-case
+  reminder is 30 seconds. Thresholds do not change exit status or timeouts.
+- **REMOVE:** none. No assertion, scenario, input volume or required check is
+  removed. LOC/case counts and minimum concurrency are not new gates.
+- **EXCEPTION:** explicit native reporter/destination options in argv or
+  `NODE_OPTIONS` keep their original native behavior; default reporter injection
+  is omitted. Document how to select the performance reporter explicitly.
+  Long real journeys remain visible in warnings; document justified exceptions
+  separately from the existing slow-file backlog, without blanket exemptions.
+- **UNKNOWN:** timing remains sensitive to host contention, cache and concurrency.
+  Reports state their observational/advisory meaning; a comparison records the
+  reference environment and complete inputs. No regression claim from a single
+  sample, and no automatic baseline reset or suppression.
+
+Root exclusively owns `apps/server/test/run.mjs`, its launcher regressions, the
+new reporter and focused reporter tests, this plan, `docs/development.md` and
+one short principle/link in `AGENTS.md`. The inventory agent is read-only.
+Existing ADR and validation evidence retain their original scope and provenance.
+
+Validation: synthetic native event streams exercise exact thresholds, file vs
+nested-case accounting, failed/skip/TODO handling, incomplete runs, ordering and
+empty output without real 30/60-second waits. Generated launcher fixtures verify
+the real default entry emits the report and preserves genuine failures, CLI
+reporter/destination overrides (including `NODE_OPTIONS`), invalid options and
+both existing signal/real-driver cleanup journeys. Then freeze the candidate
+and run the actual affected-component gate once, requesting only driver-proven
+receipt reuse for unchanged tasks. Root is the sole complete-check driver; no
+new CPU sweep, foreground UI, personal data, device or live-model checks.
+
+The main risks are reporter-stream errors/backpressure, counting nested durations
+twice, native option interference, misleading timing comparisons and alert noise.
+Use the public Node reporter/stream APIs; preserve stream errors and native
+exit status. Keep warnings visible and documented rather than relaxing coverage.
+
+Within P7, a read-only implementation review found that searching raw
+`NODE_OPTIONS` could mistake reporter-like text inside an import path for a
+reporter selection. The local correction tokenizes native double-quoted options
+without changing the forwarded value. Synthetic quoted/escaped paths and a real
+generated import path with spaces and reporter-like text cover this correction;
+it changes no coverage or decision boundary and needs no new design approval.
