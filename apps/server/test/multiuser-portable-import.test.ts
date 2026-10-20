@@ -27,27 +27,25 @@ test('personal import retains validated historical Memory evidence after a Mater
 
 async function archive(f:Awaited<ReturnType<typeof scopedMemoryFixture>>){
  for(let attempt=0;attempt<1000;attempt++){if(!f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE state='running' OR(state='waiting' AND coalesce(error,'')<>'memory_window_pending') LIMIT 1").get()))break;await delay(5);}
- const id=randomUUID(),started=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:id});assert.equal(started.statusCode,200,started.body);
- for(let attempt=0;attempt<300;attempt++){const response=await f.request(f.a.token,'/api/portable/exports/'+id);assert.equal(response.statusCode,200,response.body);const receipt=response.json();if(receipt.state==='completed'){const content=await f.request(f.a.token,'/api/portable/exports/'+id+'/content');assert.equal(content.statusCode,200,content.body);return content.json();}assert.equal(receipt.state,'working',JSON.stringify(receipt));await delay(10);}assert.fail('Generated export did not settle');
-}
+ const content=await f.request(f.a.token,'/api/export');assert.equal(content.statusCode,200,content.body);return content.json();}
 async function imported(f:Awaited<ReturnType<typeof scopedMemoryFixture>>,value:unknown,id=randomUUID()){
  const started=await f.request(f.a.token,'/api/portable/imports','POST',{operationId:id,archive:value});assert.equal(started.statusCode,200,started.body);
  let receipt=started.json();for(let attempt=0;receipt.state==='working'&&attempt<300;attempt++){await delay(10);const response=await f.request(f.a.token,'/api/portable/imports/'+id);assert.equal(response.statusCode,200,response.body);receipt=response.json();}return receipt;
 }
-test('original-account portable import merges missing original data, keeps existing records and deduplicates after a real host restart',async t=>{
+test('same-vault portable import preserves capture delete intent, other records and B across retry and restart',async t=>{
  const f=await scopedMemoryFixture(t),a=await f.upload(f.a,'A','archive-original'),b=await f.upload(f.b,'B','archive-original'),saved=await archive(f),captureId=a.captures[0].id;
  assert.equal(saved.userId,f.a.userId);const operationId=randomUUID();
  assert.equal((await f.request(f.a.token,'/api/captures/'+captureId,'DELETE')).statusCode,200);
  const current=await f.upload(f.a,'A','keep-current',Buffer.from('Generated current A record'));
  const beforeB=f.read(db=>({captures:db.prepare('SELECT * FROM pd_captures WHERE user_id=? ORDER BY id').all(f.b.userId),credentials:db.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId)})),calls=f.requests.length,grants=f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all());
- const receipt=await imported(f,saved,operationId);assert.equal(receipt.state,'completed',JSON.stringify(receipt));assert.equal(receipt.kind,'import');assert.equal(receipt.userId,f.a.userId);assert.equal(receipt.deploymentId,f.node.deploymentId);assert.equal(receipt.progress.mode,'semantic');assert.equal(receipt.coverage.credentials,false);assert.equal(receipt.coverage.activeAuthorization,false);
- const own=await f.request(f.a.token,'/api/captures/'+captureId);assert.equal(own.statusCode,200,own.body);assert.equal((await f.request(f.a.token,'/api/captures/'+current.captures[0].id)).statusCode,200);
- const context=await f.node.authority.authenticate(f.a.token);assert.deepEqual(f.node.ingress.forUser(context).readOriginal(a.captures[0].original.ref).bytes,Buffer.from('GENERATED_MEMORY_A: Nora prefers generated tea.'));
+ const receipt=await imported(f,saved,operationId);assert.equal(receipt.state,'failed',JSON.stringify(receipt));assert.equal(receipt.error,'archive_conflict');assert.equal(receipt.kind,'import');assert.equal(receipt.userId,f.a.userId);assert.equal(receipt.deploymentId,f.node.deploymentId);assert.equal(receipt.progress.mode,'semantic');assert.equal(receipt.coverage.credentials,false);assert.equal(receipt.coverage.activeAuthorization,false);
+ const own=await f.request(f.a.token,'/api/captures/'+captureId);assert.equal(own.statusCode,404,own.body);assert.equal((await f.request(f.a.token,'/api/captures/'+current.captures[0].id)).statusCode,200);
+ assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM pd_capture_deletions WHERE user_id=? AND id=?').get(f.a.userId,captureId)!.n),1);
  assert.equal((await f.request(f.b.token,'/api/portable/imports/'+operationId)).statusCode,404);assert.equal((await f.request(f.admin.token,'/api/portable/imports/'+operationId)).statusCode,404);
  assert.equal((await f.request(f.b.token,'/api/captures/'+b.captures[0].id)).statusCode,200);assert.deepEqual(f.read(db=>({captures:db.prepare('SELECT * FROM pd_captures WHERE user_id=? ORDER BY id').all(f.b.userId),credentials:db.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId)})),beforeB);
  assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),grants);assert.equal(f.requests.length,calls);
- assert.deepEqual(await imported(f,saved,operationId),receipt);await f.restart();assert.deepEqual((await f.request(f.a.token,'/api/portable/imports/'+operationId)).json(),receipt);assert.deepEqual(await imported(f,saved,operationId),receipt);
- const duplicate=await imported(f,saved);assert.equal(duplicate.state,'completed',JSON.stringify(duplicate));assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=? AND id=?').get(f.a.userId,captureId)!.n),1);
+ const retried=await imported(f,saved,operationId);assert.equal(retried.state,'failed');assert.equal(retried.error,'archive_conflict');await f.restart();assert.equal((await f.request(f.a.token,'/api/portable/imports/'+operationId)).json().state,'failed');assert.equal((await imported(f,saved,operationId)).error,'archive_conflict');
+ const duplicate=await imported(f,saved);assert.equal(duplicate.state,'failed',JSON.stringify(duplicate));assert.equal(duplicate.error,'archive_conflict');assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=? AND id=?').get(f.a.userId,captureId)!.n),0);
 });
 test('actual Memory and a completed conversation deduplicate without changing current bodies, policies, grants or successful model work',async t=>{
  const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A');await f.wait(f.a,(await f.submit(f.a,[material.id])).id);
@@ -64,7 +62,7 @@ test('actual Memory and a completed conversation deduplicate without changing cu
  const currentGrants=f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),currentCalls=f.requests.length,restored=await imported(f,saved);assert.equal(restored.state,'completed',JSON.stringify(restored));assert.match((await f.request(f.a.token,'/api/conversations/'+conversationId)).body,/Generated portable saved answer/);assert.equal(f.read(db=>JSON.parse(String(db.prepare('SELECT json FROM mm_records WHERE user_id=? AND id=?').get(f.a.userId,memoryId)!.json)).staleReason),'restored_archive');assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),currentGrants);await delay(50);assert.equal(f.requests.length,currentCalls);
 });
 for(const mode of ['cancel','disable','logout','restart'] as const)test('a real import preflight held after its actual domain read is fenced by '+mode,async t=>{
- const f=await scopedMemoryFixture(t),captured=await f.upload(f.a,'A'),saved=await archive(f),captureId=captured.captures[0].id,id=randomUUID();assert.equal((await f.request(f.a.token,'/api/captures/'+captureId,'DELETE')).statusCode,200);
+ const f=await scopedMemoryFixture(t),captured=await f.upload(f.a,'A'),saved=await archive(f),captureId=captured.captures[0].id,id=randomUUID();assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);
  let entered!:()=>void,release!:()=>void;const ready=new Promise<void>(resolve=>entered=resolve),gate=new Promise<void>(resolve=>release=resolve),entry=(f.node.services as any).users.get('memory'),read=entry.lifecycle.exportUser;
  entry.lifecycle.exportUser=async(subject:any)=>{const result=await read(subject);entered();await gate;return result;};f.beforeClose(()=>release());
  const started=await f.request(f.a.token,'/api/portable/imports','POST',{operationId:id,archive:saved});assert.equal(started.statusCode,200,started.body);await ready;
@@ -88,13 +86,22 @@ test('an imported missing source stays disabled while its canonical original is 
  const source=await f.request(f.a.token,'/api/sources/same-source');assert.equal(source.statusCode,200,source.body);assert.equal(source.json().enabled,false);
  assert.equal((await f.request(f.a.token,'/api/captures/'+captured.captures[0].id)).statusCode,200);
 });
-test('a later invalid canonical domain rolls back earlier captures, original files and grants rather than publishing a partial import',async t=>{
- const f=await scopedMemoryFixture(t),captured=await f.upload(f.a,'A'),saved=await archive(f),captureId=captured.captures[0].id;
- assert.equal((await f.request(f.a.token,'/api/captures/'+captureId,'DELETE')).statusCode,200);assert.equal((await f.request(f.a.token,'/api/ingress/gc','POST',{})).statusCode,200);
- const beforeFiles=readdirSync(join(f.directory,'originals'),{recursive:true}).filter(name=>String(name).endsWith('.plain')).sort(),grants=f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all());
- const broken=structuredClone(saved);broken.domains.find((domain:any)=>domain.domain==='processing').payload.artifacts.push({id:'0'.repeat(64),original_id:'1'.repeat(64),fingerprint:'2'.repeat(64),json:'{}',complete:1});
- const receipt=await imported(f,broken);assert.equal(receipt.state,'failed',JSON.stringify(receipt));assert.equal((await f.request(f.a.token,'/api/captures/'+captureId)).statusCode,404);
- assert.deepEqual(readdirSync(join(f.directory,'originals'),{recursive:true}).filter(name=>String(name).endsWith('.plain')).sort(),beforeFiles);assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),grants);
+test('a later invalid canonical domain rolls back new IDs and original files in an earlier recovered instance',async t=>{
+ const f=await scopedMemoryFixture(t),directory=mkdtempSync(join(tmpdir(),'mote-m16-import-rollback-')),snapshot=join(directory,'snapshot'),target=join(directory,'restored');let restored:Awaited<ReturnType<typeof buildApp>>|undefined;
+ try{
+  await f.node.app.close();await backupScopedInstance({source:f.directory,out:snapshot});await f.restart();
+  const captured=await f.upload(f.a,'A'),saved=await archive(f),captureId=captured.captures[0].id;await f.node.app.close();
+  await restoreScopedInstance({from:snapshot,target});restored=await buildApp({dataDir:target});
+  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>restored!.app.inject({url,method,headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
+  const logged=await request(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-memory-password-only-01',mode:'client'});assert.equal(logged.statusCode,200,logged.body);const token=logged.json().token;
+  const read=<T>(work:(db:DatabaseSync)=>T)=>{const db=new DatabaseSync(join(target,'mote.sqlite'));try{return work(db);}finally{db.close();}};
+  const files=()=>{try{return readdirSync(join(target,'originals'),{recursive:true}).filter(name=>String(name).endsWith('.plain')).sort();}catch{return [];}};
+  const beforeFiles=files(),grants=read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all());
+  const broken=structuredClone(saved);broken.domains.find((domain:any)=>domain.domain==='processing').payload.artifacts.push({id:'0'.repeat(64),original_id:'1'.repeat(64),fingerprint:'2'.repeat(64),json:'{}',complete:1});
+  const id=randomUUID(),started=await request(token,'/api/portable/imports','POST',{operationId:id,archive:broken});assert.equal(started.statusCode,200,started.body);let receipt=started.json();for(let attempt=0;receipt.state==='working'&&attempt<300;attempt++){await delay(10);receipt=(await request(token,'/api/portable/imports/'+id)).json();}
+  assert.equal(receipt.state,'failed',JSON.stringify(receipt));assert.equal(receipt.error,'archive_invalid');assert.equal((await request(token,'/api/captures/'+captureId)).statusCode,404);
+  assert.deepEqual(files(),beforeFiles);assert.deepEqual(read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),grants);
+ }finally{if(restored)await restored.app.close();rmSync(directory,{recursive:true,force:true});}
 });
 test('importing an older source revision preserves the actual newer head and its retired Material visibility',async t=>{
  const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A'),saved=await archive(f);
@@ -111,7 +118,7 @@ test('empty-owner import receipts paginate with owner, kind, epoch and page-size
  const f=await scopedMemoryFixture(t),saved=await archive(f);assert.deepEqual((await f.request(f.a.token,'/api/portable/imports')).json(),{items:[],nextCursor:null});
  const ids=new Set<string>();for(let index=0;index<4;index++){const receipt=await imported(f,saved);assert.equal(receipt.state,'completed',JSON.stringify(receipt));ids.add(receipt.id);assert.equal((await f.request(f.a.token,'/api/portable/imports/'+receipt.id+'/cancel','POST',{})).statusCode,409);}
  const page=(await f.request(f.a.token,'/api/portable/imports?limit=2')).json();assert.equal(page.items.length,2);assert.ok(page.nextCursor);for(const item of page.items)assert.ok(ids.delete(item.id));const rest=(await f.request(f.a.token,'/api/portable/imports?limit=2&cursor='+encodeURIComponent(page.nextCursor))).json();assert.equal(rest.nextCursor,null);for(const item of rest.items)assert.ok(ids.delete(item.id));assert.equal(ids.size,0);
- for(const [token,path] of [[f.b.token,'imports?limit=2'],[f.a.token,'imports?limit=3'],[f.a.token,'exports?limit=2']])assert.equal((await f.request(token,'/api/portable/'+path+'&cursor='+encodeURIComponent(page.nextCursor))).statusCode,400);
+ for(const [token,path] of [[f.b.token,'imports?limit=2'],[f.a.token,'imports?limit=3']])assert.equal((await f.request(token,'/api/portable/'+path+'&cursor='+encodeURIComponent(page.nextCursor))).statusCode,400);
  assert.deepEqual((await f.request(f.b.token,'/api/portable/imports')).json(),{items:[],nextCursor:null});
 });
 
@@ -123,7 +130,7 @@ test('later personal data imported into an earlier stopped instance does not bec
   const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>restored!.app.inject({url,method,headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
   assert.equal((await request(f.a.token,'/api/auth/self')).statusCode,401);const logged=await request(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-memory-password-only-01',mode:'client'});assert.equal(logged.statusCode,200,logged.body);const token=logged.json().token;assert.equal(logged.json().userId,f.a.userId);
   const id=randomUUID(),started=await request(token,'/api/portable/imports','POST',{operationId:id,archive:saved});assert.equal(started.statusCode,200,started.body);let receipt=started.json();for(let attempt=0;receipt.state==='working'&&attempt<300;attempt++){await delay(10);receipt=(await request(token,'/api/portable/imports/'+id)).json();}assert.equal(receipt.state,'completed',JSON.stringify(receipt));
-  const events=()=>{const db=new DatabaseSync(join(target,'mote.sqlite'),{readOnly:true});try{return db.prepare("SELECT entity FROM ma_auto_events WHERE user_id=? AND kind='insights'").all(f.a.userId);}finally{db.close();}};assert.deepEqual(events(),[]);assert.equal((await request(token,'/api/materials/'+material.id)).statusCode,200);
+  const events=()=>{const db=new DatabaseSync(join(target,'mote.sqlite'),{readOnly:true});try{return db.prepare("SELECT entity FROM ma_auto_events WHERE user_id=? AND kind='insights'").all(f.a.userId);}finally{db.close();}};assert.deepEqual(events(),[]);assert.equal((await request(token,'/api/materials/'+material.id)).statusCode,200);assert.equal((await request(token,'/api/sources/same-source')).json().enabled,false,'a source absent from the recovered instance is restored disabled');
   await restored.app.close();restored=await buildApp({dataDir:target});assert.deepEqual(events(),[],'restart must not turn imported canonical data into a newly authorized automation notification');
  }finally{if(restored)await restored.app.close();rmSync(directory,{recursive:true,force:true});}
 });

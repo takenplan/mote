@@ -10,6 +10,10 @@ export function installIngress(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ig_file_forget_operations(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  CREATE TABLE IF NOT EXISTS ig_file_generations(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(typeof(generation)='integer' AND generation>=0 AND generation<=9007199254740991),PRIMARY KEY(user_id,source_id,external_id));
  CREATE TABLE IF NOT EXISTS ig_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
+ -- Preserve exact accepted head ordering, including equal-time revisions in
+ -- one receipt. A deleted observation never replaces the last retained file.
+ -- Historical rows cannot reconstruct this pointer; there is no backfill.
+ CREATE TABLE IF NOT EXISTS ig_file_heads(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL,PRIMARY KEY(user_id,source_id,external_id),FOREIGN KEY(user_id,source_id,external_id) REFERENCES pd_source_heads(user_id,source_id,external_id) ON DELETE CASCADE,FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_capture_update_sequences(user_id TEXT NOT NULL,device_id TEXT NOT NULL,next INTEGER NOT NULL,PRIMARY KEY(user_id,device_id));
  CREATE TABLE IF NOT EXISTS ig_capture_updates(user_id TEXT NOT NULL,device_id TEXT NOT NULL,sequence INTEGER NOT NULL,capture_id TEXT NOT NULL,artifact_id TEXT NOT NULL,PRIMARY KEY(user_id,device_id,sequence),UNIQUE(user_id,device_id,capture_id,artifact_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_objects(user_id TEXT NOT NULL,hash TEXT NOT NULL,bytes INTEGER NOT NULL,parts INTEGER NOT NULL,PRIMARY KEY(user_id,hash));
@@ -23,6 +27,7 @@ export function installIngress(db:DatabaseSync){
  PRIMARY KEY(user_id,id),UNIQUE(user_id,source_id,capture_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash));
  CREATE TABLE IF NOT EXISTS ig_snapshot_inputs(user_id TEXT NOT NULL,original_id TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_capture_scopes(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,source_id TEXT NOT NULL,PRIMARY KEY(user_id,capture_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ig_file_revisions(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,PRIMARY KEY(user_id,capture_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
  CREATE TRIGGER IF NOT EXISTS ig_source_delete BEFORE DELETE ON pd_sources BEGIN DELETE FROM pd_captures WHERE user_id=old.user_id AND id IN(SELECT capture_id FROM ig_capture_scopes WHERE user_id=old.user_id AND source_id=old.id); END;
  CREATE TABLE IF NOT EXISTS ig_pins(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_uploads(user_id TEXT NOT NULL,id TEXT NOT NULL,source_id TEXT NOT NULL,request_key TEXT NOT NULL,manifest_hash TEXT NOT NULL,manifest TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,expires INTEGER NOT NULL,receipt TEXT,PRIMARY KEY(user_id,id),UNIQUE(user_id,source_id,request_key),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
@@ -34,7 +39,23 @@ export function installIngress(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ig_work(user_id TEXT NOT NULL,id TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
+ CREATE TRIGGER IF NOT EXISTS ig_file_head_insert AFTER INSERT ON pd_source_heads
+ WHEN EXISTS(SELECT 1 FROM pd_captures c WHERE c.user_id=new.user_id AND c.id=new.capture_id AND c.source_id=new.source_id AND c.external_id=new.external_id AND json_extract(c.json,'$.source')='file' AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)
+ BEGIN INSERT INTO ig_file_heads VALUES(new.user_id,new.source_id,new.external_id,new.capture_id) ON CONFLICT(user_id,source_id,external_id) DO UPDATE SET capture_id=excluded.capture_id; END;
+ CREATE TRIGGER IF NOT EXISTS ig_file_head_update AFTER UPDATE OF capture_id ON pd_source_heads
+ WHEN EXISTS(SELECT 1 FROM pd_captures c WHERE c.user_id=new.user_id AND c.id=new.capture_id AND c.source_id=new.source_id AND c.external_id=new.external_id AND json_extract(c.json,'$.source')='file' AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)
+ BEGIN INSERT INTO ig_file_heads VALUES(new.user_id,new.source_id,new.external_id,new.capture_id) ON CONFLICT(user_id,source_id,external_id) DO UPDATE SET capture_id=excluded.capture_id; END;
  `);
+ // File-revision identity is canonical; upload receipts are disposable. Resolve
+ // current-format committed manifests before their transport sessions expire.
+ // Generic source items whose kind happens to be "file" remain ordinary records.
+ db.exec(`INSERT OR IGNORE INTO ig_file_revisions
+ SELECT u.user_id,c.id FROM ig_uploads u JOIN json_each(u.receipt,'$.captures') receipt
+ JOIN pd_captures c ON c.user_id=u.user_id AND c.id=json_extract(receipt.value,'$.id')
+ WHERE u.receipt IS NOT NULL;`);
+ if(db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='mp_original_formats'").get())db.exec(`INSERT OR IGNORE INTO ig_file_revisions
+ SELECT r.user_id,r.capture_id FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id
+ WHERE f.format='file' OR f.format='recording-audio-backup' OR f.format LIKE 'processor:%';`);
  if(!db.prepare('PRAGMA table_info(ig_file_forgets)').all().some(row=>row.name==='decision_id')){
   db.exec('ALTER TABLE ig_file_forgets ADD COLUMN decision_id TEXT');
  }

@@ -27,9 +27,9 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
   return {sql,service,ref,status,proof};
  };
  const params=(value:unknown)=>z.object({id:z.string().uuid()}).parse(value).id;
- registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/images/:id',handle:async({context,request})=>{
-  await host.forUser(context).view();
-  const {sql,service,ref,status,proof}=bind(context,params(request.params)),settings=(await service.view()).settings;
+ const read=async(context:UserContext,id:string,prepared?:{automatic:boolean;understandingEnabled:boolean;enabled:boolean})=>{
+  const settings=prepared??await (async()=>{const service=host.forUser(context),base=(await service.view()).settings,perception=await service.perceptionSettings();return {automatic:perception.enabled,understandingEnabled:perception.understandingEnabled,enabled:base.enabled&&perception.enabled};})();
+  const {sql,service,ref,status,proof}=bind(context,id);
   const selected=status.appliedPolicy?.profile.imageRecipe;
   const custom=selected&&(selected.id!==DEFAULT_IMAGE_RECIPE.id||selected.version!==DEFAULT_IMAGE_RECIPE.version);
   let recipe:ReturnType<typeof host.processors.imageRecipes.resolve>|undefined,recipeError:string|undefined;
@@ -62,7 +62,8 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
     const phase=unfinished??(phaseFacts.length===steps.length?phaseFacts[0]:coordinator?{state:coordinator.state,error:coordinator.failure?.code??coordinator.error??undefined}:undefined);
     return phase?[{name,state:phase.state,error:phase.error,receipts:phaseFacts.flatMap(fact=>fact.receipt?[fact.receipt]:[])}]:[];
    }
-   const task=coordinator&&coordinator.state!=='succeeded'&&!tasks.some(t=>t.kind==='processing.ocr'&&t.state==='running')?coordinator:tasks.find(task=>name==='ocr'?task.kind==='processing.ocr':task.kind==='processing.analysis'&&task.mode==='image')??tasks.find(task=>task.kind==='processing.pipeline');
+   const phaseTask=tasks.find(task=>name==='ocr'?task.kind==='processing.ocr'||task.kind==='processing.image-stage'&&task.imageStep==='ocr':task.kind==='processing.analysis'&&task.mode==='image'||task.kind==='processing.image-understanding'||task.kind==='processing.image-stage'&&task.imageStep==='understanding');
+   const task=phaseTask??coordinator;
    return task?[{name,state:task.state,error:task.failure?.code??task.error??undefined}]:[];
   });
   const namedProducts=status.derivations.map(d=>({id:String(d.artifactId),materialId:String(d.materialId),kind:String(d.kind)})).filter(d=>d.kind==='image'||d.kind.startsWith('image:')||d.kind.startsWith('image-ocr:')).map(d=>({...d,stepName:d.kind.includes(':')?d.kind.slice(d.kind.indexOf(':')+1):undefined,name:d.kind.startsWith('image-ocr:')?'ocr':'understanding',kind:d.kind.startsWith('image-ocr:')?'ocr':'image'}));
@@ -82,9 +83,10 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
    const batches=sql.all('SELECT prepared FROM mm_job_batches WHERE user_id=$user AND job_id=?',job.id),count=state==='completed'?batches.reduce((n,b)=>n+(b.prepared?JSON.parse(String(b.prepared)).items?.length??0:0),0):0;
    return {state,count,error:failure?.failure?.code};
   }));
-  runtime.authority.assert(context);const current=bind(context,params(request.params));if(current.proof!==proof)throw new PrivateDataError('conflict',409);
+  runtime.authority.assert(context);const current=bind(context,id);if(current.proof!==proof)throw new PrivateDataError('conflict',409);
   return {proof,original:{state:status.original.available===false?'unavailable':'ready'},automatic:settings.automatic||tasks.length>0,ocrEnabled,understandingEnabled,policy:status.appliedPolicy,wait:service.cancellation(ref).wait,canCancel:service.cancellation(ref).canCancel,processingRequired:status.processingRequired,enabled:settings.enabled,jobs,products,materials:materials.map(m=>({id:m.id,state:'indexed'})),memory};
- }});
+ };
+ registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/images/:id',handle:({context,request})=>read(context,params(request.params))});
  for(const action of ['retry','cancel'] as const)registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/images/:id/'+action,handle:async({context,request})=>{
   const id=params(request.params),input=z.object({proof:z.string().regex(/^[a-f0-9]{64}$/),...(action==='retry'?{operationId:z.string().uuid(),mode:z.enum(['complete','recompute']),confirmUnknown:z.boolean().default(false)}:{})}).strict().parse(request.body),owned=bind(context,id);
   const assertCurrent=()=>{if(bind(context,id).proof!==input.proof)throw new PrivateDataError('conflict',409);};
@@ -93,4 +95,5 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
   if(!owned.status.processingRequired)return {queued:false,processingRequired:false};
   return owned.service.retryFile(owned.ref,{operationId:retry.operationId,stage:retry.mode==='complete'?'image-complete':'transcribe',confirmUnknown:retry.confirmUnknown},assertCurrent);
  }});
+ return read;
 }

@@ -34,10 +34,10 @@ export function scopedRecordingApi(api:Api,id:string,provider:string,generation:
   if(value.provider!==provider||typeof value.connected!=='boolean'||!value.selection||!value.counts||!Number.isSafeInteger(value.counts.failed)||!Number.isSafeInteger(value.counts.pending))throw invalid();
   onRecovery({pending:Boolean(saved()),busy:active});return {...value,...(page.sourceId?{sourceId:page.sourceId}:{}),steps:[]} as RecordingStatus;
  }
- async function wait(target:string,body:unknown,signal?:AbortSignal|null,command?:Command){
+ async function wait(target:string,body:unknown,signal?:AbortSignal|null,command?:Command,awaitTerminal=true){
   const task=command?.taskId?await api.request<RecordingTask>('/api/tasks/'+command.taskId,{signal}):await api.request<RecordingTask>(target,{method:'POST',body:JSON.stringify(body),signal});signal?.throwIfAborted();if(!/^[a-f0-9]{64}$/.test(task.id)||command?.taskId&&task.id!==command.taskId)throw invalid();if(command&&['login','setup','check','configure'].includes(command.operation)){command.taskId=task.id;remember(command);}onTask(task);
   let current=task;
-  while(!terminal.has(current.state)){
+  while(awaitTerminal&&!terminal.has(current.state)){
    await new Promise<void>((resolve,reject)=>{const timer=setTimeout(done,100);function done(){signal?.removeEventListener('abort',abort);resolve();}function abort(){clearTimeout(timer);reject(signal?.reason);}signal?.addEventListener('abort',abort,{once:true});});signal?.throwIfAborted();
    current=await api.request<RecordingTask>('/api/tasks/'+task.id,{signal});signal?.throwIfAborted();if(current.id!==task.id)throw invalid();onTask(current);
   }
@@ -47,13 +47,13 @@ export function scopedRecordingApi(api:Api,id:string,provider:string,generation:
   signal?.throwIfAborted();if(active)throw Error(moteText('另一个操作正在进行，请稍后重试。'));active=true;remember(command);
   try{
    const operation=command.operation,plain=operation==='sync'||operation==='disconnect';
-   const task=await wait(plain?path+'/'+operation:path+'/operations',{operationId:command.operationId,...(!plain?{operation,payload:command.payload}:{})},signal,command);
-   if(task.state!=='succeeded'){clear(command);throw Error(task.failure?.code??task.state);}
-   // The original Save and start control starts intake after its acknowledged
-   // source declaration and selection. Both task identities survive ACK/poll loss.
-   if(operation==='select'&&command.payload.enabled===true){
-    const sync=await wait(path+'/sync',{operationId:command.operationId+':sync'},signal);
-    if(sync.state!=='succeeded'){clear(command);throw Error(sync.failure?.code??sync.state);}
+   const task=await wait(plain?path+'/'+operation:path+'/operations',{operationId:command.operationId,...(!plain?{operation,payload:command.payload}:{})},signal,command,operation!=='sync');
+   if(operation!=='sync'&&task.state!=='succeeded'||operation==='sync'&&terminal.has(task.state)&&task.state!=='succeeded'){clear(command);throw Error(task.failure?.code??task.state);}
+   // Selection persists and admits its one background sync on the server.
+   // A saved form is immediately editable; its durable acquisition is observed
+   // independently and never submitted a second time by this consumer.
+   if(operation==='select'&&task.result&&typeof task.result==='object'&&'syncTask' in task.result){
+    const next=(task.result as {syncTask:RecordingTask}).syncTask;if(!next||!/^([a-f0-9]{64})$/.test(next.id)||!['waiting','running','succeeded','failed','blocked','cancelled','stale'].includes(next.state))throw invalid();onTask(next);
    }
    const next=await status(signal);signal?.throwIfAborted();clear(command);return next;
   }catch(error){if(command.operation==='configure'&&!command.taskId)clear(command);throw error;}finally{active=false;if(!signal?.aborted)onRecovery({pending:Boolean(saved()),busy:false});}

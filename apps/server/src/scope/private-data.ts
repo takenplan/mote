@@ -81,6 +81,7 @@ export class PrivateData{
   private insertCapture(input:CaptureInput,sourceFingerprint?:string,ingressSourceId?:string){
     const at=now(),record={...storeCapture({...input,capturedAt:new Date(input.capturedAt).toISOString()}),...(ingressSourceId?{ingressSourceId}:{})},fingerprint=sourceFingerprint??hash(record);
     if(Date.parse(record.capturedAt)>Date.now()+86400000)throw new PrivateDataError('invalid_data');
+    if(this.sql.get('SELECT id FROM pd_capture_deletions WHERE user_id=$user AND id=?',record.id))throw new PrivateDataError('capture_deleted',410);
     const prior=this.sql.get('SELECT fingerprint,json FROM pd_captures WHERE user_id=$user AND id=?',record.id);
     if(prior){
       if(sourceFingerprint===undefined&&record.stateSeries){const previous=JSON.parse(String(prior.json)) as StoredCapture;
@@ -106,7 +107,7 @@ export class PrivateData{
         if(source.retention==='reference'&&item.layer!=='reference')throw conflict();
         const {observedAt,...semantic}=item,fingerprint=hash(semantic);
         const previous=this.sql.get('SELECT id,fingerprint FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? AND revision=?',sourceId,item.externalId,item.revision);
-        if(previous){if(previous.fingerprint!==fingerprint)throw conflict();return {id:String(previous.id),sourceId,externalId:item.externalId,revision:item.revision,duplicate:true};}
+        if(previous){this.assertCaptureRetained(String(previous.id));if(previous.fingerprint!==fingerprint)throw conflict();return {id:String(previous.id),sourceId,externalId:item.externalId,revision:item.revision,duplicate:true};}
         const digest=hash([sourceId,item.externalId,item.revision]);
         const id=`${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;
         const {externalId,revision,layer,mimeType,uri,modifiedAt,calendar,deleted,metadata,document}=item;
@@ -125,6 +126,18 @@ export class PrivateData{
     const row=this.sql.get('SELECT json,received_at FROM pd_captures WHERE user_id=$user AND id=?',id);
     const {originalImage,ingressSourceId:_,...input}=json<StoredCapture>(row);
     return {...input,receivedAt:String(row!.received_at),blobHash:originalImage?.hash??null,imageMime:originalImage?.mime??null,indexingStatus:originalImage?'pending':'indexed'};
+  }
+  assertCaptureRetained(id:string){if(this.sql.get('SELECT id FROM pd_capture_deletions WHERE user_id=$user AND id=?',id))throw new PrivateDataError('capture_deleted',410);}
+  /** Read-only canonical intake match for M03. Reuse M02's normalized source
+   * fingerprint; this neither inserts a capture nor grants processing work. */
+  matchSourceRevision(sourceId:string,raw:unknown){
+    const source=this.source(sourceId);if(!source.enabled)throw conflict();
+    const input=sourceItemSchema.parse(raw),item=source.retention==='archive'?{...input,text:''}:input;
+    const {observedAt,...semantic}=item,previous=this.sql.get('SELECT id,fingerprint FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? AND revision=?',sourceId,item.externalId,item.revision);
+    if(!previous)return null;
+    const record=this.capture(String(previous.id));
+    if(previous.fingerprint!==hash(semantic)||Date.parse(record.capturedAt)!==Date.parse(observedAt))throw conflict();
+    return {id:record.id,sourceId,externalId:item.externalId,revision:item.revision,duplicate:true as const};
   }
   sourceItem(sourceId:string,externalId:string):SourceItemRecord|null{
     this.source(sourceId);const row=this.sql.get('SELECT capture_id FROM pd_source_heads WHERE user_id=$user AND source_id=? AND external_id=?',sourceId,externalId);
@@ -423,7 +436,25 @@ export class PrivateData{
    * Host domains use this when a selected output is removed from a recipe. */
   retireMaterial(id:string){return this.sql.transaction(()=>{const key=ref(id).id;if(!this.sql.get('SELECT id FROM pd_materials WHERE user_id=$user AND id=?',key))throw missing();this.retireHistory([key]);this.hideMaterials([key]);return {retired:true};});}
   deleteMaterial(id:string){return this.sql.transaction(()=>{const key=ref(id).id;if(!this.sql.get('SELECT id FROM pd_materials WHERE user_id=$user AND id=?',key))throw missing();this.removeMaterials([key]);return {deleted:true};});}
-  deleteCapture(id:string){return this.sql.transaction(()=>{this.capture(id);this.removeCaptureMaterials(id);this.sql.run('DELETE FROM pd_captures WHERE user_id=$user AND id=?',id);return {deleted:true};});}
+  private removeCapture(id:string,journal:boolean){return this.sql.transaction(()=>{this.capture(id);if(journal)this.sql.run('INSERT OR IGNORE INTO pd_capture_deletions VALUES($user,?,?)',id,now());this.removeCaptureMaterials(id);this.sql.run('DELETE FROM pd_captures WHERE user_id=$user AND id=?',id);return {deleted:true};});}
+  deleteCapture(id:string){return this.removeCapture(id,true);}
+  /** Host file-forgetting already owns the blocked/generation/allow-again
+   * decision. Its explicit allow-again must not encounter an unrelated ordinary
+   * queue tombstone for the same canonical file revision. */
+  forgetCapture(id:string){return this.removeCapture(id,false);}
+  /** Preserve the original capture retention boundary: context_end is the last
+   * state observation, or source content time, and file revisions are excluded.
+   * Reuse destructive deletion so derived anchors, histories and permission
+   * generations retire atomically with each selected original. */
+  prune(before:string){
+    const cutoff=new Date(z.string().datetime({offset:true}).parse(before)).toISOString();
+    return this.sql.transaction(()=>{
+      const selected=this.sql.all('SELECT c.id,c.json FROM pd_captures c WHERE c.user_id=$user AND c.context_at<? AND NOT EXISTS(SELECT 1 FROM ig_file_revisions f WHERE f.user_id=c.user_id AND f.capture_id=c.id)',cutoff)
+        .filter(row=>{const record=JSON.parse(String(row.json)) as StoredCapture;return new Date(record.stateSeries?.samples.at(-1)?.at??sourceContentTime(record)).toISOString()<cutoff;});
+      for(const row of selected)this.deleteCapture(String(row.id));
+      return selected.length;
+    });
+  }
   deleteSource(id:string){return this.sql.transaction(()=>{
     this.source(id);
     this.removeMaterials(this.sql.all('SELECT DISTINCT material_id AS id FROM pd_material_sources WHERE user_id=$user AND source_id=?',id).map(r=>String(r.id)));

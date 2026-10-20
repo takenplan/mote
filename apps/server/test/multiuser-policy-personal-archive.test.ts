@@ -14,7 +14,7 @@ function read<T>(directory:string,work:(db:DatabaseSync)=>T){const db=new Databa
 async function fixture(t:Parameters<typeof scopedFilesFixture>[0]){
  const f=await scopedFilesFixture(t),files=[];
  for(const [user,label] of [[f.a,'A'],[f.b,'B']] as const){const view=await f.checked(user.token,'/api/file-processing');await f.checked(user.token,'/api/file-processing','PUT',{revision:view.revision,settings:{...view.settings,automatic:true,understandingEnabled:false},policy});const file=await f.upload(user.token,'same-archived-policy','GENERATED_ARCHIVED_PLAN_'+label);files.push(file);await waitForScopedState(async()=>(await f.checked(user.token,'/api/files/'+file.id)).processing.indexed,()=> 'Generated text plan did not finish',12000);}
- const exported=async(token=f.a.token)=>{const id=randomUUID();await f.checked(token,'/api/portable/exports','POST',{operationId:id});await waitForScopedState(async()=>(await f.checked(token,'/api/portable/exports/'+id)).state==='completed',()=> 'Generated archive did not finish',10000);return f.checked(token,'/api/portable/exports/'+id+'/content');};
+ const exported=(token=f.a.token)=>f.checked(token,'/api/export');
  const imported=async(archive:unknown,id=randomUUID(),token=f.a.token)=>{let receipt=await f.checked(token,'/api/portable/imports','POST',{operationId:id,archive});await waitForScopedState(async()=>{receipt=await f.checked(token,'/api/portable/imports/'+id);return receipt.state!=='working';},()=>JSON.stringify(receipt),10000);return receipt;};
  const data=(userId=f.a.userId)=>read(f.directory,db=>({plans:db.prepare('SELECT id,original_id,json FROM mp_file_plans WHERE user_id=? ORDER BY id').all(userId),bindings:db.prepare('SELECT original_id,plan_id FROM mp_file_policy_bindings WHERE user_id=? ORDER BY original_id').all(userId)}));
  const authority=()=>read(f.directory,db=>({tasks:db.prepare('SELECT task_id,user_id,grant_id,input FROM user_tasks ORDER BY task_id').all(),grants:db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all(),calls:db.prepare('SELECT * FROM task_external_calls ORDER BY issuance_id').all(),confirmations:db.prepare('SELECT * FROM task_external_retry_confirmations ORDER BY confirmation_id').all()}));
@@ -31,10 +31,11 @@ test('personal export includes owned immutable plan history and binding closure 
 
 test('personal merge restores missing named applied plans as data and keeps current policy, other owner and authority after restart',async t=>{
  const f=await fixture(t),before=f.data(),beforeB=f.data(f.b.userId),saved=await f.exported(),file=f.files[0],old=await f.checked(f.a.token,'/api/files/'+file.id);
- assert.equal((await f.request(f.a.token,'/api/captures/'+file.id,'DELETE')).statusCode,200);assert.deepEqual(f.data(),{plans:[],bindings:[]});
+ assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);assert.deepEqual(f.data(),{plans:[],bindings:[]});
  const view=await f.checked(f.a.token,'/api/file-processing');await f.checked(f.a.token,'/api/file-processing','PUT',{revision:view.revision,settings:{...view.settings,automatic:false},policy:{...policy,rules:[{type:'*/*',profileId:'archive'}]}});
  const current=await f.checked(f.a.token,'/api/file-processing'),authority=f.authority(),id=randomUUID(),receipt=await f.imported(saved,id);assert.equal(receipt.state,'completed',JSON.stringify(receipt));
  assert.deepEqual(f.data(),before,'RED: missing applied plan history and binding must round-trip');assert.deepEqual(f.data(f.b.userId),beforeB);assert.deepEqual(f.authority(),authority);assert.deepEqual(await f.checked(f.a.token,'/api/file-processing'),current);
+ assert.equal((await f.request(f.a.token,'/api/files/'+file.id)).statusCode,404,'a missing imported source remains disabled');await f.checked(f.a.token,'/api/sources/same-source','PATCH',{enabled:true});
  assert.equal((await f.checked(f.a.token,'/api/files/'+file.id)).processing.appliedPolicy.id,old.processing.appliedPolicy.id);
  const controls=read(f.directory,db=>db.prepare('SELECT * FROM mp_file_controls ORDER BY user_id,original_id').all());assert.deepEqual(await f.imported(saved,id),receipt);assert.equal((await f.imported(saved)).state,'completed');await f.restart();assert.deepEqual(f.data(),before);assert.deepEqual(f.authority(),authority);assert.deepEqual(f.data(f.b.userId),beforeB);assert.deepEqual(read(f.directory,db=>db.prepare('SELECT * FROM mp_file_controls ORDER BY user_id,original_id').all()),controls);
 });
@@ -88,9 +89,10 @@ async function mediaFixture(t:Parameters<typeof scopedFilesFixture>[0],unknown=f
 
 test('missing current model references restore only historical plan data and never call a provider or reactivate the old blocked grant',async t=>{
  const f=await mediaFixture(t),saved=await f.exported(),file=f.file,old=read(f.directory,db=>db.prepare('SELECT task_id FROM mp_admissions WHERE user_id=? AND original_id=? ORDER BY rowid DESC LIMIT 1').get(f.a.userId,file.original.ref.slice(9))!.task_id),bBefore=f.data(f.b.userId);assert.equal(f.calls(),0);assert.equal(JSON.stringify(saved).includes('GENERATED_ARCHIVE_SECRET'),false);
- assert.equal((await f.request(f.a.token,'/api/captures/'+file.id,'DELETE')).statusCode,200);
+ assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);
  const view=await f.checked(f.a.token,'/api/configuration');await f.checked(f.a.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[],selections:{}}});const authority=f.authority();
  const receipt=await f.imported(saved);assert.equal(receipt.state,'completed',JSON.stringify(receipt));assert.equal(f.calls(),0);assert.deepEqual(f.authority(),authority);assert.deepEqual(f.data(f.b.userId),bBefore);
+ assert.equal((await f.request(f.a.token,'/api/files/'+file.id)).statusCode,404);await f.checked(f.a.token,'/api/sources/same-source','PATCH',{enabled:true});
  const applied=(await f.checked(f.a.token,'/api/files/'+file.id)).processing.appliedPolicy;assert.equal(applied.profile.id,'image');assert.equal(applied.services[0].reference.id,'same-media');assert.ok(read(f.directory,db=>Number(db.prepare('SELECT generation FROM mp_file_controls WHERE user_id=? AND original_id=?').get(f.a.userId,file.original.ref.slice(9))!.generation))>0);
  const retry=await f.request(f.a.token,'/api/tasks/'+old+'/retry','POST',{});assert.ok([200,401,404,409].includes(retry.statusCode),retry.body);
  if(retry.statusCode===200){await f.host.execution!.engine.drain([String(old)]);assert.equal(read(f.directory,db=>db.prepare('SELECT state FROM execution_steps WHERE id=?').get(old)!.state),'stale','retry acknowledgement cannot make the old input current');}
@@ -113,7 +115,7 @@ test('personal policy import neither settles nor acknowledges a real unresolved 
 });
 
 test('invalid policy closure rolls back earlier canonical original restoration and leaves B and execution history intact',async t=>{
- const f=await fixture(t),saved=await f.exported(),file=f.files[0],bBefore=f.data(f.b.userId);assert.equal((await f.request(f.a.token,'/api/captures/'+file.id,'DELETE')).statusCode,200);
+ const f=await fixture(t),saved=await f.exported(),file=f.files[0],bBefore=f.data(f.b.userId);assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);
  const authority=f.authority();saved.domains.find((domain:any)=>domain.domain==='processing').payload.policyPlans.bindings[0].plan_id='0'.repeat(64);
  const receipt=await f.imported(saved);assert.equal(receipt.state,'failed');assert.equal((await f.request(f.a.token,'/api/captures/'+file.id)).statusCode,404);assert.deepEqual(f.data(),{plans:[],bindings:[]});assert.deepEqual(f.data(f.b.userId),bBefore);assert.deepEqual(f.authority(),authority);
  assert.equal(read(f.directory,db=>db.prepare('SELECT count(*) n FROM ig_originals WHERE user_id=? AND capture_id=?').get(f.a.userId,file.id)!.n),0);

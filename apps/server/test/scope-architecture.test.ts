@@ -38,6 +38,23 @@ test('reviewed processing, usage and authorization helpers are allowed only from
   const failures=checkProductionImports(directory);assert.equal(failures.length,4);assert.ok(failures.every(value=>value.includes('unscoped production import: apps/server/src/scope/unreviewed.ts')));
 });
 
+test('the provider canary is available only to its scoped host and cannot acquire legacy storage or file access',t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-scoped-canary-ports-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const src=join(directory,'apps/server/src');mkdirSync(join(src,'scope'),{recursive:true});
+  for(const path of ['index.ts','app.ts','memory-schema.ts','memory-provider-contract.ts','store.ts'])writeFileSync(join(src,path),'export {};');
+  const pure="import {randomUUID} from 'node:crypto';import './memory-schema.js';import './memory-provider-contract.js';";
+  writeFileSync(join(src,'memory-provider-probe.ts'),pure);
+  writeFileSync(join(src,'scope/memory-providers.ts'),"import '../memory-provider-probe.js';");
+  assert.deepEqual(checkProductionImports(directory),[]);
+  writeFileSync(join(src,'scope/unreviewed.ts'),"import '../memory-provider-probe.js';");
+  assert.deepEqual(checkProductionImports(directory),['unscoped production import: apps/server/src/scope/unreviewed.ts -> apps/server/src/memory-provider-probe.ts']);
+  rmSync(join(src,'scope/unreviewed.ts'));
+  for(const specifier of ['./store.js','node:fs','node:sqlite']){
+    writeFileSync(join(src,'memory-provider-probe.ts'),pure+`import ${JSON.stringify(specifier)};`);
+    assert.deepEqual(checkProductionImports(directory),[`unreviewed capability probe import: apps/server/src/memory-provider-probe.ts -> ${specifier}`]);
+  }
+});
+
 test('undeclared tables, APIs, MCP tools/resources/prompts, tasks, directories, extensions and scoped registrations fail the architecture check',()=>{
   const source=`const server=Fastify();server.get('/api/private',handler);
     db.exec('CREATE TABLE private_new(id TEXT)');

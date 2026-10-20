@@ -19,7 +19,7 @@ second configuration framework.
 | --- | --- |
 | Instance `MOTE_CONFIG_FILE` YAML | Deployment operator; built-in ConfigService registrations. The resource administrator API edits only its `models` domain. Other instance settings retain their startup/restart contracts; unfinished runtimes stay unavailable. |
 | `DATA/configuration/users/<host-user-id>/mote.yaml` | One ConfigService per authenticated account. Path components come from a host context, never a body, header, model tool, or filename supplied by the client. Direct file editing is an operator action on that account's file. |
-| Personal `models` domain | `profiles` contain only that user's connections; `selections` maps existing model features to strict `{kind,id}` references. Empty selection is unconfigured and fails explicitly. |
+| Personal `models` domain | `profiles` contain only that user's connections; `selections` maps existing model features to strict shared `{kind,id}` references or personal `{kind,id,model?}` references. A personal model override reuses the connection credentials. Empty selection is unconfigured and fails explicitly. |
 | Instance shared models | Configured `models.deployment` and `models.profiles` publish fixed resource references. The public catalog contains only ID, name, provider, model and `readOnly`. No copying of shared credentials, endpoint override, or shared-to-personal credential inheritance is exposed. |
 | Personal `modelPrices` | Prices use the established price schema. Accounting preserves unknown prices/cache quantities and introduces no daily fee quota. |
 | SQLite M04 state, generation, usage, encrypted snapshot and restore-journal tables | User-qualified state/receipts/ciphertext, durable resource and credential generations, and credential-free restore provenance hashes. No legacy global Store or owner model runtime is mounted. |
@@ -53,7 +53,8 @@ guard exception payloads do not reach public errors.
 | `POST /api/configuration/reload` | Reload the authenticated user's fixed YAML path through the same validation/CAS. |
 | `GET /api/models` | Shared immutable references plus that user's redacted personal profiles and selections. |
 | `GET /api/models/selection/:feature` | Credential-free selected-model lease receipt; no implicit fallback. |
-| `GET /api/usage` | Only the authenticated user's receipts and the existing usage totals calculation. No client usage-write endpoint. |
+| `GET /api/usage?from=…&to=…` | The authenticated user's original timezone/date summary, exact filters, group drilldowns, date facets and paginated details; totals cover every matching issued receipt. The current no-query receipt consumer view remains account scoped. |
+| `PUT /api/usage/prices` | Validate an exact provider/model price and save the authenticated user's `modelPrices` through ConfigService; existing run snapshots keep their earlier price. No client receipt-write endpoint. |
 | `GET/PUT /api/admin/configuration/models` | Administrator-only redacted instance model view / complete model domain replacement with revision. |
 
 The production `scope/app.ts` opens and closes these real services; tests do not
@@ -77,8 +78,12 @@ directory; keys and encrypted snapshots are excluded from portable user export.
 JSON receipts contain no credentials; copied or deserialized lease objects cannot
 obtain host access. A changes neither B's document nor B's active lease. Normal
 configuration changes affect new admission; account reset/disable, deletion and
-shared resource withdrawal fence publication and usage. Shared generations are
-monotonic and durable, including identical republication. Web logout alone does
+shared resource withdrawal fence publication and usage. Shared request tuning
+(model ID, output budget, reasoning, service tier and timeouts) preserves admitted
+live and durable snapshots. Shared transport target or credential changes retire
+resource authorization; the durable generation hashes provider, protocol, base
+URL, key, sensitive headers/body and unauthenticated-local permission rather than
+all request settings. Shared generations are monotonic and durable, including identical republication. Web logout alone does
 not revoke already admitted account work.
 
 `startUsage(lease, options)` derives user, model, operation and frozen price from
@@ -205,3 +210,21 @@ deployment behavior remain downstream validation; no live keys or data are used.
 
 Executed results and independent review are recorded in the
 [M04 acceptance record](../validation/multiuser-m04-configuration.md).
+
+## Model parity supersession (2026-10-18)
+
+KEEP: the original draft → directory/test → save journey, explicit credential
+reuse decision after target changes, per-feature personal model choice, frozen
+request settings and ConfigService CAS. CHANGE: bind retained credentials to the
+same account/profile and keep shared references fixed; use shared generations
+for transport authorization rather than request tuning. REMOVE: mandatory save
+before personal inspection, silent redacted-secret reuse to a changed target,
+and whole-settings equality as a live/durable shared lease fence. EXCEPTION:
+shared target/credential replacement and withdrawal still revoke; uncertain
+restart history remains closed. UNKNOWN: physical clients, external credential
+validity and live-provider behavior are separate validation.
+
+The contract and current model-tool API are in
+[model connection tools](multiuser-model-tools-http.md). Generated real API,
+TaskExecution Ask and restart regressions are recorded in
+[the model parity validation record](../validation/configuration-model-parity-2026-10-18.md).

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import type {FeatureComponent} from '@mote/shared';
+import type {FeatureComponent,PluginCapability} from '@mote/shared';
 import type {UserContext} from './context.js';
 import type {TaskRun} from './task-execution.js';
 import type {ModelFeature} from '@mote/shared/models';
@@ -40,3 +40,15 @@ export type ScopedPluginComponent=FeatureComponent&{capability:PluginCapabilityI
  * worker adapters; asynchronous initialization belongs in call(). Paths and
  * owner facts stay in this host boundary and are never worker/user arguments. */
 export type PluginRuntimeFactory=(scope:Readonly<{userId:string;instanceId:string;generation:number;directory:string;configuration:Readonly<Record<string,string|number|boolean>>}>)=>PluginRuntime;
+
+/** Capability owners execute the real provider check under this fixed host
+ * scope. Generated probe storage and cleanup never reuse live provider data. */
+export type PluginCapabilityProbe=(input:Readonly<{
+ context:UserContext;instance:UserPluginInstance;components:readonly PluginComponent[];packageId:string;adapter?:string;
+ directory:string;attempt:Readonly<{id:string;createdAt:string}>;namespace:PluginInvocation['namespace'];signal:AbortSignal;
+ /** After local configuration/authority checks, before dispatching provider IO.
+  * The host owns issuance, result acknowledgement and interrupted recovery. */
+ beginExternal:()=>void;
+ assertCurrent:()=>void;runtime:()=>PluginRuntime;restart:()=>Promise<PluginRuntime>;
+ onClose:(close:()=>Promise<void>)=>void;
+}>)=>Promise<{capabilities:PluginCapability[];issues:string[]}>;

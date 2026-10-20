@@ -92,11 +92,22 @@ class FileSources(private val context: Context, private val cancel: Cancellation
         unchanged = { old -> metadata(Uri.parse(old.getString("uri")), source)?.let { context.fileArchives().signature(it) == context.fileArchives().signature(JSONObject(old.toString()).apply { remove("_relativePath") }) } ?: false }) }
 }
 
-/** A current v2 file revision was rejected. Retrying the same immutable
+/** A current immutable file revision was rejected. Retrying the same immutable
  * manifest immediately cannot resolve a conflict, deletion, or protocol gap. */
-internal class FileIngressRejection(val httpStatus: Int) : IllegalStateException("File ingress rejected: HTTP $httpStatus")
+internal open class FileTransportFailure(val httpStatus: Int, message: String, val code: String = "") : IllegalStateException(message)
 
-internal class FileTransportFailure(val httpStatus: Int, message: String, val code: String = "") : IllegalStateException(message)
+internal class FileIngressRejection(httpStatus: Int, code: String = "", val paused: Boolean = false) : FileTransportFailure(httpStatus, "File ingress rejected: HTTP $httpStatus", code)
+
+/** A failed lookup cannot establish that a source was enabled when upload was rejected. */
+internal class SourcePauseLookupFailure(cause: Exception) : IllegalStateException("Source pause could not be confirmed", cause)
+
+internal fun confirmSourceRejection(error: FileIngressRejection, sourcePaused: () -> Boolean): FileIngressRejection {
+    if (error.httpStatus != 409 || error.paused) return error
+    val paused = try { sourcePaused() }
+    catch (failure: SyncConditionsUnavailable) { throw failure }
+    catch (failure: Exception) { throw SourcePauseLookupFailure(failure) }
+    return if (paused) FileIngressRejection(409, error.code, paused = true) else error
+}
 
 object FileUpload {
     internal fun requireAccepted(status: Int) {
@@ -195,11 +206,18 @@ object FileUpload {
             checkSelection(); queue.acknowledge(source.id, row, ack, client.binding)
             return queue.pendingCount(source.id) == 0
         } catch (error: Exception) {
-            if (error !is SliceYield && error !is SyncConditionsUnavailable && stillSelected()) observedRow?.let {
+            // A source can be paused between registration and a later part/commit.
+            // Resolve that 409 through the same narrow port before persisting a
+            // permanent revision failure; disabled sources keep their outbox.
+            val failure = if (error is FileIngressRejection && error.httpStatus == 409 && !error.paused && stillSelected()) {
+                try { confirmSourceRejection(error) { context.ingress3(config, stillSelected).sourcePaused(source) } }
+                catch (lookupFailure: SourcePauseLookupFailure) { lookupFailure }
+            } else error
+            if (failure !is SliceYield && failure !is SyncConditionsUnavailable && stillSelected()) observedRow?.let {
                 queue.recordFailure(source, it, if (phase == FileSyncPhase.PREPARING) "prepare" else "upload",
-                    when (error) { is FileTransportFailure -> error.httpStatus; is FileIngressRejection -> error.httpStatus; else -> null }, error is FileIngressRejection)
+                    (failure as? FileTransportFailure)?.httpStatus, failure is FileIngressRejection && !failure.paused)
             }
-            throw error
+            throw failure
         } finally {
             FileSyncTransfers.clear(transferKey, owner)
             LocalStateChanges.changed(records = true, storage = false)

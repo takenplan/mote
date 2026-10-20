@@ -1,3 +1,4 @@
+import {defaultPerceptionConfiguration} from '../src/perception-configuration.js';
 /** Independent acceptance of PR153 plus the bounded M05/M06 dependency handoff.
  * Both barriers wrap real production operations; only generated external I/O is
  * held. Domain rows, grants, leases, evidence and publication are never seeded. */
@@ -35,7 +36,7 @@ for(const transition of ['source-withdraw','account-epoch','cancel','same-id-rec
   const settings=(key:string)=>({...defaultModelSettings(),provider:'custom',protocol:'mote-media',model:'',baseUrl:'http://127.0.0.1:'+endpoint.port,apiKey:key});
   const update=async(key:string)=>{const view=await http(f.admin.token,'/api/admin/configuration/models');await http(f.admin.token,'/api/admin/configuration/models','PUT',{revision:view.revision,value:{...defaultModelDomain(),deployment:settings(key)}});};
   await update('GENERATED_SEAM_OLD');
-  for(const actor of [f.a,f.b]){
+  for(const actor of [f.a,f.b]){const revision=(await http(actor.token,'/api/configuration')).revision;await http(actor.token,'/api/configuration/perception','PUT',{revision,value:{...defaultPerceptionConfiguration(),understandingEnabled:false}});
    const page=await http(actor.token,'/api/file-processing');
    await http(actor.token,'/api/file-processing','PUT',{revision:page.revision,settings:{...page.settings,automatic:true,understandingEnabled:false},policy:{version:1,services:[{id:'image',name:'Generated image',kind:'image',reference:actor===f.a?{kind:'shared',id:'env:deployment'}:{kind:'personal',id:'seam-image'}}],profiles:[{id:'image',name:'Generated image',processorId:'image.http',serviceId:'image',parameters:{},summarize:false},{id:'archive',name:'Generated archive',processorId:'archive',parameters:{},summarize:false}],rules:[{type:'image/*',profileId:'image'},{type:'*/*',profileId:'archive'}]},...(actor===f.b?{models:{profiles:[{id:'seam-image',name:'Generated private image',settings:settings('GENERATED_SEAM_B')}],selections:{}}}:{})});
   }

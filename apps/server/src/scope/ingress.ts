@@ -18,11 +18,13 @@ import {ingressLifecycle} from './ingress-lifecycle.js';
 import type {UserDataSubject} from './lifecycle.js';
 import {importUploadData,recordArchivedFile} from './import-upload-data.js';
 import {archiveRelativePath,MAX_FILE_BYTES} from '../archive-contract.js';
+import {collectIngress} from './ingress-gc.js';
 
 export const INGRESS_DOMAIN='ingress';
 const batchId=z.string().min(1).max(256);
 const conflict=()=>new PrivateDataError('conflict',409);
 export const strictBase64=(value:string)=>{if(value.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(value))throw new PrivateDataError('invalid_data');const bytes=Buffer.from(value,'base64');if(bytes.toString('base64')!==value)throw new PrivateDataError('invalid_data');return bytes;};
+const fileRevisionItem=(manifest:z.infer<typeof fileRevisionSchema>)=>sourceItemSchema.parse({...manifest.item,document:{...manifest.item.document,path:manifest.relativePath},metadata:{...manifest.item.metadata,version:1,file:{...manifest.item.metadata?.file,sizeBytes:manifest.sizeBytes}}});
 const captureId=(sourceId:string,item:SourceItem)=>{const digest=identityHash([sourceId,item.externalId,item.revision]);return `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;};
 export type IngressOriginalFormat='capture'|'source-item'|'file'|'recording-audio-backup'|`processor:${string}`;
 type SuppliedOriginal={bytes:Buffer;mime:string;format?:Exclude<IngressOriginalFormat,'capture'>;processingProfileId?:string};
@@ -43,6 +45,8 @@ export class IngressHost{
  private readonly active=new Set<string>();
  private readonly importCommits=new Map<string,Promise<unknown>>();
  private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void>();
+ private readonly published=new Set<(context:UserContext,material:Readonly<{id:string;revision:string}>)=>void>();
+ onMaterialPublished(receive:(context:UserContext,material:Readonly<{id:string;revision:string}>)=>void){this.published.add(receive);return ()=>{this.published.delete(receive);};}
  private fileRetirement?:(context:UserContext,refs:readonly string[])=>void;
  configureFileRetirement(retire:(context:UserContext,refs:readonly string[])=>void){this.fileRetirement=retire;}
  private fileProfiles?:{preflight:(context:UserContext,id:string)=>Promise<void>;bind:(context:UserContext,ref:string,id:string)=>void};
@@ -105,11 +109,11 @@ export class IngressHost{
   const serialize=async<T>(id:string,work:()=>Promise<T>)=>{const key=identityHash([context.userId,id]),prior=this.importCommits.get(key)??Promise.resolve(),next=prior.catch(()=>{}).then(work);this.importCommits.set(key,next);try{return await next;}finally{if(this.importCommits.get(key)===next)this.importCommits.delete(key);}};
   const archive=importUploadData(sql,originals,context.authorizationEpoch,()=>{assert();if(sourceIds||deviceId||authority.isTask(context))throw new ScopeError('invalid_identity',403);},during,serialize);
   const receipt=(sourceId:string,id:string,captures:IngressReceipt['captures']):IngressReceipt=>({version:3,id:identityHash([context.deploymentId,context.userId,sourceId,id]),deploymentId:context.deploymentId,userId:context.userId,sourceId,batchId:id,state:'received',captures});
-  const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);return {...value,captures:value.captures.map(item=>{data().capture(item.id);return {...item,...(item.original?{original:original(item.original.ref)}:{})};})};};
+  const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);return {...value,captures:value.captures.map(item=>{data().assertCaptureRetained(item.id);data().capture(item.id);return {...item,...(item.original?{original:original(item.original.ref)}:{})};})};};
   const batch=(sourceId:string,id:string,payload:unknown,format:IngressOriginalFormat,write:()=>IngressReceipt,formats:(receipt:IngressReceipt)=>Readonly<Record<string,IngressOriginalFormat>>=()=>({}))=>sql.transaction(()=>{
    source(sourceId);batchId.parse(id);const digest=identityHash(payload),previous=sql.get('SELECT digest,receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);
    if(previous){if(previous.digest!==digest)throw conflict();return checkReceipt(JSON.parse(String(previous.receipt)));}
-   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();for(const receive of this.accepted)receive(context,result,format,Object.freeze(formats(result)));assert();return result;
+   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();for(const receive of this.accepted)receive(context,result,format,Object.freeze(formats(result)));assert();if(result.captures.some(value=>!value.duplicate))sql.reserveStorage(0);return result;
   });
   const service={
    registerSource:(value:unknown)=>{assert();const input=sourceConnectionSchema.parse(value);if(sourceIds&&!sourceIds.includes(input.id)||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>data().registerSource(input));},
@@ -182,7 +186,7 @@ export class IngressHost{
    beginSnapshotRecovery:(sourceId:string,captureId:string,value:unknown):any=>sql.transaction(()=>{
     source(sourceId);const input=z.object({batchId,revision:fileRevisionSchema,recoveryId:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(value),row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,captureId);if(!row)throw missing();const descriptor=original('original:'+row.id),record=data().capture(captureId),prior=sql.get('SELECT u.id,u.receipt,r.recovery_id FROM ig_uploads u JOIN ig_upload_recoveries r ON r.user_id=u.user_id AND r.upload_id=u.id WHERE u.user_id=$user AND u.source_id=? AND u.request_key=? AND r.original_id=?',sourceId,input.batchId,String(row.id));
     const {sourceId:canonicalSource,...provenance}=record.provenance!;const canonical=sourceItemSchema.parse({...provenance,observedAt:record.capturedAt,title:record.windowTitle,text:record.ocrText,kind:record.source});
-    if(input.revision.sourceId!==sourceId||input.revision.sha256!==descriptor.hash||input.revision.sizeBytes!==descriptor.bytes||identityHash({...sourceItemSchema.parse(input.revision.item),observedAt:new Date(input.revision.item.observedAt).toISOString()})!==identityHash(canonical))throw conflict();
+    if(input.revision.sourceId!==sourceId||input.revision.sha256!==descriptor.hash||input.revision.sizeBytes!==descriptor.bytes||identityHash({...fileRevisionItem(input.revision),observedAt:new Date(input.revision.item.observedAt).toISOString()})!==identityHash(canonical))throw conflict();
     if(prior&&prior.recovery_id!==input.recoveryId)throw conflict();
     if(!prior?.receipt&&(!needsRecovery(descriptor)||input.recoveryId!==recoveryKey(descriptor.ref)))throw conflict();
     const upload=service.beginUpload(sourceId,{batchId:input.batchId,revision:input.revision});sql.run('INSERT INTO ig_upload_recoveries VALUES($user,?,?,?) ON CONFLICT(user_id,upload_id) DO NOTHING',upload.id,String(row.id),input.recoveryId);return upload;
@@ -204,7 +208,7 @@ export class IngressHost{
     }
     const checkAttribution=(value:any)=>{if(value?.sourceDeclaration)source(value.sourceDeclaration.sourceId);for(const entry of [...(value?.sourceContextDeclarations??[]),...(value?.sourceContextStatements??[])])source(entry.sourceId);};
     checkAttribution(draft.attributionContext);for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext);
-    const result=data().publishMaterial(draft,expectedRevision);assert();return result;
+    const result=data().publishMaterial(draft,expectedRevision);assert();for(const receive of this.published)receive(context,result);assert();return result;
    }),
    withWorkspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>during(()=>originals.workspace(work)),
    beginUpload:(sourceId:string,value:unknown)=>sql.transaction(()=>{
@@ -212,7 +216,36 @@ export class IngressHost{
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
     if(manifest.sourceId!==sourceId||manifest.item.kind!=='file'||manifest.item.text||binding.retention==='reference'&&manifest.item.layer!=='reference'||binding.retention!=='reference'&&manifest.item.layer==='reference')throw conflict();
     forgetting.allowed(sourceId,manifest.item);declaration(sourceId,input.importDeclaration);const digest=identityHash(input.importDeclaration===undefined?manifest:{manifest,importDeclaration:input.importDeclaration}),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
-    if(previous){if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch||Number(previous.expires)<=Date.now())throw conflict();if(previous.receipt)checkReceipt(JSON.parse(String(previous.receipt)));return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(previous.receipt?{receipt:JSON.parse(String(previous.receipt))}:{})};}
+    if(previous&&(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch))throw conflict();
+    // A collected transport receipt is not the canonical business ACK. Ordinary
+    // archive retries can prove the current immutable input without reopening
+    // part authority, retaining receipt history, or adopting a retired grant.
+    if(!previous&&binding.retention==='archive'&&manifest.item.layer==='original'&&!manifest.item.deleted&&manifest.sha256&&!manifest.processingProfileId&&input.importDeclaration===undefined){
+     const head=data().sourceItem(sourceId,manifest.item.externalId);
+     if(head?.revision===manifest.item.revision){
+      const ack=data().matchSourceRevision(sourceId,fileRevisionItem(manifest));
+      if(ack&&ack.id===head.captureId){
+       const retainedRow=sql.get('SELECT r.id FROM ig_originals r JOIN ig_objects o ON o.user_id=r.user_id AND o.hash=r.hash WHERE r.user_id=$user AND r.source_id=? AND r.capture_id=?',sourceId,ack.id);
+       if(retainedRow){
+        const retained=original('original:'+retainedRow.id);
+        if(retained.captureId!==ack.id||retained.hash!==manifest.sha256||retained.bytes!==manifest.sizeBytes||retained.mime!==(manifest.item.mimeType??'application/octet-stream')||retained.retention!=='archive'||retained.available===false)throw conflict();
+        let resident=false;try{originals.readObject(retained.hash);resident=true;}catch(error){if(error instanceof ScopeError)throw error;}
+        // An unavailable/corrupt local object cannot establish this fast ACK.
+        // Continue the existing upload/resupply path; do not invent a new410.
+        if(resident){assert();return {id:ack.id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[],receipt:receipt(sourceId,input.batchId,[{...ack,original:retained}])};}
+       }
+      }
+     }
+    }
+    if(previous){
+     if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch)throw conflict();
+     const received=previous.receipt?checkReceipt(JSON.parse(String(previous.receipt))):undefined;
+     if(received||Number(previous.expires)>Date.now())return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(received?{receipt:received}:{})};
+     // Expiry closes this transport attempt, not the immutable file revision.
+     // Snapshot recovery grants retain their separate, nonrenewable boundary.
+     if(sql.get('SELECT upload_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',String(previous.id)))throw conflict();
+     originals.cleanUpload(String(previous.id));sql.run('DELETE FROM ig_uploads WHERE user_id=$user AND id=?',String(previous.id));
+    }
     const id=randomUUID();sql.run('INSERT INTO ig_uploads VALUES($user,?,?,?,?,?,?,?,NULL)',id,sourceId,input.batchId,digest,JSON.stringify(manifest),context.authorizationEpoch,Date.now()+86400000);
     if(input.importDeclaration)sql.run('INSERT INTO ig_upload_imports VALUES($user,?,?)',id,JSON.stringify(input.importDeclaration));return {id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[]};
    }),
@@ -231,13 +264,14 @@ export class IngressHost{
      const current=upload(id);if(current.receipt)return checkReceipt(JSON.parse(String(current.receipt)));
      const binding=source(String(current.source_id)),head=data().sourceItem(binding.id,manifest.item.externalId);
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
-     const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
+     const ack=data().receiveSourceItems(binding.id,[fileRevisionItem(manifest)],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
+     sql.run('INSERT OR IGNORE INTO ig_file_revisions VALUES($user,?)',ack.id);
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      let reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot',manifest.item.layer==='snapshot'):undefined;
      if(reference&&!ack.duplicate&&manifest.processingProfileId)bindProfile(reference.ref,manifest.processingProfileId);
      const recovery=sql.get('SELECT original_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',id);
      if(recovery){if(!reference||reference.ref!=='original:'+recovery.original_id||!needsRecovery(reference))throw conflict();reference=originals.restoreSnapshot(reference.ref);this.snapshotRecovery!.restored(context,reference.ref);}
-     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;
+     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);sql.run('DELETE FROM ig_upload_parts WHERE user_id=$user AND upload_id=?',id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();if(result.captures.some(value=>!value.duplicate))sql.reserveStorage(0);return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
    }),
    beginImportUpload:archive.begin,importUploadPart:archive.part,commitImportUpload:archive.commit,archivedFile:archive.file,archivedBytes:archive.bytes,removeArchivedFiles:archive.remove,
@@ -249,12 +283,7 @@ export class IngressHost{
    verifyTicket:(ref:string,ticket:string)=>{
     try{const [body,signature,...extra]=ticket.split('.'),actual=Buffer.from(signature??'','base64url'),expected=createHmac('sha256',this.key).update(body??'').digest();if(extra.length||actual.length!==expected.length||!timingSafeEqual(actual,expected))throw Error();const value=JSON.parse(Buffer.from(body,'base64url').toString());if(value.v!==3||value.deployment!==context.deploymentId||value.user!==context.userId||value.credential!==context.credentialId||value.epoch!==context.authorizationEpoch||value.ref!==ref||value.expires<=Date.now())throw Error();if(original(ref).available===false||(value.fileGeneration??0)!==forgetting.generation(original(ref))||value.attachmentGeneration!==attachmentBinding(sql,original(ref).captureId)?.id)throw Error();return value.mode as 'play'|'download';}catch{throw missing();}
    },
-   gc:()=>{if(sourceIds||deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{
-    if(sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))throw conflict();
-    for(const row of sql.all('SELECT id FROM ig_uploads WHERE user_id=$user AND (expires<=? OR authorization_epoch<>?)',Date.now(),context.authorizationEpoch)){originals.cleanUpload(String(row.id));sql.run('DELETE FROM ig_uploads WHERE user_id=$user AND id=?',String(row.id));}
-    for(const row of sql.all('SELECT id FROM ig_work WHERE user_id=$user AND expires<=?',Date.now())){originals.cleanWork(String(row.id));sql.run('DELETE FROM ig_work WHERE user_id=$user AND id=?',String(row.id));}
-    return originals.gc();
-   });},
+   gc:()=>{if(sourceIds||deviceId)throw new ScopeError('invalid_identity',403);return collectIngress(sql,originals,context.authorizationEpoch);},
   };
   function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown,afterWrite?:(receipt:IngressReceipt)=>void,retained?:{hash:string;mime:string;bytes:number}){
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
@@ -273,10 +302,10 @@ export class IngressHost{
     });
     const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
     for(const ack of acks)if(!ack.duplicate)imports.bind(ack.id,pin);
-    const result=receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));afterWrite?.(result);for(const [index,ack]of result.captures.entries()){const id=inputs?.[index]?.processingProfileId;if(id&&ack.original&&!ack.duplicate)bindProfile(ack.original.ref,id);}return result;
+    const result=receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));afterWrite?.(result);for(const [index,ack]of result.captures.entries()){const format=formats?.[index]??inputs?.[index]?.format??(inputs?.[index]||retained?'file':undefined);if(format==='file'||format==='recording-audio-backup'||format?.startsWith('processor:'))sql.run('INSERT OR IGNORE INTO ig_file_revisions VALUES($user,?)',ack.id);const id=inputs?.[index]?.processingProfileId;if(id&&ack.original&&!ack.duplicate)bindProfile(ack.original.ref,id);}return result;
    },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index]||retained)?[[ack.original.ref,formats?.[index]??inputs?.[index]?.format??'file']]:[])));
   }
-  function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));forgetting.allowed(String(row.source_id),fileRevisionSchema.parse(JSON.parse(String(row.manifest))).item);if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
+  function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));forgetting.allowed(String(row.source_id),fileRevisionSchema.parse(JSON.parse(String(row.manifest))).item);if(row.authorization_epoch!==context.authorizationEpoch)throw conflict();if(Number(row.expires)<=Date.now()){if(!sql.get('SELECT upload_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',id))throw new PrivateDataError('upload_expired',409);throw conflict();}return row;}
   return Object.freeze(service);
  }
 }

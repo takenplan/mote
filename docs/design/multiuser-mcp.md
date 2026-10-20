@@ -53,9 +53,11 @@ its old scoped token. Tokens issued before M11 with selected scopes but no pins
 must be reissued; no missing pin expands permissions. Empty read scopes retain
 M01's explicit account-wide read meaning. Write credentials require exact sources.
 
-POST initializes/dispatches, GET/DELETE use the SDK session transport. Sessions
-are process-local; after crash/restart an old session ID is404 and an unchanged
-valid credential can explicitly initialize again. Global/static owner and legacy
+POST can dispatch a standalone request through a fresh stateless SDK transport,
+or initialize an optional credential-bound session. GET/DELETE use an existing
+SDK session. Sessions are process-local; after crash/restart an old session ID
+is404 and an unchanged valid credential can initialize again or send a standalone
+POST without an initialization prerequisite. Global/static owner and legacy
 MCP configuration tokens are never fallback credentials. Origin and forged host
 identity selectors are rejected before dispatch; responses disable caching.
 
@@ -101,12 +103,17 @@ M04's `mcpConnections` user domain owns `{connections:[{id,enabled,url,token,
 sourceIds}]}`. Its strict schema, revision/CAS, file watching, private files,
 prepare/publish/rollback and declared-sensitive token projection are the actual
 configuration framework. Credentials are omitted from views and portable
-configuration exports. Invocation HTTP bodies select only an owned connection
-ID and bounded resources or one explicitly confirmed read-only tool; they do not
-carry raw bearer secrets or choose an owner.
+configuration exports. Invocation HTTP bodies select either an owned connection ID or a request-owned
+`{url, token?}` target, plus bounded resources or one explicitly confirmed read-only
+tool. A one-time token is held only by that invocation; it is never saved in the
+configuration or lifecycle exports. Neither form can choose an owner. Discovery
+does not create a source or persist a connection; the original Web journey creates
+the source only when the user requests the selected import.
 
 `POST /api/connectors/mcp/discover` discovers resources, templates, tool metadata
-and prompt metadata with SDK paging. `POST /api/connectors/mcp/import` uses the
+and prompt metadata with SDK paging. Resource-only official SDK services may omit
+`resources/templates/list`; only its `MethodNotFound` result is treated as an empty
+template list, while actual service/transport failures still fail discovery. `POST /api/connectors/mcp/import` uses the
 existing resource/text or explicitly confirmed read-only tool import contract.
 No arbitrary prompt execution, unsolicited external tool, local shell or stdio
 command is introduced. The existing administrator-owned instance
@@ -171,3 +178,8 @@ no old credential gains permission to write a late status. Status does not prove
 that M06 indexing or Memory extraction completed. Domain deletion removes these
 records. They are explicitly excluded from portable metadata restoration, along
 with connections and live handles, and do not revive external authorization.
+
+The [extension parity ADR](../adr-extension-journey-parity.md) supersedes the former
+mandatory session/saved-connection steps. Reference imports page resource directory
+metadata for the original title and MIME without reading resource bodies. Both
+saved and one-time targets use this same account-bound import procedure.

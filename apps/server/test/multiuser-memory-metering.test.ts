@@ -40,7 +40,7 @@ test('a busy reply after an earlier consumed turn keeps its tokens while the pub
 test('real Memory entry retains all 600 failed tokens and safe host-validation diagnosis after finite correction',async t=>{
  const f=await fixture(t),secret='GENERATED_SECRET_BAD_MODEL_RESPONSE';
  f.responses.set('A',res=>writeMessagesResponse(res,{stage:f.requests.length,model:'generated-memory',text:JSON.stringify({answer:secret,citationIds:[]}),usage:{inputTokens:100,outputTokens:50,cacheReadTokens:0,cacheWriteTokens:0}}));
- const material=await f.publish(f.a,'A'),job=await f.submit(f.a,[material.id]),extract=job.tasks.extract.id;
+ const material=await f.publish(f.a,'A'),job=await f.submit(f.a,[material.id]),extract=job.tasks.batch.id;
  assert.equal(await f.terminal(extract),'failed');
  const task=await f.request(f.a.token,'/api/tasks/'+extract);assert.equal(task.statusCode,200,task.body);assert.equal(task.json().failure.code,'agent_host_validation');assert.equal(task.json().failure.causeCode,'json');assert.equal(task.json().failure.jobId,job.id);assert.ok(task.json().failure.runId);assert.equal(task.json().attempts,1);assert.ok(!task.body.includes(secret));
  const usage=await f.request(f.a.token,'/api/usage');assert.equal(usage.statusCode,200,usage.body);assert.equal(usage.json().items.length,1);assert.equal(usage.json().items[0].status,'failed');assert.equal(usage.json().total.totalTokens,600);assert.equal(usage.json().total.reportedRequests,4);assert.equal(usage.json().items[0].estimatedCost,null);assert.equal(f.requests.length,4);
@@ -55,9 +55,9 @@ test('Memory ready review and publication progress before an extraction backlog 
  const cancelled=jobs.pop()!;assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+cancelled.id+'/cancel','POST',{})).statusCode,200);
  const other=await f.submit(f.b,[(await f.publish(f.b,'B')).id]);f.gates.delete('A');release.resolve();
  await Promise.all([f.wait(f.a,first.id),f.wait(f.b,other.id)]);
- const succeeded=f.read(db=>Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE user_id=? AND kind='memory.extract' AND state='succeeded'").get(f.a.userId)!.n));
+ const succeeded=f.read(db=>Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE user_id=? AND kind='memory.batch' AND state='succeeded'").get(f.a.userId)!.n));
  assert.ok(succeeded<9,'first publication must not wait for every pending extraction');assert.ok((await f.request(f.a.token,'/api/memories')).json().items.length>=1);assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,1);
  for(const job of jobs)await f.wait(f.a,job.id);
- const before=f.requests.length;await f.restart();await delay(50);assert.equal(f.requests.length,before,'restart does not replay successful or cancelled work');assert.equal((await f.request(f.a.token,'/api/tasks/'+cancelled.tasks.extract.id)).json().state,'cancelled');
+ const before=f.requests.length;await f.restart();await delay(50);assert.equal(f.requests.length,before,'restart does not replay successful or cancelled work');assert.equal((await f.request(f.a.token,'/api/tasks/'+cancelled.tasks.batch.id)).json().state,'cancelled');
  const receipts=(await f.request(f.a.token,'/api/usage')).json().items;assert.ok(receipts.every((item:any)=>item.issuance?.issuedAt&&item.durationMs>=0));assert.equal(new Set(receipts.map((item:any)=>item.id)).size,receipts.length);
 });

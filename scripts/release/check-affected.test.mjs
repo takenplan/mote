@@ -92,6 +92,58 @@ test('documentation-only CLI skips builds, while moving runtime code into docs r
   assert.ok(changedPaths({ base, directory, head: 'HEAD' }).includes('apps/desktop/src/old.ts'));
 });
 
+test('actual CLI maps only the three reviewed backup inputs and unions mixed consumers', t => {
+  const { write, dryRun } = repository(t);
+  const helpers = ['scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs'];
+  for (const helper of helpers) write(helper);
+  let result = dryRun();
+  assert.equal(result.status, 0, result.stderr);
+  const backup = JSON.parse(result.stdout);
+  assert.deepEqual(backup.selection.workspaces, ['@mote/server', '@mote/web']);
+  assert.deepEqual(backup.selection.rootTests, ['backup', 'scripts-types']);
+  assert.equal(backup.selection.android, false);
+  assert.equal(backup.selection.all, false);
+  assert.ok(backup.checks.find(step => step.id === 'backup-update-tests').args.includes('scripts/update-tests.mjs'));
+  assert.ok(backup.checks.some(step => step.id === 'typecheck:scripts'));
+  write('apps/android/New.kt'); write('apps/desktop/src/new.ts');
+  result = dryRun();
+  assert.equal(result.status, 0, result.stderr);
+  const mixed = JSON.parse(result.stdout);
+  assert.deepEqual(mixed.selection.workspaces, ['@mote/desktop', '@mote/server', '@mote/web']);
+  assert.equal(mixed.selection.android, true);
+  assert.ok(mixed.checks.some(step => step.id === 'android-unit'));
+  write('scripts/scoped-backup-future.mjs');
+  result = dryRun();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).selection.all, true);
+});
+
+test('actual Git rename diffs retain both old and new backup input obligations', t => {
+  const { directory, git, write } = repository(t);
+  const helper = 'scripts/scoped-backup.mjs';
+  write(helper); git('add', '.'); git('commit', '-m', 'known backup fixture');
+  const base = git('rev-parse', 'HEAD');
+  const inspect = () => {
+    const result = spawnSync(process.execPath, [cli, '--base', base, '--head', 'HEAD', '--dry-run'], { cwd: directory, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  mkdirSync(join(directory, 'docs'));
+  git('mv', helper, 'docs/backup-fixture.mjs'); git('commit', '-m', 'move helper to docs');
+  assert.deepEqual(changedPaths({ base, head: 'HEAD', directory }).sort(), ['docs/backup-fixture.mjs', helper].sort());
+  assert.deepEqual(inspect().selection.rootTests, ['backup']);
+  assert.deepEqual(inspect().selection.workspaces, ['@mote/server', '@mote/web']);
+  git('mv', 'docs/backup-fixture.mjs', 'scripts/renamed-backup.mjs'); git('commit', '-m', 'unknown new backup location');
+  assert.equal(inspect().selection.all, true);
+  const unknownBase = git('rev-parse', 'HEAD');
+  git('mv', 'scripts/renamed-backup.mjs', helper); git('commit', '-m', 'unknown old backup location');
+  const result = spawnSync(process.execPath, [cli, '--base', unknownBase, '--head', 'HEAD', '--dry-run'], { cwd: directory, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const restored = JSON.parse(result.stdout);
+  assert.equal(restored.selection.all, true);
+  assert.ok(restored.selection.rootTests.includes('backup'));
+});
+
 test('an advanced base branch does not turn its unrelated changes into PR inputs', t => {
   const { directory, git, write } = repository(t);
   git('switch', '-c', 'feature');

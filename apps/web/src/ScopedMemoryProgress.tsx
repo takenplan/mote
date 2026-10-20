@@ -17,7 +17,7 @@ export function scopedMemoryState(job:ScopedMemoryJob){
  if(states.includes('running'))return 'running';return 'waiting';
 }
 export const scopedMemoryLabel=(job:ScopedMemoryJob)=>job.phase==='integrate'?({waiting:moteText('等待执行'),running:moteText('正在整理'),succeeded:moteText('已完成'),failed:moteText('整理失败'),blocked:moteText('需要处理'),needs_input:moteText('需要处理'),stale:moteText('资料已更新，本次结果失效'),cancelled:moteText('已取消'),deleted:moteText('已删除'),paused:moteText('已暂停')} as Record<string,string>)[scopedMemoryState(job)]:({waiting:moteText('等待提取记忆'),running:moteText('正在分批提取记忆'),succeeded:moteText('记忆提取完成'),failed:moteText('部分记忆提取需要重试'),blocked:moteText('需要处理'),needs_input:moteText('需要处理'),stale:moteText('资料已更新，本次结果失效'),cancelled:moteText('记忆提取已停止'),deleted:moteText('已删除'),paused:moteText('已暂停')} as Record<string,string>)[scopedMemoryState(job)];
-export function scopedMemoryResults(job:ScopedMemoryJob){return [...new Set(Object.entries(job.tasks).filter(([stage,task])=>(stage.startsWith('publish')||stage==='correct')&&task.state==='succeeded').flatMap(([,task])=>task.result?.memoryIds??[]))];}
+export function scopedMemoryResults(job:ScopedMemoryJob){return [...new Set(Object.entries(job.tasks).filter(([stage,task])=>(stage.startsWith('batch')||stage==='correct')&&task.state==='succeeded').flatMap(([,task])=>task.result?.memoryIds??[]))];}
 export function useScopedMemoryJob(api:Api,id?:string,revision?:unknown){
  const path=api.connection?.mode==='web'&&id?'/api/memory/jobs/'+encodeURIComponent(id):null,read=useResource<ScopedMemoryJob>(api,path,undefined,revision);
  const active=read.data&&['waiting','running'].includes(scopedMemoryState(read.data));

@@ -23,8 +23,9 @@ const annotations={readOnlyHint:true,destructiveHint:false,idempotentHint:true,o
 const json=(value:unknown)=>{const text=JSON.stringify(value);if(Buffer.byteLength(text)>256*1024)throw new ConnectorError('response_budget_exceeded_reduce_limit',413);return {content:[{type:'text' as const,text}]};};
 const failureCode=(error:unknown)=>error instanceof ScopeError?'invalid_identity':error instanceof PrivateDataError||error instanceof ConnectorError||error instanceof ScopedMemoryError||error instanceof AskError?error.code:'source_operation_failed';
 
-/** Actual SDK transports own their immutable host authorization. Browser state
- * is never consulted; a session ID alone is never an authorization credential. */
+/** Actual SDK transports own their immutable host authorization. A POST can
+ * stand alone; initialized clients may also retain a credential-bound session.
+ * Browser state is never consulted and session IDs never grant authority. */
 export class McpInbound{
  private readonly sessions=new Map<string,Session>();
  private readonly active=new Set<Session>();
@@ -44,11 +45,12 @@ export class McpInbound{
    if(selectors&&typeof selectors==='object'&&['userId','ownerId','userContext','deploymentId'].some(key=>Object.hasOwn(selectors,key)))throw new PrivateDataError('invalid_data');
    const id=request.headers['mcp-session-id'];if(id!==undefined&&typeof id!=='string')throw new PrivateDataError('invalid_data');
    let session=id?this.sessions.get(id):undefined;
+   const stateless=!id&&!isInitializeRequest(request.body);
    if(id&&(!session||session.authorization.identity.credentialId!==authorization.identity.credentialId))return reply.code(404).send({error:'not_found'});
    if(!id){
-    if(request.method!=='POST'||!isInitializeRequest(request.body))return reply.code(400).send({error:'invalid_request'});
+    if(request.method!=='POST')return reply.code(405).header('Allow','POST').send({error:'method_not_allowed'});
     const context=await runtime.authority.authenticateMcp(request.headers.authorization!.slice(7));
-    const {sources,memory,query,assert}=bind(context,authorization),server=new McpServer({name:'mote',version:'1'}),transport=new StreamableHTTPServerTransport({sessionIdGenerator:randomUUID,enableJsonResponse:true});
+    const {sources,memory,query,assert}=bind(context,authorization),server=new McpServer({name:'mote',version:'1'}),transport=new StreamableHTTPServerTransport({sessionIdGenerator:stateless?undefined:randomUUID,enableJsonResponse:true});
     session={server,transport,context,authorization,assert};const saved=session;
     const run=async(operation:()=>unknown,signal:AbortSignal,beforePublish:()=>void=()=>{})=>{try{assert();signal.throwIfAborted();const result=await operation();beforePublish();assert();signal.throwIfAborted();return json(result);}catch(error){return {...json({error:failureCode(error)}),isError:true};}};
     if(authorization.write)server.registerTool('mote_put_item',{description:'Save an immutable revision in an explicitly authorized existing source.',inputSchema:z.object({sourceId:sourceIdSchema,item:sourceItemSchema}).strict(),annotations:{...annotations,readOnlyHint:false}},(args,extra)=>run(()=>sources.put(args),extra.signal));
@@ -70,8 +72,13 @@ export class McpInbound{
     try{await server.connect(transport);}catch(error){this.active.delete(session);await server.close();throw error;}
    }
    if(!session)throw new ScopeError('invalid_identity',401);
-   try{session.assert();authorization.assertCurrent();reply.hijack();await session.transport.handleRequest(request.raw,reply.raw,request.body);if(session.transport.sessionId)this.sessions.set(session.transport.sessionId,session);}
+   // A transient SDK transport belongs to this one HTTP response. Closing a
+   // disconnected response aborts its SDK callbacks and their publication fences.
+   const current=session,disconnected=()=>{if(!reply.raw.writableEnded)void current.server.close();};
+   if(stateless)reply.raw.once('close',disconnected);
+   try{session.assert();authorization.assertCurrent();reply.hijack();await session.transport.handleRequest(request.raw,reply.raw,request.body);if(session.transport.sessionId&&this.active.has(session))this.sessions.set(session.transport.sessionId,session);}
    catch(error){await session.server.close();throw error;}
+   finally{if(stateless)reply.raw.off('close',disconnected);if(stateless||!session.transport.sessionId)await session.server.close();}
   });
  }
  async closeUser(userId:string){await Promise.allSettled([...this.active].filter(session=>session.context.userId===userId).map(session=>session.server.close()));}

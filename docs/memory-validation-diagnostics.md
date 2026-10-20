@@ -9,7 +9,7 @@ It does not require Agent trace opt-in (ordinary diagnostics must be enabled and
 log level must include warnings). Logs obey existing rotation and retention limits.
 
 Each batch also retains its last 20 `validationFailures` in the database and the
-`GET /api/memory-jobs/:id` response. Existing historical entries remain readable;
+`GET /api/memory/jobs/:id` response. Existing historical entries remain readable;
 new optional fields do not require a database migration. The job/batch terminal
 error can report the broader `invalid_model_output`; inspect the failure history
 and retained prior-validation receipt for the precise validation code.

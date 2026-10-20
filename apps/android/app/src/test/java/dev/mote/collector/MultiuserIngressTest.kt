@@ -45,34 +45,28 @@ class MultiuserIngressTest {
     private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
         request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
     })
-    @Test fun `native Vault export starts a real owner portable task instead of the retired global bundle`() = fixture { f ->
-        val server=f.getString("address");val token=f.getJSONObject("a").getString("token")
-        val id=UUID.randomUUID().toString();val receipt=CentralPortable(central(server,token)).start(id)
-        assertEquals(id,receipt.getString("id"));assertEquals("export",receipt.getString("kind"))
-        assertEquals(owner(server,token).userId,receipt.getString("userId"));assertEquals(3,receipt.getInt("version"))
+    private fun awaitState(read: () -> JSONObject, pending: (JSONObject) -> Boolean): JSONObject {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+        var value = read()
+        while (pending(value)) {
+            assertTrue(value.toString(), System.nanoTime() < deadline)
+            Thread.sleep(10)
+            value = read()
+        }
+        return value
     }
-    @Test fun `native portable recovery list exact artifact and cancellation remain bound to the original owner`() = fixture { f ->
-        val server=f.getString("address");val a=CentralPortable(central(server,f.getJSONObject("a").getString("token")))
-        val b=CentralPortable(central(server,f.getJSONObject("b").getString("token")));val id=UUID.randomUUID().toString()
-        a.start(id);var receipt=a.read(id);val deadline=System.currentTimeMillis()+10000
-        while(receipt.getString("state")=="working") { check(System.currentTimeMillis()<deadline);Thread.sleep(10);receipt=a.read(id) }
-        assertEquals("completed",receipt.getString("state"));assertEquals(id,a.start(id).getString("id"))
-        assertEquals(id,a.list().getJSONArray("items").getJSONObject(0).getString("id"));assertEquals(0,b.list().getJSONArray("items").length())
-        assertEquals(404,assertThrows(CentralFailure::class.java){b.read(id)}.status)
-        val directory=java.nio.file.Files.createTempDirectory("m15-portable-native-").toFile()
+    @Test fun `native Vault downloads a current full archive in one request and stays owner bound`() = fixture { f ->
+        val server=f.getString("address");val directory=java.nio.file.Files.createTempDirectory("portable-native-").toFile()
         try {
-            val output=java.io.ByteArrayOutputStream();a.save(receipt,directory) {output}
-            val bytes=output.toByteArray();assertEquals(receipt.getLong("bytes"),bytes.size.toLong())
-            assertEquals(receipt.getString("sha256"),Ingress3Client.hash(bytes))
-            val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(receipt.getString("userId"),archive.getString("userId"))
-            for(name in listOf("a","b","admin"))assertFalse(String(bytes,Charsets.UTF_8).contains(f.getJSONObject(name).getString("token")))
-            assertEquals(0,directory.listFiles()!!.size)
-            for((field,value) in listOf("userId" to f.getJSONObject("b").getString("userId"),"deploymentId" to "other-deployment","filename" to "wrong.json","sha256" to "wrong")) {
-                val corrupt=JSONObject(receipt.toString()).put(field,value);val untouched=java.io.ByteArrayOutputStream()
-                assertThrows(IllegalArgumentException::class.java){a.save(corrupt,directory) {untouched}};assertEquals(0,untouched.size())
+            for(name in listOf("a","b")) {
+                val token=f.getJSONObject(name).getString("token");val output=java.io.ByteArrayOutputStream()
+                central(server,token).downloadStaged("/api/export",{output},directory)
+                val bytes=output.toByteArray();val archive=JSONObject(String(bytes,Charsets.UTF_8))
+                assertEquals(owner(server,token).userId,archive.getString("userId"));assertEquals(3,archive.getInt("version"))
+                assertEquals("mote-portable",archive.getString("format"))
+                for(other in listOf("a","b","admin")) assertFalse(String(bytes,Charsets.UTF_8).contains(f.getJSONObject(other).getString("token")))
+                assertEquals(0,directory.listFiles()!!.size)
             }
-            assertEquals("cancelled",a.control(id,"cancel").getString("state"));val untouched=java.io.ByteArrayOutputStream()
-            assertThrows(IllegalArgumentException::class.java){a.save(receipt,directory) {untouched}};assertEquals(0,untouched.size())
         } finally { directory.deleteRecursively() }
     }
     @Test fun `actual native plugin inventory consumes owned M09 rather than legacy host aggregate`() = fixture { f ->
@@ -82,7 +76,7 @@ class MultiuserIngressTest {
         assertFalse(inventory.installation.getBoolean("supported"))
     }
     @Test fun `actual native owned plugin edit check CAS and memory preparation use original public commands`() = fixture(true) { f ->
-        val server=f.getString("address");val a=PluginControlClient(central(server,f.getJSONObject("a").getString("token")));val b=PluginControlClient(central(server,f.getJSONObject("b").getString("token")))
+        val server=f.getString("address");val aConnection=central(server,f.getJSONObject("a").getString("token"));val bConnection=central(server,f.getJSONObject("b").getString("token"));val a=PluginControlClient(aConnection);val b=PluginControlClient(bConnection)
         val grants=JSONObject().put("capabilities",JSONArray().put("processor")).put("sourceIds",JSONArray()).put("history",false)
         for ((control,label) in listOf(a to "A",b to "B")) {
             val before=control.inventory();val pkg=before.packages.single();assertTrue(pkg.fields.any {it.id=="credential"})
@@ -93,7 +87,16 @@ class MultiuserIngressTest {
         val edit=PluginControlClient.configureOwned(instance.packageId,instance.definition,original.revision,"A edited",JSONObject().put("label","A edited"),grants)
         a.execute(edit);assertTrue(a.inventory().instances.single().secretStatus.getBoolean("credential"));assertEquals("B",b.inventory().instances.single().name)
         assertEquals(409,assertThrows(CentralFailure::class.java){a.execute(edit)}.status)
-        a.execute(PluginControlClient.ownedInstanceAction(instance.id,"check",a.inventory().revision));assertTrue(a.inventory().instances.single().checked);assertFalse(b.inventory().instances.single().checked)
+        val fixtureControl=f.getString("controlAddress");URL(fixtureControl+"/plugin-check/hold").readText()
+        val check=a.execute(PluginControlClient.ownedInstanceAction(instance.id,"check",a.inventory().revision))
+        assertEquals("checking",check.getString("observed"));assertFalse(check.getBoolean("checked"))
+        awaitState({JSONObject(URL(fixtureControl+"/state").readText())},{!it.getBoolean("pluginCheckEntered")})
+        val pending=a.inventory().instances.single();assertEquals("checking",pending.observed);assertFalse(pending.checked);assertTrue(pending.allowedActions.isEmpty());assertFalse(b.inventory().instances.single().checked)
+        val taskPath="/api/tasks/"+CentralScreens.encode(check.getString("taskId"));assertEquals("running",aConnection.get(taskPath).getString("state"));assertEquals(404,assertThrows(CentralFailure::class.java){bConnection.get(taskPath)}.status)
+        URL(fixtureControl+"/plugin-check/release").readText()
+        val checked=awaitState({aConnection.get(taskPath)},{it.getString("state") in setOf("waiting","running")});assertEquals(checked.toString(),"succeeded",checked.getString("state"))
+        assertTrue(a.inventory().instances.single().checked);assertFalse(b.inventory().instances.single().checked)
+        val posts=JSONObject(URL(fixtureControl+"/state").readText()).getJSONObject("pluginChecks");assertEquals(1,posts.getInt("a"));assertEquals(0,posts.getInt("b"))
         a.execute(PluginControlClient.ownedInstanceAction(instance.id,"enable",a.inventory().revision));assertTrue(a.inventory().instances.single().desired)
         a.execute(PluginControlClient.ownedInstanceAction(instance.id,"disable",a.inventory().revision));assertFalse(a.inventory().instances.single().desired)
         val memory=a.memory();a.execute(PluginControlClient.memoryControl("pause",memory.getLong("revision")));assertFalse(a.memory().getBoolean("desired"))
@@ -228,4 +231,39 @@ class MultiuserIngressTest {
             val original=ack.getJSONArray("captures").getJSONObject(0).getJSONObject("original");assertEquals(Ingress3Client.hash(bytes),original.getString("hash"));assertEquals(bytes.size.toLong(),original.getLong("bytes"))
         } finally {directory.deleteRecursively()}
     }
+    @Test fun `actual capture conflict settles good records and isolates only the rejected id under its owner`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=client(server,token)
+        val conflict=event(UUID.randomUUID().toString(),"Central immutable bytes").put("privacy",JSONObject().put("excluded",false))
+        api.captures(listOf(conflict))
+        val records=listOf(event(UUID.randomUUID().toString(),"Generated before conflict"),JSONObject(conflict.toString()).put("ocrText","Different local bytes"),event(UUID.randomUUID().toString(),"Generated after conflict"))
+        val directory=kotlin.io.path.createTempDirectory("android-parity-outbox-").toFile()
+        val cipher=object:ByteCipher {override fun seal(value:ByteArray)=value;override fun open(value:ByteArray)=value}
+        try {
+            val queue=DurableQueue(directory,cipher)
+            records.forEach {queue.enqueue(it.put("privacy",JSONObject().put("excluded",false)),null,1024*1024)}
+            val settled=mutableListOf<Pair<String,Int>>()
+            api.settleCaptures(queue.peekBatch()) {record,status->
+                val id=record.getString("id");settled.add(id to status)
+                when(status) {200->queue.acknowledge(id,0,0);409->queue.uploadConflict(id);410->queue.archiveMissing(id)}
+            }
+            assertEquals(records.map {it.getString("id")}.toSet(),settled.map {it.first}.toSet())
+            assertEquals(listOf(200,409,200),records.map {record->settled.single {it.first==record.getString("id")}.second})
+            assertEquals(0,DurableQueue(directory,cipher).peekBatch().size)
+            assertEquals(1,queue.syncIssues().size)
+            for(record in records) assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/captures/"+record.getString("id"),null).first)
+            assertEquals("Central immutable bytes",request(server,token,"GET","/api/captures/"+conflict.getString("id"),null).second!!.getString("ocrText"))
+        } finally {directory.deleteRecursively()}
+    }
+    @Test fun `actual narrow source registration preserves central pause and exposes typed outcome`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=client(server,token)
+        val source=LocalSource(id="generated-paused-source",name="Generated source",kind="local-files",uri="content://generated/source",retention="archive",syncContinuously=false)
+        api.register(source.registration("same-device"))
+        assertEquals(200,request(server,token,"PATCH","/api/sources/${source.id}",JSONObject().put("enabled",false)).first)
+        assertTrue(api.sourcePaused(source))
+        val paused=assertThrows(FileIngressRejection::class.java){api.register(source.registration("same-device"))}
+        assertEquals(409,paused.httpStatus);assertTrue(paused.paused)
+        assertFalse(request(server,token,"GET","/api/sources/${source.id}",null).second!!.getBoolean("enabled"))
+        assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/sources/${source.id}",null).first)
+    }
+
 }

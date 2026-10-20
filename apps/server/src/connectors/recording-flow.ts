@@ -12,8 +12,8 @@ export interface RecordingProvider {
  account(signal?:AbortSignal):Promise<RecordingAccount>;
  discover(account:RecordingAccount,range:{start:string;end:string;cursor?:string},signal:AbortSignal):Promise<{ids:string[];next?:string}>;
  metadata(account:RecordingAccount,id:string,signal:AbortSignal):Promise<RecordingMetadata>;
- transcript(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{rawText:string;transcript:Transcript|null;formatError?:'recording_transcript_format_unsupported'|'recording_timeline_invalid'}>;
- media(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{mimeType:string;bytes:Buffer}>;
+ transcript(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal,authorize?:()=>void):Promise<{rawText:string;transcript:Transcript|null;formatError?:'recording_transcript_format_unsupported'|'recording_timeline_invalid'}>;
+ media(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal,authorize?:()=>void):Promise<{mimeType:string;bytes:Buffer}>;
  close?():Promise<void>;
 }
 export const recordingPhases=['discover','metadata','transcript','media'] as const;
@@ -31,6 +31,7 @@ export interface RecordingFlowPorts {
  assertCurrent():void;
  signal:AbortSignal;
  seenCursor(job:RecordingJob,cursor:string):boolean;
+ beforeAcquire?(phase:RecordingPhase,id:string):void;
  archive:{
   transcript(value:RecordingExport,authorize:()=>void):Promise<unknown>;
   existingMedia(id:string):unknown|undefined;
@@ -101,14 +102,16 @@ export class RecordingFlow {
   const metadata=input.metadata as RecordingMetadata;
   if(!metadata||metadata.id!==id)throw new ExecutionFailure('permanent','recording_identity_invalid');
   if(phase==='transcript'){
-   const result=await this.provider.transcript(this.account,metadata,signal);await this.fence();
+   this.ports.beforeAcquire?.(phase,id);this.assert();
+   const result=await this.provider.transcript(this.account,metadata,signal,()=>{this.ports.beforeAcquire?.(phase,id);this.assert();});await this.fence();
    const empty=!result.transcript?.segments.length,state=result.formatError?'unsupported':empty?'empty':'ready';
    const archive=await this.ports.archive.transcript({...result,metadata,state,transcript:state==='ready'?result.transcript:null},()=>this.assert());this.assert();
    if(result.formatError)throw new ExecutionFailure('permanent',result.formatError);
    return {phase,id,empty,archive};
   }
+  this.ports.beforeAcquire?.(phase,id);this.assert();
   const existing=this.ports.archive.existingMedia(id);if(existing!==undefined)return {phase,id,archive:existing};
-  const value=await this.provider.media(this.account,metadata,signal);await this.fence();
+  const value=await this.provider.media(this.account,metadata,signal,()=>{this.ports.beforeAcquire?.(phase,id);this.assert();});await this.fence();
   const archive=await this.ports.archive.media(metadata,value,()=>this.assert());this.assert();return {phase,id,archive};
  }
  next(job:RecordingJob,result:RecordingOutcome):RecordingJob[]{

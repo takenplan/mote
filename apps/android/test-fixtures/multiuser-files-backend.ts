@@ -6,6 +6,7 @@ import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
 import type {FastifyRequest} from 'fastify';
 import {requestActor,type FixtureActor} from './request-actor.js';
+import {bytesHash} from '../../server/src/scope/originals.js';
 
 // The production M03/M04/M05/M06 host processes an actual generated WAV. Only
 // ASR transport is substituted; no real recording, model or account is accessed.
@@ -13,6 +14,8 @@ const literalSpeakerPrefix=process.argv.includes('--literal-speaker-prefix');
 const cleanup:Array<()=>unknown>=[];
 const retries:Array<{actor:string;body:unknown;status:number;taskId?:string}>=[];
 const deletes:Array<{actor:string;body:unknown;status:number}>=[];
+const catalogReads:Array<{actor:string;method:string;path:string}>=[];
+const parity:{metadataCaptureId?:string;historyCaptureId?:string}={};
 let dropRetryAck=false,dropDeleteAck=false,holdDelete=false,deleteEntered=false;
 let releaseDelete:(()=>void)|undefined;
 let actors:{a:{userId:string};b:{userId:string}};
@@ -23,6 +26,10 @@ const asrCalls:string[]=[];
 // already admitted the real M05 task before its successful reply is dropped.
 const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext,host=>{
 host.app.addHook('preHandler',async request=>{
+ const path=request.url.split('?')[0];
+ if(path==='/api/files'||path.startsWith('/api/files/')||path.startsWith('/api/ingress/originals/')){
+  const actor=await requestActor(request,host,actors);requestActors.set(request,actor);catalogReads.push({actor,method:request.method,path});
+ }
  if(!/^\/api\/files\/[^/]+(?:\/(?:retry|cancel))?$/.test(request.url.split('?')[0]))return;
  const actor=await requestActor(request,host,actors);requestActors.set(request,actor);
  if(holdDelete&&request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)&&actor==='a'){holdDelete=false;deleteEntered=true;await new Promise<void>(resolve=>{releaseDelete=resolve;});releaseDelete=undefined;}
@@ -59,8 +66,11 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/generated/hold-next-asr')holdNextAsr=true;
  else if(request.url==='/generated/drop-next-asr')dropNextAsr=true;
  else if(request.url==='/generated/release-asr')releaseAsr?.();
+ else if(request.url==='/generated/file-parity/setup-metadata')await setupMetadata();
+ else if(request.url==='/generated/file-parity/setup-history')await setupHistory();
+ else if(request.url==='/generated/file-parity/state'){}
  else if(request.url!=='/generated/file-retries'){response.statusCode=404;response.end();return;}
- response.setHeader('content-type','application/json');response.end(JSON.stringify({retries,deletes,dropRetryAck,dropDeleteAck,deleteEntered,asrHeld,asrCalls}));
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({retries,deletes,dropRetryAck,dropDeleteAck,deleteEntered,asrHeld,asrCalls,...parity,catalogReads}));
 })().catch(()=>response.destroy());});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated control address');
@@ -69,6 +79,26 @@ const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}con
 await new Promise<void>(resolve=>asr.listen(0,'127.0.0.1',resolve));
 const address=asr.address();if(!address||typeof address==='string')throw Error('Missing generated ASR address');
 const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);
+async function setupMetadata(){
+ if(parity.metadataCaptureId)return;
+ for(const [actor,label] of [[f.a,'A'],[f.b,'B']] as const){
+  await f.checked(actor.token,'/api/ingress/sources','POST',{id:'parity-metadata',name:'Generated '+label+' reference source',kind:'local-files',deviceId:'same-device',platform:'import',retention:'reference'});
+  const receipt=await f.checked(actor.token,'/api/ingress/sources/parity-metadata/items','POST',{batchId:'parity-metadata',items:[{externalId:'same-reference',revision:'r1',observedAt:'2026-10-17T00:00:00Z',title:'GENERATED_'+label+'_REFERENCE',text:'',kind:'file',layer:'reference',mimeType:'text/plain',document:{path:'parity/reference.txt'},metadata:{version:1,file:{sizeBytes:33}}}]});
+  if(label==='A')parity.metadataCaptureId=receipt.captures[0].id;
+ }
+}
+async function setupHistory(){
+ if(parity.historyCaptureId)return;
+ for(const [actor,label] of [[f.a,'A'],[f.b,'B']] as const){
+  const sourceId='parity-history';await f.checked(actor.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated '+label+' archive source',kind:'local-files',deviceId:'same-device',platform:'import',retention:'archive'});
+  const upload=await f.checked(actor.token,'/api/ingress/sources/'+sourceId+'/uploads','POST',{batchId:'parity-history-original',revision:{sourceId,previousRevision:null,relativePath:'parity/history.wav',sizeBytes:wave.length,sha256:bytesHash(wave),item:{externalId:'same-history',revision:'r1',observedAt:'2026-10-16T00:00:00Z',title:'GENERATED_'+label+'_HISTORICAL',text:'',kind:'file',layer:'original',mimeType:'audio/wav'}}});
+  await f.checked(actor.token,'/api/ingress/uploads/'+upload.id+'/parts/0','PUT',{bytes:wave.toString('base64'),checksum:bytesHash(wave)});
+  const receipt=(await f.checked(actor.token,'/api/ingress/uploads/'+upload.id+'/commit','POST',{})).captures[0];
+  const task=await f.checked(actor.token,'/api/processing','POST',{originalRef:receipt.original.ref,operationId:'parity-history-process'});await waitForScopedState(async()=>(await f.checked(actor.token,'/api/tasks/'+task.id)).state==='succeeded',()=>'Generated historical extraction did not complete');
+  const tombstone=await f.checked(actor.token,'/api/ingress/sources/'+sourceId+'/uploads','POST',{batchId:'parity-history-deleted',revision:{sourceId,previousRevision:'r1',relativePath:'parity/history.wav',sizeBytes:0,item:{externalId:'same-history',revision:'r2',observedAt:'2026-10-17T00:00:00Z',title:'GENERATED_'+label+'_HISTORICAL',text:'',kind:'file',layer:'original',mimeType:'audio/wav',deleted:true}}});await f.checked(actor.token,'/api/ingress/uploads/'+tombstone.id+'/commit','POST',{});
+  if(label==='A')parity.historyCaptureId=receipt.id;
+ }
+}
 const receipts=[];
 for(const [actor,label] of [[f.a,'A'],[f.b,'B']] as const){
  let view=await f.checked(actor.token,'/api/configuration');

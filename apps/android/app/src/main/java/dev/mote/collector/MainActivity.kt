@@ -1933,7 +1933,7 @@ class MainActivity : MoteActivity() {
             .setNegativeButton(if (firstStart) MoteI18n.text("暂不开始") else MoteI18n.text("关闭预览"), null)
         if (firstStart) builder.setPositiveButton(MoteI18n.text("按此范围开始")) { _, _ ->
             if (config != loadedConfig) { toast(MoteI18n.text("配置已变化，请重新预览后开始")); return@setPositiveButton }
-            runCatching { settings.capturePreviewAccepted() }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
+            runCatching { settings.capturePreviewAccepted(config) }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
         }
         builder.show()
     }

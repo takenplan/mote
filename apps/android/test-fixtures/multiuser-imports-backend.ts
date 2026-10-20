@@ -11,10 +11,12 @@ const cleanup:Array<()=>unknown>=[],commands:Array<{actor:string;path:string;req
 const agentReads:Array<{actor:string;cursor:string|null}>=[];
 const modelOperations:Array<{actor:string;path:string;reference?:{kind:string;id:string};status:number;ok?:boolean}>=[];
 let dropping=false;
+let holdModelSave=false,modelSaveEntered=false,releaseModelSave=()=>{},modelSaveGate=Promise.resolve();
 let actors:{a:{token:string};b:{token:string}};
 const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,host=>{
  host.app.addHook('onRequest',async request=>{if(request.url.startsWith('/api/agent-view/events'))agentReads.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',cursor:new URL(request.url,'http://fixture').searchParams.get('cursor')});});
  host.app.addHook('onSend',async(request,reply,payload)=>{
+  if(request.method==='PUT'&&request.url==='/api/configuration/models'&&holdModelSave&&request.headers.authorization==='Bearer '+actors.a.token){holdModelSave=false;modelSaveEntered=true;await modelSaveGate;}
   if(request.method==='POST'&&request.url.startsWith('/api/models/')){const input=request.body as {reference?:{kind:string;id:string}};modelOperations.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',path:request.url,reference:input.reference,status:reply.statusCode,...(request.url==='/api/models/probe'&&typeof payload==='string'?{ok:JSON.parse(payload).ok}:{})});}
   if(request.method==='POST'&&request.url==='/api/imports'&&reply.statusCode===202){
    const body=request.body as {requestId:string;archivedFileIds?:string[]};commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':request.headers.authorization==='Bearer '+actors.b.token?'b':'other',path:request.url,requestId:body.requestId,...(body.archivedFileIds?{fileId:body.archivedFileIds[0]}:{})});
@@ -26,14 +28,16 @@ const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} 
 });actors=f;
 const agent=process.argv.includes('--agent'),models=process.argv.includes('--models');
 let holdModel=false,modelEntered=false,releaseModel=()=>{},modelGate=Promise.resolve();
-const modelRequests:Array<{owner:string;method:string;hasPrivateArchive:boolean;hasPrivateHeader:boolean;temperature?:number;tools?:string[];toolResults?:string[]}>=[];
+let holdProbe=false,probeEntered=false,releaseProbe=()=>{},probeGate=Promise.resolve();
+const modelRequests:Array<{owner:string;method:string;hasPrivateArchive:boolean;hasPrivateHeader:boolean;temperature?:number;model?:string;tools?:string[];toolResults?:string[]}>=[];
 let holdAgent=false,agentEntered=false,releaseAgent=()=>{},agentGate=Promise.resolve();
 const calls=new Map<string,number>();
 const model=createServer((request,response)=>{void(async()=>{
  let raw='';for await(const part of request)raw+=String(part);const actor=String(request.headers['x-api-key']??request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
  if(models){
-  const body=raw?JSON.parse(raw):{};modelRequests.push({owner:actor,method:request.method!,hasPrivateArchive:raw.includes('GENERATED_AGENT_'),hasPrivateHeader:request.headers['x-generated-native']==='GENERATED_'+actor.toUpperCase()+'_HEADER',temperature:body.temperature});
+  const body=raw?JSON.parse(raw):{};modelRequests.push({owner:actor,method:request.method!,hasPrivateArchive:raw.includes('GENERATED_AGENT_'),hasPrivateHeader:request.headers['x-generated-native']==='GENERATED_'+actor.toUpperCase()+'_HEADER',temperature:body.temperature,model:body.model});
   if(request.method==='GET'){if(holdModel&&actor==='a'){holdModel=false;modelEntered=true;await modelGate;}response.setHeader('content-type','application/json');response.end(JSON.stringify({data:[{id:'generated-'+actor+'-'+(request.url!.includes('after_id')?'two':'one')}],...(!request.url!.includes('after_id')?{has_more:true,last_id:'generated-page'}:{})}));return;}
+  if(holdProbe&&actor==='a'){holdProbe=false;probeEntered=true;await probeGate;}
   const uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);modelRequests.at(-1)!.tools=uses.map((use:any)=>use.name);modelRequests.at(-1)!.toolResults=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_result').map((p:any)=>JSON.stringify(p.content).slice(0,500)):[]);const id='7a8f56d1-45de-47b7-90bb-5e84d411c3d6';
   if(!uses.some((u:any)=>u.name==='search_context'))return writeMessagesResponse(response,{stage,tool:{name:'search_context',args:{query:'generated synthetic test'}}});
   if(!uses.some((u:any)=>u.name==='evidence'))return writeMessagesResponse(response,{stage,tool:{name:'evidence',args:{ids:[id]}}});
@@ -59,7 +63,11 @@ const control=createServer((request,response)=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
  if(request.url==='/generated/drop-import-ack')dropping=true;
  else if(request.url==='/generated/release-import-ack')dropping=false;
- else if(request.url==='/generated/model-state'){response.setHeader('content-type','application/json');response.end(JSON.stringify({requests:modelRequests,operations:modelOperations,modelEntered}));return;}
+ else if(request.url==='/generated/model-state'){response.setHeader('content-type','application/json');response.end(JSON.stringify({requests:modelRequests,operations:modelOperations,modelEntered,probeEntered,modelSaveEntered}));return;}
+ else if(request.url==='/generated/hold-model-probe'){holdProbe=true;probeEntered=false;probeGate=new Promise<void>(resolve=>releaseProbe=resolve);}
+ else if(request.url==='/generated/release-model-probe')releaseProbe();
+ else if(request.url==='/generated/hold-model-save'){holdModelSave=true;modelSaveEntered=false;modelSaveGate=new Promise<void>(resolve=>releaseModelSave=resolve);}
+ else if(request.url==='/generated/release-model-save')releaseModelSave();
  else if(request.url==='/generated/hold-model-catalog'){holdModel=true;modelEntered=false;modelGate=new Promise<void>(resolve=>releaseModel=resolve);}
  else if(request.url==='/generated/release-model-catalog')releaseModel();
  else if(request.url==='/generated/hold-agent-response'){holdAgent=true;agentEntered=false;agentGate=new Promise<void>(resolve=>releaseAgent=resolve);}
@@ -69,5 +77,5 @@ const control=createServer((request,response)=>{
  response.setHeader('content-type','application/json');response.end(JSON.stringify({dropping,commands}));
 });await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated import control');
 const address=await f.host.app.listen({host:'127.0.0.1',port:0});process.stdout.write(JSON.stringify({address,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',pid:process.pid})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;releaseAgent();releaseModel();if(models)process.stderr.write(JSON.stringify({type:'generated-model-final',requests:modelRequests,operations:modelOperations,modelEntered})+'\n');control.closeAllConnections();for(const work of cleanup.reverse())await work();model.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>model.close(()=>resolve()))]);process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;releaseAgent();releaseModel();releaseProbe();releaseModelSave();if(models)process.stderr.write(JSON.stringify({type:'generated-model-final',requests:modelRequests,operations:modelOperations,modelEntered})+'\n');control.closeAllConnections();for(const work of cleanup.reverse())await work();model.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>model.close(()=>resolve()))]);process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

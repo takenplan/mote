@@ -67,7 +67,7 @@ async function download(page,label){
  await button(page,label);return Promise.race([result,delay(20000).then(()=>{throw Error('Download did not complete');})]);
 }
 async function models(){
- const host=await start('apps/android/test-fixtures/multiuser-imports-backend.ts',['--models']),page=await open(host);await login(page,host,'a');await route(page,'#/system/models');
+ const host=await start('apps/android/test-fixtures/multiuser-imports-backend.ts',['--models']),page=await open(host);await login(page,host,'a');await route(page,'#/system/models?category=providers');
  await until(()=>js(page,`Boolean(document.querySelector('.scoped-provider-workspace details'))`),'saved personal model');await js(page,`document.querySelector('.scoped-provider-workspace details').open=true`);
  await button(page,'刷新模型列表');await until(()=>js(page,`document.querySelector('[aria-label="可用模型"]')?.textContent.includes('generated-a-two')`),'all A catalog pages');
  await button(page,'测试连接');await until(()=>js(page,`document.querySelector('.scoped-model-tools [role="status"]')`),'saved model probe');
@@ -83,7 +83,7 @@ async function models(){
  assert.equal(yes.settings.apiKey,true);assert.equal(yes.settings.headers,true);assert.equal(yes.settings.extraBody,true);assert.equal(no.settings.apiKey,false);assert.equal(no.settings.headers,false);assert.equal(no.settings.extraBody,false);assert.equal(b.personal.length,1);
  await js(page,`document.querySelector('.scoped-provider-workspace details').open=true`);await control(host,'/generated/hold-model-catalog');await button(page,'刷新模型列表');await until(async()=>(await control(host,'/generated/model-state')).modelEntered,'held real A catalog');
  const switcher=await open(host);await ready(switcher);await login(switcher,host,'b');await until(()=>js(page,`Boolean(document.querySelector('[data-session="signed-out"]'))`),'A catalog UI retired');
- await reload(page);await route(page,'#/system/models');await until(()=>js(page,`Boolean(document.querySelector('.scoped-provider-workspace details'))`),'B personal model');await js(page,`document.querySelector('.scoped-provider-workspace details').open=true`);await button(page,'刷新模型列表');await until(()=>js(page,`document.querySelector('[aria-label="可用模型"]')?.textContent.includes('generated-b-two')`),'B catalog positive');
+ await reload(page);await route(page,'#/system/models?category=providers');await until(()=>js(page,`Boolean(document.querySelector('.scoped-provider-workspace details'))`),'B personal model');await js(page,`document.querySelector('.scoped-provider-workspace details').open=true`);await button(page,'刷新模型列表');await until(()=>js(page,`document.querySelector('[aria-label="可用模型"]')?.textContent.includes('generated-b-two')`),'B catalog positive');
  await control(host,'/generated/release-model-catalog');await delay(120);assert.doesNotMatch(await text(page),/generated-a-one|generated-a-two|Generated credential copy/);
  await screenshot(page,'models-b');receipts.push({group:'models',probeRequests:3,privateProbeInput:false,aProfiles:a.personal.length,bProfiles:b.personal.length,copies:{withCredentials:true,withoutCredentials:true},heldARetired:true});checks.push('original model catalog pagination/probe/copy flags and held A→B catalog');await close(host);
 }

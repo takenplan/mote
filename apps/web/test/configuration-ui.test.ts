@@ -132,9 +132,9 @@ test('saving one clean configuration editor reloads the shared revision in anoth
 
 test('image settings submit the shared revision and retain their original draft revision after an external update',async t=>{
   const {root,d}=await fixture(t),writes:any[]=[];let revision=7;
-  const settings={providerRevision:'1',enabled:true,ocrProcessorId:'image.http',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true};
+  const settings={concurrency:1,providerRevision:'1',enabled:true,ocrProcessorId:'image.http',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true};
   const api={request:async(path:string,init?:RequestInit)=>{
-    if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/media-models')return {ocr:{state:'missing'}};if(path==='/api/sources')return {items:[]};
+    if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/media-models')return {ocr:{state:'not_installed',bytes:0,totalBytes:0,source:'auto',version:'generated',runtimeReady:false}};if(path==='/api/sources')return {items:[]};
     if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('generated conflict',409,undefined,'config_conflict');}
     return {revision,settings,model:null,recent:[],jobs:[],backfills:[]};
   }} as Api;

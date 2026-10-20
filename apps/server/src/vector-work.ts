@@ -1,6 +1,6 @@
 import {fork} from 'node:child_process';
 import {createRequire} from 'node:module';
-export type VectorQuery={sql:string;values:(string|number)[]};
+export type VectorQuery={sql:string;values:(string|number)[];boundOwner?:string};
 export type VectorTask={path:string;queries:VectorQuery[];vector:number[];limit:number};
 export type VectorScan={candidates:{id:string;embeddingHash:string}[];coverage:{candidateLimit:null;scanned:number;invalid:number;bounded:false;selection:string}};
 let active=0;

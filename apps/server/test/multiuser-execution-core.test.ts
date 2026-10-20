@@ -145,3 +145,27 @@ test('a final commit cannot publish after revoking its own host grant inside the
  const task=engine.enqueue('task:self-revoked','generated',{}, {ownership:owner('a')});await engine.drain([task]);
  assert.equal(engine.get(task)!.state,'stale');assert.equal(db.prepare('SELECT count(*) n FROM generated_outputs').get()!.n,0);assert.equal(db.prepare('SELECT enabled FROM generated_authority').get()!.enabled,1);
 });
+
+test('host capacity units span pools and connections while owner/kind limits, physical resources and late cancellation remain fenced',async t=>{
+ const releases=new Map<string,()=>void>(),started:string[]=[],committed:string[]=[];t.after(()=>{for(const release of releases.values())release();});
+ const first=fixture(t),second=first.open();let limit=3;
+ const partition=(step:any)=>step.input.group?{key:step.ownership.userId+':'+step.input.group,unit:String(step.input.unit),concurrency:step.ownership.userId==='b'?1:limit}:undefined;
+ for(const current of [first,second])for(const pool of ['coordinator','physical'])current.engine.configurePool(pool,{lane:()=> 'background',concurrency:{background:()=>1,interactive:()=>1},partition});
+ for(const [current,kind] of [[first,'coordinator'],[second,'physical']] as const)current.engine.register({...base,kind,pool:kind,resourceKeys:step=>step.input.resource?['generated-physical-listener']:[],execute:async step=>{started.push(step.id);await new Promise<void>(resolve=>releases.set(step.id,resolve));return {};},commit:step=>{committed.push(step.id);}});
+ const add=(current:typeof first,kind:string,id:string,userId:string,group:string|undefined,unit=id,resource=false)=>current.engine.enqueue('operation:'+id,kind,{group,unit,resource},{id,ownership:owner(userId)});
+ for(let i=0;i<4;i++){add(first,'coordinator','a-parent-'+i,'a','ocr','a-unit-'+i);add(second,'physical','a-child-'+i,'a','ocr','a-unit-'+i);}
+ add(second,'physical','b-child','b','ocr');add(second,'physical','a-derived','a','derived');
+ const pumping=[first.engine.tick(),second.engine.tick()];await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(started.filter(id=>id.startsWith('a-parent-')),['a-parent-0','a-parent-1','a-parent-2']);assert.equal(started.filter(id=>id.startsWith('a-child-')).length,3,'exact parent/child units share capacity across actual connections');assert.ok(started.includes('b-child'));assert.ok(started.includes('a-derived'));
+ limit=1;first.engine.cancel('a-parent-0');second.engine.cancel('a-child-0');
+ await new Promise(resolve=>setTimeout(resolve,20));void second.engine.tick();assert.equal(started.includes('a-child-3'),false,'two occupied units remain above the lowered limit');
+ releases.get('a-parent-1')!();releases.get('a-child-1')!();await new Promise(resolve=>setTimeout(resolve,20));void second.engine.tick();assert.equal(started.includes('a-child-3'),false,'one occupied unit still fills the lowered limit');
+ releases.get('a-parent-2')!();releases.get('a-child-2')!();await new Promise(resolve=>setTimeout(resolve,20));void first.engine.tick();void second.engine.tick();await new Promise(resolve=>setTimeout(resolve,20));assert.ok(started.includes('a-child-3'));
+ releases.get('a-parent-0')!();releases.get('a-child-0')!();await new Promise(resolve=>setTimeout(resolve,20));assert.equal(committed.includes('a-child-0'),false,'late result cannot commit after cancellation');
+ for(const release of releases.values())release();await Promise.all(pumping);await new Promise(resolve=>setImmediate(resolve));for(const release of releases.values())release();
+ add(second,'physical','unpartitioned-one','a',undefined);add(second,'physical','unpartitioned-two','b',undefined);
+ add(second,'physical','resource-one','a','listener-one','r1',true);add(second,'physical','resource-two','b','listener-two','r2',true);
+ void second.engine.tick();await new Promise(resolve=>setImmediate(resolve));assert.equal(started.filter(id=>id.startsWith('unpartitioned-')).length,1,'ordinary pool capacity is unchanged');assert.equal(started.filter(id=>id.startsWith('resource-')).length,1,'capacity partitions cannot bypass the shared physical resource');
+ for(let i=0;i<4;i++){for(const release of releases.values())release();await new Promise(resolve=>setImmediate(resolve));}
+ assert.equal(started.filter(id=>id.startsWith('resource-')).length,2);
+});

@@ -23,7 +23,7 @@ export type LarkCommand =
   | {kind:'minutes-metadata';id:string}
   | {kind:'minutes-transcript';id:string;outputDir:string}
   | {kind:'minutes-media';id:string;output:string};
-export type LarkRunner=(command:LarkCommand,options?:{signal?:AbortSignal;onOutput?:(chunk:string)=>void})=>Promise<string>;
+export type LarkRunner=(command:LarkCommand,options?:{signal?:AbortSignal;onOutput?:(chunk:string)=>void;assertCurrent?:()=>void})=>Promise<string>;
 
 /** Only fixed operations are executable. Neither the browser nor an agent supplies argv. */
 export function larkArguments(command:LarkCommand):string[]{
@@ -72,6 +72,7 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
     const timeout=['setup','complete'].includes(command.kind)?610000:installing||command.kind==='minutes-media'?300000:60000;
     return new Promise<string>((ok,fail)=>{
       let stdout='',stderr='',size=0,settled=false,terminal:ConnectorError|undefined;
+      options.assertCurrent?.();options.signal?.throwIfAborted();
       const child=spawn(executable,args,{cwd:root,env,shell:false,stdio:['pipe','pipe','pipe'],detached:process.platform!=='win32',windowsHide:true});
       const stop=()=>{try{if(process.platform!=='win32'&&child.pid)process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{}};
       const finish=(error?:ConnectorError)=>{if(settled)return;settled=true;clearTimeout(timer);options.signal?.removeEventListener('abort',abort);error?fail(error):ok(stdout);};

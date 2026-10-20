@@ -307,7 +307,7 @@ it('shows an actual central OCR failure instead of the immutable received pendin
  expect((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode).toBe(404);
 },20000);
 
-it.each(['desktop','named'] as const)('shows actual M06 OCR from a %s source in the Desktop archive list and detail while same-ID B retains its own raw status',async naming=>{
+it.each(['desktop','named'] as const)('shows automatic M06 OCR from a %s source while same-ID B retains its own central and immutable intake states',async naming=>{
  const provider=createServer(async(req,res)=>{for await(const _part of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_A_DESKTOP_CENTRAL_OCR'}],coverage:'full',engine:'generated-http-fixture'}));});
  await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));cleanup.push(async()=>{provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));});
  const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);const deviceId=(await app.call('mote:get-status')).config.deviceId;
@@ -319,18 +319,22 @@ it.each(['desktop','named'] as const)('shows actual M06 OCR from a %s source in 
   const source=await f.request(owner.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated named screenshot source',kind:'local-files',deviceId,platform:'macos',retention:'archive'});expect(source.statusCode,source.body).toBe(200);
   const received=await f.request(owner.token,'/api/ingress/sources/'+sourceId+'/captures','POST',{batchId:randomUUID(),items:[{...record,imageBase64:png.toString('base64')}]});expect(received.statusCode,received.body).toBe(200);
  }
- const input={source:'screen',location:'central',day:'2026-09-13'};expect((await app.call('mote:captures-browse',[input])).items[0].ocr.status).toBe('disabled');expect((await app.call('mote:captures-detail',['central',record.id])).ocr.status).toBe('disabled');expect(await app.call('mote:captures-image',['central',record.id,false])).toMatch(/^data:image\//);
- const original=(await f.request(f.a.token,'/api/ingress/sources/'+sourceId+'/originals')).json().items[0],started=await f.request(f.a.token,'/api/processing','POST',{originalRef:original.ref,operationId:'generated-desktop-list-ocr'});expect(started.statusCode,started.body).toBe(200);
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/tasks/'+started.json().id)).json().state).toBe('succeeded'),{timeout:15000});expect((await f.request(f.a.token,'/api/captures/'+record.id)).json().ocrText).toBe('');expect((await f.request(f.a.token,'/api/capture-browser/'+record.id)).json().ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ // File automatic processing and the collector's immutable OCR flag do not
+ // disable independent central image processing. Keep both owners' defaults.
+ for(const owner of [f.a,f.b]){expect((await f.request(owner.token,'/api/perception')).json().settings.enabled).toBe(true);expect((await f.request(owner.token,'/api/captures/'+record.id)).json()).toMatchObject({ocrText:'',ocr:{status:'disabled'}});}
+ const input={source:'screen',location:'central',day:'2026-09-13'};expect(await app.call('mote:captures-image',['central',record.id,false])).toMatch(/^data:image\//);
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/capture-browser/'+record.id)).json().ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR'),{timeout:15000});expect((await f.request(f.a.token,'/api/captures/'+record.id)).json().ocrText).toBe('');
  const page=await app.call('mote:captures-browse',[input]);expect(page.items[0]).toMatchObject({id:record.id,ocr:{status:'completed'},textPreview:'GENERATED_A_DESKTOP_CENTRAL_OCR'});expect((await app.call('mote:captures-detail',['central',record.id])).ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
- await app.call('mote:ask',['login',{token:f.b.token}]);const b=await app.call('mote:captures-browse',[input]);expect(b.items[0].ocr.status).toBe('disabled');expect(JSON.stringify(b)).not.toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ expect((await f.request(f.b.token,'/api/images/'+record.id)).json().products).toEqual([]);expect((await f.request(f.b.token,'/api/capture-browser/'+record.id)).json().ocrText).toBe('');
+ // B's admitted work can still be pending or already retired at this read;
+ // neither transition can supply A's successful receipt or alter B's intake.
+ await app.call('mote:ask',['login',{token:f.b.token}]);const b=await app.call('mote:captures-browse',[input]),detail=await app.call('mote:captures-detail',['central',record.id]);expect(b.items[0].ocr.status).not.toBe('completed');expect(detail.ocr.status).not.toBe('completed');expect(detail.ocrText).toBe('');expect(JSON.stringify(b)).not.toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');expect((await f.request(f.b.token,'/api/captures/'+record.id)).json()).toMatchObject({ocrText:'',ocr:{status:'disabled'}});
 },30000);
 
 it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{
- const f=await fixture(),receipt=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(receipt.statusCode,receipt.body).toBe(200);const id=receipt.json().id,workId='export:'+id;
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+id)).json().state).toBe('completed'),{timeout:10000});
+ const f=await fixture(),content=await f.request(f.a.token,'/api/export');expect(content.statusCode,content.body).toBe(200);const id=String(content.headers['x-mote-operation-id']),workId='export:'+id;
  let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
- const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[{id,href:'#/system/storage?export='+id}]});
+ const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[]});
  let finish:(()=>Promise<void>)|undefined;app.intercept=async(raw)=>{const url=new URL(raw.url);if(url.pathname==='/api/work-activity'){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);const child=app.child;finish=async()=>{child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')});};return true;}return false;};
  const late=app.documentCall('A','workActivity',[{state:'completed'}]).then(()=>({error:''}),error=>({error:String(error)}));await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
  await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;await finish!();expect((await late).error).toContain('changed');
@@ -339,16 +343,14 @@ it('consumes real portable Activity through emitted main/preload, rejects A late
  const returned=await f.login('generated-a');await app.call('mote:ask',['login',{token:returned.token}]);await app.document('A-returned');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
  await app.documentCall('A-returned','openWorkActivity',[workId]);expect(opened).toBeTypeOf('string');const query=new URLSearchParams(new URL(opened!).hash.split('?')[1]);expect(query.get('work')).toBe(workId);expect(opened).not.toContain(f.a.token);expect(opened).not.toContain(f.b.token);
  const exchanged=await f.node.app.inject({url:'/api/login/exchange',method:'POST',headers:{'content-type':'application/json','x-mote-protocol-version':'2'},payload:{code:query.get('loginTicket')}});expect(exchanged.statusCode,exchanged.body).toBe(200);expect(exchanged.json().userId).toBe(f.a.userId);
- const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts[0].id).toBe(id);
- expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
+ const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts).toEqual([]);
+
 },30000);
 
 it('consumes committed same-account import through actual main/preload and keeps its browser work handoff bound to A',async()=>{
  const f=await fixture(),sourceId='generated-desktop-import',source={id:sourceId,name:'Generated import',kind:'local-files',deviceId:'generated-import-device',platform:'import',retention:'archive'};
  expect((await f.request(f.a.token,'/api/ingress/sources','POST',source)).statusCode).toBe(200);
- const exported=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(exported.statusCode,exported.body).toBe(200);const exportId=exported.json().id;
- await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+exportId)).json().state).toBe('completed'),{timeout:10000});
- const archive=await f.request(f.a.token,'/api/portable/exports/'+exportId+'/content');expect(archive.statusCode,archive.body).toBe(200);expect((await f.request(f.a.token,'/api/sources/'+sourceId,'DELETE')).statusCode).toBe(200);
+ const archive=await f.request(f.a.token,'/api/export');expect(archive.statusCode,archive.body).toBe(200);expect((await f.request(f.a.token,'/api/sources/'+sourceId,'DELETE')).statusCode).toBe(200);
  const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('import-A');
  const imported=await f.request(f.a.token,'/api/portable/imports','POST',{operationId:randomUUID(),archive:archive.json()});expect(imported.statusCode,imported.body).toBe(200);const id=imported.json().id,workId='import:'+id;
  await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/imports/'+id)).json().state).toBe('completed'),{timeout:10000});
@@ -393,4 +395,15 @@ it('preserves the declared context reader through actual main/preload handoff fo
  const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('context-A');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
  await app.documentCall('context-A','openCentral',['ask','context:'+ref]);expect(new URLSearchParams(new URL(opened!).hash.split('?')[1]).get('evidence')).toBe('context:'+ref);
  const {readEvidenceRoute}=await nativeImport(pathToFileURL(resolve(repository,'apps/web/src/evidence-route.ts')).href);expect(readEvidenceRoute(new URL(opened!).hash)).toBe('context:'+ref);
+},20000);
+
+it('keeps scoped content/record pages and held detail responses out of a replacement account through actual main/preload',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('browse-A');const config=(await app.call('mote:get-status')).config;
+ const record={...event(),deviceId:config.deviceId,capturedAt:'2026-09-13T12:00:00Z',ocrText:'Generated A scoped browse body'};await uploadCapture({...f.config(f.a),deviceId:config.deviceId},record,image);await uploadCapture({...f.config(f.b),deviceId:config.deviceId},{...record,ocrText:'Generated B scoped browse body'},image);
+ expect((await app.documentCall('browse-A','centralContent')).items[0].preview).toBe(record.ocrText);expect((await app.documentCall('browse-A','centralContentDetail',[record.id])).text).toContain(record.ocrText);
+ const held:(()=>void)[]=[];app.intercept=async raw=>{const url=new URL(raw.url);if(url.pathname==='/api/capture-browser'||url.pathname==='/api/captures/'+record.id){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);held.push(()=>app.child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')}));return true;}return false;};
+ const page=app.documentCall('browse-A','centralContent').then(()=>'',error=>String(error)),detail=app.documentCall('browse-A','centralContentDetail',[record.id]).then(()=>'',error=>String(error));await vi.waitFor(()=>expect(held).toHaveLength(2));
+ await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;for(const release of held)release();expect(await page).toContain('changed');expect(await detail).not.toBe('');await app.document('browse-B');
+ const b=await app.documentCall('browse-B','centralContent');expect(b.items[0].preview).toBe('Generated B scoped browse body');expect(JSON.stringify(b)).not.toContain(record.ocrText);await expect(app.documentCall('browse-A','centralContent')).rejects.toThrow();
+ const active=(await app.call('mote:get-status')).config;expect((await f.request(f.b.token,'/api/connections/'+f.b.credentialId,'DELETE')).statusCode).toBe(200);expect(await app.documentCall('browse-B','centralContent')).toEqual({items:[],total:0,authorizationDenied:true});expect(active.account.userId).toBe(f.b.userId);
 },20000);

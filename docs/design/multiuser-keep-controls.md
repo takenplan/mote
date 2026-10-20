@@ -72,9 +72,11 @@ It retains owner-qualified keys and checks live source/head, excluded/deleted
 captures, attachment lineage, material visibility/dependency sources and enabled
 accounts at publication. It stages no private content across an await.
 
-The current scoped producer is M02's lexical index (`mode:text`). An old global
-embedding configuration is not a scoped vector producer; this increment does
-not mount the legacy Store/Indexer or advertise hybrid/vector retry as restored.
+The scoped lexical index remains M02's `mode:text` producer. Ask additionally
+uses an optional account-selected embedding model for new query-visible intake
+and Material publications, through M05 and owner-bound model snapshots. It does
+not mount the legacy global index or backfill historical content on startup.
+See [Ask retrieval](multiuser-ask.md#retrieval-and-directory-parity).
 No provider call or external-result acknowledgement is part of this deterministic
 maintenance operation. Cancelled or revoked work cannot publish; restart can
 resume accepted current work and repeated operations cannot duplicate it.

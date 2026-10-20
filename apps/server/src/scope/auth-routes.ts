@@ -6,6 +6,7 @@ import {registerAuthenticatedRoute,SESSION_COOKIE,cookieCredential,rejectIdentit
 import {connectionServerUrl} from '@mote/shared';
 import type {PrivateData} from './private-data.js';
 import type {ScopedMcp} from './mcp.js';
+import type {UserContext} from './context.js';
 
 const id=(request:FastifyRequest)=>(request.params as {id:string}).id;
 const serverUrl=z.string().transform((value,ctx)=>{try{return connectionServerUrl(value);}catch{ctx.addIssue({code:'custom',message:'Invalid server URL'});return z.NEVER;}});
@@ -14,7 +15,7 @@ function sessionCookie(reply:FastifyReply,token:string,durationMs:number){reply.
 const clearCookie=(reply:FastifyReply)=>reply.header('Set-Cookie',`${SESSION_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`);
 /** Same-origin JSON protects login/exchange against login-CSRF. Mutations using
  * a cookie also require the per-session secret in the common resolver. */
-export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts},publicUrl?:string|null){
+export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts},publicUrl?:string|null,onPasswordLogin?:(context:UserContext)=>void){
   const {app,authority,accounts}=runtime;
   app.addHook('onRequest',async(req,reply)=>{
     reply.header('Cache-Control','no-store');reply.header('Pragma','no-cache');
@@ -33,6 +34,7 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
     rejectIdentitySelectors(req);
     const input=z.object({username:usernameSchema,password:z.string().max(1024),mode:z.enum(['web','client']).default('web'),durationMs:durationSchema.default(0)}).strict().parse(req.body);
     const grant=await accounts.login(input.username,input.password,req.ip,input.mode,input.durationMs);
+    onPasswordLogin?.(await authority.authenticate(grant.token));
     if(input.mode==='web'){sessionCookie(reply,grant.token,input.durationMs);const {token:_,...result}=grant;return result;}return grant;
   });
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/auth/self',discoverSession:true,handle:(c,req)=>({...accounts.self(c,authority),expiresAt:accounts.credentialInfo(c,authority).expiresAt,...(cookieCredential(req)?{csrfToken:digest('csrf:'+cookieCredential(req))}:{})})});

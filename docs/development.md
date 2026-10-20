@@ -2,6 +2,16 @@
 
 开发默认使用 dev 中央 47842，测试使用 test 中央 47852；正式部署 prod 使用 47832。不要用正式中央的配置、令牌、数据库、App profile 或实际屏幕做自动化测试。所有验证素材应由程序生成。
 
+## Technical plan review
+
+任何下一批非 trivial 的业务、架构、授权或生命周期、验收器实现，先由原 owner 提交有界技术方案，再由独立 reviewer 明确 `APPROVE`，之后才实现。小修使用简短 delta 方案即可；不把方案审查变成新增产品审批或重复的完整代码审查。纯文档修订按本文的文档检查规则处理。
+
+方案至少包括：准确 base/head 与计划文本身份；旧行为和预期的完整用户入口、输入、准备、处理、产物、消费、时序及失败恢复；`KEEP / CHANGE / REMOVE / EXCEPTION / UNKNOWN`；哪些差异是必要账号/数据/资源/权限隔离、哪些有明确人类例外依据；最小源码与共享文件唯一 owner；消费者、状态转换、正常入口的验证设计；风险、未知项与有界资源。单用户和多用户应使用相同领域流程，不能为隔离缩减配方、输入、独审或产物。
+
+回执记录 reviewer、按难度选择的 Sol Medium/High、准确方案/基线/范围、结论和未决项。不得默认使用 Max/Ultra。实现后的源码审查或测试通过不能追认为开工前方案批准。已有独立方案只在准确范围和假设不变时复用；新范围、假设或产品政策先补 delta，产品政策仍由人类决定，已授权工程方案不重复向人类请示。
+
+原 owner 是唯一实现者，共享文件先指定归属；跨模块仍由一个 driver 派发真实资源和完整检查。已在运行的工作正常收尾，不为补流程重复实现、重审不变库存、重跑已准确验证的输入或增加常驻 reviewer。当前恢复工作的准确目标、必要隔离/例外和剩余差异见[越界恢复闭合表与技术方案](design/multiuser-parity-boundary-restoration-plan.md)。源码、生成 fixture、真实 UI/模型/设备证据分别登记；“已恢复”须确认改动确在所称目标分支，并验证原真实入口 A→B→C 与账号隔离对照，诊断简化不能代替它。
+
 ## 首次准备
 
 ```sh
@@ -145,6 +155,7 @@ npm run check:affected -- --base origin/main --head HEAD --dry-run
 | `docs/design/scope-inventory.json` | scope 契约及检查基础设施回归，不构建应用 | 该文件是检查器的可执行输入，不按纯文档跳过 |
 | 仅 Web | Web 类型/测试及共享契约测试；构建 shared、Agent 等实际前置 | Web 集成 fixture 仍使用真实 Server 代码；对应浏览器交互另验，不自动运行整个 Server 套件 |
 | Server | Server 及 Web 消费者检查、共享契约与中央运行器回归 | 对应 API、导入/查询/Memory 等流程；客户端契约变化补跨端旅程 |
+| 仅 `scripts/backup.ts`、`scripts/scoped-backup-schema.mjs`、`scripts/scoped-backup.mjs` | 完整 Server / Web 消费者检查、共享契约、中央运行器、profile/日志保留及根级 security/update 回归；`backup.ts` 额外保留脚本 TypeScript 检查及 diagnostics 声明构建前置 | 这些是实例备份入口与 helper；混合 Desktop、Android、shared 或未知路径继续合并各自义务；移动/改名同时检查旧新路径 |
 | Agent / 中央插件 | Agent 的实际消费者，或中央工作区检查 | 对应委派、恢复、插件生命周期及上下文授权 |
 | macOS / diagnostics | Desktop 及实际依赖检查、共享契约；diagnostics 变化覆盖 Desktop 消费者 | Desktop 构建、受影响 UI；原生助手/依赖/打包变更在 macOS 编译；权限与系统生命周期单独验收 |
 | Android | `check:i18n`、发布工具回归、Gradle debug 单测（包含测试依赖的代码编译） | 对应 variant 构建、lint、instrumentation；后台与权限变化单独真机验收 |
@@ -153,7 +164,7 @@ npm run check:affected -- --base origin/main --head HEAD --dry-run
 | 检查选择器、计划、驱动、环境预检及本地检查入口 | 对应检查基础设施回归，包含 CLI 的隔离 Git fixture | 无需应用构建 |
 | 通用发布工具、公共 workflow、根配置/lockfile、未知构建输入 | 保守检查全部消费者 | 相关部署、容器、依赖安装或发布链路 |
 
-所有范围由同一驱动执行，先运行所选环境、翻译、scope 契约和纯发布工具预检，再构建、检查类型、执行工作区测试及其余运行时回归，最后执行所需 Android 单测。环境预检核对 Node、依赖是否安装、Server/Mem0 实际解析的原生 SQLite 能否运行、macOS 隐藏窗口测试所需 Electron 可执行文件，以及 Android 所需 Java/SDK；缺失时直接失败，不自动安装或修复。构建前置与测试消费者分别选择，同一计划中的任务只执行一次；已由构建执行的同份 TypeScript 检查、Agent 隐式构建及共享测试不再重复运行。Server 的 dev-server/profile 运行时回归只随 Server、Central 或全量计划执行，不加入无关 Desktop/Android 计划。
+所有范围由同一驱动执行，先运行所选环境、翻译、scope 契约和纯发布工具预检，再构建、检查类型、执行工作区测试及其余运行时回归，最后执行所需 Android 单测。环境预检核对 Node、依赖是否安装、Server/Mem0 实际解析的原生 SQLite 能否运行、macOS 隐藏窗口测试所需 Electron 可执行文件，以及 Android 所需 Java/SDK；缺失时直接失败，不自动安装或修复。构建前置与测试消费者分别选择，同一计划中的任务只执行一次；已由构建执行的同份 TypeScript 检查、Agent 隐式构建及共享测试不再重复运行。Server 的 dev-server/profile 运行时回归只随 Server、Central 或全量计划执行，不加入无关 Desktop/Android 计划。实例备份 helper 的根级回归通过真实 CLI 和 profile 恢复入口验证安全边界，并保留更新/回滚测试；全量计划同样包含这两份完整测试入口。
 
 `check:local` 固定选择全部 TypeScript 工作区和根回归；`check:central`、`check:desktop` 固定选择各自工作区，均使用同一驱动。`check:local` 不包含 Android 测试、Desktop 原生编译、浏览器 E2E、真机或真实模型验收。`check:affected` 在共享协议、根配置、lockfile 或未知输入影响三端时仍选择全部 TypeScript 与 Android 单测。新增文案需检查翻译和 Android catalog 同步；shared 和共享翻译目录仍保守选择全部消费者。
 

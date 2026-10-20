@@ -1,5 +1,11 @@
 # M16 lifecycle and archive boundaries
 
+The current LIFE-L01–L06 parity decisions are recorded in
+[Lifecycle parity ADR](../adr-lifecycle-parity.md). The sections below retain
+prior M16 checkpoints; the L06 and portable-delivery sections describe the
+current implementation. Final validation is recorded separately in
+[the parity validation ledger](../validation/parity-lifecycle.md).
+
 This work starts at the clean M14 composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 All runtime validation uses generated accounts and disposable directories. The
 M12 handoff was unauthorized at the initial checkpoint; its later authorized
@@ -48,9 +54,13 @@ Unknown external Memory providers without a native snapshot protocol fail closed
 --deployment-id EXPECTED_ID` verifies before staging and publishes by rename.
 The deployment and user identities, canonical history, configuration and external
 journals survive. Old credentials, task grants, model epochs and plugin snapshots
-are retired. Memory/processing automation, plugin instances, connector sync,
-outbound MCP and Ask automation stay paused until explicitly reauthorized. A
-succeeded or unknown external effect is not replayed. The returned instance YAML
+are retired. Saved processing/Memory automatic settings, Memory desired state, Actions
+enabled settings and outbound MCP enabled settings survive. New authenticated
+input follows the existing domain admission paths. Stopped restore records plugin, connector, Ask and Actions future policy intent
+separately from revoked authority. A later trusted password login admits one
+current account/restoration coordinator, which creates fresh future authority
+through the original domain ports. A succeeded or
+unknown external effect is not replayed. The returned instance YAML
 rebases local storage/log paths; no runtime is started by restoration.
 
 The existing native profile restore keeps its operator-selected profile
@@ -68,6 +78,83 @@ Protocol tests alone do not establish those actual runtime results.
 Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
 started or downloaded automatically. This checkpoint does not declare that native
 path or the whole module accepted.
+
+## L06 policy intent and continuing authorization
+
+The owner confirmed that trusted password relogin after a whole-instance restore
+should resume future automatic processing, synchronization and discovery without
+another per-domain confirmation. The [parity ADR](../adr-lifecycle-parity.md)
+supersedes the earlier pending decision and blanket coordinator retirement.
+
+| Disposition | Recovery behavior |
+| --- | --- |
+| KEEP | Policy settings, account identities, canonical data, completed results, successful cursors, cancellation and unknown external journals; retire all old credentials, grants, plugin snapshots and leases. |
+| CHANGE | Record future intent per account and restoration identity. A successful password login admits an idempotent current-epoch M05 coordinator; normal logout and restart preserve this newly authorized work. |
+| REMOVE | Blanket false/paused settings and the additional per-domain reauthorization step after trusted password relogin. |
+| EXCEPTION | Explicit paused/stopped/disabled state and newer user choices win. Missing sources, changed plugin definitions or failed current capability checks require attention through existing domain controls. |
+| UNKNOWN | Live-provider behavior and physical-device continuation remain separate validation. |
+
+The coordinator can invoke only fixed domain restoration ports while its exact
+restoration identity, account epoch, task ID and running grant remain valid.
+Plugins are configured without enabled authority, checked through the current
+package, then enabled using the latest configuration revision. A copied verified
+hash or old plugin snapshot cannot substitute for that check. Connector timers
+use current auto-sync selection and preserved provider cursors. Actions and Ask
+receive fresh task identities and advance past the backup input frontier; old
+pending windows, OAuth flows and unknown external requests are never requeued.
+Successful canonical cursors and last-success times survive.
+
+`lifecycle_future_scopes` records per-restoration scope outcomes and any current
+verification task identity. Only trusted restoration checks proceed independently
+under the existing instance Agent concurrency scalar and background ceiling of 32;
+this is a separate restoration budget, not aggregate Agent capacity. Configuration writes use
+current revisions in a serialized queue. A successful connector plugin can admit
+its own future timer while another verifier is still held. Failed scopes remain
+visible through bounded task progress, and a later trusted password login
+retries the failed fresh scope without repeating completed scopes. Stopped
+restore clears these operational outcomes before recording a new restoration
+identity. The exact Extensions asynchronous-check composition remains a separate
+integration check.
+
+The restoration check task and exact scope receipt are admitted in one SQLite
+transaction. The host derives purpose from the current owner/epoch,
+restoration/coordinator identity and grants, check task/nonce,
+plugin generation/signature and saved configuration/grant intent. HTTP JSON
+cannot supply purpose. Missing or changed associations confer no special
+capacity, and a withdrawal between selection and entry cannot change budgets.
+
+Ordinary/manual checks retain the original serial `plugin-control` base of one,
+as do actual peers in that pool such as installation. Scoped Memory publication
+uses its existing independent pool and is not coupled to these controls.
+A physical probe retains its original budget until both its callback and cleanup
+settle, even if its durable task is cancelled, its worker closes, its receipt is
+removed by stop or its account epoch changes. The same owner/instance stays
+exclusive across purposes. A live reduction is nonpreemptive; a configured
+value of one admits at most one restoration probe. No new setting, minimum,
+approval or user step is introduced.
+
+A cancelled ordinary probe with unsettled physical work holds the original
+shared base against its actual peers. Releasing a whole probe explicitly wakes
+the original executor. The optional host gate leaves denied work queued with
+no attempt/fairness change and leaves unbound pools unchanged. These accounting
+rules do not renew revoked grants or permit late publication. Cleanup failures
+and unknown external results retain their original reconciliation/no-replay
+contract. The owner selected this restoration-only behavior (B); the earlier
+all-check expansion (A) is superseded. Source and generated regression proposals
+alone do not establish runtime verification.
+
+Processing and Memory retain their automatic/desired settings and admit new
+input through their ordinary generation-fenced intake. Outbound MCP retains
+its enabled policy but needs a current explicit discover/import request for a
+new session. Actions review devices and native target registrations remain
+retired. Pairing/exchange and an arbitrary task context cannot admit recovery
+continuation; only the real password login entry can do so.
+
+The generated policy-intent and future-authority tests use two accounts, real
+HTTP configuration, stopped backup/restore and restart. The latter uses a local
+generated model adapter and real watch/timer clocks for future discovery/sync.
+Their evidence is separate from native provider, Docker, device and live-model
+checks; see the validation ledger for actually executed results.
 
 ## Instance management boundary
 
@@ -87,9 +174,40 @@ queue/index/device statistics are not fabricated as zeroes. Their private scoped
 contracts remain separate gaps. Ordinary feature inventory hides these management
 routes; management grants never become a `forUser(otherOwner)` capability.
 
-Original GC stays at M03 `POST /api/ingress/gc {}` for the caller's own domain.
-An administrator cannot supply another user or invoke a global private GC fallback.
-Retention, references, physical holds and snapshot expiry remain M03 responsibilities.
+Original GC remains available at M03 `POST /api/ingress/gc {}` for the caller's
+own domain. Production startup and an hourly host timer invoke the same collector
+for each database-owned account independently of its login sessions. The host
+binds and revalidates the exact owner and account epoch; this is no administrator
+impersonation route. Shutdown stops the timer before domain teardown.
+
+The instance's existing `storage.retentionDays` again removes expired ordinary
+captures at startup and hourly. Zero retains them indefinitely. The strict cutoff
+uses the final state-series observation, otherwise the original source content
+time, matching the former `context_end`; receipt time and event duration do not
+extend it. Canonical `ig_file_revisions` records identify the actual file-manifest
+and retained file-processing paths excluded by the former `file_versions` policy.
+A generic source item's `kind: file` alone grants no exclusion. File identity
+survives expired transport sessions and personal export/import.
+
+Retention reuses the explicit capture-deletion transaction, withdrawing dependent
+Materials, readable Memory evidence, saved answers and traces. Its owner-bound
+capture-deletion journal prevents an old or newly named transport batch from
+restoring the same event ID. A newly authorized event ID and another account's
+equal ID remain independent. File forgetting keeps its existing blocked decision,
+generation and explicit allow-again contract; its host removal does not add an
+ordinary capture-retry tombstone. Source removal retains its existing separate
+incarnation boundary.
+
+The collector removes expired or revoked upload staging, expired workspaces,
+unreferenced originals and expired snapshot inputs under the existing reference
+and pin rules. Generic import staging uses the same cleanup as its original
+import entry, including removal of completed files with no capture or import-job
+links. A live physical pin protects bytes. Any unresolved ingress or processing
+activity blocks physical reclamation for that owner, including after the pin's
+deadline and across restart; elapsed time alone does not establish that a worker
+or external action stopped. Other owners can
+still be maintained. Generated validation is recorded in
+[the maintenance journeys](../validation/parity-lifecycle-maintenance.md).
 
 ## Personal portable 3 import
 
@@ -163,8 +281,9 @@ The original multi-user recommendation is linked there as thread
 `<internal-task>`; this ledger does not invent separate
 approvals for its individual implementation details. The parent additionally
 confirmed original-deployment/original-account personal import and delegated
-ordinary technical decisions. There is currently no M16 question or approval
-waiting on the user. The historical M12 handoff denial was honored; the parent has since explicitly
+ordinary technical decisions. The earlier M16 checkpoint had no pending owner
+decision; the later L06 continuing-authorization decision is recorded in the parity ADR.
+The historical M12 handoff denial was honored; the parent has since explicitly
 confirmed that handoff succeeded. M12 final lifecycle/backup composition remains
 a separate gate.
 
@@ -173,9 +292,9 @@ a separate gate.
 | A disabled account must still be erasable without private impersonation. | Purpose-bound durable lifecycle grants, revoke ordinary access before erasure; retain unknown outcomes. [Multi-user scope: host contracts](../adr-multiuser-scope.md#m00-executable-boundary), [domain lifecycle contract](multiuser-modules.md#domain-lifecycle-contract), [recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract). | Reuses the shared SQLite, domain adapters and single executor; admin status never grants another account's private service. Physical completion includes credential metadata and the final current domain set. | Actual HTTP deletion, delayed unknown cleanup, A/B SQL/hash checks, reset-password and registry-race RED→GREEN; no real account was deleted. |
 | Personal import must preserve the previous merge/dedup journey without accidentally becoming historical execution recovery. | Same original deployment/account, complete declared coverage, five canonical domain merges in one synchronous SQLite transaction; explicitly preserve current settings and execution authorization. [Storage and recovery / Supersession](../adr-multiuser-scope.md#supersession), [MVP baseline](../adr-mvp-baseline.md), [M16 matrix](multiuser-modules.md#模块改造与验收矩阵), [transaction and external results](multiuser-public-contracts.md#同步事务外部结果与恢复). Identity policy is explicitly approved by the parent. | Keeps one private library, immutable data and current merge/dedup; adds no per-user PITR, cross-account mapping, old credential or model-call replay. New registered domains declare merge/preserve rather than extending a central business switch. | Actual source-host personal import 14/14 and combined backup/import 37/37; restoreUser adjacent 11/11; final current compiled/required checks remain separate. |
 | A personal merge can otherwise create fresh automatic work on the next restart. | Suppress only the import's synchronous automatic events and restrict old Ask journal backfill to atomic first installation. [Task recovery: failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [system refactor: KEEP fences and one engine](../adr-system-refactor.md), [public recovery contract](multiuser-public-contracts.md#同步事务外部结果与恢复). | Keeps normal producer triggers and previously authorized events; no history migration, new queue or automatic reopening of old work. | Actual earlier instance backup → later personal archive → restore/import → restart valid RED→GREEN; first-install positive and normal new publication positive; import suite 14/14. |
-| A successful export or UI receipt must describe its actual authorization and coverage. | Owner/deployment/epoch-qualified persistent receipts, exact bytes/hash, current download authorization, semantic progress and explicit exclusions. [Multi-user scope: Ownership/Privacy/Storage](../adr-multiuser-scope.md#decision-and-provenance), [Central request admission: structural pages exception](../adr-central-request-admission.md#supersession-check). | Reuses existing UI entry points and bounded transport pages, without record-total claims, arbitrary backlog quotas or successful empty domain fallback. | Actual Range/ETag/cancel/epoch/pagination and consumer fixtures; malformed consumer receipt correction tracked independently. |
+| A successful export or UI receipt must describe its actual authorization and coverage. | Owner/deployment/epoch-qualified persistent receipts, exact bytes/hash, current download authorization, semantic progress and explicit exclusions. [Multi-user scope: Ownership/Privacy/Storage](../adr-multiuser-scope.md#decision-and-provenance), [Central request admission: structural pages exception](../adr-central-request-admission.md#supersession-check). | Reuses existing UI entry points and bounded transport pages, without record-total claims, arbitrary backlog quotas or successful empty domain fallback. | Historical Range/ETag/cancel/epoch/pagination fixtures described the earlier retained artifact. Current direct delivery has length/digest checks, cancellation and no-content Activity metadata; see parity validation. |
 | A backup can be internally checksummed yet omit required originals, tables or durable notification counters. | Verify required schema, references/pins, bytes and safe owner paths before staged publication; preserve both OCR journal tables and exact high-water counters. [MVP write admission](../adr-mvp-baseline.md), [multi-user new baseline](../adr-multiuser-scope.md#new-baseline-and-write-admission), [capture journal contract](multiuser-capture-browser.md). | Rejects half recovery without rewriting existing data; deleted-highest events do not rewind a device cursor. Personal import excludes this derived journal and uses the existing bounded read reconciliation. | Actual native SQLite/files/process round trips, corruption/link/path cases; six checksummed journal corruptions RED→GREEN and 7/7; later composed 14/14. |
-| Restoring data must not authorize previous external effects again. | Preserve successful/unknown journals, retire old credentials/task/plugin grants and pause automatic/outbound authority; operator reauthorizes explicitly. [Recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance). | Separates recovery of canonical records from execution rights and does not infer non-execution from timeout, cancellation or process death. | Actual generated external journals and restart tests, native Mem0 SDK canonical bodies; no live provider or real external action. |
+| Restoring data must not authorize previous external effects again. | Preserve successful/unknown journals and future policy intent; retire old credentials/task/plugin grants, then create fresh future coordinators only after trusted password relogin as specified in the L06 section. [Recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance). | Separates recovery of canonical records from execution rights and does not infer non-execution from timeout, cancellation or process death. | Actual generated external journals and restart tests, native Mem0 SDK canonical bodies; no live provider or real external action. |
 | Existing management pages contain private one-owner assumptions. | Admin finite instance metadata and signed read-only update checks; no impersonation, fake zero private queue/index metrics or HTTP update execution. [Multi-user Privacy](../adr-multiuser-scope.md#decision-and-provenance), [ConfigService responsibility/transaction](../adr-unified-configuration.md#responsibilities-and-transaction). | Retains existing settings/navigation and file configuration authority; configuration changes and deployment remain explicit operator actions. | Actual management post-await revocation RED→GREEN and Web consumer; private storage encryption/index gaps are not represented as restored. |
 | The old Docker copy-into-volume restore cannot promise atomic epoch-5 publication, and no Docker daemon is available for verification. | Keep the verified native stopped-instance path; reject unsupported Docker epoch-5 publication before mutation and report this as an OPEN retained-capability gap, not accepted removal. [Module M16 backup scope](multiuser-modules.md#模块改造与验收矩阵), [ConfigService UNKNOWN container validation](../adr-unified-configuration.md#compatibility-and-validation), [AGENTS completion rule](../../AGENTS.md). | Recommended to the parent: retain the explicit gap until atomic volume publication and real daemon recovery can be implemented/verified. No silent scope reduction, daemon start, deployment or synthetic claim of Docker acceptance. | Native source/compiled/package paths have historical positive evidence; approved read-only Docker version check reports daemon unavailable. Docker publication and native Hindsight-volume validation remain unexecuted/incomplete. |
 
@@ -218,12 +337,57 @@ clients must allow these explicitly declared extra domains, rather than fix the
 number of merged domains at five.
 
 The stopped archive now requires all columns of the thirteen Actions/Todos tables
-(173 core tables total). Restore disables inherited instance and actual private
+(173 core tables total). Restore preserves inherited instance and actual private
 YAML Actions settings, advances SQL policy/authorization generations, clears
 review-device and policy-task authority, retires target registrations and revokes
 operations. Exact claimed/issuance/native-ID/ACK/task linkage, successful history,
 unknown external facts and manual Todo content/state remain unchanged. This is
 the same [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance)
 and [unknown-result contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract),
-not a new approval or backup framework. The operator reauthorizes future work;
+not a new approval or backup framework. Keeping enabled policy intent does not
+replace a retired Actions watcher, review-device grant or target registration;
 recovery never manufactures first-issuance eligibility.
+
+
+## Portable consistency and direct delivery
+
+LIFE-L03 replaces the whole-connection change counter with exact owner-qualified
+SQL read witnesses. Direct SQL adapters record their exported projection;
+`PrivateSql` records owner-bound reads automatically. Independent reads begin
+before awaiting external providers, and all settle before final validation. The
+host rechecks the observed results, authority, configuration and domain/import
+policy registry in the final SQLite transaction. B's changes and A's unexported
+task progress do not invalidate A's archive. Changes to observed A data prevent
+publication. No SQL transaction spans provider I/O; external Memory retains its
+existing body/provider checks.
+
+LIFE-L04 restores one user action: `GET /api/export` generates and directly
+delivers the current full portable 3 archive, including retained original bytes.
+Web automatically saves this response. Android stages and verifies its length,
+MIME type and SHA-256 ETag before opening the selected output document. Both
+clients fence a late response when their account changes. A retry is a new
+current export request. No export start/history/content/retry HTTP API remains,
+no historical receipt authorizes a new download, and no central archive BLOB is
+written. Work may retain progress/audit metadata and exposes no archive artifact.
+
+The host releases request bytes when delivery finishes or disconnects. Canonical
+content deletion invalidates any in-flight full response in the same SQL
+transaction; later stream chunks recheck that state and current authorization.
+Snapshot deadlines fence delivery even if maintenance is delayed. Offline bytes
+already delivered to a user remain that user's copy. No latest-copy, count or
+TTL policy is introduced. Import receipts and their existing control flow remain
+separate from export transport.
+
+KEEP full originals, exact bytes/digest verification, canonical merge and data-only
+import. CHANGE observed-data consistency and direct request delivery. REMOVE
+unrelated-account conflicts and retained archive downloads. EXCEPTION external
+outcomes and already downloaded user copies keep their existing boundaries.
+UNKNOWN live-provider and physical-device results require separate checks.
+
+Personal import preserves the original same-vault capture delete journal: a
+portable archive containing a locally journaled deleted ID fails before any
+canonical publication. The journal is owner-qualified, so B's same capture ID
+does not block A. A genuinely new ID can merge into an earlier recovered
+instance; restoration of a whole stopped instance preserves that instance's
+canonical records and delete journal together. File-forget tombstones remain
+authoritative. No imported archive replays deletion decisions against live data.

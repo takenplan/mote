@@ -36,8 +36,10 @@ Callers must explicitly adapt any transport's different all-sources convention.
 The allowlist is copied, normalized and frozen at binding. All transitive
 pd_material_sources must fit it before SQL ordering/LIMIT, provider keys and
 semantic ranking. Cursors bind the complete allowlist and query filters.
-Parent request/grant checks apply before and after provider awaits and every SQL
-access. A current-evidence assertion does not claim external provider availability.
+Parent request/grant checks apply at logical read entry, after provider awaits
+and before returning a capability. Every SQL access independently checks the
+current owner, authorization epoch and host closure; it does not replay the
+caller-wide Ask history or snapshot proof. A current-evidence assertion does not claim external provider availability.
 Read/search always use the actual active external provider and verified body
 hash; failure never falls back to the SQL body mirror.
 
@@ -80,6 +82,14 @@ M04 credentials. Native Hindsight text consolidation persists operation intent
 before issuance and observes a known completed result after a lost response;
 unknown issuance is surfaced instead of blindly replaying inference. Visual
 input in its text-only engine mode is explicitly unsupported.
+
+Native provider calls and purpose-limited maintenance share one host turn for
+the exact namespace and fixed configuration. Maintenance holds that turn from
+cached-engine retirement through its own handle's close, so a foreground read
+cannot open another engine over the same native control directory during
+cleanup. Entry eviction does not end directory ownership. Different namespaces
+retain independent turns; model leases, read-bank scope and lifecycle authority
+are checked on their existing paths. Host shutdown drains these native turns.
 
 Binding prepare drains admitted work, verifies the real target and stages all
 current and retained published historical versions. Every version's complete
@@ -173,3 +183,122 @@ selected Material ID to its exact revision. A provided map must cover all and
 only the selected IDs; it cannot fall back to current versions for omitted
 entries. Existing callers without the map retain their original current-input
 semantics. The admitted M07 pins remain the existing durable task source of truth.
+
+## Original journey parity restoration (2026-10-18)
+
+The scoped production host preserves each batch's original continuous journey
+in one `memory.batch` task: prepare original evidence (including Coding
+conversation understanding), reuse exact complete candidates or extract,
+validate/correct, independently review, then save. Draft, reviewed evaluation,
+prepared provider write and successful save are separate durable checkpoints
+inside that continuation. They do not complete separate tasks or reenter workflow
+admission. Restart resumes from the last successful checkpoint; a saved batch
+returns its saved receipt without replaying model calls or supersession.
+
+Every physical model call uses the admitted immutable M04 snapshot, a distinct
+query/usage receipt and the existing account-fair physical admission gates. Waiting
+for a model or publisher consumes neither a physical call protection budget nor
+a new attempt. Owner-bound evidence resources exclude overlapping originals. The
+single per-user publisher resource is acquired from the same ExecutionEngine only
+around duplicate resolution, write preparation, provider staging and the actual
+fenced save. Two independently reviewed targets using the same supported context
+resolve to the same existing card under that publisher. A saved evaluation and its
+Owner questions are committed together; held, failed, unknown or cancelled
+publication cannot expose an answerable question. Independent batches may overlap
+and the first saved batch can be searchable while later model work remains queued.
+
+The Execution module owns configured model concurrency and aggregate operation
+progress. Memory admission, batches, correction and feedback children join their
+owner-bound `memory:<job>` operation through its host-only parent API. The public
+job receipt contains one `batch` task per batch; web and Android result views read
+that actual task's result. See [continuous batch decision](../adr-memory-continuous-batch.md).
+
+Extraction and review append the same `memoryCandidateOutputContract` to their
+fixed selected policies. Both can independently call `context_evidence` for the
+frozen same-job, same-recipe original catalog. The catalog grants reading, not
+body disclosure, extra targets or completion of another batch. `readInputs` pins
+canonical originals and `evidenceReadRanges` freezes their exact intervals.
+Only successful host-delivered ranges may support quotes. Separately retained
+metadata receipts fence the source, time, owner declarations and visibility that
+the catalog already disclosed, without turning unread bodies into dependencies.
+Actual reads are
+rechecked across model sends, stage transitions and publication; an unread
+catalog entry is not a saved result dependency. Context-only claims remain
+invalid. Account, source, Material, policy, model, cancellation and provider fences
+continue to apply; no catalog grants another owner's originals or archive search.
+
+A valid `no_candidates` result still receives independent review. Missing coverage
+fails host validation. Reviewed `incomplete` retains the range and reason and
+blocks with `memory_evaluation_incomplete`; no part of that batch is published.
+Retrying the original job reuses a valid extraction draft and completed siblings,
+runs the unfinished independent review, and saves only after complete evaluation.
+Restart does not silently authorize a paid replay of blocked work. Specific
+`needs_context` and `needs_owner_input` retain their separate continuation flows.
+
+Automatic consolidation selects published, unsuperseded episode cards admitted
+as long-term `memory`, then partitions them by their actual personal/coding domain
+into independent draft/review/publication checkpoints. Bounded windows retain
+frozen remaining pins and their original due clock for durable successors; a
+below-threshold tail waits for the original count-or-maximum-wait condition.
+Cancellation or withdrawal blocks successor admission. The extraction profile is
+a recipe choice, not a result-domain filter. Observations neither trigger nor
+count toward consolidation and are never promoted by this path. Manual selection
+retains its existing exact-card/version restrictions.
+
+Coding uses the shared conversation product parser and prompt through scoped
+query, validation and publication ports. A bounded clean session produces an
+independent understanding before exact candidate reuse or ordinary extraction. The Memory-owned
+`mm_batch_artifacts` checkpoint retains the complete preparation before derived
+Material publication. The derived summary, work-records and events are untrusted
+navigation referencing the exact original Material; they cannot supply original
+quotes. Candidates remain private and still require independent Memory review, including
+when their exact complete preparation replaces extraction. `actionCues` stays empty. A restart reuses the preparation; cancel,
+stop and domain deletion fence late results and clear private preparations.
+Original withdrawal or revision also scrubs retained candidate/review/prepared
+bodies and private interpretations that actually depended on that original;
+owner audit rechecks exact delivered-read receipts before disclosure.
+
+Validation checks envelope/declarations, then exact quotes, then quote-backed
+coverage ownership. Each batch exposes its last 20 content-free validation
+failures under `validationFailures`, including phase, attempt, run ID and safe
+candidate/span/field measurements. Source prose, quotes, model values, credentials
+and arbitrary exception text are not copied into these diagnostics.
+
+| Disposition | Responsibility |
+| --- | --- |
+| KEEP | Original policies, exact originals, independent review, honest empty results, successful siblings, one publisher, immutable provider journal and all lifecycle fences. |
+| CHANGE | Restore the single continuous batch, full output-contract assembly, same-task context reads, incomplete/retry settlement, actual-domain consolidation, exact Coding candidate reuse and provenance batching through account-bound ports. |
+| REMOVE | Batch-only reading restriction, success settlement of incomplete evaluation, profile-only consolidation, observation promotion, model-stage publisher lock, three independently admitted Memory stage tasks and pre-save Owner questions. |
+| EXCEPTION | Current wire/storage only; no migration, historical replay, compatibility implementation, Coding action cues or additional paid retry policy. Fresh recording sources retain the existing recording recipe without overwriting an owner override. |
+| UNKNOWN | Scripted fixtures prove host ordering, isolation and lifecycle only. Live model quality, real external provider behavior and physical-device behavior require their own checks. |
+
+This restores the accepted [context-reading](../adr-memory-context-reading.md),
+[range-evaluation](../adr-memory-range-evaluation.md) and
+[Coding product](../coding-agent-memory.md) responsibilities through the current
+scoped host. It supersedes the interim batch-only reader and single-profile
+consolidation implementation, not the authorization or provider boundary.
+Regression mapping and run receipts are recorded in
+[the parity validation record](../validation/memory-journey-parity-2026-10-18.md).
+
+
+Coding batches retain the original trusted provenance boundary: source, device,
+provider, project and session. Ordinary originals never share their final target
+batch with Coding sessions, and distinct sessions do not share one final Memory
+extraction/review batch merely because they fit the character budget. This is
+metadata grouping; the model still chooses each candidate's semantic domain.
+
+A complete unified understanding retains its validated candidate result, exact
+ranges and a host-authored generation contract containing the selected strategy,
+policy, work package, model snapshot, binding and context. Reuse requires one
+artifact matching the whole current target batch, the same work contract and
+completed, unsaturated coverage. Mismatches or context gaps retain only the
+untrusted interpretation and use ordinary extraction. Both paths always receive
+a separate independent review. Work/events navigation excludes Memory candidates.
+
+
+Native Hindsight extraction supplies a host-only model-call port to its relay.
+Each actual relay request enters the same M05 physical admission as the independent
+Agent reviewer; native operation polling and transport waits do not retain that
+model slot. Its own fixed provider lease and usage attribution remain M04-owned.
+A usage fragment starts at issued model authority after admission, excluding
+unissued capacity waiting. This is separate from the publication resource.
