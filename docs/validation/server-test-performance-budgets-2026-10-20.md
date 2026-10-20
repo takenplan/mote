@@ -96,4 +96,13 @@ three-file command passed all 33 tests in 9.630 s, without skips or cancellation
 node --import tsx --test apps/server/test/execution-continuation.test.ts apps/server/test/performance-reporter.test.ts apps/server/test/test-runner.test.ts
 ```
 
-The new frozen candidate's affected-component gate is pending.
+The P8 candidate `9c3179b1cbdd3df3a523ff406501467607e3b781` then started an
+affected-component gate. The formerly failing fairness case passed in 0.777 s;
+no new Server failure was observed before the owner requested integrating PRs
+168 and 191. The superseded candidate's run was stopped before source changes.
+Receipt `2892acd1-9f64-4aa2-b199-dadc765ae953` remains interrupted with
+`cleanupConfirmed: false` after the driver's interruption-time `EPERM`.
+A separately captured manifest of its twelve owned processes/groups confirmed
+they were all gone before releasing its exact lock. Neither this partial run nor
+that manual audit is passed/reusable gate evidence. Final combined verification
+is recorded with the [integration plan](../design/pr-168-189-191-integration.md).

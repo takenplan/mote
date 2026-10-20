@@ -4,16 +4,20 @@ Central, Desktop and Android have independent product release versions. A produc
 version describes the installed build; it does not prove API compatibility or
 authorize a feature. The shared wire contract is declared in [contract.json](contract.json)
 and implemented by `@mote/shared/protocol` and Android `ProtocolCompatibility`.
-Current products support the inclusive range `{ "min": 1, "max": 1 }`.
+Current products support the inclusive range `{ "min": 2, "max": 2 }`.
 
-`GET /api/health` returns `{ok,version,protocol}` without authentication. `version`
-is the Central release version, and `protocol` is its supported wire range.
-This public health response does not disclose credential capabilities.
+`GET /api/health` returns `{ok,mode,protocol,storageEpoch,authentication,privateCapabilities}`
+without authentication. Current mode is `multiuser-auth`, storage epoch is 5,
+and authentication is `username-password`. `privateCapabilities` describes the
+installed service composition; it does not authorize private access. This
+response has no product `version` field.
 
-Native connection checks send `X-Mote-Protocol-Version: 1` to authenticated
-`GET /api/connections/self`. Every successful response includes `node.protocol`
-alongside `{credential,node,capabilities}`. The header does not bypass
-authentication or select a different ingestion behavior.
+Native connection checks send `X-Mote-Protocol-Version: 2` to authenticated
+`GET /api/connections/self`. The response is `{account,credential,protocol,capabilities}`;
+the range is top-level, not `node.protocol`. Account identity includes deployment,
+user and credential identity; the credential carries kind, expiry and optional
+device binding. The header does not bypass authentication or select a different
+ingestion behavior.
 
 Clients require integer bounds, `min <= max`, and range overlap. Missing,
 malformed, or non-overlapping metadata fails the connection check before applying
@@ -21,18 +25,22 @@ a credential. Pre-handshake nodes are retired by this MVP upgrade. Product
 versions are never compared across Central, Desktop and Android to decide API
 compatibility.
 
-`capabilities.ingest`, `ownSources` and `archiveRead` describe the authenticated
-credential's existing authorization. They do not promise new product features.
-`capabilities.ingressVersion` retains the existing collector ingress subprotocol
-(currently 2), including `X-Mote-Ingress-Version` enforcement and durable ACK
-validation. The connection handshake does not replace that guard. Server and its
-bundled Web console remain one release unit and retain their build consistency
-check.
+The current authenticated self response reports `authentication`, `ingest`,
+`ingressVersion` and `archiveRead`; its production values are `true`, `true`, 3
+and `false`, respectively. Actual route authorization and device binding still
+apply. The static contract's capability-name list does not define the
+self-response DTO. Collector Ingress 3 separately enforces
+`X-Mote-Ingress-Version: 3` and durable ACK validation; the Wire handshake does not
+replace those guards. Server and its bundled Web console remain one release unit
+and retain their build consistency check.
 
-Storage epochs and release tags are independent of the wire range. This cleanup
-uses Central epoch 4 and native local format 3 while retaining wire range 1 and collector
-ingress 2. Unsupported stored formats fail explicitly without rewriting their
-files. See the [MVP baseline](../docs/adr-mvp-baseline.md) for Central epoch 4 and client local format 3 boundaries.
+Storage epochs and release tags are independent of the wire range. Current
+production uses Central epoch 5, Desktop/Android local format 4 and portable
+archive 3. Unsupported stored formats fail explicitly without rewriting their
+files. The [scope decision](../docs/adr-multiuser-scope.md) and
+[multiuser integration](../docs/adr-multiuser-main-integration.md) supersede the
+old single-owner MVP baseline; current local formats are enforced by Desktop
+`storage-format.ts` and Android `LocalDataFormat.kt`.
 Future wire changes must update the supported range and generated fixtures, and
 validate all consumers.
 

@@ -96,6 +96,26 @@ async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=j
  const documentCall=(name:string,method:string,args:any[]=[])=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'document-invoke',id,document:name,method,args});});
  return {child,call,document,documentCall,get generation(){return generation;},get latest(){return latest;},profile,set intercept(fn:typeof intercept){intercept=fn;},async kill(){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}};
 }
+it('retains source selection confirmation and cancellation, raw logs and typed permissions through actual main/preload',async()=>{
+ const f=await fixture(),app=await productionDesktop(f),input=join(f.directory,'generated-selection.md'),external:string[]=[];
+ await writeFile(input,'Generated explicitly selected file; no personal content.');
+ app.child.on('message',(message:any)=>{if(message.type==='external')external.push(message.url);});
+ await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
+ const cancelled=await app.call('mote:source-select',['files'],app.generation,[input]);
+ expect(cancelled.names).toEqual(['generated-selection.md']);expect(await app.documentCall('A','sources')).toEqual([]);
+ await app.documentCall('A','cancelSourceFiles',[cancelled.selectionId]);
+ await expect(app.documentCall('A','confirmSourceFiles',[cancelled.selectionId,DEFAULT_SOURCE_OPTIONS])).rejects.toThrow();
+ expect(await app.documentCall('A','sources')).toEqual([]);
+ const selected=await app.documentCall('A','selectSourceFiles',['files']);
+ expect(selected.canceled).toBe(false);expect(await app.documentCall('A','sources')).toEqual([]);
+ await app.documentCall('A','confirmSourceFiles',[selected.selectionId,DEFAULT_SOURCE_OPTIONS]);
+ expect(await app.documentCall('A','sources')).toHaveLength(1);
+ await expect(app.documentCall('A','confirmSourceFiles',[selected.selectionId,DEFAULT_SOURCE_OPTIONS])).rejects.toThrow();
+ expect(typeof await app.documentCall('A','readRawEvents')).toBe('string');
+ await app.documentCall('A','permissionSettings',['screen']);
+ expect(external).toEqual(process.platform==='darwin'?['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture']:[]);
+ await expect(app.documentCall('A','permissionSettings',['generated-invalid-kind'])).rejects.toThrow('Unknown permission');
+},30000);
 it('restores native calendar target connection through actual main/preload while retiring A controls after B login',async()=>{
  const f=await fixture(),app=await productionDesktop(f),nativeCalls:string[]=[];
  app.child.on('message',(raw:any)=>{if(raw.type==='generated-calendar')nativeCalls.push(raw.command);});
