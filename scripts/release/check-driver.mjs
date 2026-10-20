@@ -20,23 +20,37 @@ export function checkDriverPaths(directory = process.cwd()) {
 
 const signalStatus = signal => 128 + (constants.signals[signal] ?? 1);
 const seconds = milliseconds => `${(milliseconds / 1000).toFixed(3)}s`;
-function groupExists(child) {
+function groupExists(child, recordError, context) {
   if (!child.pid) return false;
   try { process.kill(process.platform === 'win32' ? child.pid : -child.pid, 0); return true; }
-  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+  catch (error) {
+    if (error.code === 'ESRCH') return false;
+    recordError?.('groupExists', child, error, context, 0);
+    throw error;
+  }
 }
-function signalGroup(child, signal) {
+function signalGroup(child, signal, recordError, context) {
   if (!child?.pid) return;
   try { process.kill(process.platform === 'win32' ? child.pid : -child.pid, signal); }
-  catch (error) { if (error.code !== 'ESRCH') throw error; }
-}
-async function groupGone(child, milliseconds) {
-  const deadline = performance.now() + milliseconds;
-  while (groupExists(child)) {
-    if (performance.now() >= deadline) return false;
-    await delay(20);
+  catch (error) {
+    if (error.code !== 'ESRCH') {
+      recordError?.('signalGroup', child, error, context, signal);
+      throw error;
+    }
   }
-  return true;
+}
+async function groupGone(child, milliseconds, recordError, context) {
+  const deadline = performance.now() + milliseconds;
+  try {
+    while (groupExists(child, recordError, context)) {
+      if (performance.now() >= deadline) return false;
+      await delay(20);
+    }
+    return true;
+  } catch (error) {
+    recordError?.('groupGone', child, error, context);
+    throw error;
+  }
 }
 
 async function saveReceipt(path, receipt) {
@@ -63,6 +77,17 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
   let initialIdentity;
   const reusable = [];
   let result = 1;
+  const groupErrorIds = new Map();
+  const recordGroupError = (operation, child, error, context, signal) => {
+    if (!groupErrorIds.has(error)) groupErrorIds.set(error, groupErrorIds.size + 1);
+    (receipt.processGroupErrors ??= []).push({
+      errorId: groupErrorIds.get(error), operation, context, pid: child?.pid ?? null,
+      targetPgid: process.platform === 'win32' ? null : child?.pid ?? null,
+      target: child?.pid ? (process.platform === 'win32' ? child.pid : -child.pid) : null,
+      signal: signal ?? null, code: error.code ?? null, errno: error.errno ?? null,
+      syscall: error.syscall ?? null, at: new Date().toISOString(),
+    });
+  };
   const identifyTask = step => {
     const identity = taskIdentity?.(step);
     if (identity !== undefined && (typeof identity !== 'string' || !/^[a-f0-9]{64}$/.test(identity))) throw Error('Invalid task input identity');
@@ -99,10 +124,10 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
     const repeated = interruptedSignal !== undefined;
     interruptedSignal ??= signal;
     if (!activeChild) return;
-    try { signalGroup(activeChild, repeated ? 'SIGKILL' : signal); }
+    try { signalGroup(activeChild, repeated ? 'SIGKILL' : signal, recordGroupError, 'forward_signal'); }
     catch { cleanupConfirmed = false; }
     if (!shutdownTimer) shutdownTimer = setTimeout(() => {
-      try { signalGroup(activeChild, 'SIGKILL'); } catch { cleanupConfirmed = false; }
+      try { signalGroup(activeChild, 'SIGKILL', recordGroupError, 'shutdown_timer'); } catch { cleanupConfirmed = false; }
     }, 2000);
   };
   const onInterrupt = () => forwardSignal('SIGINT'), onTerminate = () => forwardSignal('SIGTERM');
@@ -177,24 +202,30 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
       }
       console.log(`RUN ${measured.phase}/${measured.id}`);
       let spawnError;
+      measured.process = { spawnAttemptedAt: new Date().toISOString(), pid: null, expectedPgid: null };
       activeChild = spawn(step.command, step.args ?? [], {
         cwd: step.cwd ? resolve(directory, step.cwd) : directory,
         env: checkExecutionEnvironment(),
         stdio: 'inherit', detached: process.platform !== 'win32',
       });
       const child = activeChild;
+      measured.process.pid = child.pid ?? null;
+      measured.process.expectedPgid = process.platform === 'win32' ? null : child.pid ?? null;
       const terminal = await new Promise(resolveExit => {
         child.once('error', error => { spawnError = error.code ?? 'spawn_error'; });
-        child.once('close', (code, signal) => resolveExit({ code, signal }));
+        child.once('close', (code, signal) => {
+          measured.process.terminal = { code, signal, closedAt: new Date().toISOString() };
+          resolveExit({ code, signal });
+        });
       });
       clearTimeout(shutdownTimer); shutdownTimer = undefined;
       let leftChildren = false;
-      if (groupExists(child)) {
+      if (groupExists(child, recordGroupError, 'post_close')) {
         leftChildren = !interruptedSignal;
-        signalGroup(child, 'SIGTERM');
-        if (!await groupGone(child, 2000)) {
-          signalGroup(child, 'SIGKILL');
-          cleanupConfirmed = await groupGone(child, 2000);
+        signalGroup(child, 'SIGTERM', recordGroupError, 'post_close');
+        if (!await groupGone(child, 2000, recordGroupError, 'post_close')) {
+          signalGroup(child, 'SIGKILL', recordGroupError, 'post_close');
+          cleanupConfirmed = await groupGone(child, 2000, recordGroupError, 'post_close');
         }
       }
       activeChild = undefined;
@@ -224,10 +255,10 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
     clearTimeout(shutdownTimer);
     if (activeChild) {
       try {
-        signalGroup(activeChild, 'SIGTERM');
-        if (!await groupGone(activeChild, 2000)) {
-          signalGroup(activeChild, 'SIGKILL');
-          cleanupConfirmed = await groupGone(activeChild, 2000);
+        signalGroup(activeChild, 'SIGTERM', recordGroupError, 'finally');
+        if (!await groupGone(activeChild, 2000, recordGroupError, 'finally')) {
+          signalGroup(activeChild, 'SIGKILL', recordGroupError, 'finally');
+          cleanupConfirmed = await groupGone(activeChild, 2000, recordGroupError, 'finally');
         }
       } catch { cleanupConfirmed = false; }
     }
