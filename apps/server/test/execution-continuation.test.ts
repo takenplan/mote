@@ -24,14 +24,15 @@ test('continuous publisher reservations serialize two host processes for one acc
   await grant.withBudget(async()=>{await new Promise(done=>setTimeout(done,5));});process.send({phase:'waiting',label,id:step.id});
   return grant.withResource(JSON.stringify(['user',owner,'publisher']),async()=>{process.send({phase:'acquired',label});await held;return grant.commit(()=>{store.db.prepare('INSERT INTO generated_saved VALUES(?)').run(label);return label;});});
  },commit:()=>{}});const id=engine.enqueue(label,'batch',{}, {ownership:{userId:owner,authorizationEpoch:1}});await engine.drain([id]);process.send({phase:'done',label,state:engine.get(id).state,attempts:engine.get(id).attempts});await engine.close();store.close();process.disconnect();`);
- const db=new Store(root);db.db.exec('CREATE TABLE generated_saved(label TEXT PRIMARY KEY)');const children:ReturnType<typeof spawn>[]=[],events:any[]=[],errors:string[]=[];
- const launch=(label:string,owner:string)=>{const child=spawn(process.execPath,['--import','tsx',script,label,owner],{cwd:fileURLToPath(new URL('../../..',import.meta.url)),stdio:['ignore','pipe','pipe','ipc']});children.push(child);child.on('message',event=>events.push(event));child.stderr!.on('data',chunk=>errors.push(String(chunk)));return child;};
- t.after(async()=>{for(const child of children)if(child.exitCode===null){if(child.connected)child.send('release');child.kill('SIGKILL');}db.close();rmSync(root,{recursive:true,force:true});});
+ const db=new Store(root);db.db.exec('CREATE TABLE generated_saved(label TEXT PRIMARY KEY)');const children:ReturnType<typeof spawn>[]=[],exits:Promise<{code:number|null;signal:string|null}>[]=[],events:any[]=[],errors:string[]=[];
+ const launch=(label:string,owner:string)=>{const child=spawn(process.execPath,['--import','tsx',script,label,owner],{cwd:fileURLToPath(new URL('../../..',import.meta.url)),stdio:['ignore','pipe','pipe','ipc']});children.push(child);exits.push(new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal}))));child.on('message',event=>events.push(event));child.stderr!.on('data',chunk=>errors.push(String(chunk)));return child;};
+ t.after(async()=>{for(const child of children)if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await Promise.all(exits);db.close();rmSync(root,{recursive:true,force:true});});
  const a=launch('A','same-owner');await until(()=>events.some(event=>event.phase==='acquired'&&event.label==='A'));
  const b=launch('B','same-owner');await until(()=>events.some(event=>event.phase==='waiting'&&event.label==='B'));
  const c=launch('C','other-owner');await until(()=>events.some(event=>event.phase==='acquired'&&event.label==='C'));c.send('release');await until(()=>events.some(event=>event.phase==='done'&&event.label==='C'));
  await delay(100);assert.ok(!events.some(event=>event.phase==='acquired'&&event.label==='B'),'same-account save waits beyond a physical call budget');assert.equal(db.db.prepare('SELECT count(*) n FROM generated_saved').get()!.n,1);
  a.send('release');await until(()=>events.some(event=>event.phase==='acquired'&&event.label==='B'));b.send('release');await until(()=>events.filter(event=>event.phase==='done').length===3);
+ assert.deepEqual(await Promise.all(exits),children.map(()=>({code:0,signal:null})),'all three actual hosts close normally before fixture cleanup');
  assert.ok(events.filter(event=>event.phase==='done').every(event=>event.state==='succeeded'&&event.attempts===1),JSON.stringify({events,errors}));assert.equal(db.db.prepare('SELECT count(*) n FROM execution_dynamic_resources').get()!.n,0);assert.equal(db.db.prepare('SELECT count(*) n FROM generated_saved').get()!.n,3);
 });
 
