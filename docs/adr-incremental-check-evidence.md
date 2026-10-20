@@ -33,7 +33,7 @@ is evidence reuse, without a build-artifact or command-output cache.
 
 Complete checks start after planned edits converge and focused checks reach the
 required high-risk states. A passing result that never reached its required state
-does not cover that state. Within an established design, implementation and fixture
+does not cover that state. Within an established, approved design, implementation and fixture
 control corrections need a recorded delta and focused validation. Changes to
 assertions, timeouts, success criteria or entry points require an explicit review
 of coverage impact. Responsibility, authorization, safety and external-contract
