@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
+import {createServer} from 'node:http';
 import {AgentResponseError,AgentTimeoutError} from '@mote/agent';
 import {ModelUsageLedger,portableUsageReceipt} from '../src/scope/model-usage.js';
 import {usageTotals} from '../src/usage-metrics.js';
-import {safeAgentFailure,queryWithUsage} from '../src/scope/model-query.js';
+import {safeAgentFailure,queryWithUsage,completedQueryFailure} from '../src/scope/model-query.js';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {failureContext} from '../src/execution-failures.js';
 
@@ -57,4 +58,19 @@ test('a failed finalizer cannot replace the query failure and interrupt remains 
  let interrupted=0;const secret='GENERATED_ACCOUNTING_CLEANUP_SECRET',reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],activity:async()=>({}),devices:async()=>[]};
  const model={startUsage:()=>({id:randomUUID(),issued:()=>{},update:()=>{},finish:()=>{throw Error(secret);},interrupt:()=>{interrupted++;throw Error(secret);}})};
  await assert.rejects(queryWithUsage(model,{...defaultModelSettings(),reader},{question:'Generated request with no configured model'}),(error:any)=>error.code==='agent_not_configured'&&!String(error).includes(secret));assert.equal(interrupted,1);
+});
+
+for(const status of [403,422,503,504])test(`query completion facts are identity-bound and distinguish HTTP ${status}`,{timeout:30000},async t=>{
+ const server=createServer((_req,res)=>{res.writeHead(status,{'Content-Type':'application/json','Retry-After':'0'}).end(JSON.stringify({error:{message:'Generated provider response'}}));});
+ await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));});
+ const finishes:string[]=[],reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],activity:async()=>({}),devices:async()=>[]};
+ const model={startUsage:()=>({id:randomUUID(),issued:()=>{},update:()=>{},finish:(value:string)=>{finishes.push(value);},interrupt:()=>{}})};
+ await assert.rejects(queryWithUsage(model,{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-only',baseUrl:'http://127.0.0.1:'+(server.address() as {port:number}).port+'/v1',apiKey:'GENERATED_ONLY',reader},{question:'Generated transport fixture'}),error=>{
+  assert.equal(completedQueryFailure(error),status===403||status===422);
+  assert.equal(completedQueryFailure({...error as object}),false,'copies do not carry a completed fact');return true;
+ });
+ assert.deepEqual(finishes,['failed']);
+ assert.equal(completedQueryFailure(safeAgentFailure(new AgentResponseError('Generated local error','host_validation'))),false,'a class alone outside the actual query is not a completed fact');
+ assert.equal(completedQueryFailure({name:'ProviderFailure',details:{category:'blocked',code:'provider_authentication'},completed:true}),false);
+ assert.equal(completedQueryFailure(safeAgentFailure(new AgentTimeoutError())),false);
 });

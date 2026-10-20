@@ -244,3 +244,81 @@ functional probes and the optional performance entry, then actual affected
 consumer checks for the final frozen candidate. Preserve the running prior
 candidate's eventual receipt separately. Its two observed retry failures remain
 functional failures to diagnose, not candidates for optional classification.
+
+## P12: known query failures and confirmed unknown recovery
+
+Independently **APPROVED** before implementation by `/root/plan_review` (Sol
+High), reviewed section body SHA-256
+`aadae5387f531637c91e821e1ac84b878c2928f528a14a96aedaf8d83fd8607a`.
+Exact base/head: `8950c6d42dec8abb0bd9ecc6562cd54e9fc71e57` (P11 committed after focused checks).
+On 2026-10-20 the human owner explicitly selected **keep main: unknown results
+require confirmation; definitively failed calls remain normally retryable**.
+Root is sole source/check owner. This is independent of optional test categories.
+
+The full candidate exposed four known-failure retry regressions: HTTP 422 owner
+retry, exhausted incomplete-Coding host validation, and personal/coding HTTP 403
+review failure. Main's new issuance guard preserves `issued` after all failed
+queries except proven non-execution, so even trustworthy completed failures
+cannot use the existing Memory retry path. Two SIGKILL tests encode a genuinely
+superseded behavior: automatically repeating an issued reviewer whose outcome is
+unknown. New issued-query regressions explicitly forbid that repetition.
+
+- **KEEP:** current exact successful query checkpoint + external settlement
+  atomicity; original model/task/input identity, complete validation, independent
+  review, publication fences, successful siblings, account isolation and usage.
+  Preserve unknown issuance on timeout, network/disconnect, unavailable provider,
+  local abort, lease loss, crash, arbitrary errors and structural lookalikes.
+- **CHANGE:** within `model-query.ts`, derive a private, typed completed-failure
+  fact before sanitizing a concrete failure. Initially limit it to concrete
+  `AgentResponseError` with `host_validation` (a finished bounded repair session)
+  and fixed terminal `ProviderFailure` codes for authentication, endpoint,
+  redirect, quota, policy, invalid request, processing limit and unsupported
+  format. Do not infer facts from strings, arbitrary status objects or unknown
+  `provider_failed`. Expose only a predicate over the exact branded safe error.
+  `memory.ts` may then settle its exact bound issuance as completed before
+  rethrowing that same error. Preserve failed usage and no published domain
+  output; completed external execution is not successful Memory acceptance.
+- **REMOVE:** only the assumption that all failed issued queries are unknown,
+  and the obsolete automatic repeat assertion for unknown interrupted review.
+- **EXCEPTION:** per the owner's explicit decision, the two real SIGKILL
+  journeys first prove `external_result_unknown`, unchanged request counts,
+  unconfirmed retry rejection and foreign-owner denial, then use the existing
+  authenticated task HTTP retry with `{confirmUnknown:true}`. No DB settlement,
+  synthetic success or new API/policy/permission step is introduced.
+- **UNKNOWN:** providers without trustworthy terminal facts remain unknown;
+  confirmation acknowledges potential repeat/charge without rewriting the old
+  unknown journal or usage as known or successful. Live model quality is untested.
+
+Minimal production owners/files: `scope/model-query.ts` and `scope/memory.ts`.
+No shared protocol, TaskExecution, UI or parent Memory retry API change. Strengthen
+the existing owner-retry, Coding-preparation, integration-domain and two real
+process test files; extend issued-query/model-usage regressions for typed facts
+versus lookalikes and unknown cleanup/transport. Keep real HTTP/native process
+entry points, SIGKILL ordering, deadlines, original calls after explicit
+confirmation, complete output, model pins and successful sibling checks.
+Preserve direct known-failure parent retry, same task/checkpoint/model identity,
+failed accounting and no premature publication for all four known-failure cases.
+
+Supersession review covers the current Memory review, lifecycle and Central docs
+and existing task-recovery ADR. Qualify unconditional automatic-review replay
+claims; record this owner decision and keep historical dated evidence unchanged
+with a forward supersession reference where needed. No new migration/compat path.
+
+Focused validation covers the six actual failing cases, all issued-query success/
+unknown/429/repair states and model accounting; verify another owner progresses
+while an interrupted owner waits, and only each owner can confirm its own exact
+task. Query metering consumers include Ask, Processing, Memory feedback/OQ and
+Actions; the final affected-consumer gate remains required after convergence.
+Freeze once, execute functional defaults and report the two P11 performance
+probes separately. No actual models/devices/personal content/foreground UI.
+
+Review guard: the provider allowlist binds terminal category/code tuples, not
+an arbitrary matching code; concrete host-validation completion is initially the
+sole accepted response-error reason. The predicate cannot brand an error.
+
+Implementation delta within this boundary: M05 deliberately reconstructs safe
+errors across its M04 callback. Memory therefore reads the identity-based fact
+inside that callback into a query-local boolean before reconstruction; the outer
+catch still settles only this query's exact bound issuance. Do not propagate a
+forgeable marker through M05 or modify its sanitization. Initial focused results
+exposed this transfer requirement; they were not passing fix evidence.
