@@ -25,9 +25,17 @@ function assertOutput(result){
  const output=JSON.parse(result.answer);assert.deepEqual(output.coverage,members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})));
  assert.deepEqual(output.proof,originals.map(record=>({id:record.id,quote:record.ocrText})));assert.deepEqual(result.citations.map(({id})=>id),originals.map(({id})=>id));
 }
+async function readProviderBody(stream){
+ const chunks=[];for await(const chunk of stream)chunks.push(chunk);
+ return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+test('generated HTTP provider preserves UTF-8 at every request chunk boundary',async()=>{
+ const expected={question:'Generated 正文🌱 and emoji 😀',evidence:['完整原文']},bytes=Buffer.from(JSON.stringify(expected));
+ for(let at=1;at<bytes.length;at++)assert.deepEqual(await readProviderBody([bytes.subarray(0,at),bytes.subarray(at)]),expected,'split at byte '+at);
+});
 async function provider(t,protocol,reject=false){
  const requests=[],server=createServer(async(req,res)=>{
-  let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw);requests.push(body);
+  const body=await readProviderBody(req);requests.push(body);
   if(reject){res.writeHead(413,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Generated capacity rejection'}}));return;}
   const message=body.messages.find(message=>message.role==='user'),text=typeof message.content==='string'?message.content:message.content.find(block=>block.type==='text').text,envelope=JSON.parse(text);
   assertEnvelope(envelope);const answer=JSON.stringify(generatedAnswer(envelope));
