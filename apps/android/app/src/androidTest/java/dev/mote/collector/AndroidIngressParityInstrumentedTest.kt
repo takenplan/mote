@@ -1,7 +1,11 @@
 package dev.mote.collector
 
+import android.Manifest
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.os.Build
+import android.provider.CalendarContract
 import android.provider.DocumentsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -107,6 +111,41 @@ class AndroidIngressParityInstrumentedTest {
         assertEquals("Generated provider must produce a durable pending original", 1, app.fileArchives().pendingCount(source.id))
         return app.fileArchives().next(source.id)!!.getJSONObject("pending").getJSONObject("manifest")
     }
+    private fun calendarSource(app: Context): Pair<LocalSource, Long> {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.READ_CALENDAR)
+        instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.WRITE_CALENDAR)
+        val name = "generated-ingress-${UUID.randomUUID()}"
+        val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, name)
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, "LOCAL").build()
+        val values = ContentValues().apply {
+            put(CalendarContract.Calendars.ACCOUNT_NAME, name); put(CalendarContract.Calendars.ACCOUNT_TYPE, "LOCAL")
+            put(CalendarContract.Calendars.NAME, name); put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, name)
+            put(CalendarContract.Calendars.OWNER_ACCOUNT, name); put(CalendarContract.Calendars.VISIBLE, 1)
+            put(CalendarContract.Calendars.SYNC_EVENTS, 1); put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, "UTC")
+            put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.CAL_ACCESS_OWNER)
+        }
+        val id = ContentUris.parseId(requireNotNull(app.contentResolver.insert(uri, values)))
+        app.contentResolver.insert(CalendarContract.Events.CONTENT_URI, ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, id); put(CalendarContract.Events.TITLE, "Generated pause lookup event")
+            put(CalendarContract.Events.DESCRIPTION, "Generated indexed retry evidence")
+            put(CalendarContract.Events.DTSTART, System.currentTimeMillis() + 60_000)
+            put(CalendarContract.Events.DTEND, System.currentTimeMillis() + 120_000)
+            put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+        }) ?: error("Generated calendar event was not inserted")
+        return LocalSource(name = name, kind = "local-calendar", calendarId = id) to id
+    }
+    private fun scanCalendar(app: Context, source: LocalSource): JSONObject {
+        app.localSources().save(source)
+        val request = OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf(
+            "owner" to Settings(app).read().ownerKey(), "manual" to true, "sourceId" to source.id)).build()
+        assertEquals(WorkInfo.State.SUCCEEDED, awaitResult(app, enqueue(app, request)).state)
+        val pending = app.localSources().state(source.id).getJSONArray("pending")
+        assertEquals("The actual CalendarProvider scan must stage one revision", 1, pending.length())
+        return pending.getJSONObject(0)
+    }
     private fun requests() = control("/state").getJSONArray("ingressRequests").let { rows -> (0 until rows.length()).map(rows::getJSONObject) }
     private fun uploadState(id: String) = control("/uploads/state").getJSONArray("uploads").let { rows ->
         (0 until rows.length()).map(rows::getJSONObject).single { it.getString("id") == id }
@@ -190,6 +229,74 @@ class AndroidIngressParityInstrumentedTest {
             assertEquals(WorkInfo.State.FAILED, awaitResult(app, upload(app, manual = true)).state)
             assertTrue("The existing explicit retry control may recheck the retained revision", requests().any { it.getString("path").endsWith("/uploads") })
         } finally { cancel(app); app.localSources().remove(source.id) }
+    }
+
+    @Test fun failedPauseLookupKeepsBinaryRevisionRetryableUntilAutomaticAcknowledgement() {
+        val app = setup(); val settings = Settings(app); val source = generatedSource(app)
+        try {
+            val manifest = scan(app, source); val bytes = app.fileArchives().part(source.id, 0)
+            settings.save(settings.read().copy(syncMode = "realtime"))
+            control("/source-pause/arm/${source.id}")
+            val request = upload(app, manual = false)
+            assertEquals("An unconfirmed pause lookup must retry", WorkInfo.State.ENQUEUED, awaitResult(app, request).state)
+            assertTrue(control("/state").getInt("pauseLookupDrops") > 0)
+            val pending = app.fileArchives().rows(source.id).single()
+            assertEquals(manifest.toString(), pending.getJSONObject("pending").getJSONObject("manifest").toString())
+            assertArrayEquals(bytes, app.fileArchives().part(source.id, 0))
+            assertFalse("A disconnected pause lookup cannot create a permanent refusal", pending.getJSONObject("syncFailure").getBoolean("blocked"))
+            control("/source-pause/clear")
+            CentralAccess.requireClient(app).patch("/api/sources/${source.id}", JSONObject().put("enabled", true))
+            waitFor("same automatic binary Worker acknowledgement") { app.fileArchives().pendingCount(source.id) == 0 }
+            waitFor("automatic binary Worker terminal state") { WorkManager.getInstance(app).getWorkInfoById(request).get()!!.state.isFinished }
+            assertEquals(WorkInfo.State.SUCCEEDED, WorkManager.getInstance(app).getWorkInfoById(request).get()!!.state)
+            assertPrivateCapture("a", Ingress3Receipt.captureId(source.id, manifest.getJSONObject("item")))
+        } finally { control("/source-pause/clear"); cancel(app); app.localSources().remove(source.id) }
+    }
+
+    @Test fun failedPauseLookupKeepsIndexedRevisionRetryableUntilAutomaticAcknowledgement() {
+        val app = setup(); val settings = Settings(app); val (source, calendarId) = calendarSource(app)
+        try {
+            val pending = scanCalendar(app, source)
+            settings.save(settings.read().copy(syncMode = "realtime"))
+            control("/source-pause/arm/${source.id}")
+            val request = upload(app, manual = false)
+            assertEquals("An unconfirmed indexed pause lookup must retry", WorkInfo.State.ENQUEUED, awaitResult(app, request).state)
+            assertTrue(control("/state").getInt("pauseLookupDrops") > 0)
+            val state = app.localSources().state(source.id)
+            assertEquals(pending.toString(), state.getJSONArray("pending").getJSONObject(0).toString())
+            assertFalse("A disconnected pause lookup cannot create an indexed rejection", state.has("uploadRejection"))
+            control("/source-pause/clear")
+            CentralAccess.requireClient(app).patch("/api/sources/${source.id}", JSONObject().put("enabled", true))
+            waitFor("same automatic indexed Worker acknowledgement") { app.localSources().next(source.id, settings.read().ownerKey()) == null }
+            waitFor("automatic indexed Worker terminal state") { WorkManager.getInstance(app).getWorkInfoById(request).get()!!.state.isFinished }
+            assertEquals(WorkInfo.State.SUCCEEDED, WorkManager.getInstance(app).getWorkInfoById(request).get()!!.state)
+            assertPrivateCapture("a", Ingress3Receipt.captureId(source.id, pending))
+        } finally {
+            control("/source-pause/clear"); cancel(app); app.localSources().remove(source.id)
+            app.contentResolver.delete(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId), null, null)
+        }
+    }
+
+    @Test fun confirmedEnabledSourceKeepsIndexedConflictDurableAndExplicitlyRetryable() {
+        val app = setup(); val settings = Settings(app); val (source, calendarId) = calendarSource(app)
+        try {
+            val pending = scanCalendar(app, source)
+            app.ingress3(settings.read()).item(source, JSONObject(pending.toString()).put("title", "Generated different immutable content"))
+            settings.save(settings.read().copy(syncMode = "realtime"))
+            assertEquals(WorkInfo.State.FAILED, awaitResult(app, upload(app, manual = false)).state)
+            val rejection = app.localSources().state(source.id).getJSONObject("uploadRejection")
+            assertEquals(pending.getString("externalId"), rejection.getString("externalId"))
+            assertEquals(pending.getString("revision"), rejection.getString("revision"))
+            control("/ingress/reset")
+            assertEquals(WorkInfo.State.FAILED, awaitResult(app, upload(app, manual = false)).state)
+            assertFalse("A confirmed immutable refusal must not be retried automatically", requests().any { it.getString("path").endsWith("/items") })
+            assertEquals(WorkInfo.State.FAILED, awaitResult(app, upload(app, manual = true)).state)
+            assertTrue("Explicit retry may recheck the same retained revision", requests().any { it.getString("path").endsWith("/items") })
+            assertEquals(pending.toString(), app.localSources().next(source.id, settings.read().ownerKey())!!.toString())
+        } finally {
+            cancel(app); app.localSources().remove(source.id)
+            app.contentResolver.delete(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId), null, null)
+        }
     }
 
     @Test fun halfUploadedExpiredSessionRestartsFromTheSameProviderSpoolWithoutBTakingOver() {

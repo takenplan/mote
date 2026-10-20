@@ -98,6 +98,17 @@ internal open class FileTransportFailure(val httpStatus: Int, message: String, v
 
 internal class FileIngressRejection(httpStatus: Int, code: String = "", val paused: Boolean = false) : FileTransportFailure(httpStatus, "File ingress rejected: HTTP $httpStatus", code)
 
+/** A failed lookup cannot establish that a source was enabled when upload was rejected. */
+internal class SourcePauseLookupFailure(cause: Exception) : IllegalStateException("Source pause could not be confirmed", cause)
+
+internal fun confirmSourceRejection(error: FileIngressRejection, sourcePaused: () -> Boolean): FileIngressRejection {
+    if (error.httpStatus != 409 || error.paused) return error
+    val paused = try { sourcePaused() }
+    catch (failure: SyncConditionsUnavailable) { throw failure }
+    catch (failure: Exception) { throw SourcePauseLookupFailure(failure) }
+    return if (paused) FileIngressRejection(409, error.code, paused = true) else error
+}
+
 object FileUpload {
     internal fun requireAccepted(status: Int) {
         if (status in setOf(409, 410, 426)) throw FileIngressRejection(status)
@@ -199,10 +210,8 @@ object FileUpload {
             // Resolve that 409 through the same narrow port before persisting a
             // permanent revision failure; disabled sources keep their outbox.
             val failure = if (error is FileIngressRejection && error.httpStatus == 409 && !error.paused && stillSelected()) {
-                val paused = runCatching { context.ingress3(config, stillSelected).sourcePaused(source) }.getOrElse {
-                    if (it is SyncConditionsUnavailable) throw it else false
-                }
-                if (paused) FileIngressRejection(409, error.code, paused = true) else error
+                try { confirmSourceRejection(error) { context.ingress3(config, stillSelected).sourcePaused(source) } }
+                catch (lookupFailure: SourcePauseLookupFailure) { lookupFailure }
             } else error
             if (failure !is SliceYield && failure !is SyncConditionsUnavailable && stillSelected()) observedRow?.let {
                 queue.recordFailure(source, it, if (phase == FileSyncPhase.PREPARING) "prepare" else "upload",

@@ -23,6 +23,17 @@ const fixtureOwners=new Map<string,string>();
 const ingressRequests:{owner:string;method:string;path:string;status:number}[]=[];
 let holdUpload:'begin'|'part'|'commit'|undefined,heldUploadId:string|undefined,dropNextCommit=false,droppedCommitId:string|undefined;
 let holdNext=false,entered=false,release:(()=>void)|undefined;
+let pauseRace:{sourceId:string;phase:'upload'|'lookup'}|undefined,pauseLookupDrops=0;
+node.app.addHook('preHandler',async(request,reply)=>{
+ if(!pauseRace)return;
+ if(pauseRace.phase==='upload'&&request.method==='POST'&&['uploads','items'].some(endpoint=>request.url===`/api/ingress/sources/${pauseRace!.sourceId}/${endpoint}`)){
+  const sourceId=pauseRace.sourceId;pauseRace.phase='lookup';
+  const paused=await node.app.inject({url:'/api/sources/'+sourceId,method:'PATCH',headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',authorization:String(request.headers.authorization)},payload:{enabled:false}});
+  if(paused.statusCode!==200)throw Error('Generated source pause failed '+paused.statusCode);
+ }else if(pauseRace.phase==='lookup'&&request.method==='POST'&&request.url==='/api/ingress/sources'&&(request.body as {id?:string})?.id===pauseRace.sourceId){
+  pauseLookupDrops++;reply.hijack();reply.raw.destroy();
+ }
+});
 node.app.addHook('onSend',async(request,reply,payload)=>{
  const owner=fixtureOwners.get(String(request.headers.authorization))??'other';
  if(request.method==='POST'&&/^\/api\/plugin-instances\/[^/]+\/check$/.test(request.url))pluginChecks[owner]++;
@@ -82,6 +93,8 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/archive-reads'){}
  else if(request.url==='/hold-next'){entered=false;holdNext=true;}
  else if(request.url==='/ingress/reset'){ingressRequests.length=0;}
+ else if(request.url?.startsWith('/source-pause/arm/')){const sourceId=request.url.slice('/source-pause/arm/'.length);if(!/^[A-Za-z0-9_.:-]{1,128}$/.test(sourceId))throw Error('Invalid generated source ID');pauseRace={sourceId,phase:'upload'};pauseLookupDrops=0;}
+ else if(request.url==='/source-pause/clear'){pauseRace=undefined;}
  else if(request.url==='/uploads/hold-begin'){entered=false;heldUploadId=undefined;holdUpload='begin';}
  else if(request.url==='/uploads/hold-part'){entered=false;heldUploadId=undefined;holdUpload='part';}
  else if(request.url==='/uploads/hold-commit'){entered=false;heldUploadId=undefined;holdUpload='commit';}
@@ -101,7 +114,7 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
  let uploads:unknown[]|undefined;if(request.url==='/uploads/state'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{uploads=db.prepare('SELECT id,user_id AS userId,source_id AS sourceId,expires,receipt IS NOT NULL AS committed FROM ig_uploads ORDER BY id').all().map(row=>({...row,parts:db.prepare('SELECT part,bytes,checksum FROM ig_upload_parts WHERE upload_id=? ORDER BY part').all(String(row.id))}));}finally{db.close();}}
- response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads,ingressRequests,heldUploadId,droppedCommitId,uploads,pluginCheckEntered:existsSync(pluginEntered),pluginChecks}));
+ response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads,ingressRequests,heldUploadId,droppedCommitId,uploads,pauseLookupDrops,pluginCheckEntered:existsSync(pluginEntered),pluginChecks}));
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;

@@ -148,10 +148,18 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     throw error
                 } catch (error: FileIngressRejection) {
                     Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.HTTP, httpStatus = error.httpStatus)
-                    val paused = error.paused || (error.httpStatus == 409 && runCatching {
-                        SyncSchedule.requireConditions(applicationContext, config)
-                        applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }.sourcePaused(source)
-                    }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false })
+                    val rejection = try { confirmSourceRejection(error) {
+                            SyncSchedule.requireConditions(applicationContext, config)
+                            applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }.sourcePaused(source)
+                        }
+                    } catch (_: SourcePauseLookupFailure) {
+                        store.status(source.id, "offline")
+                        Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK)
+                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK)
+                        failed = true
+                        continue
+                    }
+                    val paused = rejection.paused
                     store.status(source.id, if (paused) "paused" else "ack")
                     if (!paused) {
                         blocked = true
