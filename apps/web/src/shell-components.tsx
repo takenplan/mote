@@ -35,19 +35,15 @@ import {
 ApiError,
 createApi,
 dateTime,
-deviceLabels,
-deviceState,
 duration,
 errorMessage,
 type Answer,
 type Api,
 type Capture,
-type Connection,
-type Device
+type Connection
 } from "./api";
 import { evidencePresentation,ocrPresentation } from './capture-presentation';
 import { containDialogFocus } from './dialog-focus';
-import { type Page } from './navigation';
 import { resources } from './resource-cache';
 import { readSessionLifetime,type SessionLifetime } from "./session";
 import { useOperationUpdates } from './useOperationUpdates';
@@ -116,18 +112,6 @@ export function DeviceIcon({
     <HardDrive size={size} />
   ) : (
     <Monitor size={size} />
-  );
-}
-
-export function StateBadge({ device }: { device: Device }) {
-  const state = deviceState(device);
-  return (
-    <span
-      className={`badge ${state === "capturing" ? "green" : state === "error" || state === "permission_required" ? "amber" : "muted"}`}
-    >
-      <span className="dot" />
-      {deviceLabels[state] || state}
-    </span>
   );
 }
 
@@ -626,27 +610,4 @@ export function AnswerView({
   );
 }
 
-export function SetupSteps({ onPage }: { onPage: (page: Page) => void }) {
-  return (
-    <div className="setup-steps">
-      <div>
-        <span>01</span>
-        <h3>{moteText("连上采集端")}</h3>
-        <p>{moteText("在手机或电脑的连接设置中，扫描或导入一次性邀请。")}</p>
-      </div>
-      <div>
-        <span>02</span>
-        <h3>{moteText("选择愿意留下的内容")}</h3>
-        <p>{moteText("设置应用排除和脱敏，确认权限后主动开启采集。")}</p>
-      </div>
-      <div>
-        <span>03</span>
-        <h3>{moteText("让上下文开始连结")}</h3>
-        <p>{moteText("回到这里查看记录；配置模型后，就可以问一个问题。")}</p>
-        <button className="text-button" onClick={() => onPage("devices")}>
-          {moteText("查看设备连接指引")}{' '}<ArrowRight size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
+
