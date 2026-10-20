@@ -1,0 +1,171 @@
+{
+  "base": "4fc433cd2f9f0f43c38c6afc70834ba19d9d5c6a",
+  "total": 335,
+  "results": [
+    {
+      "family": "multiuser-memory",
+      "scenarios": 90,
+      "registrationBlocks": 74,
+      "registrationSha256": "047d1b6190f9ccdbfaa72b9aa40327b9f5c456e85745fb14c8778e85c9b5561d",
+      "helperSha256": "9bae7c4db7738f64ebbe985a4ae9ac720768184690f88ebd702e185724cc51f3",
+      "shards": [
+        {
+          "path": "apps/server/test/multiuser-memory.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-02.test.ts",
+          "scenarios": 8
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-03.test.ts",
+          "scenarios": 12
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-04.test.ts",
+          "scenarios": 14
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-05.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-06.test.ts",
+          "scenarios": 13
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-07.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-08.test.ts",
+          "scenarios": 10
+        }
+      ]
+    },
+    {
+      "family": "multiuser-ask",
+      "scenarios": 65,
+      "registrationBlocks": 60,
+      "registrationSha256": "653bb9b91b4367906fc2fed77ca96311e9d3f64b9ccc3c65156f087cbd0b7c90",
+      "helperSha256": "c5c1e21a310ed34f836e66cea6502bf8034f318a47bf520b5d6ba59be13a319f",
+      "shards": [
+        {
+          "path": "apps/server/test/multiuser-ask.test.ts",
+          "scenarios": 5
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-02.test.ts",
+          "scenarios": 15
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-03.test.ts",
+          "scenarios": 12
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-04.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-05.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-06.test.ts",
+          "scenarios": 11
+        }
+      ]
+    },
+    {
+      "family": "file-processing",
+      "scenarios": 59,
+      "registrationBlocks": 56,
+      "registrationSha256": "4eaf17ce762470e11852de74758d42b3d367efe25687c76fd417cc7ffc84a4fa",
+      "helperSha256": "39731c34a54f3514af2c18d27814af640bde91ea488b2e5fdc37d92f6d8f1d2b",
+      "shards": [
+        {
+          "path": "apps/server/test/file-processing.test.ts",
+          "scenarios": 1
+        },
+        {
+          "path": "apps/server/test/file-processing-02.test.ts",
+          "scenarios": 13
+        },
+        {
+          "path": "apps/server/test/file-processing-03.test.ts",
+          "scenarios": 17
+        },
+        {
+          "path": "apps/server/test/file-processing-04.test.ts",
+          "scenarios": 14
+        },
+        {
+          "path": "apps/server/test/file-processing-05.test.ts",
+          "scenarios": 14
+        }
+      ]
+    },
+    {
+      "family": "multiuser-processing",
+      "scenarios": 68,
+      "registrationBlocks": 43,
+      "registrationSha256": "d612818341e33f0b75b4aeec35728f55cd1a7b9f3a70c22fd61f793f99c5dbb4",
+      "helperSha256": "b4649feed75558161d45960312958d5bebc125ecb0ce88bb285263ea59a03aeb",
+      "shards": [
+        {
+          "path": "apps/server/test/multiuser-processing.test.ts",
+          "scenarios": 12
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-02.test.ts",
+          "scenarios": 12
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-03.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-04.test.ts",
+          "scenarios": 11
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-05.test.ts",
+          "scenarios": 13
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-06.test.ts",
+          "scenarios": 9
+        }
+      ]
+    },
+    {
+      "family": "multiuser-connectors",
+      "scenarios": 53,
+      "registrationBlocks": 47,
+      "registrationSha256": "9acff2c48070a9eadb1cc78aa3712048270e058377a58b4fb4e7c07903e4dabd",
+      "helperSha256": "9587bd47f0263d98220288b157e0c6365a142bcfbec9890c30f9e1a802ccb392",
+      "shards": [
+        {
+          "path": "apps/server/test/multiuser-connectors.test.ts",
+          "scenarios": 5
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-02.test.ts",
+          "scenarios": 5
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-03.test.ts",
+          "scenarios": 12
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-04.test.ts",
+          "scenarios": 14
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-05.test.ts",
+          "scenarios": 17
+        }
+      ]
+    }
+  ]
+}
