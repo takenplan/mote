@@ -144,7 +144,7 @@ export class TaskExecution {
  }
  /** The integration composition passes the existing M04 Configurations host. */
  bindConfiguration(host:TaskModelHost){if(this.modelHost&&this.modelHost!==host)throw new TaskError('model_host_conflict',409);this.modelHost=host;}
- private modelCurrent(step:ExecutionStep){const row=this.row(step.id);if(!row?.model_receipt)return true;const lease=this.modelLeases.get(step.id);if(!lease){const fence=this.modelRecovery.get(step.id);return Boolean(fence&&this.engine.isCurrentGrant(step.id,fence));}try{this.modelHost?.assertLease(lease);return Boolean(this.modelHost);}catch{return false;}}
+ private modelCurrent(step:ExecutionStep){const row=this.validationStatement('SELECT model_receipt FROM user_tasks WHERE task_id=?').get(step.id) as Pick<TaskRow,'model_receipt'>|undefined;if(!row?.model_receipt)return true;const lease=this.modelLeases.get(step.id);if(!lease){const fence=this.modelRecovery.get(step.id);return Boolean(fence&&this.engine.isCurrentGrant(step.id,fence));}try{this.modelHost?.assertLease(lease);return Boolean(this.modelHost);}catch{return false;}}
  private transaction<T>(write:()=>T):T{
   const nested=this.db.isTransaction,savepoint='user_task_'+randomUUID().replaceAll('-','');
   this.db.exec(nested?'SAVEPOINT '+savepoint:'BEGIN IMMEDIATE');
@@ -153,11 +153,12 @@ export class TaskExecution {
  }
  private row(taskId:string){return this.validationStatement('SELECT * FROM user_tasks WHERE task_id=?').get(taskId) as TaskRow|undefined;}
  private enabled(userId:string){if(this.validationStatement('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(userId))throw new ScopeError('invalid_identity',401);}
- private assertTask(step:ExecutionStep){
-  const row=this.row(step.id);if(!row||!step.ownership||row.user_id!==step.ownership.userId||row.grant_id!==step.ownership.grantId)throw new ScopeError('invalid_identity',401);
+ private assertTaskIdentity<T extends Pick<TaskRow,'user_id'|'grant_id'>>(step:ExecutionStep,row:T|undefined){
+  if(!row||!step.ownership||row.user_id!==step.ownership.userId||row.grant_id!==step.ownership.grantId)throw new ScopeError('invalid_identity',401);
   this.enabled(row.user_id);if(this.grants.assert(row.grant_id,row.user_id,step.ownership.authorizationEpoch).task_id!==step.id)throw new ScopeError('invalid_identity',401);return row;
  }
- private valid(step:ExecutionStep){try{this.assertTask(step);return true;}catch{return false;}}
+ private assertTask(step:ExecutionStep){return this.assertTaskIdentity(step,this.row(step.id));}
+ private valid(step:ExecutionStep){try{this.assertTaskIdentity(step,this.validationStatement('SELECT user_id,grant_id FROM user_tasks WHERE task_id=?').get(step.id) as Pick<TaskRow,'user_id'|'grant_id'>|undefined);return true;}catch{return false;}}
  private localWork<T>(step:ExecutionStep,signal:AbortSignal,grant:ExecutionGrant,work:()=>Promise<T>):Promise<T>{
   const current=()=>{if(this.closing)throw new ExecutionFailure('stale','grant_revoked');signal.throwIfAborted();grant.assert();};
   try{current();}catch(error){return Promise.reject(error);}
