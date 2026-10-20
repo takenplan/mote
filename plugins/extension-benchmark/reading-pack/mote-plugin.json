@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "generated.reading-pack",
+  "name": "Generated reading notes",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "entry": "plugin.mjs",
+  "archive": {
+    "asset": "reading-pack.zip",
+    "sha256": "bb6522b7e41dbd82a7af44e94ebc62c60c8c1ce56242d242187fc69dea3711a5"
+  },
+  "capabilities": [
+    "source",
+    "processor"
+  ],
+  "configuration": [
+    {
+      "id": "label",
+      "label": "Reading collection",
+      "type": "text",
+      "required": true
+    }
+  ],
+  "dependencies": [],
+  "access": [
+    "Explicitly granted archived reading sources"
+  ],
+  "components": [
+    {
+      "id": "reading.source.enumerate",
+      "version": "1",
+      "surface": "ingress",
+      "capability": "source"
+    },
+    {
+      "id": "reading.processor.normalize",
+      "version": "1",
+      "surface": "processing",
+      "capability": "processor"
+    }
+  ]
+}

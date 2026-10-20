@@ -1,0 +1,458 @@
+{
+  "schemaVersion": 1,
+  "candidate": "7795f14eaa5382d6b1704a72ac0023694fc506cc",
+  "productionBaseline": "2c78ca8d52a7d17fae20962cf68d09a717ffc73a",
+  "specSha256": "9abd71fb674ff111e3b5e82ce016e6fdc992752a972ab3da1bb2a3c7f332fba5",
+  "seedCommitment": "47c03a34bd371c3e8ad841d39b75d5e0f3e49a12f69525ecb580cf757bc6199e",
+  "seedSelectedAt": "2026-10-19T18:48:50.545501+00:00",
+  "seedTimingLimitation": "After Iterator start; before inspecting any delivered artifacts",
+  "releasedSeed": "67ccfbb7749c98ad3e92dcdafc4f1a493f8b63a74d1491bd",
+  "finalValueVariant": "refund-repair-1",
+  "runtime": {
+    "node": "v24.19.0",
+    "typescript": "5.9.3",
+    "tsx": "4.23.13"
+  },
+  "verification": {
+    "independentTests": {
+      "pass": 9,
+      "fail": 0,
+      "exitCode": 0,
+      "durationMs": 31401.719455
+    },
+    "financeSelftestIndependent": {
+      "pass": 3,
+      "fail": 0,
+      "exitCode": 0
+    },
+    "readingSelftestIndependent": {
+      "pass": 1,
+      "fail": 0,
+      "exitCode": 0
+    },
+    "existingFocused": {
+      "pass": 8,
+      "fail": 0,
+      "exitCode": 0,
+      "durationMs": 13375.695053
+    },
+    "postRunChange": "Only finance diagnostic full-case label clarified to FAIL/NO_EXTENSION_POINT; no test assertion, plugin, or production behavior changed."
+  },
+  "calibrationExpectedAndObserved": [
+    {
+      "evidence": "EV-C01-C04",
+      "specimenSha256": "f493ecf5d6c46bcac1c01012b27275143d3e73f06d58ff8f668b5b752bcd08ce",
+      "archiveSha256": "0f99fda31b0a18a8ec1faea93dd3f6631b6225cb7220de880f99eae9d991f52c",
+      "c01": "PASS",
+      "c02": {
+        "task": "succeeded",
+        "intendedPublication": false,
+        "functional": "FAIL",
+        "realExecution": "FAIL"
+      },
+      "c03": {
+        "persisted": 83335,
+        "expected": 1186,
+        "functional": "FAIL"
+      },
+      "c04": {
+        "specimenSha256": "bbe7669703e96b67e26fc17e3d370232a82b6aac24d39cfc5d25b8abf0261919",
+        "coreZero": "FAIL",
+        "core": [
+          "apps/server/src/scope/app.ts"
+        ]
+      }
+    },
+    {
+      "evidence": "EV-C05-C06",
+      "foreignOriginal": "blocked",
+      "foreignSnapshot": 404,
+      "administratorPrivateSelection": false,
+      "pauseDrain": "succeeded",
+      "stopLateTask": "stale",
+      "latePublications": 0,
+      "bContinues": true
+    },
+    {
+      "evidence": "EV-INPUT-FENCES",
+      "deletedOriginalTask": "blocked",
+      "revokedSourceTask": "stale",
+      "lateMaterials": 0,
+      "oldSnapshotHttp": 401,
+      "newlyNarrowedOriginalRead": "blocked"
+    },
+    {
+      "evidence": "EV-P04-P06",
+      "nativeBytesSha256": "cef385399221e0906343652be39a5acc41c104c1852d792b6e2e28102e26355d",
+      "nativeFactoryCheckHttp": 502,
+      "nativeFailure": {
+        "error": "execution_unavailable"
+      },
+      "nativeHarnessCapability": "FAIL/NO_EXTENSION_POINT",
+      "genericTriggerHttp": 503,
+      "customAutomationHttp": 400,
+      "extraCallbackOnBuiltInHttp": 400,
+      "workerRegisterTrigger": "blocked",
+      "triggerCapability": "FAIL/NO_EXTENSION_POINT"
+    },
+    {
+      "evidence": "EV-SHIPPED-RESTART",
+      "entry": "apps/server/src/index.ts",
+      "actualProcessHttp": true,
+      "termination": "SIGKILL",
+      "fixedTaskId": "bd1378f38d8a3258524f21224a8cc55196d17560d838a7515ec74cbded64d0a6",
+      "duplicatePublications": 0,
+      "foreignOriginal": "blocked",
+      "referencedUninstallHttp": 409,
+      "modelCalls": 0,
+      "inFlightRecovery": "NOT RUN"
+    },
+    {
+      "evidence": "EV-FINANCE-VISIBLE",
+      "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+      "inputSha256": "4fb0da2b1eb69e25339b9416612c28ee909fd89e18ec61b0cd7a6001b0d23910",
+      "mockSha256": "a127d9f602aedb203785a2a1f6182866f8d6fe201723438a4022982575638e33",
+      "originalCount": 43,
+      "uniqueTransactions": 23,
+      "totals": {
+        "2026-10": 9999,
+        "2026-09": 83335,
+        "2026-08": 1234
+      },
+      "exactEvidence": true,
+      "missingRefundLinks": [],
+      "productionModelPath": "blocked",
+      "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+      "sourcePublication": "PASS",
+      "executedDiagnosticFullE01": "PARTIAL",
+      "scoredFullE01": "FAIL",
+      "reason": "NO_EXTENSION_POINT: source host exposes no authorized semantic model callback"
+    },
+    {
+      "evidence": "EV-FINANCE-HELDOUT",
+      "pluginSha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+      "inputSha256": "0e8de8eb8be6167d8090156dc665f301251753614b31a235529c777910b03351",
+      "mockSha256": "8c858f854ba02adc8ceb9fd02dd3715d44ee7433c15d82478d148c27f7236434",
+      "originalCount": 43,
+      "uniqueTransactions": 23,
+      "totals": {
+        "2026-10": 10857,
+        "2026-09": 83331,
+        "2026-08": 1330
+      },
+      "exactEvidence": true,
+      "missingRefundLinks": [],
+      "productionModelPath": "blocked",
+      "semanticTransport": "NOT EXECUTED; deterministic in-package semantic replacement only",
+      "sourcePublication": "PASS",
+      "executedDiagnosticFullE01": "PARTIAL",
+      "scoredFullE01": "FAIL",
+      "reason": "NO_EXTENSION_POINT: source host exposes no authorized semantic model callback"
+    },
+    {
+      "evidence": "EV-READING",
+      "pluginSha256": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+      "fixtureSha256": "98e37f3da0374e4f14b0df3b7786ada307af483866b159abe69ec17e16aa32ee",
+      "originalCount": 5,
+      "pages": 3,
+      "exactArtifacts": 5,
+      "duplicatePublications": 0,
+      "wrongSourceAndOwner": "blocked",
+      "processorSubprobe": "PASS",
+      "fullImageProvider": "NOT RUN",
+      "modelCalls": 0
+    },
+    {
+      "evidence": "EV-COMPOSITION",
+      "independentPackages": 2,
+      "financeSourceScan": "succeeded",
+      "readingProcessor": "succeeded",
+      "stoppedFinanceSnapshotHttp": 401,
+      "readingAfterSiblingStop": "succeeded",
+      "packageUpgrade": "NOT RUN",
+      "inFlightUpgrade": "NOT RUN"
+    }
+  ],
+  "audit": {
+    "observedAt": "2026-10-19T19:05:08.949404+00:00",
+    "candidate": "7795f14eaa5382d6b1704a72ac0023694fc506cc",
+    "productionBaseline": "2c78ca8d52a7d17fae20962cf68d09a717ffc73a",
+    "coreExistingDiffFiles": [],
+    "existingTestDiffFiles": [],
+    "iteratorOwnedExistingFiles": [],
+    "pluginPrivateImports": [],
+    "files": [
+      {
+        "path": "plugins/extension-benchmark/reading-pack/reading-pack.zip",
+        "sha256": "bb6522b7e41dbd82a7af44e94ebc62c60c8c1ce56242d242187fc69dea3711a5",
+        "bytes": 1144,
+        "lines": null,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/build-release.mjs",
+        "sha256": "bbf34909e183975d69102afcdb0cc0ebb6577b14dbcced11d21f2136222ebd28",
+        "bytes": 1243,
+        "lines": 20,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/release-fixture.mjs",
+        "sha256": "81eb68714244433a9fb5d79ceebc84590a8184d4ac5ac9d2e92941a5e6acd69e",
+        "bytes": 1770,
+        "lines": 28,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/plugin.mjs",
+        "sha256": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+        "bytes": 2612,
+        "lines": 60,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/README.md",
+        "sha256": "db0aedfeba5d9d84f011217fed0a825c3cba4ae92ff3a06a5b5d6c6436c179c5",
+        "bytes": 5771,
+        "lines": 108,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/trial-result.json",
+        "sha256": "2c37c23c41d5e67993561fe6bc76f3a4c0fddcefc5580508dee203b0d98c1fe4",
+        "bytes": 5047,
+        "lines": 71,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/reading-pack/mote-plugin.json",
+        "sha256": "71e21d6887ca407b8783fb0df5da0888e9eb1c8cf80be438314516a71474c7f8",
+        "bytes": 882,
+        "lines": 42,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/semantic-mock.mjs",
+        "sha256": "f7a16d94530609a2c42a739d4fb94415dd461b9fd6f4f61e69dfd63eef168be4",
+        "bytes": 496,
+        "lines": 10,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/trial-r1.json",
+        "sha256": "5702e984003b58dd3a82f6eb7ee1df269bd0191c70687177b504c6c45b90712c",
+        "bytes": 10428,
+        "lines": 277,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/plugin.mjs",
+        "sha256": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+        "bytes": 6843,
+        "lines": 99,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/case-input.mjs",
+        "sha256": "5eb79b3a6ff2fdd3dc38002896085f7410e28269a073e2eafeea9863a37c5ab3",
+        "bytes": 6908,
+        "lines": 2,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/README.md",
+        "sha256": "05efe5df560ed53ff029359e60a36eb5e9dd5e9ef1fb50250c4e4cf6516a4684",
+        "bytes": 7445,
+        "lines": 75,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/release.mjs",
+        "sha256": "e136175376096aaad529167a3276afbcedde31cca6f364c0dd8d05a11dad17eb",
+        "bytes": 2012,
+        "lines": 22,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/oracle.mjs",
+        "sha256": "d3488b6a32021c949aefaebaa0f71d559d6d1865a56d377d4901952c3bffb752",
+        "bytes": 461,
+        "lines": 4,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "plugins/extension-benchmark/finance/fixtures.mjs",
+        "sha256": "740d692a8e7f10be270a107c52609a57b09384034997f6b638bbc13b5d1cbdf6",
+        "bytes": 1938,
+        "lines": 19,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "apps/server/test/extension-benchmark-finance.test.ts",
+        "sha256": "0083a6f6bfbf7590a0b2a1c8c329ab4b01c32f43f7d45d9c560deeb380466f37",
+        "bytes": 14452,
+        "lines": 147,
+        "preExistingAtBaseline": false
+      },
+      {
+        "path": "apps/server/test/extension-benchmark-reading.test.ts",
+        "sha256": "8dd270b6a3e9ad3546908855067a223154848d05a1b10ad0d64075d657a55436",
+        "bytes": 14950,
+        "lines": 182,
+        "preExistingAtBaseline": false
+      }
+    ],
+    "iteratorConfigurationEdits": 0,
+    "scopeAttribution": "Iterator-owned new extension directories and new focused tests are separate from root-owned preexisting documentation edits."
+  },
+  "evaluatedFileSha256": {
+    "plugins/extension-benchmark/reading-pack/reading-pack.zip": "bb6522b7e41dbd82a7af44e94ebc62c60c8c1ce56242d242187fc69dea3711a5",
+    "plugins/extension-benchmark/reading-pack/build-release.mjs": "bbf34909e183975d69102afcdb0cc0ebb6577b14dbcced11d21f2136222ebd28",
+    "plugins/extension-benchmark/reading-pack/release-fixture.mjs": "81eb68714244433a9fb5d79ceebc84590a8184d4ac5ac9d2e92941a5e6acd69e",
+    "plugins/extension-benchmark/reading-pack/plugin.mjs": "96c9100fa847e5c6728d0d7df0b3d1603f19630163e3c5cd1d552071c616b7ca",
+    "plugins/extension-benchmark/reading-pack/README.md": "db0aedfeba5d9d84f011217fed0a825c3cba4ae92ff3a06a5b5d6c6436c179c5",
+    "plugins/extension-benchmark/reading-pack/trial-result.json": "2c37c23c41d5e67993561fe6bc76f3a4c0fddcefc5580508dee203b0d98c1fe4",
+    "plugins/extension-benchmark/reading-pack/mote-plugin.json": "71e21d6887ca407b8783fb0df5da0888e9eb1c8cf80be438314516a71474c7f8",
+    "plugins/extension-benchmark/finance/semantic-mock.mjs": "f7a16d94530609a2c42a739d4fb94415dd461b9fd6f4f61e69dfd63eef168be4",
+    "plugins/extension-benchmark/finance/trial-r1.json": "5702e984003b58dd3a82f6eb7ee1df269bd0191c70687177b504c6c45b90712c",
+    "plugins/extension-benchmark/finance/plugin.mjs": "3fdc2f3ea8a96a4311c783d7d8a6f6b59e45bb8c49ffa4cbdf8344a1bd7fa1d1",
+    "plugins/extension-benchmark/finance/case-input.mjs": "5eb79b3a6ff2fdd3dc38002896085f7410e28269a073e2eafeea9863a37c5ab3",
+    "plugins/extension-benchmark/finance/README.md": "05efe5df560ed53ff029359e60a36eb5e9dd5e9ef1fb50250c4e4cf6516a4684",
+    "plugins/extension-benchmark/finance/release.mjs": "e136175376096aaad529167a3276afbcedde31cca6f364c0dd8d05a11dad17eb",
+    "plugins/extension-benchmark/finance/oracle.mjs": "d3488b6a32021c949aefaebaa0f71d559d6d1865a56d377d4901952c3bffb752",
+    "plugins/extension-benchmark/finance/fixtures.mjs": "740d692a8e7f10be270a107c52609a57b09384034997f6b638bbc13b5d1cbdf6",
+    "apps/server/test/extension-benchmark-finance.test.ts": "0083a6f6bfbf7590a0b2a1c8c329ab4b01c32f43f7d45d9c560deeb380466f37",
+    "apps/server/test/extension-benchmark-reading.test.ts": "8dd270b6a3e9ad3546908855067a223154848d05a1b10ad0d64075d657a55436",
+    "apps/server/test/extension-benchmark-evaluator.test.ts": "72ea75cab74504149779eda671968902d9758f3d542b4b00fc6aeacd6d149c2d"
+  },
+  "inputManifestSha256": "19d150f8bd7f171ac9db397f98109005e1393342616d9dfe76c16943956ae7e9",
+  "coverage": {
+    "actualProcessShippedEntry": true,
+    "models": "No live model calls; deterministic semantic replacement only",
+    "native": "NOT RUN",
+    "browser": "NOT RUN",
+    "packageUpgrade": "NOT RUN",
+    "inFlightHostRecovery": "NOT RUN"
+  },
+  "feedback": {
+    "financeCycles": 1,
+    "financeFirstValidAttempt": "FAIL: persisted R01/R02 lacked refundOf; correct totals and all other evidence",
+    "financeAfterCycle1": "PASS for source arithmetic/publication on visible and fresh held-out values",
+    "readingCycles": 0
+  },
+  "safety": "Generated synthetic data only; no credentials, model secrets, real screenshots or account tokens preserved.",
+  "fullCaseResults": [
+    {
+      "id": "E01",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E02",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E03",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E04",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E05",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E06",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "E07",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E08",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E09",
+      "status": "NOT RUN"
+    },
+    {
+      "id": "E10",
+      "status": "PARTIAL"
+    },
+    {
+      "id": "E11",
+      "status": "PARTIAL"
+    },
+    {
+      "id": "E12",
+      "status": "NOT RUN"
+    }
+  ],
+  "primaryProbeResults": [
+    {
+      "id": "P01_SOURCE",
+      "status": "PASS",
+      "scope": "Bounded source publication with explicit in-package semantic replacement; no model lease/transport claim"
+    },
+    {
+      "id": "P02_PROCESSOR",
+      "status": "PASS",
+      "scope": "Archived text Transcript staging; no image-provider claim"
+    },
+    {
+      "id": "P10_LIFECYCLE",
+      "status": "PARTIAL",
+      "missing": [
+        "exact package-version in-flight upgrade",
+        "in-flight process recovery"
+      ]
+    },
+    {
+      "id": "P11_ISOLATION",
+      "status": "PARTIAL",
+      "missing": [
+        "model resource/export branch",
+        "combined A/B held callback and restart"
+      ]
+    },
+    {
+      "id": "P04_HARNESS",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    },
+    {
+      "id": "P06_TRIGGER",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT"
+    }
+  ],
+  "metrics": {
+    "fullCaseNISR": {
+      "numerator": 0,
+      "denominator": 5,
+      "notRun": 7,
+      "blocked": 0
+    },
+    "comparisonWarning": "Finance and reading are different authoring tasks, not matched docs-only statistical replicates.",
+    "primaryFunctionalCoverage": {
+      "numerator": 2,
+      "denominator": 6,
+      "blocked": 0,
+      "isCompleteGateNISR": false,
+      "scope": "Two narrowed source-publication/text-extraction slices; not complete frozen requiredAssertionIds."
+    },
+    "completeGateProbeNISR": null,
+    "completeGateProbeNISRReason": "Only focused G5 evidence exists for this round; durable insight and image-input/provider assertions also remain incomplete. Final G5 cannot promote those slices to complete frozen-probe PASS."
+  },
+  "scoringClarification": {
+    "change": "Report-only correction of G5 symbols and metric naming; all commands, execution counts, artifacts and full-case outcomes are unchanged.",
+    "frozenPrimaryScope": "P01/P02 PASS labels in primaryProbeResults refer only to each explicit scope field. They are not all-assertion PASS verdicts for frozen probes.",
+    "g5": "Focused regression evidence only; complete check belongs to root."
+  }
+}

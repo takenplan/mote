@@ -1,5 +1,10 @@
 # 插件中心与 Memory 方案
 
+> 新外部插件从 [当前多用户插件开发指南](plugin-authoring.md) 开始。
+> 共享包由管理员安装，每个用户分别配置和授权实例；正文/检索通过 Memory 领域绑定。
+> 本页后续部分保留一期 owner-token API 的历史说明，当前账户 API 以开发指南及
+> [多用户插件领域](design/multiuser-plugins.md) 为准。
+
 全局 UI 的主题／布局扩展通过独立的[可信平台展示包合同](adr-ui-presentation-packs.md)实现。默认 Linear 主题和四目的地外壳使用同一边界；它不经过本页 Memory worker 安装器，不新增远程 UI 代码执行或主题偏好跨端同步。
 
 插件中心位于「设置 → 插件」，包含已安装、发现和记忆方案。它管理当前 Central 的包、配置实例、运行能力、自动准入和正文绑定；GitHub 资料连接器仍在来源中管理。Web 与 Android 使用同一声明式状态合同；Android 使用原生页面。实际执行记录见 [一期验证方案](design/plugin-center-phase-one-validation-2026-10-12.md)，架构选择见 [ADR](adr-plugin-center-memory-replacement.md)。

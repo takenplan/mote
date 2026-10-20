@@ -1,0 +1,2057 @@
+{
+  "final-initial": {
+    "expected": {
+      "allTransactionIds": [
+        "tx-00df5e7b90aab981",
+        "tx-02c114e214bc7b21",
+        "tx-0f4eaf97ed42bd05",
+        "tx-21ac3d351fb35f11",
+        "tx-34451e99f5c7bd33",
+        "tx-3dcac1061a7d9f5f",
+        "tx-4bf3f0e2283fb7f8",
+        "tx-594161eb05a48e41",
+        "tx-5b55953c1d5ed013",
+        "tx-86b2e239e5f7c671",
+        "tx-95d4d3a0597edaea",
+        "tx-a00107581f2ac8bb",
+        "tx-adcb2e71c1f8f10c",
+        "tx-bb6169371a950f45",
+        "tx-c08fa639e8a9fa9d",
+        "tx-c235503a417ac073",
+        "tx-d426c75c90acff55",
+        "tx-dffa7d0528ac144d",
+        "tx-e23cbefdda92307f",
+        "tx-e4b68562208717ec",
+        "tx-f056c4464dc07d92",
+        "tx-f548d26bda856a59",
+        "tx-fb6aff874c5240c3"
+      ],
+      "currency": "USD",
+      "grossCents": 95860,
+      "ledgerIds": [
+        "tx-00df5e7b90aab981",
+        "tx-02c114e214bc7b21",
+        "tx-0f4eaf97ed42bd05",
+        "tx-21ac3d351fb35f11",
+        "tx-34451e99f5c7bd33",
+        "tx-4bf3f0e2283fb7f8",
+        "tx-594161eb05a48e41",
+        "tx-5b55953c1d5ed013",
+        "tx-86b2e239e5f7c671",
+        "tx-95d4d3a0597edaea",
+        "tx-a00107581f2ac8bb",
+        "tx-adcb2e71c1f8f10c",
+        "tx-bb6169371a950f45",
+        "tx-c08fa639e8a9fa9d",
+        "tx-c235503a417ac073",
+        "tx-d426c75c90acff55",
+        "tx-dffa7d0528ac144d",
+        "tx-e23cbefdda92307f",
+        "tx-e4b68562208717ec",
+        "tx-f056c4464dc07d92",
+        "tx-f548d26bda856a59"
+      ],
+      "month": "2026-09",
+      "monthlyCharges": 19,
+      "monthlyRefunds": 2,
+      "netCents": 89251,
+      "noiseObservations": 4,
+      "observationIdsByTransaction": {
+        "tx-00df5e7b90aab981": [
+          "obs-6713365b339b87e6",
+          "obs-9a1a02acd4a576e4"
+        ],
+        "tx-02c114e214bc7b21": [
+          "obs-23cee93028c782b1"
+        ],
+        "tx-0f4eaf97ed42bd05": [
+          "obs-30f5acf90c55baac",
+          "obs-6916fde703547004"
+        ],
+        "tx-21ac3d351fb35f11": [
+          "obs-41817dac1906b3a7",
+          "obs-fd099bd66ed1b59d"
+        ],
+        "tx-34451e99f5c7bd33": [
+          "obs-eca9ae8baf15af03",
+          "obs-fab5b1f04a0a170e"
+        ],
+        "tx-3dcac1061a7d9f5f": [
+          "obs-c92c4d480d5f2e09",
+          "obs-f241de8b0c16aa6f"
+        ],
+        "tx-4bf3f0e2283fb7f8": [
+          "obs-6821cb21ae334565",
+          "obs-71071dcfff358b6a"
+        ],
+        "tx-594161eb05a48e41": [
+          "obs-e8dfadb83044731d"
+        ],
+        "tx-5b55953c1d5ed013": [
+          "obs-1ad3e6a9324de3d5",
+          "obs-3a2ec2ec41c83eff"
+        ],
+        "tx-86b2e239e5f7c671": [
+          "obs-65645256bde47d45",
+          "obs-a9eba7534b10406a"
+        ],
+        "tx-95d4d3a0597edaea": [
+          "obs-205d34ddb7003cf3",
+          "obs-c9f46b34924063b6"
+        ],
+        "tx-a00107581f2ac8bb": [
+          "obs-83fb8936ff473611"
+        ],
+        "tx-adcb2e71c1f8f10c": [
+          "obs-f31f13492eecdf0f"
+        ],
+        "tx-bb6169371a950f45": [
+          "obs-834dea6fcd8760b9"
+        ],
+        "tx-c08fa639e8a9fa9d": [
+          "obs-139265676592ecf3"
+        ],
+        "tx-c235503a417ac073": [
+          "obs-60d1f090521b112c",
+          "obs-76b108a11cda9b56"
+        ],
+        "tx-d426c75c90acff55": [
+          "obs-1f960e8f270f140d",
+          "obs-ac3bbfd261d9a853"
+        ],
+        "tx-dffa7d0528ac144d": [
+          "obs-d0f71f35283bec48",
+          "obs-d41f6dd4882857c6"
+        ],
+        "tx-e23cbefdda92307f": [
+          "obs-97dce43e03b0acf4",
+          "obs-e0570deb0cff3520"
+        ],
+        "tx-e4b68562208717ec": [
+          "obs-1e1bbfd44d6b762b",
+          "obs-5b7d6a0ea410e9e9"
+        ],
+        "tx-f056c4464dc07d92": [
+          "obs-0669cfd1a47ea02b",
+          "obs-451553139a322506"
+        ],
+        "tx-f548d26bda856a59": [
+          "obs-5cac8e02b205a72f",
+          "obs-e4f5a11a711edbd5"
+        ],
+        "tx-fb6aff874c5240c3": [
+          "obs-8463ac6a3d5e4cc4"
+        ]
+      },
+      "pageLimit": 7,
+      "refundCents": 6609,
+      "refundOfById": {
+        "tx-adcb2e71c1f8f10c": "tx-00df5e7b90aab981",
+        "tx-e23cbefdda92307f": "tx-95d4d3a0597edaea"
+      },
+      "repeatedObservations": 16,
+      "sourceMinimumPages": {
+        "source-0fab5e7b3e56": 3,
+        "source-4a3f4a67faac": 2,
+        "source-b314ca8475b0": 3
+      },
+      "sourceObservationCounts": {
+        "source-0fab5e7b3e56": 20,
+        "source-4a3f4a67faac": 8,
+        "source-b314ca8475b0": 15
+      },
+      "totalObservations": 43,
+      "uniqueTransactions": 23
+    },
+    "label": "final-initial",
+    "observations": [
+      {
+        "observationId": "obs-451553139a322506",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-451553139a322506\n{\"amountCents\": 2546, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant c4e53185\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-f056c4464dc07d92\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f056c4464dc07d92"
+      },
+      {
+        "observationId": "obs-fd099bd66ed1b59d",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-fd099bd66ed1b59d\n{\"amountCents\": 2881, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant d727301e\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-21ac3d351fb35f11\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-21ac3d351fb35f11"
+      },
+      {
+        "observationId": "obs-e8dfadb83044731d",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-e8dfadb83044731d\n{\"amountCents\": 3932, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 6af527ff\", \"postedAt\": \"2026-09-20T12:00:00Z\", \"transactionId\": \"tx-594161eb05a48e41\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-594161eb05a48e41"
+      },
+      {
+        "observationId": "obs-6821cb21ae334565",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-6821cb21ae334565\n{\"amountCents\": 993, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 6e0fa1a9\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-4bf3f0e2283fb7f8\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-4bf3f0e2283fb7f8"
+      },
+      {
+        "observationId": "obs-5cac8e02b205a72f",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-5cac8e02b205a72f\n{\"amountCents\": 804, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 45808032\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-f548d26bda856a59\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f548d26bda856a59"
+      },
+      {
+        "observationId": "obs-1ad3e6a9324de3d5",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-1ad3e6a9324de3d5\n{\"amountCents\": 1387, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 7cea91b5\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-5b55953c1d5ed013\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-5b55953c1d5ed013"
+      },
+      {
+        "observationId": "obs-834dea6fcd8760b9",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-834dea6fcd8760b9\n{\"amountCents\": 7782, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant e5aa5285\", \"postedAt\": \"2026-09-28T12:00:00Z\", \"transactionId\": \"tx-bb6169371a950f45\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-bb6169371a950f45"
+      },
+      {
+        "observationId": "obs-97dce43e03b0acf4",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-97dce43e03b0acf4\n{\"amountCents\": -2337, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 523ea6a8\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-95d4d3a0597edaea\", \"transactionId\": \"tx-e23cbefdda92307f\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-e23cbefdda92307f"
+      },
+      {
+        "observationId": "obs-6916fde703547004",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-6916fde703547004\n{\"amountCents\": 1677, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 6b33c24d\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-0f4eaf97ed42bd05\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-0f4eaf97ed42bd05"
+      },
+      {
+        "observationId": "obs-5f6add5a38cecfdf",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-5f6add5a38cecfdf: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-ac3bbfd261d9a853",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-ac3bbfd261d9a853\n{\"amountCents\": 8581, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant aa0b62cf\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-d426c75c90acff55\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d426c75c90acff55"
+      },
+      {
+        "observationId": "obs-c92c4d480d5f2e09",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-c92c4d480d5f2e09\n{\"amountCents\": 5007, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 86e2811c\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-3dcac1061a7d9f5f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-3dcac1061a7d9f5f"
+      },
+      {
+        "observationId": "obs-65645256bde47d45",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-65645256bde47d45\n{\"amountCents\": 24639, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 73809642\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-86b2e239e5f7c671\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-86b2e239e5f7c671"
+      },
+      {
+        "observationId": "obs-76b108a11cda9b56",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-76b108a11cda9b56\n{\"amountCents\": 1995, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 3341b404\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-c235503a417ac073\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-c235503a417ac073"
+      },
+      {
+        "observationId": "obs-c9f46b34924063b6",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-c9f46b34924063b6\n{\"amountCents\": 3899, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant e188f38f\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-95d4d3a0597edaea\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-95d4d3a0597edaea"
+      },
+      {
+        "observationId": "obs-30f5acf90c55baac",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-30f5acf90c55baac\n{\"amountCents\": 1677, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 6b33c24d\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-0f4eaf97ed42bd05\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-0f4eaf97ed42bd05"
+      },
+      {
+        "observationId": "obs-fab5b1f04a0a170e",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-fab5b1f04a0a170e\n{\"amountCents\": 5540, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 516f6ff3\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-34451e99f5c7bd33\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-34451e99f5c7bd33"
+      },
+      {
+        "observationId": "obs-f31f13492eecdf0f",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-f31f13492eecdf0f\n{\"amountCents\": -4272, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 342f64fd\", \"postedAt\": \"2026-09-26T12:00:00Z\", \"refundOf\": \"tx-00df5e7b90aab981\", \"transactionId\": \"tx-adcb2e71c1f8f10c\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-adcb2e71c1f8f10c"
+      },
+      {
+        "observationId": "obs-3a2ec2ec41c83eff",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-3a2ec2ec41c83eff\n{\"amountCents\": 1387, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 7cea91b5\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-5b55953c1d5ed013\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-5b55953c1d5ed013"
+      },
+      {
+        "observationId": "obs-e0570deb0cff3520",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-e0570deb0cff3520\n{\"amountCents\": -2337, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 523ea6a8\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-95d4d3a0597edaea\", \"transactionId\": \"tx-e23cbefdda92307f\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-e23cbefdda92307f"
+      },
+      {
+        "observationId": "obs-139265676592ecf3",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-139265676592ecf3\n{\"amountCents\": 1888, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant f3813a00\", \"postedAt\": \"2026-09-07T00:00:00Z\", \"transactionId\": \"tx-c08fa639e8a9fa9d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-c08fa639e8a9fa9d"
+      },
+      {
+        "observationId": "obs-371efa4a66362372",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-371efa4a66362372: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-71071dcfff358b6a",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-71071dcfff358b6a\n{\"amountCents\": 993, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 6e0fa1a9\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-4bf3f0e2283fb7f8\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-4bf3f0e2283fb7f8"
+      },
+      {
+        "observationId": "obs-d0f71f35283bec48",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-d0f71f35283bec48\n{\"amountCents\": 4778, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant b028d994\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-dffa7d0528ac144d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-dffa7d0528ac144d"
+      },
+      {
+        "observationId": "obs-10f7db97810b48b6",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-10f7db97810b48b6: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-5b7d6a0ea410e9e9",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-5b7d6a0ea410e9e9\n{\"amountCents\": 9276, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant f38ee56e\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-e4b68562208717ec\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-e4b68562208717ec"
+      },
+      {
+        "observationId": "obs-60d1f090521b112c",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-60d1f090521b112c\n{\"amountCents\": 1995, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 3341b404\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-c235503a417ac073\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-c235503a417ac073"
+      },
+      {
+        "observationId": "obs-1f960e8f270f140d",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-1f960e8f270f140d\n{\"amountCents\": 8581, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant aa0b62cf\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-d426c75c90acff55\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d426c75c90acff55"
+      },
+      {
+        "observationId": "obs-eca9ae8baf15af03",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-eca9ae8baf15af03\n{\"amountCents\": 5540, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 516f6ff3\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-34451e99f5c7bd33\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-34451e99f5c7bd33"
+      },
+      {
+        "observationId": "obs-a9eba7534b10406a",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-a9eba7534b10406a\n{\"amountCents\": 24639, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 73809642\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-86b2e239e5f7c671\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-86b2e239e5f7c671"
+      },
+      {
+        "observationId": "obs-1e1bbfd44d6b762b",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-1e1bbfd44d6b762b\n{\"amountCents\": 9276, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant f38ee56e\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-e4b68562208717ec\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-e4b68562208717ec"
+      },
+      {
+        "observationId": "obs-8463ac6a3d5e4cc4",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-8463ac6a3d5e4cc4\n{\"amountCents\": 10178, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant e23a7f05\", \"postedAt\": \"2026-10-01T00:00:00Z\", \"transactionId\": \"tx-fb6aff874c5240c3\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-fb6aff874c5240c3"
+      },
+      {
+        "observationId": "obs-205d34ddb7003cf3",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-205d34ddb7003cf3\n{\"amountCents\": 3899, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant e188f38f\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-95d4d3a0597edaea\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-95d4d3a0597edaea"
+      },
+      {
+        "observationId": "obs-0669cfd1a47ea02b",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-0669cfd1a47ea02b\n{\"amountCents\": 2546, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant c4e53185\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-f056c4464dc07d92\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f056c4464dc07d92"
+      },
+      {
+        "observationId": "obs-e4f5a11a711edbd5",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-e4f5a11a711edbd5\n{\"amountCents\": 804, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 45808032\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-f548d26bda856a59\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f548d26bda856a59"
+      },
+      {
+        "observationId": "obs-23cee93028c782b1",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-23cee93028c782b1\n{\"amountCents\": 4814, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant bf9097cd\", \"postedAt\": \"2026-09-25T12:00:00Z\", \"transactionId\": \"tx-02c114e214bc7b21\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-02c114e214bc7b21"
+      },
+      {
+        "observationId": "obs-9a1a02acd4a576e4",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-9a1a02acd4a576e4\n{\"amountCents\": 6481, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant f001ab87\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-00df5e7b90aab981\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-00df5e7b90aab981"
+      },
+      {
+        "observationId": "obs-f241de8b0c16aa6f",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-f241de8b0c16aa6f\n{\"amountCents\": 5007, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 86e2811c\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-3dcac1061a7d9f5f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-3dcac1061a7d9f5f"
+      },
+      {
+        "observationId": "obs-6713365b339b87e6",
+        "sourceId": "source-b314ca8475b0",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-6713365b339b87e6\n{\"amountCents\": 6481, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant f001ab87\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-00df5e7b90aab981\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-00df5e7b90aab981"
+      },
+      {
+        "observationId": "obs-83fb8936ff473611",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-83fb8936ff473611\n{\"amountCents\": 1967, \"category\": \"health\", \"currency\": \"USD\", \"merchant\": \"Merchant c2dbf034\", \"postedAt\": \"2026-09-14T12:00:00Z\", \"transactionId\": \"tx-a00107581f2ac8bb\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-a00107581f2ac8bb"
+      },
+      {
+        "observationId": "obs-41817dac1906b3a7",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-41817dac1906b3a7\n{\"amountCents\": 2881, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant d727301e\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-21ac3d351fb35f11\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-21ac3d351fb35f11"
+      },
+      {
+        "observationId": "obs-1d5ded50d7a6882a",
+        "sourceId": "source-4a3f4a67faac",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-1d5ded50d7a6882a: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-d41f6dd4882857c6",
+        "sourceId": "source-0fab5e7b3e56",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-d41f6dd4882857c6\n{\"amountCents\": 4778, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant b028d994\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-dffa7d0528ac144d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-dffa7d0528ac144d"
+      }
+    ],
+    "sources": {
+      "source-bank": "source-0fab5e7b3e56",
+      "source-email": "source-4a3f4a67faac",
+      "source-notice": "source-b314ca8475b0"
+    },
+    "transactions": [
+      {
+        "amountCents": 5540,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 516f6ff3",
+        "postedAt": "2026-09-01T00:00:00Z",
+        "transactionId": "tx-34451e99f5c7bd33",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 804,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant 45808032",
+        "postedAt": "2026-09-03T12:00:00Z",
+        "transactionId": "tx-f548d26bda856a59",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1995,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant 3341b404",
+        "postedAt": "2026-09-04T12:00:00Z",
+        "transactionId": "tx-c235503a417ac073",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2546,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant c4e53185",
+        "postedAt": "2026-09-05T12:00:00Z",
+        "transactionId": "tx-f056c4464dc07d92",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4778,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant b028d994",
+        "postedAt": "2026-09-06T12:00:00Z",
+        "transactionId": "tx-dffa7d0528ac144d",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 9276,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant f38ee56e",
+        "postedAt": "2026-09-08T12:00:00Z",
+        "transactionId": "tx-e4b68562208717ec",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 3899,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant e188f38f",
+        "postedAt": "2026-09-09T12:00:00Z",
+        "transactionId": "tx-95d4d3a0597edaea",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 24639,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant 73809642",
+        "postedAt": "2026-09-10T12:00:00Z",
+        "transactionId": "tx-86b2e239e5f7c671",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2881,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant d727301e",
+        "postedAt": "2026-09-11T12:00:00Z",
+        "transactionId": "tx-21ac3d351fb35f11",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 993,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant 6e0fa1a9",
+        "postedAt": "2026-09-12T12:00:00Z",
+        "transactionId": "tx-4bf3f0e2283fb7f8",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1967,
+        "category": "health",
+        "currency": "USD",
+        "merchant": "Merchant c2dbf034",
+        "postedAt": "2026-09-14T12:00:00Z",
+        "transactionId": "tx-a00107581f2ac8bb",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 6481,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant f001ab87",
+        "postedAt": "2026-09-16T12:00:00Z",
+        "transactionId": "tx-00df5e7b90aab981",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 8581,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant aa0b62cf",
+        "postedAt": "2026-09-18T12:00:00Z",
+        "transactionId": "tx-d426c75c90acff55",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 3932,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 6af527ff",
+        "postedAt": "2026-09-20T12:00:00Z",
+        "transactionId": "tx-594161eb05a48e41",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1677,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant 6b33c24d",
+        "postedAt": "2026-09-22T12:00:00Z",
+        "transactionId": "tx-0f4eaf97ed42bd05",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4814,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant bf9097cd",
+        "postedAt": "2026-09-25T12:00:00Z",
+        "transactionId": "tx-02c114e214bc7b21",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 7782,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant e5aa5285",
+        "postedAt": "2026-09-28T12:00:00Z",
+        "transactionId": "tx-bb6169371a950f45",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1387,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant 7cea91b5",
+        "postedAt": "2026-09-30T23:59:59Z",
+        "transactionId": "tx-5b55953c1d5ed013",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -2337,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 523ea6a8",
+        "postedAt": "2026-09-21T12:00:00Z",
+        "refundOf": "tx-95d4d3a0597edaea",
+        "transactionId": "tx-e23cbefdda92307f",
+        "transactionType": "refund"
+      },
+      {
+        "amountCents": 1888,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant f3813a00",
+        "postedAt": "2026-09-07T00:00:00Z",
+        "transactionId": "tx-c08fa639e8a9fa9d",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 5007,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant 86e2811c",
+        "postedAt": "2026-08-31T23:59:59Z",
+        "transactionId": "tx-3dcac1061a7d9f5f",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 10178,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant e23a7f05",
+        "postedAt": "2026-10-01T00:00:00Z",
+        "transactionId": "tx-fb6aff874c5240c3",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -4272,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant 342f64fd",
+        "postedAt": "2026-09-26T12:00:00Z",
+        "refundOf": "tx-00df5e7b90aab981",
+        "transactionId": "tx-adcb2e71c1f8f10c",
+        "transactionType": "refund"
+      }
+    ]
+  },
+  "reserve-repair-1": {
+    "expected": {
+      "allTransactionIds": [
+        "tx-1e0e52df28476172",
+        "tx-2116643bf7563c18",
+        "tx-48bc37895b9dfaa2",
+        "tx-49199b9fd3c7b565",
+        "tx-54cccf244e0bbb76",
+        "tx-5b1083c9d75720c1",
+        "tx-630d1d33276dee2e",
+        "tx-67ea8132375cc7b6",
+        "tx-79deba93c0e0a4d1",
+        "tx-7e8fb76e873a3be2",
+        "tx-83158360bac29046",
+        "tx-8bf0da8a6fa6454f",
+        "tx-8d022523c5a415b2",
+        "tx-930263c25be73924",
+        "tx-9db5ea923fb23abb",
+        "tx-abfc9ba1a7d3e5be",
+        "tx-af75bc0b04ef8640",
+        "tx-bae42fafa1690bf6",
+        "tx-d017950f53db0be2",
+        "tx-d3c88303cb4d0ff9",
+        "tx-d6123b51239b146d",
+        "tx-e2b3480ec6dbb0de",
+        "tx-f0c58aebe2193a26"
+      ],
+      "currency": "USD",
+      "grossCents": 93304,
+      "ledgerIds": [
+        "tx-1e0e52df28476172",
+        "tx-2116643bf7563c18",
+        "tx-48bc37895b9dfaa2",
+        "tx-49199b9fd3c7b565",
+        "tx-54cccf244e0bbb76",
+        "tx-5b1083c9d75720c1",
+        "tx-630d1d33276dee2e",
+        "tx-67ea8132375cc7b6",
+        "tx-79deba93c0e0a4d1",
+        "tx-7e8fb76e873a3be2",
+        "tx-83158360bac29046",
+        "tx-8bf0da8a6fa6454f",
+        "tx-8d022523c5a415b2",
+        "tx-930263c25be73924",
+        "tx-9db5ea923fb23abb",
+        "tx-af75bc0b04ef8640",
+        "tx-bae42fafa1690bf6",
+        "tx-d3c88303cb4d0ff9",
+        "tx-d6123b51239b146d",
+        "tx-e2b3480ec6dbb0de",
+        "tx-f0c58aebe2193a26"
+      ],
+      "month": "2026-09",
+      "monthlyCharges": 19,
+      "monthlyRefunds": 2,
+      "netCents": 86580,
+      "noiseObservations": 4,
+      "observationIdsByTransaction": {
+        "tx-1e0e52df28476172": [
+          "obs-29345cef9aa68e6e",
+          "obs-9f2c65569d0791cc"
+        ],
+        "tx-2116643bf7563c18": [
+          "obs-5ba3fe4ddf8ee67b",
+          "obs-7105333e291bc0b5"
+        ],
+        "tx-48bc37895b9dfaa2": [
+          "obs-18132223d6625ab3",
+          "obs-251f9daf759d0c98"
+        ],
+        "tx-49199b9fd3c7b565": [
+          "obs-76cc001959415c80"
+        ],
+        "tx-54cccf244e0bbb76": [
+          "obs-32135311c3bfced6",
+          "obs-519be31ca60607cb"
+        ],
+        "tx-5b1083c9d75720c1": [
+          "obs-a327d83c9f8b1d14"
+        ],
+        "tx-630d1d33276dee2e": [
+          "obs-4a026280ef7bb926"
+        ],
+        "tx-67ea8132375cc7b6": [
+          "obs-393e8e81f5e5618c",
+          "obs-4bff4b5d8dc1a704"
+        ],
+        "tx-79deba93c0e0a4d1": [
+          "obs-d263e2014abb2c46",
+          "obs-ffc6c8b6e190c265"
+        ],
+        "tx-7e8fb76e873a3be2": [
+          "obs-7b4bcf0b621146ef"
+        ],
+        "tx-83158360bac29046": [
+          "obs-f280738e3a1e1e80"
+        ],
+        "tx-8bf0da8a6fa6454f": [
+          "obs-8ebaf5587e4b9fc4",
+          "obs-a8da4c856a708a36"
+        ],
+        "tx-8d022523c5a415b2": [
+          "obs-24174f650f01ec75",
+          "obs-7052dd23ff0ac8a3"
+        ],
+        "tx-930263c25be73924": [
+          "obs-87691d9f55fc40ff",
+          "obs-9762c16a8101e323"
+        ],
+        "tx-9db5ea923fb23abb": [
+          "obs-c4ce6a6905c1ad79",
+          "obs-cbb406c9d9cfe074"
+        ],
+        "tx-abfc9ba1a7d3e5be": [
+          "obs-671ef7a61155ca87",
+          "obs-9b38f8af05a76ede"
+        ],
+        "tx-af75bc0b04ef8640": [
+          "obs-61345ba1d8851d70"
+        ],
+        "tx-bae42fafa1690bf6": [
+          "obs-a58b6e41431d3862",
+          "obs-f89c92dddf5855f2"
+        ],
+        "tx-d017950f53db0be2": [
+          "obs-2827a1a86f4788f0"
+        ],
+        "tx-d3c88303cb4d0ff9": [
+          "obs-ed57fbae2da65516",
+          "obs-f77931f1ee82fda5"
+        ],
+        "tx-d6123b51239b146d": [
+          "obs-0d59a70851a9e36e",
+          "obs-655e8d0fceecec00"
+        ],
+        "tx-e2b3480ec6dbb0de": [
+          "obs-1e93f06130d39cf4",
+          "obs-8e87f9c535c9671e"
+        ],
+        "tx-f0c58aebe2193a26": [
+          "obs-153be71545e721dc",
+          "obs-bddd00b65ae35113"
+        ]
+      },
+      "pageLimit": 7,
+      "refundCents": 6724,
+      "refundOfById": {
+        "tx-2116643bf7563c18": "tx-8d022523c5a415b2",
+        "tx-af75bc0b04ef8640": "tx-bae42fafa1690bf6"
+      },
+      "repeatedObservations": 16,
+      "sourceMinimumPages": {
+        "source-a77c4a820523": 3,
+        "source-c2f614c67405": 2,
+        "source-cdec6303c2bc": 3
+      },
+      "sourceObservationCounts": {
+        "source-a77c4a820523": 15,
+        "source-c2f614c67405": 8,
+        "source-cdec6303c2bc": 20
+      },
+      "totalObservations": 43,
+      "uniqueTransactions": 23
+    },
+    "label": "reserve-repair-1",
+    "observations": [
+      {
+        "observationId": "obs-9f2c65569d0791cc",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-9f2c65569d0791cc\n{\"amountCents\": 809, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 090c4c8b\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-1e0e52df28476172\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-1e0e52df28476172"
+      },
+      {
+        "observationId": "obs-f280738e3a1e1e80",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-f280738e3a1e1e80\n{\"amountCents\": 7669, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 497eb635\", \"postedAt\": \"2026-09-28T12:00:00Z\", \"transactionId\": \"tx-83158360bac29046\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-83158360bac29046"
+      },
+      {
+        "observationId": "obs-87691d9f55fc40ff",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-87691d9f55fc40ff\n{\"amountCents\": 2202, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant e60a50ea\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-930263c25be73924\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-930263c25be73924"
+      },
+      {
+        "observationId": "obs-ed57fbae2da65516",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-ed57fbae2da65516\n{\"amountCents\": 9574, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant d37bf5f7\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-d3c88303cb4d0ff9\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d3c88303cb4d0ff9"
+      },
+      {
+        "observationId": "obs-4bff4b5d8dc1a704",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-4bff4b5d8dc1a704\n{\"amountCents\": 8771, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 83b40acf\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-67ea8132375cc7b6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-67ea8132375cc7b6"
+      },
+      {
+        "observationId": "obs-5ba3fe4ddf8ee67b",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-5ba3fe4ddf8ee67b\n{\"amountCents\": -2307, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 5fbf18d4\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-8d022523c5a415b2\", \"transactionId\": \"tx-2116643bf7563c18\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-2116643bf7563c18"
+      },
+      {
+        "observationId": "obs-d263e2014abb2c46",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-d263e2014abb2c46\n{\"amountCents\": 5400, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 1b46e210\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-79deba93c0e0a4d1\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-79deba93c0e0a4d1"
+      },
+      {
+        "observationId": "obs-29345cef9aa68e6e",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-29345cef9aa68e6e\n{\"amountCents\": 809, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 090c4c8b\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-1e0e52df28476172\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-1e0e52df28476172"
+      },
+      {
+        "observationId": "obs-393e8e81f5e5618c",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-393e8e81f5e5618c\n{\"amountCents\": 8771, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 83b40acf\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-67ea8132375cc7b6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-67ea8132375cc7b6"
+      },
+      {
+        "observationId": "obs-c4ce6a6905c1ad79",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-c4ce6a6905c1ad79\n{\"amountCents\": 1007, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant aa2a245e\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-9db5ea923fb23abb\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-9db5ea923fb23abb"
+      },
+      {
+        "observationId": "obs-bddd00b65ae35113",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-bddd00b65ae35113\n{\"amountCents\": 2801, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 2872c678\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-f0c58aebe2193a26\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f0c58aebe2193a26"
+      },
+      {
+        "observationId": "obs-32135311c3bfced6",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-32135311c3bfced6\n{\"amountCents\": 4286, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 8a2b2168\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-54cccf244e0bbb76\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-54cccf244e0bbb76"
+      },
+      {
+        "observationId": "obs-a8da4c856a708a36",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-a8da4c856a708a36\n{\"amountCents\": 674, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant e0280c49\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-8bf0da8a6fa6454f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-8bf0da8a6fa6454f"
+      },
+      {
+        "observationId": "obs-4dd883b747d54579",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-4dd883b747d54579: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-d12a720f5bb4426a",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-d12a720f5bb4426a: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-85c50f17614d4b93",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-85c50f17614d4b93: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-0d59a70851a9e36e",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-0d59a70851a9e36e\n{\"amountCents\": 1348, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant d4eb31be\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-d6123b51239b146d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d6123b51239b146d"
+      },
+      {
+        "observationId": "obs-a327d83c9f8b1d14",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-a327d83c9f8b1d14\n{\"amountCents\": 5020, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant 9c8a2df9\", \"postedAt\": \"2026-09-25T12:00:00Z\", \"transactionId\": \"tx-5b1083c9d75720c1\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-5b1083c9d75720c1"
+      },
+      {
+        "observationId": "obs-671ef7a61155ca87",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-671ef7a61155ca87\n{\"amountCents\": 4990, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 69d0beb2\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-abfc9ba1a7d3e5be\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-abfc9ba1a7d3e5be"
+      },
+      {
+        "observationId": "obs-519be31ca60607cb",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-519be31ca60607cb\n{\"amountCents\": 4286, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 8a2b2168\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-54cccf244e0bbb76\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-54cccf244e0bbb76"
+      },
+      {
+        "observationId": "obs-1e93f06130d39cf4",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-1e93f06130d39cf4\n{\"amountCents\": 1598, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 8f875616\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-e2b3480ec6dbb0de\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-e2b3480ec6dbb0de"
+      },
+      {
+        "observationId": "obs-24174f650f01ec75",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-24174f650f01ec75\n{\"amountCents\": 4447, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 1de21afb\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-8d022523c5a415b2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-8d022523c5a415b2"
+      },
+      {
+        "observationId": "obs-76cc001959415c80",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-76cc001959415c80\n{\"amountCents\": 3537, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 1e96490d\", \"postedAt\": \"2026-09-20T12:00:00Z\", \"transactionId\": \"tx-49199b9fd3c7b565\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-49199b9fd3c7b565"
+      },
+      {
+        "observationId": "obs-a58b6e41431d3862",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-a58b6e41431d3862\n{\"amountCents\": 6605, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant a3c08e86\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-bae42fafa1690bf6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-bae42fafa1690bf6"
+      },
+      {
+        "observationId": "obs-9762c16a8101e323",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-9762c16a8101e323\n{\"amountCents\": 2202, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant e60a50ea\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-930263c25be73924\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-930263c25be73924"
+      },
+      {
+        "observationId": "obs-8ebaf5587e4b9fc4",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-8ebaf5587e4b9fc4\n{\"amountCents\": 674, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant e0280c49\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-8bf0da8a6fa6454f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-8bf0da8a6fa6454f"
+      },
+      {
+        "observationId": "obs-f77931f1ee82fda5",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-f77931f1ee82fda5\n{\"amountCents\": 9574, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant d37bf5f7\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-d3c88303cb4d0ff9\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d3c88303cb4d0ff9"
+      },
+      {
+        "observationId": "obs-2827a1a86f4788f0",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-2827a1a86f4788f0\n{\"amountCents\": 10158, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 97cf413f\", \"postedAt\": \"2026-10-01T00:00:00Z\", \"transactionId\": \"tx-d017950f53db0be2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d017950f53db0be2"
+      },
+      {
+        "observationId": "obs-7105333e291bc0b5",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-7105333e291bc0b5\n{\"amountCents\": -2307, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 5fbf18d4\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-8d022523c5a415b2\", \"transactionId\": \"tx-2116643bf7563c18\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-2116643bf7563c18"
+      },
+      {
+        "observationId": "obs-18132223d6625ab3",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-18132223d6625ab3\n{\"amountCents\": 24482, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 3063250b\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-48bc37895b9dfaa2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-48bc37895b9dfaa2"
+      },
+      {
+        "observationId": "obs-4a026280ef7bb926",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-4a026280ef7bb926\n{\"amountCents\": 1732, \"category\": \"health\", \"currency\": \"USD\", \"merchant\": \"Merchant bcdfd252\", \"postedAt\": \"2026-09-14T12:00:00Z\", \"transactionId\": \"tx-630d1d33276dee2e\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-630d1d33276dee2e"
+      },
+      {
+        "observationId": "obs-ffc6c8b6e190c265",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-ffc6c8b6e190c265\n{\"amountCents\": 5400, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 1b46e210\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-79deba93c0e0a4d1\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-79deba93c0e0a4d1"
+      },
+      {
+        "observationId": "obs-8e87f9c535c9671e",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-8e87f9c535c9671e\n{\"amountCents\": 1598, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 8f875616\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-e2b3480ec6dbb0de\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-e2b3480ec6dbb0de"
+      },
+      {
+        "observationId": "obs-251f9daf759d0c98",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-251f9daf759d0c98\n{\"amountCents\": 24482, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 3063250b\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-48bc37895b9dfaa2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-48bc37895b9dfaa2"
+      },
+      {
+        "observationId": "obs-cbb406c9d9cfe074",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-cbb406c9d9cfe074\n{\"amountCents\": 1007, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant aa2a245e\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-9db5ea923fb23abb\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-9db5ea923fb23abb"
+      },
+      {
+        "observationId": "obs-9b38f8af05a76ede",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-9b38f8af05a76ede\n{\"amountCents\": 4990, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 69d0beb2\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-abfc9ba1a7d3e5be\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-abfc9ba1a7d3e5be"
+      },
+      {
+        "observationId": "obs-61345ba1d8851d70",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-61345ba1d8851d70\n{\"amountCents\": -4417, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant a0843e6c\", \"postedAt\": \"2026-09-26T12:00:00Z\", \"refundOf\": \"tx-bae42fafa1690bf6\", \"transactionId\": \"tx-af75bc0b04ef8640\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-af75bc0b04ef8640"
+      },
+      {
+        "observationId": "obs-f89c92dddf5855f2",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-f89c92dddf5855f2\n{\"amountCents\": 6605, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant a3c08e86\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-bae42fafa1690bf6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-bae42fafa1690bf6"
+      },
+      {
+        "observationId": "obs-7b4bcf0b621146ef",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-7b4bcf0b621146ef\n{\"amountCents\": 1342, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant de3307fd\", \"postedAt\": \"2026-09-07T00:00:00Z\", \"transactionId\": \"tx-7e8fb76e873a3be2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-7e8fb76e873a3be2"
+      },
+      {
+        "observationId": "obs-b96d2ca0cb0decc7",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-b96d2ca0cb0decc7: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-153be71545e721dc",
+        "sourceId": "source-c2f614c67405",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-153be71545e721dc\n{\"amountCents\": 2801, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 2872c678\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-f0c58aebe2193a26\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f0c58aebe2193a26"
+      },
+      {
+        "observationId": "obs-655e8d0fceecec00",
+        "sourceId": "source-cdec6303c2bc",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-655e8d0fceecec00\n{\"amountCents\": 1348, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant d4eb31be\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-d6123b51239b146d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d6123b51239b146d"
+      },
+      {
+        "observationId": "obs-7052dd23ff0ac8a3",
+        "sourceId": "source-a77c4a820523",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-7052dd23ff0ac8a3\n{\"amountCents\": 4447, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 1de21afb\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-8d022523c5a415b2\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-8d022523c5a415b2"
+      }
+    ],
+    "sources": {
+      "source-bank": "source-cdec6303c2bc",
+      "source-email": "source-c2f614c67405",
+      "source-notice": "source-a77c4a820523"
+    },
+    "transactions": [
+      {
+        "amountCents": 5400,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 1b46e210",
+        "postedAt": "2026-09-01T00:00:00Z",
+        "transactionId": "tx-79deba93c0e0a4d1",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 809,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant 090c4c8b",
+        "postedAt": "2026-09-03T12:00:00Z",
+        "transactionId": "tx-1e0e52df28476172",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1348,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant d4eb31be",
+        "postedAt": "2026-09-04T12:00:00Z",
+        "transactionId": "tx-d6123b51239b146d",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2202,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant e60a50ea",
+        "postedAt": "2026-09-05T12:00:00Z",
+        "transactionId": "tx-930263c25be73924",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4286,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant 8a2b2168",
+        "postedAt": "2026-09-06T12:00:00Z",
+        "transactionId": "tx-54cccf244e0bbb76",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 9574,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant d37bf5f7",
+        "postedAt": "2026-09-08T12:00:00Z",
+        "transactionId": "tx-d3c88303cb4d0ff9",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4447,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 1de21afb",
+        "postedAt": "2026-09-09T12:00:00Z",
+        "transactionId": "tx-8d022523c5a415b2",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 24482,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant 3063250b",
+        "postedAt": "2026-09-10T12:00:00Z",
+        "transactionId": "tx-48bc37895b9dfaa2",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2801,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 2872c678",
+        "postedAt": "2026-09-11T12:00:00Z",
+        "transactionId": "tx-f0c58aebe2193a26",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 674,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant e0280c49",
+        "postedAt": "2026-09-12T12:00:00Z",
+        "transactionId": "tx-8bf0da8a6fa6454f",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1732,
+        "category": "health",
+        "currency": "USD",
+        "merchant": "Merchant bcdfd252",
+        "postedAt": "2026-09-14T12:00:00Z",
+        "transactionId": "tx-630d1d33276dee2e",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 6605,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant a3c08e86",
+        "postedAt": "2026-09-16T12:00:00Z",
+        "transactionId": "tx-bae42fafa1690bf6",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 8771,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 83b40acf",
+        "postedAt": "2026-09-18T12:00:00Z",
+        "transactionId": "tx-67ea8132375cc7b6",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 3537,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 1e96490d",
+        "postedAt": "2026-09-20T12:00:00Z",
+        "transactionId": "tx-49199b9fd3c7b565",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1598,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant 8f875616",
+        "postedAt": "2026-09-22T12:00:00Z",
+        "transactionId": "tx-e2b3480ec6dbb0de",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 5020,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant 9c8a2df9",
+        "postedAt": "2026-09-25T12:00:00Z",
+        "transactionId": "tx-5b1083c9d75720c1",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 7669,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 497eb635",
+        "postedAt": "2026-09-28T12:00:00Z",
+        "transactionId": "tx-83158360bac29046",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1007,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant aa2a245e",
+        "postedAt": "2026-09-30T23:59:59Z",
+        "transactionId": "tx-9db5ea923fb23abb",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -2307,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 5fbf18d4",
+        "postedAt": "2026-09-21T12:00:00Z",
+        "refundOf": "tx-8d022523c5a415b2",
+        "transactionId": "tx-2116643bf7563c18",
+        "transactionType": "refund"
+      },
+      {
+        "amountCents": 1342,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant de3307fd",
+        "postedAt": "2026-09-07T00:00:00Z",
+        "transactionId": "tx-7e8fb76e873a3be2",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4990,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant 69d0beb2",
+        "postedAt": "2026-08-31T23:59:59Z",
+        "transactionId": "tx-abfc9ba1a7d3e5be",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 10158,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 97cf413f",
+        "postedAt": "2026-10-01T00:00:00Z",
+        "transactionId": "tx-d017950f53db0be2",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -4417,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant a0843e6c",
+        "postedAt": "2026-09-26T12:00:00Z",
+        "refundOf": "tx-bae42fafa1690bf6",
+        "transactionId": "tx-af75bc0b04ef8640",
+        "transactionType": "refund"
+      }
+    ]
+  },
+  "reserve-repair-2": {
+    "expected": {
+      "allTransactionIds": [
+        "tx-1d4b5104a336e139",
+        "tx-2555f7313be165e8",
+        "tx-26c98ac7fdd98710",
+        "tx-2e17df1a77b290fe",
+        "tx-2e7109f6cbff0b33",
+        "tx-3dd87f2e9a1f9405",
+        "tx-4e7500c24423d8d7",
+        "tx-4f5006e358776a01",
+        "tx-541e13de61cad344",
+        "tx-561ca8618986fa26",
+        "tx-581be4eae9d7397d",
+        "tx-ad7159dab1f2aa82",
+        "tx-b6604d71ffe66bd6",
+        "tx-bf1d027883536331",
+        "tx-c0ce526055e75c53",
+        "tx-cc491e6229b1d509",
+        "tx-d7c787ec30071d9c",
+        "tx-dd1227745cd7821d",
+        "tx-e46bdd4506a4490c",
+        "tx-ed06eb11c65ffd0f",
+        "tx-ee51d9f8c69e3603",
+        "tx-f18d5d93f91a8635",
+        "tx-f80ace0c7ae8289e"
+      ],
+      "currency": "USD",
+      "grossCents": 92280,
+      "ledgerIds": [
+        "tx-1d4b5104a336e139",
+        "tx-2555f7313be165e8",
+        "tx-26c98ac7fdd98710",
+        "tx-2e17df1a77b290fe",
+        "tx-2e7109f6cbff0b33",
+        "tx-3dd87f2e9a1f9405",
+        "tx-4e7500c24423d8d7",
+        "tx-4f5006e358776a01",
+        "tx-541e13de61cad344",
+        "tx-561ca8618986fa26",
+        "tx-581be4eae9d7397d",
+        "tx-ad7159dab1f2aa82",
+        "tx-b6604d71ffe66bd6",
+        "tx-bf1d027883536331",
+        "tx-c0ce526055e75c53",
+        "tx-cc491e6229b1d509",
+        "tx-d7c787ec30071d9c",
+        "tx-dd1227745cd7821d",
+        "tx-e46bdd4506a4490c",
+        "tx-ed06eb11c65ffd0f",
+        "tx-ee51d9f8c69e3603"
+      ],
+      "month": "2026-09",
+      "monthlyCharges": 19,
+      "monthlyRefunds": 2,
+      "netCents": 85201,
+      "noiseObservations": 4,
+      "observationIdsByTransaction": {
+        "tx-1d4b5104a336e139": [
+          "obs-722cf3da65466b0a"
+        ],
+        "tx-2555f7313be165e8": [
+          "obs-53d51cfb7609b88d",
+          "obs-612ebef729a26c44"
+        ],
+        "tx-26c98ac7fdd98710": [
+          "obs-0bad037cdd9c293f",
+          "obs-179eba032e5ce3a3"
+        ],
+        "tx-2e17df1a77b290fe": [
+          "obs-149839b6aa8a07a6",
+          "obs-b4c79ff5ccf0919a"
+        ],
+        "tx-2e7109f6cbff0b33": [
+          "obs-7c4b09db4104d5d6",
+          "obs-897db5064b30d2c6"
+        ],
+        "tx-3dd87f2e9a1f9405": [
+          "obs-31213a5996f04cdf",
+          "obs-bb93dedafa4f8dac"
+        ],
+        "tx-4e7500c24423d8d7": [
+          "obs-2f56de8dac026a98",
+          "obs-925ecc4d27b5a37e"
+        ],
+        "tx-4f5006e358776a01": [
+          "obs-af037d6e07235565",
+          "obs-e8f27bc70ae92dcf"
+        ],
+        "tx-541e13de61cad344": [
+          "obs-a26638fe9ef2de60",
+          "obs-fbdaf510ad3055cc"
+        ],
+        "tx-561ca8618986fa26": [
+          "obs-537f7d9a7d6e4071"
+        ],
+        "tx-581be4eae9d7397d": [
+          "obs-57122726f27f1997",
+          "obs-6d6fd6d5f8b6c3d8"
+        ],
+        "tx-ad7159dab1f2aa82": [
+          "obs-6bfbd838d1e2d030",
+          "obs-eb74910bd5ae8249"
+        ],
+        "tx-b6604d71ffe66bd6": [
+          "obs-1dce5a6669f80b54",
+          "obs-37107ebea15a1675"
+        ],
+        "tx-bf1d027883536331": [
+          "obs-450b134792558150",
+          "obs-a7dae25350dca409"
+        ],
+        "tx-c0ce526055e75c53": [
+          "obs-40bf37ee9db105fa",
+          "obs-7999f3d958babcc6"
+        ],
+        "tx-cc491e6229b1d509": [
+          "obs-51f13f9803447d09",
+          "obs-9f9c35a879bca0e7"
+        ],
+        "tx-d7c787ec30071d9c": [
+          "obs-73c92f600a415d07"
+        ],
+        "tx-dd1227745cd7821d": [
+          "obs-0ce60dee45967279"
+        ],
+        "tx-e46bdd4506a4490c": [
+          "obs-a6556d74afb09907"
+        ],
+        "tx-ed06eb11c65ffd0f": [
+          "obs-4060b0413b7f73a8",
+          "obs-432ee268d638ed8a"
+        ],
+        "tx-ee51d9f8c69e3603": [
+          "obs-8f8a2a84c5425f52"
+        ],
+        "tx-f18d5d93f91a8635": [
+          "obs-20595d8461b2f171"
+        ],
+        "tx-f80ace0c7ae8289e": [
+          "obs-7d79bed37d6020ba",
+          "obs-f322d13a8d12fd1b"
+        ]
+      },
+      "pageLimit": 7,
+      "refundCents": 7079,
+      "refundOfById": {
+        "tx-4f5006e358776a01": "tx-26c98ac7fdd98710",
+        "tx-561ca8618986fa26": "tx-2e7109f6cbff0b33"
+      },
+      "repeatedObservations": 16,
+      "sourceMinimumPages": {
+        "source-386a10f783e0": 2,
+        "source-96b7a5000ea5": 3,
+        "source-b98f7cc66860": 3
+      },
+      "sourceObservationCounts": {
+        "source-386a10f783e0": 8,
+        "source-96b7a5000ea5": 15,
+        "source-b98f7cc66860": 20
+      },
+      "totalObservations": 43,
+      "uniqueTransactions": 23
+    },
+    "label": "reserve-repair-2",
+    "observations": [
+      {
+        "observationId": "obs-6d6fd6d5f8b6c3d8",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-6d6fd6d5f8b6c3d8\n{\"amountCents\": 2470, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 868fa1fd\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-581be4eae9d7397d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-581be4eae9d7397d"
+      },
+      {
+        "observationId": "obs-450b134792558150",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-450b134792558150\n{\"amountCents\": 9160, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant d1263f31\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-bf1d027883536331\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-bf1d027883536331"
+      },
+      {
+        "observationId": "obs-b4c79ff5ccf0919a",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-b4c79ff5ccf0919a\n{\"amountCents\": 528, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant fd6a99e7\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-2e17df1a77b290fe\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2e17df1a77b290fe"
+      },
+      {
+        "observationId": "obs-a7dae25350dca409",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-a7dae25350dca409\n{\"amountCents\": 9160, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant d1263f31\", \"postedAt\": \"2026-09-08T12:00:00Z\", \"transactionId\": \"tx-bf1d027883536331\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-bf1d027883536331"
+      },
+      {
+        "observationId": "obs-612ebef729a26c44",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-612ebef729a26c44\n{\"amountCents\": 1305, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 353af13b\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-2555f7313be165e8\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2555f7313be165e8"
+      },
+      {
+        "observationId": "obs-40bf37ee9db105fa",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-40bf37ee9db105fa\n{\"amountCents\": 5592, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 330f0fed\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-c0ce526055e75c53\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-c0ce526055e75c53"
+      },
+      {
+        "observationId": "obs-149839b6aa8a07a6",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-149839b6aa8a07a6\n{\"amountCents\": 528, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant fd6a99e7\", \"postedAt\": \"2026-09-03T12:00:00Z\", \"transactionId\": \"tx-2e17df1a77b290fe\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2e17df1a77b290fe"
+      },
+      {
+        "observationId": "obs-1ba78cc00737412d",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-1ba78cc00737412d: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-1dce5a6669f80b54",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-1dce5a6669f80b54\n{\"amountCents\": 901, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 8ab1931c\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-b6604d71ffe66bd6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-b6604d71ffe66bd6"
+      },
+      {
+        "observationId": "obs-88e8e033965563f6",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-88e8e033965563f6: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-eb74910bd5ae8249",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-eb74910bd5ae8249\n{\"amountCents\": 2205, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant bcd61dd5\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-ad7159dab1f2aa82\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-ad7159dab1f2aa82"
+      },
+      {
+        "observationId": "obs-51f13f9803447d09",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-51f13f9803447d09\n{\"amountCents\": 24661, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 5cb53af7\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-cc491e6229b1d509\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-cc491e6229b1d509"
+      },
+      {
+        "observationId": "obs-53d51cfb7609b88d",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-53d51cfb7609b88d\n{\"amountCents\": 1305, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant 353af13b\", \"postedAt\": \"2026-09-22T12:00:00Z\", \"transactionId\": \"tx-2555f7313be165e8\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2555f7313be165e8"
+      },
+      {
+        "observationId": "obs-e8f27bc70ae92dcf",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-e8f27bc70ae92dcf\n{\"amountCents\": -2693, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 80f4c51a\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-26c98ac7fdd98710\", \"transactionId\": \"tx-4f5006e358776a01\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-4f5006e358776a01"
+      },
+      {
+        "observationId": "obs-7c4b09db4104d5d6",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-7c4b09db4104d5d6\n{\"amountCents\": 6453, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 5eb132f7\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-2e7109f6cbff0b33\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2e7109f6cbff0b33"
+      },
+      {
+        "observationId": "obs-a26638fe9ef2de60",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-a26638fe9ef2de60\n{\"amountCents\": 1359, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant c67aca77\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-541e13de61cad344\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-541e13de61cad344"
+      },
+      {
+        "observationId": "obs-8f8a2a84c5425f52",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-8f8a2a84c5425f52\n{\"amountCents\": 7899, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant f08bcf58\", \"postedAt\": \"2026-09-28T12:00:00Z\", \"transactionId\": \"tx-ee51d9f8c69e3603\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-ee51d9f8c69e3603"
+      },
+      {
+        "observationId": "obs-897db5064b30d2c6",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-897db5064b30d2c6\n{\"amountCents\": 6453, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 5eb132f7\", \"postedAt\": \"2026-09-16T12:00:00Z\", \"transactionId\": \"tx-2e7109f6cbff0b33\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-2e7109f6cbff0b33"
+      },
+      {
+        "observationId": "obs-0bad037cdd9c293f",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-0bad037cdd9c293f\n{\"amountCents\": 4024, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant b6385afb\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-26c98ac7fdd98710\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-26c98ac7fdd98710"
+      },
+      {
+        "observationId": "obs-57122726f27f1997",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-57122726f27f1997\n{\"amountCents\": 2470, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 868fa1fd\", \"postedAt\": \"2026-09-11T12:00:00Z\", \"transactionId\": \"tx-581be4eae9d7397d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-581be4eae9d7397d"
+      },
+      {
+        "observationId": "obs-f322d13a8d12fd1b",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-f322d13a8d12fd1b\n{\"amountCents\": 5187, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 73a4ee3b\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-f80ace0c7ae8289e\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f80ace0c7ae8289e"
+      },
+      {
+        "observationId": "obs-4d32f753e6a9197a",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-4d32f753e6a9197a: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-20595d8461b2f171",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-20595d8461b2f171\n{\"amountCents\": 10764, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 55b86db9\", \"postedAt\": \"2026-10-01T00:00:00Z\", \"transactionId\": \"tx-f18d5d93f91a8635\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f18d5d93f91a8635"
+      },
+      {
+        "observationId": "obs-af037d6e07235565",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-af037d6e07235565\n{\"amountCents\": -2693, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 80f4c51a\", \"postedAt\": \"2026-09-21T12:00:00Z\", \"refundOf\": \"tx-26c98ac7fdd98710\", \"transactionId\": \"tx-4f5006e358776a01\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-4f5006e358776a01"
+      },
+      {
+        "observationId": "obs-9f9c35a879bca0e7",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-9f9c35a879bca0e7\n{\"amountCents\": 24661, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant 5cb53af7\", \"postedAt\": \"2026-09-10T12:00:00Z\", \"transactionId\": \"tx-cc491e6229b1d509\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-cc491e6229b1d509"
+      },
+      {
+        "observationId": "obs-31213a5996f04cdf",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-31213a5996f04cdf\n{\"amountCents\": 8441, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 86f697f9\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-3dd87f2e9a1f9405\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-3dd87f2e9a1f9405"
+      },
+      {
+        "observationId": "obs-e397c85f61687486",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-e397c85f61687486: this is a generated nontransaction notice.",
+        "transactionId": null
+      },
+      {
+        "observationId": "obs-7d79bed37d6020ba",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-7d79bed37d6020ba\n{\"amountCents\": 5187, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 73a4ee3b\", \"postedAt\": \"2026-08-31T23:59:59Z\", \"transactionId\": \"tx-f80ace0c7ae8289e\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-f80ace0c7ae8289e"
+      },
+      {
+        "observationId": "obs-73c92f600a415d07",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-73c92f600a415d07\n{\"amountCents\": 1822, \"category\": \"health\", \"currency\": \"USD\", \"merchant\": \"Merchant aa47f950\", \"postedAt\": \"2026-09-14T12:00:00Z\", \"transactionId\": \"tx-d7c787ec30071d9c\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-d7c787ec30071d9c"
+      },
+      {
+        "observationId": "obs-179eba032e5ce3a3",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-179eba032e5ce3a3\n{\"amountCents\": 4024, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant b6385afb\", \"postedAt\": \"2026-09-09T12:00:00Z\", \"transactionId\": \"tx-26c98ac7fdd98710\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-26c98ac7fdd98710"
+      },
+      {
+        "observationId": "obs-432ee268d638ed8a",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-432ee268d638ed8a\n{\"amountCents\": 1337, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant b2a63788\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-ed06eb11c65ffd0f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-ed06eb11c65ffd0f"
+      },
+      {
+        "observationId": "obs-925ecc4d27b5a37e",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-925ecc4d27b5a37e\n{\"amountCents\": 4299, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 87df54a4\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-4e7500c24423d8d7\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-4e7500c24423d8d7"
+      },
+      {
+        "observationId": "obs-a6556d74afb09907",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-a6556d74afb09907\n{\"amountCents\": 1298, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 0426899e\", \"postedAt\": \"2026-09-07T00:00:00Z\", \"transactionId\": \"tx-e46bdd4506a4490c\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-e46bdd4506a4490c"
+      },
+      {
+        "observationId": "obs-bb93dedafa4f8dac",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-bb93dedafa4f8dac\n{\"amountCents\": 8441, \"category\": \"equipment\", \"currency\": \"USD\", \"merchant\": \"Merchant 86f697f9\", \"postedAt\": \"2026-09-18T12:00:00Z\", \"transactionId\": \"tx-3dd87f2e9a1f9405\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-3dd87f2e9a1f9405"
+      },
+      {
+        "observationId": "obs-37107ebea15a1675",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-37107ebea15a1675\n{\"amountCents\": 901, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant 8ab1931c\", \"postedAt\": \"2026-09-12T12:00:00Z\", \"transactionId\": \"tx-b6604d71ffe66bd6\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-b6604d71ffe66bd6"
+      },
+      {
+        "observationId": "obs-fbdaf510ad3055cc",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-fbdaf510ad3055cc\n{\"amountCents\": 1359, \"category\": \"subscriptions\", \"currency\": \"USD\", \"merchant\": \"Merchant c67aca77\", \"postedAt\": \"2026-09-04T12:00:00Z\", \"transactionId\": \"tx-541e13de61cad344\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-541e13de61cad344"
+      },
+      {
+        "observationId": "obs-722cf3da65466b0a",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-722cf3da65466b0a\n{\"amountCents\": 3610, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant 3cb6221f\", \"postedAt\": \"2026-09-20T12:00:00Z\", \"transactionId\": \"tx-1d4b5104a336e139\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-1d4b5104a336e139"
+      },
+      {
+        "observationId": "obs-6bfbd838d1e2d030",
+        "sourceId": "source-96b7a5000ea5",
+        "sourceKind": "notice",
+        "text": "Synthetic notice observation obs-6bfbd838d1e2d030\n{\"amountCents\": 2205, \"category\": \"dining\", \"currency\": \"USD\", \"merchant\": \"Merchant bcd61dd5\", \"postedAt\": \"2026-09-05T12:00:00Z\", \"transactionId\": \"tx-ad7159dab1f2aa82\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-ad7159dab1f2aa82"
+      },
+      {
+        "observationId": "obs-7999f3d958babcc6",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-7999f3d958babcc6\n{\"amountCents\": 5592, \"category\": \"groceries\", \"currency\": \"USD\", \"merchant\": \"Merchant 330f0fed\", \"postedAt\": \"2026-09-01T00:00:00Z\", \"transactionId\": \"tx-c0ce526055e75c53\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-c0ce526055e75c53"
+      },
+      {
+        "observationId": "obs-4060b0413b7f73a8",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-4060b0413b7f73a8\n{\"amountCents\": 1337, \"category\": \"transport\", \"currency\": \"USD\", \"merchant\": \"Merchant b2a63788\", \"postedAt\": \"2026-09-30T23:59:59Z\", \"transactionId\": \"tx-ed06eb11c65ffd0f\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-ed06eb11c65ffd0f"
+      },
+      {
+        "observationId": "obs-2f56de8dac026a98",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-2f56de8dac026a98\n{\"amountCents\": 4299, \"category\": \"books\", \"currency\": \"USD\", \"merchant\": \"Merchant 87df54a4\", \"postedAt\": \"2026-09-06T12:00:00Z\", \"transactionId\": \"tx-4e7500c24423d8d7\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-4e7500c24423d8d7"
+      },
+      {
+        "observationId": "obs-0ce60dee45967279",
+        "sourceId": "source-b98f7cc66860",
+        "sourceKind": "bank",
+        "text": "Synthetic bank observation obs-0ce60dee45967279\n{\"amountCents\": 4916, \"category\": \"utilities\", \"currency\": \"USD\", \"merchant\": \"Merchant 2294718c\", \"postedAt\": \"2026-09-25T12:00:00Z\", \"transactionId\": \"tx-dd1227745cd7821d\", \"transactionType\": \"charge\"}",
+        "transactionId": "tx-dd1227745cd7821d"
+      },
+      {
+        "observationId": "obs-537f7d9a7d6e4071",
+        "sourceId": "source-386a10f783e0",
+        "sourceKind": "email",
+        "text": "Synthetic email observation obs-537f7d9a7d6e4071\n{\"amountCents\": -4386, \"category\": \"travel\", \"currency\": \"USD\", \"merchant\": \"Merchant d2279241\", \"postedAt\": \"2026-09-26T12:00:00Z\", \"refundOf\": \"tx-2e7109f6cbff0b33\", \"transactionId\": \"tx-561ca8618986fa26\", \"transactionType\": \"refund\"}",
+        "transactionId": "tx-561ca8618986fa26"
+      }
+    ],
+    "sources": {
+      "source-bank": "source-b98f7cc66860",
+      "source-email": "source-386a10f783e0",
+      "source-notice": "source-96b7a5000ea5"
+    },
+    "transactions": [
+      {
+        "amountCents": 5592,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 330f0fed",
+        "postedAt": "2026-09-01T00:00:00Z",
+        "transactionId": "tx-c0ce526055e75c53",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 528,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant fd6a99e7",
+        "postedAt": "2026-09-03T12:00:00Z",
+        "transactionId": "tx-2e17df1a77b290fe",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1359,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant c67aca77",
+        "postedAt": "2026-09-04T12:00:00Z",
+        "transactionId": "tx-541e13de61cad344",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2205,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant bcd61dd5",
+        "postedAt": "2026-09-05T12:00:00Z",
+        "transactionId": "tx-ad7159dab1f2aa82",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4299,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant 87df54a4",
+        "postedAt": "2026-09-06T12:00:00Z",
+        "transactionId": "tx-4e7500c24423d8d7",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 9160,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant d1263f31",
+        "postedAt": "2026-09-08T12:00:00Z",
+        "transactionId": "tx-bf1d027883536331",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4024,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant b6385afb",
+        "postedAt": "2026-09-09T12:00:00Z",
+        "transactionId": "tx-26c98ac7fdd98710",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 24661,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant 5cb53af7",
+        "postedAt": "2026-09-10T12:00:00Z",
+        "transactionId": "tx-cc491e6229b1d509",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 2470,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 868fa1fd",
+        "postedAt": "2026-09-11T12:00:00Z",
+        "transactionId": "tx-581be4eae9d7397d",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 901,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant 8ab1931c",
+        "postedAt": "2026-09-12T12:00:00Z",
+        "transactionId": "tx-b6604d71ffe66bd6",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1822,
+        "category": "health",
+        "currency": "USD",
+        "merchant": "Merchant aa47f950",
+        "postedAt": "2026-09-14T12:00:00Z",
+        "transactionId": "tx-d7c787ec30071d9c",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 6453,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant 5eb132f7",
+        "postedAt": "2026-09-16T12:00:00Z",
+        "transactionId": "tx-2e7109f6cbff0b33",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 8441,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 86f697f9",
+        "postedAt": "2026-09-18T12:00:00Z",
+        "transactionId": "tx-3dd87f2e9a1f9405",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 3610,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 3cb6221f",
+        "postedAt": "2026-09-20T12:00:00Z",
+        "transactionId": "tx-1d4b5104a336e139",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1305,
+        "category": "subscriptions",
+        "currency": "USD",
+        "merchant": "Merchant 353af13b",
+        "postedAt": "2026-09-22T12:00:00Z",
+        "transactionId": "tx-2555f7313be165e8",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 4916,
+        "category": "utilities",
+        "currency": "USD",
+        "merchant": "Merchant 2294718c",
+        "postedAt": "2026-09-25T12:00:00Z",
+        "transactionId": "tx-dd1227745cd7821d",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 7899,
+        "category": "groceries",
+        "currency": "USD",
+        "merchant": "Merchant f08bcf58",
+        "postedAt": "2026-09-28T12:00:00Z",
+        "transactionId": "tx-ee51d9f8c69e3603",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 1337,
+        "category": "transport",
+        "currency": "USD",
+        "merchant": "Merchant b2a63788",
+        "postedAt": "2026-09-30T23:59:59Z",
+        "transactionId": "tx-ed06eb11c65ffd0f",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -2693,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 80f4c51a",
+        "postedAt": "2026-09-21T12:00:00Z",
+        "refundOf": "tx-26c98ac7fdd98710",
+        "transactionId": "tx-4f5006e358776a01",
+        "transactionType": "refund"
+      },
+      {
+        "amountCents": 1298,
+        "category": "dining",
+        "currency": "USD",
+        "merchant": "Merchant 0426899e",
+        "postedAt": "2026-09-07T00:00:00Z",
+        "transactionId": "tx-e46bdd4506a4490c",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 5187,
+        "category": "books",
+        "currency": "USD",
+        "merchant": "Merchant 73a4ee3b",
+        "postedAt": "2026-08-31T23:59:59Z",
+        "transactionId": "tx-f80ace0c7ae8289e",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": 10764,
+        "category": "equipment",
+        "currency": "USD",
+        "merchant": "Merchant 55b86db9",
+        "postedAt": "2026-10-01T00:00:00Z",
+        "transactionId": "tx-f18d5d93f91a8635",
+        "transactionType": "charge"
+      },
+      {
+        "amountCents": -4386,
+        "category": "travel",
+        "currency": "USD",
+        "merchant": "Merchant d2279241",
+        "postedAt": "2026-09-26T12:00:00Z",
+        "refundOf": "tx-2e7109f6cbff0b33",
+        "transactionId": "tx-561ca8618986fa26",
+        "transactionType": "refund"
+      }
+    ]
+  }
+}

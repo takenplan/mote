@@ -1,0 +1,25 @@
+{
+  "candidateCommit": "2c78ca8d52a7d17fae20962cf68d09a717ffc73a",
+  "sourceRoot": "/workspace/scratch/8d97506698dc/evaluator-r5",
+  "helperFiles": {
+    "http-runtime.mjs": "90096d0749c34b9c6a0c5d5929ff559dcbbe9bd3266d7e30a10c3b14e8c63391",
+    "release-preload.mjs": "aa4153b40abda2c46121ab92ed31dc93313af24d6011c8d984f796bbebb53c6f"
+  },
+  "input": {
+    "sha256": "e1feb8f787038e8f18a212783a67b153bf4160f914e68cb757eb62d4d62d3b8f",
+    "observations": 43,
+    "sources": 3,
+    "note": "Same generated SourceItems as failed R5 prefix; transaction oracle and semantic expectations are not copied."
+  },
+  "fixtureRelease": {
+    "generated-final--finance/v1.0.0/release.json": "4cdf856814c7c2137d0b9a39b8cb1be8a252fd50aaae20879319e14b3e39300d",
+    "generated-final--finance/v1.0.0/mote-plugin.json": "740880ea06ec2a2dd92dac64ee23cf3bc1297fa1e6f971e0ada526379c951e41",
+    "generated-final--finance/v1.0.0/plugin.zip": "fa7957be870b1f69284a49edc09d684d910b187fd5071ffa9b5960b4887642dc",
+    "generated-final--finance/v1.0.0/commit.json": "6a68899b01894ef22fd82920529ea3ef999df509f3e860296b7185a2cb72a657",
+    "generated-final--finance/v1.1.0/release.json": "d87e77a8e3cd68d8222f639a6d6b33788b4c1ed8fd1002e04cd48d7abc1fe7a2",
+    "generated-final--finance/v1.1.0/mote-plugin.json": "7f22a8b6b1ebc3975964d55519aaefbd1a0f3f680cfaa88544cb270c7e2b0c49",
+    "generated-final--finance/v1.1.0/plugin.zip": "1617ab03d1078b179617c5e02a98252152b4f004213975faa38581e9d5c46f87",
+    "generated-final--finance/v1.1.0/commit.json": "42fbda8413dcdd2941ac80b299923f52a4fd2e31794c690ffd99fa366051a646"
+  },
+  "dependencies": "Existing node_modules links; @mote packages have unchanged baseline source."
+}

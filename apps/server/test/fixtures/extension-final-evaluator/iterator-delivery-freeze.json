@@ -1,0 +1,29 @@
+{
+  "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+  "iteratorFrozenAt": "2026-10-19T19:31:32.197758+00:00",
+  "evaluatorRecordedAt": "2026-10-19T19:36:58.857000+00:00",
+  "runtimeTreeSha256": "f7c8f2418be662234f4dc073a486950b7ea89e68ebae774ea46752ff630dfb3b",
+  "files": {
+    "native-apply.mjs": "706914d8e891359057a47f3abaa87a81bdd06a623140d26a1cc6d9eb391e14d8",
+    "trial.json": "b4c41072211ab30b6bafbe7d9849b2c6c38caae43b49d97da16c67a739e1c3b0",
+    "mote-plugin.json": "392fff5cf157dfd837ab86b6319ac6bf821c2a7c7c52f7c071ee2c1565e09ad5",
+    "originals.mjs": "19d41c3c81d05c42874bacab3bf9e35bd695e7b8c489be2da0913d738195ea3e",
+    "validation-report.json": "75af5069c301dbc50ef469954c76cd16504d449aeda84706b3886a15a80e1df3",
+    "visible-inputs.json": "045171d4b0f8f3fd1e75d55263006daae462f5319820ad356e221700b5473dd3",
+    "source.mjs": "eb27799aa47c254c7df4ac722312afb4cb2c6970ded86ba3f2cb2da90a47d4a3",
+    "release.mjs": "4347084684c64b3fc4fa8a8dcc52d5bf524ec53f2337bc2a646da712db10b889",
+    "plugin.zip": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9",
+    "README.md": "387ced1df2923b11a32128e50e4419ae1e93e3108bf06ca906a03357697e269f",
+    "plugin.mjs": "1156fd03aebec465891568c2b2205891734585a51488cb19293a7e004e3c5fa6",
+    "version.mjs": "aaf51a60c54d0afc97cbc7957d715e570fd054a4b95d7a3903dba71333abf5c5",
+    "processor.mjs": "5b235348a4d69ca0fec793a77e78beec9b8c5cbc913b11b42f33442d4ed987f2",
+    "semantic-mock.mjs": "996f68758fc49a95ed620ee9970999f93dbcba73c4d7d32275dbcd191f9ea24e",
+    "semantic-fixtures.json": "c4c0d29924028c01824d6d2d0d8c6c4dfd88e878e14638e4b3aabd81a770082a",
+    "http-host.ts": "f16db0dbc97295c76c92013fc3decc0ffcab5940ed0c330756ae8ae7e03b90b6"
+  },
+  "authoredArchives": {
+    "1.0.0": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9",
+    "1.1.0": "835706709a116180c0088da971043e59f99fd644434b0e623338a745edf67682"
+  },
+  "testSha256": "517ef50201675e15cac69e88be38227e6b832c709f0940ddccfc1318b4bf76e7"
+}

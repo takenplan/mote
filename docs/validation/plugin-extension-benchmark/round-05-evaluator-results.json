@@ -1,0 +1,1057 @@
+{
+  "schemaVersion": 1,
+  "round": "R05",
+  "role": "Independent final Evaluator",
+  "createdAt": "2026-10-19T19:55:56.313205+00:00",
+  "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+  "candidateAcceptance": "FAIL",
+  "candidateAcceptanceReason": "FAIL_HOST_STORAGE",
+  "rootG5Disposition": "FAIL; unresolved cause; later successful runs do not clear it",
+  "seedCommitment": {
+    "round": "R05",
+    "phase": "ORACLE_FROZEN_BEFORE_ITERATOR",
+    "createdAtUtc": "2026-10-19T19:12:32.498803+00:00",
+    "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+    "seedSha256": "8a3b86447d7345d4067c9ab079f169fde271c883e0474eeeb088e2ce26a2d9b6",
+    "heldOracleSha256": "a0775299beb99949d1c280272f7db13c3720e42ce88eaf230f47693fd00a46e9",
+    "generatorSha256": "2ef1a91dcb8fade723315079850dd017b0d5d0b830c44d482afb3140573dbefd",
+    "publicInputsSha256": {
+      "AGENTS.md": "9d253ca5d665aeec83239f46b3b4b34dadc1ee13f56af4ee842e838e6ed37b90",
+      "docs/validation/plugin-extension-benchmark/plan.md": "3bdb82893a91ef8dc65afdb26562cbf659e6df31b88ed9315dc3770a8d037136",
+      "docs/validation/plugin-extension-benchmark/cases.json": "9abd71fb674ff111e3b5e82ce016e6fdc992752a972ab3da1bb2a3c7f332fba5",
+      "docs/plugin-authoring.md": "3229e9891618684623ef2fbeb97dfa5c4890dd9870ff41107c4190513614e761"
+    },
+    "beforeFreezeReads": [
+      "AGENTS.md",
+      "docs/validation/plugin-extension-benchmark/plan.md",
+      "docs/validation/plugin-extension-benchmark/cases.json",
+      "docs/plugin-authoring.md",
+      "git rev-parse HEAD"
+    ],
+    "candidatePluginInspected": false,
+    "priorTrialImplementationInspected": false,
+    "hiddenBehaviors": [
+      "renamed exact IDs",
+      "bounded integer cents",
+      "permuted arrival order",
+      "explicit changed refund reference",
+      "same UTC month boundary",
+      "pagination limit 7"
+    ],
+    "variants": [
+      "final-initial",
+      "reserve-repair-1",
+      "reserve-repair-2"
+    ],
+    "expectedOutcomesDerivedFrom": "Frozen public canonical transactions, transformed independently before implementation inspection; never plugin results.",
+    "calibrationPlan": [
+      "actual installed positive publication",
+      "actual plausible success without publication",
+      "actual hardcoded-visible publication against changed input",
+      "synthetic forbidden core diff",
+      "actual foreign-owner request",
+      "actual held/stop stale-publication attempt"
+    ]
+  },
+  "iteratorDelivery": {
+    "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+    "iteratorFrozenAt": "2026-10-19T19:31:32.197758+00:00",
+    "evaluatorRecordedAt": "2026-10-19T19:36:58.857000+00:00",
+    "runtimeTreeSha256": "f7c8f2418be662234f4dc073a486950b7ea89e68ebae774ea46752ff630dfb3b",
+    "files": {
+      "native-apply.mjs": "706914d8e891359057a47f3abaa87a81bdd06a623140d26a1cc6d9eb391e14d8",
+      "trial.json": "b4c41072211ab30b6bafbe7d9849b2c6c38caae43b49d97da16c67a739e1c3b0",
+      "mote-plugin.json": "392fff5cf157dfd837ab86b6319ac6bf821c2a7c7c52f7c071ee2c1565e09ad5",
+      "originals.mjs": "19d41c3c81d05c42874bacab3bf9e35bd695e7b8c489be2da0913d738195ea3e",
+      "validation-report.json": "75af5069c301dbc50ef469954c76cd16504d449aeda84706b3886a15a80e1df3",
+      "visible-inputs.json": "045171d4b0f8f3fd1e75d55263006daae462f5319820ad356e221700b5473dd3",
+      "source.mjs": "eb27799aa47c254c7df4ac722312afb4cb2c6970ded86ba3f2cb2da90a47d4a3",
+      "release.mjs": "4347084684c64b3fc4fa8a8dcc52d5bf524ec53f2337bc2a646da712db10b889",
+      "plugin.zip": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9",
+      "README.md": "387ced1df2923b11a32128e50e4419ae1e93e3108bf06ca906a03357697e269f",
+      "plugin.mjs": "1156fd03aebec465891568c2b2205891734585a51488cb19293a7e004e3c5fa6",
+      "version.mjs": "aaf51a60c54d0afc97cbc7957d715e570fd054a4b95d7a3903dba71333abf5c5",
+      "processor.mjs": "5b235348a4d69ca0fec793a77e78beec9b8c5cbc913b11b42f33442d4ed987f2",
+      "semantic-mock.mjs": "996f68758fc49a95ed620ee9970999f93dbcba73c4d7d32275dbcd191f9ea24e",
+      "semantic-fixtures.json": "c4c0d29924028c01824d6d2d0d8c6c4dfd88e878e14638e4b3aabd81a770082a",
+      "http-host.ts": "f16db0dbc97295c76c92013fc3decc0ffcab5940ed0c330756ae8ae7e03b90b6"
+    },
+    "authoredArchives": {
+      "1.0.0": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9",
+      "1.1.0": "835706709a116180c0088da971043e59f99fd644434b0e623338a745edf67682"
+    },
+    "testSha256": "517ef50201675e15cac69e88be38227e6b832c709f0940ddccfc1318b4bf76e7"
+  },
+  "trial": {
+    "initialDeliveries": 1,
+    "iteratorRepairCycles": 0,
+    "hiddenVariantsUsed": [
+      "final-initial"
+    ],
+    "unusedRepairVariants": [
+      "reserve-repair-1",
+      "reserve-repair-2"
+    ],
+    "submittedBytesChangedAfterFreeze": false,
+    "hiddenExecutionRuns": 4,
+    "publishedArchiveReplayRuns": 1,
+    "newIndependentStatisticalTrialsFromReruns": 0,
+    "finalHarnessCorrections": 2,
+    "calibrationHarnessConstructionCorrections": 2,
+    "initialDeliveryFullCasePassAt1": false,
+    "finalCompleteCasePass": false,
+    "publishedBoundedSequenceCompleted": true
+  },
+  "fullCaseNISR": {
+    "numerator": 0,
+    "denominator": 5,
+    "value": 0,
+    "attemptedIds": [
+      "E01",
+      "E04",
+      "E06",
+      "E10",
+      "E11"
+    ],
+    "notRun": 7,
+    "fullFrozenCount": 12,
+    "attemptCoverage": 0.4166666666666667,
+    "counts": {
+      "PASS": 0,
+      "PARTIAL": 2,
+      "FAIL": 3,
+      "BLOCKED": 0,
+      "NOT RUN": 7
+    }
+  },
+  "probeNISR": {
+    "numerator": 0,
+    "denominator": 6,
+    "value": 0,
+    "counts": {
+      "PASS": 0,
+      "PARTIAL": 4,
+      "FAIL": 2,
+      "BLOCKED": 0,
+      "NOT RUN": 0
+    },
+    "scope": "Frozen requiredAssertionIds, not narrower successful subchecks"
+  },
+  "passAt1": {
+    "fullCaseNumerator": 0,
+    "fullCaseDenominator": 5,
+    "probeNumerator": 0,
+    "probeDenominator": 6,
+    "unit": "first submitted immutable plugin; evaluator corrections and host reruns are not Iterator repairs"
+  },
+  "final": {
+    "fullCaseNumerator": 0,
+    "fullCaseDenominator": 5,
+    "probeNumerator": 0,
+    "probeDenominator": 6
+  },
+  "gates": {
+    "G1_FUNCTIONAL": {
+      "status": "NOT_SATISFIED",
+      "detail": "0 complete frozen full-case successes and0 complete frozen probe successes."
+    },
+    "G2_CORE_ZERO": {
+      "status": "PASS",
+      "iteratorCoreFilesChanged": 0,
+      "iteratorExistingTestsChanged": 0,
+      "privateRuntimeImports": 0,
+      "hostAdaptersAdded": 0,
+      "detail": "Frozen candidate tracked diff empty; only new final-pack and new Iterator test plus dependency link; full delivered hashes unchanged. Root optimizer source edits precede this candidate and are not Iterator edits."
+    },
+    "G3_AUTHORIZATION": {
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "detail": "No disclosures in exercised A/B selectors and generation/cancellation paths; unexecuted full E11 branches remain open."
+    },
+    "G4_LIFECYCLE": {
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "detail": "Public replay completed admitted upgrade, disable drain, grant/stop/cancel, abrupt restart/readback and referenced-uninstall rejection; no successful removal or combined both-held owner restart."
+    },
+    "G5_REGRESSION": {
+      "status": "FAIL",
+      "reason": "FAIL_HOST_STORAGE",
+      "rootCause": "UNDETERMINED",
+      "durableCorruptionRuns": 2,
+      "affectedCheckOwner": "root",
+      "detail": "Two distinct newly created vaults suffered actual persisted SQLite corruption before any finance plugin invocation. Later passing replay does not erase this known candidate failure. Root full affected check is separate evidence."
+    },
+    "G6_REAL_EXECUTION": {
+      "status": "PARTIAL",
+      "boundedSourceProcessorStatus": "PASS",
+      "detail": "Installed worker bytes produce actual Material and Transcript readback. Complete insight/native/trigger results are not produced."
+    }
+  },
+  "fullCases": [
+    {
+      "id": "E01",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "coverageVerdict": "PARTIAL",
+      "missingAssertionIds": [
+        "E01.3",
+        "E01.4"
+      ],
+      "detail": "Source/processor data paths execute; complete insight/query/UI extension journey is unsupported/unexecuted. Root disposition of full case is FAIL; source Material alone cannot satisfy the frozen full-case scope.",
+      "hardGateAccepted": false,
+      "regressionGate": "FAIL",
+      "regressionReason": "FAIL_HOST_STORAGE",
+      "gates": {
+        "G1_FUNCTIONAL": "FAIL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PARTIAL"
+      }
+    },
+    {
+      "id": "E02",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E03",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E04",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "coverageVerdict": "FAIL",
+      "missingAssertionIds": [
+        "E04.1",
+        "E04.2",
+        "E04.3",
+        "E04.4"
+      ],
+      "detail": "Concrete unchanged native loading/check rejection.",
+      "hardGateAccepted": false,
+      "regressionGate": "FAIL",
+      "regressionReason": "FAIL_HOST_STORAGE",
+      "gates": {
+        "G1_FUNCTIONAL": "FAIL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "NOT RUN",
+        "G4_LIFECYCLE": "NOT RUN",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "FAIL"
+      }
+    },
+    {
+      "id": "E05",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E06",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "coverageVerdict": "FAIL",
+      "missingAssertionIds": [
+        "E06.2",
+        "E06.3",
+        "E06.4"
+      ],
+      "detail": "Concrete extension-policy admission rejection.",
+      "hardGateAccepted": false,
+      "regressionGate": "FAIL",
+      "regressionReason": "FAIL_HOST_STORAGE",
+      "gates": {
+        "G1_FUNCTIONAL": "FAIL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "NOT RUN",
+        "G4_LIFECYCLE": "NOT RUN",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "FAIL"
+      }
+    },
+    {
+      "id": "E07",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E08",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E09",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    },
+    {
+      "id": "E10",
+      "status": "PARTIAL",
+      "coverageVerdict": "PARTIAL",
+      "missingAssertionIds": [
+        "E10.4",
+        "E10.5"
+      ],
+      "detail": "Covered source/processor coexistence, package upgrade and post-publication restart/readback. E10.4 is partial: termination before task-completion persistence and recovery of an in-flight result were not established. Successful removal/history remains absent.",
+      "hardGateAccepted": false,
+      "regressionGate": "FAIL",
+      "regressionReason": "FAIL_HOST_STORAGE",
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PARTIAL"
+      }
+    },
+    {
+      "id": "E11",
+      "status": "PARTIAL",
+      "coverageVerdict": "PARTIAL",
+      "missingAssertionIds": [
+        "E11.3",
+        "E11.4",
+        "E11.5"
+      ],
+      "detail": "Covered actual owner selectors; foreign event cursor, both-held lifecycle/restart, and model-resource/export/restore branches remain absent.",
+      "hardGateAccepted": false,
+      "regressionGate": "FAIL",
+      "regressionReason": "FAIL_HOST_STORAGE",
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PARTIAL"
+      }
+    },
+    {
+      "id": "E12",
+      "status": "NOT RUN",
+      "coverageVerdict": "NOT RUN"
+    }
+  ],
+  "probes": [
+    {
+      "id": "P01_SOURCE",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "missingRequiredAssertionIds": [
+        "E01.3"
+      ],
+      "detail": "Exact ledger, actual Material/evidence and source generation revocation exercised; complete durable insight outcome is absent.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PASS"
+      }
+    },
+    {
+      "id": "P02_PROCESSOR",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "missingRequiredAssertionIds": [
+        "E08.1",
+        "E08.2",
+        "E08.4"
+      ],
+      "detail": "Actual text Original to Transcript staging/readback; no image origins/provider or held image/processor deletion fence.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PASS"
+      }
+    },
+    {
+      "id": "P10_LIFECYCLE",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "missingRequiredAssertionIds": [
+        "E10.4",
+        "E10.5"
+      ],
+      "detail": "E10.4 is partial: restart occurred after publication, before task-result observation, without establishing interruption before completion persistence or in-flight result recovery. The completed replay needed no retry. E10.5 successful package removal and subsequent lawful history were not attempted; referenced uninstall rejection did execute.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PASS"
+      }
+    },
+    {
+      "id": "P11_ISOLATION",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "missingRequiredAssertionIds": [
+        "E11.3",
+        "E11.4"
+      ],
+      "detail": "Foreign event-cursor substitution and both users held across A revocation plus restart remain unexecuted.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "PARTIAL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "PARTIAL",
+        "G4_LIFECYCLE": "PARTIAL",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "PASS"
+      }
+    },
+    {
+      "id": "P04_HARNESS",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "boundedStatus": "FAIL",
+      "missingRequiredAssertionIds": [
+        "E04.2",
+        "E04.3",
+        "E04.4"
+      ],
+      "detail": "Unchanged generated native apply(ctx) module installs as fixed release but actual check returns502 execution_unavailable; native tool never executes.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "FAIL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "NOT RUN",
+        "G4_LIFECYCLE": "NOT RUN",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "FAIL"
+      }
+    },
+    {
+      "id": "P06_TRIGGER",
+      "status": "FAIL",
+      "reason": "NO_EXTENSION_POINT",
+      "boundedStatus": "FAIL",
+      "missingRequiredAssertionIds": [
+        "E06.2",
+        "E06.3",
+        "E06.4"
+      ],
+      "detail": "Actual public extension-owned automation admission returns400 invalid_request; no contributed scheduler callback.",
+      "hardGateAccepted": false,
+      "gates": {
+        "G1_FUNCTIONAL": "FAIL",
+        "G2_CORE_ZERO": "PASS",
+        "G3_AUTHORIZATION": "NOT RUN",
+        "G4_LIFECYCLE": "NOT RUN",
+        "G5_REGRESSION": "FAIL",
+        "G6_REAL_EXECUTION": "FAIL"
+      }
+    }
+  ],
+  "heldOracleSummary": {
+    "currency": "USD",
+    "grossCents": 95860,
+    "month": "2026-09",
+    "monthlyCharges": 19,
+    "monthlyRefunds": 2,
+    "netCents": 89251,
+    "noiseObservations": 4,
+    "pageLimit": 7,
+    "refundCents": 6609,
+    "refundOfById": {
+      "tx-adcb2e71c1f8f10c": "tx-00df5e7b90aab981",
+      "tx-e23cbefdda92307f": "tx-95d4d3a0597edaea"
+    },
+    "repeatedObservations": 16,
+    "sourceMinimumPages": {
+      "source-0fab5e7b3e56": 3,
+      "source-4a3f4a67faac": 2,
+      "source-b314ca8475b0": 3
+    },
+    "sourceObservationCounts": {
+      "source-0fab5e7b3e56": 20,
+      "source-4a3f4a67faac": 8,
+      "source-b314ca8475b0": 15
+    },
+    "totalObservations": 43,
+    "uniqueTransactions": 23
+  },
+  "calibration": {
+    "createdAt": "2026-10-19T19:20:07.974Z",
+    "runDir": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/calibration-1792437600286",
+    "observed": [
+      {
+        "id": "C01_REAL_POSITIVE",
+        "expected": "PASS",
+        "observed": "PASS",
+        "specimenSha256": "5620a5fe60b23df587da0ff7c1782be4fc34f361502215106359264304c2fef2",
+        "packageDigest": "1b6fd8305de92d258f26766f112e430faf0029e9e0afce295da311d61f67b3e9",
+        "taskId": "64846137604a4e4e6dbefa93aeb3f8d66dd7c4bb0af426b705168a3a5b2af8bd",
+        "materialId": "mat_77bf8353620ad4429fa529b119db3729a90eed73f70175da59ed6f6206e06bad",
+        "manifestOrderReversed": true
+      },
+      {
+        "id": "C02_REGISTRY_ONLY",
+        "expected": "FAIL",
+        "observed": "FAIL",
+        "taskSucceeded": true,
+        "publicationDelta": 0
+      },
+      {
+        "id": "C03_HARDCODED_VISIBLE",
+        "expected": "FAIL",
+        "observed": "FAIL",
+        "actualCents": 83335,
+        "independentExpectedCents": 83352,
+        "changedInputOriginal": "original:603ce47adf5a2c8b1eb05a0189ed06040e564e7ec61e5e97ac653e03ac765c27",
+        "materialRead": true
+      },
+      {
+        "id": "C04_CORE_INTRUSION",
+        "expected": "FAIL",
+        "observed": "FAIL",
+        "specimenSha256": "f26f17b2d2b634d5cf6a3bf4e5c09de495ff2fb9ec8d9a76c7989960a1646fe5",
+        "changedCoreFiles": [
+          "apps/server/src/index.ts"
+        ],
+        "checkoutModified": false
+      },
+      {
+        "id": "C05_FOREIGN_OWNER",
+        "expected": "no disclosures",
+        "observed": "PASS",
+        "workerReadState": "blocked",
+        "foreignSnapshotStatus": 404,
+        "foreignDataDisclosures": 0
+      },
+      {
+        "id": "C06_LATE_PUBLISH",
+        "expected": "no stale publications",
+        "observed": "PASS",
+        "taskId": "d2c16cc9ae98b70ad0bfc8f1b4c24dac0a8399af33f9a3ef76960393ae4f75d3",
+        "latePublishRejected": true,
+        "cancelSignalObserved": true,
+        "sameWorkerSiblingSucceeded": true
+      },
+      {
+        "id": "PROCESSOR_SANITY",
+        "observed": "PASS",
+        "artifactId": "9757f39e1b0193e475d07ff5c3ab73de535201f3796fcc086e234fb21cd04d43",
+        "originalRef": "original:b5c984594c28f997e5bcb1c5c1502fd48bbf8913b4cde503c8f58674ffffa92e"
+      },
+      {
+        "id": "ACTUAL_RESTART_SANITY",
+        "observed": "PASS",
+        "distinctPids": 2,
+        "taskId": "64846137604a4e4e6dbefa93aeb3f8d66dd7c4bb0af426b705168a3a5b2af8bd",
+        "historyReadable": true
+      }
+    ]
+  },
+  "boundaries": {
+    "createdAt": "2026-10-19T19:21:55.605Z",
+    "runDir": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/boundaries-1792437712941",
+    "results": [
+      {
+        "id": "HOST_CAPABILITY_DISCOVERY",
+        "status": "PASS",
+        "anonymousStatus": 401,
+        "schemaVersion": 1,
+        "runtime": "worker",
+        "factoryExports": [
+          "createMotePlugin",
+          "createMemoryProvider"
+        ],
+        "invocationCapabilities": [
+          {
+            "id": "source",
+            "registered": true
+          },
+          {
+            "id": "processor",
+            "registered": true
+          },
+          {
+            "id": "repository",
+            "registered": false,
+            "reason": "scoped_domain_unavailable"
+          },
+          {
+            "id": "retrieval",
+            "registered": false,
+            "reason": "scoped_domain_unavailable"
+          },
+          {
+            "id": "engine",
+            "registered": false,
+            "reason": "scoped_domain_unavailable"
+          },
+          {
+            "id": "model",
+            "registered": false,
+            "reason": "scoped_domain_unavailable"
+          },
+          {
+            "id": "ui",
+            "registered": false,
+            "reason": "scoped_domain_unavailable"
+          }
+        ]
+      },
+      {
+        "id": "P04_HARNESS",
+        "status": "FAIL",
+        "reason": "NO_EXTENSION_POINT",
+        "attempt": "Pinned apply(ctx) native module packaged unchanged; supported worker install succeeded and actual check rejected absent worker factory.",
+        "nativeSha256": "7009bf8045f33f6193f5c3070d238c43a2c3629f48fd95add50742ed37ee7cf5",
+        "packageDigest": "8e8df8057d05de20f6942dd1a7e12b9f08dd5bf3c85802de36accd2f8f339fd7",
+        "checkStatus": 502,
+        "checkBody": {
+          "error": "execution_unavailable"
+        },
+        "byteIdentity": true,
+        "nativeToolExecuted": false
+      },
+      {
+        "id": "P06_TRIGGER",
+        "status": "FAIL",
+        "reason": "NO_EXTENSION_POINT",
+        "attempt": "Public durable automation admission with extension-owned policy/component",
+        "statusCode": 400,
+        "body": {
+          "error": "invalid_request"
+        },
+        "pluginCallbackExecuted": false
+      }
+    ]
+  },
+  "hiddenRunHistory": [
+    {
+      "index": 1,
+      "resultPath": "round-05-evidence/hidden-run-01-config-order.json",
+      "createdAt": "2026-10-19T19:37:52.944Z",
+      "runDirectory": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/final-final-initial-1792438651218",
+      "reason": "EVALUATOR_CONFIGURATION_ORDER",
+      "exitCode": 1,
+      "earnedSubchecks": [
+        "P01_SOURCE",
+        "IDEMPOTENCE",
+        "P02_PROCESSOR",
+        "P11_ISOLATION"
+      ],
+      "lastError": "POST /api/plugin-instances {\"error\":\"config_prepare_failed\"}\n\n503 !== 200\n"
+    },
+    {
+      "index": 2,
+      "resultPath": "round-05-evidence/hidden-run-02-host-storage.json",
+      "createdAt": "2026-10-19T19:42:08.949Z",
+      "runDirectory": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/final-final-initial-1792438924438",
+      "reason": "FAIL_HOST_STORAGE",
+      "exitCode": 1,
+      "earnedSubchecks": [],
+      "lastError": "fetch failed",
+      "pluginInvocationsBeforeFailure": 0,
+      "serverEvidencePath": "round-05-evidence/hidden-run-02-host-storage-server.json",
+      "processes": [
+        {
+          "pid": 27668,
+          "startedAt": "2026-10-19T19:42:05.086Z",
+          "url": "http://127.0.0.1:42689",
+          "exit": {
+            "code": 1,
+            "signal": null
+          }
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "resultPath": "round-05-evidence/hidden-run-03-ingress-scope.json",
+      "createdAt": "2026-10-19T19:43:17.140Z",
+      "runDirectory": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/final-final-initial-1792438968186",
+      "reason": "EVALUATOR_INGRESS_PROJECTION_SCOPE",
+      "exitCode": 1,
+      "earnedSubchecks": [
+        "P01_SOURCE",
+        "IDEMPOTENCE",
+        "P02_PROCESSOR",
+        "P11_ISOLATION",
+        "PACKAGE_UPGRADE",
+        "ACTUAL_PROCESS_RESTART"
+      ],
+      "lastError": "disable permits neither new Materials nor revisions\n+ actual - expected\n... Skipped lines\n\n  [\n    {\n      id: 'mat_08cdec83220283d5d059e3b0ec9ca7969fb05e4a254dad3cb06586a288398e44',\n      revision: '902fb9aec54bf81652ea31c7dfe889145f14d37f0efaa306f24695f17debbf0b'\n    },\n...\n    {\n+     id: 'mat_b3c9c984b2e3450b47afafe261c8e2e97bf61b67e2ab1ff476be7396fac06492',\n+     revision: '87da2cdf0fc0d4326a3af3a2a57204814c8decef50d5ee2cd5bc58209e0b9ede'\n+   },\n+   {\n      id: 'mat_be928a3e9acc3bc736f586a7444ca7d9f645a33f339a643cb23adc6827bf8f40',\n      revision: 'bb1c5df1e9baae7c28bb929dfd6d98c73a70aece3fd2b485fe6637c2072d74a8'\n    },\n    {\n      id: 'mat_c05115227f37b380d677fab137a25c527e358e10b32356f4784ba95b1ed43f3d',\n"
+    },
+    {
+      "index": 4,
+      "resultPath": "round-05-evidence/hidden-run-04-host-storage.json",
+      "createdAt": "2026-10-19T19:44:38.750Z",
+      "runDirectory": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/final-final-initial-1792439074184",
+      "reason": "FAIL_HOST_STORAGE",
+      "exitCode": 1,
+      "earnedSubchecks": [],
+      "lastError": "GET /api/ingress/sources/source-b314ca8475b0/originals?limit=7 {\"error\":\"scope_unavailable\"}\n\n503 !== 200\n",
+      "pluginInvocationsBeforeFailure": 0,
+      "serverEvidencePath": "round-05-evidence/hidden-run-04-host-storage-server.json",
+      "processes": [
+        {
+          "pid": 28271,
+          "startedAt": "2026-10-19T19:44:34.892Z",
+          "url": "http://127.0.0.1:36949",
+          "exit": {
+            "code": 1,
+            "signal": null
+          }
+        }
+      ]
+    }
+  ],
+  "publishedReplays": [
+    {
+      "phase": "calibration",
+      "startedAt": "2026-10-19T19:47:38.425Z",
+      "completedAt": "2026-10-19T19:47:53.717Z",
+      "verification": {
+        "verified": true,
+        "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+        "files": 521
+      },
+      "code": 0,
+      "signal": null,
+      "evidencePath": "round-05-evidence/published-calibration-results.json",
+      "outputDirectory": "/tmp/mote-r5-calibration-Cf7iKD",
+      "newHiddenAttempt": false
+    },
+    {
+      "phase": "boundaries",
+      "startedAt": "2026-10-19T19:47:53.974Z",
+      "completedAt": "2026-10-19T19:47:57.130Z",
+      "verification": {
+        "verified": true,
+        "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+        "files": 521
+      },
+      "code": 0,
+      "signal": null,
+      "evidencePath": "round-05-evidence/published-boundary-results.json",
+      "outputDirectory": "/tmp/mote-r5-boundaries-EW68aP",
+      "newHiddenAttempt": false
+    },
+    {
+      "phase": "final",
+      "startedAt": "2026-10-19T19:47:57.379Z",
+      "completedAt": "2026-10-19T19:48:35.930Z",
+      "verification": {
+        "verified": true,
+        "candidateCommit": "88fb30af6cc70d369625f4b1350e78f01e207650",
+        "files": 521
+      },
+      "code": 0,
+      "signal": null,
+      "evidencePath": "round-05-evidence/published-final-evaluation-results.json",
+      "outputDirectory": "/tmp/mote-r5-final-U2a1Xz",
+      "newHiddenAttempt": false
+    }
+  ],
+  "publishedFinalSubchecks": [
+    {
+      "id": "P01_SOURCE",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "scope": "43 original source observations -> mocked per-observation extraction -> independent integer ledger -> real Material/readback",
+      "unexecutedRequired": [
+        "durable insight outcome required by E01.3 is incomplete"
+      ],
+      "taskId": "d545cfed85607db50f23c9fd784ab9d718d48094ae7a5da6d33369bf3a3d515f",
+      "materialId": "mat_8835e9ba785e70aec41595770378e0546acf3d2a819d07217dcf0a030ec1f7e9",
+      "revision": "59cc907b53401181ec5b7847e2e584c0d1a5aa6e7626c01d673c178d1ecdba62",
+      "matchedIdentities": 23,
+      "matchedMonthlyIdentities": 21,
+      "matchedObservations": 43,
+      "netCents": 89251,
+      "pageCounts": {
+        "source-0fab5e7b3e56": 3,
+        "source-4a3f4a67faac": 2,
+        "source-b314ca8475b0": 3
+      },
+      "modelRequests": 43,
+      "elapsedMs": 1960,
+      "packageDigest": "4bd72140fc2b6c3fa33f6fb795200873117cdc9ad35df07e060b0b577bca4f87"
+    },
+    {
+      "id": "IDEMPOTENCE",
+      "status": "PASS",
+      "sameTaskId": "d545cfed85607db50f23c9fd784ab9d718d48094ae7a5da6d33369bf3a3d515f",
+      "sameMaterialRevision": true,
+      "additionalModelRequests": 0
+    },
+    {
+      "id": "P02_PROCESSOR",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "scope": "Real text Original -> installed processor -> durable Transcript/readback, no image-provider claim",
+      "unexecutedRequired": [
+        "capture/upload image origins (E08.1)",
+        "selected image provider and named products (E08.2)",
+        "held processor deletion/configuration fence (E08.4)"
+      ],
+      "taskId": "340b3fb7be2f5f58e7f753a4f3cd0b9eddedc0fe8bc016389ae1ac5ba3dba0f2",
+      "artifactId": "6066ccc07741ede0ca8c6cacc99160ee1cacc1800dd36962db03fe84cbb50fcc",
+      "originalRef": "original:55fccb98b6eb3e8925b721de94007d486ceb0972f7664422804fe42db264e338"
+    },
+    {
+      "id": "P11_ISOLATION",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "scope": "Actual A administrator/B users, colliding instance/source/transaction identities, owner Material/task/event/original and snapshot substitutions",
+      "unexecutedRequired": [
+        "foreign event-cursor substitution (E11.3)",
+        "both users held across A revocation then actual restart (E11.4)"
+      ],
+      "aMaterialId": "mat_8835e9ba785e70aec41595770378e0546acf3d2a819d07217dcf0a030ec1f7e9",
+      "bMaterialId": "mat_8835e9ba785e70aec41595770378e0546acf3d2a819d07217dcf0a030ec1f7e9",
+      "bNetCents": 987654321,
+      "foreignProcessorState": "blocked",
+      "foreignDisclosures": 0
+    },
+    {
+      "id": "PACKAGE_UPGRADE",
+      "status": "PASS",
+      "oldTaskId": "a07267124eec2d147aa224093688e24b07e4656734875cc249a2bdb3f12eb86c",
+      "oldVersion": "1.0.0",
+      "oldDigest": "4bd72140fc2b6c3fa33f6fb795200873117cdc9ad35df07e060b0b577bca4f87",
+      "newTaskId": "10623143b24f6dbba2df300ad4feb8e659b2d0111b79788ec1b77ddb7846f74a",
+      "newVersion": "1.1.0",
+      "newDigest": "773db63209e5cf6dde641591703f23ebcffdc3189a2778480227ab77dabe0c1f",
+      "oldMaterialId": "mat_8835e9ba785e70aec41595770378e0546acf3d2a819d07217dcf0a030ec1f7e9",
+      "newMaterialId": "mat_8835e9ba785e70aec41595770378e0546acf3d2a819d07217dcf0a030ec1f7e9"
+    },
+    {
+      "id": "ACTUAL_PROCESS_RESTART",
+      "status": "PASS",
+      "phase": "after real Material publication and before first task result GET",
+      "taskId": "5bb7153bbca8ae867892f605948f39c3056ad79f7152b37530befb4d7b477a81",
+      "materialId": "mat_2b87176f1554cd781fbef6540663b93b7a0d8514818c5abafe2042ef6a89dfd5",
+      "distinctProcessIds": [
+        29055,
+        29129
+      ],
+      "sameTaskAfterReplay": true,
+      "sameMaterialRevision": true,
+      "bHistoryReadable": true
+    },
+    {
+      "id": "DISABLE_DRAIN_HISTORY",
+      "status": "PASS",
+      "drainedTask": "514dd2cd71a5aa02041d1a70fb8f92d96e69f5d026a3e4357aa0f9408ca32563",
+      "newSnapshotStatus": 409,
+      "newPluginMaterialsWhileDisabled": 0,
+      "normalIngressProjection": "mat_bcc97ce05246ada86c3b5e1dc1d77994800c04703efef20ba0649c86431111a8",
+      "automaticModelCallsAfterResume": 0,
+      "oldHistoryReadable": true
+    },
+    {
+      "id": "GRANT_REVOCATION",
+      "status": "PASS",
+      "revokedTaskId": "4418d302d71a9176a60d0ad4de931ba849a37a6fd0fce65cae09cb6a68615bea",
+      "revokedTaskState": "stale",
+      "oldSnapshotStatus": 401,
+      "lateUnauthorizedMaterials": 0,
+      "bConcurrentTaskId": "8b0a9e1b629384e21b85e8502678206ff7aff9669d819fd5cc02207be027e9f5",
+      "processorSiblingTaskId": "cd4e7f4515b6295b8e42c7eec94c923c938cf5d1a938f5058a3378d5777cc7d6"
+    },
+    {
+      "id": "ISOLATED_STOP",
+      "status": "PASS",
+      "heldTaskId": "363cee61740131d1d55876ee96e0f743e025ff3798398fde11d20e4cd80fb15b",
+      "state": "stale",
+      "previousSnapshotWasValid": true,
+      "oldSnapshotStatus": 401,
+      "lateMaterialsOrRevisions": 0
+    },
+    {
+      "id": "SUBMITTED_TASK_CANCEL",
+      "status": "PASS",
+      "cancelledTaskId": "59545e5c7f6b8755f866c1c526e9d12e01380e43fb148bb3fe5b1e576633e8c0",
+      "sameWorkerIntakeTaskId": "657c4573e3f2967091fa7e42c107f00b66771121dd62d51dd1c22a5c320b2faf",
+      "duplicateIntakeReceipt": true,
+      "lateMaterialsOrRevisions": 0
+    },
+    {
+      "id": "P10_LIFECYCLE",
+      "status": "PARTIAL",
+      "boundedStatus": "PASS",
+      "scope": "Distinct source/processor instances; real v1→v1.1 package upgrade; disable drain; grant/stop/cancel fencing; distinct-process restart and retained-reference uninstall rejection",
+      "unexecutedRequired": [
+        "successful package removal after releasing every retained reference"
+      ],
+      "referencedUninstallStatus": 409,
+      "historySurvivesRejectedRemoval": true
+    },
+    {
+      "id": "RUN_COMPLETION",
+      "status": "PASS",
+      "variant": "final-initial",
+      "modelCalls": 281,
+      "liveModelCalls": 0,
+      "rootRegressionGate": "reported separately by root driver",
+      "fullCaseLimitations": [
+        "E01 normal query/automatic insight/browser journey not executed",
+        "E10 actual successful package removal after releasing every reference not executed",
+        "E11 model-resource export/restore not executed",
+        "No image-provider full E08 attempt"
+      ]
+    }
+  ],
+  "publishedObservationSummary": {
+    "publishedRegression": true,
+    "runDirectory": "/tmp/mote-r5-final-U2a1Xz/runs/final-final-initial-1792439277664",
+    "httpObservations": 350,
+    "httpObservationsSha256": "7c088a21918909e38b21241aa09b39cfe056b9846d3f94cce1b237380868ba76",
+    "semanticLedgerSha256": "5a09246c2e9c8e94bf794559ec30cddf08a4b622cf472c18ad20434c4561b436",
+    "semanticRequests": 281,
+    "semanticErrors": 0,
+    "liveModelCalls": 0,
+    "outboundFixtureRequests": 10,
+    "forbiddenOutboundAttempts": 0,
+    "retryRequests": 0,
+    "processes": [
+      {
+        "pid": 29055,
+        "startedAt": "2026-10-19T19:47:58.500Z",
+        "url": "http://127.0.0.1:37401",
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        }
+      },
+      {
+        "pid": 29129,
+        "startedAt": "2026-10-19T19:48:24.998Z",
+        "url": "http://127.0.0.1:43013",
+        "exit": {
+          "code": 0,
+          "signal": null
+        }
+      }
+    ],
+    "evidenceObservation": "Raw synthetic HTTP/model logs retained in reported temporary directory; summaries and hashes archived. No retry request was required in this completed restart run."
+  },
+  "coreAudit": {
+    "frozenCheckoutTrackedDiff": "",
+    "iteratorBusinessCoreChanges": 0,
+    "iteratorExistingTestChanges": 0,
+    "newIteratorTest": "apps/server/test/extension-benchmark-final.test.ts",
+    "privateImportScan": "No apps/server/src, packages/agent/src, ExecutionEngine, TaskHub, ScopedPlugin, setInterval, better-sqlite or node:sqlite reference in business runtime modules; source modules also reviewed",
+    "rootOptimizerChangesCountedSeparately": true
+  },
+  "friction": {
+    "authoringElapsedMs": null,
+    "interfaceDiscoveryElapsedMs": null,
+    "developmentTokens": null,
+    "developmentCost": null,
+    "independentFirstFinanceInvocationMs": 1877,
+    "archivePhaseDurationsMs": {
+      "calibration": 15522.893927,
+      "boundaries": 3407.307876,
+      "final": 38799.448019
+    },
+    "archiveSuiteDurationMs": 57909.082656,
+    "iteratorBusinessNonblankLines": 220,
+    "semanticMockNonblankLines": 15,
+    "releaseAssemblyNonblankLines": 53,
+    "locConvention": "Count nonblank source lines; comments included; business=plugin/source/processor/originals; exclude fixture JSON, version constant, host test harness and documentation",
+    "iteratorCoreEdits": 0,
+    "iteratorRepairCycles": 0,
+    "hostBinaryUpgradeUntested": true
+  },
+  "coverage": {
+    "actualCentralProcessHTTP": "EXECUTED",
+    "productionScopedComposition": "EXECUTED via shipped index.ts",
+    "actualProcessRestart": "EXECUTED",
+    "syntheticSemanticProtocol": "EXECUTED",
+    "SharedContractSuite": "NOT RUN by this evaluator; root owns affected check",
+    "headlessDOM": "NOT RUN",
+    "actualBrowser": "NOT RUN",
+    "macNativeBuild": "NOT RUN",
+    "macNativeDevice": "NOT RUN",
+    "androidNativeBuild": "NOT RUN",
+    "androidEmulatorDevice": "NOT RUN",
+    "liveModelProviderQuality": "NOT RUN",
+    "nativeResourcePerformance": "NOT RUN",
+    "fullE08ImageProvider": "NOT RUN"
+  },
+  "reproduction": {
+    "testEntry": "apps/server/test/extension-benchmark-final-evaluator.test.ts",
+    "phaseEntry": "apps/server/test/fixtures/extension-final-evaluator/run.mjs",
+    "command": "node --import tsx --test --test-concurrency=1 apps/server/test/extension-benchmark-final-evaluator.test.ts",
+    "strictSourceReplayEnv": "R5_REQUIRE_FROZEN_SOURCE=1",
+    "defaultCI": "Record source differences and execute unchanged behavioral assertions",
+    "defaultWrites": "Generated OS temporary directories only; no tracked writes",
+    "originalRunCodeHashes": "round-05-evidence/archive-first-replay-code-sha256.json",
+    "finalCodeHashes": "round-05-evidence/final-evaluator-code-sha256.json",
+    "subsequentRunsArePublishedRegressions": true
+  },
+  "evidenceFilesSha256": {
+    "archive-first-replay-code-sha256.json": "d4c25d2892b84d7841af4614e8bcfd75078a8bcc251432cb918f0b8b8c30db8f",
+    "final-evaluator-code-sha256.json": "717a58b89a8e391cc75a4a7ccea42d508551ac32f274e6ea306f73662304a47f",
+    "hidden-run-01-config-order.json": "37d37492d3e9df006af615d1df882ddd13074192040aa8762f8d0efc3c07e717",
+    "hidden-run-02-host-storage-process.json": "63ce15fea79c66834cc30ad5964ed5c10f760df631ff177ef9a14af991edb837",
+    "hidden-run-02-host-storage-server.json": "a2566f01e404474ca74a427a29512080c193215c643e71b221a31044157ef544",
+    "hidden-run-02-host-storage.json": "320e778d14cc6cdf5bec0f1a5665f3eb274245d1d83b953eadfbb659a9e5ef7f",
+    "hidden-run-03-ingress-scope.json": "53d3b83572948ca913ac7626419a24e2bc2a4467ea94694125bdb605b8e68fdf",
+    "hidden-run-04-host-storage-process.json": "b42cda6b1f29b5e5e229730539b0da22dbc0707ee5106f0962e36fe0af2caca1",
+    "hidden-run-04-host-storage-server.json": "81ce1994f7df7de01763d704357a1ba780c03da8e37810de16caabcb6e778863",
+    "hidden-run-04-host-storage.json": "9bbf74456c0fa6df55acc040ce67d513f9bd16d00038845be4c209d072bd701e",
+    "initial-boundary-results.json": "178d6d0944035c45362f4bc02cbd84f391e50efa4038237d33c69964bae9ac0e",
+    "initial-calibration-results.json": "ae95b1a6eda436a656311c5c594acc842accbb4b67e4bcf8fcf1f65a9bd82ac4",
+    "published-boundaries-phase.json": "35338ad3bb3f26f9d7d9981babed1960f30635ee09d0ca21f26538b56ae6a71d",
+    "published-boundaries-process.json": "5f6183bd6c31386c6fa9127141f217052586c07d312e05695e98808544be66ec",
+    "published-boundary-results.json": "dd5661a1f7f929c62cd278e2c283a2637089e031c6d62752cf5bf8dcdb48e667",
+    "published-calibration-phase.json": "ef1c75023f6e611072bab9beaca792e56fb77a1601ed997de05ade8216fd0d08",
+    "published-calibration-process.json": "a52fc5cb477d0a78732cd7a6320b12a0d0ef9a8d96c4b0e59d3f66add25f075d",
+    "published-calibration-results.json": "153f4fabd06610237defefab328184cc5a040e5469115727d0c7180322564eb0",
+    "published-final-evaluation-results.json": "f1023a967d14fc588e578491b27dd1104f8b579f729179acb647268d85e7f058",
+    "published-final-phase.json": "fde89c2c0bf2c009ed50abd364fc610ceff475ab970938d85e853edbc6475455",
+    "published-final-process.json": "d89c8d55b4612345c9c2e95844488a6c43149ac1cefb7a8b63fb8dd3b05ce98c",
+    "published-observation-summary.json": "c5bc88cbbe044a482f7dba05540f8f840d9bf05c116e9302c732d82f5c091b54"
+  },
+  "rootAffectedCheck": {
+    "statusAtEvaluatorHandoff": "RUNNING; root reports result separately",
+    "commit": "fe15cbd5e7aba9b53e3d664f7470a85107428013",
+    "tree": "3eee98ad87917b53b82238b0ef5dc54918422646",
+    "cannotClearObservedStorageFailures": true,
+    "finalStatus": "FAIL; original check exit 1 at Agent stage; all five originally unrun stages completed once, supplemental overall exit 1",
+    "record": "final-validation.md",
+    "defaultCIThreePhases": {
+      "mode": "supplemental server stage",
+      "calibration": "PASS",
+      "boundaries": "PASS",
+      "final": "PASS",
+      "cannotClearObservedStorageFailures": true
+    },
+    "supplementalStages": {
+      "server": "FAIL: 3151 pass, 4 fail, 3 cancelled, 2 skipped; owned_processes_outlived_command",
+      "shared": "PASS: 198/198",
+      "web": "FAIL: 601/601 assertions passed; owned_processes_outlived_command",
+      "releaseIntegration": "FAIL: 34 pass, 1 fail, 2 skipped; expected EACCES/EPERM rejection was absent",
+      "centralRunner": "PASS: structured scenario, exit 0",
+      "record": "final-validation-results.json"
+    }
+  },
+  "rootFinalScoringReview": {
+    "date": "2026-10-19",
+    "scope": "Documentation-only clarification of already stated restart evidence; execution receipts and all score/gate dispositions are unchanged.",
+    "assertion": "E10.4",
+    "status": "PARTIAL",
+    "reason": "Post-publication restart/readback cannot establish interruption before completion persistence and recovery of an in-flight result.",
+    "originalPublishedSubcheckPreserved": true
+  }
+}

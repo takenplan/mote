@@ -1,0 +1,514 @@
+{
+  "8557ec7ac145b719c74c4abf56db2569208a719f13a72c8e1cba4f5e333ef6f5": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P01",
+        "occurredOn": "2026-09-02",
+        "amountMinor": 5234,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "8e5f793f9ba69ea31fb438be3d176fffe32fc975a76f1536b1b9b3711c8027ad": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P02",
+        "occurredOn": "2026-09-03",
+        "amountMinor": 275,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "8b802287934bc341e456c276fc9db7270950d7cf12f33e690faa6aea14d6fdb2": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P03",
+        "occurredOn": "2026-09-04",
+        "amountMinor": 1299,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "202c7f690ab31b602014182f06615dcbfbd3a3325c32d6284fa9b56402e766c1": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P04",
+        "occurredOn": "2026-09-05",
+        "amountMinor": 1860,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "913773d2f49ab183b1d1d2e76509557057c05561f4539aaddedbee5e500dcc0e": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P05",
+        "occurredOn": "2026-09-06",
+        "amountMinor": 4250,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "a4b2f3adb5e1fe7cc2d2704c496442fecafaf3e3b19cec181de64ad8827c903e": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P06",
+        "occurredOn": "2026-09-08",
+        "amountMinor": 8931,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "c3f45399de51a1fb9de25dd4baab03fdc0d0ca10ed29ae9609f0527a08b66cda": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P07",
+        "occurredOn": "2026-09-09",
+        "amountMinor": 3678,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "13118e5093a3807cc1b9c5018b6206db623ae29688f207cb5b4b1028ef8c8f67": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P08",
+        "occurredOn": "2026-09-10",
+        "amountMinor": 24000,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "07d442f67b56b1150377e5580b02ebb69deef1e88cc49c5adda81e9c9aee777a": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P09",
+        "occurredOn": "2026-09-11",
+        "amountMinor": 2145,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "7b5377e4a6e8ef3527f83a0f074b057cb2237897c60e9a2bb31a641a50a20e6a": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P10",
+        "occurredOn": "2026-09-12",
+        "amountMinor": 550,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "2ba7911ea012962032c3f8e774015eea6fdb527e14c653e605fb09c0fdb66ae0": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P11",
+        "occurredOn": "2026-09-14",
+        "amountMinor": 1499,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "e64ec88b1bbfecd4b4d4b1aa8798055ebac18a08921bfa3d34a0433c3e5aab6e": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P12",
+        "occurredOn": "2026-09-16",
+        "amountMinor": 6289,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "d1faea8cf226c83bb2f328fc02becb3e56eee814f9984343c08f708a84fab44d": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P13",
+        "occurredOn": "2026-09-18",
+        "amountMinor": 7999,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "1e8784a7d6813743f43f2ab1971717a239095892b344c5d7323ac6e3d3d57395": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P14",
+        "occurredOn": "2026-09-20",
+        "amountMinor": 3200,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "527af85f6f020376db715d65270a493c34bccbcf7be8eee648f1af3bde93455d": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P15",
+        "occurredOn": "2026-09-22",
+        "amountMinor": 999,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "3e2786774970a88093dc992214c663e8ce3db3ccce7e11bd56e671dce1a521e6": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P16",
+        "occurredOn": "2026-09-25",
+        "amountMinor": 4550,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "2434a59ec57fbb8a9b00b5831a816932f35a29ccf8deab8220ea44261a43997e": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P17",
+        "occurredOn": "2026-09-28",
+        "amountMinor": 7185,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "523339d7a8437c3c6afaf6a5dd66144a5372a1b0cfa39a384fd3c01de4d33a31": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P18",
+        "occurredOn": "2026-09-30",
+        "amountMinor": 825,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "689e03af34bbc41f4c5bdb29e2eed48c779f49cdf93dd60c5f2c90ae284b5341": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "R01",
+        "occurredOn": "2026-09-21",
+        "amountMinor": 2000,
+        "currency": "USD",
+        "kind": "refund",
+        "refundOf": "P13"
+      }
+    ]
+  },
+  "0438e3e0801337db06d6aef57c71502a4c73781168f08c9d1be89610fd34bf47": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P19",
+        "occurredOn": "2026-08-31",
+        "amountMinor": 1234,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "54e644fa5af962d6e543b5e108837c923429b64e26e7e03d32c54249a628bb4a": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P01",
+        "occurredOn": "2026-09-02",
+        "amountMinor": 5234,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "2d714b8fd0616e19dae885872e9261f3769e7720b18a47607b101084db0f1cdf": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P03",
+        "occurredOn": "2026-09-04",
+        "amountMinor": 1299,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "214c42327c3c3aae6d4d2a935b6d973e6530fb707fa1899aecdad1e7ffdcffd0": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P04",
+        "occurredOn": "2026-09-05",
+        "amountMinor": 1860,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "aff7937c1b1023560d77f24fc88b9676f32d5c5d93606b87ec484c06c9c3ef39": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P05",
+        "occurredOn": "2026-09-06",
+        "amountMinor": 4250,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "ffb284e9ea31189b53d0a985b05d5efd248652a82cd0e55dd2de60a051b0490f": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P07",
+        "occurredOn": "2026-09-09",
+        "amountMinor": 3678,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "abaa44071d70a3502245914edb629be01c3b1826a428343ecab9cb6296f345ea": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P08",
+        "occurredOn": "2026-09-10",
+        "amountMinor": 24000,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "e31699340af817191686a27a02175a4e41dba071b6427d710bb6bb80177f11e2": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P10",
+        "occurredOn": "2026-09-12",
+        "amountMinor": 550,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "75160956ca1ef96f8aecd98e6715218fb8dd950b808d250730c0bba022448a0c": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P12",
+        "occurredOn": "2026-09-16",
+        "amountMinor": 6289,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "f143bcc0947fdfa4ce71bbcb949ff6ba29149fd9d5e28cf5f588fab1b2789e97": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P13",
+        "occurredOn": "2026-09-18",
+        "amountMinor": 7999,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "c129ea531c2d8d5b4a466af7ddd63fdeaed751a6c9e9308eebaf383c3aed6d15": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P15",
+        "occurredOn": "2026-09-22",
+        "amountMinor": 999,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "6c1192ec764ad6d23a29f009a49bfb3e16f93b5a775efe518a3d3740ae5b299e": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P18",
+        "occurredOn": "2026-09-30",
+        "amountMinor": 825,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "0ac7202ab7d79b702519cba3da5d2fa8738ae80eda65f0458e003b8159655b44": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P20",
+        "occurredOn": "2026-09-29",
+        "amountMinor": 4567,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "ab3305d6fc9dcb4a9e09326e8eb65680a9a30d8524b4b8fb0484f65426f86564": {
+    "sourceId": "source-notice",
+    "observations": [
+      {
+        "transactionId": "P21",
+        "occurredOn": "2026-10-01",
+        "amountMinor": 9999,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "1d0c24addfe1ab0fd5d2a0af6b6865799bb8a5753518c64c1db043ea5042e510": {
+    "sourceId": "source-notice",
+    "observations": []
+  },
+  "955712d19315c06b1186cc2eac265887cdf3f011796ec1c0d7e1697da8754218": {
+    "sourceId": "source-notice",
+    "observations": []
+  },
+  "834f793ad8ff7459c2a656d7647b167b7a1f4cee24c8a50246a54bd47b743c1d": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "P02",
+        "occurredOn": "2026-09-03",
+        "amountMinor": 275,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "7dbc65e6157f10806408c887e6301563bb685ebe5ff5b2975b58b811485e2a02": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "P06",
+        "occurredOn": "2026-09-08",
+        "amountMinor": 8931,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "a243b41e2f8a51f0bbd7e02798691ff12e18e8dc8c3e68bdcd3dc09077b4b832": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "P09",
+        "occurredOn": "2026-09-11",
+        "amountMinor": 2145,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "54f41ef4299f1ffa447fca6c2e7bf7d4c3c933b33441990e579300bb198cdb89": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "P20",
+        "occurredOn": "2026-09-29",
+        "amountMinor": 4567,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "183c413311bacc1c1bf904c5ffc8aa89d99118566633d2ee090de9988cd190ca": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "R01",
+        "occurredOn": "2026-09-21",
+        "amountMinor": 2000,
+        "currency": "USD",
+        "kind": "refund",
+        "refundOf": "P13"
+      }
+    ]
+  },
+  "8055fbe05771fd601742e3d4068a6e64e22c6cafcf09c8faf303377824a1cd2f": {
+    "sourceId": "source-email",
+    "observations": [
+      {
+        "transactionId": "R02",
+        "occurredOn": "2026-09-26",
+        "amountMinor": 4000,
+        "currency": "USD",
+        "kind": "refund",
+        "refundOf": "P08"
+      }
+    ]
+  },
+  "281c32561ac62bc8a129de94edab4cf3cd91ecfd6365e6f9105bc185ef1b93bc": {
+    "sourceId": "source-email",
+    "observations": []
+  },
+  "4134b871e29c3f347a6b4ca07f135b4d9e03eba4d64d2dbb4b454d53a0897a23": {
+    "sourceId": "source-email",
+    "observations": []
+  },
+  "1446a6d3b800aaddbe0d6e4a02ea5db7d14f89e757160f28f02582e1293056fd": {
+    "sourceId": "source-bank",
+    "observations": [
+      {
+        "transactionId": "P01",
+        "occurredOn": "2026-09-02",
+        "amountMinor": 987654321,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ]
+  },
+  "874f2fdb850bd43f73ee9f35cd1977807fb7d11c0bd2a04def22050a81e6043e": {
+    "sourceId": "source-hold",
+    "observations": [
+      {
+        "transactionId": "HOLD-01",
+        "occurredOn": "2026-09-12",
+        "amountMinor": 321,
+        "currency": "USD",
+        "kind": "payment"
+      }
+    ],
+    "delayMs": 3500
+  }
+}
