@@ -89,7 +89,10 @@ export class ScopedMemoryData {
   const state=this.state();if(input.ownerParentJobId&&this.sql.get('SELECT job_id FROM mm_owner_cancellations WHERE user_id=$user AND job_id=?',input.ownerParentJobId))throw new PrivateDataError('conflict',409);if(state.generation!==input.generation||memoryHash(this.binding())!==memoryHash(input.binding)||input.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
   if(input.automatic&&input.integrationWindowId){const window=this.sql.get('SELECT revoked FROM mm_integration_windows WHERE user_id=$user AND id=?',input.integrationWindowId);if(!window||window.revoked)throw new PrivateDataError('conflict',409);}
   else if(input.automatic){if(!input.intakeIds?.length)throw new PrivateDataError('conflict',409);for(const id of input.intakeIds){const receipt=this.sql.get('SELECT revoked FROM mm_intakes WHERE user_id=$user AND id=?',id);if(!receipt||receipt.revoked)throw new PrivateDataError('conflict',409);}}
-  for(const pin of input.materialPins??[]){if(input.evidenceReadRanges&&!input.inputs.some(evidence=>this.sql.get('SELECT material_id FROM mm_evidence WHERE user_id=$user AND id=?',evidence.id)?.material_id===pin.id))continue;const current=this.privateData.material(pin.id);if(current.revision!==pin.revision)throw new PrivateDataError('conflict',409);const version=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',pin.id,pin.revision);if(!version||!materialDependencyStatus(materialDraftSchema.parse(JSON.parse(String(version.json))),pin.required).ready)throw new PrivateDataError('conflict',409);}
+  // Evidence-to-Material bindings are shared only within this synchronous check.
+  // Current versions, dependency readiness and SQL authority are still re-read.
+  const targetedMaterials=input.evidenceReadRanges?new Set(input.inputs.map(evidence=>this.sql.get('SELECT material_id FROM mm_evidence WHERE user_id=$user AND id=?',evidence.id)?.material_id)):undefined;
+  for(const pin of input.materialPins??[]){if(targetedMaterials&&!targetedMaterials.has(pin.id))continue;const current=this.privateData.material(pin.id);if(current.revision!==pin.revision)throw new PrivateDataError('conflict',409);const version=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',pin.id,pin.revision);if(!version||!materialDependencyStatus(materialDraftSchema.parse(JSON.parse(String(version.json))),pin.required).ready)throw new PrivateDataError('conflict',409);}
   const pins=input.inputs,evidence=this.evidence(pins.map(pin=>pin.id));for(const pin of pins)if(memoryEvidenceFingerprint(evidence.find(item=>item.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);
   for(const pin of input.related){const row=this.row(pin.id);if(row.version!==pin.version||row.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);this.assertCurrentRecord(row);}
   return evidence.filter(record=>input.inputs.some(pin=>pin.id===record.id));
@@ -149,7 +152,9 @@ export class ScopedMemoryData {
   });return {at:createdAt,resultHash:receipt.resultHash!,items,changed:[...changed.values()],expected,deletionSnapshot:input.deletionSnapshot};
  }
  assertPrepared(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){
-  this.assertInputs(input);for(const memory of prepared.items)this.readInputs(input,memory.evidenceIds);if(prepared.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
+  // No await or mutation separates these reads: validate the whole input once,
+  // then retain every selected evidence/hash/current-Material check.
+  this.assertInputs(input);for(const memory of prepared.items)this.readPinnedInputs(input,memory.evidenceIds);if(prepared.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
   for(const [id,hash] of Object.entries(prepared.expected)){const row=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',id);if((row?memoryHashAnswer(String(row.json)):null)!==hash)throw new PrivateDataError('conflict',409);}
  }
  commit(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){return this.sql.transaction(()=>{
