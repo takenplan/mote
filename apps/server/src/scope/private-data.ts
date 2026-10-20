@@ -378,8 +378,12 @@ export class PrivateData{
    * Retire their visibility, including exact dependent revisions, while keeping
    * originals, artifacts and version bodies. A read never grants reconstruction. */
   private withdrawUnfilteredCoding(id?:string){
-    const roots=()=>this.sql.all(`${id===undefined?'':`WITH RECURSIVE coding_inputs(id,revision) AS(SELECT id,revision FROM pd_materials WHERE user_id=$user AND id=? UNION SELECT d.input_material_id,d.input_revision FROM pd_material_inputs d JOIN coding_inputs i ON d.material_id=i.id AND d.revision=i.revision WHERE d.user_id=$user) `}SELECT h.id FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
-      WHERE h.user_id=$user AND v.user_id=$user AND h.sequence>=h.min_visible_sequence ${id===undefined?'':'AND EXISTS(SELECT 1 FROM coding_inputs i WHERE i.id=h.id AND i.revision=h.revision)'}
+    // Drive exact reads from their transitive input pairs. A correlated EXISTS
+    // let SQLite inspect every retained version's JSON before testing that set.
+    const inputs=id===undefined?'':`WITH RECURSIVE coding_inputs(id,revision) AS(SELECT id,revision FROM pd_materials WHERE user_id=$user AND id=? UNION SELECT d.input_material_id,d.input_revision FROM coding_inputs i CROSS JOIN pd_material_inputs d ON d.user_id=$user AND d.material_id=i.id AND d.revision=i.revision) `;
+    const heads=id===undefined?'pd_materials h JOIN':'coding_inputs i CROSS JOIN pd_materials h ON h.user_id=$user AND h.id=i.id AND h.revision=i.revision CROSS JOIN';
+    const roots=()=>this.sql.all(`${inputs}SELECT h.id FROM ${heads} pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
+      WHERE h.user_id=$user AND v.user_id=$user AND h.sequence>=h.min_visible_sequence
       AND NOT EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') a WHERE json_extract(a.value,'$.key')='coding-dialogue' AND json_extract(a.value,'$.state')='ready' AND json_extract(a.value,'$.revision')='1')
       AND(json_extract(v.json,'$.kind')='mote.coding-session' OR EXISTS(
         SELECT 1 FROM pd_material_captures m JOIN pd_captures c ON c.user_id=m.user_id AND c.id=m.capture_id
