@@ -82,7 +82,7 @@ full scoped production canonical-input test.
 Run the focused suite headlessly:
 
 ```sh
-node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-recording-revision-parity.test.ts
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 'apps/server/test/multiuser-recording-revision-parity*.test.ts'
 ```
 
 Execution receipts, exact candidate and affected-component checks are reported
