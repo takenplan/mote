@@ -87,3 +87,15 @@ and before every external effect and fenced commit.
 
 This port restores Memory's original single `memory.batch` continuation; it does
 not add a domain scheduler or require model stages to reenter the task workflow.
+
+Automatic consolidation splits a frozen pending set into bounded, disjoint
+selections. The remaining window does not consume the preceding selection's
+results, so it has no success dependency on those batches. A failed, paused or
+owner-blocked batch leaves independent selections runnable under the existing
+concurrency, resource locks, original due clock and count threshold. Retrying a
+batch reuses its successful stages; it does not replay completed siblings.
+Cancelling one job affects its selection and genuine derived work, while the
+disjoint remainder may continue. This replaces the former implicit cancellation
+of the remainder through the success dependency. Global Memory stop, revoked
+authority and changed or deleted inputs retain their existing fences. Existing
+historical dependency failures are not automatically reopened.
