@@ -15,6 +15,7 @@ export class PerformanceFailureObservation{
  private readonly started=performance.now();
  private readonly events:Fields[]=[];
  private readonly polls=new Map<string,{count:number;firstMs:number;lastMs:number;maxGapMs:number}>();
+ private readonly pollInstances=new Map<string,number>();
  private overflow=0;
  private currentPhase='created';
  private completed=false;
@@ -32,7 +33,11 @@ export class PerformanceFailureObservation{
  }
  phase(phase:string,fields:Fields={}){this.currentPhase=phase;this.event('phase',{phase,...fields});}
  owner(id:string){try{return this.scope?.()?.users.find(user=>user.id===id)?.alias??'unknown';}catch{return 'unknown';}}
- poll<T>(name:string,check:()=>T):()=>T{return ()=>{const at=performance.now()-this.started,prior=this.polls.get(name);if(prior){prior.count++;prior.maxGapMs=Math.max(prior.maxGapMs,at-prior.lastMs);prior.lastMs=at;}else if(this.polls.size<EVENT_LIMIT)this.polls.set(name,{count:1,firstMs:at,lastMs:at,maxGapMs:0});return check();};}
+ poll<T>(name:string,check:()=>T):()=>T{
+  const instance=(this.pollInstances.get(name)??0)+1;if(this.pollInstances.size<EVENT_LIMIT)this.pollInstances.set(name,instance);
+  const key=instance===1?name:name+'#'+instance;
+  return ()=>{const at=performance.now()-this.started,prior=this.polls.get(key);if(prior){prior.count++;prior.maxGapMs=Math.max(prior.maxGapMs,at-prior.lastMs);prior.lastMs=at;}else if(this.polls.size<EVENT_LIMIT)this.polls.set(key,{count:1,firstMs:at,lastMs:at,maxGapMs:0});return check();};
+ }
  transportError(error:unknown,fields:Fields={}){this.event('transport-error',{...fields,...errorIdentity(error)});}
  complete(){this.completed=true;this.phase('complete');}
  failure(phase:string,original:string){
