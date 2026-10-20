@@ -106,6 +106,26 @@ test('one publication larger than maxItems advances a durable bounded continuati
  assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,2);const before=calls.length;await f.restart();for(const row of rows)await f.wait(f.a,String(row.job_id));assert.equal(calls.length,before,'restart preserves both windows\' completed domain checkpoints');
 });
 
+for(const state of ['failed','paused'] as const)test('an independent consolidation continuation progresses while the earlier batch is '+state,async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.now()});
+ const f=await scopedMemoryFixture(t),calls:ModelCall[]=[],settings=defaultMemorySettings();settings.lifecycle.consolidation.minChanges=2;settings.lifecycle.consolidation.maxItems=1;await f.replace(f.a.token,'memory',settings);let fail=true;
+ scripted(f,'A',calls,{failReview:()=>fail?calls.find(call=>call.integration)?.domain:undefined});
+ const extraction=await f.submit(f.a,[(await f.publish(f.a,'A')).id]);await f.wait(f.a,extraction.id);const first=await automaticJob(f,f.a,extraction.id);
+ const batch=await until(()=>f.read(db=>db.prepare('SELECT draft,review,tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,first.id)),row=>Boolean(row?.draft),'first valid draft');const taskId=JSON.parse(String(batch!.tasks)).batch;assert.ok(['failed','blocked'].includes(await f.terminal(taskId)));assert.equal(f.read(db=>db.prepare('SELECT review FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,first.id))!.review,null);
+ if(state==='paused'){assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+first.id+'/pause','POST',{})).statusCode,200);assert.equal((await f.request(f.a.token,'/api/tasks/'+taskId+'/retry','POST',{})).statusCode,200);await until(()=>f.read(db=>db.prepare('SELECT state,error FROM execution_steps WHERE id=?').get(taskId)),row=>row?.state==='waiting'&&row.error==='memory_job_paused','the failed review waits without a running slot');}
+ const continuation=await until(()=>f.read(db=>db.prepare('SELECT id,task_id,job_id FROM mm_integration_windows WHERE user_id=? AND id!=?').get(f.a.userId,extraction.id)),Boolean,'frozen disjoint remaining window');
+ assert.equal(continuation!.job_id,null,'the remainder has not started before its original due time');
+ assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM execution_dependencies WHERE step_id=?').get(continuation!.task_id))!.n,0,'disjoint chunks have no fabricated success prerequisite');
+ const window=(await f.request(f.a.token,'/api/memory/observations')).json().items.find((item:any)=>item.kind==='consolidation'&&item.id===continuation!.id);assert.ok(window);t.mock.timers.setTime(Date.parse(window.dueAt)+1);
+ const later=await automaticJob(f,f.a,String(continuation!.id));await f.wait(f.a,later.id);assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,1,'an unrelated selected card commits despite the earlier unresolved batch');
+ const completed=f.read(db=>db.prepare('SELECT state,draft,review,prepared,tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,later.id)),before=calls.length;await f.restart();assert.equal(calls.length,before,'restart does not replay either a completed sibling or the held failure');
+ fail=false;assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+first.id+'/'+(state==='paused'?'resume':'retry'),'POST',{})).statusCode,200);if(state==='paused')t.mock.timers.setTime(Math.max(Date.now(),Number(f.read(db=>db.prepare('SELECT available_at FROM execution_steps WHERE id=?').get(taskId))!.available_at))+1);await f.wait(f.a,first.id);
+ assert.deepEqual(calls.slice(before),[{owner:'A',domain:calls.find(call=>call.integration)!.domain,review:true,integration:true}],'only the missing reviewer runs');
+ assert.equal(f.read(db=>db.prepare('SELECT draft FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,first.id))!.draft,batch!.draft,'the successful draft is reused');
+ assert.deepEqual(f.read(db=>db.prepare('SELECT state,draft,review,prepared,tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,later.id)),completed,'the completed later batch remains byte-for-byte intact');
+ assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,2);
+});
+
 test('pending consolidation observations project both actual domains and exclude observation cards',async t=>{
  const f=await scopedMemoryFixture(t),calls:ModelCall[]=[];await setup(f,f.a,3);scripted(f,'A',calls,{onlyObservations:true});const observation=await f.submit(f.a,[(await f.publish(f.a,'A','same-source','older-observation')).id]);await f.wait(f.a,observation.id);
  scripted(f,'A',calls,{observations:true});const mixed=await f.submit(f.a,[(await f.publish(f.a,'A','same-source','both-domains')).id]);await f.wait(f.a,mixed.id);
@@ -123,13 +143,16 @@ test('a below-threshold continuation retains its due clock and progresses after 
  const next=await automaticJob(f,f.a,pending.id);await f.wait(f.a,next.id);assert.equal(calls.filter(call=>call.integration).length,4,'the original remaining card is integrated after its due time without a new publication');assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,2);
 });
 
-for(const change of ['cancel','stop'] as const)test('a frozen consolidation continuation cannot advance after '+change,async t=>{
- const f=await scopedMemoryFixture(t),calls:ModelCall[]=[],settings=defaultMemorySettings();settings.lifecycle.consolidation.minChanges=1;settings.lifecycle.consolidation.maxItems=1;await f.replace(f.a.token,'memory',settings);scripted(f,'A',calls);
+for(const change of ['cancel','stop'] as const)test('a frozen consolidation continuation respects the scope of '+change,async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.now()});
+ const f=await scopedMemoryFixture(t),calls:ModelCall[]=[],settings=defaultMemorySettings();settings.lifecycle.consolidation.minChanges=2;settings.lifecycle.consolidation.maxItems=1;await f.replace(f.a.token,'memory',settings);scripted(f,'A',calls);
  const respond=f.responses.get('A')!;let release!:()=>void,enter!:()=>void,held=false;const gate=new Promise<void>(done=>release=done),entered=new Promise<void>(done=>enter=done);t.after(()=>release());
  f.responses.set('A',(res,raw,keys,ids)=>{const input=envelope(raw),context=input.untrustedTaskContext,interpretations=context.untrustedInterpretations?JSON.parse(context.untrustedInterpretations):undefined;if(!held&&interpretations?.kind==='supplied-memory-cards'&&context.untrustedMemoryDraft){held=true;enter();void gate.then(()=>respond(res,raw,keys,ids));return;}respond(res,raw,keys,ids);});
  const extraction=await f.submit(f.a,[(await f.publish(f.a,'A')).id]);await f.wait(f.a,extraction.id);const current=await automaticJob(f,f.a,extraction.id);await entered;
- const continuation=await until(()=>f.read(db=>db.prepare("SELECT id,task_id FROM mm_integration_windows WHERE user_id=? AND id!=? AND state='pending'").get(f.a.userId,extraction.id)),Boolean,'the unstarted successor is already durable');
+ const continuation=await until(()=>f.read(db=>db.prepare("SELECT id,task_id,job_id,created_at FROM mm_integration_windows WHERE user_id=? AND id!=? AND state='pending'").get(f.a.userId,extraction.id)),Boolean,'the unstarted successor is already durable');assert.equal(continuation!.job_id,null);assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,0);
  const state=(await f.request(f.a.token,'/api/memory')).json(),changed=change==='cancel'?await f.request(f.a.token,'/api/memory/jobs/'+current.id+'/cancel','POST',{}):await f.request(f.a.token,'/api/memory/stop','POST',{expectedRevision:state.revision,operationId:randomUUID()});assert.equal(changed.statusCode,200,changed.body);release();
- await f.terminal(String(continuation!.task_id));assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,0,'the held reviewer and successor publish no derived result');
- const requests=f.requests.length;await f.restart();await delay(100);assert.equal(f.requests.length,requests,'restart cannot regrant a cancelled or stopped continuation');assert.equal(f.read(db=>db.prepare('SELECT job_id FROM mm_integration_windows WHERE user_id=? AND id=?').get(f.a.userId,continuation!.id))!.job_id,null);
+ t.mock.timers.setTime(Date.parse(String(continuation!.created_at))+3600001);
+ if(change==='cancel'){const later=await automaticJob(f,f.a,String(continuation!.id));await f.wait(f.a,later.id);assert.equal((await f.request(f.a.token,'/api/memory/jobs/'+current.id)).json().state,'cancelled');assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,1,'cancelling one selection does not cancel the disjoint remainder');}
+ else{await f.terminal(String(continuation!.task_id));assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,0,'global stop fences both the held reviewer and the remaining window');assert.equal(f.read(db=>db.prepare('SELECT job_id FROM mm_integration_windows WHERE user_id=? AND id=?').get(f.a.userId,continuation!.id))!.job_id,null);}
+ const requests=f.requests.length;await f.restart();await delay(100);assert.equal(f.requests.length,requests,'restart neither regrants revoked work nor replays a completed continuation');
 });
