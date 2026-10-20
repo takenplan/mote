@@ -262,3 +262,59 @@ reporter selection. The local correction tokenizes native double-quoted options
 without changing the forwarded value. Synthetic quoted/escaped paths and a real
 generated import path with spaces and reporter-like text cover this correction;
 it changes no coverage or decision boundary and needs no new design approval.
+
+## P8: replacement-host fixture readiness
+
+Before implementation, `/root/plan_review` (Sol High) explicitly **APPROVED**
+P8 at exact base/head:
+`952126d178a2c683637009c977b28a6d12558ce3`. The first P7 gate exposed a
+10-second state-wait failure in the unchanged `execution-continuation` fairness
+case; the run was interrupted and its failed observation and unconfirmed-cleanup
+receipt are retained. No P7 full-check PASS is claimed.
+The reviewed preimplementation section SHA-256 was
+`41d2daf492e37c56d9be8db80c3c08016e88b1eb40974bf481d3b389e8e3206f`.
+
+The code-supported hypothesis is that surviving host B can own A's queued work:
+an A-owner SQL predicate cannot prove replacement process A has reached its
+startup loop. Releasing the shared holder before that process starts can let B
+complete every A task; replacement A then waits forever for an already-past
+`running` state. Confirm the window with an isolated generated diagnostic and
+inspect the original focused failure/result before changing the fixture.
+
+- **KEEP:** the same real Store/ExecutionEngine entry and child processes;
+  initial A/B contention; old A shutdown while the holder stays occupied;
+  replacement A; sustained arrivals; exact existing SQL waits, sixteen saves,
+  first-eight account alternation, operation fairness, attempts and empty-wait
+  assertions; existing 10-second helper and 30-second case deadlines. Production
+  scheduling, six-file concurrency, the driver and P7 reporter are unchanged.
+- **CHANGE:** identify IPC events by the originating child PID and wait for the
+  replacement's own existing `queued` message before releasing the holder,
+  retaining the exact SQL predicate as a separate check. Add stage/child-error
+  diagnostics and await owned child termination during fixture cleanup.
+- **REMOVE:** no assertion, scale, process, failure path or required check.
+- **EXCEPTION:** generated diagnostic entry points may force delayed replacement
+  startup with explicit IPC solely to confirm the race. They are separate from
+  actual-entry validation and do not establish a full-suite PASS.
+- **UNKNOWN:** the interrupted native spec report did not flush its deferred
+  error stack; exact wait-stage attribution must be confirmed, not assumed.
+  If the diagnostic contradicts this hypothesis, stop this implementation scope
+  and investigate before selecting a different fix.
+
+Root alone owns the single fairness fixture and its narrowly used diagnostics,
+this plan and the P7 validation record. No production/shared-driver owner is
+added. Validate the forced old startup window, the actual focused file and the
+explicit replacement-ready/held-resource state, then freeze a new candidate and
+complete one affected-component gate. Preserve the first failure and manual
+cleanup audit separately; its original receipt remains ineligible for reuse.
+
+The generated diagnostic confirmed the window when initial A is held before its
+first tick, allowing B to claim both owners' rows. After A stops, the original
+A-owner predicate is already true on B. With replacement startup held, B
+completes eight A and eight B steps; releasing replacement startup then leaves
+its `running` poll stuck and the original final 10-second wait fails. The first
+diagnostic did not force initial cross-claiming and failed the earlier SQL wait;
+it is not confirmation. Under the confirmed forced ordering, the actual new
+parent-side PID readiness barrier observes replacement `queued` while the holder
+is running and publication count is zero; all original fairness assertions pass.
+This establishes a possible fixture defect, not conclusive attribution of the
+first interrupted full-run timeout, whose deferred stack was unavailable.

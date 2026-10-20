@@ -58,4 +58,42 @@ reporter/destination arguments, quoted `NODE_OPTIONS`, reporter-like text inside
 an actual generated import path, invalid reporter pairing,
 genuine test failure and both signal/real-driver cleanup journeys.
 
-The frozen candidate's affected-component gate is pending.
+## Interrupted P7 gate and bounded fixture correction
+
+P7 runtime `952126d178a2c683637009c977b28a6d12558ce3` started the real
+affected-component gate. The unchanged fairness case in
+`execution-continuation.test.ts` failed a state wait after 10.415 s. The run was
+interrupted at 170.503 s for diagnosis, so it is incomplete, not performance or
+PASS evidence. Receipt `d77674d0-8b37-457f-ad73-f9fb29aafb9c` records interruption,
+exit 130 and `cleanupConfirmed: false` after driver `EPERM`; it is ineligible for
+reuse. A separate manual audit found the driver and test commands gone and all
+remaining checkout-cwd Node processes were unrelated tool services predating
+this run. Only its exact matching lock was released; the original receipt was
+not modified.
+
+The original isolated fairness case passed in 0.669 s, which does not close the
+race. [P8](../design/server-test-parallelism.md#p8-replacement-host-fixture-readiness)
+was independently approved before correction. An explicitly forced generated
+entry reproduced a missing replacement-startup handshake: surviving B completed
+all eight A and eight B steps before replacement A observed `running`; the
+original final state wait then failed after 10.661 s. An earlier diagnostic
+without initial cross-claiming failed at a different wait and did not confirm
+this window. These diagnostics do not conclusively attribute the first full-run
+failure, whose deferred spec stack was not flushed.
+
+The fixture now waits for the replacement PID's own existing `queued` event
+before releasing the holder, keeps both original SQL predicates, and asserts the
+holder remains running with zero publication at readiness. All existing fairness,
+attempt, scale, real-process and deadline checks remain. Cleanup awaits owned
+children, and failed waits include phase/child diagnostics. No production
+scheduling, driver, concurrency or timeout changed.
+
+The generated forced-ordering check of the corrected actual fixture passed in
+0.726 s, observing replacement readiness before any publication. The real focused
+three-file command passed all 33 tests in 9.630 s, without skips or cancellations:
+
+```sh
+node --import tsx --test apps/server/test/execution-continuation.test.ts apps/server/test/performance-reporter.test.ts apps/server/test/test-runner.test.ts
+```
+
+The new frozen candidate's affected-component gate is pending.
