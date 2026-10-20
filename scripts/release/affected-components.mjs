@@ -24,6 +24,25 @@ const rootScriptOwners = new Map([
 const backupInputs = new Set([
   'scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs',
 ]);
+// These top-level test entries are inputs to their owner's suite, not exported
+// production code. Helpers and fixture directories retain consumer traversal:
+// Server fixtures, for example, are also used by Web and standalone journeys.
+const workspaceTestOwners = [
+  ['apps/server/test/', '@mote/server', '.test.ts'],
+  ['apps/web/test/', '@mote/web', '.test.ts'],
+  ['apps/desktop/test/', '@mote/desktop', '.test.ts'],
+  ['packages/agent/test/', '@mote/agent', '.test.mjs'],
+  ['packages/shared/test/', '@mote/shared', '.test.mjs'],
+  ['packages/diagnostics/test/', '@mote/diagnostics', '.test.ts'],
+];
+// Android's detail fixture reads this test's worker source. It is deliberately
+// excluded from the owner-only rule even though it has a test-entry filename.
+const externallyConsumedTests = new Set(['apps/server/test/plugin-control-journeys.test.ts']);
+const validationScriptOwners = new Map([
+  // Loads the compiled Server and its dependencies, without a Web client.
+  // Its explicit generated-fixture journey execution remains a separate duty.
+  ['scripts/validation/profile-scoped-startup.test.mjs', ['@mote/server']],
+]);
 
 export function workspaceGraph(directory = '.') {
   return ['apps', 'packages'].flatMap(parent => readdirSync(resolve(directory, parent), { withFileTypes: true })
@@ -59,6 +78,10 @@ function inputSelection(paths, graph) {
     }
     if (name === '@mote/shared') { result.android = true; result.protocol = true; all = true; }
   }
+  function selectTestOwner(name) {
+    mark(groups.filter(group => roots[group].some(root => uses(root, name))));
+    workspaces.add(name);
+  }
   function selectGroup(group) {
     mark([group]);
     for (const workspace of graph) {
@@ -80,7 +103,7 @@ function inputSelection(paths, graph) {
     if (path.startsWith('protocol/')) { selectAll(); result.protocol = true; continue; }
     const workflow = /^\.github\/workflows\/release-(central|desktop|android)\.yml$/.exec(path);
     if (workflow) { selectGroup(workflow[1]); result.tooling = true; continue; }
-    if (/^scripts\/release\/(?:affected-components|check-affected|check-plan|check-driver|check-environment)(?:\.test)?\.mjs$/.test(path)) {
+    if (/^scripts\/release\/(?:affected-components|check-affected|check-plan|check-driver|check-environment|check-inputs)(?:\.test)?\.mjs$/.test(path)) {
       result.tooling = true; continue;
     }
     if (path.startsWith('scripts/release/') || path.startsWith('.github/workflows/')) {
@@ -88,6 +111,13 @@ function inputSelection(paths, graph) {
     }
     if (path === 'apps/android/app/src/main/assets/i18n-en.json') { selectWorkspace('@mote/shared'); continue; }
     if (path.startsWith('apps/android/')) { mark(['android']); continue; }
+    const ownedTest = workspaceTestOwners.find(([root, , suffix]) => path.startsWith(root)
+      && !path.slice(root.length).includes('/') && path.endsWith(suffix));
+    if (ownedTest && !externallyConsumedTests.has(path)) {
+      selectTestOwner(ownedTest[1]);
+      continue;
+    }
+    if (externallyConsumedTests.has(path)) result.android = true;
     const workspace = graph.find(entry => path.startsWith(entry.path + '/'));
     if (workspace) {
       selectWorkspace(workspace.name);
@@ -103,6 +133,11 @@ function inputSelection(paths, graph) {
       // Root CLI/profile restore and update regressions are separate obligations.
       selectWorkspace('@mote/server'); rootTests.add('backup'); result.tooling = true;
       if (path === 'scripts/backup.ts') rootTests.add('scripts-types');
+      continue;
+    }
+    if (validationScriptOwners.has(path)) {
+      for (const owner of validationScriptOwners.get(path)) selectTestOwner(owner);
+      result.tooling = true;
       continue;
     }
     if (path === 'scripts/check-scope-contracts.mjs') {

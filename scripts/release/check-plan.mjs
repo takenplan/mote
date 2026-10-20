@@ -6,7 +6,7 @@ import { workspaceGraph } from './affected-components.mjs';
 const script = name => fileURLToPath(new URL(name, import.meta.url));
 export const quickReleaseTests = new Set([
   'affected-components.test.mjs', 'check-affected.test.mjs', 'check-plan.test.mjs',
-  'check-driver.test.mjs', 'check-environment.test.mjs', 'profile-health.test.mjs',
+  'check-driver.test.mjs', 'check-environment.test.mjs', 'check-inputs.test.mjs', 'profile-health.test.mjs',
   'components.test.mjs', 'dev-assets.test.mjs',
 ]);
 const serverReleaseTests = new Set([
@@ -15,7 +15,7 @@ const serverReleaseTests = new Set([
 ]);
 const infrastructureTests = new Set([
   'affected-components.test.mjs', 'check-affected.test.mjs', 'check-plan.test.mjs',
-  'check-driver.test.mjs', 'check-environment.test.mjs',
+  'check-driver.test.mjs', 'check-environment.test.mjs', 'check-inputs.test.mjs',
 ]);
 
 export function fixedChecks(component, graph = workspaceGraph()) {

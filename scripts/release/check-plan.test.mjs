@@ -99,11 +99,22 @@ test('infrastructure-only and scope-inventory changes cannot silently lose their
   const steps = plan('scripts/release/check-driver.mjs');
   assert.ok(steps.every(step => step.phase === 'preflight'));
   assert.ok(steps.some(step => step.args.includes('scripts/release/check-driver.test.mjs')));
+  assert.ok(steps.some(step => step.args.includes('scripts/release/check-inputs.test.mjs')));
   assert.ok(!steps.some(step => step.args.includes('scripts/release/dev-server.test.mjs')));
   const scope = plan('docs/design/scope-inventory.json');
   assert.ok(ids(scope).includes('scope-contracts'));
   assert.ok(!scope.some(step => step.phase === 'build'));
   assert.deepEqual(plan('docs/development.md'), []);
+});
+
+test('test-only edits keep the owning suite while fixture helpers retain product consumers', () => {
+  const names = ids(plan('apps/server/test/multiuser-ingress.test.ts'));
+  assert.ok(names.includes('test:@mote/server'));
+  assert.ok(!names.includes('test:@mote/web'));
+  assert.ok(ids(plan('apps/server/test/fixtures/legacy-app.ts')).includes('test:@mote/web'));
+  const shared = ids(plan('packages/shared/test/protocol.test.mjs'));
+  assert.ok(shared.includes('test:@mote/shared'));
+  for (const id of ['test:@mote/server', 'test:@mote/web', 'test:@mote/desktop', 'android-unit']) assert.ok(!shared.includes(id), id);
 });
 
 test('Agent uses the already-built test entry, while standalone npm test still builds', () => {
