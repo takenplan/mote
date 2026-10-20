@@ -46,13 +46,14 @@ async function fixture(t:TestContext,options:{count?:boolean;large?:boolean}={})
  const admin=await login('generated-proof-admin');
  const create=async(username:string)=>{const response=await request(admin,'/api/admin/accounts','POST',{username,password,administrator:false});assert.equal(response.statusCode,200,response.body);const account=response.json();return {...account,token:await login(username)};};
  const a=await create('generated-proof-a'),b=await create('generated-proof-b');
+ const contextA=await node.authority.authenticate(a.token),contextB=await node.authority.authenticate(b.token);
  const submit=async(token:string,operationId:string,payload='generated')=>{const response=await request(token,'/api/tasks','POST',{kind:'generated.joined-proof',operationId,input:{label:operationId,payload}});assert.equal(response.statusCode,200,response.body);return response.json().id as string;};
  const ids={a:await submit(a.token,'same-business',options.large?'a'.repeat(256*1024):'generated-a'),b:await submit(b.token,'same-business','b'.repeat(1024))};
  assert.notEqual(ids.a,ids.b);assert.equal(node.execution.engine.get(ids.a)?.state,'waiting');assert.equal(node.execution.engine.get(ids.b)?.state,'waiting');
  const grants=new TaskAuthorization(db,node.accounts!,node.deploymentId),ownerA=node.execution.engine.get(ids.a)!.ownership!,ownerB=node.execution.engine.get(ids.b)!.ownership!;
  const current=(id=ids.a)=>node.execution.engine.isCurrentInputAuthority(id);
  const other=()=>new DatabaseSync(join(directory,'mote.sqlite'));
- const finish=async()=>{state.permit=true;for(const [id,token] of [[ids.a,a.token],[ids.b,b.token]]){const response=await request(token,'/api/tasks/'+id+'/retry','POST',{});assert.equal(response.statusCode,200,response.body);}await node.execution.engine.drain([ids.a,ids.b]);for(const id of [ids.a,ids.b]){assert.equal(node.execution.engine.get(id)?.state,'succeeded');assert.equal(executed.filter(x=>x===id).length,1);assert.equal(committed.filter(x=>x===id).length,1);}};
+ const finish=async()=>{node.execution.forUser(contextA).retry(ids.a);node.execution.forUser(contextB).retry(ids.b);state.permit=true;await node.execution.engine.drain([ids.a,ids.b]);for(const id of [ids.a,ids.b]){assert.equal(node.execution.engine.get(id)?.state,'succeeded');assert.equal(executed.filter(x=>x===id).length,1);assert.equal(committed.filter(x=>x===id).length,1);}};
  return {node,db,directory,observer,state,executed,committed,request,submit,a,b,ids,ownerA,ownerB,grants,current,other,finish,releases,close:async()=>{if(!closed){closed=true;await node.app.close();}}};
 }
 function changed(db:DatabaseSync,change:()=>void,check:()=>void){db.exec('SAVEPOINT generated_joined_check');try{change();check();}finally{db.exec('ROLLBACK TO generated_joined_check; RELEASE generated_joined_check');}}
