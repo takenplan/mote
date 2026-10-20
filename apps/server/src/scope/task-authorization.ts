@@ -3,6 +3,7 @@ import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import type {Accounts} from './accounts.js';
 import type {DurableIdentityVerifier,UserContext,VerifiedIdentity} from './context.js';
 import {ScopeError} from './baseline.js';
+import type {ExecutionStep} from '../execution-engine.js';
 
 /** Only the trusted task host issues and resolves these records. A grant ID is
  * an internal locator, never a login credential or a client-selectable owner. */
@@ -42,6 +43,23 @@ export class TaskAuthorization implements DurableIdentityVerifier {
   const row=this.validationStatement('SELECT * FROM task_authorizations WHERE grant_id=? AND revoked=0').get(grantId);
   if(!row||userId!==undefined&&row.user_id!==userId||epoch!==undefined&&row.authorization_epoch!==epoch)throw new ScopeError('invalid_identity',401);
   this.accounts.assertAccountEnabled(String(row.user_id),Number(row.authorization_epoch));return row;
+ }
+ /** Fixed TaskExecution.valid checkpoint. Read fresh facts together, then keep
+  * the account's independent read and closed-state check. No proof escapes. */
+ assertExecutionTaskIdentity(step:Pick<ExecutionStep,'id'|'ownership'>):void{
+  const row=this.validationStatement(`SELECT t.user_id AS validation_task_user_id,t.grant_id AS validation_task_grant_id,
+   CASE WHEN l.user_id IS NULL THEN 0 ELSE 1 END AS validation_deleted,
+   CASE WHEN g.grant_id IS NULL THEN 0 ELSE 1 END AS validation_grant_present,g.*
+   FROM user_tasks AS t
+   LEFT JOIN task_lifecycle_state AS l ON l.user_id=t.user_id AND l.deleted=1
+   LEFT JOIN task_authorizations AS g ON g.grant_id=t.grant_id AND g.revoked=0
+   WHERE t.task_id=?`).get(step.id);
+  if(!row||!step.ownership||row.validation_task_user_id!==step.ownership.userId||row.validation_task_grant_id!==step.ownership.grantId)throw new ScopeError('invalid_identity',401);
+  if(row.validation_deleted)throw new ScopeError('invalid_identity',401);
+  const userId=row.validation_task_user_id,epoch=step.ownership.authorizationEpoch;
+  if(!row.validation_grant_present||userId!==undefined&&row.user_id!==userId||epoch!==undefined&&row.authorization_epoch!==epoch)throw new ScopeError('invalid_identity',401);
+  this.accounts.assertAccountEnabled(String(row.user_id),Number(row.authorization_epoch));
+  if(row.task_id!==step.id)throw new ScopeError('invalid_identity',401);
  }
  async verify(grantId:string):Promise<VerifiedIdentity|undefined>{
   try{const row=this.assert(grantId),execution=this.validationStatement("SELECT fence FROM execution_steps WHERE id=? AND state='running' AND lease_until>?").get(row.task_id,Date.now());if(!execution?.fence)return undefined;return {deploymentId:this.deploymentId,userId:String(row.user_id),credentialId:grantId+':'+execution.fence,authorizationEpoch:Number(row.authorization_epoch),administrator:false};}catch{return undefined;}

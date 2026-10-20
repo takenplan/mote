@@ -158,7 +158,7 @@ export class TaskExecution {
   this.enabled(row.user_id);if(this.grants.assert(row.grant_id,row.user_id,step.ownership.authorizationEpoch).task_id!==step.id)throw new ScopeError('invalid_identity',401);return row;
  }
  private assertTask(step:ExecutionStep){return this.assertTaskIdentity(step,this.row(step.id));}
- private valid(step:ExecutionStep){try{this.assertTaskIdentity(step,this.validationStatement('SELECT user_id,grant_id FROM user_tasks WHERE task_id=?').get(step.id) as Pick<TaskRow,'user_id'|'grant_id'>|undefined);return true;}catch{return false;}}
+ private valid(step:ExecutionStep){try{this.grants.assertExecutionTaskIdentity(step);return true;}catch{return false;}}
  private localWork<T>(step:ExecutionStep,signal:AbortSignal,grant:ExecutionGrant,work:()=>Promise<T>):Promise<T>{
   const current=()=>{if(this.closing)throw new ExecutionFailure('stale','grant_revoked');signal.throwIfAborted();grant.assert();};
   try{current();}catch(error){return Promise.reject(error);}
