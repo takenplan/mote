@@ -17,6 +17,7 @@ import {MEMORY_VISUAL_EVIDENCE_CONTRACT} from '../memory-image-proof.js';
 import {type ContextReader,type QueryInput} from '@mote/agent';
 import type {QueryResult,ImageReadInput} from '@mote/shared';
 import {queryWithUsage} from './model-query.js';
+import type {ModelUsageStart} from './model-usage.js';
 import {retainFailureContext} from '../execution-failures.js';
 import {memorySchema,type Memory} from '../memory-schema.js';
 import {MemoryOutputValidationError} from '../memory-errors.js';
@@ -230,9 +231,18 @@ export class MemoryHost {
  private async query(run:TaskRun,input:ScopedMemoryTask,args:QueryInput):Promise<QueryResult>{
   if(!run.model)throw new PrivateDataError('scope_unavailable',503);const reader=await this.reader(run,input),disclosed=new Set<string>(),data=this.data(run.context),catalog=snapshotMemoryCatalog(data,args),assert=()=>{run.grant.assert();this.assertJob(run.context,input);assertMemoryCatalog(data,catalog);data.readInputs(input,[...disclosed]);};
   if(catalog&&input.batchId)run.grant.commit(()=>{assert();const prior=data.sql.get("SELECT json FROM mm_batch_artifacts WHERE user_id=$user AND job_id=? AND batch_id=? AND kind='memory-catalog'",input.jobId,input.batchId!),receipts:MemoryCatalogReceipt[]=prior?JSON.parse(String(prior.json)):[];if(!receipts.some(receipt=>memoryHash(receipt)===memoryHash(catalog)))receipts.push(catalog);data.sql.run("INSERT INTO mm_batch_artifacts VALUES($user,?,?,'memory-catalog',?) ON CONFLICT(user_id,job_id,batch_id,kind) DO UPDATE SET json=excluded.json",input.jobId,input.batchId!,JSON.stringify(receipts));});
+  // The complete query, including its in-session output repairs, owns one
+  // issuance. A lease timeout cannot prove that its remote work did not run.
+  const key='model-query:'+memoryHash([run.checkpoint.read('phase'),args]),saved=data.sql.get('SELECT json FROM mm_batch_artifacts WHERE user_id=$user AND job_id=? AND batch_id=? AND kind=?',input.jobId,input.batchId!,key);
+  if(saved){const value=queryResultSchema.parse(JSON.parse(String(saved.json))) as QueryResult;assert();data.assertReadReceipt(input,value);return value;}
+  let complete:ReturnType<TaskExecution['bindExternalCompletion']>|undefined,notStarted=false;
+  const model={...run.model,startUsage:(options:ModelUsageStart={})=>{const meter=run.model!.startUsage(options);return {...meter,finish:(status:'completed'|'failed',facts?:{executionStarted:false})=>{if(facts?.executionStarted===false)notStarted=true;return meter.finish(status,facts);}};}};
   return run.localWork(async()=>{
-  try{return await run.model!.withModel(settings=>queryWithUsage(run.model!,{...settings,reader,authorizeModelRequest:assert},{...args,onEvidence:records=>{records.forEach(record=>disclosed.add(record.id));args.onEvidence?.(records);}},{jobId:input.jobId,agentId:args.traceContext?.phase==='coding-understanding'?'coding-conversation-understanding':args.taskContext?.untrustedMemoryDraft?'memory.review':'memory.extract',moduleId:'memories',skillId:args.traceContext?.phase==='coding-understanding'?null:args.skill??null}));}
-  catch(error){run.grant.assert();this.assertJob(run.context,input);throw retainFailureContext(error,{jobId:input.jobId,batchId:input.batchId,phase:args.traceContext?.phase??(args.taskContext?.untrustedMemoryDraft?'review':'extract')});}
+  try{const value=await run.model!.withModel(settings=>queryWithUsage(model,{...settings,reader,authorizeModelRequest:()=>{assert();if(!complete){const issuance=run.external.begin('memory:'+input.jobId+':'+input.batchId+':'+key);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);}}},{...args,onEvidence:records=>{records.forEach(record=>disclosed.add(record.id));args.onEvidence?.(records);}},{jobId:input.jobId,agentId:args.traceContext?.phase==='coding-understanding'?'coding-conversation-understanding':args.taskContext?.untrustedMemoryDraft?'memory.review':'memory.extract',moduleId:'memories',skillId:args.traceContext?.phase==='coding-understanding'?null:args.skill??null}));
+   // The exact successful result and settlement commit together. Recovery can
+   // reuse this checkpoint before the enclosing draft/review has been saved.
+   run.grant.commit(()=>{assert();data.assertReadReceipt(input,value);data.sql.run('INSERT INTO mm_batch_artifacts VALUES($user,?,?,?,?)',input.jobId,input.batchId!,key,JSON.stringify(value));complete?.();});return value;}
+  catch(error){if(notStarted)complete?.('not-executed');run.grant.assert();this.assertJob(run.context,input);throw retainFailureContext(error,{jobId:input.jobId,batchId:input.batchId,phase:args.traceContext?.phase??(args.taskContext?.untrustedMemoryDraft?'review':'extract')});}
   });
  }
  private async execute(run:TaskRun){
