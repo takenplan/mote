@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {CONVERSATION_UNDERSTANDING_PROMPT,conversationProductText,parseConversationProducts} from '../conversation-products.js';
 import {MemoryOutputValidationError} from '../memory-errors.js';
 import type {MemoryWorkContract} from '../memory-strategy-contract.js';
-import {memoryWorkInstruction,readMemoryWorkCoverage,type MemoryWorkMember} from '../memory-work-contract.js';
+import {memoryWorkInstruction,readMemoryWorkCoverage,type MemoryWorkMember,memoryEvaluationMetadata} from '../memory-work-contract.js';
 import {StoreError} from '../execution-storage.js';
 import {materialId} from '../material-organizer-contract.js';
 import {memoryHash,type ScopedMemoryData} from './memory-data.js';
@@ -48,7 +48,8 @@ export function scopedCodingScopes(data:ScopedMemoryData,input:ScopedMemoryTask)
 
 export type ScopedCodingPreparation={
  version:1;fingerprint:string;runId:string;materialRef:string;ranges:Range[];
- generationContract:string;workContract?:MemoryWorkContract;complete:true;
+ generationContract:string;
+ contextTime:string;workContract?:MemoryWorkContract;complete:true;
  /** Host-validated candidates with exact coverage and successful read receipts. */
  candidateResult:QueryResult;
  /** Structured products remain separate from the readable navigation text. */
@@ -62,13 +63,14 @@ type CodingPorts={
  validate:(draft:QueryResult)=>void;
  assertCurrent:()=>void;
  generationContract:string;
+ contextTime:string;
 };
 type Work={members?:MemoryWorkMember[];contextMembers?:MemoryWorkMember[];workContract?:MemoryWorkContract;[key:string]:unknown};
 const inScope=(range:{id:string;offset:number;length:number},scope:ScopedCodingScope)=>scope.ranges.some(allowed=>range.id===allowed.id&&range.offset>=allowed.offset&&range.offset+range.length<=allowed.offset+allowed.length);
 
 /** The policy/model/range identity is host-authored and checked again at reuse.
  * An artifact cannot supply a looser admission policy or expand the batch. */
-export function codingGenerationContract(input:ScopedMemoryTask,base:QueryInput){return memoryHash({productsVersion:3,strategy:input.strategy,model:input.model,binding:input.binding,profile:input.profile,question:base.question,work:base.taskContext?.memoryWork,timeZone:base.timeZone,contextTime:base.contextTime,ranges:base.evidenceRanges});}
+export function codingGenerationContract(input:ScopedMemoryTask,base:QueryInput){return memoryHash({productsVersion:3,evaluationContext:input.evaluationContext,skill:base.skill,strategy:input.strategy,model:input.model,binding:input.binding,profile:input.profile,question:base.question,work:base.taskContext?.memoryWork,evaluation:base.taskContext?.memoryEvaluation,timeZone:base.timeZone,contextTime:base.contextTime,ranges:base.evidenceRanges});}
 export function reuseScopedCoding(prepared:ScopedCodingPreparation,input:ScopedMemoryTask,base:QueryInput):QueryResult|undefined{
  const ranges=(value:readonly Range[])=>[...value].sort((a,b)=>a.id.localeCompare(b.id)||a.offset-b.offset);
  const work=base.taskContext?.memoryWork as Work|undefined;
@@ -85,6 +87,7 @@ export async function prepareScopedCoding(scope:ScopedCodingScope,base:QueryInpu
  const work=base.taskContext?.memoryWork as Work|undefined;
  const selectedMembers=work?.members?.filter(member=>inScope(member,scope));
  const selectedWork=work?{...work,members:selectedMembers,contextMembers:work.contextMembers?.filter(member=>inScope(member,scope)),...(selectedMembers?{instruction:memoryWorkInstruction(selectedMembers,undefined,work.workContract)}:{})}:undefined;
+ const evaluation=base.taskContext?.memoryEvaluation as ReturnType<typeof memoryEvaluationMetadata>|undefined,selectedEvaluation=evaluation?{...evaluation,members:evaluation.members.filter(member=>inScope(member,scope)),contextMembers:evaluation.contextMembers.filter(member=>inScope(member,scope)),readRanges:scope.ranges.map(range=>{const source=[...evaluation.readRanges,...evaluation.members,...evaluation.contextMembers].find(allowed=>range.id===allowed.id&&range.offset>=allowed.offset&&range.offset+range.length<=allowed.offset+allowed.length);if(!source?.evaluationTime)throw new PrivateDataError('conflict',409);return {...range,evaluationTime:source.evaluationTime};})}:undefined;
  const contract=selectedWork?.workContract;
  const parse=(result:QueryResult)=>{
   const {coverage,capacity,...raw}=JSON.parse(result.answer);
@@ -97,12 +100,12 @@ export async function prepareScopedCoding(scope:ScopedCodingScope,base:QueryInpu
   return products;
  };
  const result=await ports.query({...base,skill:undefined,traceContext:{...base.traceContext,phase:'coding-understanding'},executionLane:'background',responseMode:'memory-extraction',
-  contextTime:scope.records.map(record=>record.capturedAt).sort().at(-1),
+  contextTime:ports.contextTime,
   evidenceIds:scope.records.map(record=>record.id),evidenceRanges:scope.ranges,
   evidenceReadRanges:scope.ranges,processingImages:undefined,
   ...(base.processingEvidence?{processingEvidence:Object.fromEntries(Object.entries(base.processingEvidence).filter(([id])=>scope.records.some(record=>record.id===id)))}:{}),
   processingMaterialInputs:[{materialId:scope.material.id,required:['coding-dialogue'],fingerprint:scope.fingerprint,evidenceIds:scope.records.map(record=>record.id)}],
-  taskContext:{...base.taskContext,turns:base.taskContext?.turns??[],...(selectedWork?{memoryWork:selectedWork}:{})},
+  taskContext:{...base.taskContext,turns:base.taskContext?.turns??[],...(selectedWork?{memoryWork:selectedWork}:{}),...(selectedEvaluation?{memoryEvaluation:selectedEvaluation}:{})},
   question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+base.question+
    '\nFINAL UNIFIED RESPONSE CONTRACT:\n'+(contract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)+
    (selectedWork?'\nApply the complete supplied taskContext.memoryWork package and coverage contract to the listed original ranges. memoryCandidates is the memories array for that coverage contract. Additionally return coverage'+(contract?'':' and capacity')+'.':''),
@@ -124,7 +127,7 @@ export async function prepareScopedCoding(scope:ScopedCodingScope,base:QueryInpu
    {key:'events',state:'ready',revision:scope.fingerprint,blockIds:['events']}],
   fidelity:{state:'summary-only',limitations:['model_interpretation','bounded_conversation']},retention:{original:'retained',policy:'keep'}};
  const {coverage,capacity}=JSON.parse(result.answer),candidateResult={...result,answer:JSON.stringify({memories:products.memoryCandidates,...(selectedWork?{coverage,...(contract?{}:{capacity})}:{})})};
- ports.assertCurrent();return {version:1,complete:true,generationContract:ports.generationContract,workContract:contract,candidateResult,fingerprint:scope.fingerprint,runId:result.runId,materialRef:scope.material.ref,ranges:scope.ranges.map(range=>({...range})),products,text,materialDraft};
+ ports.assertCurrent();return {version:1,complete:true,generationContract:ports.generationContract,contextTime:ports.contextTime,workContract:contract,candidateResult,fingerprint:scope.fingerprint,runId:result.runId,materialRef:scope.material.ref,ranges:scope.ranges.map(range=>({...range})),products,text,materialDraft};
 }
 
 /** Call only through the current Memory grant's commit fence after durable

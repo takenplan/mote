@@ -1,0 +1,113 @@
+# Memory evaluation context: independent plan review
+
+Current decision: **APPROVE v2**, seal `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`, plus the bounded semantic-clock-wrapper, feedback-catalog-v2 and legacy-metadata-v3 deltas recorded below. The historical v1 review follows.
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer` (independent Sol High). Review type: pre-implementation technical plan review under `AGENTS.md` and `docs/development.md#technical-plan-review`.
+
+- Decision: **CHANGES_REQUIRED**. No source, test or Skill implementation is approved by this receipt.
+- Plan: [`memory-evaluation-context-restoration-v1`](../design/memory-evaluation-context-restoration-2026-10-20.md).
+- Exact plan SHA-256: `1bce8b3dac51e49bce37f6e64f2256f0a0b9c5354cf15eaf0df283909989415e`.
+- Exact source base/head: `bcff7bab6109a7c99acde3decb5712a072e1b045`, branch `codex/memory-evaluation-context`, PR 194 included.
+- Sole proposed implementation owner: `memory_adr_audit`; complete-check driver: root task.
+- Working-tree review boundary: the sealed plan was the only untracked file before this receipt. No running source, tests or Skills were changed or executed for this review.
+
+## Required correction
+
+**R1 — Close the supported processor-plugin producer path before implementation approval.** Section 2 requires the actual producer's original receipt clock, rather than the first/latest transitive member, but leaves the current publisher enumeration until implementation begins. There is an existing supported path that does not expose the described producer identity in the current callback:
+
+1. `scope/processing.ts:123–125` accepts a processor's `stageExtraction(ref, value)`, validates that original and saves its parsed input in `pluginStages`.
+2. `scope/processing.ts:131` publishes with `publish(invocation.run, value, pending.input)`. The canonical original is in the host's `pending.input`.
+3. `scope/processing.ts:660` then calls `notifyMaterial(run, material)`; `:82–85` passes only that run and Material identity to listeners.
+4. This run is a plugin invocation. `scope/plugins.ts:352` constructs its task input as `{snapshotId, componentId, payload}`, without a host-authored top-level `originalRef`. The processor may choose its original inside the invocation; arbitrary plugin payload is not the validated producer proof.
+
+The generic plan stop condition safely forbids guessing, but does not establish how this already supported input-to-Memory journey remains covered by the proposed minimum ownership scope. Before reopening approval, the implementation owner must enumerate the existing publishers and describe the exact host-validated producer proof available to intake for this path, its preservation across readiness/rebuild/restart, and its regression entry point. If that requires a callback/producer-port change, include its source owner and bounded contract change in the plan. A lookup through existing host publication metadata is also reviewable if its exact identity and validation are established. No particular implementation is prescribed here.
+
+The focused regression must exercise processor `stageExtraction` through its actual plugin invocation and M06 publication, then assert that automatic Memory receives the original receipt's evaluation clock and existing source/authorization fences. An absent/unproven producer must not silently skip supported automatic work or fall back to wall/source time. This is an engineering completeness issue; it does not request a new human product decision.
+
+## Accepted design findings within the reviewed scope
+
+The remaining design is appropriately bounded for U1/U2 restoration: it distinguishes per-input evaluation clocks from source clocks, preserves scoped catalog source-time validation, retains mixed-input batching compatibility, uses the first actual target/preparation member at the relevant model call, and preserves the job clock for feedback planning. Separate internal `evaluationTime` is justified by the existing scoped source-bound `contextTime` receipt rather than by a new product policy. Host maps, member identities, prompt instructions, compaction, Coding reuse and descendant remapping are all included.
+
+The plan correctly retains independent owner-reply interpretation while restoring the questioned member's clock for re-evaluation; freezes automatic integration time at eligible admission and inherits it through PR 194 successors; preserves explicit `validFrom` precedence; selects existing neutral programs for pinned strategies and independent review; and keeps native generation separate from Mote's envelope. No new confirmation, automatic historical replay, migration or admission-timer policy is authorized.
+
+The private current-format task requirement is accepted only as written: missing-context work fails closed without invented clocks, migration or automatic paid reissue, while retained canonical Memory stays readable under existing authorization. Exact success reuse and unknown-issued-result protection remain mandatory. The proposed semantic-clock fixture injection must not change execution, lease or authorization time.
+
+## Evidence and validation limits
+
+This review statically read the original and scoped manual/automatic, Coding, feedback, owner-question, integration, catalog, query checkpoint and publication paths; the shared work instructions and Agent compaction; and existing production-composition fixtures. It verified the plan hash and source HEAD. No tests, builds, real models, native providers, devices, UI or personal materials were run.
+
+E1–E10 are a suitable journey/state matrix once R1's supported publisher is added. They remain required implementation evidence, not results of this review. Actual serialized provider envelopes, durable private inputs, controlled lifecycle states, physical call/usage counts and cleanup must substantiate the implementation claims. Root still owns the frozen-candidate `check:affected` run and reporting of affected consumers. Later test passes cannot retroactively supply this pre-implementation approval.
+
+Only R1 blocks approval of this sealed plan. Submit a revised plan hash with its bounded delta for an explicit new decision; unchanged findings need not be redesigned or independently reimplemented.
+
+## v2 delta review — APPROVE
+
+Date: 2026-10-20. Reviewer: the same independent `memory_plan_reviewer`, Sol High. This is a new pre-implementation decision on the R1 delta; the v1 rejection above remains historical evidence. Its exact original bytes are retained in the [frozen v1 plan](../design/memory-evaluation-context-restoration-v1-2026-10-20.md), independently verified at SHA-256 `1bce8b3dac51e49bce37f6e64f2256f0a0b9c5354cf15eaf0df283909989415e`.
+
+- Decision: **APPROVE** for the sealed v2 plan and its stated scope/assumptions.
+- Approved plan: [`memory-evaluation-context-restoration-v2`](../design/memory-evaluation-context-restoration-2026-10-20.md).
+- Exact v2 SHA-256: `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`.
+- Exact source base/head remains `bcff7bab6109a7c99acde3decb5712a072e1b045`; branch, sole implementation owner and complete-check driver remain unchanged.
+- At review, tracked source/test/Skill diff remained empty. Only plan/history/review documents were untracked. No implementation or tests preceded this approval.
+
+**R1 is closed in the plan.** The v2 delta enumerates both intake call sites and the actual organizer, pipeline, analysis, named-image and processor-plugin producer paths. Its internal synchronous Processing hook now explicitly carries the original identity from the already validated effective/fixed input, including `pluginStages.pending.input`. The direct named-image notification is covered separately. The organizer callback carries its independently validated `captureId`. Intake resolves that proof within the account and checks canonical transitive Material membership and the saved receipt; plugin payload and arbitrary task input are explicitly excluded as substitutes. The separate `processOriginal` child retains one publication/intake journey.
+
+The added `scope/processing.ts` and `scope/memory-capture-materials.ts` ownership is minimal for this handoff. The callback remains synchronous after canonical publication, inside the same success fence, with existing grant assertions, asynchronous-hook rejection and failure rollback. The complete current listener inventory permits Ask, capture-browser projection and organizer scheduling to ignore the added identity without changing their behavior. Static source inspection confirmed these notification sites and consumers, plus the existing generated processor invocation fixtures.
+
+E2P supplies the previously missing real plugin-invocation → staged M06 publication → intake → final M07 generation/review envelope validation. Its outer `plugin.invoke` assertion, separate child path, direct named-image path, source/owner/grant/stop and mismatched-artifact cases are appropriate evidence requirements. Implementations must actually control these states and report any uncovered transition; neighboring fixture success alone is insufficient.
+
+The complete original v1 constraints remain binding: per-input evaluation semantics, source-bound catalog validation, unchanged batching/admission policy, neutral programs, owner/native boundaries, exact cache/issued-call safety, no old-task migration or historical paid replay, and the E1–E10 matrix. The v2 delta does not authorize a new product policy or public/client contract. Newly discovered supported producers, changed private-input handling, changed clock/member/catalog semantics or validation-entry/coverage changes still require the plan's bounded delta review.
+
+This approval authorizes the sole owner to begin implementation within that sealed design. It is not evidence that code, tests, real models/devices/providers, merge or deployment have completed. No blocking plan findings remain. Root retains frozen-candidate checks and delivery reporting.
+
+## Semantic-clock-wrapper ownership delta — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Delta ID: `memory-evaluation-context-semantic-clock-wrapper-v1`. Parent approval: v2 seal `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`; source base/head remains `bcff7bab6109a7c99acde3decb5712a072e1b045`.
+
+Decision: **APPROVE** this exact bounded ownership/type delta before its implementation:
+
+> Add `apps/server/src/scope/memory-routes.ts` to the sole implementation owner's scope. Change only the `registerMemory` construction wrapper's options type/import from `MemoryProviderOptions` to `MemoryHostOptions`, defined as `MemoryProviderOptions & {evaluationClock?:()=>string}`. Pass the same options object already forwarded to `MemoryHost`. This completes the approved internal semantic-clock fixture dependency from `scope/app.ts` through the wrapper. Do not change HTTP routes, request/body schemas, user permissions, model tools, or execution/lease/authorization clocks.
+
+The reviewer statically verified that `registerMemory` currently forwards its options object directly into `new MemoryHost`, that the current wrapper file is unchanged, and that the owner's already approved work defines `MemoryHostOptions` with the stated semantic-clock-only dependency. The owner reported that the delta was identified before wrapper edits, with an empty tracked source diff at that earlier boundary (SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`); approved v2 implementation had subsequently begun elsewhere. This decision does not reinterpret that in-progress implementation as a new pristine source base or as post-implementation approval of the wrapper.
+
+This is the minimal missing construction-wrapper surface for the already approved semantic-clock injection. It changes neither product policy nor validation meaning/entry point. Existing E1/E2/E3 clock-control and consumer checks must validate the complete injection path. No tests were run by the reviewer, and the reported RED results are not used as pre-implementation approval. All parent scope, stop conditions, sole-owner and complete-check-driver constraints remain binding.
+
+## Feedback catalog compatibility delta v2 — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Decision: **APPROVE** the [bounded feedback catalog delta](../design/memory-evaluation-context-feedback-catalog-delta-2026-10-20.md), Delta ID `memory-evaluation-context-feedback-catalog-v2`, exact SHA-256 `7031685fff490f38f2eebf75cb065309cc7dcefab113292620443f9bb598a096`. Parent v2 seal remains `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`; exact source base/head remains `bcff7bab6109a7c99acde3decb5712a072e1b045`.
+
+The owner reported the pre-delta runtime diff identity as SHA-256 `3c0910f62ccf79c8261882072553a93eb74ef3d3c0b4fb24527ef426f6a5123c` for `git diff -- apps/server/src packages/agent/src`. Parent-plan implementation was in progress. At review the proposed compatible-batch filter had not been implemented, and the temporary read-carrier expansion had been withdrawn. This is prospective approval of the exact sealed delta, not retrospective authorization of that expansion or its temporary passing fixture. The earlier proposed delta hash `94b8d52248398e92f77246b234d567f9ad7f7a106e6ede4977cab18939de8c22` is not the approval seal; its v2 successor adds current-contract evidence without changing the proposal.
+
+Independent static inspection confirmed both the original `memory-pipeline.ts:608–650` compatible strategy/profile/version/review filtering and the current scoped aggregation that relabels all root-recipe members with the caller's strategy. More importantly, the current accepted [context-reading ADR](../adr-memory-context-reading.md) explicitly retains each range's recipe, review policy and exact Material input fingerprint through feedback. The current [scoped Memory design](../design/multiuser-memory.md) requires a frozen same-job, same-recipe catalog. Range evaluation retains `needs_context` within the existing grant; it does not supersede that compatibility boundary. Root/client's separate current-contract cross-check agrees. No human product decision or new denial policy is needed to restore this boundary.
+
+Approval covers only filtering scoped feedback authorization catalogs/history to the caller's exact frozen strategy binding and profile, without relabeling incompatible members. Preserve each compatible member's frozen clock and the immutable root planning clock; retain existing parent `readInputs/evidenceReadRanges`, quote authority, novelty checks and successful siblings. No foreign-recipe read-carrier merge, public permission, tool capability or additional limit is approved. The sole owner and minimum runtime surface (`scope/memory-feedback.ts`) remain as sealed. A newly necessary compatibility field or wider consumer change triggers the delta's stop condition.
+
+Validation must prove both sides through actual model-protocol fixtures: the same-policy planner and worker still obtain useful authorized context through real tool submission and independent review, while the differing-recipe case retains a visible gap without an incompatible planner/body call or child grant and lets its successful sibling finish. Assert exact catalog membership, unchanged read carriers, clock inheritance and restart call counts. Changing the differing-recipe fixture's expectation is justified by the cited accepted contract, not by a desire to turn a failure green; the same-policy positive journey is mandatory. No tests or application checks were run by this reviewer. Parent complete-check and remaining E1–E10/E2P evidence requirements still apply.
+
+## Legacy descriptive evaluation metadata delta — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Decision: **APPROVE** [legacy metadata delta v1](../design/memory-evaluation-context-legacy-metadata-v1-2026-10-20.md), Delta ID `memory-evaluation-context-legacy-metadata-v1`, exact SHA-256 `8c3798e3cc2abf960ac0f8b4480f0f50f011ebc357c996ab1002e571a32d0fc1`. Source base/HEAD remains `bcff7bab6109a7c99acde3decb5712a072e1b045`; tracked runtime diff at this pre-delta decision was independently verified as `0bb8c5271ea356cc5b02e6421e32e77a2542550331c0a0704f1efa8f092f61ac`, with helper seal `2143a0a20ed7716e6e507df0684df1b218d3afa560b483dac5bbb9e5a423ddf9`. Parent v2/feedback seals and sole-owner/driver constraints remain unchanged.
+
+This prospective delta provides an appropriately narrow remedy for implementation finding I1. Legal selected recipes without `workContract` gain descriptive `taskContext.memoryEvaluation` target/context vectors and a time-role instruction, derived only from the already validated exact host ranges. The vectors exclude coverage keys, fingerprints, completion state, capacity, a broader body catalog and capabilities. They stay outside `memoryWork`, preserving existing legacy candidate-only output, policy limits, independent nonempty review and the existing empty-draft shortcut. Static inspection confirmed that `reviewMemory` spreads arbitrary task context while detecting work/coverage by `memoryWork`, and that final Agent serialization retains other task-context fields.
+
+Coding understanding must narrow these vectors to its own exact scope, use the already approved first scoped target clock, and bind the serialized metadata into its generation identity. The delta does not change the current range-evaluation path, legacy coverage validation, old recipe definitions, native generation, source/catalog checks or read grants. The three named runtime ownership surfaces are sufficient; no Agent/public schema or client change is approved.
+
+Required evidence remains the sealed real automatic two-reception/M06/final extraction-and-nonempty-review journey, legacy empty-result behavior, and real Coding-session scoped understanding plus cache mismatch/restart assertions. No tests were run for this review. This approves implementation of the remedy before its code change; it does not itself close I1, prove model behavior, or approve a completed implementation.
+
+## Legacy metadata v2 optional type declaration — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Decision: **APPROVE** the prospective type-only addition in [legacy metadata delta v2](../design/memory-evaluation-context-legacy-metadata-v2-2026-10-20.md), exact SHA-256 `14a1344e4562c32db92dd17f23961a1fcc7703cddd5f53893e7bacee98a4fbc5`. Delta ID `memory-evaluation-context-legacy-metadata-v2`; source base/HEAD remains `bcff7bab6109a7c99acde3decb5712a072e1b045`; independently verified pre-type tracked runtime diff SHA-256 `9a81597fdaef0fcc1a07600b3264a567d6665506e86040c479d19af5dbbf4131`. The private helper hash and parent/feedback approval seals remain unchanged.
+
+The exact additional scope is `memoryEvaluation?:unknown` beside `memoryWork?:unknown` in `packages/agent/src/types.ts`'s existing `QueryInput.taskContext` structural type. Static inspection confirmed that the current declaration enumerates supported host task-context properties and that this file was not yet changed. Declaring the already approved optional descriptive metadata is the minimal honest consumer typing; it avoids an assertion cast without adding an index signature, runtime parser/serializer behavior, tool authority or public request setting. The exported SDK type gains the stated optional field; no stronger claim that its declaration is wholly private is required.
+
+This decision covers that single additional field/ownership surface and preserves all v1 behavior and validation requirements. Existing in-progress v1 source changes and the reported passing legacy Coding fixture are not retroactive approval evidence for this new type edit. No tests/typechecks were run by this reviewer. Required Agent/Server consumer typechecks and final affected checks remain with the owner/driver; I1 still awaits implementation delta review and evidence.
+
+## Legacy metadata v3 permitted-read clocks — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Decision: **APPROVE** [legacy metadata delta v3](../design/memory-evaluation-context-legacy-metadata-delta-2026-10-20.md), Delta ID `memory-evaluation-context-legacy-metadata-v3`, exact SHA-256 `14749414da47f8c09314d667c3f71d981c744d1e00d5651e2ba97176d2dedefa`. Source base/HEAD remains `bcff7bab6109a7c99acde3decb5712a072e1b045`; pre-v3 tracked runtime SHA-256 was independently verified as `5f42e45112fdd11633815c93083a056d019e068d029ee35564a7e0c703289df6`; helper remains `2143a0a20ed7716e6e507df0684df1b218d3afa560b483dac5bbb9e5a423ddf9`. The previously approved v1/v2 snapshots were independently rehashed and the historical approval links above now point to their exact immutable files.
+
+The new `memoryEvaluation.readRanges` is limited to `{id,offset,length,evaluationTime}` projected from this call's already frozen read intervals and private clock map. It supplies the missing semantic clock when an allowed legacy tool read delivers another input's body. It adds no body, attribution/source declaration metadata, candidate/coverage role, interval, grant or capability. The existing `authorizedContextRanges`, successful delivery and exact quote validation remain authoritative. This is a necessary descriptive consumer correction within U1, not a new reading policy.
+
+Coding must narrow this descriptor to its actual scoped read intervals, fail closed when no containing fixed descriptor supplies the clock, and preserve first-target now plus the complete serialized metadata identity. No reader/catalog implementation, body-carrier, coverage, empty-review, source fence or old-history change is approved. The stated three runtime files and already approved optional SDK type suffice.
+
+Approval requires the sealed actual two-clock/separate-batch legacy extraction and nonempty independent-review `context_evidence` journey, a delivered page matched to its exact read-clock descriptor on continuation, correct first-target now, an out-of-grant third-original rejection, scoped Coding and changed-read-clock identity assertions. Existing positive/empty-result cases remain. No tests were run by this reviewer; this is prospective approval before the read-clock increment, and I1 is not closed by the plan receipt itself.

@@ -76,13 +76,13 @@ export class ProcessingHost {
  private readonly processorAdmission:ProcessorAdmission;
  private readonly imageOriginalHolds=new Map<string,{ref:string;retain:()=>()=>void}>();
  private recheckTimer:ReturnType<typeof setInterval>|undefined;
- private readonly materialListeners=new Set<(run:TaskRun,material:Readonly<{id:string;revision:string}>)=>unknown>();
+ private readonly materialListeners=new Set<(run:TaskRun,material:Readonly<{id:string;revision:string}>,origin:Readonly<{originalRef:string}>)=>unknown>();
  private readonly fileAdmissionListeners=new Set<(context:UserContext,originalRef:string,taskId:string)=>void>();
  /** Synchronous host-only handoff inside the same M05 success transaction. */
- onMaterialPublished(listener:(run:TaskRun,material:Readonly<{id:string;revision:string}>)=>unknown){if(this.closed)throw new ScopeError('invalid_identity',401);this.materialListeners.add(listener);return ()=>{this.materialListeners.delete(listener);};}
+ onMaterialPublished(listener:(run:TaskRun,material:Readonly<{id:string;revision:string}>,origin:Readonly<{originalRef:string}>)=>unknown){if(this.closed)throw new ScopeError('invalid_identity',401);this.materialListeners.add(listener);return ()=>{this.materialListeners.delete(listener);};}
  /** Admission changes processing metadata even before any product is ready. */
  onFileAdmitted(listener:(context:UserContext,originalRef:string,taskId:string)=>void){if(this.closed)throw new ScopeError('invalid_identity',401);this.fileAdmissionListeners.add(listener);return ()=>{this.fileAdmissionListeners.delete(listener);};}
- private notifyMaterial(run:TaskRun,material:Readonly<{id:string;revision:string}>){for(const listener of this.materialListeners){run.grant.assert();const result=listener(run,Object.freeze({id:material.id,revision:material.revision}));if(result&&typeof (result as {then?:unknown}).then==='function'){void Promise.resolve(result).catch(()=>{});throw new ExecutionFailure('permanent','asynchronous_material_hook');}run.grant.assert();}}
+ private notifyMaterial(run:TaskRun,material:Readonly<{id:string;revision:string}>,originalRef:string){for(const listener of this.materialListeners){run.grant.assert();const result=listener(run,Object.freeze({id:material.id,revision:material.revision}),Object.freeze({originalRef}));if(result&&typeof (result as {then?:unknown}).then==='function'){void Promise.resolve(result).catch(()=>{});throw new ExecutionFailure('permanent','asynchronous_material_hook');}run.grant.assert();}}
  private readonly pluginStages=new WeakMap<TaskRun,{input:ProcessingInput;artifactId:string}>();
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly ingress:IngressHost,private readonly plugins:ScopedPluginHost,sourcePacks:readonly ImportPythonPackConfig[]=[],private readonly managedMedia?:ManagedMedia){
   installProcessing(db);
@@ -574,7 +574,7 @@ export class ProcessingHost {
   bound.sql.run('UPDATE mp_artifacts SET complete=1 WHERE user_id=$user AND id=? AND original_id=?',artifactId,input.originalRef.slice(9));bound.sql.run('INSERT INTO mp_file_steps VALUES($user,?,?,?,?) ON CONFLICT(user_id,original_id,generation,stage) DO UPDATE SET artifact_id=excluded.artifact_id',input.originalRef.slice(9),input.fileGeneration??0,imageStepKey(bound.plan.id,bound.recipe.fingerprint,bound.step.name,input.imageStep.dependencies),artifactId);
   if(primary){if(bound.recipe.recipe.id!==DEFAULT_IMAGE_RECIPE.id||bound.recipe.recipe.version!==DEFAULT_IMAGE_RECIPE.version)this.publish(run,{artifactId},bound.base);return;}
   const inputs=Object.keys(input.imageStep.dependencies).flatMap(name=>{const sourceStep=bound.recipe.steps.find(step=>step.name===name)!,sourcePrimary=bound.recipe.steps.find(step=>step.kind==='ocr')?.name===name,row=sourcePrimary?bound.sql.get('SELECT material_id,revision FROM mp_publications WHERE user_id=$user AND original_id=?',input.originalRef.slice(9)):bound.sql.get('SELECT material_id,revision FROM mp_derivations WHERE user_id=$user AND original_id=? AND kind=?',input.originalRef.slice(9),(sourceStep.kind==='ocr'?'image-ocr:':'image:')+name);return row?[{id:String(row.material_id),revision:String(row.revision)}]:[];});
-  const material=this.publishArtifact(run.context,bound.base,artifactId,{mode:'image',key:this.imageProductKind(bound.recipe,bound.step.name),kind:bound.step.kind==='ocr'?'document':'image-interpretation',inputs});this.notifyMaterial(run,material);
+  const material=this.publishArtifact(run.context,bound.base,artifactId,{mode:'image',key:this.imageProductKind(bound.recipe,bound.step.name),kind:bound.step.kind==='ocr'?'document':'image-interpretation',inputs});this.notifyMaterial(run,material,bound.base.originalRef);
  }
  private imageUnderstandingInput(context:UserContext,input:z.infer<typeof imageUnderstandingInputSchema>){
   const base=baseInput(input),bound=this.input(context,base);if(!bound.original.mime.startsWith('image/'))throw new ExecutionFailure('permanent','image_original_required');const parent=input.parentTaskId?bound.sql.get("SELECT u.input FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=$user AND e.user_id=$user AND u.task_id=? AND e.kind='processing.image-stage'",input.parentTaskId):undefined;if(!parent)throw new ExecutionFailure('stale','image_recipe_changed');const stageInput=imageRecipeInputSchema.parse(JSON.parse(String(parent.input)));if(stageInput.originalRef!==input.originalRef)throw new ExecutionFailure('stale','image_recipe_changed');this.imageStep(context,stageInput);
@@ -657,7 +657,7 @@ export class ProcessingHost {
   }finally{releaseOriginal?.();}
  }
  private publish(run:TaskRun,value:unknown,fixedInput?:ProcessingInput,derived?:AnalysisInput){
-  const input=fixedInput??processingInputSchema.parse(run.task.input),material=this.publishArtifact(run.context,input,resultSchema.parse(value).artifactId,derived);this.notifyMaterial(run,material);
+  const input=fixedInput??processingInputSchema.parse(run.task.input),material=this.publishArtifact(run.context,input,resultSchema.parse(value).artifactId,derived);this.notifyMaterial(run,material,input.originalRef);
   if(derived?.mode==='image'){const {record,original}=this.input(run.context,input);if(record.provenance?.layer==='snapshot'&&record.provenance?.document?.fileIndex)this.ingress.forUser(run.context).releaseSnapshot(original.ref);}
  }
  private publishArtifact(context:UserContext,input:ProcessingInput,artifactId:string,derived?:PublicationDerivation,ownerEdit=false){

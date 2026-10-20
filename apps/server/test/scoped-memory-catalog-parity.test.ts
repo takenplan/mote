@@ -4,6 +4,8 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {scopedMemoryFixture} from './fixtures/scoped-memory-host.js';
 import {defaultMemorySettings,type ScopedMemoryTask} from '../src/scope/memory-schema.js';
 import {snapshotMemoryCatalog,assertMemoryCatalog,frozenMemoryCatalogMembers} from '../src/scope/memory-catalog.js';
+import {randomUUID} from 'node:crypto';
+import {memoryEvaluationContext} from '../src/scope/memory-evaluation-context.js';
 import type {QueryInput} from '@mote/agent';
 
 // Generated inputs through the production app and Memory Job API. The query
@@ -58,6 +60,10 @@ test('MEM-M02: frozen catalog metadata remains owner-bound across unread body re
  const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A');f.answers.set('A',(_raw,keys)=>({memories:[],coverage:keys.map(key=>({key,state:'no_candidates',candidateIndexes:[]}))}));
  const submitted=await f.submit(f.a,[material.id]);await f.wait(f.a,submitted.id);
  const input=f.read(db=>JSON.parse(String(db.prepare('SELECT input FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,submitted.id)!.input))) as ScopedMemoryTask,data=await f.data(f.a),other=await f.data(f.b),members=frozenMemoryCatalogMembers(data,input),task={turns:[],memoryWork:{members,contextMembers:[],authorizedMembers:members,history:[]}};
+ assert.equal(members[0].evaluationTime,input.evaluationContext.inputs.find(pin=>pin.id===members[0].id)!.time);assert.notEqual(members[0].evaluationTime,members[0].contextTime,'source date and host semantic evaluation date are separate');
+ assert.throws(()=>snapshotMemoryCatalog(data,{turns:[],memoryWork:{members:[{...members[0],contextTime:members[0].evaluationTime}]}}),'evaluation time cannot replace the source-bound catalog fence');
+ assert.throws(()=>data.assertInputs({...input,evaluationContext:{...input.evaluationContext,inputs:[...input.evaluationContext.inputs,{id:randomUUID(),time:input.evaluationContext.time}]}}),'clock map may not authorize an extra original');assert.throws(()=>data.assertInputs({...input,evaluationContext:{...input.evaluationContext,inputs:[]}}),'every frozen pin needs its own clock');assert.throws(()=>memoryEvaluationContext(input.evaluationContext.time,[{id:members[0].id,time:input.evaluationContext.time},{id:members[0].id,time:'2038-01-01T00:00:00.000Z'}]),'same canonical ID with conflicting semantic clocks cannot be silently overwritten');
+ const forged=structuredClone(input);forged.evaluationContext.inputs[0].time='2038-01-01T00:00:00.000Z';const snapshots=f.read(db=>Number(db.prepare('SELECT count(*) n FROM user_model_snapshots WHERE user_id=?').get(f.a.userId)!.n)),rejected=await f.request(f.a.token,'/api/tasks','POST',{kind:'memory.batch',operationId:randomUUID(),input:forged});assert.notEqual(rejected.statusCode,200,'a client cannot replace a retained task clock or acquire a lease under that forged snapshot');assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM user_model_snapshots WHERE user_id=?').get(f.a.userId)!.n)),snapshots);
  const receipt=snapshotMemoryCatalog(data,task);assert.ok(receipt);assert.ok(!JSON.stringify(receipt).includes('Nora')&&!JSON.stringify(receipt).includes('prefers generated tea'));
  assert.throws(()=>assertMemoryCatalog(other,receipt),'an equal-ID receipt cannot cross owner authority');
  const draft=f.read(db=>JSON.parse(String(db.prepare('SELECT json FROM pd_material_versions WHERE user_id=? AND material_id=? AND revision=?').get(f.a.userId,material.id,material.revision)!.json)));

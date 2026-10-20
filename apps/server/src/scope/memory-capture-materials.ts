@@ -27,7 +27,7 @@ export class MemoryCaptureMaterials {
  private ingress?:IngressHost;
  private processing?:ProcessingHost;
  private readonly disposers:Array<()=>void|Promise<void>>=[];
- constructor(private readonly data:(context:UserContext)=>ScopedMemoryData,private readonly execution:TaskExecution,private readonly published:(run:TaskRun,material:{id:string;revision:string})=>void){
+ constructor(private readonly data:(context:UserContext)=>ScopedMemoryData,private readonly execution:TaskExecution,private readonly published:(run:TaskRun,material:{id:string;revision:string},origin:Readonly<{captureId:string}>)=>void){
   for(const organizer of [sourceItem,codingSession,uiPageObject,screenGroup,captureEvent,stateSeries,authored])this.registry.register(organizer);
   this.disposers.push(execution.register({kind:'memory.materials',pool:'memory.materials',concurrency:()=>4,policy:EXECUTION_POLICIES.deterministic,parseInput:value=>inputSchema.parse(value),authorizeInput:(context,raw)=>this.input(context,inputSchema.parse(raw)),resources:raw=>[{scope:'user',key:'memory-material:'+String(raw.sourceId)}],execute:async run=>{const {data,record}=this.input(run.context,inputSchema.parse(run.task.input));run.grant.commit(()=>this.publish(run));const pending=(file:MaterialOrganizerFile):boolean=>Boolean(file.image?.jobs.some(job=>job.state==='pending')||file.attachedFiles?.some(attached=>pending(attached.file)));if(pending(this.file(run.context,data,record.id)))throw new ExecutionFailure('waiting','memory_image_products_pending',100,{executionStarted:false});return {};},commit:run=>this.publish(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('stale','memory_capture_changed')}));
  }
@@ -67,7 +67,7 @@ export class MemoryCaptureMaterials {
    // switch the host grant or manufacture another source's authorization.
    draft.origin.sourceId=source.id;draft.id='mat_'+memoryHash([source.id,draft.origin.externalId]);
    const prior=data.sql.get("SELECT h.revision,json_extract(v.json,'$.kind') AS kind FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision WHERE h.user_id=$user AND v.user_id=$user AND h.id=?",draft.id);if(prior&&prior.kind!==draft.kind)continue;
-   const material=data.privateData.publishMaterial(draft,prior?String(prior.revision):undefined);run.grant.assert();this.published(run,material);
+   const material=data.privateData.publishMaterial(draft,prior?String(prior.revision):undefined);run.grant.assert();this.published(run,material,Object.freeze({captureId:input.captureId}));
   }
  }
  /** Reuse the existing complete-message projection. Archive retention keeps

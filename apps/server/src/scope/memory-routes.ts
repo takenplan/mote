@@ -5,14 +5,13 @@ import {registerUserRoute,type ScopedRuntime} from './http.js';
 import type {Configurations} from './configuration.js';
 import type {TaskExecution} from './task-execution.js';
 import type {ScopedPluginHost} from './plugins.js';
-import type {MemoryProviderOptions} from './memory-providers.js';
-import {MemoryHost} from './memory.js';
+import {MemoryHost,type MemoryHostOptions} from './memory.js';
 import {MEMORY_DOMAIN} from './memory-schema.js';
 
 const memoryQuery=(raw:unknown)=>Object.fromEntries(Object.entries(z.record(z.unknown()).parse(raw)).map(([key,value])=>[key,['includeHistory','includeStale'].includes(key)&&['true','false'].includes(String(value))?value==='true':value]));
 const memoryReadQuery=(raw:unknown)=>{const fields=memoryQuery(raw);return Object.keys(fields).length?memoryReadFiltersSchema.parse(fields):undefined;};
 
-export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryProviderOptions={},questions?:import('./owner-questions.js').ScopedOwnerQuestions){
+export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryHostOptions={},questions?:import('./owner-questions.js').ScopedOwnerQuestions){
  const host=new MemoryHost(runtime,db,configuration,execution,plugins,providerOptions,undefined,questions),service=(context:Parameters<MemoryHost['forUser']>[0])=>host.forUser(context);
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory',handle:({context})=>service(context).view()});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/observations',handle:({context,request})=>service(context).observations(request.query)});
