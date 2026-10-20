@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn, type ChildProcess} from 'node:child_process';
@@ -92,7 +93,7 @@ test('independent R4 held values: cooperative task cancellation, overlapping aut
   let bootstrapClosed = false;
   let origin = await bootstrap.app.listen({host: '127.0.0.1', port: 0});
   let active: {child: ChildProcess; pid: number; closed: Promise<{code: number | null; signal: string | null}>} | undefined;
-  const report: any = {seedCommitment: commitment, fixtureSha256: sha(JSON.stringify({inputA, inputB, siblingDelayMs, otherDelayMs, cancellationOffsetMs})), archiveSha256: fixedArchive, manifestSha256: fixedManifest, startedAt: new Date().toISOString(), timing: {siblingDelayMs, otherDelayMs, cancellationOffsetMs}, modelCalls: 0, coreBusinessEdits: 0, operations: [], observations: {}};
+  const report: any = {regressionMode: 'current-host', testedCandidate: process.env.MOTE_BENCHMARK_CANDIDATE ?? 'unrecorded', seedCommitment: commitment, fixtureSha256: sha(JSON.stringify({inputA, inputB, siblingDelayMs, otherDelayMs, cancellationOffsetMs})), archiveSha256: fixedArchive, manifestSha256: fixedManifest, startedAt: new Date().toISOString(), timing: {siblingDelayMs, otherDelayMs, cancellationOffsetMs}, modelCalls: 0, coreBusinessEdits: 0, operations: [], observations: {}};
 
   const request = async (token: string | undefined, path: string, method = 'GET', body?: unknown) => {
     const result = await fetch(origin + path, {method, headers: {...protocol, ...(token ? {authorization: 'Bearer ' + token} : {}), ...(body === undefined ? {} : {'content-type': 'application/json'})}, ...(body === undefined ? {} : {body: JSON.stringify(body)}), signal: AbortSignal.timeout(20000)});
@@ -106,7 +107,13 @@ test('independent R4 held values: cooperative task cancellation, overlapping aut
     return result.value;
   };
   const view = (token: string) => ok(token, '/api/plugins');
-  const action = async (token: string, operation: string) => ok(token, '/api/plugin-instances/' + instanceId + '/' + operation, 'POST', operation === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+  const action = async (token: string, operation: string) => {
+    const receipt = await ok(token, '/api/plugin-instances/' + instanceId + '/' + operation, 'POST', operation === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+    if (operation !== 'check') return receipt;
+    await waitForPluginCheck(receipt, taskId => ok(token, '/api/tasks/' + taskId));
+    const instance = (await view(token)).instances.find((value: any) => value.id === instanceId);
+    assert.equal(instance.checked, true, JSON.stringify(instance)); return instance;
+  };
   const snapshot = (token: string) => ok(token, '/api/plugin-instances/' + instanceId + '/snapshots', 'POST', {});
   const submit = (token: string, snapshotId: string, payload: unknown, operationId = randomUUID(), componentId = 'cancel.source') => ok(token, '/api/plugin-snapshots/' + snapshotId + '/invoke', 'POST', {componentId, payload, operationId});
   const terminal = async (token: string, id: string, expected = 'succeeded') => {

@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn, type ChildProcess} from 'node:child_process';
@@ -84,7 +85,7 @@ if (process.env.MOTE_CANCEL_SERVER === '1') {
 } else test('independent Round4 pack: source, processor, per-task cancellation, isolation, retirement and restart through loopback HTTP', {timeout: 120000}, async t => {
   const started = Date.now(), directory = mkdtempSync(join(tmpdir(), 'mote-cancel-r4-'));
   const workerRoot = join(directory, 'plugins', 'instances');
-  const report: any = {round: 4, startedAt: new Date(started).toISOString(), candidate: 'b3d956189ba81e4843e9ceacdec06bb7f30a352e', releaseSha256: releases()[0].manifest.archive.sha256, composition: 'real child process calling buildScopedApp and listening on loopback; not the shipped index.ts launcher', modelCalls: 0, modelQuality: 'NOT RUN', coreBusinessFilesChanged: 0, observations: {}, requestStatuses: []};
+  const report: any = {originatingRound: 4, regressionMode: 'current-host', testedCandidate: process.env.MOTE_BENCHMARK_CANDIDATE ?? 'unrecorded', startedAt: new Date(started).toISOString(), originalFrozenCandidate: 'b3d956189ba81e4843e9ceacdec06bb7f30a352e', releaseSha256: releases()[0].manifest.archive.sha256, composition: 'real child process calling buildScopedApp and listening on loopback; not the shipped index.ts launcher', modelCalls: 0, modelQuality: 'NOT RUN', coreBusinessFilesChanged: 0, observations: {}, requestStatuses: []};
   let active: {child: ChildProcess; origin: string; pid: number; closed: Promise<number | null>} | undefined;
   async function start(initialize: boolean) {
     const environment = {...process.env, MOTE_CANCEL_SERVER: '1', MOTE_CANCEL_DATA_DIR: directory, MOTE_CANCEL_INITIALIZE: initialize ? '1' : '0'};
@@ -136,7 +137,13 @@ if (process.env.MOTE_CANCEL_SERVER === '1') {
   const login = (username: string) => ok(undefined, '/api/auth/login', 'POST', {username, password, mode: 'client'});
   const view = (token: string) => ok(token, '/api/plugins');
   const configure = async (token: string, instance: unknown) => ok(token, '/api/plugin-instances', 'POST', {instance, expectedRevision: (await view(token)).revision});
-  const action = async (token: string, name: string, id = 'shared-instance') => ok(token, '/api/plugin-instances/' + id + '/' + name, 'POST', name === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+  const action = async (token: string, name: string, id = 'shared-instance') => {
+    const receipt = await ok(token, '/api/plugin-instances/' + id + '/' + name, 'POST', name === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+    if (name !== 'check') return receipt;
+    await waitForPluginCheck(receipt, taskId => ok(token, '/api/tasks/' + taskId));
+    const instance = (await view(token)).instances.find((value: any) => value.id === id);
+    assert.equal(instance.checked, true, JSON.stringify(instance)); return instance;
+  };
   const snapshot = (token: string) => ok(token, '/api/plugin-instances/shared-instance/snapshots', 'POST', {});
   const invoke = (token: string, snapshotId: string, payload: Record<string, unknown>, componentId = 'cancel.source') => ok(token, '/api/plugin-snapshots/' + snapshotId + '/invoke', 'POST', {componentId, payload, operationId: randomUUID()});
   const terminal = async (token: string, id: string, expected = 'succeeded') => {
@@ -254,9 +261,10 @@ if (process.env.MOTE_CANCEL_SERVER === '1') {
   const nativePackageId = await install(admin.token, 'generated-cancel/native-apply');
   await configure(alice.token, {id: 'native-apply', packageId: nativePackageId, name: 'Native public-path failure', configuration: {}, desired: false, grants: {capabilities: ['source'], sourceIds: [sourceId], history: false}});
   const nativeCheck = await request(alice.token, '/api/plugin-instances/native-apply/check', 'POST', {});
-  assert.notEqual(nativeCheck.status, 200);
+  assert.equal(nativeCheck.status, 200);
+  const nativeTask = await waitForPluginCheck(nativeCheck.body, taskId => ok(alice.token, '/api/tasks/' + taskId), 'blocked');
   assert.equal((await view(alice.token)).instances.find((value: any) => value.id === 'native-apply').checked, false);
-  report.observations.nativeHarness = {status: 'FAIL', reason: 'NO_EXTENSION_POINT', entry: 'unchanged native-apply.mjs exports apply only', check: nativeCheck, archiveSha256: releases()[1].manifest.archive.sha256, harnessSession: 'NOT RUN: no supported native loading admission'};
+  report.observations.nativeHarness = {status: 'FAIL', reason: 'NO_EXTENSION_POINT', entry: 'unchanged native-apply.mjs exports apply only', check: nativeCheck, checkTask: nativeTask, archiveSha256: releases()[1].manifest.archive.sha256, harnessSession: 'NOT RUN: no supported native loading admission'};
   const triggerResolve = await request(admin.token, '/api/plugins/resolve', 'POST', {repository: 'generated-cancel/custom-trigger', tag: 'v1.0.0'});
   assert.equal(triggerResolve.status, 400);
   const triggerPolicy = await request(alice.token, '/api/ask-automations', 'POST', {id: randomUUID(), kind: 'cancel.periodic', sourceIds: [sourceId], includeExisting: false});

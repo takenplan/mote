@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -48,7 +49,13 @@ test('reading pack: real release, authorized originals, Transcript publication, 
     return response.value;
   };
   const view = (token: string) => ok(token, '/api/plugins');
-  const action = async (token: string, operation: string) => ok(token, `/api/plugin-instances/${instanceId}/${operation}`, 'POST', operation === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+  const check = async (token: string, id = instanceId) => {
+    const receipt = await ok(token, `/api/plugin-instances/${id}/check`, 'POST', {});
+    await waitForPluginCheck(receipt, taskId => ok(token, '/api/tasks/' + taskId));
+    const instance = (await view(token)).instances.find((value: any) => value.id === id);
+    assert.equal(instance.checked, true, JSON.stringify(instance)); return instance;
+  };
+  const action = async (token: string, operation: string) => operation === 'check' ? check(token) : ok(token, `/api/plugin-instances/${instanceId}/${operation}`, 'POST', {expectedRevision: (await view(token)).revision});
   const snapshot = (token: string) => ok(token, `/api/plugin-instances/${instanceId}/snapshots`, 'POST', {});
   const invoke = (token: string, id: string, componentId: string, payload: unknown, operationId: string) => ok(token, `/api/plugin-snapshots/${id}/invoke`, 'POST', {componentId, payload, operationId});
   const waitTask = async (token: string, id: string, state = 'succeeded') => {
@@ -143,7 +150,7 @@ test('reading pack: real release, authorized originals, Transcript publication, 
   assert.deepEqual((await ok(bob, '/api/materials')).items, []);
   const sourceOnly = 'reading-source-only';
   await ok(alice, '/api/plugin-instances', 'POST', {expectedRevision: (await view(alice)).revision, instance: {id: sourceOnly, packageId, name: 'Source only', configuration: {label: 'SOURCE_ONLY'}, desired: false, grants: {capabilities: ['source'], sourceIds: [sourceId], history: false}}});
-  await ok(alice, `/api/plugin-instances/${sourceOnly}/check`, 'POST', {});
+  await check(alice, sourceOnly);
   await ok(alice, `/api/plugin-instances/${sourceOnly}/enable`, 'POST', {expectedRevision: (await view(alice)).revision});
   const only = await ok(alice, `/api/plugin-instances/${sourceOnly}/snapshots`, 'POST', {});
   assert.equal((await request(alice, `/api/plugin-snapshots/${only.id}/invoke`, 'POST', {componentId: normalization, payload: {originalRef: aReceipt.captures[0].original.ref}, operationId: 'missing-processor-grant'})).status, 503);

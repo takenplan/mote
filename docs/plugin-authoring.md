@@ -153,8 +153,12 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 2. 用 `POST /api/plugin-instances` 提交 `{instance, expectedRevision}`。
    instance 包含 `id`、`packageId`、`name`、`configuration`、`desired: false` 和
    `grants: {capabilities, sourceIds, history}`。
-3. 对 `/api/plugin-instances/:id/check` 发送空对象，再查看实例的各个 capability 状态。
-   `checked` 记录代码描述与配置的核验结果；运行能力由实际领域 adapter 提供。
+3. 对 `/api/plugin-instances/:id/check` 发送空对象。HTTP `200` 返回
+   `{checked: false, observed: "checking", taskId}`，表示核验任务已持久接收。
+   通过 `GET /api/tasks/:taskId` 跟随这一个任务至终态，再读取 `/api/plugins` 中
+   同一实例的 `checked`、`issues` 和各个 capability 状态。只有当前准确配置核验成功、
+   所需 capability 已验证时才继续；任务成功但实例仍未核验通过也不能启用。
+   运行能力由实际领域 adapter 和对应能力探针提供。
 4. 用当前 revision 调用 `/enable`，然后向 `/snapshots` 提交 `{}`，得到固定运行快照。
 5. 向 `/api/plugin-snapshots/:id/invoke` 提交
    `{componentId, payload, operationId}`，通过 `GET /api/tasks/:id` 读取结果。
@@ -178,7 +182,8 @@ HTTP 调用采用当前登录会话；生成测试使用 client Bearer token 和
 停用实例后的新快照请求返回 `409`；stop 后使用已撤销快照返回 `401`。
 
 替换 package、configuration 或 grants 后，先提交 `desired: false`，再对这份准确配置
-执行 `check`、`enable`，最后申请新 snapshot。旧配置的核验结果不能启用新配置；
+完成 `check` 的准确任务与实例状态核验，再执行 `enable`，最后申请新 snapshot。
+旧配置的核验结果不能启用新配置；
 直接携带 `desired: true` 更新尚未核验的配置会被准备阶段拒绝。这个顺序也适用于
 版本升级与来源授权收窄，保留旧快照的版本与撤销行为仍遵循上表。
 

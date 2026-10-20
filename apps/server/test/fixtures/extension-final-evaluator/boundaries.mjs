@@ -17,10 +17,15 @@ try {
   const pkg=await runtime.install(a,nativeRelease);
   const view=(await runtime.request(a,'GET','/api/plugins',undefined,200)).body;
   await runtime.request(a,'POST','/api/plugin-instances',{expectedRevision:view.revision,instance:{id:'native-instance',packageId:pkg.id,name:'Native unchanged trial',configuration:{},desired:false,grants:{capabilities:['source'],sourceIds:[],history:false}}},200);
-  const checked=await runtime.request(a,'POST','/api/plugin-instances/native-instance/check',{});
-  assert.notEqual(checked.status,200);
+  const checked=await runtime.check(a,'native-instance',{expected:'blocked'});
+  assert.equal(checked.task.state,'blocked');assert.equal(checked.instance.checked,false);
+  const beforeEnable=(await runtime.request(a,'GET','/api/plugins',undefined,200)).body;
+  const refusedEnable=await runtime.request(a,'POST','/api/plugin-instances/native-instance/enable',{expectedRevision:beforeEnable.revision},503);
+  const afterEnable=(await runtime.request(a,'GET','/api/plugins',undefined,200)).body.instances.find(instance=>instance.id==='native-instance');
+  assert.equal(afterEnable.checked,false);assert.equal(afterEnable.desired,false);
+  const refusedSnapshot=await runtime.snapshot(a,'native-instance',409);
   const installed=await readFile(join(runtime.dir,'vault','plugins','packages',nativeRelease.digest,'native.mjs'),'utf8').catch(()=>null);
-  record({id:'P04_HARNESS',status:'FAIL',reason:'NO_EXTENSION_POINT',attempt:'Pinned apply(ctx) native module packaged unchanged; supported worker install succeeded and actual check rejected absent worker factory.',nativeSha256:sha256(native),packageDigest:nativeRelease.digest,checkStatus:checked.status,checkBody:checked.body,byteIdentity:installed===null?'archive byte hash retained; installed path not observed':sha256(installed)===sha256(native),nativeToolExecuted:false});
+  record({id:'P04_HARNESS',status:'FAIL',reason:'NO_EXTENSION_POINT',attempt:'Pinned apply(ctx) native module packaged unchanged; supported worker install succeeded and actual verification task blocked on absent worker factory.',nativeSha256:sha256(native),packageDigest:nativeRelease.digest,checkStatus:200,checkReceipt:checked.receipt,checkTask:checked.task,instance:afterEnable,enableStatus:refusedEnable.status,snapshotStatus:refusedSnapshot.status,byteIdentity:installed===null?'archive byte hash retained; installed path not observed':sha256(installed)===sha256(native),nativeToolExecuted:false});
   const triggerInput={id:randomUUID(),kind:'benchmark-periodic-v1',sourceIds:[],includeExisting:false,language:'en',timeZone:'UTC',componentId:'benchmark.periodic',intervalMs:1000};
   const trigger=await runtime.request(a,'POST','/api/ask-automations',triggerInput);
   assert.equal(trigger.status,400);

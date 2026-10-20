@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn, type ChildProcess} from 'node:child_process';
@@ -54,7 +55,7 @@ test('Round 5 fresh source/processor release: public finance, scope, version pin
   const spec = JSON.parse(await readFile(new URL('../../../docs/validation/plugin-extension-benchmark/cases.json', import.meta.url), 'utf8'));
   const expected = spec.fixtures['finance-visible-v1'].expected;
   const processes: ChildProcess[] = [], snapshots: {token: string; id: string}[] = [];
-  const observations: Record<string, any> = {startedAt, liveModelCalls: 0, developmentTokens: null, developmentCost: null,
+  const observations: Record<string, any> = {regressionMode: 'current-host', testedCandidate: process.env.MOTE_BENCHMARK_CANDIDATE ?? 'unrecorded', startedAt, liveModelCalls: 0, developmentTokens: null, developmentCost: null,
     baselineCommit: '88fb30af6cc70d369625f4b1350e78f01e207650', coreChanges: 0, privateRuntimeImports: 0,
     hostAdaptersAdded: 0, coverage: 'actual-process loopback HTTP through buildScopedApp'};
   let node = await launch(join(directory, 'vault'), true); processes.push(node.child);
@@ -116,8 +117,13 @@ test('Round 5 fresh source/processor release: public finance, scope, version pin
       id, packageId, name: 'Generated ' + id, configuration: packageId.includes('native') ? {} : {pageLimit: 7}, desired: false,
       grants: {capabilities, sourceIds, history: false},
     }});
-  const action = async (token: string, id: string, action: string) => ok(token, '/api/plugin-instances/' + id + '/' + action, 'POST',
-    action === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+  const action = async (token: string, id: string, action: string) => {
+    const receipt = await ok(token, '/api/plugin-instances/' + id + '/' + action, 'POST', action === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+    if (action !== 'check') return receipt;
+    await waitForPluginCheck(receipt, taskId => ok(token, '/api/tasks/' + taskId));
+    const instance = (await view(token)).instances.find((value: any) => value.id === id);
+    assert.equal(instance.checked, true, JSON.stringify(instance)); return instance;
+  };
   const admit = async (token: string, id = 'same-instance') => {
     const snapshot = await ok(token, '/api/plugin-instances/' + id + '/snapshots', 'POST', {});
     snapshots.push({token, id: snapshot.id}); return snapshot;
@@ -157,9 +163,11 @@ test('Round 5 fresh source/processor release: public finance, scope, version pin
   const native = await install('1.0.0', 'native');
   await configure(a.token, 'native-boundary', native.packageId, ['source'], ['source-bank']);
   const nativeCheck = await request(a.token, '/api/plugin-instances/native-boundary/check', 'POST', {});
-  assert.notEqual(nativeCheck.status, 200);
+  assert.equal(nativeCheck.status, 200);
+  const nativeTask = await waitForPluginCheck(nativeCheck.body, taskId => ok(a.token, '/api/tasks/' + taskId), 'blocked');
+  assert.equal((await view(a.token)).instances.find((value: any) => value.id === 'native-boundary').checked, false);
   observations.nativeHarness = {status: 'FAIL', reason: 'NO_EXTENSION_POINT', archiveSha256: native.manifest.archive.sha256,
-    nativeFileSha256: hash(await readFile(new URL('native-apply.mjs', pack))), check: nativeCheck,
+    nativeFileSha256: hash(await readFile(new URL('native-apply.mjs', pack))), check: nativeCheck, checkTask: nativeTask,
     supportedFactoryExports: caps.factoryExports, toolExecuted: false, scope: 'apply-only worker ABI boundary, not native Harness execution'};
 
   const v1 = await install();

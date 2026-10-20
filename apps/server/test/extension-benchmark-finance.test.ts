@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync,existsSync} from 'node:fs';
@@ -17,7 +18,7 @@ import {expected} from '../../../plugins/extension-benchmark/finance/oracle.mjs'
 import {monthlyTotals} from '../../../plugins/extension-benchmark/finance/plugin.mjs';
 
 const protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
-test('E01 frozen production host: external worker reads finance evidence, semantic extension remains unavailable',async t=>{
+test('E01 current host with frozen plugin: external worker reads finance evidence, semantic extension remains unavailable',async t=>{
   const startedAt=new Date().toISOString(),directory=mkdtempSync(join(tmpdir(),'mote-finance-r1-')),release=generatedFinanceRelease();
   const node=await buildScopedApp({dataDir:directory},{pluginReleaseTransport:release.transport});
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
@@ -42,9 +43,14 @@ test('E01 frozen production host: external worker reads finance evidence, semant
   }
   assert.equal(captures.length,expected.originals);
   const view=()=>checked(a.token,'/api/plugins');
+  const check=async()=>{
+    const receipt=await checked(a.token,'/api/plugin-instances/finance/check','POST',{});
+    await waitForPluginCheck(receipt,taskId=>checked(a.token,'/api/tasks/'+taskId));
+    assert.equal((await view()).instances.find((value:any)=>value.id==='finance').checked,true);
+  };
   const instance={id:'finance',packageId,name:'Finance trial',configuration:{},desired:false,grants:{capabilities:['source','model'],sourceIds,history:false}};
   await checked(a.token,'/api/plugin-instances','POST',{expectedRevision:(await view()).revision,instance});
-  await checked(a.token,'/api/plugin-instances/finance/check','POST',{});
+  await check();
   await checked(a.token,'/api/plugin-instances/finance/enable','POST',{expectedRevision:(await view()).revision});
   const inventory=await view(),unsupported=inventory.instances[0].capabilities.find((cap:any)=>cap.id==='benchmark.finance.model');
   assert.equal(unsupported.state,'unsupported');
@@ -73,7 +79,7 @@ test('E01 frozen production host: external worker reads finance evidence, semant
   // source grants, dedup/arithmetic, M03 publication and M02 retrieval persist.
   const fixtureInstance={...instance,configuration:{semanticFixture:true},desired:false};
   await checked(a.token,'/api/plugin-instances','POST',{expectedRevision:(await view()).revision,instance:fixtureInstance});
-  await checked(a.token,'/api/plugin-instances/finance/check','POST',{});
+  await check();
   await checked(a.token,'/api/plugin-instances/finance/enable','POST',{expectedRevision:(await view()).revision});
   const fixtureSnapshot=await checked(a.token,'/api/plugin-instances/finance/snapshots','POST',{});
   const fixtureTask=await checked(a.token,'/api/plugin-snapshots/'+fixtureSnapshot.id+'/invoke','POST',{componentId:'benchmark.finance.source',payload:{action:'analyze',sourceIds},operationId:'finance-fixture-publication'});
@@ -116,7 +122,7 @@ test('E01 frozen production host: external worker reads finance evidence, semant
   await checked(a.token,'/api/plugin-instances','POST',{expectedRevision:(await view()).revision,instance:{...fixtureInstance,grants:{...fixtureInstance.grants,sourceIds:sourceIds.slice(0,2)}}});
   const revoked=await request(a.token,'/api/plugin-snapshots/'+fixtureSnapshot.id+'/invoke','POST',{componentId:'benchmark.finance.source',payload:{action:'scan',sourceIds},operationId:randomUUID()});
   assert.equal(revoked.statusCode,401,'Grant withdrawal must invalidate the retained source receipt');
-  const report={trial:'E01-round-1',base:'2c78ca8d52a7d17fae20962cf68d09a717ffc73a',startedAt,firstRunAt,finishedAt:new Date().toISOString(),status:'PARTIAL',failureCode:'NO_EXTENSION_POINT',workerExecuted:true,originalsRead:scan.result.originals,semanticCalls:0,semanticFixtureCalls:1,modelComponent:unsupported,modelHttpStatus:model.statusCode,analysisState:analysis.state,analysisFailure:analysis.failure,fixtureFinanceState:finance.state,months:finance.result.months.map(({month,netMinor}:any)=>({month,netMinor})),published,ownerSearchFound:true,foreignSnapshotHttpStatus:foreign.statusCode,ungrantedSourceState:outside.state,disableAdmissionHttpStatus:disabled.statusCode,revokedSnapshotHttpStatus:revoked.statusCode,historicalCaptureReadable:true,historicalInsightReadable:true,expected,notRun:['automatic finance trigger','restart','upgrade','live GitHub download','live model'],coreEdits:0,privatePluginImports:0};
+  const report={regressionMode:'current-host',testedCandidate:process.env.MOTE_BENCHMARK_CANDIDATE??'unrecorded',originatingTrial:'E01-round-1',base:'2c78ca8d52a7d17fae20962cf68d09a717ffc73a',startedAt,firstRunAt,finishedAt:new Date().toISOString(),status:'PARTIAL',failureCode:'NO_EXTENSION_POINT',workerExecuted:true,originalsRead:scan.result.originals,semanticCalls:0,semanticFixtureCalls:1,modelComponent:unsupported,modelHttpStatus:model.statusCode,analysisState:analysis.state,analysisFailure:analysis.failure,fixtureFinanceState:finance.state,months:finance.result.months.map(({month,netMinor}:any)=>({month,netMinor})),published,ownerSearchFound:true,foreignSnapshotHttpStatus:foreign.statusCode,ungrantedSourceState:outside.state,disableAdmissionHttpStatus:disabled.statusCode,revokedSnapshotHttpStatus:revoked.statusCode,historicalCaptureReadable:true,historicalInsightReadable:true,expected,notRun:['automatic finance trigger','restart','upgrade','live GitHub download','live model'],coreEdits:0,privatePluginImports:0};
   if(process.env.MOTE_FINANCE_REPORT)writeFileSync(process.env.MOTE_FINANCE_REPORT,JSON.stringify(report,null,2)+'\n');
   t.diagnostic(JSON.stringify(report));
   if(process.env.MOTE_FINANCE_REQUIRE_COMPLETE==='1')assert.fail('NO_EXTENSION_POINT: current scoped host has no authorized semantic model callback or external automatic finance consumer entrypoint. The production model path produced no insight; explicitly enabled fixture semantics succeeded separately.');

@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
@@ -11,16 +12,18 @@ import {buildScopedApp} from '../src/scope/app.js';
 const pack = new URL('../../../plugins/extension-benchmark/meeting-pack/', import.meta.url);
 const started = Date.now();
 const requireComposition = process.env.MOTE_MEETING_REQUIRE_COMPOSITION !== '0';
-const report: any = {originatingRound: 3, originalFrozenCandidate: '2879214', testedCandidate: process.env.MOTE_BENCHMARK_CANDIDATE ?? 'unrecorded', originalBaseline: '2c78ca8', startedAt: new Date(started).toISOString(), scope: 'Independent two-source meeting summary probe, actual authenticated loopback HTTP and installed workers', modelPolicy: 'No semantic interpretation: explicit generated structured facts, deterministic rendering and arithmetic only', operations: [], gates: {}, pluginPrivateImports: 0, pluginCoreImports: 0, productionChanges: 0, fullCaseClaim: false};
+const report: any = {regressionMode: 'current-host', originatingRound: 3, originalFrozenCandidate: '2879214', testedCandidate: process.env.MOTE_BENCHMARK_CANDIDATE ?? 'unrecorded', originalBaseline: '2c78ca8', startedAt: new Date(started).toISOString(), scope: 'Independent two-source meeting summary probe, actual authenticated loopback HTTP and installed workers', modelPolicy: 'No semantic interpretation: explicit generated structured facts, deterministic rendering and arithmetic only', operations: [], gates: {}, pluginPrivateImports: 0, pluginCoreImports: 0, productionChanges: 0, fullCaseClaim: false};
 report.setup = {developmentElapsedMs:null,buildOperations:0,dependencyInstallOperations:0,newAdapters:0,fullSuiteRuns:0,realAccountBootstrap:true,actualLoopbackHttp:true,workerEnvironment:'Node /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node; authorized require_escalated local execution',testAssemblyImports:['apps/server/src/scope/app.ts (production composition root)'],discoveryReads:['AGENTS.md','docs/plugin-authoring.md','docs/validation/plugin-extension-benchmark/cases.json','package.json','apps/server/package.json','Original non-benchmark multiuser-plugin-ingress and multiuser-plugins tests','Original non-benchmark fixtures/scoped-plugin-release.ts','Original SourceCapability, Original, MaterialDraft and PluginReleaseTransport value contracts'],priorTrialImplementationsRead:false,preliminaryPathMisses:['apps/server/src/accounts.ts','packages/shared/src/plugin.ts','packages/shared/src/source.ts'],firstTrial:{startedAt:'2026-10-19T18:56:28.258Z',firstSuccessfulControlReadbackAt:'2026-10-19T18:56:33.236Z',readbackElapsedMs:4978,independentOrderStatus:409,control:'PASS'}};
 const hash = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
 const declaration = (id: string) => ({id, version: '1', surface: 'ingress', capability: 'source'});
 const fileNames = ['plugin.mjs','notes.mjs','references.mjs','source-summary.mjs'];
-const zip = zipSync(Object.fromEntries(fileNames.map(name => [name, [new Uint8Array(readFileSync(new URL(name, pack))), {mtime: new Date('2026-10-19T00:00:00Z')}]])) as any);
+// ZIP stores local DOS calendar fields; these match the retained archive in every timezone.
+const fixtureZipMtime = new Date(2026,9,19,2,0,0);
+const zip = zipSync(Object.fromEntries(fileNames.map(name => [name, [new Uint8Array(readFileSync(new URL(name, pack))), {mtime: fixtureZipMtime}]])) as any);
 const manifest = {schemaVersion: 1, id: 'meeting.summary.pack', name: 'Generated meeting summary pack', version: '1.0.0', runtime: 'worker', entry: 'plugin.mjs', archive: {asset: 'plugin.zip', sha256: hash(zip)}, capabilities: ['source'], configuration: [], dependencies: [], access: ['Explicitly granted generated meeting and reference sources'], components: [declaration('meeting.notes.summary'),declaration('meeting.references.summary')]};
 const controlManifest = {...manifest, version: '1.0.1', components: [...manifest.components].reverse()};
 const nativeCode = 'export function apply(ctx) { ctx.on("ready", () => undefined); }\n';
-const nativeZip = zipSync({'native.mjs': [strToU8(nativeCode), {mtime:new Date('2026-10-19T00:00:00Z')} ]});
+const nativeZip = zipSync({'native.mjs': [strToU8(nativeCode), {mtime:fixtureZipMtime} ]});
 const nativeManifest = {...manifest, id: 'meeting.native.harness', name: 'Unchanged generated native Harness apply module', version: '1.0.0', entry: 'native.mjs', archive: {asset: 'plugin.zip', sha256: hash(nativeZip)}, capabilities: ['engine'], components: [{id:'native.harness',version:'1',surface:'agent',capability:'engine'}]};
 const releases = [
   {repository: 'round3-generated/meeting-pack', tag: 'v1.0.0', manifest, zip},
@@ -96,7 +99,14 @@ test('ROUND3 external meeting pack: independent order plus separately labeled sa
     const configure = async (token:string,packageId:string,instanceId:string,grants=['source']) => {
       await ok(token,'/api/plugin-instances','POST',{instance:{id:instanceId,packageId,name:'Generated meeting instance',configuration:{},desired:false,grants:{capabilities:grants,sourceIds:['meeting-source','reference-source'],history:false}},expectedRevision:(await view(token)).revision});
     };
-    const action = async (token:string,instanceId:string,name:string) => ok(token,'/api/plugin-instances/'+instanceId+'/'+name,'POST',name==='check'?{}:{expectedRevision:(await view(token)).revision});
+    const check = async (token:string,instanceId:string,expected='succeeded') => {
+      const receipt=await ok(token,'/api/plugin-instances/'+instanceId+'/check','POST',{});
+      const task=await waitForPluginCheck(receipt,taskId=>ok(token,'/api/tasks/'+taskId),expected);
+      const instance=(await view(token)).instances.find((value:any)=>value.id===instanceId);
+      assert.equal(instance.checked,expected==='succeeded',JSON.stringify({task,instance}));
+      return {receipt,task,instance};
+    };
+    const action = async (token:string,instanceId:string,name:string) => name==='check'?(await check(token,instanceId)).instance:ok(token,'/api/plugin-instances/'+instanceId+'/'+name,'POST',{expectedRevision:(await view(token)).revision});
     const snapshot = (token:string,instanceId:string) => ok(token,'/api/plugin-instances/'+instanceId+'/snapshots','POST',{});
     const invoke = async (token:string,snapshotId:string,componentId:string,payload:unknown) => {
       const admitted = await ok(token,'/api/plugin-snapshots/'+snapshotId+'/invoke','POST',{componentId,payload,operationId:randomUUID()});
@@ -112,9 +122,9 @@ test('ROUND3 external meeting pack: independent order plus separately labeled sa
     // Probe the unchanged native module through the actual generic loading path.
     const nativePackage = await install(releases[2]);
     await configure(alice.token,nativePackage,'native-probe',['engine']);
-    const nativeCheck = await request(alice.token,'/api/plugin-instances/native-probe/check','POST',{});
+    const nativeCheck = await check(alice.token,'native-probe','blocked');
     report.nativeHarness = {verdict:'NO_EXTENSION_POINT', untouchedApplyModule:true, sourceSha256:hash(strToU8(nativeCode)),archiveSha256:hash(nativeZip), installed:true, check:nativeCheck, genericEngineRegistered:false, scope:'Native apply ABI availability probe only; actual Harness-session checksum tool execution remains NOT RUN'};
-    assert.notEqual(nativeCheck.status,200);
+    assert.equal(nativeCheck.task.state,'blocked');
     const trigger = await request(alice.token,'/api/plugin-triggers','POST',{instanceId:'meeting-instance',kind:'periodic',intervalMs:60000});
     report.trigger = {verdict:'NO_EXTENSION_POINT',attempt:trigger,scope:'No advertised generic scheduler entry; attempted public plugin trigger registration was rejected. Built-in scheduler is not an external contribution.'};
     assert.notEqual(trigger.status,200);
@@ -122,9 +132,9 @@ test('ROUND3 external meeting pack: independent order plus separately labeled sa
     for (const user of [alice,bob]) for (const sourceId of ['meeting-source','reference-source','ungranted-source']) await ok(user.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated '+sourceId,kind:'coding-agent',deviceId:'same-device',platform:'import',retention:'archive'});
     const independentPackage = await install(releases[0]);
     await configure(alice.token,independentPackage,'independent-order');
-    const independentCheck = await request(alice.token,'/api/plugin-instances/independent-order/check','POST',{});
+    const independentCheck = await check(alice.token,'independent-order',requireComposition?'succeeded':'blocked');
     report.independentComposition = {manifestOrder:manifest.components.map(component=>component.id),implementationOrder:['meeting.references.summary','meeting.notes.summary'],check:independentCheck};
-    report.gates.independentOrder = independentCheck.status===200?'PASS':'FAIL';
+    report.gates.independentOrder = independentCheck.instance.checked?'PASS':'FAIL';
     console.log('ROUND3_INDEPENDENT_ORDER',JSON.stringify(independentCheck));
 
     // Control differs only in release manifest ordering/version; installed JS bytes
@@ -158,7 +168,7 @@ test('ROUND3 external meeting pack: independent order plus separately labeled sa
         report.controlResults ??= []; report.controlResults.push({owner,sourceId,taskState:task.state,materialId:task.result.materialId,originalCount:task.result.originalCount,expectedTotalCents:total,members,body});
       }
     }
-    if(independentCheck.status===200) {
+    if(independentCheck.instance.checked) {
       await action(alice.token,'independent-order','enable');
       const independentSnapshot=await snapshot(alice.token,'independent-order');
       report.independentExecution=[];
@@ -197,12 +207,12 @@ test('ROUND3 external meeting pack: independent order plus separately labeled sa
     assert.ok(bobBefore.includes('mat_'));
     report.gates.sameOrderSourceControl='PASS';report.gates.currentUserIsolation='PASS';report.gates.disableStopAndBContinues='PASS';report.gates.realWorkerPublicationControl='PASS';report.gates.coreZero='PASS';
     report.gates.regression='NOT RUN (focused trial only)';report.gates.actualProcessRestart='NOT RUN';
-    report.verdict=independentCheck.status===200?'PASS_PROBE':'PARTIAL: same-order source control passed; independent composition failed';
+    report.verdict=independentCheck.instance.checked?'PASS_PROBE':'PARTIAL: same-order source control passed; independent composition failed';
     assert.deepEqual(Buffer.from(zip),readFileSync(new URL('plugin.zip',pack)),'Retained release must match the actual component source');
     assert.deepEqual(JSON.parse(readFileSync(new URL('mote-plugin.json',pack),'utf8')),manifest);
     assert.deepEqual(JSON.parse(readFileSync(new URL('control-mote-plugin.json',pack),'utf8')),controlManifest);
-    report.assertionMode={requireComposition,expectedStatus:requireComposition?200:409,architecturalVerdict:report.gates.independentOrder};
-    await t.test(requireComposition?'independently ordered registrations match and both callbacks execute':'frozen candidate reproduces independent-order rejection (architectural FAIL)',()=>assert.equal(independentCheck.status,requireComposition?200:409,JSON.stringify(independentCheck)));
+    report.assertionMode={requireComposition,expectedCheckState:requireComposition?'succeeded':'blocked',architecturalVerdict:report.gates.independentOrder};
+    await t.test(requireComposition?'independently ordered registrations match and both callbacks execute':'frozen candidate reproduces independent-order rejection (architectural FAIL)',()=>assert.equal(independentCheck.task.state,requireComposition?'succeeded':'blocked',JSON.stringify(independentCheck)));
     await t.test('same-order control executes both components with independent durable readback and B isolation',()=>assert.equal(report.gates.sameOrderSourceControl,'PASS'));
   } catch(error) {report.unexpectedFailure=String(error);throw error;}
   finally {

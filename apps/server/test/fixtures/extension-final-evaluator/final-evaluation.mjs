@@ -143,7 +143,7 @@ try {
   await semantic.waitHeld();
   const pkg2=await runtime.install(a,release2);
   await reconfigure(a,'same-instance',pkg2,sourceIds);
-  await runtime.request(a,'POST','/api/plugin-instances/same-instance/check',{},200);
+  await runtime.check(a,'same-instance');
   await runtime.action(a,'same-instance','enable');
   const as2=(await runtime.snapshot(a)).body;assert.equal(as2.version,'1.1.0');assert.equal(as2.digest,release2.digest);
   semantic.release();
@@ -227,7 +227,7 @@ try {
   const siblingTask=terminalSuccess(await runtime.task(a,siblingAdmission.id),'independent processor instance continues');
   record({id:'GRANT_REVOCATION',status:'PASS',revokedTaskId:revokedTask.id,revokedTaskState:revokedTask.state,oldSnapshotStatus:401,lateUnauthorizedMaterials:0,bConcurrentTaskId:bConcurrentTask.id,processorSiblingTaskId:siblingTask.id});
   // Stop receives a newly checked, independently valid grant; prior revocation cannot explain this rejection.
-  await reconfigure(a,'same-instance',pkg2,sourceIds);await runtime.request(a,'POST','/api/plugin-instances/same-instance/check',{},200);await runtime.action(a,'same-instance','enable');
+  await reconfigure(a,'same-instance',pkg2,sourceIds);await runtime.check(a,'same-instance');await runtime.action(a,'same-instance','enable');
   const stopSnapshot=(await runtime.snapshot(a)).body;semantic.arm(sourceIds[0]);
   const stopAdmission=(await runtime.invoke(a,stopSnapshot.id,'final.finance.source',{...payload,operationId:'isolated-stop-'+randomUUID()})).body;
   await semantic.waitHeld();const stateBeforeStop=await publicationState(a);
@@ -236,7 +236,7 @@ try {
   assert.deepEqual(await publicationState(a),stateBeforeStop);
   record({id:'ISOLATED_STOP',status:'PASS',heldTaskId:stopTask.id,state:stopTask.state,previousSnapshotWasValid:true,oldSnapshotStatus:401,lateMaterialsOrRevisions:0});
   // Per-task cancellation is separately exercised against the submitted worker; a same-worker intake operation survives.
-  await reconfigure(a,'same-instance',pkg2,sourceIds);await runtime.request(a,'POST','/api/plugin-instances/same-instance/check',{},200);await runtime.action(a,'same-instance','enable');
+  await reconfigure(a,'same-instance',pkg2,sourceIds);await runtime.check(a,'same-instance');await runtime.action(a,'same-instance','enable');
   const cancelSnapshot=(await runtime.snapshot(a)).body;semantic.arm(sourceIds[0]);
   const cancelAdmission=(await runtime.invoke(a,cancelSnapshot.id,'final.finance.source',{...payload,operationId:'isolated-cancel-'+randomUUID()})).body;
   await semantic.waitHeld();const stateBeforeCancel=await publicationState(a);await runtime.request(a,'POST','/api/tasks/'+cancelAdmission.id+'/cancel',{},200);

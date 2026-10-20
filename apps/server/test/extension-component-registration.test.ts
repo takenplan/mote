@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -39,7 +40,9 @@ test('production registration composes independently ordered components and reje
   while(!(pkg=(await ok(token,'/api/admin/plugins')).packages.find((value:any)=>value.version===release.manifest.version&&value.state==='installed'))){assert.ok(Date.now()<installDeadline,'Generated release installation timed out');await delay(5);}
   await ok(token,'/api/plugin-instances','POST',{expectedRevision:(await ok(token,'/api/plugins')).revision,instance:{id:name,packageId:pkg.id,name:'Generated '+name,configuration:{label:name},desired:false,grants:{capabilities:['source'],sourceIds:['generated-source'],history:false}}});
   const check=await request(token,'/api/plugin-instances/'+name+'/check','POST',{});
-  assert.equal(check.statusCode,status,check.body);
+  assert.equal(check.statusCode,200,check.body);
+  assert.equal(check.json().observed,'checking');assert.equal(check.json().checked,false);
+  await waitForPluginCheck(check.json(),taskId=>ok(token,'/api/tasks/'+taskId),status===200?'succeeded':'blocked');
   const current=await ok(token,'/api/plugins');assert.equal(current.instances.find((value:any)=>value.id===name).checked,status===200);
   if(status!==200){assert.equal((await request(token,'/api/plugin-instances/'+name+'/enable','POST',{expectedRevision:current.revision})).statusCode,503);return;}
   await ok(token,'/api/plugin-instances/'+name+'/enable','POST',{expectedRevision:current.revision});

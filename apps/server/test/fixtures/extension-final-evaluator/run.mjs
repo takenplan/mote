@@ -9,7 +9,7 @@ assert(phases[phase],'Usage: node --import tsx apps/server/test/fixtures/extensi
 await mkdir(ROOT,{recursive:true});
 const verification=await verifyCandidate();
 const startedAt=new Date().toISOString();
-console.log(JSON.stringify({phase,outputDirectory:ROOT,candidateDirectory:CANDIDATE,verification,publishedRegression:true}));
+console.log(JSON.stringify({phase,outputDirectory:ROOT,candidateDirectory:CANDIDATE,verification,publishedRegression:true,regressionMode:'current-host',originalArchiveCommit:verification.originalArchiveCommit}));
 const child=spawn(process.execPath,['--import','tsx',join(FIXTURES,phases[phase])],{
   cwd:CANDIDATE,env:{...process.env,R5_OUTPUT_DIR:ROOT,R5_CANDIDATE:CANDIDATE},stdio:'inherit',
 });
@@ -17,5 +17,5 @@ const result=await new Promise((resolve,reject)=>{
   child.once('error',reject);
   child.once('exit',(code,signal)=>resolve({code,signal}));
 });
-await writeFile(join(ROOT,'phase-receipt.json'),JSON.stringify({phase,startedAt,completedAt:new Date().toISOString(),verification,...result},null,2));
+await writeFile(join(ROOT,'phase-receipt.json'),JSON.stringify({phase,startedAt,completedAt:new Date().toISOString(),regressionMode:'current-host',verification,...result},null,2));
 process.exitCode=result.code??1;

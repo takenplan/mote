@@ -1,3 +1,4 @@
+import {waitForPluginCheck} from './fixtures/plugin-check.js';
 import test, {type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash, randomUUID} from 'node:crypto';
@@ -128,7 +129,13 @@ async function fixture(t: TestContext, releases: Release[] = [release('evaluator
   };
   const view = (token: string) => checked(token, '/api/plugins');
   const configure = async (token: string, instance: unknown) => checked(token, '/api/plugin-instances', 'POST', {instance, expectedRevision: (await view(token)).revision});
-  const action = async (token: string, id: string, action: string) => checked(token, '/api/plugin-instances/' + id + '/' + action, 'POST', action === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+  const action = async (token: string, id: string, action: string) => {
+    const receipt = await checked(token, '/api/plugin-instances/' + id + '/' + action, 'POST', action === 'check' ? {} : {expectedRevision: (await view(token)).revision});
+    if (action !== 'check') return receipt;
+    await waitForPluginCheck(receipt, taskId => checked(token, '/api/tasks/' + taskId));
+    const instance = (await view(token)).instances.find((row: any) => row.id === id);
+    assert.equal(instance.checked, true, JSON.stringify(instance)); return instance;
+  };
   const source = (token: string, id = 'shared-source') => checked(token, '/api/ingress/sources', 'POST', {id, name: 'Generated ' + id, kind: 'custom', deviceId: 'same-device', platform: 'import', retention: 'archive'});
   const seed = (token: string, sourceId: string, externalId: string, text: string) => checked(token, '/api/ingress/sources/' + sourceId + '/items', 'POST', {batchId: randomUUID(), items: [{externalId, revision: '1', observedAt: '2026-09-15T00:00:00Z', title: 'Generated input', text, kind: 'message', layer: 'original'}]});
   const enable = async (token: string, packageId: string, id = 'shared-instance', sourceIds = ['shared-source'], configuration = {label: 'generated'}) => {
@@ -290,7 +297,8 @@ test('Evaluator P04/P06: unchanged native Harness factory and generic plugin tri
   await f.source(f.a.token);
   await f.configure(f.a.token, {id: 'native-harness', packageId: nativePackage, name: 'Unchanged native ABI attempt', configuration: {}, desired: false, grants: {capabilities: ['source'], sourceIds: ['shared-source'], history: false}});
   const check = await f.request(f.a.token, '/api/plugin-instances/native-harness/check', 'POST', {});
-  assert.notEqual(check.statusCode, 200);
+  assert.equal(check.statusCode, 200);
+  const nativeTask = await waitForPluginCheck(check.json(), taskId => f.checked(f.a.token, '/api/tasks/' + taskId), 'blocked');
   assert.equal((await f.view(f.a.token)).instances.find((row: any) => row.id === 'native-harness').checked, false);
   assert.equal((await f.checked(f.a.token, '/api/plugin-events')).items.length, 0);
   const packageId = await f.install(ordinary), snapshot = await f.enable(f.a.token, packageId, 'trigger');
@@ -304,7 +312,7 @@ test('Evaluator P04/P06: unchanged native Harness factory and generic plugin tri
   const registration = await f.invoke(f.a.token, snapshot.id, 'evaluator.source', {method: 'registerTrigger', args: [{id: 'benchmark-periodic-v1', intervalMs: 60000}]});
   assert.equal(registration.state, 'blocked');
   assert.deepEqual((await f.checked(f.a.token, '/api/ask-automations')).items, []);
-  t.diagnostic(JSON.stringify({evidence: 'EV-P04-P06', nativeBytesSha256: sha(nativeSource), nativeFactoryCheckHttp: check.statusCode, nativeFailure: check.json(), nativeHarnessCapability: 'FAIL/NO_EXTENSION_POINT', genericTriggerHttp: absent.statusCode, customAutomationHttp: custom.statusCode, extraCallbackOnBuiltInHttp: fixedKind.statusCode, workerRegisterTrigger: registration.state, triggerCapability: 'FAIL/NO_EXTENSION_POINT'}));
+  t.diagnostic(JSON.stringify({evidence: 'EV-P04-P06', nativeBytesSha256: sha(nativeSource), nativeFactoryCheckHttp: check.statusCode, nativeCheckReceipt: check.json(), nativeFailure: nativeTask.failure, nativeCheckTask: nativeTask, nativeHarnessCapability: 'FAIL/NO_EXTENSION_POINT', genericTriggerHttp: absent.statusCode, customAutomationHttp: custom.statusCode, extraCallbackOnBuiltInHttp: fixedKind.statusCode, workerRegisterTrigger: registration.state, triggerCapability: 'FAIL/NO_EXTENSION_POINT'}));
 });
 
 test('Evaluator shipped index: real process termination/restart retains package bytes, A/B snapshots, owner readback and task identity', async t => {

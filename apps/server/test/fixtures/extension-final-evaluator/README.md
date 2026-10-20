@@ -1,6 +1,8 @@
 # Published Round 5 independent evaluator
 
-This is the archived evaluator for the first frozen `final-pack` submission against Mote candidate `88fb30af6cc70d369625f4b1350e78f01e207650`. The financial inputs and expected values were committed by hash at **2026-10-19 19:12:32 UTC**, before the Round 5 Iterator was assigned. The Iterator froze its package at **19:31:32 UTC**. These inputs are now public regression fixtures; later runs are not fresh hidden trials.
+The original evaluator for the first frozen `final-pack` submission against Mote candidate `88fb30af6cc70d369625f4b1350e78f01e207650` is preserved in immutable [archive commit `74da386f`](https://github.com/utopiafar/mote/tree/74da386f33adde6521d5dd3435bf9643da89f495/apps/server/test/fixtures/extension-final-evaluator). The financial inputs and expected values were committed by hash at **2026-10-19 19:12:32 UTC**, before the Round 5 Iterator was assigned. The Iterator froze its package at **19:31:32 UTC**.
+
+This checkout contains current-host public regression orchestration. It follows durable asynchronous plugin-check receipts before enabling instances, and verifies failed native factory probes through the actual terminal task and unchecked instance. Financial oracles, seeds, submitted plugin bytes and historical reports/receipts retain their original identity. These runs are not unchanged frozen reruns or fresh hidden trials. Historical evaluator code-hash receipts describe the original archive commit, not the evolved orchestration in this checkout.
 
 ## Run from a clean checkout
 
@@ -22,7 +24,11 @@ Each command reports its output directory. It writes generated releases, synthet
 
 `R5_OUTPUT_DIR` selects an output directory. `R5_CANDIDATE` selects another checkout. The default candidate path is derived from this file's location, and the default output path is a new operating-system temporary directory. There is no dependency on the original scratch checkout.
 
-The runner always enforces the submitted package's complete frozen file hash map. It also compares the 521 source/package-manifest hashes in `frozen-production-sha256.json` and records all differences. Normal CI runs continue against changed host code and execute the same behavioral assertions. For strict reproduction of the frozen source identity, set `R5_REQUIRE_FROZEN_SOURCE=1`; any differing or missing source file then rejects the run. A later Git commit that changes only documentation or tests can retain the same checked production bytes. A regression against changed production code does not count as the original trial. This mode switch changes only source-identity enforcement, not the plugin hash checks, independent oracle, host behavior or benchmark gates.
+The runner always enforces the submitted package's complete frozen file hash map. It also compares the 521 source/package-manifest hashes in `frozen-production-sha256.json` and records all differences. Normal CI runs continue against changed host code and retain the financial, lineage, isolation and lifecycle assertions; check admission and completed verification are now asserted separately.
+
+New phase receipts label `regressionMode: "current-host"`. Their `verification.actualCandidate` records the actual Git commit and whether the checkout is dirty; `verification.orchestration` records the executed harness file hashes. The legacy `verification.candidateCommit` field remains the original frozen production candidate, and `originalArchiveCommit` identifies the immutable original evaluator. A dirty checkout is explicitly reported and must be bound to the driver's exact input receipt for a final acceptance claim.
+
+`R5_REQUIRE_FROZEN_SOURCE=1` still rejects differing or missing frozen production files. It does not establish historical harness identity. To reproduce the original source and orchestration, check out `74da386f33adde6521d5dd3435bf9643da89f495` and run its original entry with strict mode. No frozen hashes are rewritten to accept the current host; passing current regressions does not erase original failures or satisfy previously unexecuted benchmark requirements.
 
 ## What executes and what is substituted
 
@@ -38,7 +44,7 @@ The only replacement inside the submitted finance package is its explicitly repl
 
 The calibration phase actually installs and executes positive publication, plausible-success/no-publication, hardcoded-visible-answer, foreign-owner and late-publication specimens. The core-intrusion specimen is an executed synthetic diff audit and never changes the host checkout. An additional text Transcript check and separate-process restart verify the calibration harness.
 
-The boundaries phase makes actual public loading/admission attempts. HTTP rejection of the unchanged native `apply(ctx)` package and of an extension-owned automation policy is an expected test observation. Thus the regression test can pass while the corresponding benchmark capabilities remain **FAIL / NO_EXTENSION_POINT**. No native tool or extension scheduler callback is claimed to have executed.
+The boundaries phase makes actual public loading/admission attempts. The unchanged native `apply(ctx)` package is admitted for a durable check, whose actual task must become blocked while the instance remains unchecked. The extension-owned automation policy is still rejected at HTTP admission. Thus the regression test can pass while the corresponding benchmark capabilities remain **FAIL / NO_EXTENSION_POINT**. No native tool or extension scheduler callback is claimed to have executed.
 
 The final phase exercises the frozen finance/source and text/processor submission, owner isolation, exact package versions, restart, disable, grant revocation, stop and cancellation where the run reaches those steps. A `RUN_COMPLETION` record is required before crediting the complete bounded sequence. A failed or interrupted run does not earn later steps merely because they exist in the script.
 

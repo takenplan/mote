@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {mkdir,readFile,writeFile,appendFile} from 'node:fs/promises';
 import {existsSync,mkdtempSync} from 'node:fs';
@@ -26,7 +26,10 @@ export async function verifyCandidate() {
   }
   const strict=process.env.R5_REQUIRE_FROZEN_SOURCE==='1';
   if(strict)assert.deepEqual(differences,[],'strict replay requires frozen production bytes');
-  return {verified:differences.length===0,strict,candidateCommit:manifest.candidateCommit,files:Object.keys(manifest.files).length,differences};
+  const actualCandidate={commit:execFileSync('git',['rev-parse','HEAD'],{cwd:CANDIDATE,encoding:'utf8'}).trim(),dirty:Boolean(execFileSync('git',['status','--porcelain'],{cwd:CANDIDATE,encoding:'utf8'}).trim())};
+  const orchestrationFiles=['run.mjs','http-runtime.mjs','calibrate.mjs','boundaries.mjs','final-evaluation.mjs','finance-oracle.mjs','semantic-service.mjs'];
+  const orchestration=Object.fromEntries(await Promise.all(orchestrationFiles.map(async name=>[name,sha256(await readFile(join(FIXTURES,name)))])));
+  return {verified:differences.length===0,strict,candidateCommit:manifest.candidateCommit,originalArchiveCommit:'74da386f33adde6521d5dd3435bf9643da89f495',actualCandidate,orchestration,files:Object.keys(manifest.files).length,differences};
 }
 
 export const redact = value => {
@@ -133,9 +136,18 @@ export class HttpRuntime {
   async configure(token,pkg,sourceIds,{id='same-instance',configuration={},capabilities=pkg.declaredCapabilities??pkg.capabilities?.map(c=>c.id)??['source']}={}) {
     const before=await this.request(token,'GET','/api/plugins',undefined,200);
     const response=await this.request(token,'POST','/api/plugin-instances',{expectedRevision:before.body.revision,instance:{id,packageId:pkg.id,name:'Independent R05 '+id,configuration,desired:false,grants:{capabilities,sourceIds,history:true}}},200);
-    const check=await this.request(token,'POST','/api/plugin-instances/'+id+'/check',{},200);
+    const check=await this.check(token,id);
     const enabled=await this.action(token,id,'enable');
-    return {id,configured:response.body,check:check.body,enabled};
+    return {id,configured:response.body,check,enabled};
+  }
+  async check(token,id,{expected='succeeded'}={}) {
+    const receipt=(await this.request(token,'POST','/api/plugin-instances/'+id+'/check',{},200)).body;
+    assert.equal(receipt.checked,false);assert.equal(receipt.observed,'checking');assert.equal(typeof receipt.taskId,'string');
+    const task=await this.task(token,receipt.taskId,{timeoutMs:30000});assert.equal(task.state,expected,JSON.stringify(task));
+    const instance=(await this.request(token,'GET','/api/plugins',undefined,200)).body.instances.find(value=>value.id===id);
+    assert(instance,'exact checked instance remains visible');assert.equal(instance.checked,expected==='succeeded',JSON.stringify({task,instance}));
+    if(expected!=='succeeded')assert.equal(instance.observed,'blocked');
+    return {receipt,task,instance,checked:instance.checked};
   }
   async action(token,id,action) {
     const before=await this.request(token,'GET','/api/plugins',undefined,200);
