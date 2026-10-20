@@ -12,6 +12,7 @@ import {openScopeStorage} from '../src/scope/storage.js';
 import {LifecycleAuthority,type LifecyclePurpose,type UserExport} from '../src/scope/lifecycle.js';
 import {TaskExecution,type TaskRun,type UserTaskHandler} from '../src/scope/task-execution.js';
 import {EXECUTION_POLICIES} from '../src/execution-policy.js';
+import {ExecutionFailure} from '../src/execution-engine.js';
 
 const password='Generated-lifecycle-password-01';
 const headers=(token?:string)=>({'x-mote-protocol-version':'2',...(token?{authorization:'Bearer '+token}:{})});
@@ -80,6 +81,30 @@ test('invalid envelopes, coverage, duplicate IDs and dependency graphs fail befo
  ];
  for(const [index,mutate] of invalid.entries()){const bad=structuredClone(archive);mutate(bad);await assert.rejects(f.lifecycle(f.a.userId,'restore',bad,'generated-invalid-'+index));assert.equal(f.snapshot(f.a.userId),empty);assert.equal(f.snapshot(f.b.userId),bBefore);}
  await f.lifecycle(f.a.userId,'restore',archive,'generated-valid-after-rejections');assert.equal(f.rows(f.a.userId).length,2);assert.equal(f.snapshot(f.b.userId),bBefore);
+});
+
+test('registered large portable input restores exact history with revoked authority and no automatic execution',async t=>{
+ let executions=0;
+ const f=await fixture(t,node=>node.execution.register(handler({admit:()=>new ExecutionFailure('waiting','generated_capacity',60000),execute:async()=>{executions++;return null;}}))),label='GENERATED_PORTABLE_'.repeat(2500);
+ assert.ok(Buffer.byteLength(JSON.stringify({label}))>32768);
+ const original=await f.submit(f.alice.token,'generated-large-portable',label),archive=await f.lifecycle(f.a.userId,'export') as UserExport,epoch=f.rows(f.a.userId)[0].authorization_epoch;
+ const exported=(archive.payload as any).tasks.find((task:any)=>task.id===original.id);assert.deepEqual(exported.input,{label});assert.equal(exported.state,'waiting');
+ await f.lifecycle(f.a.userId,'delete',undefined,'generated-large-delete');await f.lifecycle(f.a.userId,'restore',archive,'generated-large-restore');await f.lifecycle(f.a.userId,'restore',archive,'generated-large-restore');
+ const restored=f.rows(f.a.userId);assert.equal(restored.length,1);assert.equal(restored[0].id,original.id);assert.equal(restored[0].authorization_epoch,epoch);assert.equal(restored[0].revoked,1);assert.equal(restored[0].state,'blocked');assert.equal(restored[0].error,'restore_authorization_required');
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{const row=db.prepare('SELECT u.input task_input,e.input engine_input FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id WHERE u.task_id=?').get(original.id)!;assert.equal(row.task_input,row.engine_input);assert.deepEqual(JSON.parse(String(row.task_input)),{label});}finally{db.close();}
+ await assert.rejects(f.node.authority.restoreTask(String(restored[0].grant_id)),{code:'invalid_identity'});await f.node.execution.tick();await delay(20);assert.equal(executions,0);assert.equal((await f.request(f.alice.token,'/api/tasks/'+original.id+'/retry','POST',{})).statusCode,401);assert.equal((await f.request(f.bob.token,'/api/tasks/'+original.id)).statusCode,404);
+});
+
+test('unknown-handler large history keeps the metadata guard and atomically rolls back before omitted-input restore',async t=>{
+ let unregister!:()=>Promise<void>;
+ const f=await fixture(t,node=>{unregister=node.execution.register(handler({admit:()=>new ExecutionFailure('waiting','generated_capacity',60000)}));});
+ const small=await f.submit(f.alice.token,'generated-small-history','Generated small history'),large=await f.submit(f.alice.token,'generated-large-history','界'.repeat(12000)),archive=await f.lifecycle(f.a.userId,'export') as UserExport;
+ (archive.payload as any).tasks.sort((a:any,b:any)=>Number(a.id===large.id)-Number(b.id===large.id));assert.equal((archive.payload as any).tasks[0].id,small.id,'force a valid row before the oversized row to exercise transaction rollback');
+ await f.lifecycle(f.a.userId,'delete',undefined,'generated-unknown-delete');await unregister();
+ const snapshot=()=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{return {owned:f.snapshot(f.a.userId),lifecycle:db.prepare('SELECT * FROM task_lifecycle_state WHERE user_id=?').all(f.a.userId),journal:db.prepare('SELECT * FROM task_restore_journal WHERE user_id=?').all(f.a.userId),dependencies:db.prepare('SELECT * FROM execution_dependencies').all(),sequence:db.prepare('SELECT * FROM execution_user_sequence WHERE user_id=?').all(f.a.userId)};}finally{db.close();}},before=snapshot();
+ await assert.rejects(f.lifecycle(f.a.userId,'restore',archive,'generated-unknown-large-restore'),{code:'task_metadata_invalid'});assert.deepEqual(snapshot(),before,'failed history restore leaves no partial tasks, grants, dependencies, lifecycle or journal');
+ const omitted=structuredClone(archive),entry=(omitted.payload as any).tasks.find((task:any)=>task.id===large.id);delete entry.input;entry.inputOmitted=true;
+ await f.lifecycle(f.a.userId,'restore',omitted,'generated-omitted-restore');const rows=f.rows(f.a.userId);assert.equal(rows.length,2);assert.equal(rows.find(row=>row.id===large.id)!.input,'{}');for(const row of rows){assert.equal(row.state,'blocked');assert.equal(row.error,'restore_authorization_required');assert.equal(row.revoked,1);}
 });
 
 test('deleting an issued external task reports result_unknown, revokes late work and retains reconciliation evidence',async t=>{

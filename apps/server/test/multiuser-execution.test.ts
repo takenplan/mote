@@ -37,6 +37,38 @@ async function fixture(t:TestContext,register?:(node:ProductionNode)=>void){
  return {directory,node,nodes,request,login,admin,a,b,alice,bob,submit,task,waitTask};
 }
 
+test('large validated ASCII and multibyte task inputs retain exact identity, resources and restart deduplication',async t=>{
+ let calls=0;
+ const definition=()=>handler({resources:input=>[{scope:'user',key:'generated-evidence:'+input.resource}],execute:async()=>{calls++;return {complete:true};}});
+ const f=await fixture(t,node=>node.execution.register(definition())),inputs=[{resource:'ascii',label:'a'.repeat(40000)},{resource:'unicode',label:'界'.repeat(12000)}];
+ assert.ok(JSON.stringify(inputs[0]).length>32768);
+ assert.ok(Buffer.byteLength(JSON.stringify(inputs[1]))>32768&&JSON.stringify(inputs[1]).length<32768,'multibyte data independently exercises the old byte gate');
+ const stored=()=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{return db.prepare('SELECT e.id,e.input engine_input,u.input task_input,e.user_id,e.authorization_epoch,a.revoked FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id JOIN task_authorizations a ON a.task_id=e.id WHERE e.kind=? ORDER BY e.id').all('generated.execution');}finally{db.close();}};
+ const ids:string[]=[];
+ for(const input of inputs){const task=await f.submit(f.alice.token,'generated-large-'+input.resource,input);ids.push(task.id);await f.waitTask(f.alice.token,task.id);assert.equal((await f.submit(f.alice.token,'generated-large-'+input.resource,{label:input.label,resource:input.resource})).id,task.id);const row=stored().find(row=>row.id===task.id)!;assert.equal(row.task_input,row.engine_input);assert.deepEqual(JSON.parse(String(row.task_input)),input);assert.equal(row.user_id,f.a.userId);assert.equal(row.revoked,0);
+  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.deepEqual(db.prepare('SELECT resource_key FROM execution_resources WHERE step_id=?').all(task.id).map(row=>String(row.resource_key)),[JSON.stringify(['user',f.a.userId,'generated-evidence:'+input.resource])]);}finally{db.close();}
+ }
+ const before=stored(),bob=await f.submit(f.bob.token,'generated-b-parent',{label:'Generated B'});await f.waitTask(f.bob.token,bob.id);
+ const rejected=await f.request(f.alice.token,'/api/tasks','POST',{kind:'generated.execution',operationId:'generated-large-foreign-dependency',input:inputs[0],dependencies:[bob.id]});assert.equal(rejected.statusCode,404);assert.equal(stored().length,3,'failed dependency admission leaves no task');
+ const invalid=await f.request(f.alice.token,'/api/tasks','POST',{kind:'generated.execution',operationId:'generated-invalid-large',input:{...inputs[0],unexpected:true}});assert.equal(invalid.statusCode,400);assert.equal(stored().length,3);
+ await f.node.app.close();const restarted=await buildApp({dataDir:f.directory}) as ProductionNode;f.nodes.push(restarted);restarted.execution.register(definition());await restarted.app.ready();await restarted.execution.tick();assert.equal(calls,3);assert.deepEqual(stored().filter(row=>ids.includes(String(row.id))),before);
+ for(const [index,input] of inputs.entries()){const response=await restarted.app.inject({method:'POST',url:'/api/tasks',headers:headers(f.alice.token),payload:{kind:'generated.execution',operationId:'generated-large-'+input.resource,input}});assert.equal(response.statusCode,200,response.body);assert.equal(response.json().id,ids[index]);}
+ await restarted.execution.tick();assert.equal(calls,3,'restart and duplicate admission do not execute successful tasks again');
+});
+
+test('large task input does not relax bounded progress, checkpoint or result metadata',async t=>{
+ const oversized={generated:'界'.repeat(12000)};
+ const f=await fixture(t,node=>node.execution.register(handler({execute:async run=>{
+  run.progress({stage:'kept'});run.checkpoint.write('kept',{saved:true});
+  assert.throws(()=>run.progress(oversized),{code:'task_metadata_invalid'});
+  assert.throws(()=>run.checkpoint.write('oversized',oversized),{code:'task_metadata_invalid'});
+  return oversized;
+ }})));
+ const task=await f.submit(f.alice.token,'generated-large-result',{label:'a'.repeat(40000)}),done=await f.waitTask(f.alice.token,task.id,'failed');
+ assert.deepEqual(done.progress,{stage:'kept'});assert.deepEqual(done.checkpoints,['kept']);assert.equal(done.result,undefined);
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{const row=db.prepare('SELECT progress,checkpoints,result FROM user_tasks WHERE task_id=?').get(task.id)!;assert.deepEqual(JSON.parse(String(row.checkpoints)),{kept:{saved:true}});assert.equal(row.result,null);}finally{db.close();}
+});
+
 test('caught synchronous child admission failure leaves no authority or runnable work when the outer commit succeeds',async t=>{
  let executions=0,caught=false;const f=await fixture(t,node=>{
   node.execution.register(handler({kind:'generated.bad-resource',pool:'generated-child',resources:()=>[{scope:'invalid' as 'user',key:'generated'}],execute:async()=>{executions++;return null;}}));
