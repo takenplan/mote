@@ -123,3 +123,56 @@ and freeze once all focused checks converge. The full affected-consumer gate
 includes all four new files and their consumers, so the upstream's reported
 23-test/2-journey/typecheck PASS is context, not a reused gate receipt. Recheck
 remote inputs and ancestry before authorized main delivery as in P9.
+
+## P10: first-run cache directory identity
+
+Independently **APPROVED** before implementation by `/root/plan_review` (Sol
+High), with reviewed section body SHA-256
+`3572bed88007f72a74203a81502ea1486277e87ee02377b97ffeeeb35e8b1897`.
+Exact base/head is `aeb6f5f983e5b940e2ad11a70ab979a917b54e5d`; main and both cleanup PR inputs
+remain those approved in P9-D1. Root remains the sole implementation/check owner.
+
+The actual combined gate passed Agent, Desktop (628 tests) and Diagnostics (five
+tests), then correctly stopped because its input keys changed. Diagnostics' first
+Vitest run created `packages/diagnostics/node_modules/.vite` where no workspace
+installation directory existed. Existing identity code ignores reviewed Vite
+cache contents, but distinguishes an absent root from a cache-only root by its
+new inode/mode. This makes a fresh checkout invalidate earlier tasks despite no
+installed input changing. Receipt `d20d6356-0443-4527-a371-326a91a6947b` records
+`check_inputs_changed`, not PASS; cleanup was confirmed. Warming this checkout
+alone would leave the fresh-checkout failure unresolved.
+
+- **KEEP:** task definitions, source/dependency/configuration/environment/tool
+  identity, built-output bytes, prerequisite ordering, consumers, assertions,
+  deadlines, cleanup and required full gate. Installed roots with any actual
+  dependency or unreviewed entry retain device/inode/mode and child signatures.
+- **CHANGE:** only `snapshotTree`'s `node_modules` root representation: a missing
+  root and an actual readable directory whose sorted children, after excluding
+  exactly `.vite` and `.vite-temp`, are empty share one no-installed-input marker.
+  Keep the absolute root path in the hash. Creating, rewriting or removing only
+  these output caches cannot change installation identity.
+- **REMOVE:** no test, coverage or real input. Do not normalize ordinary empty
+  directories, file roots, symlink roots or unknown caches such as `.cache`.
+- **EXCEPTION:** absent, empty and reviewed-cache-only installation roots are
+  equivalent specifically because none contains an installed input. This extends
+  the already reviewed cache-content exclusion to first creation/removal; it does
+  not permit reuse across a real install/reinstall or uncertain inspection.
+- **UNKNOWN:** unreadable/racing inputs retain current conservative behavior;
+  inspection failure prevents reuse. No new fallback or cache-name discovery.
+
+Scope is `scripts/release/check-inputs.mjs`, its existing regression file and
+this integration's documentation. Add generated temporary-repository regressions
+for root and workspace missing → empty → cache-only → rewrite/delete → missing;
+real dependency and unknown-cache additions/mutations/removals; and nonempty
+root metadata replacement, file and symlink guards. Keep fixture temporaries
+outside Git-visible source so negative assertions cannot pass on unrelated edits.
+Run the input/affected/driver regressions (including existing source/tool/env/
+output safeguards), then freeze a new commit and execute the actual full
+`check:affected` against main `301b5941` once. Preserve the invalidated receipt
+unchanged and report newly executed results separately. No device, live model,
+foreground UI or product-policy change is involved.
+
+Review guards: prove positive keys are defined SHA-256 identities; do not apply
+empty-root normalization when following a module-root symlink to its target.
+Retain and test dangling/resolved link and target-replacement identity. Inspection
+races/errors must not become an empty-directory success.
