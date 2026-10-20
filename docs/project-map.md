@@ -52,7 +52,7 @@ DEV Release 保留其当时事实。运行节点、安装版本和系统权限�
 | 多用户与第二轮业务恢复 | 生产已装配账号域；汇总 [PR 184](https://github.com/utopiafar/mote/pull/184) 的 merge `9a8717c3` 在基线中 | 按台账对齐 66 项原要求和后继证据；完整旅程、设备和模型资格分开记录 |
 | 后续清理、检查器和 Memory 修复 | PR 168/186/187/188/189/191/192/193 已进入基线 | [最近功能门禁](validation/pr-168-189-191-integration-2026-10-20.md) 被测 runtime `0696be48`，23 项新执行通过；这是原记录，不是本次重跑 |
 | 固定 Memory 适配器与一般扩展 | 插件一期已有固定适配器；扩展实验 PR 183 已合入 | [一期账本](design/plugin-center-phase-one-validation-2026-10-12.md)与一般扩展实验分别看；原 0/5、NOT RUN、SQLite UNKNOWN 不据此关闭 |
-| Memory 时间与策略入口 | 两处文档合同/运行输入差异进入专项调查 | [调查记录](audits/memory-runtime-contract-investigation-2026-10-20.md)；维护既有合同，修复实现另走技术方案审查 |
+| Memory 时间与策略入口 | `af11ab7c` 的 U1/U2 原发现保留；后续独立候选 `c9b6c116` 已有方案批准、I1/I2 源码复核与分候选生成 fixture 证据 | [修复 PR](https://github.com/utopiafar/mote/pull/203)、[验证记录](https://github.com/utopiafar/mote/blob/42cd862ac5c025803276466145526948f75c0976/docs/validation/memory-evaluation-context-restoration-2026-10-20.md)及[有日期后记](project-progress.md#2026-10-20-u1u2-后续候选)；main 合入与部署分别核对，不关闭 MEM-Q1 或原质量缺口 |
 | 原图片 Memory 保存及客户端接缝 | 已有有限范围修复和验证，原旅程完整闭环未证实 | 先找相同输入/状态的后继证据，再限定补验；不自动重放付费或未知结果任务 |
 | UI 清晰度、DSH 兼容 | 审计快照中 PR 185、190 为草稿，分别 0/15 轮、阶段 1/4 | 独立跟踪，不计入已交付 UI/插件一期；具体 head 和范围见台账 |
 | 发布、安装与部署 | 部分旧标签发布事实已核对 | 不从 main 合入推断节点更新；安装包、真实账号和运行版本保持未核对 |
