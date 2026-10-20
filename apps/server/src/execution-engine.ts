@@ -168,7 +168,7 @@ export class ExecutionEngine {
   if(this.stopping)throw new StoreError('Execution engine is closed',503);
   const handler=this.handlers.get(kind);if(!handler)throw new StoreError('Execution handler unavailable',409);
   input=canonical(input) as Record<string,unknown>;
-  const json=JSON.stringify(input);if(json.length>32768)throw new StoreError('Execution input exceeds metadata limit',413);
+  const json=JSON.stringify(input);
   const ownership=options.ownership;
   if(ownership&&(!ownership.userId||!Number.isSafeInteger(ownership.authorizationEpoch)||ownership.authorizationEpoch<0||ownership.grantId!==undefined&&!ownership.grantId))throw new StoreError('Invalid execution ownership',400);
   const id=options.id??hash([ownership?.userId??'',operationId,kind,input]),now=this.now(),db=this.store.db;
