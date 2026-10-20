@@ -1,5 +1,12 @@
 # Server test parallelism
 
+The current decision is the measured six-worker cap in the
+[ADR](../adr-server-test-parallelism.md). The
+[validation record](../validation/server-test-parallelism-2026-10-20.md)
+separates final checks from failed or incomplete experiments. The approval
+history below retains the superseded plans rather than presenting them as the
+current behavior.
+
 ## Scope and review
 
 The implementation owner and complete-check driver is `/root` in the
@@ -127,7 +134,7 @@ Tests inside a file do not become concurrent.
 | CHANGE | Partition nine suites into 48 balanced shards; extract unchanged helper declarations and initializers; use a measured CPU-based worker cap with native overrides and inherited process-group ownership |
 | REMOVE | Fixed four-worker limit and oversized serial file grouping; superseded unlimited native worker default |
 | EXCEPTION | None; no production behavior, assertion, timeout or success criterion changes |
-| UNKNOWN | Fastest stable worker setting and resource pressure, until measured on this host |
+| UNKNOWN | Optimum on other hosts or future workloads; global optimum beyond the measured settings |
 
 `plugin-control-journeys.test.ts` remains intact because an Android fixture reads
 its generated worker source. The 61-second real periodic Insight check remains
@@ -179,3 +186,19 @@ accommodate resource pressure. Finish with the frozen candidate's full
 [PR check plan](../development.md#pr-check-scope) and report its original receipt
 separately from benchmarks. Physical devices, personal content and live models
 are not part of this fixture-only change.
+
+## Measured outcome
+
+The six-worker cohort passed all 404 cases in 361.260 seconds. Full Server
+runs at frozen runtime `2ae39ebb32c66aa51acbf18c55d5da5b4ea69139` then passed
+in 1252.279 and 1238.976 seconds, each with 3653 passes and nine existing skips.
+The second ran through the actual 13-task affected-component gate, which
+passed all tasks in 1406.581 seconds with confirmed cleanup. Post-gate source,
+dependency and built-output checks match the original run identities; these
+are two executed full checks, with no reused benchmark task.
+
+The default remains six. Eight and twelve showed that more simultaneous files
+can breach existing physical-call deadlines; those failures remain in the
+[validation record](../validation/server-test-parallelism-2026-10-20.md).
+The historical 27m26s Server / 29m51s whole-gate figures are references with
+unproved matching complete inputs, not controlled speedup attribution.
