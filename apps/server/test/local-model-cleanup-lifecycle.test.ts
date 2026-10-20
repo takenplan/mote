@@ -24,23 +24,25 @@ function localWork<T>(run:TaskRun,work:()=>Promise<T>):Promise<T>{
 const aborted=(signal:AbortSignal)=>signal.aborted?Promise.resolve():new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}));
 const handler=(kind:string,execute:UserTaskHandler['execute']):UserTaskHandler=>({kind,pool:kind,concurrency:()=>2,policy:EXECUTION_POLICIES.localProcessing,parseInput:input=>input as Record<string,unknown>,execute});
 
-async function fixture(t:TestContext){
+async function fixture(t:TestContext,mark?:(phase:string)=>void){
+ mark?.('setup.start');
  const directory=mkdtempSync(join(tmpdir(),'mote-local-cleanup-lifecycle-'));
  const nodes:ProductionNode[]=[],releases=new Set<()=>void>(),physical=new Set<Promise<unknown>>();
  const track=<T>(promise:Promise<T>)=>{physical.add(promise);void promise.then(()=>physical.delete(promise),()=>physical.delete(promise));return promise;};
  t.after(async()=>{
-  for(const release of releases)release();
-  for(const node of [...nodes].reverse())await node.app.close();
-  await Promise.allSettled([...physical]);
-  rmSync(directory,{recursive:true,force:true});
+  mark?.('after.start');
+  for(const release of releases)release();mark?.('after.released');
+  for(const node of [...nodes].reverse())await node.app.close();mark?.('after.apps-closed');
+  await Promise.allSettled([...physical]);mark?.('after.physical-settled');
+  rmSync(directory,{recursive:true,force:true});mark?.('after.end');
  });
  const open=async()=>{const node=await buildApp({dataDir:directory}) as ProductionNode;assert.ok(node.execution);nodes.push(node);return node;};
- const node=await open();await node.accounts!.initialize('generated-admin',password);
+ const node=await open();mark?.('initialize.begin');await node.accounts!.initialize('generated-admin',password);mark?.('initialize.end');
  const request=(host:ProductionNode,token:string|undefined,url:string,method:'GET'|'POST'='GET',payload?:unknown)=>host.app.inject({method,url,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
  const login=async(username:string)=>{const r=await request(node,undefined,'/api/auth/login','POST',{username,password,mode:'client',durationMs:86400000});assert.equal(r.statusCode,200,r.body);return r.json() as {token:string};};
- const admin=await login('generated-admin');
- const account=async(username:string)=>{const r=await request(node,admin.token,'/api/admin/accounts','POST',{username,password,administrator:false});assert.equal(r.statusCode,200,r.body);return {userId:String(r.json().userId),...(await login(username))};};
- const a=await account('generated-a'),b=await account('generated-b');
+ mark?.('admin.login.begin');const admin=await login('generated-admin');mark?.('admin.login.end');
+ const account=async(username:string,label:'a'|'b')=>{mark?.(label+'.create.begin');const r=await request(node,admin.token,'/api/admin/accounts','POST',{username,password,administrator:false});assert.equal(r.statusCode,200,r.body);mark?.(label+'.login.begin');return {userId:String(r.json().userId),...(await login(username))};};
+ const a=await account('generated-a','a'),b=await account('generated-b','b');mark?.('setup.ready');
  const submit=async(host:ProductionNode,token:string,kind:string,operationId:string)=>{const r=await request(host,token,'/api/tasks','POST',{kind,operationId,input:{label:operationId}});assert.equal(r.statusCode,200,r.body);return r.json() as {id:string};};
  const task=async(host:ProductionNode,token:string,id:string)=>{const r=await request(host,token,'/api/tasks/'+id);assert.equal(r.statusCode,200,r.body);return r.json();};
  const barrier=()=>{const value=deferred();releases.add(value.resolve);return value;};
@@ -132,7 +134,9 @@ test('unregistered remote work does not delay close or clear its issued outcome,
 test('local cleanup drains belong to their host while another owner completes normally on the second host',{timeout:8000},async t=>{
  // Independent current profiles, not a new concurrent-schedulers-on-one-vault
  // deployment mode. A/B account checks still use each host's real HTTP routes.
- const f=await fixture(t),second=await fixture(t),other=second.node;
+ let started:number|undefined;const mark=(phase:string)=>{try{const at=performance.now();started??=at;t.diagnostic('[local-cleanup-phase] '+phase+' elapsedMs='+(at-started).toFixed(3));}catch{/* Observation failure must not replace the original test outcome. */}};
+ mark('body.start');
+ const f=await fixture(t,phase=>mark('host-a.'+phase)),second=await fixture(t,phase=>mark('host-b.'+phase)),other=second.node;
  const aEntered=deferred(),aFinally=deferred(),aRelease=f.barrier(),bEntered=deferred(),bRelease=second.barrier();
  let bRun!:TaskRun,bCleaned=false,aCleaned=false,lateStarted=false;
  f.node.execution.register(handler('generated.local.host-a',run=>f.track(localWork(run,async()=>{
@@ -141,19 +145,20 @@ test('local cleanup drains belong to their host while another owner completes no
  other.execution.register(handler('generated.local.host-b',run=>second.track(localWork(run,async()=>{
   bRun=run;bEntered.resolve();try{await bRelease.promise;run.checkpoint.write('owned',{owner:run.context.userId});return {owner:run.context.userId};}finally{bCleaned=true;}
  }))));
- const a=await f.submit(f.node,f.a.token,'generated.local.host-a','same-business-id');f.start(f.node);await aEntered.promise;
- const b=await second.submit(other,second.b.token,'generated.local.host-b','same-business-id');second.start(other);await bEntered.promise;
- assert.equal((await second.request(other,second.a.token,'/api/tasks/'+b.id)).statusCode,404);
- assert.equal((await f.request(f.node,f.b.token,'/api/tasks/'+a.id+'/cancel','POST',{})).statusCode,404);
- assert.equal((await second.request(other,f.a.token,'/api/tasks/'+b.id)).statusCode,401);
- const engineDone=engineClosed(f.node);let closed=false;const closing=f.node.execution.close().then(()=>{closed=true;});
+ mark('host-a.submit.begin');const a=await f.submit(f.node,f.a.token,'generated.local.host-a','same-business-id');f.start(f.node);mark('host-a.tick-dispatched');await aEntered.promise;mark('host-a.entered');
+ mark('host-b.submit.begin');const b=await second.submit(other,second.b.token,'generated.local.host-b','same-business-id');second.start(other);mark('host-b.tick-dispatched');await bEntered.promise;mark('host-b.entered');
+ mark('isolation.other-owner-read.begin');assert.equal((await second.request(other,second.a.token,'/api/tasks/'+b.id)).statusCode,404);mark('isolation.other-owner-read.end');
+ mark('isolation.other-owner-cancel.begin');assert.equal((await f.request(f.node,f.b.token,'/api/tasks/'+a.id+'/cancel','POST',{})).statusCode,404);mark('isolation.other-owner-cancel.end');
+ mark('isolation.foreign-profile.begin');assert.equal((await second.request(other,f.a.token,'/api/tasks/'+b.id)).statusCode,401);mark('isolation.foreign-profile.end');
+ mark('host-a.close.begin');const engineDone=engineClosed(f.node);let closed=false;const closing=f.node.execution.close().then(()=>{closed=true;});
  try{
-  await aFinally.promise;await engineDone;await nextTurn();assert.equal(closed,false);assert.equal(aCleaned,false);
-  bRun.grant.assert();bRun.progress({owner:second.b.userId});assert.equal(bCleaned,false);
- }finally{aRelease.resolve();await closing;}
+  await aFinally.promise;mark('host-a.finally-observed');await engineDone;mark('host-a.engine-closed');await nextTurn();mark('host-a.next-turn');assert.equal(closed,false);assert.equal(aCleaned,false);
+  bRun.grant.assert();bRun.progress({owner:second.b.userId});assert.equal(bCleaned,false);mark('host-b.progress-current');
+ }finally{mark('host-a.release');aRelease.resolve();await closing;mark('host-a.close.end');}
  assert.equal(aCleaned,true);assert.equal(bCleaned,false,'closing one host must not drain another host local runtime');
- bRun.grant.assert();assert.equal((await second.task(other,second.b.token,b.id)).state,'running');
- bRelease.resolve();await other.execution.engine.drain([b.id]);
- const result=await second.task(other,second.b.token,b.id);assert.equal(result.state,'succeeded');assert.deepEqual(result.result,{owner:second.b.userId});assert.deepEqual(result.checkpoints,['owned']);assert.equal(bCleaned,true);
- await assert.rejects(()=>localWork(bRun,async()=>{lateStarted=true;return null;}));assert.equal(lateStarted,false);
+ mark('host-b.running-read.begin');bRun.grant.assert();assert.equal((await second.task(other,second.b.token,b.id)).state,'running');mark('host-b.running-read.end');
+ mark('host-b.release');bRelease.resolve();await other.execution.engine.drain([b.id]);mark('host-b.drained');
+ mark('host-b.terminal-read.begin');const result=await second.task(other,second.b.token,b.id);mark('host-b.terminal-read.end');assert.equal(result.state,'succeeded');assert.deepEqual(result.result,{owner:second.b.userId});assert.deepEqual(result.checkpoints,['owned']);assert.equal(bCleaned,true);mark('host-b.terminal-assertions-passed');
+ mark('host-b.late-local-work.begin');await assert.rejects(()=>localWork(bRun,async()=>{lateStarted=true;return null;}));assert.equal(lateStarted,false);mark('host-b.late-local-work.rejected');
+ mark('body.end');
 });
