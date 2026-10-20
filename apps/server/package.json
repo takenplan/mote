@@ -10,7 +10,10 @@
     "build": "tsc -p tsconfig.json && cp src/import-parser.mjs dist/import-parser.mjs && cp src/import-disposition-validation.mjs src/import-disposition-validation.d.mts src/log-retention-config.mjs src/log-retention-config.d.mts dist/ && cp src/connectors/cli-runtime.mjs src/connectors/cli-runtime.d.mts dist/connectors/ && cp src/plugin-worker.mjs dist/plugin-worker.mjs && cp src/hindsight-worker.py dist/hindsight-worker.py",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node test/run.mjs",
-    "auth:initialize-admin": "node dist/scope/initialize-admin.js"
+    "auth:initialize-admin": "node dist/scope/initialize-admin.js",
+    "test:performance": "node test/run.mjs --performance",
+    "test:live": "node test/run.mjs --live",
+    "test:live:embeddings": "node test/run.mjs --live-embeddings"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.4",

@@ -7,7 +7,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test, { type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkDriverPaths } from '../../../scripts/release/check-driver.mjs';
-import { MAX_TEST_WORKERS, PERFORMANCE_REPORTER, testArguments, testWorkerCount } from './run.mjs';
+import { MAX_TEST_WORKERS, PERFORMANCE_REPORTER, testArguments, testWorkerCount, testInvocation } from './run.mjs';
+import { testEmbeddingConfiguration } from './fixtures/test-embedding-config.mjs';
 
 const launcher = fileURLToPath(new URL('./run.mjs', import.meta.url));
 const driver = new URL('../../../scripts/release/check-driver.mjs', import.meta.url).href;
@@ -68,6 +69,52 @@ test('Server launcher bounds its CPU default and leaves native CLI overrides aft
     ['--import', 'tsx', '--test', `--test-concurrency=${testWorkerCount(18)}`, '--test-timeout=120000',
       `--test-reporter=${PERFORMANCE_REPORTER}`,
       '--test-concurrency=1', '--test-name-pattern=generated', 'test/*.test.ts']);
+});
+
+test('optional live entries are explicit and preserve the standalone live journey budget', async t => {
+  const f = fixture(t), missing = join(f.root, 'absent-private-config.json');
+  const ambient = { MOTE_TEST_LIVE_EMBEDDINGS: '1', MOTE_MEMORY_CONTEXT_LIVE: '1', MOTE_MEM0_TEST_EMBEDDING_CONFIG: missing };
+  const normal = await testInvocation([], ambient);
+  assert.equal(normal.env.MOTE_TEST_LIVE_EMBEDDINGS, undefined);
+  assert.equal(normal.env.MOTE_MEMORY_CONTEXT_LIVE, undefined);
+  assert.equal(await testEmbeddingConfiguration(normal.env), undefined, 'default does not read an ambient missing file');
+  const live = await testInvocation(['--live'], ambient);
+  assert.deepEqual(live.args, ['--import', 'tsx', 'test/live/memory-context-reading.ts']);
+  assert.equal(live.env.MOTE_MEMORY_CONTEXT_LIVE, '1');
+  assert.equal(live.env.MOTE_TEST_LIVE_EMBEDDINGS, undefined);
+  assert.ok(!live.args.some(arg => arg.startsWith('--test-timeout')));
+  await assert.rejects(testInvocation(['--live', '--performance']), /exactly one/);
+  await assert.rejects(testInvocation(['--live-embeddings'], {}), /require MOTE_MEM0/);
+  await assert.rejects(testInvocation(['--live-embeddings'], ambient), /unavailable or invalid/);
+  const path = join(f.root, 'generated-config.json');
+  writeFileSync(path, 'GENERATED_PRIVATE_MALFORMED_BODY');
+  assert.equal(await testEmbeddingConfiguration({ MOTE_MEM0_TEST_EMBEDDING_CONFIG: path }), undefined);
+  await assert.rejects(testInvocation(['--live-embeddings'], { MOTE_MEM0_TEST_EMBEDDING_CONFIG: path }), error => {
+    assert.equal((error as Error).message, 'Live embedding configuration is unavailable or invalid'); return true;
+  });
+  writeFileSync(path, JSON.stringify({ baseUrl: 'http://127.0.0.1:1/v1', apiKey: 'generated-only', model: 'generated', dimension: 3 }));
+  const embeddings = await testInvocation(['--live-embeddings'], { MOTE_MEM0_TEST_EMBEDDING_CONFIG: path });
+  assert.equal(embeddings.env.MOTE_TEST_LIVE_EMBEDDINGS, '1');
+  assert.deepEqual(embeddings.args.slice(-2), ['test/mem0-memory-provider.test.ts', 'test/memory-provider-consumers.test.ts']);
+  assert.equal((await testEmbeddingConfiguration(embeddings.env))!.dimension, 3);
+});
+
+test('real launcher keeps performance files opt-in and clears ambient live guards in both fixture modes', async t => {
+  const f = fixture(t);
+  const assertion = "import test from 'node:test';import assert from 'node:assert/strict';test('MARKER',()=>{assert.equal(process.env.MOTE_TEST_LIVE_EMBEDDINGS,undefined);assert.equal(process.env.MOTE_MEMORY_CONTEXT_LIVE,undefined);});\n";
+  writeFileSync(join(f.directory, 'test/generated.test.ts'), assertion.replace('MARKER', 'GENERATED_FUNCTIONAL'));
+  mkdirSync(join(f.directory, 'test/performance'));
+  writeFileSync(join(f.directory, 'test/performance/generated.test.ts'), assertion.replace('MARKER', 'GENERATED_PERFORMANCE'));
+  const environment = { MOTE_TEST_LIVE_EMBEDDINGS: '1', MOTE_MEMORY_CONTEXT_LIVE: '1', MOTE_MEM0_TEST_EMBEDDING_CONFIG: join(f.root, 'missing.json') };
+  const normal = await f.start(launcher, [], environment).done;
+  assert.equal(normal.code, 0, normal.output); assert.match(normal.output, /GENERATED_FUNCTIONAL/);
+  assert.doesNotMatch(normal.output, /GENERATED_PERFORMANCE/);
+  const selected = await f.start(launcher, ['--performance', '--test-concurrency=1'], environment).done;
+  assert.equal(selected.code, 0, selected.output); assert.match(selected.output, /GENERATED_PERFORMANCE/);
+  assert.doesNotMatch(selected.output, /GENERATED_FUNCTIONAL/);
+  const rejected = await f.start(launcher, ['--live-embeddings'], environment).done;
+  assert.notEqual(rejected.code, 0, rejected.output); assert.match(rejected.output, /unavailable or invalid/);
+  assert.doesNotMatch(rejected.output, /GENERATED_FUNCTIONAL/);
 });
 
 test('Server launcher leaves native reporter/destination arrays and NODE_OPTIONS aliases intact', () => {

@@ -1,8 +1,9 @@
+import {testEmbeddingConfiguration} from './fixtures/test-embedding-config.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {randomUUID,createHash} from 'node:crypto';
-import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
@@ -17,7 +18,7 @@ async function setup(){
  // ranking is validated separately with the pinned real MiniLM endpoint.
  const token=randomUUID(),server=createServer(async(req,res)=>{if(req.headers.authorization!=='Bearer '+token){res.writeHead(401).end();return;}let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw),texts=Array.isArray(body.input)?body.input:[body.input];calls++;res.setHeader('content-type','application/json');res.end(JSON.stringify({object:'list',data:texts.map((_:unknown,index:number)=>({object:'embedding',index,embedding:[1,0,0]})),model:'constant-transport-fixture'}));});
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
- const realConfig=process.env.MOTE_MEM0_TEST_EMBEDDING_CONFIG?JSON.parse(await readFile(process.env.MOTE_MEM0_TEST_EMBEDDING_CONFIG,'utf8')):undefined;
+ const realConfig=await testEmbeddingConfiguration();
  const config={directory,embedding:realConfig?{baseUrl:realConfig.baseUrl,apiKey:realConfig.apiKey,model:realConfig.model,dimension:realConfig.dimension}:{baseUrl:`http://127.0.0.1:${(server.address() as {port:number}).port}/v1`,apiKey:token,model:'constant-transport-fixture',dimension:3}};
  let provider=new Mem0MemoryProvider(config);const namespace:MemoryProviderNamespace={ownerId:'generated-owner',instanceId:'generated-mem0',bindingRevision:1};
  return {directory,namespace,get provider(){return provider;},calls:()=>calls,async restart(){await provider.close();provider=new Mem0MemoryProvider(config);},async close(){await provider.close();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(directory,{recursive:true,force:true});}};

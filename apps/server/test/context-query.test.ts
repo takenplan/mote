@@ -1,3 +1,4 @@
+import {literalSearchProbe} from './fixtures/read-path-probes.js';
 import {memorySchema} from '../src/memory-schema.js';
 import {memoryEvidenceFingerprint} from '../src/memory.js';
 import test from 'node:test';
@@ -59,12 +60,7 @@ test('unified context query keeps candidate projects explainable and reads exact
   const status=query.status();assert.equal(status.archive.captures,3);assert.equal(status.sources.length,1);
 });
 
-test('literal search remains bounded on generated archive data',async t=>{
-  const {store,sources,query}=await fixture(t);
-  for(let i=0;i<120;i++)await coding(store,i%60,'github:utopiafar/mote',`s-${i%3}`,`generated filler ${i} ${i===119?'EFFICIENCY_ANCHOR':''}`);
-  const started=performance.now();const result=query.search({query:'EFFICIENCY_ANCHOR',limit:5});const durationMs=performance.now()-started;
-  assert.equal(result.items.length,1);assert.match(result.items[0].snippet,/EFFICIENCY_ANCHOR/);assert.ok(result.items[0].locator);assert.ok(durationMs<1000,`fixture lexical search was too slow: ${durationMs}ms`);assert.equal(sources.listSources().length,1);
-});
+test('literal search remains bounded on generated archive data',async t=>{await literalSearchProbe(t);});
 
 test('137 same-time records paginate without omissions under item and response budgets',async t=>{
   const {store,query}=await fixture(t);const expected=new Set<string>();

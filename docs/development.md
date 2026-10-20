@@ -97,6 +97,24 @@ adb reverse tcp:47842 tcp:47842
 
 ## 验证命令
 
+`npm test`、`npm test -w @mote/server`、`check:local` 和 `check:affected` 默认只执行
+功能测试；生成素材、loopback 模型响应、真实 HTTP/子进程和必要的重启、撤权、租约与
+周期等待仍属于功能回归。大输入的完整性断言和物理并发限制不按名称或耗时自动归为性能测试。
+真实模型调用与绝对速度指标使用显式可选入口：
+
+| 入口（仓库根目录） | 范围 | 默认开启 |
+| --- | --- | --- |
+| `npm test` / `npm run check:affected -- --base <main>` | 生成夹具功能回归及所选组件检查 | 是 |
+| `npm run test:performance` | 120 条记录检索的 1 秒指标、2000 块转录 100 次校验的 2 秒指标；同时验证原功能断言 | 否 |
+| `npm run test:live` | 既有生成日记的真实 Codex Memory 链路；保留 8 次 query、8 次模型 turn 和既有单次 300 秒预算 | 否 |
+| `MOTE_MEM0_TEST_EMBEDDING_CONFIG=/absolute/private/config.json npm run test:live:embeddings` | 两个 Mem0/消费者套件使用明确配置的真实嵌入模型 | 否 |
+
+先构建相关工作区；可选入口也应记录版本、配置身份、结果与耗时。嵌入配置使用既有
+`baseUrl`、`apiKey`、`model`、`dimension` 字段，保存在私有本地文件中；默认入口忽略
+环境中遗留的真实嵌入配置与可选模式 guard，始终使用生成向量端点。显式模型入口可能产生费用，
+功能夹具通过不表示真实模型验收通过。本轮修改测试分组时不自动执行真实模型。
+其他 `scripts/benchmark-*` 各有输入要求，仍单独按需运行，不由默认检查或性能入口批量启动。
+
 Server 的 `npm test -w @mote/server` 使用 Node/tsx 按文件隔离运行，默认文件并发为
 `max(4, min(可用 CPU 数, 6))`；文件内部仍按原来的顺序执行。长套件已拆成均衡文件，
 断言、真实生命周期和原有时限保持不变。需要定向测量时可显式覆盖，例如
@@ -117,6 +135,7 @@ Server 的 `npm test -w @mote/server` 使用 Node/tsx 按文件隔离运行，�
 | 文件并发数 | 不设最低值 | 调整默认值前验证完整套件，并记录总耗时、CPU、内存和失败情况 |
 
 默认 `npm test -w @mote/server` 在原生 spec 输出后列出全部超额文件和用例，不额外运行测试。
+这个耗时提醒不执行性能探针，也不启用真实模型；两者仍由上表入口显式选择。
 文件使用 Node 的逐文件 summary wall time，不累加可能重叠的父子用例耗时；
 case 提醒不包含 suite、skip 或 TODO，失败用例的耗时仍保留。
 这些是性能与评审预算，不是新的执行超时或失败门槛；测试失败、取消、原有 deadline 和清理规则照常生效。

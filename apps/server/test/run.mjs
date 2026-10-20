@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { testEmbeddingConfiguration } from './fixtures/test-embedding-config.mjs';
 
 export const MAX_TEST_WORKERS = 6;
 export const PERFORMANCE_REPORTER = fileURLToPath(new URL('./performance-reporter.mjs', import.meta.url));
@@ -26,20 +27,42 @@ export function testWorkerCount(parallelism = availableParallelism()) {
   return Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS));
 }
 
-export function testArguments({ args = [], parallelism = availableParallelism(), nodeOptions = process.env.NODE_OPTIONS ?? '' } = {}) {
+export function testArguments({ args = [], files = ['test/*.test.ts'], parallelism = availableParallelism(), nodeOptions = process.env.NODE_OPTIONS ?? '' } = {}) {
   // Native reporter arrays have paired destinations. Leave explicit selections
   // entirely to Node, including its underscore aliases and NODE_OPTIONS quoting.
   const explicitReporter = [...args, ...nodeOptionTokens(nodeOptions)]
     .some(arg => /^--test[-_]reporter(?:[-_]destination)?(?:=|$)/.test(arg));
   return ['--import', 'tsx', '--test', `--test-concurrency=${testWorkerCount(parallelism)}`,
     '--test-timeout=120000', ...(!explicitReporter ? [`--test-reporter=${PERFORMANCE_REPORTER}`] : []),
-    ...args, 'test/*.test.ts'];
+    ...args, ...files];
+}
+
+export async function testInvocation(args = [], env = process.env) {
+  const flags = ['--performance', '--live', '--live-embeddings'];
+  const selected = args.filter(arg => flags.includes(arg));
+  if (selected.length > 1) throw new Error('Choose exactly one optional test mode');
+  const mode = selected[0], nativeArgs = args.filter(arg => !flags.includes(arg)), childEnv = { ...env };
+  delete childEnv.MOTE_TEST_LIVE_EMBEDDINGS;
+  delete childEnv.MOTE_MEMORY_CONTEXT_LIVE;
+  if (mode === '--live') {
+    childEnv.MOTE_MEMORY_CONTEXT_LIVE = '1';
+    return { args: ['--import', 'tsx', 'test/live/memory-context-reading.ts', ...nativeArgs], env: childEnv };
+  }
+  let files;
+  if (mode === '--performance') files = ['test/performance/*.test.ts'];
+  if (mode === '--live-embeddings') {
+    childEnv.MOTE_TEST_LIVE_EMBEDDINGS = '1';
+    await testEmbeddingConfiguration(childEnv);
+    files = ['test/mem0-memory-provider.test.ts', 'test/memory-provider-consumers.test.ts'];
+  }
+  return { args: testArguments({ args: nativeArgs, files, nodeOptions: childEnv.NODE_OPTIONS ?? '' }), env: childEnv };
 }
 
 export async function runTests(args = []) {
   // Inherit the invoking process group so the complete-check driver retains
   // ownership of every test worker and fixture descendant during cleanup.
-  const child = spawn(process.execPath, testArguments({ args }), { stdio: 'inherit' });
+  const invocation = await testInvocation(args);
+  const child = spawn(process.execPath, invocation.args, { stdio: 'inherit', env: invocation.env });
   let receivedSignal;
   const forward = signal => { receivedSignal ??= signal; child.kill(signal); };
   const interrupt = () => forward('SIGINT'), terminate = () => forward('SIGTERM');

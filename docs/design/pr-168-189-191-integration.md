@@ -176,3 +176,71 @@ Review guards: prove positive keys are defined SHA-256 identities; do not apply
 empty-root normalization when following a module-root symlink to its target.
 Retain and test dangling/resolved link and target-replacement identity. Inspection
 races/errors must not become an empty-directory success.
+
+## P11: functional defaults and explicit optional checks
+
+Independently **APPROVED** before implementation by `/root/plan_review` (Sol
+High), reviewed section body SHA-256
+`0b0b17d6ba8e1feeeb463e61a2feabdadf5d7b4b0c24d115999b02ace152f32a`.
+Exact base/head:
+`30ec69a7e3293785f54404fc26d9a1005e0acf52`. The owner now explicitly requests
+functional tests by default, with actual model chains and performance tests
+disabled unless selected. No communication to other user chats is permitted.
+Root remains sole source/check owner; same-chat reviewers are read-only.
+
+**KEEP:** generated-fixture unit/integration tests through actual product entry
+points, restart/revocation/isolation, scheduling/lease deadlines, physical-call
+limits, exact input scales and complete output assertions. Names such as
+`extension-benchmark` and `read-model-performance` do not make those functional
+contracts optional. Thousand-input import, 1080-record Persona and former-bound
+regressions verify completeness rather than a wall-time SLO and remain default.
+The soft timing reporter observes existing execution and remains advisory.
+
+**CHANGE:** give root and Server npm scripts explicit `test:performance`,
+`test:live` and `test:live:embeddings` entries. The Server launcher consumes only
+their exact mode flags, selecting `test/performance/*.test.ts`, the existing
+guarded `test/live/memory-context-reading.ts`, or the two native Mem0/consumer
+files respectively. Default discovery remains top-level functional suites.
+Retain native arguments/reporters, process-group ownership, failure and signals.
+Reject conflicting modes and missing required live-embedding configuration
+before starting workers. The live entry enables its existing explicit consent
+guard only when that command is deliberately selected; do not execute real
+models during this implementation's validation.
+
+Extract only the two absolute-speed probes: context-query's 120-record literal
+search (<1000 ms) and materials' 2000-block/100-read rebuilt transcript (<2000
+ms). Shared generated probe helpers retain every original semantic, lineage,
+source-count and live-revocation assertion and input scale. Existing functional
+registrations call these helpers without a speed failure criterion; the two
+optional performance registrations call the same helpers and retain the exact
+original timing assertions. No product timeout changes. Do not aggregate existing
+benchmark scripts that require unrelated databases, baselines or live models.
+
+**REMOVE:** ambient environment configuration's ability to silently turn default
+Mem0 functional fixtures into real embedding calls. Both affected files consume
+one explicit fixture configuration helper; it ignores the configured path unless
+the live-embedding entry also enables its separate mode. The launcher clears
+optional mode guards in default/performance children. Missing/malformed live
+configuration fails explicitly rather than silently falling back to a fixture.
+**EXCEPTION:** absolute timing acceptance is deliberately optional under the
+owner's new policy. Moving these two speed assertions is a coverage-policy
+change, not a claim that they passed without execution. **UNKNOWN:** live model
+quality and endpoint availability remain unverified; preserve their independent
+reports and existing privacy/credential rules.
+
+Scope: root/Server package scripts; Server launcher and existing launcher tests;
+the four affected functional files, generated probe/config helpers, new explicit
+performance entry and focused helper regression; development/testing docs.
+`check:affected`/`check:local` and root npm test already invoke Server's npm test,
+so they share the functional default without changing selection, consumers or
+Agent's direct generated-functional entry. Keep AGENTS.md minimal.
+
+Validation: real launcher fixture processes prove default ignores ambient live
+guards, optional performance selects only its directory, optional live setup is
+guarded, native overrides/errors/signals remain intact, and invalid/conflicting
+modes fail. Prove missing/invalid embedding files are not read by default but
+fail in live mode; use only temporary generated config. Execute both shared
+functional probes and the optional performance entry, then actual affected
+consumer checks for the final frozen candidate. Preserve the running prior
+candidate's eventual receipt separately. Its two observed retry failures remain
+functional failures to diagnose, not candidates for optional classification.
