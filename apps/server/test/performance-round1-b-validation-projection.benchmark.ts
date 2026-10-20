@@ -41,13 +41,13 @@ export async function projectionHarness(sizes=[1024],validate?:()=>boolean){
 }
 
 type Query={count:number;returnedBytes:number;columns:string[][]};
-export function observeGets(){
+export function observeGets(onGet?:(sql:string)=>void){
  const descriptor=Object.getOwnPropertyDescriptor(StatementSync.prototype,'get')!,get=descriptor.value,queries=new Map<string,Query>();
  Object.defineProperty(StatementSync.prototype,'get',{...descriptor,value:function(this:StatementSync,...args:unknown[]){
   const value=get.apply(this,args),sql=this.sourceSQL.replace(/\s+/g,' ').trim();
   const entry=queries.get(sql)??{count:0,returnedBytes:0,columns:[]};entry.count++;
   if(value!==undefined){entry.returnedBytes+=Buffer.byteLength(JSON.stringify(value));const keys=Object.keys(value).sort();if(!entry.columns.some(prior=>JSON.stringify(prior)===JSON.stringify(keys)))entry.columns.push(keys);}
-  queries.set(sql,entry);return value;
+  queries.set(sql,entry);onGet?.(sql);return value;
  }});
  return {queries,restore:()=>Object.defineProperty(StatementSync.prototype,'get',descriptor)};
 }

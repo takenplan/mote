@@ -9,16 +9,31 @@ import {projectionHarness,observeGets} from './performance-round1-b-validation-p
 test('fresh task identity validation preserves native full-row consumers and independent validation calls',async()=>{
  let mutate:(()=>void)|undefined;const f=await projectionHarness([1024],()=>{mutate?.();return true;});
  try{
-  const a=f.runs.get('0:1024')!,b=f.runs.get('1:1024')!,observer=observeGets();
-  try{f.node.authority.assert(a.context);}finally{observer.restore();}
-  const taskGets=[...observer.queries].filter(([sql])=>/^SELECT .* FROM user_tasks WHERE task_id=\?$/.test(sql));
-  assert.equal(taskGets.reduce((count,[,value])=>count+value.count,0),3,'validate, validateGrant and modelCurrent retain three independent fresh reads');
+  const a=f.runs.get('0:1024')!,b=f.runs.get('1:1024')!;
+  const identitySql=`SELECT t.user_id AS validation_task_user_id,t.grant_id AS validation_task_grant_id,
+   CASE WHEN l.user_id IS NULL THEN 0 ELSE 1 END AS validation_deleted,
+   CASE WHEN g.grant_id IS NULL THEN 0 ELSE 1 END AS validation_grant_present,g.*
+   FROM user_tasks AS t
+   LEFT JOIN task_lifecycle_state AS l ON l.user_id=t.user_id AND l.deleted=1
+   LEFT JOIN task_authorizations AS g ON g.grant_id=t.grant_id AND g.revoked=0
+   WHERE t.task_id=?`.replace(/\s+/g,' ').trim(),modelSql='SELECT model_receipt FROM user_tasks WHERE task_id=?';
+  const observeCheckpoints=(events:string[])=>observeGets(sql=>{if(sql===identitySql)events.push('identity');else if(sql===modelSql)events.push('model');});
+  const events:string[]=[],observer=observeCheckpoints(events);mutate=()=>{events.push('domain');};
+  try{f.node.authority.assert(a.context);}finally{mutate=undefined;observer.restore();}
+  const checkpointGets=[identitySql,modelSql].reduce((count,sql)=>count+(observer.queries.get(sql)?.count??0),0);
+  assert.equal(checkpointGets,3,'validate, validateGrant and modelCurrent retain three independent fresh reads');
+  assert.equal(observer.queries.get(identitySql)?.count,2,'validate and validateGrant each execute the fresh joined identity proof');
+  assert.equal(observer.queries.get(modelSql)?.count,1,'modelCurrent retains its independent raw receipt read');
+  assert.deepEqual(events,['identity','domain','identity','model'],'the domain callback remains between distinct native identity reads, before modelCurrent');
   a.checkpoint.write('generated',{kept:true});a.progress({stage:'generated'});
   const response=await f.request(f.owners[0].token,'/api/tasks/'+a.task.id);assert.equal(response.statusCode,200);assert.deepEqual(response.json().checkpoints,['generated']);assert.deepEqual(response.json().progress,{stage:'generated'});
   assert.equal((await f.request(f.owners[0].token,'/api/tasks/'+b.task.id)).statusCode,404);
-  mutate=()=>f.db.prepare('UPDATE task_authorizations SET revoked=1 WHERE task_id=?').run(a.task.id);
-  assert.equal(f.node.execution.engine.isCurrentInputGrant(a.task.id,a.context.credentialId.split(':')[1]),false,'authority revoked by domain validate is freshly rejected by validateGrant');
-  mutate=undefined;f.node.authority.assert(b.context);
+  const revokedEvents:string[]=[],revokedObserver=observeCheckpoints(revokedEvents);
+  mutate=()=>{revokedEvents.push('domain');f.db.prepare('UPDATE task_authorizations SET revoked=1 WHERE task_id=?').run(a.task.id);};
+  try{assert.equal(f.node.execution.engine.isCurrentInputGrant(a.task.id,a.context.credentialId.split(':')[1]),false,'authority revoked by domain validate is freshly rejected by validateGrant');}finally{mutate=undefined;revokedObserver.restore();}
+  assert.equal(revokedObserver.queries.get(identitySql)?.count,2,'the second identity proof rereads the revocation committed by the domain callback');
+  assert.equal(revokedObserver.queries.get(modelSql)?.count??0,0,'failed current identity still short-circuits modelCurrent');
+  assert.deepEqual(revokedEvents,['identity','domain','identity']);f.node.authority.assert(b.context);
  }finally{await f.close();}
 });
 
