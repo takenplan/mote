@@ -1,0 +1,72 @@
+{
+  "createdAt": "2026-10-19T19:20:07.974Z",
+  "runDir": "/workspace/scratch/8d97506698dc/evaluator-r5/runs/calibration-1792437600286",
+  "observed": [
+    {
+      "id": "C01_REAL_POSITIVE",
+      "expected": "PASS",
+      "observed": "PASS",
+      "specimenSha256": "5620a5fe60b23df587da0ff7c1782be4fc34f361502215106359264304c2fef2",
+      "packageDigest": "1b6fd8305de92d258f26766f112e430faf0029e9e0afce295da311d61f67b3e9",
+      "taskId": "64846137604a4e4e6dbefa93aeb3f8d66dd7c4bb0af426b705168a3a5b2af8bd",
+      "materialId": "mat_77bf8353620ad4429fa529b119db3729a90eed73f70175da59ed6f6206e06bad",
+      "manifestOrderReversed": true
+    },
+    {
+      "id": "C02_REGISTRY_ONLY",
+      "expected": "FAIL",
+      "observed": "FAIL",
+      "taskSucceeded": true,
+      "publicationDelta": 0
+    },
+    {
+      "id": "C03_HARDCODED_VISIBLE",
+      "expected": "FAIL",
+      "observed": "FAIL",
+      "actualCents": 83335,
+      "independentExpectedCents": 83352,
+      "changedInputOriginal": "original:603ce47adf5a2c8b1eb05a0189ed06040e564e7ec61e5e97ac653e03ac765c27",
+      "materialRead": true
+    },
+    {
+      "id": "C04_CORE_INTRUSION",
+      "expected": "FAIL",
+      "observed": "FAIL",
+      "specimenSha256": "f26f17b2d2b634d5cf6a3bf4e5c09de495ff2fb9ec8d9a76c7989960a1646fe5",
+      "changedCoreFiles": [
+        "apps/server/src/index.ts"
+      ],
+      "checkoutModified": false
+    },
+    {
+      "id": "C05_FOREIGN_OWNER",
+      "expected": "no disclosures",
+      "observed": "PASS",
+      "workerReadState": "blocked",
+      "foreignSnapshotStatus": 404,
+      "foreignDataDisclosures": 0
+    },
+    {
+      "id": "C06_LATE_PUBLISH",
+      "expected": "no stale publications",
+      "observed": "PASS",
+      "taskId": "d2c16cc9ae98b70ad0bfc8f1b4c24dac0a8399af33f9a3ef76960393ae4f75d3",
+      "latePublishRejected": true,
+      "cancelSignalObserved": true,
+      "sameWorkerSiblingSucceeded": true
+    },
+    {
+      "id": "PROCESSOR_SANITY",
+      "observed": "PASS",
+      "artifactId": "9757f39e1b0193e475d07ff5c3ab73de535201f3796fcc086e234fb21cd04d43",
+      "originalRef": "original:b5c984594c28f997e5bcb1c5c1502fd48bbf8913b4cde503c8f58674ffffa92e"
+    },
+    {
+      "id": "ACTUAL_RESTART_SANITY",
+      "observed": "PASS",
+      "distinctPids": 2,
+      "taskId": "64846137604a4e4e6dbefa93aeb3f8d66dd7c4bb0af426b705168a3a5b2af8bd",
+      "historyReadable": true
+    }
+  ]
+}

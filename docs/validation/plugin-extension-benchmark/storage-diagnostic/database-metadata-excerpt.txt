@@ -1,0 +1,8 @@
+bootstrap-metadata.strace
+29447 1792439562.917406 openat(AT_FDCWD</tmp/mote-sqlite-baseline-20261019>, "/workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite", O_RDWR|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600) = 22</workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite>
+29447 1792439562.918448 openat(AT_FDCWD</tmp/mote-sqlite-baseline-20261019>, "/workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite", O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0644) = 22</workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite>
+
+host-metadata.strace
+29476 1792439567.106371 openat(AT_FDCWD</tmp/mote-sqlite-baseline-20261019>, "/workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite", O_RDONLY|O_CLOEXEC) = 226</workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite>
+29476 1792439567.113059 openat(AT_FDCWD</tmp/mote-sqlite-baseline-20261019>, "/workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite", O_RDONLY|O_CLOEXEC) = 226</workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite>
+29476 1792439567.118372 openat(AT_FDCWD</tmp/mote-sqlite-baseline-20261019>, "/workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite", O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0644) = 226</workspace/scratch/8d97506698dc/sqlite-diagnostic/runs/baseline-intake-once-1792439561196/vault/mote.sqlite>

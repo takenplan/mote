@@ -1,0 +1,1502 @@
+{
+  "round": 3,
+  "frozenCandidate": "2879214",
+  "originalBaseline": "2c78ca8",
+  "startedAt": "2026-10-19T18:59:38.340Z",
+  "scope": "Independent two-source meeting summary probe, actual authenticated loopback HTTP and installed workers",
+  "modelPolicy": "No semantic interpretation: explicit generated structured facts, deterministic rendering and arithmetic only",
+  "operations": [
+    {
+      "elapsedMs": 1072,
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1113,
+      "method": "GET",
+      "path": "/api/plugins/host-capabilities",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1230,
+      "method": "POST",
+      "path": "/api/admin/accounts",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1327,
+      "method": "POST",
+      "path": "/api/admin/accounts",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1432,
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1519,
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1528,
+      "method": "POST",
+      "path": "/api/plugins/resolve",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1531,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1549,
+      "method": "POST",
+      "path": "/api/plugins/install",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1552,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1566,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1627,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1673,
+      "method": "POST",
+      "path": "/api/plugin-instances",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1725,
+      "method": "POST",
+      "path": "/api/plugin-instances/native-probe/check",
+      "status": 502
+    },
+    {
+      "elapsedMs": 1729,
+      "method": "POST",
+      "path": "/api/plugin-triggers",
+      "status": 503
+    },
+    {
+      "elapsedMs": 1737,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1743,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1748,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1753,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1758,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1763,
+      "method": "POST",
+      "path": "/api/ingress/sources",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1774,
+      "method": "POST",
+      "path": "/api/plugins/resolve",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1777,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1800,
+      "method": "POST",
+      "path": "/api/plugins/install",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1804,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1818,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1825,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1873,
+      "method": "POST",
+      "path": "/api/plugin-instances",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1930,
+      "method": "POST",
+      "path": "/api/plugin-instances/independent-order/check",
+      "status": 409
+    },
+    {
+      "elapsedMs": 1938,
+      "method": "POST",
+      "path": "/api/plugins/resolve",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1941,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1957,
+      "method": "POST",
+      "path": "/api/plugins/install",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1962,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1975,
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 1988,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2078,
+      "method": "POST",
+      "path": "/api/plugin-instances",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2148,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/check",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2156,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2209,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/enable",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2222,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/snapshots",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2235,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/7c0d670b-bca7-4a23-923e-0147fc284198/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2244,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2258,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2272,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2286,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2300,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2327,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2341,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 2355,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3378,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3485,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3517,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3533,
+      "method": "GET",
+      "path": "/api/tasks/12f74778ba82dd6b7532eb1c283b45c20677b87a1e91be7d8fff2ed0a1dbf018",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3536,
+      "method": "GET",
+      "path": "/api/materials",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3539,
+      "method": "GET",
+      "path": "/api/materials/mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3541,
+      "method": "GET",
+      "path": "/api/materials/mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5/members",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3547,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/7c0d670b-bca7-4a23-923e-0147fc284198/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3551,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3564,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3578,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3595,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3609,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3624,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 3724,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4050,
+      "method": "GET",
+      "path": "/api/tasks/9d44bdf8bf77c70af0dd631570c9c715dce161606d835b19fc593bf6ff3e6f83",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4054,
+      "method": "GET",
+      "path": "/api/materials",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4057,
+      "method": "GET",
+      "path": "/api/materials/mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4060,
+      "method": "GET",
+      "path": "/api/materials/mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f/members",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4097,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4145,
+      "method": "POST",
+      "path": "/api/plugin-instances",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4205,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/check",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4212,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4252,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/enable",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4262,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/snapshots",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4268,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/1f70dfd4-45a7-4303-8f3f-dc47d635a092/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4270,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4283,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4296,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4311,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4342,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4356,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 4371,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5234,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5314,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5352,
+      "method": "GET",
+      "path": "/api/tasks/f8698a79d3633fa908eb31bdb569b186217383090d060c4ee97498913aa45cc3",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5356,
+      "method": "GET",
+      "path": "/api/materials",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5359,
+      "method": "GET",
+      "path": "/api/materials/mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5361,
+      "method": "GET",
+      "path": "/api/materials/mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5/members",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5370,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/1f70dfd4-45a7-4303-8f3f-dc47d635a092/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5372,
+      "method": "GET",
+      "path": "/api/tasks/4099b044636a12ce763c0ac26c06cccea4a964aaa544fc3aff4e5185f51e0d75",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5445,
+      "method": "GET",
+      "path": "/api/tasks/4099b044636a12ce763c0ac26c06cccea4a964aaa544fc3aff4e5185f51e0d75",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5478,
+      "method": "GET",
+      "path": "/api/tasks/4099b044636a12ce763c0ac26c06cccea4a964aaa544fc3aff4e5185f51e0d75",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5742,
+      "method": "GET",
+      "path": "/api/tasks/4099b044636a12ce763c0ac26c06cccea4a964aaa544fc3aff4e5185f51e0d75",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5746,
+      "method": "GET",
+      "path": "/api/materials",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5747,
+      "method": "GET",
+      "path": "/api/materials/mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5750,
+      "method": "GET",
+      "path": "/api/materials/mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f/members",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5752,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/1f70dfd4-45a7-4303-8f3f-dc47d635a092/invoke",
+      "status": 404
+    },
+    {
+      "elapsedMs": 5754,
+      "method": "GET",
+      "path": "/api/materials/mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5757,
+      "method": "GET",
+      "path": "/api/materials/mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f/read",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5763,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/7c0d670b-bca7-4a23-923e-0147fc284198/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5766,
+      "method": "GET",
+      "path": "/api/tasks/4b868e04b9f5c667698b38e35b7cafc4d253f659e02f1fa4ddfa9e2684638a50",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5780,
+      "method": "GET",
+      "path": "/api/tasks/4b868e04b9f5c667698b38e35b7cafc4d253f659e02f1fa4ddfa9e2684638a50",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5792,
+      "method": "GET",
+      "path": "/api/tasks/4b868e04b9f5c667698b38e35b7cafc4d253f659e02f1fa4ddfa9e2684638a50",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5805,
+      "method": "GET",
+      "path": "/api/tasks/4b868e04b9f5c667698b38e35b7cafc4d253f659e02f1fa4ddfa9e2684638a50",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5826,
+      "method": "GET",
+      "path": "/api/tasks/4b868e04b9f5c667698b38e35b7cafc4d253f659e02f1fa4ddfa9e2684638a50",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5830,
+      "method": "GET",
+      "path": "/api/materials",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5837,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5889,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/disable",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5901,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/snapshots",
+      "status": 409
+    },
+    {
+      "elapsedMs": 5916,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/1f70dfd4-45a7-4303-8f3f-dc47d635a092/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5961,
+      "method": "GET",
+      "path": "/api/tasks/785fb3ac378c15b692dcded668fa9551b2e1cd68c513edc9647d6be87e80c873",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5989,
+      "method": "GET",
+      "path": "/api/tasks/785fb3ac378c15b692dcded668fa9551b2e1cd68c513edc9647d6be87e80c873",
+      "status": 200
+    },
+    {
+      "elapsedMs": 5997,
+      "method": "GET",
+      "path": "/api/plugins",
+      "status": 200
+    },
+    {
+      "elapsedMs": 6080,
+      "method": "POST",
+      "path": "/api/plugin-instances/same-instance/stop",
+      "status": 200
+    },
+    {
+      "elapsedMs": 6087,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/7c0d670b-bca7-4a23-923e-0147fc284198/invoke",
+      "status": 401
+    },
+    {
+      "elapsedMs": 6103,
+      "method": "POST",
+      "path": "/api/plugin-snapshots/1f70dfd4-45a7-4303-8f3f-dc47d635a092/invoke",
+      "status": 200
+    },
+    {
+      "elapsedMs": 6107,
+      "method": "GET",
+      "path": "/api/tasks/7b33b876a540e147df9bc1cfd731a1df2acd717df1123b3ef98b11fe9d45a2e2",
+      "status": 200
+    },
+    {
+      "elapsedMs": 6155,
+      "method": "GET",
+      "path": "/api/tasks/7b33b876a540e147df9bc1cfd731a1df2acd717df1123b3ef98b11fe9d45a2e2",
+      "status": 200
+    },
+    {
+      "elapsedMs": 6178,
+      "method": "GET",
+      "path": "/api/tasks/7b33b876a540e147df9bc1cfd731a1df2acd717df1123b3ef98b11fe9d45a2e2",
+      "status": 200
+    }
+  ],
+  "gates": {
+    "independentOrder": "FAIL",
+    "sameOrderSourceControl": "PASS",
+    "currentUserIsolation": "PASS",
+    "disableStopAndBContinues": "PASS",
+    "realWorkerPublicationControl": "PASS",
+    "coreZero": "PASS",
+    "regression": "NOT RUN (focused trial only)",
+    "actualProcessRestart": "NOT RUN"
+  },
+  "pluginPrivateImports": 0,
+  "pluginCoreImports": 0,
+  "productionChanges": 0,
+  "fullCaseClaim": false,
+  "setup": {
+    "developmentElapsedMs": null,
+    "buildOperations": 0,
+    "dependencyInstallOperations": 0,
+    "newAdapters": 0,
+    "fullSuiteRuns": 0,
+    "realAccountBootstrap": true,
+    "actualLoopbackHttp": true,
+    "workerEnvironment": "Node /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node; authorized require_escalated local execution",
+    "testAssemblyImports": [
+      "apps/server/src/scope/app.ts (production composition root)"
+    ],
+    "discoveryReads": [
+      "AGENTS.md",
+      "docs/plugin-authoring.md",
+      "docs/validation/plugin-extension-benchmark/cases.json",
+      "package.json",
+      "apps/server/package.json",
+      "Original non-benchmark multiuser-plugin-ingress and multiuser-plugins tests",
+      "Original non-benchmark fixtures/scoped-plugin-release.ts",
+      "Original SourceCapability, Original, MaterialDraft and PluginReleaseTransport value contracts"
+    ],
+    "priorTrialImplementationsRead": false,
+    "preliminaryPathMisses": [
+      "apps/server/src/accounts.ts",
+      "packages/shared/src/plugin.ts",
+      "packages/shared/src/source.ts"
+    ],
+    "firstTrial": {
+      "startedAt": "2026-10-19T18:56:28.258Z",
+      "firstSuccessfulControlReadbackAt": "2026-10-19T18:56:33.236Z",
+      "readbackElapsedMs": 4978,
+      "independentOrderStatus": 409,
+      "control": "PASS"
+    }
+  },
+  "discovery": {
+    "beforeInstall": true,
+    "actualHttp": true,
+    "value": {
+      "schemaVersion": 1,
+      "runtime": "worker",
+      "factoryExports": [
+        "createMotePlugin",
+        "createMemoryProvider"
+      ],
+      "invocationCapabilities": [
+        {
+          "id": "source",
+          "registered": true
+        },
+        {
+          "id": "processor",
+          "registered": true
+        },
+        {
+          "id": "repository",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "retrieval",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "engine",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "model",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        },
+        {
+          "id": "ui",
+          "registered": false,
+          "reason": "scoped_domain_unavailable"
+        }
+      ]
+    },
+    "practicalValue": "Discovered source and processor availability without release packaging or worker check; unavailable generic engine/model domains identified before choosing an extension path."
+  },
+  "nativeHarness": {
+    "verdict": "NO_EXTENSION_POINT",
+    "untouchedApplyModule": true,
+    "sourceSha256": "8d13dee64e78df9fee6d883683f9cc5f18240fca9e0667a5e4edf6ec73ab26ce",
+    "archiveSha256": "e1a3f99e865384197997d24b5eed2a1465526ea00086ed5896fec11ec564cc95",
+    "installed": true,
+    "check": {
+      "status": 502,
+      "body": {
+        "error": "execution_unavailable"
+      }
+    },
+    "genericEngineRegistered": false,
+    "scope": "Native apply ABI availability probe only; actual Harness-session checksum tool execution remains NOT RUN"
+  },
+  "trigger": {
+    "verdict": "NO_EXTENSION_POINT",
+    "attempt": {
+      "status": 503,
+      "body": {
+        "error": "scope_unavailable"
+      }
+    },
+    "scope": "No advertised generic scheduler entry; attempted public plugin trigger registration was rejected. Built-in scheduler is not an external contribution."
+  },
+  "independentComposition": {
+    "manifestOrder": [
+      "meeting.notes.summary",
+      "meeting.references.summary"
+    ],
+    "implementationOrder": [
+      "meeting.references.summary",
+      "meeting.notes.summary"
+    ],
+    "check": {
+      "status": 409,
+      "body": {
+        "error": "conflict"
+      }
+    }
+  },
+  "firstSuccess": {
+    "observedAt": "2026-10-19T18:59:41.881Z",
+    "elapsedMs": 3541,
+    "owner": "A",
+    "sourceId": "meeting-source",
+    "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+    "workerPid": 12323,
+    "actualHttp": true,
+    "scope": "Same-order control only; timestamp is successful HTTP readback, not exact commit time"
+  },
+  "controlResults": [
+    {
+      "owner": "A",
+      "sourceId": "meeting-source",
+      "taskState": "succeeded",
+      "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+      "originalCount": 3,
+      "expectedTotalCents": 5800,
+      "members": {
+        "items": [
+          {
+            "id": "evidence-0",
+            "kind": "capture",
+            "ref": "capture:4f306a7b-675e-58dc-a9f2-a0e4cae50708",
+            "locator": {
+              "originalRef": "original:bf74e9a1cdfe1e6dfbe6d9740b15d67d9d2e72d98b07ac240a8beda148940310",
+              "sha256": "49d2ec0b0966b7d73919ced57c4a2a5ec3a8138736034a9f4d4ad10614c688b6"
+            }
+          },
+          {
+            "id": "evidence-1",
+            "kind": "capture",
+            "ref": "capture:235d2062-ed99-50ea-ae27-9e962e16be32",
+            "locator": {
+              "originalRef": "original:711ce2336326cffd9a5043960fac3b8d292fd4089d74457dc827a9c4af921d4d",
+              "sha256": "15e0647078c7c7a46ed5630f039d9a53e5d378df2758ffcc43e6ac1f8583a7bb"
+            }
+          },
+          {
+            "id": "evidence-2",
+            "kind": "capture",
+            "ref": "capture:619693e4-a050-546f-a2b6-9373bc75f2bc",
+            "locator": {
+              "originalRef": "original:5984b66ea393e6b2a09a9d3c7b8fcc7372da5bbb9853e9858aee889acd03c8f4",
+              "sha256": "cd67bfde06e2edf4ae097c67f88889bcca1669d934e2f4a0334643f1853a335f"
+            }
+          }
+        ],
+        "total": 3,
+        "nextOffset": null
+      },
+      "body": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "meeting-notes: meeting-source",
+          "origin": {
+            "sourceId": "meeting-source",
+            "externalId": "meeting-notes-summary"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "fidelity": {
+            "state": "derived",
+            "limitations": [
+              "Deterministic rendering of explicit structured fixture facts; no semantic model quality claim"
+            ]
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "dbb26a99cbae84fed54acaff0c7795328865fba79d6028cc12e78cf5c4c5c2c5",
+          "ref": "material:mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5@dbb26a99cbae84fed54acaff0c7795328865fba79d6028cc12e78cf5c4c5c2c5",
+          "sequence": 1,
+          "createdAt": "2026-10-19T18:59:41.846Z",
+          "updatedAt": "2026-10-19T18:59:41.846Z",
+          "blockCount": 4,
+          "memberCount": 3,
+          "textLength": 285,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "A planning\nd1: Reserve the blue meeting room. [owner: Morgan]\nAmount (cents): 4200\nA review\nd2: Move the generated launch to Thursday. [owner: Sam]\nAmount (cents): 990\nA handoff\nd3: Record the alternate supplier in the notes. [owner: Lee]\nAmount (cents): 610\nSource total (cents): 5800",
+        "spans": [
+          {
+            "blockId": "entry-0",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 82
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 82
+            }
+          },
+          {
+            "blockId": "entry-1",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-1"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 83,
+              "end": 167
+            },
+            "pageRange": {
+              "start": 83,
+              "end": 167
+            }
+          },
+          {
+            "blockId": "entry-2",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-2"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 168,
+              "end": 258
+            },
+            "pageRange": {
+              "start": 168,
+              "end": 258
+            }
+          },
+          {
+            "blockId": "total",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0",
+              "evidence-1",
+              "evidence-2"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 259,
+              "end": 285
+            },
+            "pageRange": {
+              "start": 259,
+              "end": 285
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 285,
+          "nextOffset": null
+        }
+      }
+    },
+    {
+      "owner": "A",
+      "sourceId": "reference-source",
+      "taskState": "succeeded",
+      "materialId": "mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f",
+      "originalCount": 1,
+      "expectedTotalCents": 3975,
+      "members": {
+        "items": [
+          {
+            "id": "evidence-0",
+            "kind": "capture",
+            "ref": "capture:cf88d41e-2066-5e85-a1fc-3f377ad71c07",
+            "locator": {
+              "originalRef": "original:a100f3fea939860f6b2cd52f08a6608f773d0809447ec593d28c7c690e31de1e",
+              "sha256": "bb5c633b3ec407519c681d37bed43dc2c3816571697b7e70106458d36abe79a8"
+            }
+          }
+        ],
+        "total": 1,
+        "nextOffset": null
+      },
+      "body": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "reference-facts: reference-source",
+          "origin": {
+            "sourceId": "reference-source",
+            "externalId": "reference-facts-summary"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "fidelity": {
+            "state": "derived",
+            "limitations": [
+              "Deterministic rendering of explicit structured fixture facts; no semantic model quality claim"
+            ]
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "80c2ee9702b5a24770e7f7d3f0171815d85bebaf0e289f413ca2e4cf6188755f",
+          "ref": "material:mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f@80c2ee9702b5a24770e7f7d3f0171815d85bebaf0e289f413ca2e4cf6188755f",
+          "sequence": 1,
+          "createdAt": "2026-10-19T18:59:42.071Z",
+          "updatedAt": "2026-10-19T18:59:42.071Z",
+          "blockCount": 2,
+          "memberCount": 1,
+          "textLength": 147,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "A reference sheet\nr1: The generated venue has forty seats.\nr2: The projector deposit is refundable.\nAmount (cents): 3975\nSource total (cents): 3975",
+        "spans": [
+          {
+            "blockId": "entry-0",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 120
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 120
+            }
+          },
+          {
+            "blockId": "total",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 121,
+              "end": 147
+            },
+            "pageRange": {
+              "start": 121,
+              "end": 147
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 147,
+          "nextOffset": null
+        }
+      }
+    },
+    {
+      "owner": "B_PRIVATE",
+      "sourceId": "meeting-source",
+      "taskState": "succeeded",
+      "materialId": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+      "originalCount": 3,
+      "expectedTotalCents": 5800,
+      "members": {
+        "items": [
+          {
+            "id": "evidence-0",
+            "kind": "capture",
+            "ref": "capture:4f306a7b-675e-58dc-a9f2-a0e4cae50708",
+            "locator": {
+              "originalRef": "original:698ca767177bfab4d5f863389364d544378b3e8cdd66ef131f277e526d837551",
+              "sha256": "0f7c8207c20b741752cce479d1a42a9eab2dd3bd5445f28434d56ca420e80c23"
+            }
+          },
+          {
+            "id": "evidence-1",
+            "kind": "capture",
+            "ref": "capture:235d2062-ed99-50ea-ae27-9e962e16be32",
+            "locator": {
+              "originalRef": "original:70eabac05c5f6dc0828ec91e9adbedc262c08747024aff3047edf6caff8195f3",
+              "sha256": "3c79c4b5f5c5c101eb836559d4c95943aa117fd21423d511f5e10d0ea62b4834"
+            }
+          },
+          {
+            "id": "evidence-2",
+            "kind": "capture",
+            "ref": "capture:619693e4-a050-546f-a2b6-9373bc75f2bc",
+            "locator": {
+              "originalRef": "original:da6129f61785353caf6d3382f939f068825ec9d320421de0f661386b31630764",
+              "sha256": "63ea9e78ab111197051a6c4d2945f5cbdc414deefbb149d4e7971237f379ff74"
+            }
+          }
+        ],
+        "total": 3,
+        "nextOffset": null
+      },
+      "body": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "meeting-notes: meeting-source",
+          "origin": {
+            "sourceId": "meeting-source",
+            "externalId": "meeting-notes-summary"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "fidelity": {
+            "state": "derived",
+            "limitations": [
+              "Deterministic rendering of explicit structured fixture facts; no semantic model quality claim"
+            ]
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "7e892d9332060585bb3945f9619883992e045b4e501968b35a0e8b046ec5dfef",
+          "ref": "material:mat_53a2e2a386ca7c24e2abb8e1e23e15cc8e654f2930e80437d26f5cde94fb63b5@7e892d9332060585bb3945f9619883992e045b4e501968b35a0e8b046ec5dfef",
+          "sequence": 1,
+          "createdAt": "2026-10-19T18:59:43.674Z",
+          "updatedAt": "2026-10-19T18:59:43.674Z",
+          "blockCount": 4,
+          "memberCount": 3,
+          "textLength": 309,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "B_PRIVATE planning\nd1: Reserve the blue meeting room. [owner: Morgan]\nAmount (cents): 4200\nB_PRIVATE review\nd2: Move the generated launch to Thursday. [owner: Sam]\nAmount (cents): 990\nB_PRIVATE handoff\nd3: Record the alternate supplier in the notes. [owner: Lee]\nAmount (cents): 610\nSource total (cents): 5800",
+        "spans": [
+          {
+            "blockId": "entry-0",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 90
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 90
+            }
+          },
+          {
+            "blockId": "entry-1",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-1"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 91,
+              "end": 183
+            },
+            "pageRange": {
+              "start": 91,
+              "end": 183
+            }
+          },
+          {
+            "blockId": "entry-2",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-2"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 184,
+              "end": 282
+            },
+            "pageRange": {
+              "start": 184,
+              "end": 282
+            }
+          },
+          {
+            "blockId": "total",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0",
+              "evidence-1",
+              "evidence-2"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 283,
+              "end": 309
+            },
+            "pageRange": {
+              "start": 283,
+              "end": 309
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 309,
+          "nextOffset": null
+        }
+      }
+    },
+    {
+      "owner": "B_PRIVATE",
+      "sourceId": "reference-source",
+      "taskState": "succeeded",
+      "materialId": "mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f",
+      "originalCount": 1,
+      "expectedTotalCents": 3975,
+      "members": {
+        "items": [
+          {
+            "id": "evidence-0",
+            "kind": "capture",
+            "ref": "capture:cf88d41e-2066-5e85-a1fc-3f377ad71c07",
+            "locator": {
+              "originalRef": "original:f2c64dc415d7b46b6c19f5d7e942bd654814abeef31ff6de48838011a345b290",
+              "sha256": "8698b18d26b1b7491c6ee4bb651e4352098fad166828b07abad3ec84efdae0a2"
+            }
+          }
+        ],
+        "total": 1,
+        "nextOffset": null
+      },
+      "body": {
+        "material": {
+          "attributionContext": {
+            "version": 1,
+            "ownerRelation": "unknown",
+            "basis": "default",
+            "declarations": [],
+            "ownerStatements": []
+          },
+          "id": "mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f",
+          "kind": "document",
+          "schemaVersion": 1,
+          "title": "reference-facts: reference-source",
+          "origin": {
+            "sourceId": "reference-source",
+            "externalId": "reference-facts-summary"
+          },
+          "coverage": {
+            "state": "complete"
+          },
+          "fidelity": {
+            "state": "derived",
+            "limitations": [
+              "Deterministic rendering of explicit structured fixture facts; no semantic model quality claim"
+            ]
+          },
+          "retention": {
+            "original": "retained",
+            "policy": "keep"
+          },
+          "revision": "53991c520f247508b1f198903725cc879694d783f9539a1c8d4989f1f9b1f36a",
+          "ref": "material:mat_dd279e628774fccfbda8e06cabbed4dd27a72378ed3d7b8f7beb40a60160ad5f@53991c520f247508b1f198903725cc879694d783f9539a1c8d4989f1f9b1f36a",
+          "sequence": 1,
+          "createdAt": "2026-10-19T18:59:43.807Z",
+          "updatedAt": "2026-10-19T18:59:43.807Z",
+          "blockCount": 2,
+          "memberCount": 1,
+          "textLength": 155,
+          "assetCount": 0,
+          "indexing": {
+            "state": "indexed"
+          }
+        },
+        "text": "B_PRIVATE reference sheet\nr1: The generated venue has forty seats.\nr2: The projector deposit is refundable.\nAmount (cents): 3975\nSource total (cents): 3975",
+        "spans": [
+          {
+            "blockId": "entry-0",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 0,
+              "end": 128
+            },
+            "pageRange": {
+              "start": 0,
+              "end": 128
+            }
+          },
+          {
+            "blockId": "total",
+            "kind": "text",
+            "format": "plain",
+            "memberIds": [
+              "evidence-0"
+            ],
+            "attributionContext": {
+              "version": 1,
+              "ownerRelation": "unknown",
+              "basis": "default",
+              "declarations": [],
+              "ownerStatements": []
+            },
+            "materialRange": {
+              "start": 129,
+              "end": 155
+            },
+            "pageRange": {
+              "start": 129,
+              "end": 155
+            }
+          }
+        ],
+        "textRange": {
+          "offset": 0,
+          "total": 155,
+          "nextOffset": null
+        }
+      }
+    }
+  ],
+  "independentExecution": "NOT RUN: check admission rejected",
+  "verdict": "PARTIAL: same-order source control passed; independent composition failed",
+  "assertionMode": {
+    "requireComposition": false,
+    "expectedStatus": 409,
+    "architecturalVerdict": "FAIL"
+  },
+  "finishedAt": "2026-10-19T18:59:44.520Z",
+  "elapsedMs": 6180,
+  "originalFullReceiptSha256": "a69ea0f395e17847c9de6970d7062e0c4ee95063b8bcafa21c8e466c0664913f",
+  "receiptPresentation": "All HTTP operation status/timing rows retained; repeated response bodies omitted here. Discovery, exact control results and evidence are retained in their dedicated fields."
+}

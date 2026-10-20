@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "benchmark.cancel-pack",
+  "name": "Generated cancellation evidence pack",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "entry": "plugin.mjs",
+  "archive": {
+    "asset": "plugin.zip",
+    "sha256": "f4e054fa8211acc8a2eb2bf47baea1be1c52ac74b47646399bdb7bcd15605c0e"
+  },
+  "capabilities": [
+    "source",
+    "processor"
+  ],
+  "configuration": [
+    {
+      "id": "label",
+      "label": "Generated owner label",
+      "type": "text",
+      "required": true
+    }
+  ],
+  "dependencies": [],
+  "access": [
+    "Explicitly granted generated source originals"
+  ],
+  "components": [
+    {
+      "id": "cancel.processor",
+      "version": "1",
+      "surface": "processing",
+      "capability": "processor"
+    },
+    {
+      "id": "cancel.source",
+      "version": "1",
+      "surface": "ingress",
+      "capability": "source"
+    }
+  ]
+}

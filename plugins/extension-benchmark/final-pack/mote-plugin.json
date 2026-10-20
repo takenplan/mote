@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "benchmark.final-finance",
+  "name": "Round 5 independent financial ledger",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "entry": "plugin.mjs",
+  "archive": {
+    "asset": "plugin.zip",
+    "sha256": "ec28c770c69aa59215cf3e656bfbaaf63e3e9686fcd7966ef632cb0bd7a55de9"
+  },
+  "capabilities": [
+    "source",
+    "processor"
+  ],
+  "configuration": [
+    {
+      "id": "pageLimit",
+      "label": "Originals per page",
+      "type": "number",
+      "description": "1–100; default 7"
+    }
+  ],
+  "dependencies": [],
+  "access": [
+    "Only source IDs explicitly granted by the current owner"
+  ],
+  "components": [
+    {
+      "id": "final.text.processor",
+      "version": "1",
+      "surface": "processing",
+      "capability": "processor"
+    },
+    {
+      "id": "final.finance.source",
+      "version": "1",
+      "surface": "ingress",
+      "capability": "source"
+    }
+  ]
+}

@@ -23,10 +23,16 @@ import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
 import type {TaskExecution,TaskRun} from './task-execution.js';
 import type {DomainLifecycle,UserDataSubject,UserExport} from './lifecycle.js';
-import {PLUGINS_DOMAIN,PLUGIN_CONFIGURATION_DOMAIN,componentSchema,instanceSchema,pluginConfigurationSchema,invokeSchema,type PluginConfiguration,type UserPluginInstance,type PluginCapabilityId,type PluginComponent,type PluginDomainAdapter,type PluginInvocation,type SourceCapabilityBinder,type PluginRuntimeFactory,type PluginCapabilityProbe} from './plugin-contract.js';
+import {PLUGINS_DOMAIN,PLUGIN_CONFIGURATION_DOMAIN,pluginCapability,componentSchema,instanceSchema,pluginConfigurationSchema,invokeSchema,type PluginConfiguration,type UserPluginInstance,type PluginCapabilityId,type PluginComponent,type PluginDomainAdapter,type PluginInvocation,type SourceCapabilityBinder,type PluginRuntimeFactory,type PluginCapabilityProbe} from './plugin-contract.js';
 
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone=<T>(value:T):T=>structuredClone(value);
+// Components are addressed by identity, never by their declaration order.
+// Compare the complete descriptor and reject duplicate registrations explicitly.
+const sameComponents=(actual:PluginComponent[],expected:PluginComponent[])=>{
+ const declared=new Map(expected.map(component=>[component.id,component])),seen=new Set<string>();
+ return actual.length===expected.length&&declared.size===expected.length&&actual.every(component=>{const fixed=declared.get(component.id);if(!fixed||seen.has(component.id))return false;seen.add(component.id);return component.version===fixed.version&&component.surface===fixed.surface&&component.capability===fixed.capability;});
+};
 const signature=(i:UserPluginInstance)=>digest([i.packageId,i.configuration,i.grants]);
 type RestorationProbePurpose={userId:string;instanceId:string;epoch:number;restorationId:string;coordinatorId:string;checkId:string;generation:number;signature:string};
 type InstanceRow={user_id:string;id:string;generation:number;removed:number;json:string;verified_hash:string|null};
@@ -290,7 +296,7 @@ export class ScopedPluginHost {
   const pkg=this.package(fixed.packageId);if(pkg.view.source.digest!==fixed.digest||pkg.view.version!==fixed.version)throw new StoreError('Pinned provider unavailable',503);
   const directory=join(this.directory(subject.userId),digest([fixed.instance.id,fixed.packageId,fixed.instance.configuration]));
   return Object.freeze({instanceId:snapshot.instance_id,namespace:this.namespace(snapshot),configuration:Object.freeze(clone(fixed.instance.configuration)),adapter:pkg.hostAdapter,directory,assertCurrent:assert,
-   runtime:async()=>{assert();const worker=new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory);try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));assert();if(digest(actual.components)!==digest(fixed.components))throw new StoreError('Pinned maintenance provider differs',409);}catch(error){await worker.close();throw error;}return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assert();if(!(purpose==='delete'?['remove','read']:['read','export']).includes(method))throw new ScopeError('invalid_identity',403);const value=await worker.call(method,params);assert();return value;},close:()=>worker.close()});},
+   runtime:async()=>{assert();const worker=new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory);try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));assert();if(!sameComponents(actual.components,fixed.components))throw new StoreError('Pinned maintenance provider differs',409);}catch(error){await worker.close();throw error;}return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assert();if(!(purpose==='delete'?['remove','read']:['read','export']).includes(method))throw new ScopeError('invalid_identity',403);const value=await worker.call(method,params);assert();return value;},close:()=>worker.close()});},
   });
  }
  forAdministrator(context:UserContext){
@@ -325,6 +331,7 @@ export class ScopedPluginHost {
  forUser(context:UserContext){
   this.assert(context);
   return Object.freeze({
+   hostCapabilities:()=>{this.assert(context);return {schemaVersion:1,runtime:'worker' as const,factoryExports:['createMotePlugin','createMemoryProvider'],invocationCapabilities:pluginCapability.options.map(id=>{const adapter=this.adapters.get(id);return {id,registered:Boolean(adapter),...(adapter?.modelFeature?{modelFeature:adapter.modelFeature}:{}),...(!adapter?{reason:'scoped_domain_unavailable' as const}:{})};})};},
    view:async()=>{const configuration=await this.configuration(context);this.assert(context);const packages=this.catalog.view().packages.map(({instanceIds:_,operationId:_op,allowedActions:_actions,...pkg})=>({...pkg,instanceIds:[],allowedActions:pkg.state==='installed'?['configure']:[],declaredCapabilities:clone(this.packageDeclaration(pkg.id).manifest.capabilities)}));return {revision:configuration.revision,packages,instances:this.values(context.userId).instances.map(value=>{const row=this.instance(context.userId,value.id),pkg=this.package(value.packageId),checked=row.verified_hash===signature(value);return {...this.safe(value),generation:row.generation,checked,secretStatus:Object.fromEntries(pkg.manifest.configuration.filter(field=>field.type==='secret-reference').map(field=>[field.id,Boolean(value.configuration[field.id])])),...this.observation(context,value,row,pkg,checked)};})};},
    configure:async(raw:unknown,expectedRevision:number,preserveRedactedSecrets=false)=>{await this.configuration(context);this.assert(context);const value=instanceSchema.parse(raw),current=this.values(context.userId),index=current.instances.findIndex(i=>i.id===value.id);
     if(preserveRedactedSecrets&&index>=0&&current.instances[index].packageId===value.packageId){for(const field of this.package(value.packageId).manifest.configuration)if(field.type==='secret-reference'&&!Object.hasOwn(value.configuration,field.id)&&Object.hasOwn(current.instances[index].configuration,field.id))value.configuration[field.id]=current.instances[index].configuration[field.id];}
@@ -363,7 +370,7 @@ export class ScopedPluginHost {
   const worker=factory?factory(Object.freeze({userId,instanceId:fixed.instance.id,generation,directory,configuration:Object.freeze(clone(fixed.instance.configuration))})):new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory),scope=new BackendPluginScope(this.root),registry=new FeatureRegistry<Runtime['registry'] extends FeatureRegistry<infer T>?T:never>();
   const record:WorkerRecord={scope,worker,userId,instanceId:fixed.instance.id,generation,...(factory?{factory,factoryId:pkg.hostAdapter}:{}),...(probe?{probeDirectory:directory}:{})};this.workers.add(record);
   if(signal){const abort=()=>{void this.closeWorker(record).catch(()=>{});};signal.addEventListener('abort',abort,{once:true});record.probeDetach=()=>signal.removeEventListener('abort',abort);if(signal.aborted)abort();}
-  try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));if(digest(actual.components)!==digest(fixed.components))throw new StoreError('Actual plugin registration differs from the pinned manifest',409);
+  try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));if(!sameComponents(actual.components,fixed.components))throw new StoreError('Actual plugin registration differs from the pinned manifest',409);
    if(this.closed||this.instance(userId,fixed.instance.id).generation!==generation)throw new ScopeError('invalid_identity',401);
    await scope.install(ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));});
    return {record,worker,scope,registry};

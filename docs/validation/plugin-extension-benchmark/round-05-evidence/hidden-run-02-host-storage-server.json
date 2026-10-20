@@ -1,0 +1,9 @@
+[
+  {
+    "pid": 27668,
+    "stdout": "{\"event\":\"server.listening\",\"port\":42689,\"mode\":\"multiuser-auth\"}\n",
+    "stderr": "/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:222\n  for(const row of db.prepare(\"SELECT * FROM execution_steps WHERE state='waiting' AND recovery_deadline>0 AND recovery_deadline<=?\").all(now) as Row[]){\n                      ^\n\nError: malformed database schema (sqlite_autoindex_mp_file_reviews_1) - orphan index\n    at ExecutionEngine.recover (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:222:23)\n    at ExecutionEngine.tick (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:243:9)\n    at <anonymous> (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:214:74)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:502:9) {\n  code: 'ERR_SQLITE_ERROR',\n  errcode: 11,\n  errstr: 'database disk image is malformed'\n}\n\nNode.js v24.19.0\n",
+    "code": 1,
+    "signal": null
+  }
+]

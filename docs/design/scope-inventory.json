@@ -1637,6 +1637,7 @@
       "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/plugin-snapshots/:id',service:PLUGINS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugin-events',service:PLUGINS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins/host-capabilities',service:PLUGINS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances',service:PLUGINS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/'+action,service:PLUGINS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/check',service:PLUGINS_DOMAIN",
