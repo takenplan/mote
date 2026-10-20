@@ -1,6 +1,6 @@
 # Memory evaluation context: implementation review
 
-Current decision: **I1 CLOSED; no remaining blocking findings in the reviewed runtime scope**, at tracked runtime seal `632330eb843cf5532e6290166f0d823678628221a4d57bac9415552df9a36878` plus helper seal `2143a0a20ed7716e6e507df0684df1b218d3afa560b483dac5bbb9e5a423ddf9`. Complete checks and delivery remain pending. The initial finding and subsequent decisions below are preserved as history.
+Current decision: **I1 CLOSED; I2 CLOSED; no remaining blocking findings in the reviewed source scope**. The final source is committed head `4925a706d3baeced085230eeea9533676ab6fa30` plus Activity runtime delta seal `e4b0291c85fa0780dc7d3833dae05b75e6fb406a1accee572475f77818e7f88b`; complete original-base runtime diff seal is `8c078baaac996ab7cd02566c2e24a7dee7c40491f84c459527ce43294670b980`. Complete checks and delivery remain pending. Historical findings and decisions below are preserved.
 
 Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High.
 
@@ -84,3 +84,42 @@ Execution evidence is **owner-reported**, not reviewer-executed: 5/5 focused cas
 The reviewer subsequently read `/tmp/mote-memory-i1-focused-2026-10-20.txt`, the owner's explicitly labeled verbatim transcript of exec session `68060`, final chunk `f9e2cf`, exit 0. It records the exact candidate seals, command selecting `I1:|candidate reuse` in the two named test files, all five case names, 5 passed/0 failed/0 skipped and 16728.232 ms. It is a transcript of returned tool output, not an original raw process log or an additional run. The fresh focused matrix log was still running when supplied and is not counted as passed here.
 
 No further blocking source findings remain from this bounded review. Closing I1 does not certify whole-project tests, live semantic quality, actual native providers, devices, merge readiness, deployment or delivery.
+
+## I2 — Activity coverage identity consumer omitted — OPEN
+
+The root driver's fresh full affected-check candidate at HEAD `4925a706d3baeced085230eeea9533676ab6fa30` reported failure in `multiuser-memory-07.test.ts:82`, the existing complete owner-question journey. Root's focused diagnostic identified the exact failure as `assert.ok(work)` at `:87`: the source-filtered attention page had no Memory card. Earlier assertions had established one published supported sibling, an `awaiting_context` batch, one owner question and B's denial. The reply/continuation part had not yet run. This is root-executed evidence, not a run performed by this reviewer.
+
+Independent static inspection at that committed head confirms the causal mismatch: `scope/activity.ts:30` still computes `work_activity_member` as `hash([range, evidenceHash, strategy])`, while canonical scoped members now include the per-input evaluation time as a fourth component. Both the `target_states.member_key` expression and coverage LEFT JOIN at `:43` use the old key. A successful task's rank zero does not override the unmatched coverage row in that CASE; with no matched owner/context-gap state it falls through to waiting rank two. The attention filter therefore omits the real unresolved Memory work. The existing test expectation is the accepted E6 consumer contract, not an obsolete fixture.
+
+I2 requires the minimal Activity identity-consumer correction: use the exact member's frozen private task clock while retaining original record counting, grouping, source filters, state precedence, authorization and metadata-only projection. No source/wall-time fallback, task migration, broad `awaiting_context` state override or weakened original test assertion is justified. The sole owner is preparing a bounded pre-implementation delta; plan approval will not itself close this implementation finding. No source/test edits or test execution were made by this reviewer.
+
+Root stopped and cleaned its prior complete-check run; its interrupted/cleanup evidence and eventual fresh complete run are tracked by root, not represented as a passing check in this receipt.
+
+The owner subsequently submitted the [Activity identity delta](../design/memory-evaluation-context-activity-delta-2026-10-20.md), seal `e99096236f92c2d5ce9daef3bd6d6dd05ab55495be171fda4012ec01f9798180`. It received prospective independent **APPROVE** in the plan-review receipt, bound to original base `bcff7bab6109a7c99acde3decb5712a072e1b045`, pre-delta head `4925a706d3baeced085230eeea9533676ab6fa30` and committed runtime diff seal `018f905b2dbdfc5334ab7a01963d7f47b7040966942c98099eac9c11e3103029`. Activity and the original regression were unchanged at approval. I2 remains OPEN; plan approval is not evidence that the consumer has been repaired.
+
+## Final I2 implementation delta review — CLOSED
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. **I2 is closed** following static review of the approved three-path correction and reading the sole implementation owner's actual RED/GREEN evidence. This is implementation closure, not a new pre-implementation approval, an independently executed test run, or full-gate completion.
+
+Independently verified final identities:
+
+- Original base `bcff7bab6109a7c99acde3decb5712a072e1b045`; pre-delta/current HEAD `4925a706d3baeced085230eeea9533676ab6fa30` with the Activity increment uncommitted.
+- `git diff -- apps/server/src packages/agent/src` contains only Activity and hashes to `e4b0291c85fa0780dc7d3833dae05b75e6fb406a1accee572475f77818e7f88b`.
+- Complete runtime diff from the original base hashes to `8c078baaac996ab7cd02566c2e24a7dee7c40491f84c459527ce43294670b980`; the earlier I1/helper identity remains unchanged within the committed portion.
+- `scope/activity.ts`: `9c742158f0ff51c165ddbd4d6b501598db2b0da07e9d58486a304af178cecfdb`.
+- Existing `multiuser-memory-07.test.ts`: `8b4f2eebdf939c2c65e30ba412df170efd5c92676c5b6dd5b319e1d8056778d4`.
+- New `scoped-memory-evaluation-activity.test.ts`: `0b8bb23b26c4a781ad2f1a577f7e07a4090f22c9f634e1610d907c48acc60c24`.
+
+The runtime change matches the approved boundary. A correlated metadata lookup selects each target's own time from its frozen batch map by exact evidence ID. The four-argument UDF hashes the canonical ordered tuple and returns NULL when no string clock exists. Both the projected member key and coverage JOIN use that same value. No rank expression, record/source/group identity, pagination, owner predicate, public Activity field, body read, state mutation or fallback was changed. The existing test adds only page/detail/branch equivalence and foreign-owner denial; all original complete-journey assertions remain.
+
+The new actual ingress/M06/M07 two-clock case proves why the per-input lookup is required: one independently reviewed original completes with no candidates, the second retains its owner gap, and Activity page/detail consistently show two originals, one complete and one needing input. Assertions cover branch progress/group identity, foreign detail denial, absent public evaluation metadata and zero model calls on Activity read/restart. Reading the test confirms it uses real model-protocol coverage and existing semantic-clock injection, not fabricated stored coverage or a changed state shortcut.
+
+The reviewer read the owner's raw tee logs and identity manifest `/tmp/mote-memory-activity-final-identity-20261020.json`, and independently verified the recorded log hashes:
+
+| Owner-executed evidence | Result read by reviewer | SHA-256 |
+| --- | --- | --- |
+| `/tmp/mote-memory-activity-red-20261020.log` against unchanged pre-fix runtime | 1 failed at the exact missing attention card; 4697.942208 ms | `eb59dfb5b6e9c0cbae1bfe16e5eba7fc683f755429f9998989a5e9ca74984a42` |
+| `/tmp/mote-memory-activity-green-20261020.log` | 16 passed, 0 failed/skipped; 50328.88 ms, including the original full owner-question journey and new mixed-clock Activity case | `9f4670e3d7c036a7c716ca3842065acbac512ad2323dae11a180312f2e4df699` |
+| `/tmp/mote-memory-activity-neighbor-import-20261020.log` | The initially unselected final original-file import-prose case passed separately; 5522.110875 ms | `776fcd49197964cb5328d2ae14fdae804c1788378ad98ab28121c72a365b4305` |
+
+The owner reports exit 0 for both GREEN processes, all original `-07` cases covered across those sequential selections, awaited fixture cleanup and no subsequent source/test change. This reviewer did not launch those tests or independently repeat process cleanup; it inspected their code, raw output and identity evidence. The initially unselected case is explicitly separated rather than represented as part of the 16-case command. The original failed/interrupted complete gate remains non-passing and non-reusable. Root owns a new frozen candidate and fresh complete checks; source closure here does not claim merge readiness, deployment or delivered behavior.

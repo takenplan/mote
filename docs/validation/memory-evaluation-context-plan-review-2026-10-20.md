@@ -1,6 +1,6 @@
 # Memory evaluation context: independent plan review
 
-Current decision: **APPROVE v2**, seal `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`, plus the bounded semantic-clock-wrapper, feedback-catalog-v2 and legacy-metadata-v3 deltas recorded below. The historical v1 review follows.
+Current plan decision: **APPROVE v2**, seal `4e85b9497a90dd95e3efe741baceeb025b3896bcf8f0432db4fffa0f60e08bef`, plus the bounded semantic-clock-wrapper, feedback-catalog-v2, legacy-metadata-v3 and Activity identity deltas recorded below. Plan approval does not close the open I2 implementation finding. The historical v1 review follows.
 
 Date: 2026-10-20. Reviewer: `memory_plan_reviewer` (independent Sol High). Review type: pre-implementation technical plan review under `AGENTS.md` and `docs/development.md#technical-plan-review`.
 
@@ -111,3 +111,15 @@ The new `memoryEvaluation.readRanges` is limited to `{id,offset,length,evaluatio
 Coding must narrow this descriptor to its actual scoped read intervals, fail closed when no containing fixed descriptor supplies the clock, and preserve first-target now plus the complete serialized metadata identity. No reader/catalog implementation, body-carrier, coverage, empty-review, source fence or old-history change is approved. The stated three runtime files and already approved optional SDK type suffice.
 
 Approval requires the sealed actual two-clock/separate-batch legacy extraction and nonempty independent-review `context_evidence` journey, a delivered page matched to its exact read-clock descriptor on continuation, correct first-target now, an out-of-grant third-original rejection, scoped Coding and changed-read-clock identity assertions. Existing positive/empty-result cases remain. No tests were run by this reviewer; this is prospective approval before the read-clock increment, and I1 is not closed by the plan receipt itself.
+
+## I2 Activity member identity delta — APPROVE
+
+Date: 2026-10-20. Reviewer: `memory_plan_reviewer`, independent Sol High. Decision: **APPROVE** the [Activity identity delta](../design/memory-evaluation-context-activity-delta-2026-10-20.md), exact SHA-256 `e99096236f92c2d5ce9daef3bd6d6dd05ab55495be171fda4012ec01f9798180`. Original source base: `bcff7bab6109a7c99acde3decb5712a072e1b045`; frozen pre-delta head: `4925a706d3baeced085230eeea9533676ab6fa30`. Parent approval seals, sole implementation owner and root complete-check driver remain unchanged.
+
+The reviewer independently verified HEAD, empty Activity/original-regression source diff, the committed base-to-head runtime diff seal `018f905b2dbdfc5334ab7a01963d7f47b7040966942c98099eac9c11e3103029` and current Activity file seal `a4d1f0d3a9d749149803f5f5b2e1d4a0a8549e81d9a31e3e49b7b71a44f6f5de`. This is prospective approval before the Activity/test increment, not approval after root's failing diagnostic.
+
+The bounded design correctly repairs an omitted consumer of the already approved canonical member identity. Activity must use `hash([range, evidenceFingerprint, strategy, exactInputEvaluationTime])`, with that time selected by target evidence ID from the owning frozen batch map. The same metadata value must serve both coverage matching and the projected member key. A metadata-only CTE/alias is appropriate if cardinality and existing owner/source joins remain intact. A missing clock must stay unmatched; no job/source/wall-time or three-field fallback is approved.
+
+The single new runtime surface `scope/activity.ts` is justified by the actual existing Activity contract and reported failure. Record folding, group IDs, source filtering, ranking, pagination, page/detail permissions and public fields must remain unchanged. Retaining every `multiuser-memory-07` assertion and adding page/detail equivalence protects the whole E6 question/reply/immutable-model/idempotency/cancel/recovery journey, including the portion not reached by the initial failure. The new genuine two-receipt mixed-clock scenario is necessary: using the job's first clock for all members would otherwise mask the mismatch.
+
+Validation must exercise actual reviewed no-candidate/owner-gap coverage through ingress/M06/M07, Activity page/detail record counts, per-input clock identity, foreign-owner denial, absent public clock metadata and restart without extra model calls. No rank override, fabricated SQL coverage, weakened timeout/assertion or alternate internal entry is authorized. The previous root run is failed/interrupted evidence only and cannot be reused as a pass. This reviewer ran no tests or implementation. I2 remains OPEN until the approved source correction and its actual regression evidence are reviewed; complete checks and delivery remain root's responsibility.
