@@ -91,3 +91,35 @@ to verify selection alone collects nothing, cancellation invalidates the native
 selection, confirmation is one-use, raw logs remain readable, and typed permission
 settings reach a stubbed native boundary. It starts no Electron window, real
 capture or system permission UI. Existing test deadlines remain unchanged.
+
+## P9-D1: consume the updated main
+
+Before this branch consumed the updated main, `/root/plan_review` (Sol High)
+explicitly **APPROVED** P9-D1. Reviewed section SHA-256:
+`f975722b39664df014434fa93c69ae1f6aede41fdfa7555f5017041030c56498`.
+Local checkpoint is `eaa54db0`; GitHub and fetch confirm main is now
+`301b5941e2d451e46710befb23a5398a089b24e7`, the merged PR 192 head
+`f2f08b44f1eed5ccf77532f8e7452ba0ab9190dd` over the original `cc5d30f8`.
+Only four files changed: scoped Memory input validation/result issuance and two
+generated regression files. No cleanup-PR head or owned integration scope changed.
+
+**KEEP:** all P9 removals, retained journeys, settings, assertions and deadlines;
+upstream's synchronous within-check de-duplication while current authority,
+versions, dependencies and selected evidence are still re-read; upstream query
+issuance/unknown-outcome and exact-result recovery under the existing task
+contract. **CHANGE:** consume that already-merged main as the integration input
+and final gate base. **REMOVE:** no additional code or coverage. **EXCEPTION:**
+the upstream owner reports focused-only validation and an explicit human process
+exception, with no new preimplementation TPR APPROVE; our delta approval covers
+integration/coverage before this branch consumes it, not retrospective approval
+of PR 192 implementation. **UNKNOWN:** no live-model/device evidence is supplied;
+do not infer it from generated recovery tests.
+
+Root remains sole merge/check owner. Review the precise new source delta and
+its existing generated regressions before merging main without modification.
+Then run both updated reader-batch/issued-query files from the actual native
+entry, retain the two real extraction/deletion journeys at their split locations,
+and freeze once all focused checks converge. The full affected-consumer gate
+includes all four new files and their consumers, so the upstream's reported
+23-test/2-journey/typecheck PASS is context, not a reused gate receipt. Recheck
+remote inputs and ancestry before authorized main delivery as in P9.
