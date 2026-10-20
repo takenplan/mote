@@ -3,7 +3,7 @@ import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const MAX_TEST_WORKERS = 8;
+export const MAX_TEST_WORKERS = 6;
 
 export function testWorkerCount(parallelism = availableParallelism()) {
   return Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS));

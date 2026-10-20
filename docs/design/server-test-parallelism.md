@@ -83,6 +83,26 @@ background activity prevents a controlled quiet-host speedup/ranking claim.
 The first added-family focused run is preserved as 60 passes and two
 120-second Perception timeouts, not successful coverage of all 62 scenarios.
 
+P6 received explicit **APPROVE** from `/root/plan_review` using Sol High before
+implementation, at original base `4fc433cd2f9f0f43c38c6afc70834ba19d9d5c6a`
+and runtime head `4fe376b0202910f796ea5bb660e69314c9f243b2` (docs-only dirty).
+The 8-worker stress cohort passed all 404 scenarios, but its first full run
+hit the reused-listener Perception deadline at 120.365 seconds; the other
+physical-eight-call case passed at 118.510 seconds. That full run was
+interrupted and is incomplete. Its cleanup receipt also preserves an EPERM
+and unconfirmed cleanup; a separate process/cwd/orphan audit found no remaining
+owned test process before the retained lock was manually released. Neither
+the receipt nor its incomplete elapsed time is promoted to a passed result.
+
+P6 supersedes the unsafe 8/12 selection with a six-worker cap only. Root owns
+that single constant change, documentation and the check driver. The formula,
+native CLI override/discovery, process groups, signals, 120000 ms deadline,
+397 original scenarios and their internal physical concurrency remain intact.
+Required validation is the seven launcher regressions, source parity, the same
+404-case stress cohort at six workers, then two full passing Server runs at
+the frozen cap including the complete 13-task PR gate. Stability is unknown
+until those results; no automatic fallback or assertion relaxation is added.
+
 ## Original and intended journey
 
 The developer invokes `npm test -w @mote/server`, directly or through
@@ -139,17 +159,23 @@ those scenarios, including cancellation, revocation, account separation,
 restart, failure recovery, duplicate requests and late publication fences.
 
 Performance runs use generated fixtures, one benchmark at a time, on an 18-core,
-64 GiB host. Baseline and candidate use the same installed dependencies and Node
-ABI. The frozen baseline's built Agent directory must resolve to the same real
-module as `@mote/agent`; copying that directory creates duplicate runtime class
-identities and is invalid benchmark preparation. Interrupted preparation runs
-and their failures are preserved locally and excluded from timing claims.
-Measurements must avoid other complete checks. Report wall time, process-tree
-CPU and sampled aggregate RSS, together with test counts and failures.
+64 GiB host with Node 26.11.1 and this checkout's installed dependencies. The
+8/12-worker stress comparison uses identical source and built outputs, guarded
+by the common driver and an input digest. The unrelated Windsurf test run had
+finished before these two formal stress runs; ordinary Mote background work
+remained active as allowed by P5-M. Report wall time, child CPU time, sampled
+process-tree CPU and RSS sum, together with test counts and failures. RSS sum
+can count shared pages more than once.
 
-Use a four-worker control when separating partitioning gains from concurrency
-gains. Repeat finalist settings before claiming stable performance. Preserve
-first failures; do not loosen existing deadlines to accommodate resource
-pressure. Finish with the frozen candidate's full [PR check plan](../development.md#pr-check-scope) and
-report its original receipt separately from benchmark runs. Physical devices,
-personal content and live models are not part of this fixture-only change.
+The old frozen checkout is used for source parity, not a fresh timing control.
+Its Agent path had initially resolved to a copied build, causing duplicate class
+identities; interrupted preparation runs are preserved and excluded from timing
+claims. No controlled attribution separates splitting gains from worker-count
+gains or changing host load. The previous four-worker timing is historical only.
+
+Repeat the final setting with the full native npm entry before claiming
+stability. Preserve first failures; do not loosen existing deadlines to
+accommodate resource pressure. Finish with the frozen candidate's full
+[PR check plan](../development.md#pr-check-scope) and report its original receipt
+separately from benchmarks. Physical devices, personal content and live models
+are not part of this fixture-only change.

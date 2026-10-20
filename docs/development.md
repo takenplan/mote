@@ -97,6 +97,12 @@ adb reverse tcp:47842 tcp:47842
 
 ## 验证命令
 
+Server 的 `npm test -w @mote/server` 使用 Node/tsx 按文件隔离运行，默认文件并发为
+`max(4, min(可用 CPU 数, 6))`；文件内部仍按原来的顺序执行。长套件已拆成均衡文件，
+断言、真实生命周期和原有时限保持不变。需要定向测量时可显式覆盖，例如
+`npm test -w @mote/server -- --test-concurrency=4`。并发越高不一定越快：部分场景
+自身会启动多路真实子进程，当前配置及测量依据见[Server 测试并行方案](design/server-test-parallelism.md)。
+
 <a id="background-testing"></a>
 
 ### 本地后台测试
