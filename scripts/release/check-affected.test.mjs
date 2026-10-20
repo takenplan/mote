@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { checkPlan, runChecks, parseArguments, sourceIdentity } from './check-affected.mjs';
@@ -27,6 +27,8 @@ test('fixed entry points retain component obligations and never turn into a diff
   assert.ok(!checkPlan(fixedChecks('typescript'), tests).some(step => step.id === 'android-unit'));
   assert.throws(() => fixedChecks('unknown'), /Unknown/);
   assert.throws(() => parseArguments(['--all', '--head', 'HEAD']), /Choose/);
+  assert.deepEqual(parseArguments(['--reuse', '/first.json', '--reuse', '/second.json']).reuseReceiptPaths, ['/first.json', '/second.json']);
+  assert.throws(() => parseArguments(['--reuse']), /Invalid/);
 });
 
 function repository(t) {
@@ -186,6 +188,29 @@ test('actual tooling-only CLI executes regression checks without invoking applic
   assert.equal(readFileSync(marker, 'utf8'), 'passed');
 });
 
+test('actual CLI reuses an original tooling task after a documentation commit and reports provenance', t => {
+  const { directory, write, git, base } = repository(t), marker = join(directory, 'ignored/executions');
+  write('scripts/release/check-plan.mjs');
+  write('scripts/release/check-plan.test.mjs', `import fs from 'node:fs';const p=${JSON.stringify(marker)};fs.mkdirSync(${JSON.stringify(join(directory, 'ignored'))},{recursive:true});fs.writeFileSync(p,String(Number(fs.existsSync(p)?fs.readFileSync(p,'utf8'):0)+1));fs.mkdirSync('docs',{recursive:true});fs.writeFileSync('docs/generated.md','Generated validation notes');`);
+  const env = { PATH: [dirname(process.execPath), '/usr/bin', '/bin'].join(':'), HOME: directory, TMPDIR: process.env.TMPDIR,
+    CODEX_TOOL_CALL_ID: 'generated-first-invocation' };
+  const run = args => spawnSync(process.execPath, [cli, '--base', base, ...args], { cwd: directory, encoding: 'utf8', env });
+  const first = run([]); assert.equal(first.status, 0, first.stderr);
+  const originalPath = /Check receipt: (.+)/.exec(first.stdout)?.[1]; assert.ok(originalPath, first.stdout);
+  const original = JSON.parse(readFileSync(originalPath, 'utf8'));
+  assert.equal(original.steps.find(step => step.id === 'release-contracts').inputsStable, true);
+  git('add', '.'); git('commit', '-m', 'generated fixture plus validation notes');
+  write('AGENTS.md', 'Generated ordinary documentation edit');
+  env.CODEX_TOOL_CALL_ID = 'generated-second-invocation';
+  const second = run(['--reuse', originalPath]); assert.equal(second.status, 0, second.stderr);
+  assert.match(second.stdout, /RUN preflight\/environment/);
+  assert.match(second.stdout, /REUSED preflight\/release-contracts/);
+  assert.equal(readFileSync(marker, 'utf8'), '1');
+  const receipt = JSON.parse(readFileSync(/Check receipt: (.+)/.exec(second.stdout)[1], 'utf8'));
+  assert.equal(receipt.steps.find(step => step.id === 'release-contracts').origin.runId, original.runId);
+  assert.notEqual(receipt.revision, original.revision);
+});
+
 test('check execution stops at the first failing command', async t => {
   const { directory } = repository(t);
   const marker = join(directory, 'unexpected');
@@ -255,4 +280,14 @@ test('source identity includes staged/unstaged/untracked source and ignores gene
   write('apps/web/src/change.ts', 'next input');
   assert.notEqual(sourceIdentity(directory), changed);
   assert.equal(sourceIdentity(directory, cache), sourceIdentity(directory), 'per-run file digest reuse observes changed file metadata');
+});
+
+test('ordinary documentation and content-equivalent commits do not invalidate runtime identity', t => {
+  const { directory, write, git } = repository(t), original = sourceIdentity(directory);
+  write('AGENTS.md', 'Generated review rules'); write('docs/development.md', 'Generated prose');
+  assert.equal(sourceIdentity(directory), original);
+  git('add', '.'); git('commit', '-m', 'generated review document change');
+  assert.equal(sourceIdentity(directory), original);
+  write('docs/design/scope-inventory.json', '{}');
+  assert.notEqual(sourceIdentity(directory), original, 'executable scope input must still invalidate');
 });

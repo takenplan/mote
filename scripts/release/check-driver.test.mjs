@@ -35,7 +35,7 @@ async function repository(t) {
     const id = randomUUID(), planPath = join(root, `${id}-plan.json`), receiptPath = options.defaultReceipt ? 'default' : join(root, `${id}-receipt.json`);
     await writeFile(planPath, JSON.stringify(plan));
     const child = spawn(process.execPath, [entry, planPath, options.directory ?? directory, receiptPath, options.inputIdentity ? 'identity' : ''], {
-      env: { ...process.env, ...(options.path ? { PATH: options.path } : {}) }, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, ...options.env, ...(options.path ? { PATH: options.path } : {}) }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
     for (const stream of [child.stdout, child.stderr]) stream.on('data', part => { output += part; });
@@ -182,4 +182,94 @@ test('npm-style shell descendants use the invoking Node before an incompatible P
   const run = await f.start([{ id: 'npm-style-child', phase: 'fixture', command: npmStyle, args: [childEntry] }], { path: [bin, process.env.PATH ?? ''].join(delimiter) });
   const result = await run.done; assert.equal(result.code, 0, result.output); assert.equal(await exists(wrong), false);
   assert.deepEqual(JSON.parse(await readFile(actual, 'utf8')), { node: process.versions.node, modules: process.versions.modules, execPath: process.execPath });
+});
+
+test('explicit receipt reuse reruns changed tasks and prerequisites, preserving original provenance', async t => {
+  const f = await repository(t), a = join(f.root, 'a.count'), b = join(f.root, 'b.count'), build = join(f.root, 'build.count');
+  const counter = (id, path, phase = 'test') => ({ ...f.node(id,
+    `const fs=require('node:fs');const p=${JSON.stringify(path)};fs.writeFileSync(p,String(Number(fs.existsSync(p)?fs.readFileSync(p,'utf8'):0)+1));`), phase });
+  const plan = [counter('build', build, 'build'), counter('a', a), counter('b', b)];
+  let bInput = 'first';
+  const taskIdentity = step => step.phase === 'build' ? undefined
+    : createHash('sha256').update(JSON.stringify(step)).update(step.id === 'b' ? bInput : 'stable-a').digest('hex');
+  const firstPath = join(f.root, 'first.json'), secondPath = join(f.root, 'second.json');
+  assert.equal(await runChecks(plan, { directory: f.directory, receiptPath: firstPath, taskIdentity }), 0);
+  const original = JSON.parse(await readFile(firstPath, 'utf8'));
+  bInput = 'changed';
+  assert.equal(await runChecks(plan, { directory: f.directory, receiptPath: secondPath, taskIdentity, reuseReceiptPaths: [firstPath] }), 0);
+  const receipt = JSON.parse(await readFile(secondPath, 'utf8'));
+  assert.deepEqual(receipt.steps.map(step => step.status), ['passed', 'reused', 'passed']);
+  assert.equal(await readFile(build, 'utf8'), '2'); assert.equal(await readFile(a, 'utf8'), '1'); assert.equal(await readFile(b, 'utf8'), '2');
+  assert.equal(receipt.steps[1].origin.runId, original.runId);
+  assert.equal(receipt.steps[1].origin.receipt, firstPath);
+  assert.equal(receipt.steps[1].origin.stepId, 'a'); assert.equal(receipt.steps[1].elapsedMs, 0);
+  // A reused claim is not a new execution. Supply the original again to reuse A.
+  const thirdPath = join(f.root, 'third.json');
+  assert.equal(await runChecks(plan, { directory: f.directory, receiptPath: thirdPath, taskIdentity, reuseReceiptPaths: [secondPath] }), 0);
+  assert.deepEqual(JSON.parse(await readFile(thirdPath, 'utf8')).steps.map(step => step.status), ['passed', 'passed', 'reused']);
+});
+
+test('a later failure does not discard an unchanged original task, while interrupted or unclean evidence is rejected', async t => {
+  const f = await repository(t), taskIdentity = step => createHash('sha256').update(JSON.stringify(step)).digest('hex');
+  const firstPath = join(f.root, 'failed.json'), first = [f.node('good', ''), f.node('bad', 'process.exit(7)')];
+  assert.equal(await runChecks(first, { directory: f.directory, receiptPath: firstPath, taskIdentity }), 7);
+  const repaired = [first[0], f.node('bad', '')], repairedPath = join(f.root, 'repaired.json');
+  assert.equal(await runChecks(repaired, { directory: f.directory, receiptPath: repairedPath, taskIdentity, reuseReceiptPaths: [firstPath] }), 0);
+  assert.deepEqual(JSON.parse(await readFile(repairedPath, 'utf8')).steps.map(step => step.status), ['reused', 'passed']);
+  const original = JSON.parse(await readFile(firstPath, 'utf8'));
+  for (const change of [{ schemaVersion: 1 }, { status: 'interrupted' }, { status: 'blocked' }, { cleanupConfirmed: false }, { reason: 'check_lock_owner_changed' }, { directory: f.root }]) {
+    const ineligiblePath = join(f.root, `${randomUUID()}.json`), resultPath = join(f.root, `${randomUUID()}.json`);
+    await writeFile(ineligiblePath, JSON.stringify({ ...original, ...change }));
+    assert.equal(await runChecks([first[0]], { directory: f.directory, receiptPath: resultPath, taskIdentity, reuseReceiptPaths: [ineligiblePath] }), 0);
+    assert.equal(JSON.parse(await readFile(resultPath, 'utf8')).steps[0].status, 'passed');
+  }
+});
+
+test('runtime edits abort the frozen plan but only changed task evidence is invalidated', async t => {
+  const f = await repository(t), input = join(f.directory, 'fixture.txt'), firstPath = join(f.root, 'edited.json');
+  const taskIdentity = step => createHash('sha256').update(JSON.stringify(step))
+    .update(step.id === 'changing' ? readFileSync(input) : 'unaffected').digest('hex');
+  const inputIdentity = () => createHash('sha256').update(readFileSync(input)).digest('hex');
+  const plan = [f.node('stable', ''), f.node('changing', "require('node:fs').writeFileSync('fixture.txt','changed runtime input')"), f.node('unrun', '')];
+  assert.notEqual(await runChecks(plan, { directory: f.directory, receiptPath: firstPath, taskIdentity, inputIdentity }), 0);
+  const original = JSON.parse(await readFile(firstPath, 'utf8'));
+  assert.equal(original.inputChanged, true);
+  assert.deepEqual(original.steps.map(step => step.status), ['passed', 'invalidated', 'unrun']);
+  const nextPath = join(f.root, 'next.json');
+  assert.equal(await runChecks([plan[0]], { directory: f.directory, receiptPath: nextPath, taskIdentity, inputIdentity, reuseReceiptPaths: [firstPath] }), 0);
+  assert.equal(JSON.parse(await readFile(nextPath, 'utf8')).steps[0].status, 'reused');
+});
+
+test('a reused task is checked again while publishing the new receipt', async t => {
+  const f = await repository(t), firstPath = join(f.root, 'first.json'), nextPath = join(f.root, 'next.json');
+  let identity = 'a'.repeat(64);
+  const taskIdentity = () => {
+    if (existsSync(nextPath)) identity = 'b'.repeat(64);
+    return identity;
+  };
+  const plan = [f.node('stable', '')];
+  assert.equal(await runChecks(plan, { directory: f.directory, receiptPath: firstPath, taskIdentity }), 0);
+  assert.notEqual(await runChecks(plan, { directory: f.directory, receiptPath: nextPath, taskIdentity, reuseReceiptPaths: [firstPath] }), 0);
+  const receipt = JSON.parse(await readFile(nextPath, 'utf8'));
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.steps[0].status, 'invalidated');
+  assert.equal(receipt.steps[0].origin.receipt, firstPath);
+});
+
+test('a detected task input change stays invalid even if the old input returns before finalization', async t => {
+  const f = await repository(t), receiptPath = join(f.root, 'transient.json');
+  let calls = 0;
+  const taskIdentity = () => (++calls === 2 ? 'b' : 'a').repeat(64);
+  const result = await runChecks([f.node('changed-during-check', ''), f.node('unrun', '')], { directory: f.directory, receiptPath, taskIdentity });
+  assert.notEqual(result, 0);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.deepEqual(receipt.steps.map(step => step.status), ['invalidated', 'unrun']);
+  assert.equal(receipt.steps[0].inputsStable, false);
+});
+
+test('caller tool invocation metadata is absent from the actual check child environment', async t => {
+  const f = await repository(t), output = join(f.root, 'child-environment.txt');
+  const run = await f.start([f.node('isolated-caller-metadata', `require('node:fs').writeFileSync(${JSON.stringify(output)},process.env.CODEX_TOOL_CALL_ID??'absent')`)],
+    { env: { CODEX_TOOL_CALL_ID: 'generated-caller-invocation' } });
+  assert.equal((await run.done).code, 0);
+  assert.equal(await readFile(output, 'utf8'), 'absent');
 });

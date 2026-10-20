@@ -2,9 +2,10 @@ import { spawn, execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, rmSync } from 'node:fs';
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { constants } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
+import { checkExecutionEnvironment } from './check-inputs.mjs';
 
 export function checkDriverPaths(directory = process.cwd()) {
   const commonDirectory = realpathSync(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
@@ -48,18 +49,41 @@ async function saveReceipt(path, receipt) {
 }
 
 /** One local repository gate. Receipts contain metadata, never arguments or output. */
-export async function runChecks(plan, { directory = process.cwd(), lock = true, receiptPath, inputIdentity, expectedInputIdentity } = {}) {
+export async function runChecks(plan, { directory = process.cwd(), lock = true, receiptPath, inputIdentity, expectedInputIdentity,
+  taskIdentity, reuseReceiptPaths = [] } = {}) {
   directory = resolve(directory);
   if (!plan.length) return 0;
   const started = performance.now(), runId = randomUUID(), startedAt = new Date().toISOString();
   const receipt = {
-    schemaVersion: 1, runId, pid: process.pid, directory, startedAt,
+    schemaVersion: 2, runId, pid: process.pid, directory, startedAt,
     runtime: { node: process.versions.node, modules: process.versions.modules, platform: process.platform, arch: process.arch },
     status: 'running', steps: plan.map(({ id, phase }, index) => ({ id: id ?? `step-${index + 1}`, phase: phase ?? 'check', status: 'unrun' })),
   };
   let paths, ownsLock = false, cleanupConfirmed = true, activeChild, interruptedSignal, shutdownTimer;
   let initialIdentity;
+  const reusable = [];
   let result = 1;
+  const identifyTask = step => {
+    const identity = taskIdentity?.(step);
+    if (identity !== undefined && (typeof identity !== 'string' || !/^[a-f0-9]{64}$/.test(identity))) throw Error('Invalid task input identity');
+    return identity;
+  };
+  const validateTasks = () => {
+    if (!receipt.steps.some(step => ['passed', 'reused'].includes(step.status) && step.inputIdentity)) return;
+    taskIdentity?.refresh?.();
+    for (let index = 0; index < plan.length; index++) {
+      const measured = receipt.steps[index];
+      if (!['passed', 'reused'].includes(measured.status) || !measured.inputIdentity) continue;
+      measured.inputsStable = measured.inputsStable !== false && identifyTask(plan[index]) === measured.inputIdentity;
+      if (!measured.inputsStable) {
+        measured.status = 'invalidated';
+        measured.reason = 'task_inputs_changed';
+        result = 1;
+        receipt.reason ??= 'check_inputs_changed';
+        console.error(`INVALIDATED ${measured.phase}/${measured.id}: task inputs changed.`);
+      }
+    }
+  };
   const unchangedInputs = () => {
     if (!inputIdentity || receipt.status === 'blocked') return true;
     if (receipt.inputChanged) return false;
@@ -86,6 +110,7 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
   process.on('SIGTERM', onTerminate);
   try {
     paths = checkDriverPaths(directory);
+    receipt.revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim();
     receiptPath ??= join(paths.receiptDirectory, `${startedAt.replace(/[:.]/g, '-')}-${runId}.json`);
     receiptPath = resolve(directory, receiptPath);
     if (lock) {
@@ -115,17 +140,46 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
         if (typeof initialIdentity !== 'string' || !initialIdentity) throw Error('Invalid check input identity');
         receipt.inputIdentity = initialIdentity;
       }
+      // Opt in to concrete local evidence. Never promote a reused result into
+      // an execution, or use interrupted/unclean/blocked/older-format receipts.
+      for (const path of reuseReceiptPaths) {
+        const absolute = resolve(directory, path);
+        if (absolute === receiptPath) throw Error('A new receipt cannot overwrite its original evidence');
+        const previous = JSON.parse(await readFile(absolute, 'utf8'));
+        if (previous.schemaVersion !== 2 || previous.directory !== directory || !previous.cleanupConfirmed
+          || !['passed', 'failed'].includes(previous.status) || previous.reason && previous.reason !== 'check_inputs_changed'
+          || typeof previous.runId !== 'string' || !Array.isArray(previous.steps)) {
+          console.log(`IGNORE reuse receipt: ${absolute} (ineligible evidence)`);
+          continue;
+        }
+        for (const step of previous.steps) {
+          if (step.status === 'passed' && step.exitCode === 0 && step.inputsStable === true && /^[a-f0-9]{64}$/.test(step.inputIdentity ?? '')) {
+            reusable.push({ step, origin: { receipt: absolute, runId: previous.runId, stepId: step.id,
+              completedAt: previous.completedAt, elapsedMs: step.elapsedMs } });
+          }
+        }
+      }
       result = 0;
     }
     for (let index = 0; receipt.status !== 'blocked' && index < plan.length; index++) {
       if (interruptedSignal) { result = signalStatus(interruptedSignal); break; }
       if (!unchangedInputs()) { result = 1; break; }
       const step = plan[index], measured = receipt.steps[index], stepStarted = performance.now();
+      taskIdentity?.refresh?.();
+      measured.inputIdentity = identifyTask(step);
+      const previous = measured.inputIdentity && reusable.find(value => value.step.id === measured.id
+        && value.step.phase === measured.phase && value.step.inputIdentity === measured.inputIdentity);
+      if (previous) {
+        measured.status = 'reused'; measured.exitCode = 0; measured.elapsedMs = 0;
+        measured.inputsStable = true; measured.origin = previous.origin;
+        console.log(`REUSED ${measured.phase}/${measured.id} from ${previous.origin.runId}/${previous.origin.stepId}`);
+        continue;
+      }
       console.log(`RUN ${measured.phase}/${measured.id}`);
       let spawnError;
       activeChild = spawn(step.command, step.args ?? [], {
         cwd: step.cwd ? resolve(directory, step.cwd) : directory,
-        env: { ...process.env, PATH: [dirname(process.execPath), process.env.PATH ?? ''].join(delimiter) },
+        env: checkExecutionEnvironment(),
         stdio: 'inherit', detached: process.platform !== 'win32',
       });
       const child = activeChild;
@@ -153,10 +207,13 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
       if (leftChildren) measured.reason = 'owned_processes_outlived_command';
       if (!cleanupConfirmed) measured.reason = 'owned_process_cleanup_unconfirmed';
       measured.status = measured.exitCode === 0 ? 'passed' : 'failed';
+      taskIdentity?.refresh?.();
+      if (measured.inputIdentity) measured.inputsStable = identifyTask(step) === measured.inputIdentity;
       console.log(`${measured.exitCode === 0 ? 'PASS' : 'FAIL'} ${measured.phase}/${measured.id} ${seconds(measured.elapsedMs)}${measured.exitCode ? ` exit ${measured.exitCode}` : ''}${measured.reason ? ` (${measured.reason})` : ''}`);
-      if (measured.exitCode !== 0) { result = measured.exitCode; break; }
+      if (measured.exitCode !== 0 || measured.inputsStable === false) { result = measured.exitCode || 1; break; }
     }
     if (!unchangedInputs()) result = 1;
+    validateTasks();
     if (receipt.status !== 'blocked') receipt.status = interruptedSignal ? 'interrupted' : result === 0 ? 'passed' : 'failed';
   } catch (error) {
     console.error(`FAIL check driver: ${error.code ?? error.name ?? 'unknown error'}`);
@@ -196,6 +253,8 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
     const finalizeOutcome = () => {
       try { if (initialIdentity !== undefined && !unchangedInputs()) result = 1; }
       catch { result = 1; receipt.reason = 'check_input_identity_failed'; }
+      try { validateTasks(); }
+      catch { result = 1; receipt.reason = 'check_task_identity_failed'; }
       if (interruptedSignal) { result = signalStatus(interruptedSignal); receipt.status = 'interrupted'; }
       else if (result !== 0 && receipt.status === 'passed') receipt.status = 'failed';
       receipt.elapsedMs = Math.round((performance.now() - started) * 1000) / 1000;
@@ -207,11 +266,12 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
     if (receiptPath) {
       try {
         await saveReceipt(receiptPath, receipt);
-        const savedOutcome = JSON.stringify([receipt.exitCode, receipt.status, receipt.inputChanged, receipt.reason]);
+        const outcome = () => JSON.stringify([receipt.exitCode, receipt.status, receipt.inputChanged, receipt.reason, receipt.steps]);
+        const savedOutcome = outcome();
         // Receipt persistence is asynchronous. Keep the repository locked and
         // reject an edit or interruption that happened while publishing it.
         finalizeOutcome();
-        if (savedOutcome !== JSON.stringify([receipt.exitCode, receipt.status, receipt.inputChanged, receipt.reason])) await saveReceipt(receiptPath, receipt);
+        if (savedOutcome !== outcome()) await saveReceipt(receiptPath, receipt);
         console.log(`Check receipt: ${receiptPath}`);
       } catch (error) { console.error(`FAIL writing check receipt: ${error.code ?? error.name}`); result = 1; }
     }

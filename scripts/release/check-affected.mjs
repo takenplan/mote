@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { affectedChecks, affectedComponents, changedPaths, workspaceGraph } from './affected-components.mjs';
 import { checkPlan, fixedChecks } from './check-plan.mjs';
 import { runChecks } from './check-driver.mjs';
+import { createTaskIdentity, isCheckDocumentation } from './check-inputs.mjs';
 
 export { checkPlan, runChecks };
 
@@ -13,7 +14,7 @@ export { checkPlan, runChecks };
  * No source text, credentials or command output is written into a receipt. */
 export function sourceIdentity(directory = process.cwd(), fileDigests = new Map()) {
   const git = args => execFileSync('git', args, { cwd: directory, encoding: 'utf8' });
-  const hash = createHash('sha256').update(git(['rev-parse', 'HEAD']));
+  const hash = createHash('sha256');
   hash.update(JSON.stringify({ node: process.versions.node, abi: process.versions.modules, platform: process.platform, arch: process.arch,
     path: process.env.PATH, java: process.env.JAVA_HOME, android: process.env.ANDROID_HOME, androidRoot: process.env.ANDROID_SDK_ROOT }));
   const installed = resolve(directory, 'node_modules/.package-lock.json');
@@ -21,6 +22,9 @@ export function sourceIdentity(directory = process.cwd(), fileDigests = new Map(
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const paths = [...new Set(git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean))].sort();
   for (const path of paths) {
+    // Ordinary review documents are not executable check inputs. Keep the
+    // scope inventory, which is read by the scope-contracts task.
+    if (isCheckDocumentation(path)) continue;
     hash.update(path).update('\0');
     try {
       const absolute = resolve(directory, path), stat = lstatSync(absolute, { bigint: true });
@@ -43,9 +47,11 @@ export function sourceIdentity(directory = process.cwd(), fileDigests = new Map(
 
 export function parseArguments(args) {
   const options = {}; let component; let all = false; let dryRun = false; let typescriptOnly = false;
+  const reuseReceiptPaths = [];
   for (let i = 0; i < args.length; i++) {
     const value = args[i];
-    if (['--base', '--head', '--component'].includes(value) && args[i + 1] && !args[i + 1].startsWith('--')) {
+    if (value === '--reuse' && args[i + 1] && !args[i + 1].startsWith('--')) reuseReceiptPaths.push(args[++i]);
+    else if (['--base', '--head', '--component'].includes(value) && args[i + 1] && !args[i + 1].startsWith('--')) {
       if (value === '--component') component = args[++i]; else options[value.slice(2)] = args[++i];
     } else if (value === '--all') all = true;
     else if (value === '--dry-run') dryRun = true;
@@ -53,11 +59,11 @@ export function parseArguments(args) {
     else throw Error(`Invalid argument: ${value}`);
   }
   if ((component || all) && Object.keys(options).length || component && all) throw Error('Choose a fixed component/all check or a Git diff, not both.');
-  return { options, component, all, dryRun, typescriptOnly };
+  return { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths };
 }
 
 export async function main(args = process.argv.slice(2), directory = process.cwd()) {
-  const { options, component, all, dryRun, typescriptOnly } = parseArguments(args);
+  const { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths } = parseArguments(args);
   // Selection and execution must refer to the same input, including the async
   // interval while acquiring the shared repository lock.
   const fileDigests = new Map();
@@ -85,6 +91,7 @@ export async function main(args = process.argv.slice(2), directory = process.cwd
   }
   if (dryRun) return 0;
   return runChecks(plan, { directory, expectedInputIdentity: plannedIdentity,
+    taskIdentity: createTaskIdentity({ directory, graph }), reuseReceiptPaths,
     inputIdentity: () => sourceIdentity(directory, fileDigests) });
 }
 
