@@ -1,5 +1,12 @@
 # Manual Memory input plans
 
+This guide describes the retained EvidenceArchive input-plan implementation and
+its domain constraints. The production account-scoped entry is documented in
+[M07 Memory](design/multiuser-memory.md); private table names and the old HTTP
+route below are not its public API. Evaluation-time and procedure assembly must
+follow the selected contract; current deviations are recorded in the
+[runtime investigation](audits/memory-runtime-contract-investigation-2026-10-20.md).
+
 A manual request with explicit recipes freezes its selected materials and recipe bindings. Each material/recipe pair has a private `memory_input_plans` row and a required `memory.input` step in the existing execution engine. The HTTP client cannot supply source pins. New material arriving after the request is outside that request.
 
 The source pin identifies the original source input separately from derived output readiness. Normal OCR or transcription completion may change a Material revision while preserving that source pin. A changed source head or archive checkpoint makes the waiting plan stale. Older/custom material without a stable original identity uses the exact Material revision. Named outputs bind their evidence and fingerprint once, when first ready. Exact evidence-ID requests never acquire a future sibling output outside their allowlist.
@@ -13,11 +20,11 @@ mapped selections. Unmapped legacy blocks retain whole-Material readiness and
 revision checks. Explicit recipe requirements and range-based selection keep
 their existing dependency policies. See the [selection correction ADR](adr-manual-memory-selected-outputs.md).
 
-Ready plans keep the existing same-recipe batching budget. Each generated batch owns only its applicable input pins and Material references; validation, model reads, review, commit and timeout subdivision use that scope. A failed transcript does not invalidate an independent body batch. Timeout subdivision preserves its child scopes and updates the plans' batch associations. Existing jobs retain their saved evidence and strategy bindings; ambiguous old scope metadata keeps conservative validation instead of inventing a new authorization.
+Ready plans keep the configured initial same-recipe packing. Each generated batch owns only its applicable input pins and Material references; validation, model reads, review and commit use that scope. A failed transcript does not invalidate an independent body batch. Timeout or actual capacity failure preserves the unfinished frozen range; it does not automatically subdivide the target. Existing jobs retain their saved evidence and strategy bindings. Specific newly useful authorized context can still use the separate `needs_context` adjustment path; it does not turn incomplete inspection into completion. See the [simplification decision](adr-ask-evidence-quality-and-simple-context.md).
 
 Package metadata and the full coverage contract are supplied through the task
-context once, keeping internal extraction and review questions within the existing
-Agent limit. Coverage describes each listed target range, not completion of the
+context once, avoiding duplicate serialization without a host character limit on
+internal extraction or review questions. Coverage describes each listed target range, not completion of the
 whole original. Separately scheduled ranges alone do not require more context;
 genuine missing interpretive evidence remains explicit. The host aggregates job
 completion and preserves all original range grants. See the

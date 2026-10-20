@@ -1,78 +1,21 @@
 # Android native central UI
 
-Android previously embedded the central web app through `CentralWebSession` in
-`CentralActivity` and `AskActivity`. The four entry points exposed the web app's
-remaining management pages. Central content now uses Kotlin and Android Views; the WebView wrapper and its
-session/draft protocol have been removed. `CentralContent` is shared by the
-central deep-link Activity and MainActivity's Ask tab. Tapping Ask swaps content
-inside the existing home window and keeps the same bottom navigation, without
-launching another Activity or showing a root-level Back arrow. Switching tabs
-retains the conversation and unsent draft, pauses answer polling while hidden,
-and resumes it on return. Back from Ask returns to Today after any central detail
-history is exhausted; rotation restores the selected tab and encrypted draft.
+Android central content uses Kotlin and Android Views. The retired WebView wrapper and its session/draft protocol are not the current entry point. `CentralContent` is shared by central deep links and MainActivity's Ask tab. Ask stays inside the existing window and primary navigation; switching tabs retains the conversation and draft, pauses hidden polling and resumes on return. After central detail history is exhausted, Back returns to Library / 内容. Rotation restores the selected tab and persisted draft. The default navigation is [Library, Ask, Sources and Activity](client-navigation.md).
 
-The native navigation covers all 26 central pages:
+## Current account and device boundaries
 
-| Area | Pages |
-| --- | --- |
-| Everyday | Overview, archive, ask, notes |
-| Evidence | Materials, Coding uploads, timeline, files/recordings, memories, insights, Agent view, sources |
-| Administration | Devices, connections, Lark, statistics, processing, extensions, models/services, usage, vault, diagnostics/updates, preferences, imports, help |
+`CentralAccess` and `CentralSession` serve native private pages, backup export, foreground calendar actions and remote record browsing. Access is bound to the verified origin, deployment and account, with a session generation that rejects stale responses and picker results. Private pages use a full account login. Background capture and synchronization use the configured credential with ingress authority. A restricted device credential cannot be promoted into private archive or management access. Pairing and fresh-self checks follow [the connection contract](connections.md).
 
-Views use the central JSON APIs. Evidence and model output are selectable literal
-text; they never run HTML, scripts, or content-driven actions. Forms use native
-inputs, switches, pickers, and dialogs; arbitrary policy arrays and parameter
-maps use an explicit native JSON editor. External provider OAuth and GitHub
-feedback use the system browser. Android document pickers handle uploads/exports,
-and MediaPlayer handles audio. Mac's UI implementation is unchanged.
+Login offers application lifetime or 1/7/30 days. Application-lifetime credentials remain process-bound. Prod / Test durable credentials use Keystore SecretBox; Dev tokens use private JSON and its SecretBox uses a private JSON AES key. Private drafts and ledgers remain authenticated and encrypted. Logout prevents automatic reuse of configured credentials; expiry, logout and account changes invalidate old clients without allowing a late response to sign out a newer session. Requests do not redirect credentials to another origin. Connector-specific errors do not sign out the account session.
 
-## One owner session
+Ask drafts, run admissions, notes/outbox, import staging and ambiguous insight admissions use verified account storage, not an origin-only owner bucket. Stable request IDs and receipts survive ambiguous responses so retries reuse the original operation. Query runs remain on Central when the Activity closes and can be revisited from history. Switching accounts preserves each account's private state and cannot publish a result into another account.
 
-`CentralAccess` and `CentralSessionStore` serve every central page, central backup
-export, foreground calendar actions, and foreground remote record browsing.
-The session is bound to the explicitly selected central origin. Owner login and
-current owner invitation credentials are verified against that origin. Background
-capture and synchronization use the current configured owner credential. Retired
-collector identities and MCP credentials are rejected by native client pairing;
-there is no legacy credential promotion.
+## Native surfaces
 
-Login offers application lifetime or 1/7/30 days. Durable credentials use
-Android Keystore encryption in the no-backup directory; application lifetime
-credentials remain in memory. Logout leaves an encrypted marker preventing
-automatic reuse of the configured token. Expiry, logout, re-login, and node
-changes invalidate previously issued clients. Stale authentication responses
-cannot sign out a newer session. Requests do not follow redirects or send owner
-credentials to another origin. Picker results also bind to the initiating origin
-and session generation. Connector-specific authentication errors do not log out
-the central session.
+Native pages cover everyday reading and Ask, evidence and file views, sources and connections, processing and model settings, usage, archive operations, preferences and help. Management controls remain subject to the server's actual administrator capability; a native screen does not grant permission. Views render selectable literal evidence and model text, never HTML, scripts or content-driven actions. Forms use native controls and explicit JSON editors for structured policy fields. External OAuth and GitHub feedback use the system browser; Android document pickers handle uploads/exports and MediaPlayer handles audio.
 
-Ask drafts, run admissions, notes/outbox, import staging, and ambiguous insight
-admissions use encrypted files scoped by origin. Note receipts and upload/import
-request IDs survive ambiguous responses; retries reuse the same request rather
-than create another record. Query runs remain on the central node after leaving
-the Activity, and resume through the native progress/history views.
+Current account-isolation and lifecycle evidence is recorded in [Android parity validation](validation/parity-android-20261018.md) and the [multiuser matrix](validation/multiuser-parity-restoration-matrix.md). These receipts do not establish physical-device capture, external-account OAuth or live-model validation.
 
-## Generated fixture validation
+## Historical native conversion fixture
 
-Run `npm run build:libs` and `node --import tsx scripts/android-central-fixture.ts`.
-The fixture starts a loopback central node on port 47883 with generated evidence
-and a deterministic injected query agent. It performs no live model calls and
-does not collect screenshots. Use a dedicated fresh Android emulator, install the
-development and development Android-test APKs, then:
-
-```sh
-adb -s emulator-5566 reverse tcp:47883 tcp:47883
-adb -s emulator-5566 shell am instrument -w -r \
-  -e nativeCentralFixture true \
-  -e class dev.mote.collector.NativeCentralInstrumentedTest \
-  dev.mote.collector.dev.test/androidx.test.runner.AndroidJUnitRunner
-```
-
-The opt-in suite checks all 26 pages without WebViews or repeated login, actual
-central API settings/invitation contracts, current owner identity and rejection of
-retired collector/MCP identities, node
-changes, query/draft recovery, literal evidence, and native activity statistics.
-Its visual fixture renders only the app's generated views. Shared contract tests
-exercise encrypted persistence, expiry/logout, stale clients, note receipts,
-and upload/import retry identities. These are fixture checks, not physical-device,
-external-account OAuth, or live-model validation.
+The original native-conversion fixture described 26 central pages and used `scripts/android-central-fixture.ts` with `NativeCentralInstrumentedTest` on a dedicated emulator. It checked the then-current owner identity, native settings, invitation contracts, literal evidence, drafts and activity statistics with generated evidence and a deterministic query agent. The owner-session assertions and loopback owner fixture are historical; they do not validate the current account/device boundary or provide a production bootstrap recipe. Current source and multiuser receipts above determine the accepted path. No fixture, emulator, device or model check was rerun for this documentation cleanup.

@@ -1,6 +1,14 @@
 # ADR: Incremental check evidence
 
-Date: 2026-10-20. Status: revised implementation for review.
+Date: 2026-10-20. Status: implementation integrated into main; engineering review
+and executed qualification are recorded separately.
+
+The [validation record](validation/incremental-check-evidence-2026-10-20.md)
+preserves the initial 77-test candidate, the independently approved integration
+delta and the later 83-test execution at `3eaa9e28`. It does not turn the initial
+implementation into a retroactively pre-approved plan. Current final-check timing
+is in the [development guide](development.md#pr-check-scope); later composition
+and remaining journey evidence are tracked in the [progress ledger](project-progress.md).
 
 ## Decision
 

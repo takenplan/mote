@@ -73,7 +73,7 @@ node scripts/dev-server.mjs
 - **采集什么由你决定。** 每台设备都需明确开始采集；应用可设置为采集内容、仅记录活动或不记录。遮挡区域和可选文字隐私规则在端侧上传前生效。
 - **资料放在哪里由你决定。** 中央归档保存在自己的基础设施上；客户端内容保存在应用私有目录。中央内容加密可选，默认关闭，不等于整个 SQLite 元数据加密。
 - **AI 服务由你选择。** AI 请求会将检索到的文本发送至所配置模型；披露原始截图需要单独授权。可选 embedding 会向指定服务发送文本，自部署资料库不代表远程 AI 请求也在本机处理。
-- **归档与连接由你管理。** 可导出归档、制作离线备份，并单独撤销连接。当前多用户中央尚未执行配置的保留期限和资料库容量限制，详见[已知 MVP 缺口](docs/audits/business-flow-parity-2026-10-18.md)。
+- **归档与连接由你管理。** 可导出归档、制作离线备份，并单独撤销连接。当前多用户中央通过账号绑定的维护与准入执行配置的保留期限和存储容量，具体实现、验证范围及剩余旅程缺口见[项目地图](docs/project-map.md)和[进度台账](docs/project-progress.md)。
 
 详见[隐私控制](docs/privacy-and-metadata.md)、[内容存储](docs/content-storage.md)和[备份恢复](docs/deployment.md)。采样活动反映观察期间的覆盖时间，不能当作连续专注时长。
 
@@ -105,6 +105,7 @@ flowchart LR
 | 接入文件、日历或其他应用 | [来源与 MCP](docs/connectors.md) · [导入与记忆](docs/central-memory.md) · [编码对话](docs/coding-agent-memory.md) |
 | 了解记忆与处理 | [记忆生命周期](docs/memory-lifecycle.md) · [本地 OCR 与转写](docs/ocr-asr-implementation-plan.md) |
 | 排查问题 | [故障排查](docs/troubleshooting.md) · [文档索引](docs/README.md) |
+| 查看项目进展和架构决定 | [项目地图](docs/project-map.md) · [进度台账](docs/project-progress.md) · [ADR 台账](docs/architecture-decisions.md) |
 
 当前采集端支持 macOS 和 Android，尚未实现 Windows／Linux 屏幕采集。Mac DEV App 使用 ad-hoc 签名，尚未公证。Android 后台行为与耗电因机型而异；fixture、模拟器、真机和真实模型验证分别记录。
 

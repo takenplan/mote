@@ -73,7 +73,7 @@ Presets include hosted providers, local services such as Ollama and LM Studio, a
 - **You choose what to collect.** Collection starts explicitly on each device. Per-app rules let you collect content, keep activity only, or record nothing. Masks and optional text-based privacy rules apply on the device before upload.
 - **You choose where it lives.** Central stores the archive on your infrastructure. Client content is stored in app-private directories; Central content encryption is optional and off by default. It does not encrypt all SQLite metadata.
 - **You choose the AI service.** Retrieved text is sent to the configured model for AI requests. Original screenshot disclosure requires separate authorization. Optional embeddings send text to the embedding service you configure; self-hosting the archive does not make remote AI requests local.
-- **Export and connection controls.** Export your archive, make offline backups, and revoke individual connections. The current multi-user server does not yet enforce configured retention periods or archive capacity limits. See the [known MVP gaps](docs/audits/business-flow-parity-2026-10-18.md).
+- **Export and connection controls.** Export your archive, make offline backups, and revoke individual connections. The current multi-user server applies configured retention and storage capacity through account-bound maintenance and admission. See the [project map](docs/project-map.md) and [progress ledger](docs/project-progress.md) for implementation, validation and remaining journey gaps.
 
 See [privacy controls](docs/privacy-and-metadata.md), [content storage](docs/content-storage.md), and [backup and recovery](docs/deployment.md). Sampled activity shows coverage during observations, rather than continuous focus time.
 
@@ -105,6 +105,7 @@ Detailed guides are currently primarily in Chinese. Both READMEs cover the same 
 | Bring in files, calendars, or other apps | [Sources and MCP](docs/connectors.md) · [Import and memory](docs/central-memory.md) · [Coding conversations](docs/coding-agent-memory.md) |
 | Understand memory and processing | [Memory lifecycle](docs/memory-lifecycle.md) · [Local OCR and transcription](docs/ocr-asr-implementation-plan.md) |
 | Diagnose a problem | [Troubleshooting](docs/troubleshooting.md) · [Documentation index](docs/README.md) |
+| Check project status and architectural decisions | [Project map](docs/project-map.md) · [Progress ledger](docs/project-progress.md) · [ADR index](docs/architecture-decisions.md) |
 
 Current collectors support macOS and Android; Windows/Linux screen collection is not implemented. Mac DEV apps use ad-hoc signing and are not notarized. Android background behavior and battery use vary by device; fixture, emulator, physical-device, and live-model checks are documented separately.
 

@@ -176,7 +176,7 @@ node scripts/mote.mjs update --profile prod --home /srv/mote/profiles --version 
 
 Docker 更新只拉取已签名 manifest 中的 `ghcr.io/仓库@sha256:...`，验证本地 RepoDigest 后切换。不会使用漂移的 `latest` tag，也不把宿主 profile 凭据交给镜像拉取进程。公开发行依赖的 registry 可用性需要部署机器具备网络访问。
 
-同代更新沿用所选 profile 的配置与存储身份。执行完整实例恢复或带数据恢复的回退时，历史数据和身份保留，但旧登录凭据与执行授权会撤销，后台工作保持暂停；需要重新登录、配对并明确授权后再继续。恢复行为见下文和[多用户恢复契约](design/multiuser-lifecycle.md#stopped-instance-archive-checkpoint)。服务不会自动安装、降级或回退。
+同代更新沿用所选 profile 的配置与存储身份。执行完整实例恢复或带数据恢复的回退时，历史数据和身份保留，但旧登录凭据与执行授权会撤销，后台工作保持暂停；可信密码重新登录会以新权限恢复本人原有未来策略，不要求逐域重新批准；设备/目标权限需重新配对，旧 pending/unknown 外部操作不重放。恢复行为见下文和[多用户恢复契约](design/multiuser-lifecycle.md#stopped-instance-archive-checkpoint)。服务不会自动安装、降级或回退。
 
 ### 手动准备的版本
 
@@ -236,7 +236,7 @@ npm run restore:instance -- --from /srv/mote-backups/mote-epoch5-2026-10-18 --da
 
 恢复先验证完整 manifest、身份、文件和校验和，在私有目录准备并复核后发布；拒绝非空目标或覆盖活动资料，不启动服务。返回值中的 `configurationFile` 是恢复后的 `instance.yaml`，本机资料与日志路径已重定位。启动时显式选用这个文件，并检查部署路径和外部密钥来源；不要误用新初始化 profile 的空配置替代备份配置。
 
-恢复保留部署、账号、密码和规范历史，撤销旧登录/设备凭据、任务授权和插件授权，并暂停自动处理、Memory、连接器同步、出站 MCP 与自动化。重新登录并逐项确认授权后再恢复后台工作；已成功或结果未知的外部操作不会自动重放。先验收账号隔离、原文/原件、历史和暂停状态，再切换客户端地址并重新配对设备。保留原节点和备份，直到迁移验收完成。
+恢复保留部署、账号、密码和规范历史，撤销旧登录/设备凭据、任务与插件授权，停止状态下不启动后台工作。原有未来策略意图单独保留；首次可信密码登录为本人提交恢复协调任务，按当前配置重新核验并恢复获准的未来处理、Memory、连接器及自动化，不要求逐领域再次批准。原先暂停/停用和之后的新选择仍优先，某个范围失败不会阻止无关成功范围。旧 pending/unknown 操作、OAuth 流程、设备和日历目标权限不复活；设备另需配对。准确边界见[生命周期平价决定](adr-lifecycle-parity.md)。先验收身份、资料、恢复任务和具体等待/失败范围，再切换客户端；保留原节点与备份。
 
 托管 profile 也可使用 `node scripts/mote.mjs restore --profile prod --home /srv/mote-new/profiles --from BACKUP`。原生恢复保留操作员选择的 profile 配置，并返回已恢复实例 YAML 路径；要使用备份配置须显式选择返回文件。Docker 恢复要求目标卷为空且已有本地镜像，将资料准备到新卷、逐字节校验后原子发布 YAML 存储指针，保留旧卷且保持停止，见[容器恢复说明](validation/multiuser-container-backup.md)。不要在旧库上初始化新账号或套用旧版恢复命令；旧代备份只能交给匹配旧程序。
 

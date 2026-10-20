@@ -3,6 +3,12 @@
 Status: adopted for the multi-user implementation, 2026-10-15. M00 establishes
 the foundation; the remaining modules are planned, not delivered by this ADR.
 
+Progress update, 2026-10-20: the sentence above bounds this original M00 decision,
+not today's source composition. M01–M16 implementation and the subsequent parity
+integration are now in main. Their delivered source, scoped validation and
+remaining full-journey/device/model qualification are tracked separately in the
+[project map](project-map.md) and [progress ledger](project-progress.md).
+
 ## Decision and provenance
 
 Mote will support a small number of invited users on one self-hosted deployment,

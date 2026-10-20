@@ -6,6 +6,15 @@ The [multi-user integration decision](adr-multiuser-main-integration.md) records
 the scoped production implementation and its separate validation.
 Applies to main. This does not authorize deployment or a paid historical replay.
 
+Host boundary: the receipt backfill and migration passages below describe the
+original EvidenceArchive implementation and its frozen validation. Current scoped
+production follows the [integration decision](adr-multiuser-main-integration.md):
+startup and reads do not reconstruct missing historical dependency/publication
+receipts. Missing lineage stays unavailable; existing valid receipts survive normal
+restart. Current-format personal recovery has its own validated data-only contract.
+This distinction preserves retained dialogue and privacy deletion without adding an
+old-version compatibility path.
+
 ## Decision and scope
 
 The owner explicitly requires change detection at normalized, model-visible evidence,

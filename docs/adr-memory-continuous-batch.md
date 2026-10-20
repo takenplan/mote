@@ -2,6 +2,13 @@
 
 Status: accepted restoration of the original production journey, 2026-10-18.
 
+External-stage boundary: the [plugin replacement decision](adr-plugin-center-memory-replacement.md)
+changes declared stages inside this batch, not Mote's batch lifecycle, original
+authorization, independent review or fenced publication. Mem0 supplies the pinned
+CRUD/retrieval modules; Hindsight may supply its declared native draft stages.
+Neither installs a second Mote scheduler or bypasses the final host save. Supported
+bindings and validation limits are in [Plugin center](plugin-center.md).
+
 The original production `memory.batch` handler at `2c262762` continuously prepared
 evidence, extracted or reused exact candidates, corrected, independently reviewed,
 staged and committed one batch. The interim scoped implementation through

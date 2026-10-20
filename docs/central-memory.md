@@ -2,7 +2,9 @@
 
 > 用户自身表达、代办任务和项目归属见[个人记忆归属](personal-memory-attribution.md)。用户的日常、重复主观表达可以成为个人记忆；第三方或身份未知的有用内容可成为来源限定观察。当前个人 v5 组合按需原件上下文读取与完整范围评估，由模型择要保存，见[范围评估 ADR](adr-memory-range-evaluation.md)。上下文解释责任及旧 v4 固定定义见[上下文读取 ADR](adr-memory-context-reading.md)，旧 v3 固定定义见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
 
-> 当前 Central epoch 4：新产物须经过 admission 分层与独立审核；已授权且就绪的新输入采用有界滚动package，保留artifact/history的固定窗口。当前规则见 [系统改造ADR](adr-system-refactor.md)、[记忆准入设计](memory-admission.md)，存储边界见 [MVP 基线 ADR](adr-mvp-baseline.md)。
+> 当前生产 Central 使用 epoch 5 的账号作用域宿主。新产物仍须经过 admission 分层、独立审核和当前授权校验；当前接入见 [M07 Memory](design/multiuser-memory.md)。本文保留领域旅程及旧 EvidenceArchive 接口说明，旧路由和 artifact/history 窗口不能当作当前生产 API；存储边界见 [MVP 基线 ADR](adr-mvp-baseline.md)。
+
+> 手工任务创建时刻、自动接收时刻与原文时间应分别保留；所选策略负责语义，公共程序负责证据合同。当前 scoped 实现的评估时刻与 Skill 装配存在已确认偏离，见 [运行合同调查](audits/memory-runtime-contract-investigation-2026-10-20.md)。这两项尚未修复，不能用本页的预期合同证明生产已经符合。
 
 本文的通用导入与 [文件原件同步](files.md) 是不同入口。当前已共享 PDF/DOCX/XLSX 解码，已知文档可直接提取；需要模型映射的资料仍走预览确认。自动记忆调度与审核以 [生命周期](memory-lifecycle.md)、[准入](memory-admission.md) 和 [版本化更新](memory-updates.md) 为准。
 
@@ -104,10 +106,9 @@ HTML 布局由模型生成，展示失败时仍可查看文字和引用。引用
 | 解析清单 | 最多 32 MiB、10,000 条记录；单条正文最多 100,000 个字符 |
 | 自然语言导入说明 | 12,000 个字符 |
 | Memory 单任务 | 最多 20,000 个证据 ID、10,000 个待处理片段 |
-| Memory 总条数 | 100,000 条，达到后拒绝新增或校正；需移除不再需要的记忆 |
 | 洞察关注方向 | 8,000 个字符 |
 
-上述是实现上限，不代表建议一次处理到上限；总存储配额、模型输出预算和运行期限仍然适用。旧 `import:files --watch` 命令是独立的文本同步器，仍有每文件 100 KB 的限制，不具有中央通用导入的解析预览能力。
+上述旧导入／任务入口的结构限制不代表建议一次处理到上限，也不应直接套用到当前 scoped API。Memory 没有累计条数准入上限；配置的存储容量、实际输入输出和任务保护仍适用，见 [归档准入清理](adr-archive-admission-cleanup.md)。旧 `import:files --watch` 命令是独立的文本同步器，仍有每文件 100 KB 的限制，不具有中央通用导入的解析预览能力。
 
 ## 来源离线时能做什么
 
