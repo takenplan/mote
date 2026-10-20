@@ -35,6 +35,9 @@ const privateOperationId=(userId:string,businessId:string)=>{
  return id.safeParse(encoded).success?encoded:'task:'+digest;
 };
 export type TaskParent={parentTaskId?:string;parentOperationId?:string;generation?:{slot:string;version?:string}};
+// Domain-validated inputs retain their complete frozen scope; runtime metadata
+// uses the separate bounded encoding below.
+const inputJson=(value:unknown)=>{const result=JSON.stringify(value);if(result===undefined)throw new TaskError('task_metadata_invalid',413);return result;};
 const json=(value:unknown)=>{const result=JSON.stringify(value);if(result===undefined||Buffer.byteLength(result)>32768)throw new TaskError('task_metadata_invalid',413);return result;};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>[key,canonical(value)])):value;
 /** Only branded host failures cross the M04 callback boundary. Reconstruct
@@ -273,7 +276,7 @@ export class TaskExecution {
     const operation='processing-recheck:'+intent.id+':'+stamp,taskId=hash([owner.userId,operation,handler.kind,input]);
     if(this.row(taskId))return;
     const grant=this.grants.issueProcessingRecheck(intent.id,taskId);this.enabled(grant.userId);
-    this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,user_position) SELECT ?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,grant.userId,grant.grantId,json(input),grant.userId);
+    this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,user_position) SELECT ?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,grant.userId,grant.grantId,inputJson(input),grant.userId);
     this.engine.enqueue(privateOperationId(grant.userId,operation),handler.kind,input,{id:taskId,ownership:grant});
    });
   }
@@ -290,7 +293,7 @@ export class TaskExecution {
   };
   const prepare=(value:unknown,allowModels=true)=>{
     assert();const request=submitSchema.parse(value);if(request.kind==='processing.recheck')throw new TaskError('task_handler_unavailable',503);const handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
-    const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=json(input),operationId=privateOperationId(context.userId,request.operationId),taskId=hash([context.userId,request.operationId,request.kind,input]);
+    const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=inputJson(input),operationId=privateOperationId(context.userId,request.operationId),taskId=hash([context.userId,request.operationId,request.kind,input]);
     handler.authorizeInput?.(context,input);
     return {request,handler,input,encoded,operationId,taskId};
   };
@@ -415,7 +418,7 @@ export class TaskExecution {
    for(const task of payload.tasks){if(this.engine.get(task.id)||this.row(task.id)||task.dependencies.some(dependency=>!ids.has(dependency)))throw new TaskError('task_restore_conflict',409);if(Boolean(task.input)===Boolean(task.inputOmitted))throw new TaskError('task_archive_invalid');if(task.input&&this.handlers.has(task.kind))task.input=canonical(this.handlers.get(task.kind)!.parseInput(task.input)) as Record<string,unknown>;}
    const now=Date.now();
    for(const task of payload.tasks){
-    const grantId=randomUUID(),encoded=json(task.input??{}),terminal=['succeeded','failed','cancelled','stale'].includes(task.state),state=terminal?task.state:'blocked';
+    const grantId=randomUUID(),encoded=task.input&&this.handlers.has(task.kind)?inputJson(task.input):json(task.input??{}),terminal=['succeeded','failed','cancelled','stale'].includes(task.state),state=terminal?task.state:'blocked';
     this.db.prepare('INSERT INTO task_authorizations VALUES(?,?,?,?,1)').run(grantId,task.id,subject.userId,task.authorizationEpoch);
     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,external_state,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(task.id,subject.userId,grantId,encoded,task.externalState==='issued'?'unknown':task.externalState,subject.userId);
     const position=Number(this.db.prepare('INSERT INTO execution_user_sequence(user_id,next) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET next=next+1 RETURNING next').get(subject.userId)!.next);
