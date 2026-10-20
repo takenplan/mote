@@ -15,14 +15,16 @@ import {selectScopedFilePolicy} from './processing-policy-contract.js';
 import type {UserContext} from './context.js';
 import {registerUserRoute,type ScopedRuntime} from './http.js';
 import type {Configurations} from './configuration.js';
-import type {TaskExecution} from './task-execution.js';
+import {TaskError,type TaskExecution,type TaskRun} from './task-execution.js';
 import type {ProcessingHost} from './processing.js';
 
 const historicalSchema=z.object({after:z.string().datetime({offset:true}).optional(),before:z.string().datetime({offset:true}).optional(),sourceId:z.string().max(128).optional(),mode:z.enum(['complete','recompute']).default('complete')}).strict();
 type Query=z.infer<typeof historicalSchema>;
 const backfillProgress=z.object({queued:z.number().int().nonnegative().safe()});
 function publicBackfillProgress(value:unknown){const result=backfillProgress.safeParse(value);return result.success?{queued:result.data.queued}:null;}
-type Backfill={id:string;query:Query;watermark:number;cursor:number;queued:number;state:'waiting'|'succeeded';epoch:number};
+type Deferred={id:string;position:number;reason:'active'|'unknown'};
+type Backfill={id:string;query:Query;watermark:number;cursor:number;queued:number;state:'waiting'|'succeeded';epoch:number;deferred?:Deferred[]};
+function conflict(error:unknown){return error instanceof TaskError&&error.code==='file_processing_active'?'active':error instanceof TaskError&&error.code==='external_result_unknown'?'unknown':undefined;}
 /** The existing image settings and paged backfill are adapters to M04/M05/M06,
  * not a second image processor, model reader or execution authority. */
 export class ProcessingPerception {
@@ -40,14 +42,33 @@ export class ProcessingPerception {
    return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_perception_state VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_perception_state SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_perception_state WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&this.executionStamp(before?perceptionConfigurationSchema.parse(JSON.parse(String(before.json))):defaultPerceptionConfiguration())!==this.executionStamp(value)){const preserved=this.profileChanges.has(subject.userId);this.profileChanges.add(subject.userId);try{changed(subject);}finally{if(!preserved)this.profileChanges.delete(subject.userId);}}}};
   }}));
   this.stop=execution.register({kind:'processing.image-backfill',pool:'processing.image-backfill',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,publicProgress:publicBackfillProgress,parseInput:raw=>z.object({id:z.string().uuid()}).strict().parse(raw),authorizeInput:(context,input)=>this.load(context,String(input.id)),resources:input=>[{scope:'user',key:'image-backfill:'+input.id}],execute:async run=>{
-   for(;;){run.grant.assert();const job=this.load(run.context,String(run.task.input.id));if(job.state==='succeeded')return {jobId:job.id,queued:job.queued};const rows=this.candidates(run.context,job.query,job.watermark,job.cursor,200);
-    let inPage=0;for(const row of rows){run.grant.commit(()=>{const current=this.load(run.context,job.id);if(current.cursor>=Number(row.position))return;
-      if(job.query.mode==='recompute'||!this.host().forUser(run.context).imageComplete('original:'+row.id))try{const result=this.host().retryImageHistory(run.context,'original:'+row.id,'image-backfill:'+job.id+':'+row.id,job.query.mode);if(result.queued)current.queued++;}catch(error){if(!(error instanceof PrivateDataError||error instanceof ScopeError||error instanceof Error&&'statusCode' in error&&error.statusCode===409))throw error;}
-      current.cursor=Number(row.position);this.save(run.context,current);
-     });if(++inPage%25===0)await delay(0,undefined,{signal:run.signal});}
-    const progress=run.grant.commit(()=>{const current=this.load(run.context,job.id);if(rows.length<200){current.cursor=job.watermark;current.state='succeeded';}this.save(run.context,current);return {queued:current.queued};});run.progress(progress);await delay(0,undefined,{signal:run.signal});
+   for(;;){run.grant.assert();const job=this.load(run.context,String(run.task.input.id));if(job.state==='succeeded')return {jobId:job.id,queued:job.queued};
+    if(job.cursor<job.watermark){const rows=this.candidates(run.context,job.query,job.watermark,job.cursor,200);
+     let inPage=0;for(const row of rows){this.admitCandidate(run,job,{id:String(row.id),position:Number(row.position)});if(++inPage%25===0)await delay(0,undefined,{signal:run.signal});}
+     const progress=run.grant.commit(()=>{const current=this.load(run.context,job.id);if(rows.length<200)current.cursor=job.watermark;this.save(run.context,current);return {queued:current.queued};});run.progress(progress);await delay(0,undefined,{signal:run.signal});if(rows.length===200)continue;
+    }
+    // Conflicts retain only their exact private intent. Accepted siblings are
+    // never rescanned, recounted or held behind another original's outcome.
+    let inPage=0;for(const row of this.load(run.context,job.id).deferred??[]){this.admitCandidate(run,job,row,true);if(++inPage%25===0)await delay(0,undefined,{signal:run.signal});}
+    const pending=this.load(run.context,job.id);run.progress({queued:pending.queued});
+    if(pending.deferred?.some(row=>row.reason==='active'))throw new ExecutionFailure('waiting','file_processing_active',this.host().busyRecheckMs,{executionStarted:false});
+    if(pending.deferred?.length)throw new ExecutionFailure('blocked','external_result_unknown');
+    run.grant.commit(()=>{const current=this.load(run.context,job.id);current.state='succeeded';this.save(run.context,current);});
    }
   },classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError||error instanceof PrivateDataError?new ExecutionFailure('stale','image_backfill_retired'):new ExecutionFailure('permanent','image_backfill_failed')});
+ }
+ private admitCandidate(run:TaskRun,job:Backfill,row:{id:string;position:number},deferred=false){
+  try{run.grant.commit(()=>{const current=this.load(run.context,job.id);if(deferred?!current.deferred?.some(item=>item.id===row.id&&item.position===row.position):current.cursor>=row.position)return;
+   // An original can retire while an earlier page yields or waits. Only its
+   // current eligibility permits skipping; an admission error is not success.
+   const candidate=this.candidates(run.context,job.query,Math.min(job.watermark,row.position),row.position-1,1)[0];
+   if(candidate?.id===row.id&&(job.query.mode==='recompute'||!this.host().forUser(run.context).imageComplete('original:'+row.id))){const result=this.host().retryImageHistory(run.context,'original:'+row.id,'image-backfill:'+job.id+':'+row.id,job.query.mode);if(result.queued)current.queued++;}
+   current.deferred=(current.deferred??[]).filter(item=>item.id!==row.id||item.position!==row.position);if(!deferred)current.cursor=row.position;this.save(run.context,current);
+  });}catch(error){const reason=conflict(error);if(!reason)throw error;
+   // The rejected admission has rolled back, including policy/task mutations.
+   // Persist its intent separately, then let the initial scan visit siblings.
+   run.grant.commit(()=>{const current=this.load(run.context,job.id);current.deferred=[...(current.deferred??[]).filter(item=>item.id!==row.id||item.position!==row.position),{...row,reason}];if(!deferred)current.cursor=row.position;this.save(run.context,current);});
+  }
  }
  private sql(context:UserContext){const sql=new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));if(this.closed||sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new ScopeError('invalid_identity',401);return sql;}
  retire(userId:string){for(const [token,preview]of this.previews)if(preview.user===userId)this.previews.delete(token);}
@@ -110,7 +131,7 @@ export class ProcessingPerception {
   const token=randomUUID();this.previews.set(token,{user:context.userId,epoch:context.authorizationEpoch,expires:now+600000,query,watermark});return {token,count,bounded:false,mode:query.mode};
  }
  confirm(context:UserContext,raw:unknown){const {token}=z.object({token:z.string().uuid()}).strict().parse(raw),preview=this.previews.get(token);if(!preview||preview.user!==context.userId||preview.epoch!==context.authorizationEpoch||preview.expires<Date.now())throw new PrivateDataError('conflict',409);
-  const id=randomUUID(),job:Backfill={id,query:preview.query,watermark:preview.watermark,cursor:0,queued:0,state:'waiting',epoch:context.authorizationEpoch};this.sql(context).transaction(()=>{this.sql(context).run('INSERT INTO mp_image_backfills VALUES($user,?,?)',id,JSON.stringify(job));this.execution.forUser(context).submitSync({kind:'processing.image-backfill',operationId:'image-backfill:'+id,input:{id}});});this.previews.delete(token);return {queued:true,jobId:id};
+  const id=randomUUID(),job:Backfill={id,query:preview.query,watermark:preview.watermark,cursor:0,queued:0,state:'waiting',epoch:context.authorizationEpoch,deferred:[]};this.sql(context).transaction(()=>{this.sql(context).run('INSERT INTO mp_image_backfills VALUES($user,?,?)',id,JSON.stringify(job));this.execution.forUser(context).submitSync({kind:'processing.image-backfill',operationId:'image-backfill:'+id,input:{id}});});this.previews.delete(token);return {queued:true,jobId:id};
  }
  async close(){if(this.closed)return;this.closed=true;this.previews.clear();await this.stop();}
 }

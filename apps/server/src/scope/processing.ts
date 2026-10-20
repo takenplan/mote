@@ -67,6 +67,7 @@ export class ProcessingHost {
  readonly reviews:ReturnType<typeof processingReviews>;
  readonly importJobs:ReturnType<typeof processingImports>;
  readonly processors=new FileProcessorRuntime();
+ readonly busyRecheckMs=PROCESSOR_BUSY_RECHECK_MS;
  private readonly unregister:Array<()=>void|Promise<void>>=[];
  private closed=false;
  private readonly active=new Set<string>();
@@ -296,18 +297,21 @@ export class ProcessingHost {
   const payload=diarizationSchema.parse(this.artifact(context,artifactId).payload),sample=payload.samples.find(sample=>'speaker_samples/'+sample.speaker+'.wav'===name);if(!sample)throw missing();return this.sampleBytes(sample.wavBase64);
  }
  private sampleBytes(value:string){const bytes=Buffer.from(value,'base64');if(!validBase64(value)||bytes.length>768*1024||bytes.subarray(0,4).toString()!=='RIFF'||bytes.subarray(8,12).toString()!=='WAVE')throw new ExecutionFailure('permanent','processing_sample_invalid');return bytes;}
- retryImageHistory(context:UserContext,ref:string,operationId:string,mode:'complete'|'recompute'){this.policies.bindPlan(context,ref,true);return this.retryFileSync(context,ref,{operationId,stage:mode==='complete'?'image-complete':'transcribe'});}
+ retryImageHistory(context:UserContext,ref:string,operationId:string,mode:'complete'|'recompute'){return this.retryFileSync(context,ref,{operationId,stage:mode==='complete'?'image-complete':'transcribe'},()=>{},true);}
  retryImageCapture(context:UserContext,id:string,operationId:string){const original=this.ingress.forUser(context).originalForCapture(id);if(!original.mime.startsWith('image/'))throw missing();return this.forUser(context).retryFile(original.ref,{operationId,stage:'image-complete'});}
  private async retryFile(context:UserContext,ref:string,value:unknown,assertCurrent:()=>void=()=>{}){
   await this.configuration.forUser(context).view();return this.retryFileSync(context,ref,value,assertCurrent);
  }
- private retryFileSync(context:UserContext,ref:string,value:unknown,assertCurrent:()=>void=()=>{}){
+ private retryFileSync(context:UserContext,ref:string,value:unknown,assertCurrent:()=>void=()=>{},replacePolicyPlan=false){
   const request=z.object({operationId:z.string().min(1).max(128),stage:z.enum(['transcribe','diarize','summary','image-complete']).default('transcribe'),confirmUnknown:z.boolean().default(false),diarization:z.object({artifactId:z.string().regex(/^[a-f0-9]{64}$/),options:fileDiarizationOptionsSchema.nullable()}).strict().optional()}).strict().parse(value);
   const sql=this.sql(context),digest=identityHash(request);return sql.transaction(()=>{
    this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true);const prior=sql.get('SELECT digest,task_id FROM mp_file_retries WHERE user_id=$user AND original_id=? AND operation_id=?',ref.slice(9),request.operationId);
    if(prior){if(prior.digest!==digest)throw new PrivateDataError('conflict',409);this.execution.forUser(context).get(String(prior.task_id));return {queued:true,taskId:String(prior.task_id)};}
    assertCurrent();const before=this.cancellation(context,ref);if(before.wait==='running'||sql.get("SELECT e.id FROM execution_steps e JOIN user_tasks u ON u.user_id=e.user_id AND u.task_id=e.id WHERE u.user_id=$user AND e.user_id=$user AND e.kind LIKE 'processing.%' AND e.state='running' AND json_extract(u.input,'$.originalRef')=? LIMIT 1",ref))throw new TaskError('file_processing_active',409);
    if(before.wait==='unknown'&&!request.confirmUnknown)throw new TaskError('external_result_unknown',409);
+   // Historical retries select the current policy only after physical conflict
+   // refusal. Plan replacement and its admitted retry share this transaction.
+   if(replacePolicyPlan)this.policies.bindPlan(context,ref,true);
    if(request.stage==='image-complete'&&this.completeImageRecipe(context,ref))return {queued:false,complete:true};
    if(request.stage==='image-complete'&&!this.customImageRecipe(context,ref)){const status=this.forUser(context).status(ref),settings=this.snapshot(context,ref).settings;if(status.indexed&&(!settings.understandingEnabled||status.derivations.some(d=>d.kind==='image'))&&(!settings.summarize||status.derivations.some(d=>d.kind==='summary'))&&!before.canCancel)return {queued:false,complete:true};}
    const previous=this.fileControl(context,ref);if(previous.generation>=Number.MAX_SAFE_INTEGER)throw new PrivateDataError('conflict',409);
