@@ -1,5 +1,9 @@
 # Server test parallelism validation — 2026-10-20
 
+This report records the original parallelism checkpoint. Later advisory budgets,
+functional/optional entry separation, latest-main integration and Memory recovery
+changes have separate [final integration evidence](pr-168-189-191-integration-2026-10-20.md).
+
 ## Candidate and scope
 
 Original source: `4fc433cd2f9f0f43c38c6afc70834ba19d9d5c6a`.
