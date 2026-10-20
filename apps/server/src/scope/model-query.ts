@@ -12,6 +12,12 @@ export function fencedUsage(start:TaskModelRun['startUsage'],commit:<T>(work:()=
 
 const reasons=new Set(['invalid_response','invalid_json','invalid_shape','response_too_large','unretrieved_citation','truncated_citation','undeclared_citation','output_limit','tools_unverified','host_validation','tool_failure','image_disclosure_disabled']);
 const validationCodes=new Set([...Object.keys(validationFeedback),'owner_reply','memory_feedback_plan','summary_length','summary_too_long','invalid_summary_citations','invalid_semantic_grouping','invalid_import_manifest','semantic_products','calendar_shape','calendar_relation','calendar_quote']);
+const completedFailures=new WeakSet<object>();
+const terminalProviderFailures=new Set(['blocked:provider_authentication','blocked:provider_endpoint','blocked:provider_redirect','blocked:provider_quota',
+ 'permanent:provider_policy','permanent:provider_request_invalid','permanent:processing_limit','permanent:unsupported_format']);
+/** Only the exact safe error produced by a definitively ended query carries
+ * this local fact. Messages, serialized copies and caller properties cannot. */
+export function completedQueryFailure(error:unknown):boolean{return !!error&&typeof error==='object'&&completedFailures.has(error);}
 /** Only concrete host types and fixed reason codes cross the credential boundary.
  * Arbitrary messages, stacks and structural lookalikes never become diagnostics. */
 export function safeAgentFailure(error:unknown,context:FailureContext={}){
@@ -37,6 +43,6 @@ export async function queryWithUsage(model:Pick<TaskModelRun,'startUsage'|'codex
   // Acceptance is a local final check, after the model run has ended. A failed
   // check keeps the fragment failed and never asks the model to repair output.
   const accepted=accept?await accept(result):result;status='completed';return accepted;
- }catch(error){failed=true;if(error instanceof AgentYieldError)status='completed';if(error instanceof ProviderFailure&&(error.details.executionStarted===false||error.details.category==='transient'&&error.details.code==='rate_limited')&&sends<=1&&(!sample||sample.totalTokens===0))facts={executionStarted:false};throw safeAgentFailure(error,context);}
+ }catch(error){failed=true;if(error instanceof AgentYieldError)status='completed';if(error instanceof ProviderFailure&&(error.details.executionStarted===false||error.details.category==='transient'&&error.details.code==='rate_limited')&&sends<=1&&(!sample||sample.totalTokens===0))facts={executionStarted:false};const safe=safeAgentFailure(error,context);if(error instanceof AgentResponseError&&error.reason==='host_validation'||error instanceof ProviderFailure&&terminalProviderFailures.has(error.details.category+':'+error.details.code))completedFailures.add(safe);throw safe;}
  finally{try{await agent?.close();}finally{try{meter.finish(status,facts);}catch(error){try{meter.interrupt();}catch{}if(!failed)throw error;}}}
 }

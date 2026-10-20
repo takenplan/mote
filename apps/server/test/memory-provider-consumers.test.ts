@@ -1,8 +1,9 @@
+import {testEmbeddingConfiguration} from './fixtures/test-embedding-config.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import {createServer} from 'node:http';
-import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -33,7 +34,7 @@ async function fixture(t:any){
  // separate opt-in run uses the pinned real MiniLM endpoint for retrieval.
  const endpoint=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw),input=Array.isArray(body.input)?body.input:[body.input];res.setHeader('content-type','application/json');res.end(JSON.stringify({object:'list',data:input.map((_:unknown,index:number)=>({object:'embedding',index,embedding:[1,0,0]})),model:'transport-fixture'}));});
  await new Promise<void>(resolve=>endpoint.listen(0,'127.0.0.1',resolve));
- const real=process.env.MOTE_MEM0_TEST_EMBEDDING_CONFIG?JSON.parse(await readFile(process.env.MOTE_MEM0_TEST_EMBEDDING_CONFIG,'utf8')):undefined;
+ const real=await testEmbeddingConfiguration();
  const provider=new Mem0MemoryProvider({directory:join(directory,'mem0'),embedding:real?{baseUrl:real.baseUrl,apiKey:real.apiKey,model:real.model,dimension:real.dimension}:{baseUrl:`http://127.0.0.1:${(endpoint.address() as {port:number}).port}/v1`,apiKey:'generated-fixture',model:'transport-fixture',dimension:3}});
  bindings.providerFactory=()=>provider;
  const namespace:MemoryProviderNamespace={ownerId:'generated-owner',instanceId:'generated-mem0',bindingRevision:1};

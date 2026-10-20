@@ -36,7 +36,11 @@ recipe's extraction/review definition and fingerprint remain unchanged.
 
 ## Generated production journeys
 
-[`multiuser-recording-revision-parity.test.ts`](../apps/server/test/multiuser-recording-revision-parity.test.ts)
+The `multiuser-recording-revision-parity*.test.ts` family
+([first shard](../apps/server/test/multiuser-recording-revision-parity.test.ts),
+[02](../apps/server/test/multiuser-recording-revision-parity-02.test.ts),
+[03](../apps/server/test/multiuser-recording-revision-parity-03.test.ts),
+[04](../apps/server/test/multiuser-recording-revision-parity-04.test.ts))
 uses the actual application builder, connector package installation, owner HTTP
 routes, M05 execution, generated fixed-command vendor transport, M03 original
 storage, M06 processing, M07 intake and restart. Two accounts share the same
@@ -82,7 +86,7 @@ full scoped production canonical-input test.
 Run the focused suite headlessly:
 
 ```sh
-node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-recording-revision-parity.test.ts
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 'apps/server/test/multiuser-recording-revision-parity*.test.ts'
 ```
 
 Execution receipts, exact candidate and affected-component checks are reported

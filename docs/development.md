@@ -97,6 +97,69 @@ adb reverse tcp:47842 tcp:47842
 
 ## 验证命令
 
+`npm test`、`npm test -w @mote/server`、`check:local` 和 `check:affected` 默认只执行
+功能测试；生成素材、loopback 模型响应、真实 HTTP/子进程和必要的重启、撤权、租约与
+周期等待仍属于功能回归。大输入的完整性断言和物理并发限制不按名称或耗时自动归为性能测试。
+真实模型调用与绝对速度指标使用显式可选入口：
+
+| 入口（仓库根目录） | 范围 | 默认开启 |
+| --- | --- | --- |
+| `npm test` / `npm run check:affected -- --base <main>` | 生成夹具功能回归及所选组件检查 | 是 |
+| `npm run test:performance` | 120 条记录检索的 1 秒指标、2000 块转录 100 次校验的 2 秒指标；同时验证原功能断言 | 否 |
+| `npm run test:live` | 既有生成日记的真实 Codex Memory 链路；保留 8 次 query、8 次模型 turn 和既有单次 300 秒预算 | 否 |
+| `MOTE_MEM0_TEST_EMBEDDING_CONFIG=/absolute/private/config.json npm run test:live:embeddings` | 两个 Mem0/消费者套件使用明确配置的真实嵌入模型 | 否 |
+
+先构建相关工作区；可选入口也应记录版本、配置身份、结果与耗时。嵌入配置使用既有
+`baseUrl`、`apiKey`、`model`、`dimension` 字段，保存在私有本地文件中；默认入口忽略
+环境中遗留的真实嵌入配置与可选模式 guard，始终使用生成向量端点。显式模型入口可能产生费用，
+功能夹具通过不表示真实模型验收通过。本轮修改测试分组时不自动执行真实模型。
+其他 `scripts/benchmark-*` 各有输入要求，仍单独按需运行，不由默认检查或性能入口批量启动。
+
+Server 的 `npm test -w @mote/server` 使用 Node/tsx 按文件隔离运行，默认文件并发为
+`max(4, min(可用 CPU 数, 6))`；文件内部仍按原来的顺序执行。长套件已拆成均衡文件，
+断言、真实生命周期和原有时限保持不变。需要定向测量时可显式覆盖，例如
+`npm test -w @mote/server -- --test-concurrency=4`。并发越高不一定越快：部分场景
+自身会启动多路真实子进程，当前配置及测量依据见[Server 测试并行方案](design/server-test-parallelism.md)。
+
+<a id="test-performance-budget"></a>
+
+### 测试性能预算
+
+当前先对 Server 实施软预算：
+
+| 指标 | 建议值 | 超额后的处理 |
+| --- | --- | --- |
+| 普通测试文件 | 60 秒 | 新增或扩大的文件超额时，拆分独立场景，或记录具体长场景及保留原因 |
+| 单个测试用例 | 超过 30 秒提醒 | 检查重复准备、资源等待和可控时钟的适用性，保留必要的真实计时与生命周期 |
+| 文件行数、用例数 | 不设性能硬限制 | 用于可读性判断，不能代替实测耗时 |
+| 文件并发数 | 不设最低值 | 调整默认值前验证完整套件，并记录总耗时、CPU、内存和失败情况 |
+
+默认 `npm test -w @mote/server` 在原生 spec 输出后列出全部超额文件和用例，不额外运行测试。
+这个耗时提醒不执行性能探针，也不启用真实模型；两者仍由上表入口显式选择。
+文件使用 Node 的逐文件 summary wall time，不累加可能重叠的父子用例耗时；
+case 提醒不包含 suite、skip 或 TODO，失败用例的耗时仍保留。
+这些是性能与评审预算，不是新的执行超时或失败门槛；测试失败、取消、原有 deadline 和清理规则照常生效。
+中断可能只有部分记录或没有报告，不能据此声称完整通过。
+
+参考环境为 macOS arm64、18 核、64 GiB、Node 26.11.1、npm 11.20.0、默认六文件并发。
+不同机器、并发、缓存和后台负载会影响结果；比较时记录这些条件及源码、依赖和构建输入。
+一次超额先定位原因，不据此放宽超时，也不通过删断言、跳过场景或缩小必要规模达标。
+新增例外应注明精确场景、真实时序或规模依据、现有 timeout 和验证证据；例外继续显示提醒。
+
+已确认需要保留完整流程的长场景如下；说明仅适用于列明 case，不豁免同文件其他测试，也不表示当前耗时不可优化：
+
+- [自动 Insight](../apps/server/test/multiuser-ask.test.ts) 的 `automatic Insight waits for interval AND increments…`，真实等待 61 秒并验证窗口冻结、撤权和重启；[重新登录后的 future authority](../apps/server/test/multiuser-restored-future-authority.test.ts) 的 `password relogin issues fresh future…`，等待恢复后的真实 60 秒周期。均保留原生默认 120 秒时限。
+- [千条原件后台导入](../apps/server/test/memory-import-background.test.ts) 的 `HTTP import of a thousand generated originals…`，保留 HTTP 准备/确认路由（Fastify inject）、周期 worker、处理中间态及完整千条收尾，保留既有 390 秒 case timeout。
+- Perception 的 [OCR/pixel 实际调用复用监听器](../apps/server/test/multiuser-perception-history.test.ts)、[独立监听器](../apps/server/test/multiuser-perception-history-02.test.ts)，以及 declared kinds 的 [limit 8](../apps/server/test/multiuser-perception-history-04.test.ts) / [limit 3](../apps/server/test/multiuser-perception-history-05.test.ts) 场景，保留同实例内的多路实际执行、限流调整、资源占用及取消顺序，均保留默认 120 秒时限。素材与模型响应为生成 fixture。
+
+其余现有慢文件继续作为性能债列出，详见[性能预算基线与验证记录](validation/server-test-performance-budgets-2026-10-20.md)。
+显式传入原生 reporter/destination（含 `NODE_OPTIONS`、下划线别名）时完全交由 Node 处理，避免改变机器可读输出。
+需要自定义选择本报告器时，例如从仓库根目录运行：
+
+```sh
+npm test -w @mote/server -- --test-reporter=./test/performance-reporter.mjs
+```
+
 <a id="background-testing"></a>
 
 ### 本地后台测试

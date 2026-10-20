@@ -280,7 +280,7 @@ else {
     const operationLabels: Record<string, string> = {
       'mote:configure': "正在应用设置或迁移存储", 'mote:import-queue': "正在导入队列", 'mote:export-queue': "正在导出队列",
       'mote:source-sync': "正在扫描并同步来源",
-      'mote:retry': "正在同步待发记录", 'mote:source-files': "正在连接文件来源", 'mote:source-update': "正在保存来源设置",
+      'mote:retry': "正在同步待发记录", 'mote:source-update': "正在保存来源设置",
       'mote:source-calendar': "正在连接日历", 'mote:calendar-authorize': "正在读取日历授权", 'mote:installed-applications': "正在读取应用列表",
       'mote:support-export': "正在导出支持包", 'mote:diagnostics-export': "正在导出诊断", 'mote:diagnostics-sample': "正在读取诊断",
       'mote:connection-confirm': "正在连接中央节点", 'mote:connection-test': "正在测试连接",
@@ -288,7 +288,7 @@ else {
       'mote:start': "正在准备采集", 'mote:stop': "正在结束当前采集", 'mote:note': "正在保存随手记",
     };
     const handle = (channel: string, operation: (...args: unknown[]) => unknown) => {
-      const stage: EventStage | undefined = ({ 'mote:source-sync': 'SOURCE', 'mote:source-files': 'SOURCE', 'mote:source-calendar': 'SOURCE', 'mote:source-update': 'SOURCE', 'mote:connection-confirm': 'CONNECTION', 'mote:connection-test': 'CONNECTION', 'mote:update-check': 'UPDATE', 'mote:update-download': 'UPDATE', 'mote:update-install': 'UPDATE', 'mote:retry': 'UPLOAD', 'mote:configure': 'CONFIG', 'mote:start': 'CAPTURE', 'mote:stop': 'CAPTURE', 'mote:note': 'NOTE', 'mote:note-draft-update': 'NOTE', 'mote:support-export': 'SUPPORT', 'mote:import-queue': 'QUEUE', 'mote:export-queue': 'QUEUE' } as Record<string, EventStage>)[channel];
+      const stage: EventStage | undefined = ({ 'mote:source-sync': 'SOURCE', 'mote:source-calendar': 'SOURCE', 'mote:source-update': 'SOURCE', 'mote:connection-confirm': 'CONNECTION', 'mote:connection-test': 'CONNECTION', 'mote:update-check': 'UPDATE', 'mote:update-download': 'UPDATE', 'mote:update-install': 'UPDATE', 'mote:retry': 'UPLOAD', 'mote:configure': 'CONFIG', 'mote:start': 'CAPTURE', 'mote:stop': 'CAPTURE', 'mote:note': 'NOTE', 'mote:note-draft-update': 'NOTE', 'mote:support-export': 'SUPPORT', 'mote:import-queue': 'QUEUE', 'mote:export-queue': 'QUEUE' } as Record<string, EventStage>)[channel];
     ipcMain.handle(channel, async (event, bound, ...args) => {
         trusted(event);
         const expected=accountGeneration;
@@ -540,19 +540,10 @@ else {
         const id=receiptKey?selectedHistory.receivedCapture(config,receiptKey):undefined;if(!id)throw error;return readCentralContent(config,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
       });
     }));
-    handle('mote:source-files', (mode, input) => serialize(async () => {
-      requireAccount();const options = normalizeSourceOptions(input);
-      if (mode !== 'files' && mode !== 'directory') throw new Error(moteText("文件选择方式无效"));
-      const result = await dialog.showOpenDialog(window!, { title: moteText("选择持续同步到中央仓库的本地资料"), properties: mode === 'directory' ? ['openDirectory'] : ['openFile', 'multiSelections'], ...(mode === 'files' ? { filters: [{ name: moteText("UTF-8 文本资料"), extensions: options.extensions.map(e => e.slice(1)) }] } : {}) });
-      if (result.canceled) return { canceled: true };
-      for (const path of result.filePaths) await localSources!.addFiles(path, options);
-      return { canceled: false };
-    }));
     handle('mote:calendar-permissions', async () => { if (process.platform === 'darwin') await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars'); });
     handle('mote:diagnostics-sample', async () => { await diagnostics.sample(); updateUi(clientStatus()); return clientStatus(); });
     handle('mote:storage-statistics',async()=>storageStatistics([dataDirectory,queue.directory]));
     handle('mote:events-raw', async () => events.readRaw());
-    handle('mote:events-read', async () => events.read(true));
     handle('mote:diagnostics-export', async () => {
       const selectedDiagnostics=diagnostics,expected=accountGeneration;
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出本机数值诊断（不含内容与令牌）"), defaultPath: 'mote-diagnostics.json', filters: [{ name: 'JSON diagnostics', extensions: ['json'] }] });
@@ -686,7 +677,6 @@ else {
         await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?' + panes[kind]);
       }
     });
-    handle('mote:permissions', async () => { if (process.platform === 'darwin') { await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); } });
     handle('mote:data-folder', async () => { await shell.openPath(dataDirectory); });
     handle('mote:export-metadata', async () => {
       const selectedQueue=queue,expected=accountGeneration;

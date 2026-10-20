@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync, renameSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, delimiter } from 'node:path';
@@ -20,7 +20,9 @@ function fixture(t) {
     { name: '@mote/web', path: 'apps/web', dependencies: ['@mote/shared'] },
     { name: '@mote/desktop', path: 'apps/desktop', dependencies: ['@mote/shared'] },
   ];
-  write('.gitignore', 'node_modules/\n.npmrc\n**/dist/\n');
+  // Installation-root files/links must also stay outside source inventory so
+  // their negative identity tests exercise dependency inspection alone.
+  write('.gitignore', 'node_modules\n.npmrc\n**/dist/\n');
   write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*', 'packages/*'] }));
   write('package-lock.json', '{"generated":true}\n');
   write('tsconfig.base.json', '{}\n');
@@ -134,6 +136,79 @@ test('reviewed Vite output caches do not invalidate installed inputs, while othe
   assert.equal(f.key('server'), before);
   f.write('node_modules/.cache/unknown-input.json'); assert.notEqual(f.key('server'), before);
 });
+
+function installedKey(f) {
+  const key = f.key('server');
+  assert.match(key ?? '', /^[a-f0-9]{64}$/, 'installation inspection must produce a defined identity');
+  return key;
+}
+
+for (const root of ['node_modules', 'apps/server/node_modules']) {
+  test(`first-run reviewed caches preserve missing installation identity: ${root}`, t => {
+    const f = fixture(t), before = installedKey(f), path = join(f.directory, root);
+    mkdirSync(path, { recursive: true }); assert.equal(installedKey(f), before, 'empty root');
+    f.write(`${root}/.vite/vitest/generated/results.json`, '{}\n');
+    f.write(`${root}/.vite-temp/config.mjs`, 'generated transform\n');
+    assert.equal(installedKey(f), before, 'first cache-only root');
+    f.write(`${root}/.vite/vitest/generated/results.json`, '{"updated":true}\n');
+    assert.equal(installedKey(f), before, 'cache rewrite');
+    rmSync(path, { recursive: true }); assert.equal(installedKey(f), before, 'removed root');
+    f.write(`${root}/.vite-temp/config.mjs`, 'generated replacement\n');
+    assert.equal(installedKey(f), before, 'replacement cache-only inode');
+    rmSync(join(path, '.vite-temp'), { recursive: true }); assert.equal(installedKey(f), before, 'removed cache');
+  });
+
+  test(`cache-only installations still detect actual dependencies and unknown inputs: ${root}`, t => {
+    const f = fixture(t);
+    f.write(`${root}/.vite/vitest/generated/results.json`, '{}\n');
+    const empty = installedKey(f);
+    f.write(`${root}/generated-package/index.js`, 'generated dependency\n');
+    const installed = installedKey(f); assert.notEqual(installed, empty, 'package addition');
+    f.write(`${root}/generated-package/index.js`, 'generated changed dependency\n');
+    const changed = installedKey(f); assert.notEqual(changed, installed, 'package mutation');
+    rmSync(join(f.directory, root, 'generated-package'), { recursive: true });
+    assert.equal(installedKey(f), empty, 'package removal returns to no installed inputs');
+    f.write(`${root}/.cache/unknown-input.json`, '{}\n');
+    const unknown = installedKey(f); assert.notEqual(unknown, empty, 'unknown cache addition');
+    f.write(`${root}/.cache/unknown-input.json`, '{"updated":true}\n');
+    assert.notEqual(installedKey(f), unknown, 'unknown cache mutation');
+    rmSync(join(f.directory, root, '.cache'), { recursive: true });
+    assert.equal(installedKey(f), empty, 'unknown cache removal');
+  });
+
+  test(`nonempty installation metadata and file roots remain inputs: ${root}`, t => {
+    const f = fixture(t), path = join(f.directory, root), empty = installedKey(f);
+    const outside = mkdtempSync(join(tmpdir(), 'mote-installed-root-'));
+    t.after(() => rmSync(outside, { recursive: true, force: true }));
+    f.write(`${root}/generated-package/index.js`);
+    chmodSync(path, 0o755);
+    const installed = installedKey(f);
+    chmodSync(path, 0o700); assert.notEqual(installedKey(f), installed, 'root mode');
+    chmodSync(path, 0o755);
+    const beforeReplacement = installedKey(f);
+    renameSync(path, join(outside, 'retired'));
+    mkdirSync(path, { mode: 0o755 });
+    renameSync(join(outside, 'retired/generated-package'), join(path, 'generated-package'));
+    assert.notEqual(installedKey(f), beforeReplacement, 'root replacement with same package inode and bytes');
+    rmSync(path, { recursive: true });
+    f.write(root, 'generated file root\n'); assert.notEqual(installedKey(f), empty, 'file root');
+  });
+
+  test(`module-root symlinks retain missing, resolved and target replacement identity: ${root}`, { skip: process.platform === 'win32' }, t => {
+    const f = fixture(t), path = join(f.directory, root), missing = installedKey(f);
+    const outside = mkdtempSync(join(tmpdir(), 'mote-linked-root-')), target = join(outside, 'target');
+    t.after(() => rmSync(outside, { recursive: true, force: true }));
+    mkdirSync(dirname(path), { recursive: true }); symlinkSync(target, path);
+    const dangling = installedKey(f); assert.notEqual(dangling, missing, 'dangling root link');
+    mkdirSync(target);
+    const resolved = installedKey(f); assert.notEqual(resolved, dangling, 'link resolution to empty target');
+    mkdirSync(join(target, '.vite')); writeFileSync(join(target, '.vite/results.json'), '{}\n');
+    assert.equal(installedKey(f), resolved, 'reviewed cache content remains excluded');
+    renameSync(target, join(outside, 'retired')); mkdirSync(target);
+    assert.notEqual(installedKey(f), resolved, 'empty symlink target inode replacement');
+    rmSync(target, { recursive: true }); assert.equal(installedKey(f), dangling, 'target removal');
+  });
+}
 
 test('ignored built package contents remain inputs across byte-identical rebuilds', t => {
   const f = fixture(t); f.write('packages/agent/dist/index.js');

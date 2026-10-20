@@ -72,11 +72,17 @@ export function createTaskIdentity({ directory = process.cwd(), graph = workspac
       return cached.digest;
     } catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return 'missing'; throw error; }
   }
-  function snapshotTree(hash, path, visited = new Set(), modulesRoot = basename(path) === 'node_modules') {
+  function snapshotTree(hash, path, visited = new Set(), modulesRoot = basename(path) === 'node_modules', normalizeEmptyRoot = true) {
     hash.update(path).update('\0');
     let stat;
     try { stat = lstatSync(path, { bigint: true }); }
-    catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') { hash.update('missing\0'); return; } throw error; }
+    catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') { hash.update(modulesRoot && normalizeEmptyRoot ? 'no-installed-inputs\0' : 'missing\0'); return; } throw error; }
+    // First-run Vitest can create an otherwise absent workspace install root.
+    // Only actual readable directories containing no installed inputs are
+    // equivalent to missing roots. Links and their targets retain identity.
+    const entries = stat.isDirectory() && modulesRoot
+      ? readdirSync(path).sort().filter(entry => !['.vite', '.vite-temp'].includes(entry)) : undefined;
+    if (normalizeEmptyRoot && entries?.length === 0) { hash.update('no-installed-inputs\0'); return; }
     // Directory mtimes/size also change when reviewed output caches are
     // created. Included sorted children detect actual input additions/removals.
     hash.update(stat.isDirectory() ? [stat.dev, stat.ino, stat.mode].join(':') : signature(stat)).update('\0');
@@ -87,15 +93,14 @@ export function createTaskIdentity({ directory = process.cwd(), graph = workspac
       catch (error) { if (['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) { hash.update('unresolved\0'); return; } throw error; }
       // npm workspace links are represented by their selected source closure.
       // Following them here would invalidate every task on any workspace edit.
-      if (!workspaceTargets.has(target)) snapshotTree(hash, target, visited, modulesRoot);
+      if (!workspaceTargets.has(target)) snapshotTree(hash, target, visited, modulesRoot, false);
     } else if (stat.isDirectory()) {
       const key = `${stat.dev}:${stat.ino}`;
       if (visited.has(key)) { hash.update('visited\0'); return; }
       visited.add(key);
-      for (const entry of readdirSync(path).sort()) {
-        // Vite/Vitest write transforms, timing/results and temporary bundled
-        // config here. Their source/config/package inputs remain in the key.
-        if (modulesRoot && ['.vite', '.vite-temp'].includes(entry)) continue;
+      // Vite/Vitest output caches were filtered above; source/config/package
+      // inputs and all unreviewed entries remain in the key.
+      for (const entry of entries ?? readdirSync(path).sort()) {
         snapshotTree(hash, join(path, entry), visited);
       }
     }

@@ -24,6 +24,13 @@ or changed versions. An unstarted `activationRequired=true` job stays dormant.
 MVP historical jobs can be explicitly rerun; recovery does not infer owner
 authorization from past attempts. See the [activation regression](validation/query-lease-and-memory-activation-2026-10-14.md).
 
+Scoped issued model queries have an additional recovery guard: an uncertain
+outcome blocks until the owner explicitly confirms the existing task retry.
+Known completed failures retain ordinary explicit retry; exact successful query
+checkpoints are revalidated and reused without repeating a model call. Draft
+retention alone does not authorize another independent review. See
+[issued-query recovery](memory-review-policy.md#scoped-issued-query-recovery).
+
 New versioned built-in recipes and newly created unbound jobs with independent
 review use `range-evaluation@1`: complete target-range
 assessment and independent review precede model-selected Memory. Empty selection

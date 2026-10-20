@@ -9,6 +9,32 @@ recorded separately from this decision.
 
 ## Decision
 
+### Memory query outcomes (accepted 2026-10-20)
+
+The owner explicitly chose to keep main's unknown-outcome protection: a Memory
+query interrupted after issuance requires owner confirmation before repetition.
+An existing authenticated task retry with `confirmUnknown:true` records that
+confirmation; it does not establish the old outcome or rewrite failed/unknown
+usage. Preserve the same task, model, inputs, successful stages and account
+fences. A successful query result and its exact issuance settlement persist
+together and may be revalidated/reused before a later domain save completes.
+
+Definitively ended failures remain normally retryable. Concrete terminal provider
+rejections and completed bounded host-validation failures may settle only their
+exact external issuance, while keeping the query/domain failed and publishing
+no Memory. Timeouts, network failure, unavailable providers, local abort, lease
+loss and crashes retain unknown facts. Only concrete trusted types and fixed
+terminal category/code tuples establish completed failure; strings, copied
+errors and arbitrary provider fields cannot.
+
+KEEP independent review, failed usage, cancellation and publication fences.
+CHANGE the previous blanket assumption that every failed issued query remains
+unknown; REMOVE unconditional automatic repetition of an unknown reviewer after
+restart. EXCEPTION: owner-confirmed replay may incur another call while the old
+fact stays unknown. UNKNOWN: unsupported remote reconciliation and lost result
+bodies. Historical successful recovery reports retain their original scope;
+they do not establish automatic replay under this current decision.
+
 ### Cross-client resource waiting (accepted 2026-10-18)
 
 The owner reaffirmed this rule for every client and processing entry point:

@@ -47,7 +47,10 @@
     "build:central": "npm run build -w @mote/shared && npm run build -w @mote/agent && npm run build -w @mote/server && npm run build -w @mote/web",
     "check:central": "node scripts/release/check-affected.mjs --component central",
     "check:desktop": "node scripts/release/check-affected.mjs --component desktop",
-    "auth:initialize-admin": "npm run auth:initialize-admin -w @mote/server"
+    "auth:initialize-admin": "npm run auth:initialize-admin -w @mote/server",
+    "test:performance": "npm run test:performance -w @mote/server",
+    "test:live": "npm run test:live -w @mote/server",
+    "test:live:embeddings": "npm run test:live:embeddings -w @mote/server"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

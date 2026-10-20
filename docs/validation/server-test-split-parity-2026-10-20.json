@@ -1,0 +1,390 @@
+{
+  "base": "4fc433cd2f9f0f43c38c6afc70834ba19d9d5c6a",
+  "runtimeHead": "4fe376b0202910f796ea5bb660e69314c9f243b2",
+  "total": 397,
+  "families": 9,
+  "passed": true,
+  "audit": "Original git sources; exact registration/call hashes, expanded names/options/modes, enclosing binding declarations/types/values and canonical helper statements/order.",
+  "results": [
+    {
+      "family": "multiuser-memory",
+      "scenarios": 90,
+      "shards": [
+        "apps/server/test/multiuser-memory-02.test.ts",
+        "apps/server/test/multiuser-memory-03.test.ts",
+        "apps/server/test/multiuser-memory-04.test.ts",
+        "apps/server/test/multiuser-memory-05.test.ts",
+        "apps/server/test/multiuser-memory-06.test.ts",
+        "apps/server/test/multiuser-memory-07.test.ts",
+        "apps/server/test/multiuser-memory-08.test.ts",
+        "apps/server/test/multiuser-memory.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 74,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "55bdf62d42d5e53a8430e05e9ed0cbe5af8e27428f6184065576f98c50f5d3f4",
+      "helperSha256": "3e25dd9e05106c64628ecd98ab1ea1dd6ffd22751a402e63e666615580d70314",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-memory-02.test.ts",
+          "sha256": "62426689fd4910efa67b739682d4a46f276672165b14316769e945b0839077bc"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-03.test.ts",
+          "sha256": "4e2d329a7afc84c27113ef1e90ccdec0b58f0906e952d7f4d56740a5d2a7cb23"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-04.test.ts",
+          "sha256": "7f8785d79f9ef0170ef973580502f4ba36438a37ecb45b8475112106d7dbdc4e"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-05.test.ts",
+          "sha256": "2153e36873666f1d5450474f7252af766cc36473a6195af8bc9ece11827738e4"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-06.test.ts",
+          "sha256": "5e93fd16cea761584f8e51cc419b026e83ef9a70f04bf914291fa249e9d5d24d"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-07.test.ts",
+          "sha256": "0f9cea67bd8ecde20546f539e1cd199077c70a9b7d599f81234427b84ac55ec6"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory-08.test.ts",
+          "sha256": "3d0b2c0bd456dd883851fce730a2efd1480e5ff677c99604b959e2a10b97c737"
+        },
+        {
+          "path": "apps/server/test/multiuser-memory.test.ts",
+          "sha256": "eba4639972ddeeeda515f3331c40c1ced66d3fc198cf5aefd59daf4b8d319916"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-memory-suite.ts",
+          "sha256": "3cd4c3f3447cb099a0c87f12fd0f395397b2edbc79aa47a13582543756831b48"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-ask",
+      "scenarios": 65,
+      "shards": [
+        "apps/server/test/multiuser-ask-02.test.ts",
+        "apps/server/test/multiuser-ask-03.test.ts",
+        "apps/server/test/multiuser-ask-04.test.ts",
+        "apps/server/test/multiuser-ask-05.test.ts",
+        "apps/server/test/multiuser-ask-06.test.ts",
+        "apps/server/test/multiuser-ask.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 60,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "781244402c5e0447017b9d76cd3e3c580d1ce92697bd0b3ee03697fcb2ee8061",
+      "helperSha256": "2b3f16bec86c26b461dd6a7db87bc074928f9b3144a6ccc0ea3878852aae99a4",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-ask-02.test.ts",
+          "sha256": "befc12af2e8209dc245a3a674bd716a526a3322d7cfa23c63d2d74cc5a991de0"
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-03.test.ts",
+          "sha256": "b2237431125d99f50b7d27a6bf72bb6374497e7af4b0e9a70b9c8475e6e2f7b6"
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-04.test.ts",
+          "sha256": "c2b3f4e3cb0091052e9f3e0d3c67b346a2ad77028388f30966617852d1260077"
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-05.test.ts",
+          "sha256": "71548b5ac107290f349437a358ac19f2cd1878e284a1bdf1bbfa5acd7cda338d"
+        },
+        {
+          "path": "apps/server/test/multiuser-ask-06.test.ts",
+          "sha256": "d51938bb564300dee37d7a88f5fbe42ff1fed96259ca168392e52760e95139b2"
+        },
+        {
+          "path": "apps/server/test/multiuser-ask.test.ts",
+          "sha256": "42c103364f11874cba2836291a40627fe2706aa1fcf30b147247bfd8fc0c8800"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-ask-suite.ts",
+          "sha256": "2a93b5e96b52971da01ea8f108b7f7895f87730525a9e58b0daa73a242738b9b"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-processing",
+      "scenarios": 68,
+      "shards": [
+        "apps/server/test/multiuser-processing-02.test.ts",
+        "apps/server/test/multiuser-processing-03.test.ts",
+        "apps/server/test/multiuser-processing-04.test.ts",
+        "apps/server/test/multiuser-processing-05.test.ts",
+        "apps/server/test/multiuser-processing-06.test.ts",
+        "apps/server/test/multiuser-processing.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 43,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "288eb1093aca42213d32556ff2d3da0c6d8b31f0a4f74c3dc88893dad3cb0291",
+      "helperSha256": "5d5bf4c830839c62ea4dcc0744d0f4a13ad5cfa3eb5c3655709de5da3936bcc0",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-processing-02.test.ts",
+          "sha256": "8e4b6aeb3dc1cccd09626da420654883eaa61041c8c31f794cbdb7cc8b1dbb15"
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-03.test.ts",
+          "sha256": "99b8325cd49e82060bf4a8bba035db7ad223537fb3399c092ebbca08303bbc23"
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-04.test.ts",
+          "sha256": "e058860e9430f22fe1ae8c4b433609d051c679037393237882a5b077bca9e93f"
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-05.test.ts",
+          "sha256": "6016014a8dd733aa4f6b90eae7e3c8e4827b2ad4b29ca4b69e2e58467b4ada69"
+        },
+        {
+          "path": "apps/server/test/multiuser-processing-06.test.ts",
+          "sha256": "bbb563d3ba5a7f7da5fbc5905353498495800a60ff6e1924c56cd3caa5eae6c4"
+        },
+        {
+          "path": "apps/server/test/multiuser-processing.test.ts",
+          "sha256": "54b4e17617c5059e30f2cbdd7e3c794cf377c8304c7f4aa56b4db8682610b2bb"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-processing-suite.ts",
+          "sha256": "68b8c1d82e24a2128f6793fe57548440f6289a9ff4f91293762ae01d74273375"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-connectors",
+      "scenarios": 53,
+      "shards": [
+        "apps/server/test/multiuser-connectors-02.test.ts",
+        "apps/server/test/multiuser-connectors-03.test.ts",
+        "apps/server/test/multiuser-connectors-04.test.ts",
+        "apps/server/test/multiuser-connectors-05.test.ts",
+        "apps/server/test/multiuser-connectors.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 47,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "91dff259b38801460bd5b3e869d3342413d5f32616c8c73ebe0fbb3a292e90af",
+      "helperSha256": "7c8a182d13ed20a28b058ec38a0131da014491b4f2b24a5f03e98b712fe8599f",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-connectors-02.test.ts",
+          "sha256": "d161aa08483109a394fded2bb3b8ef15e7dbb3059d3aa3bb0586ac8447f40db6"
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-03.test.ts",
+          "sha256": "3a5ee0d9626448d1a6a3012c014819ffa760050cc03c4b807e5b83c1aeab2a1e"
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-04.test.ts",
+          "sha256": "137a224cc3469e47376e00bf3726bea088d524c83c4f1ecfe29f6df910fce3a5"
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors-05.test.ts",
+          "sha256": "e1ee0a2d6123011a063e91ba2f28b2cf0dc700c00d5310c66139cef82de73a62"
+        },
+        {
+          "path": "apps/server/test/multiuser-connectors.test.ts",
+          "sha256": "24105b95f00dd1db51a07bb4858918341aff3d06213127dbb9446ef866a020a8"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-connectors-suite.ts",
+          "sha256": "eb4a094bd0e3a75773a303baa66b03956996d4280431c7b7eeca1c496c63a201"
+        }
+      ]
+    },
+    {
+      "family": "file-processing",
+      "scenarios": 59,
+      "shards": [
+        "apps/server/test/file-processing-02.test.ts",
+        "apps/server/test/file-processing-03.test.ts",
+        "apps/server/test/file-processing-04.test.ts",
+        "apps/server/test/file-processing-05.test.ts",
+        "apps/server/test/file-processing.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 56,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "0b4ef27a56675335afbb3ec2de6b1c08c97e3f36d60723bd30adbca9c817dc3a",
+      "helperSha256": "28a645a44b3027bd59f854321395506da9042800fe1a0a55827d6e930d0c92c0",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/file-processing-02.test.ts",
+          "sha256": "cf125d1d29e81abaeb59b65825d1b4d19d574eb0afce95c0372bcfaff3b855ea"
+        },
+        {
+          "path": "apps/server/test/file-processing-03.test.ts",
+          "sha256": "d747a12715f3cf2bbc68cb98d8fdf618a9411a9fa24232a04760f70bac576f09"
+        },
+        {
+          "path": "apps/server/test/file-processing-04.test.ts",
+          "sha256": "87e83fa3344693bb84bbf2d5a28f21c3066b6462fd48481158d4156c9a788098"
+        },
+        {
+          "path": "apps/server/test/file-processing-05.test.ts",
+          "sha256": "1991767a8750b79b2278492f97895b804b031d25ac5ca997384b7715f1b57e31"
+        },
+        {
+          "path": "apps/server/test/file-processing.test.ts",
+          "sha256": "f4600aaba2b78b2cdb7b4d829c5e805bf725eb92c88eeba4af8c4e9cab9125fb"
+        },
+        {
+          "path": "apps/server/test/fixtures/file-processing-suite.ts",
+          "sha256": "7ec208d324923a60a27837c9807aa2f4d5787c5386d7262867f6061825143ad6"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-perception-history",
+      "scenarios": 11,
+      "shards": [
+        "apps/server/test/multiuser-perception-history-02.test.ts",
+        "apps/server/test/multiuser-perception-history-03.test.ts",
+        "apps/server/test/multiuser-perception-history-04.test.ts",
+        "apps/server/test/multiuser-perception-history-05.test.ts",
+        "apps/server/test/multiuser-perception-history-06.test.ts",
+        "apps/server/test/multiuser-perception-history.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 7,
+      "partitionedOriginalLoops": 2,
+      "expandedIdentitySha256": "737f9829f3749eabc38943efbbdce63cb0e51593986105f76dc550eb2988fab0",
+      "helperSha256": "8bb6c351def6c2f1282dc55a2a5e32594e365822f587c268b30c3e45b64b9e52",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-perception-history-02.test.ts",
+          "sha256": "57c4b7632f7b3843cd233fb4a775eec12aee324cd1a6e4db874c053472ba912d"
+        },
+        {
+          "path": "apps/server/test/multiuser-perception-history-03.test.ts",
+          "sha256": "fa071f33bd7fc06482cb3e91d65a78ef759b15e82180a7b71884a0c487807968"
+        },
+        {
+          "path": "apps/server/test/multiuser-perception-history-04.test.ts",
+          "sha256": "e751e4a44c41ec5c21453ad0ec79e2c3ff1b98aa78ee6b63e0abc0fbf6ee1334"
+        },
+        {
+          "path": "apps/server/test/multiuser-perception-history-05.test.ts",
+          "sha256": "e69d1c46482b9ea903164c4bd76071bca006314d1eb34e2bf6ca6536a13a9a1b"
+        },
+        {
+          "path": "apps/server/test/multiuser-perception-history-06.test.ts",
+          "sha256": "a81ef64b4cf43eb240103a171bc82629ba51da49dc7a02bfeca88292db4b38a5"
+        },
+        {
+          "path": "apps/server/test/multiuser-perception-history.test.ts",
+          "sha256": "97ddfc7ba941492b7b3349a8809e3b3b43032ad989a513c9fef5627a049d8472"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-perception-history-suite.ts",
+          "sha256": "61efe88ef727272dbd4a54712e3b38db01c1b2c9230f6ec388d2fb44fc4b3f05"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-recording-revision-parity",
+      "scenarios": 11,
+      "shards": [
+        "apps/server/test/multiuser-recording-revision-parity-02.test.ts",
+        "apps/server/test/multiuser-recording-revision-parity-03.test.ts",
+        "apps/server/test/multiuser-recording-revision-parity-04.test.ts",
+        "apps/server/test/multiuser-recording-revision-parity.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 8,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "d7833ba95f5691183471df1f1ac1c2c3cfedd80a69a2e1e4fb9f793c0122be64",
+      "helperSha256": "34e10165b362a2e50109dd9777fb4c97979b7e2dfb37de445fa7dba51263551a",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-recording-revision-parity-02.test.ts",
+          "sha256": "30b2d94892c70170ec938df9e7e9d15ed3d47f701b8bcbd0622415c72942adc6"
+        },
+        {
+          "path": "apps/server/test/multiuser-recording-revision-parity-03.test.ts",
+          "sha256": "fce65dcf49ab6ec67a9773002658ad13682fe853e38a1902801ca2f2a4fcf453"
+        },
+        {
+          "path": "apps/server/test/multiuser-recording-revision-parity-04.test.ts",
+          "sha256": "ef25c3df353abdc72cdde0bb78fe53a41d81a68f793b47156ebbd77fc8482022"
+        },
+        {
+          "path": "apps/server/test/multiuser-recording-revision-parity.test.ts",
+          "sha256": "f5f400b1bdebec6e0e23a025581ee55d31debc072ab2b895f6ff870e4e721267"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-recording-revision-parity-suite.ts",
+          "sha256": "88798b26a6d1efbdb7937d996b17f3708f1a0dd68f34bf23acb85d12305e3591"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-mcp-query",
+      "scenarios": 26,
+      "shards": [
+        "apps/server/test/multiuser-mcp-query-02.test.ts",
+        "apps/server/test/multiuser-mcp-query-03.test.ts",
+        "apps/server/test/multiuser-mcp-query-04.test.ts",
+        "apps/server/test/multiuser-mcp-query.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 17,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "116c6ea901eb4ffce406f260e840a0cd4844e19bf84d518cc72299c1038848c7",
+      "helperSha256": "5858b0a022d8295c9580801d949d4c447ef2ed1357d7c062aa564793ea54fffc",
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-mcp-query-02.test.ts",
+          "sha256": "8d7306c2343e1f223457894c0815a1059ddeaf475c9dd1c41e4c276655fa9729"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-query-03.test.ts",
+          "sha256": "e3e3ef874d9f48c3bebe6dcef484aebd2c9139cf68fbab2b9a4c2787704d1a17"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-query-04.test.ts",
+          "sha256": "5bb1ba33f2237c8054c77ce967148dc4dd9f05dcacfa06919a15d37fc1f60f8c"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-query.test.ts",
+          "sha256": "d0cce70b4f45f97e6225fbb33785e0715c6a9b534012e39558bcd27a55f4396d"
+        },
+        {
+          "path": "apps/server/test/fixtures/multiuser-mcp-query-suite.ts",
+          "sha256": "e948e077225e60434b7e9ab35006f247f2f987012971a149993f1a0f5554b167"
+        }
+      ]
+    },
+    {
+      "family": "multiuser-mcp-memory",
+      "scenarios": 14,
+      "shards": [
+        "apps/server/test/multiuser-mcp-memory-02.test.ts",
+        "apps/server/test/multiuser-mcp-memory-03.test.ts",
+        "apps/server/test/multiuser-mcp-memory-04.test.ts",
+        "apps/server/test/multiuser-mcp-memory.test.ts"
+      ],
+      "exactWholeRegistrationBlocks": 9,
+      "partitionedOriginalLoops": 0,
+      "expandedIdentitySha256": "610aafe4391aeafc7dd900e6ae3b75ffecf7787afa68398b5d8a75005ba3cb24",
+      "helperSha256": null,
+      "inputFiles": [
+        {
+          "path": "apps/server/test/multiuser-mcp-memory-02.test.ts",
+          "sha256": "d5e90ab3059ec1dcd5313d0999a84fe49d6176bfb971deb4e54d3878af0ce963"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-memory-03.test.ts",
+          "sha256": "cd2adab88fc706f97d4790007c44c59eed9e6cbbd5922f9ad2b67c5897e09003"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-memory-04.test.ts",
+          "sha256": "09ebc108c134eadb5f4f3a38909d84dd9f2db87c1e2125f461b2c685d8f545f2"
+        },
+        {
+          "path": "apps/server/test/multiuser-mcp-memory.test.ts",
+          "sha256": "07b0a9896696e579dab8321d2ed66bd8a2f0474897083559ccc730d59a0ecf7c"
+        }
+      ]
+    }
+  ]
+}
