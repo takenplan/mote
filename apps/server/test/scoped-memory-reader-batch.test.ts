@@ -12,7 +12,7 @@ async function fixture(t:TestContext){
  await f.replace(f.a.token,'memory',{...settings,automatic:false,integration:false});
  const materials=await Promise.all(['first','tail','optional','changed','valid'].map(key=>f.publish(f.a,'A','same-source',key,'Generated reader '+key+'.'))),data=await f.data(f.a);
  const records=materials.map(material=>data.materialEvidence(material.id)[0]),pins=records.map(record=>({id:record.id,hash:memoryEvidenceFingerprint(record)}));
- const input=scopedMemoryTaskSchema.parse({jobId:randomUUID(),phase:'extract',inputs:pins.slice(0,2),readInputs:pins.slice(2),evidenceReadRanges:records.slice(2).map(record=>({id:record.id,offset:0,length:record.ocrText.length})),materialPins:materials.map(material=>({id:material.id,revision:material.revision,required:['material']})),related:[],binding:data.binding(),generation:data.state().generation,deletionSnapshot:data.deletionSnapshot(),automatic:false,profile:'personal',timeZone:'UTC'});
+ const evaluationTime='2037-04-10T08:00:00.000Z',input=scopedMemoryTaskSchema.parse({evaluationContext:{time:evaluationTime,inputs:pins.map(pin=>({id:pin.id,time:evaluationTime}))},jobId:randomUUID(),phase:'extract',inputs:pins.slice(0,2),readInputs:pins.slice(2),evidenceReadRanges:records.slice(2).map(record=>({id:record.id,offset:0,length:record.ocrText.length})),materialPins:materials.map(material=>({id:material.id,revision:material.revision,required:['material']})),related:[],binding:data.binding(),generation:data.state().generation,deletionSnapshot:data.deletionSnapshot(),automatic:false,profile:'personal',timeZone:'UTC'});
  t.after(()=>assert.equal(f.requests.length,0,'these scoped reads never request a model'));
  return {f,data,input,records,materials};
 }
@@ -73,7 +73,7 @@ test('whole-input Material mapping reads grow with evidence inputs and are refre
   }
  }
  mappingReads=0;versions.length=0;assert.deepEqual(data.assertInputs({...input,evidenceReadRanges:undefined}),records.slice(0,2));assert.equal(mappingReads,0);assert.deepEqual(versions,materials.map(material=>material.id),'without delivered read ranges, the original complete Material-pin guard remains in force');
- const unknown=scopedMemoryTaskSchema.parse({...input,inputs:[input.inputs[0],{id:randomUUID(),hash:input.inputs[1].hash}]});
+ const missingId=randomUUID(),unknown=scopedMemoryTaskSchema.parse({...input,evaluationContext:{...input.evaluationContext,inputs:input.evaluationContext.inputs.map(pin=>pin.id===input.inputs[1].id?{...pin,id:missingId}:pin)},inputs:[input.inputs[0],{id:missingId,hash:input.inputs[1].hash}]});
  assert.throws(()=>data.assertInputs(unknown),error=>(error as {code?:string}).code==='not_found','an unknown required evidence mapping cannot skip the whole-input evidence guard');
 });
 
