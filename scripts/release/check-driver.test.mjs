@@ -27,20 +27,20 @@ async function repository(t) {
   const entry = join(root, 'entry.mjs');
   await writeFile(entry, `import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';import {join} from 'node:path';import {runChecks} from ${JSON.stringify(driverUrl)};const options={directory:process.argv[3]};if(process.argv[4]!=='default')options.receiptPath=process.argv[4];if(process.argv[5]==='identity')options.inputIdentity=()=>createHash('sha256').update(readFileSync(join(options.directory,'fixture.txt'))).digest('hex');process.exitCode=await runChecks(JSON.parse(readFileSync(process.argv[2],'utf8')),options);`);
   t.after(async () => {
-    for (const run of runs) if (run.child.exitCode === null && run.child.signalCode === null) run.child.kill('SIGTERM');
+    for (const run of runs) if (!run.naturalExitOnly && run.child.exitCode === null && run.child.signalCode === null) run.child.kill('SIGTERM');
     await Promise.all(runs.map(run => run.done));
     await rm(root, { recursive: true, force: true });
   });
   async function start(plan, options = {}) {
     const id = randomUUID(), planPath = join(root, `${id}-plan.json`), receiptPath = options.defaultReceipt ? 'default' : join(root, `${id}-receipt.json`);
     await writeFile(planPath, JSON.stringify(plan));
-    const child = spawn(process.execPath, [entry, planPath, options.directory ?? directory, receiptPath, options.inputIdentity ? 'identity' : ''], {
+    const child = spawn(process.execPath, [options.entry ?? entry, planPath, options.directory ?? directory, receiptPath, options.inputIdentity ? 'identity' : ''], {
       env: { ...process.env, ...options.env, ...(options.path ? { PATH: options.path } : {}) }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
     for (const stream of [child.stdout, child.stderr]) stream.on('data', part => { output += part; });
     const done = new Promise((resolveExit, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolveExit({ code, signal, output })); });
-    const run = { child, done, receiptPath, output: () => output }; runs.push(run); return run;
+    const run = { child, done, receiptPath, naturalExitOnly: options.naturalExitOnly, output: () => output }; runs.push(run); return run;
   }
   const node = (id, code, extra = []) => ({ id, phase: 'fixture', command: process.execPath, args: ['-e', code, ...extra] });
   return { root, directory, git, start, node, paths: checkDriverPaths(directory) };
@@ -63,6 +63,76 @@ test('real driver stops after failure and writes elapsed metadata without comman
   assert.equal(raw.includes(secret), false); assert.equal(raw.includes('process.exit(7)'), false);
   assert.match(terminal.output, /PASS fixture\/first .*s/); assert.match(terminal.output, /FAIL fixture\/failing .*exit 7/); assert.match(terminal.output, /UNRUN fixture\/unrun/);
   assert.equal(await exists(f.paths.lockDirectory), false);
+});
+
+for (const scenario of [
+  {
+    name: 'post-close probe EPERM retains natural exit 17 and preserves the cleanup lock',
+    exitCode: 17, probeExists: false, signals: [0, 'SIGTERM'],
+    errors: [['groupExists', 'post_close', 0], ['signalGroup', 'finally', 'SIGTERM']],
+  },
+  {
+    name: 'post-close SIGTERM EPERM retains natural exit 0 and preserves the cleanup lock',
+    exitCode: 0, probeExists: true, signals: [0, 'SIGTERM', 'SIGTERM'],
+    errors: [['signalGroup', 'post_close', 'SIGTERM'], ['signalGroup', 'finally', 'SIGTERM']],
+  },
+]) test(scenario.name, { skip: process.platform === 'win32' }, async t => {
+  const f = await repository(t), entry = join(f.root, 'group-error-entry.mjs');
+  const taskPidPath = join(f.root, 'task.pid'), callsPath = join(f.root, 'group-calls.json'), unexpected = join(f.root, 'unexpected');
+  // Only this driver process is patched. The real task has its own unmodified
+  // process object, exits naturally, and has already closed before any probe.
+  await writeFile(entry, `
+    import assert from 'node:assert/strict';
+    import { readFileSync, writeFileSync } from 'node:fs';
+    import { runChecks } from ${JSON.stringify(driverUrl)};
+    const signals = ${JSON.stringify(scenario.signals)}, calls = [], originalKill = process.kill;
+    process.kill = (target, signal) => {
+      calls.push({ target, signal });
+      assert.ok(Number.isInteger(target) && target < 0, 'only generated negative group targets are allowed');
+      assert.equal(signal, signals[calls.length - 1], 'unexpected group operation');
+      if (${scenario.probeExists} && calls.length === 1) return true;
+      throw Object.assign(new Error('Generated group permission failure'), { code: 'EPERM', errno: -1, syscall: 'kill' });
+    };
+    try {
+      process.exitCode = await runChecks(JSON.parse(readFileSync(process.argv[2], 'utf8')), {
+        directory: process.argv[3], receiptPath: process.argv[4],
+      });
+      assert.equal(calls.length, signals.length, 'all scripted group operations must occur');
+    } finally {
+      process.kill = originalKill;
+      writeFileSync(${JSON.stringify(callsPath)}, JSON.stringify(calls));
+    }
+  `);
+  const run = await f.start([
+    { ...f.node('server', `require('node:fs').writeFileSync(${JSON.stringify(taskPidPath)},String(process.pid));process.exitCode=${scenario.exitCode};`), phase: 'test' },
+    f.node('following', `require('node:fs').writeFileSync(${JSON.stringify(unexpected)},'unexpected')`),
+  ], { entry, naturalExitOnly: true });
+  // Await the driver close before any assertion or fixture-directory cleanup.
+  // Cleanup must never send a signal to this naturally terminating fixture.
+  const terminal = await run.done;
+  assert.equal(terminal.code, 1, terminal.output); assert.equal(terminal.signal, null);
+  const taskPid = Number(await readFile(taskPidPath, 'utf8'));
+  const raw = await readFile(run.receiptPath, 'utf8'), receipt = JSON.parse(raw), measured = receipt.steps[0];
+  assert.ok(Number.isInteger(taskPid) && taskPid > 0); assert.notEqual(taskPid, run.child.pid);
+  assert.equal(measured.process.pid, taskPid); assert.equal(measured.process.expectedPgid, taskPid);
+  assert.equal(measured.process.terminal.code, scenario.exitCode); assert.equal(measured.process.terminal.signal, null);
+  for (const time of [measured.process.spawnAttemptedAt, measured.process.terminal.closedAt, ...receipt.processGroupErrors.map(error => error.at)]) {
+    assert.equal(new Date(time).toISOString(), time);
+  }
+  assert.deepEqual(JSON.parse(await readFile(callsPath, 'utf8')), scenario.signals.map(signal => ({ target: -taskPid, signal })));
+  assert.deepEqual(receipt.processGroupErrors.map(({ at, ...error }) => error),
+    scenario.errors.map(([operation, context, signal], index) => ({
+      errorId: index + 1, operation, context, pid: taskPid, targetPgid: taskPid, target: -taskPid,
+      signal, code: 'EPERM', errno: -1, syscall: 'kill',
+    })));
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.exitCode, 1); assert.equal(receipt.cleanupConfirmed, false);
+  assert.equal(receipt.reason, 'owned_process_cleanup_unconfirmed');
+  assert.deepEqual(receipt.steps.map(step => step.status), ['unrun', 'unrun']);
+  assert.equal(Object.hasOwn(measured, 'exitCode'), false); assert.equal(Object.hasOwn(receipt.steps[1], 'process'), false);
+  assert.equal(await exists(unexpected), false); assert.equal(await exists(f.paths.lockDirectory), true);
+  const owner = JSON.parse(await readFile(join(f.paths.lockDirectory, 'owner.json'), 'utf8'));
+  assert.equal(owner.runId, receipt.runId); assert.equal(owner.pid, run.child.pid);
+  assert.equal(raw.includes('Generated group permission failure'), false);
 });
 
 test('independent real CLI processes in two worktrees share one atomic repository lock', { skip: process.platform === 'win32' }, async t => {

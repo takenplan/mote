@@ -5,7 +5,7 @@ import {connectorOriginalProcessors} from '../connectors/original-processors.js'
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {rm} from 'node:fs/promises';
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {recordingSelectionSchema,sourceIdSchema,type SourceItem,type SourceItemRecord,type SourceConnection} from '@mote/shared';
 import {GoogleCalendarConnector,selectedCalendarsSchema} from '../connectors/google.js';
@@ -32,6 +32,7 @@ import {ScopedRecordingAdapter} from './connector-recordings.js';
 import {PrivateCursor} from './private-data-sql.js';
 
 type Row={user_id:string;id:string;generation:number;removed:number;settings:string;sync_authorized:number;storage_generation:number};
+type RowIdentity=Pick<Row,'generation'|'removed'|'storage_generation'>;
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>[key,canonical(child)])):value;
 const DOMAIN='connectors',CONFIG='connectorSettings',TASK='connector.run',SELECT_TASK='connector.select';
 const pluginId=(id:string)=>'connector.'+id;
@@ -43,6 +44,7 @@ export interface ConnectorSourceStatusReader{sourceStatuses(sourceIds:readonly s
 /** One registrar, one shared executor, and M09's existing user instance lifecycle.
  * Provider factories below use actual adapters with transport-only injection. */
 export class ScopedConnectors {
+ private readonly readStatements=new Map<string,StatementSync>();
  private readonly sourceStatusReaders=new Set<(context:UserContext,sourceIds:readonly string[])=>ReadonlyMap<string,NonNullable<SourceConnection['status']>>>();
  registerSourceStatusReader(reader:(context:UserContext,sourceIds:readonly string[])=>ReadonlyMap<string,NonNullable<SourceConnection['status']>>){this.sourceStatusReaders.add(reader);return ()=>{this.sourceStatusReaders.delete(reader);};}
  private readonly extensions=new Map<string,ConnectorDefinition>();
@@ -81,7 +83,7 @@ export class ScopedConnectors {
   const handler:UserTaskHandler={kind:TASK,pool:'connectors',concurrency:()=>4,policy:EXECUTION_POLICIES.networkAcquisition,parseInput:value=>connectorTask.parse(value),
    authorizeInput:(context,input)=>{this.binding(context,connectorTask.parse(input));},
    resources:input=>[{scope:'user',key:'connector:'+String(input.connectionId)}],
-   validate:step=>{try{const input=connectorTask.parse(step.input),row=this.row(step.ownership!.userId,input.connectionId);plugins.assertStoredBinding(step.ownership!.userId,input.snapshotId);return !this.closed&&!row.removed&&row.generation===input.generation;}catch{return false;}},
+   validate:step=>{try{const input=connectorTask.parse(step.input),row=this.row(step.ownership!.userId,input.connectionId,true);plugins.assertStoredBinding(step.ownership!.userId,input.snapshotId);return !this.closed&&!row.removed&&row.generation===input.generation;}catch{return false;}},
    admit:step=>{const input=connectorTask.parse(step.input);if(input.action==='oauth'){const state=this.oauth(input.state!);if(!state||state.expires<=Date.now())return new ExecutionFailure('blocked','connector_oauth_expired');if(state.status==='pending')return new ExecutionFailure('waiting','connector_oauth_pending',Math.min(1000,state.expires-Date.now()));if(state.status!=='ready')return new ExecutionFailure('blocked','connector_oauth_consumed');}if(input.due>0&&!plugins.storedAdmissionOpen(step.ownership!.userId,pluginId(input.connectionId)))return new ExecutionFailure('blocked','connector_timer_paused');if(input.due>Date.now())return new ExecutionFailure('waiting','connector_timer_wait',input.due-Date.now());return;},
    execute:run=>this.execute(run),classify:error=>error instanceof z.ZodError?new ExecutionFailure('permanent','connector_input_invalid'):error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','connector_authority_revoked'):new ExecutionFailure('blocked',error instanceof ConnectorError?error.code:'connector_requires_attention'),
   };
@@ -90,8 +92,12 @@ export class ScopedConnectors {
   this.dispose=async()=>{await disposeSelection();await dispose();for(const disposeStage of disposeStages)await disposeStage();};
  }
  private tx<T>(work:()=>T):T{const db=this.options.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=work();if(own)db.exec('COMMIT');return result;}catch(e){if(own&&db.isTransaction)db.exec('ROLLBACK');throw e;}}
- private assert(context:UserContext){this.runtime.authority.assert(context);if(this.closed||this.options.db.prepare('SELECT 1 FROM connector_domain_state WHERE user_id=? AND deleted=1').get(context.userId))throw new ScopeError('invalid_identity',401);}
- private row(user:string,id:string):Row{const row=this.options.db.prepare('SELECT * FROM connector_connections WHERE user_id=? AND id=?').get(user,id) as Row|undefined;if(!row||row.removed)throw new ConnectorError('connector_not_found',404);return row;}
+ // Cache compilation only: every invocation still reads current database state.
+ private readStatement(sql:string){let statement=this.readStatements.get(sql);if(!statement){statement=this.options.db.prepare(sql);this.readStatements.set(sql,statement);}return statement;}
+ private assert(context:UserContext){this.runtime.authority.assert(context);if(this.closed||this.readStatement('SELECT 1 FROM connector_domain_state WHERE user_id=? AND deleted=1').get(context.userId))throw new ScopeError('invalid_identity',401);}
+ private row(user:string,id:string):Row;
+ private row(user:string,id:string,identityOnly:true):RowIdentity;
+ private row(user:string,id:string,identityOnly=false):Row|RowIdentity{const row=this.readStatement(identityOnly?'SELECT generation,removed,storage_generation FROM connector_connections WHERE user_id=? AND id=?':'SELECT * FROM connector_connections WHERE user_id=? AND id=?').get(user,id) as Row|RowIdentity|undefined;if(!row||row.removed)throw new ConnectorError('connector_not_found',404);return row;}
  private binding(context:UserContext,input:ConnectorTask){this.assert(context);const row=this.row(context.userId,input.connectionId);if(row.generation!==input.generation)throw new ScopeError('invalid_identity',401);const binding=this.options.plugins.binding(context,input.snapshotId);if(binding.instanceId!==pluginId(row.id)||binding.packageId!==this.packages.get(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ScopeError('invalid_identity',401);return {row,binding};}
  private recordingBinding(context:UserContext,input:ConnectorTask,phase:RecordingPhase){
   const {row}=this.binding(context,input);if(input.action!=='recording'||input.recordingPhase!==phase||!input.recordingKey||!['feishu-recordings','dingtalk-recordings'].includes(connectionSchema.parse(JSON.parse(row.settings)).provider))throw new ConnectorError('recording_job_binding_invalid',409);
@@ -113,9 +119,9 @@ export class ScopedConnectors {
  private abort(user:string,id:string){for(const controller of this.active.get(hash([user,id]))??[])controller.abort();}
  private abortSync(context:UserContext,id:string){for(const controller of this.syncing.get(hash([context.userId,id]))??[])controller.abort();for(const row of this.options.db.prepare("SELECT t.task_id FROM user_tasks t JOIN execution_steps e ON e.id=t.task_id AND e.user_id=t.user_id WHERE t.user_id=? AND json_extract(t.input,'$.connectionId')=? AND e.state IN ('waiting','running') AND ((e.kind=? AND json_extract(t.input,'$.action')='sync' AND (e.state='running' OR json_extract(t.input,'$.due')<=?)) OR (e.kind IN ('connector.recording.discover','connector.recording.metadata','connector.recording.transcript','connector.recording.media') AND json_extract(t.input,'$.action')='recording'))").all(context.userId,id,TASK,Date.now()))this.options.execution.forUser(context).cancel(String(row.task_id));}
  private oauth(state:string){return this.options.db.prepare('SELECT * FROM connector_oauth WHERE state_hash=?').get(hash(state)) as {user_id:string;instance_id:string;generation:number;snapshot_id:string;expires:number;status:string;task_id?:string}|undefined;}
- private vault(context:UserContext,id:string,assert:()=>void){return new ConnectorVault(this.options.db,this.options.directory,context.deploymentId,context.userId,id+':'+this.row(context.userId,id).storage_generation+':'+context.authorizationEpoch,assert);}
+ private vault(context:UserContext,id:string,assert:()=>void){return new ConnectorVault(this.options.db,this.options.directory,context.deploymentId,context.userId,id+':'+this.row(context.userId,id,true).storage_generation+':'+context.authorizationEpoch,assert);}
  private ledger(context:UserContext,id:string,assert:()=>void){const db=this.options.db,user=context.userId;return {
-  get:<T>(scope:string,key:string):T|undefined=>{assert();const row=db.prepare('SELECT json FROM connector_ledger WHERE user_id=? AND instance_id=? AND scope=? AND key=?').get(user,id,scope,key);return row?JSON.parse(String(row.json)) as T:undefined;},
+  get:<T>(scope:string,key:string):T|undefined=>{assert();const row=this.readStatement('SELECT json FROM connector_ledger WHERE user_id=? AND instance_id=? AND scope=? AND key=?').get(user,id,scope,key);return row?JSON.parse(String(row.json)) as T:undefined;},
   set:(scope:string,key:string,value:unknown)=>{assert();db.prepare('INSERT INTO connector_ledger VALUES(?,?,?,?,?) ON CONFLICT(user_id,instance_id,scope,key) DO UPDATE SET json=excluded.json').run(user,id,scope,key,JSON.stringify(value));},
   drop:(scope:string,key:string)=>{assert();db.prepare('DELETE FROM connector_ledger WHERE user_id=? AND instance_id=? AND scope=? AND key=?').run(user,id,scope,key);},
   rows:<T>(scope:string,prefix:string,limit=-1,errorOnly=false)=>{assert();return db.prepare("SELECT key,json FROM connector_ledger WHERE user_id=? AND instance_id=? AND scope=? AND substr(key,1,?)=? ORDER BY key").all(user,id,scope,prefix.length,prefix).map(row=>({key:String(row.key),value:JSON.parse(String(row.json)) as T})).filter(row=>!errorOnly||(row.value as any)?.error).slice(0,limit<0?undefined:limit);},
@@ -189,7 +195,7 @@ export class ScopedConnectors {
  private activity(context:UserContext,row:Row,extra:()=>void=()=>{}){
   this.assert(context);const journal=this.beginActivity(context.userId,row.id),controller=new AbortController(),key=hash([context.userId,row.id]),group=this.active.get(key)??new Set<AbortController>();group.add(controller);this.active.set(key,group);
   let adapter:Awaited<ReturnType<ScopedConnectors['adapter']>>|undefined;
-  const assert=()=>{this.assert(context);const current=this.row(context.userId,row.id);if(current.generation!==row.generation||current.storage_generation!==row.storage_generation||controller.signal.aborted)throw new ScopeError('invalid_identity',401);extra();},stop=()=>{void adapter?.close().catch(()=>{});};controller.signal.addEventListener('abort',stop,{once:true});
+  const assert=()=>{this.assert(context);const current=this.row(context.userId,row.id,true);if(current.generation!==row.generation||current.storage_generation!==row.storage_generation||controller.signal.aborted)throw new ScopeError('invalid_identity',401);extra();},stop=()=>{void adapter?.close().catch(()=>{});};controller.signal.addEventListener('abort',stop,{once:true});
   return {assert,signal:controller.signal,open:async()=>{assert();adapter=await this.adapter(context,row,assert,controller.signal);assert();return adapter;},finish:async()=>{controller.signal.removeEventListener('abort',stop);let confirmed=false;try{await adapter?.close();confirmed=Boolean(adapter)||!this.extensions.has(connectionSchema.parse(JSON.parse(row.settings)).provider);}finally{journal.finish(confirmed);group.delete(controller);if(!group.size)this.active.delete(key);}}};
  }
  private async serializeLifecycle<T>(userId:string,work:()=>Promise<T>){const previous=this.lifecycleQueue.get(userId)??Promise.resolve(),result=previous.then(work),tail=result.then(()=>{},()=>{});this.lifecycleQueue.set(userId,tail);try{return await result;}finally{if(this.lifecycleQueue.get(userId)===tail)this.lifecycleQueue.delete(userId);}}
@@ -376,7 +382,7 @@ export class ScopedConnectors {
  async callback(state:string,code:string){
   z.string().min(20).max(200).parse(state);z.string().min(1).max(4096).parse(code);
   const saved=this.oauth(state);if(!saved||saved.status!=='pending'||saved.expires<=Date.now())throw new ConnectorError('connector_oauth_invalid',400);
-  const row=this.row(saved.user_id,saved.instance_id),assert=()=>{if(this.closed||row.generation!==this.row(saved.user_id,saved.instance_id).generation)throw new ConnectorError('connector_oauth_revoked',400);this.options.plugins.assertStoredBinding(saved.user_id,saved.snapshot_id);};
+  const row=this.row(saved.user_id,saved.instance_id),assert=()=>{if(this.closed||row.generation!==this.row(saved.user_id,saved.instance_id,true).generation)throw new ConnectorError('connector_oauth_revoked',400);this.options.plugins.assertStoredBinding(saved.user_id,saved.snapshot_id);};
   assert();if(row.generation!==saved.generation||!saved.task_id)throw new ConnectorError('connector_oauth_invalid',400);
   const vault=new ConnectorVault(this.options.db,this.options.directory,this.runtime.authority.deploymentId,saved.user_id,saved.instance_id+':'+row.storage_generation+':'+this.options.plugins.assertStoredBinding(saved.user_id,saved.snapshot_id),assert);
   this.tx(()=>{assert();const changed=this.options.db.prepare("UPDATE connector_oauth SET status='ready' WHERE state_hash=? AND status='pending' AND expires>?").run(hash(state),Date.now());if(!changed.changes)throw new ConnectorError('connector_oauth_invalid',400);vault.write('code:'+hash(state),code);});void this.options.execution.tick().catch(()=>{});return {accepted:true};

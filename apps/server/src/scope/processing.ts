@@ -1,7 +1,8 @@
 import {ProcessingPerception} from './processing-perception.js';
 import type {ManagedMedia} from './media-assets.js';
 import {attachmentOriginalBinding,attachmentBinding} from './ingress-attachments.js';
-import {fileOriginalGeneration} from './ingress-file-forget.js';
+import {fileOriginalGeneration,FILE_ORIGINAL_GENERATION_SQL} from './ingress-file-forget.js';
+import {archiveReadSetActive} from './archive-read-set.js';
 import {connectorOriginalProcessors} from '../connectors/original-processors.js';
 import {conversationRecords} from '../coding-dialogue-projection.js';
 import {randomUUID} from 'node:crypto';
@@ -190,7 +191,26 @@ export class ProcessingHost {
   const record=JSON.parse(String(capture.json));let current=true;if(record.provenance){const head=sql.get('SELECT capture_id FROM pd_source_heads WHERE user_id=$user AND source_id=? AND external_id=?',record.provenance.sourceId,record.provenance.externalId);current=!record.provenance.deleted&&head?.capture_id===original.captureId;if(!current&&!allowInactive)throw new ScopeError('invalid_identity',401);}
   return {sql,source,original,record,current,format:String(sql.get('SELECT format FROM mp_original_formats WHERE user_id=$user AND original_id=?',original.ref.slice(9))?.format??'file')};
  }
- private current(userId:string,raw:Record<string,unknown>,allowCancelled=false){try{const input=processingInputSchema.parse(raw),sql=new PrivateSql(this.db,userId,()=>{}),state=this.state(sql);if(this.perception.stamp(sql,input.originalRef)!==input.perceptionStamp)return false;const control=sql.get('SELECT generation,cancelled FROM mp_file_controls WHERE user_id=$user AND original_id=?',input.originalRef.slice(9));if(state.deleted||state.generation!==input.generation||sql.get('SELECT plan_id FROM mp_file_policy_bindings WHERE user_id=$user AND original_id=?',input.originalRef.slice(9))?.plan_id!==input.policyPlanId||attachmentOriginalBinding(sql,input.originalRef)?.id!==input.attachmentGeneration||fileOriginalGeneration(sql,input.originalRef)!==(input.originalGeneration??0)||Number(control?.generation??0)!==(input.fileGeneration??0)||control?.cancelled&&!allowCancelled)return false;if(input.fileModel&&identityHash(this.policies.fileModelDependency(sql)?.reference??null)!==identityHash(input.fileModel.reference))return false;if(input.intentTaskId&&this.execution.processingRecheckIntent(input.intentTaskId)?.ownership?.userId!==userId)return false;if(input.parentTaskId)this.parent(sql,input.parentTaskId);if(input.plugin)this.parent(sql,input.plugin.parentTaskId,true);return true;}catch{return false;}}
+ private current(userId:string,raw:Record<string,unknown>,allowCancelled=false){try{
+  const input=processingInputSchema.parse(raw),sql=new PrivateSql(this.db,userId,()=>{}),state=this.state(sql);if(this.perception.stamp(sql,input.originalRef)!==input.perceptionStamp)return false;
+  if(archiveReadSetActive(userId)){
+   // Archive replay must retain the original row shapes and short-circuit reads.
+   const control=sql.get('SELECT generation,cancelled FROM mp_file_controls WHERE user_id=$user AND original_id=?',input.originalRef.slice(9));if(state.deleted||state.generation!==input.generation||sql.get('SELECT plan_id FROM mp_file_policy_bindings WHERE user_id=$user AND original_id=?',input.originalRef.slice(9))?.plan_id!==input.policyPlanId||attachmentOriginalBinding(sql,input.originalRef)?.id!==input.attachmentGeneration||fileOriginalGeneration(sql,input.originalRef)!==(input.originalGeneration??0)||Number(control?.generation??0)!==(input.fileGeneration??0)||control?.cancelled&&!allowCancelled)return false;
+  }else{
+   const originalId=input.originalRef.slice(9),facts=sql.get(`SELECT control.present control_present,control.generation control_generation,control.cancelled control_cancelled,
+ policy.present policy_present,policy.plan_id,generation.present generation_present,generation.generation original_generation
+ FROM (SELECT 1) seed
+ LEFT JOIN (SELECT 1 present,generation,cancelled FROM mp_file_controls WHERE user_id=$user AND original_id=?) control ON 1
+ LEFT JOIN (SELECT 1 present,plan_id FROM mp_file_policy_bindings WHERE user_id=$user AND original_id=?) policy ON 1
+ LEFT JOIN (SELECT 1 present,generation FROM (${FILE_ORIGINAL_GENERATION_SQL})) generation ON 1`,originalId,originalId,originalId)!;
+   const control=facts.control_present?{generation:facts.control_generation,cancelled:facts.control_cancelled}:undefined;
+   const policy=facts.policy_present?{plan_id:facts.plan_id}:undefined;
+   if(state.deleted||state.generation!==input.generation||policy?.plan_id!==input.policyPlanId||attachmentOriginalBinding(sql,input.originalRef)?.id!==input.attachmentGeneration)return false;
+   if(!facts.generation_present)throw missing();
+   if(Number(facts.original_generation)!==(input.originalGeneration??0)||Number(control?.generation??0)!==(input.fileGeneration??0)||control?.cancelled&&!allowCancelled)return false;
+  }
+  if(input.fileModel&&identityHash(this.policies.fileModelDependency(sql)?.reference??null)!==identityHash(input.fileModel.reference))return false;if(input.intentTaskId&&this.execution.processingRecheckIntent(input.intentTaskId)?.ownership?.userId!==userId)return false;if(input.parentTaskId)this.parent(sql,input.parentTaskId);if(input.plugin)this.parent(sql,input.plugin.parentTaskId,true);return true;
+ }catch{return false;}}
  private kind(original:Pick<Original,'mime'>){return original.mime.startsWith('image/')?'ocr':original.mime.startsWith('audio/')?'asr':'extract';}
  private physicalState(context:UserContext,originalRef:string,exceptTask='',coordinator=''){
   const calls=this.sql(context).all("SELECT a.id,NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations r WHERE r.user_id=c.user_id AND r.issuance_id=c.issuance_id) unacknowledged FROM task_external_calls c JOIN user_tasks u ON u.task_id=c.task_id AND u.user_id=c.user_id JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id LEFT JOIN mp_activity a ON a.user_id=c.user_id AND c.request_key='processing:'||c.task_id||':'||a.id WHERE c.user_id=$user AND u.user_id=$user AND e.user_id=$user AND e.kind IN ('processing.extract','processing.ocr','processing.asr','processing.analysis','processing.image-understanding','processing.review') AND c.task_id<>? AND c.state IN ('issued','unknown') AND json_extract(u.input,'$.originalRef')=?",exceptTask,originalRef);

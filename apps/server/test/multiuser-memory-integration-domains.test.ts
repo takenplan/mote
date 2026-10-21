@@ -49,6 +49,17 @@ async function automaticJob(f:Fixture,user:any,windowId:string){
  const row=await until(()=>f.read(db=>db.prepare('SELECT job_id,state,json FROM mm_integration_windows WHERE user_id=? AND id=?').get(user.userId,windowId)),row=>Boolean(row?.job_id),'automatic integration admission');
  return {id:String(row!.job_id),window:JSON.parse(String(row!.json))};
 }
+async function continuationOperationOverHttp(f:Fixture,taskId:string){
+ const step=await until(()=>f.read(db=>db.prepare('SELECT operation_id,user_position,state,error FROM execution_steps WHERE id=?').get(taskId)),row=>row?.state==='waiting'&&row.error==='memory_integration_window_pending','the independent continuation waits at its original due time');
+ const address=await f.node.app.listen({host:'127.0.0.1',port:0});
+ const request=(token:string,cursor=0)=>fetch(address+'/api/operations/'+encodeURIComponent(String(step!.operation_id))+'?limit=1&cursor='+cursor,{headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',authorization:'Bearer '+token}});
+ const response=await request(f.a.token);assert.equal(response.status,200);const detail=await response.json() as any;
+ assert.equal(detail.operation.id,step!.operation_id);assert.equal(detail.steps.length,1);assert.equal(detail.steps[0].id,taskId);
+ assert.deepEqual(detail.steps[0].dependencies,[],'the actual HTTP projection does not fabricate a predecessor dependency');assert.equal(detail.nextCursor,null);
+ const tailResponse=await request(f.a.token,Number(step!.user_position));assert.equal(tailResponse.status,200);const tail=await tailResponse.json() as any;
+ assert.deepEqual(tail.operation,detail.operation);assert.deepEqual(tail.steps,[]);assert.equal(tail.nextCursor,null,'the continuation has no hidden next page');
+ const foreign=await request(f.b.token);assert.equal(foreign.status,404,await foreign.text());
+}
 async function setup(f:Fixture,user:any,minChanges=1){const settings=defaultMemorySettings();settings.lifecycle.consolidation.minChanges=minChanges;await f.replace(user.token,'memory',settings);}
 
 test('automatic integration preserves both actual domains, independent review and same-ID owner isolation',async t=>{
@@ -116,6 +127,7 @@ for(const state of ['failed','paused'] as const)test('an independent consolidati
  const continuation=await until(()=>f.read(db=>db.prepare('SELECT id,task_id,job_id FROM mm_integration_windows WHERE user_id=? AND id!=?').get(f.a.userId,extraction.id)),Boolean,'frozen disjoint remaining window');
  assert.equal(continuation!.job_id,null,'the remainder has not started before its original due time');
  assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM execution_dependencies WHERE step_id=?').get(continuation!.task_id))!.n,0,'disjoint chunks have no fabricated success prerequisite');
+ await continuationOperationOverHttp(f,String(continuation!.task_id));
  const window=(await f.request(f.a.token,'/api/memory/observations')).json().items.find((item:any)=>item.kind==='consolidation'&&item.id===continuation!.id);assert.ok(window);t.mock.timers.setTime(Date.parse(window.dueAt)+1);
  const later=await automaticJob(f,f.a,String(continuation!.id));await f.wait(f.a,later.id);assert.equal((await f.request(f.a.token,'/api/memories?tier=consolidated')).json().items.length,1,'an unrelated selected card commits despite the earlier unresolved batch');
  const completed=f.read(db=>db.prepare('SELECT state,draft,review,prepared,tasks FROM mm_job_batches WHERE user_id=? AND job_id=?').get(f.a.userId,later.id)),before=calls.length;await f.restart();assert.equal(calls.length,before,'restart does not replay either a completed sibling or the held failure');
