@@ -273,3 +273,79 @@ test('declared root fixture tasks retain all workspace test inputs conservativel
   f.write('apps/server/test/entry.test.ts', 'generated corrected suite entry\n');
   f.identity.refresh(); assert.notEqual(f.identity(step), before);
 });
+
+test('Server bucket keys preserve unrelated suite evidence and conservatively invalidate source/helper changes', t => {
+  const f = fixture(t);
+  f.write('apps/server/test/other.test.ts', 'generated independent suite\n');
+  const step = { ...f.step('server'), testFiles: ['apps/server/test/entry.test.ts'] };
+  const key = () => { f.identity.refresh(); return f.identity(step); };
+  const first = key(); assert.match(first, /^[a-f0-9]{64}$/);
+  f.write('apps/server/test/other.test.ts', 'generated correction to another bucket\n');
+  assert.equal(key(), first);
+  f.write('apps/server/test/entry.test.ts', 'generated selected suite correction\n');
+  const corrected = key(); assert.notEqual(corrected, first);
+  f.write('apps/server/test/fixtures/evidence.json', 'generated helper correction\n');
+  const helper = key(); assert.notEqual(helper, corrected);
+  f.write('apps/server/src/index.ts', 'generated source correction\n');
+  assert.notEqual(key(), helper);
+  f.write('apps/server/test/entry.test.ts', "import './other.test.ts';\n");
+  const imported = key();
+  f.write('apps/server/test/other.test.ts', 'generated imported test correction\n');
+  assert.notEqual(key(), imported);
+  f.write('apps/server/test/entry.test.ts', 'generated independent suite\n');
+  f.write('apps/server/test/fixtures/importer.ts', "import '../other.test.js';\n");
+  const indirect = key();
+  f.write('apps/server/test/other.test.ts', 'generated indirect import correction\n');
+  assert.notEqual(key(), indirect);
+});
+
+
+test('cross-suite references through helpers outside fixtures or product source prevent narrow reuse', t => {
+  const f = fixture(t);
+  f.write('apps/server/test/other.test.ts', 'generated other suite\n');
+  const step = { ...f.step('server'), testFiles: ['apps/server/test/entry.test.ts'] };
+  const key = () => { f.identity.refresh(); return f.identity(step); };
+  f.write('apps/server/test/entry.test.ts', "import './helper.js';\n");
+  f.write('apps/server/test/helper.ts', "import './other.test.js';\n");
+  let before = key();
+  f.write('apps/server/test/other.test.ts', 'generated outside-fixture helper dependency correction\n');
+  assert.notEqual(key(), before);
+  f.write('apps/server/test/helper.ts', "import '../src/index.js';\n");
+  f.write('apps/server/src/index.ts', "import '../test/other.test.js';\n");
+  before = key();
+  f.write('apps/server/test/other.test.ts', 'generated product-source dependency correction\n');
+  assert.notEqual(key(), before);
+});
+
+
+test('root helper references retain other suite inputs in bucket identities', t => {
+  const f = fixture(t);
+  f.write('apps/server/test/other.test.ts', 'generated other suite\n');
+  f.write('apps/server/test/entry.test.ts', "import '../../../scripts/helper.mjs';\n");
+  f.write('scripts/helper.mjs', "import '../apps/server/test/other.test.js';\n");
+  const step = { ...f.step('server'), testFiles: ['apps/server/test/entry.test.ts'] };
+  const key = () => { f.identity.refresh(); return f.identity(step); };
+  const before = key();
+  f.write('apps/server/test/other.test.ts', 'generated root-helper dependency correction\n');
+  assert.notEqual(key(), before);
+  f.write('scripts/helper.mjs', "const suffix = '.test.ts';\n");
+  const discovered = key();
+  f.write('apps/server/test/other.test.ts', 'generated dynamic-discovery dependency correction\n');
+  assert.notEqual(key(), discovered);
+});
+
+
+test('unrelated root suite examples do not disable grouping, but importing a root suite does', t => {
+  const f = fixture(t);
+  f.write('scripts/other.test.mjs', "const generatedExample = '.test.ts';\n");
+  f.write('apps/server/test/other.test.ts', 'generated other suite\n');
+  const step = { ...f.step('server'), testFiles: ['apps/server/test/entry.test.ts'] };
+  const key = () => { f.identity.refresh(); return f.identity(step); };
+  const before = key();
+  f.write('apps/server/test/other.test.ts', 'generated unrelated correction\n');
+  assert.equal(key(), before);
+  f.write('scripts/helper.mjs', "import './other.test.mjs';\n");
+  const imported = key();
+  f.write('apps/server/test/other.test.ts', 'generated conservative root-suite correction\n');
+  assert.notEqual(key(), imported);
+});

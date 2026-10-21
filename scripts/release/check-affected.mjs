@@ -47,10 +47,11 @@ export function sourceIdentity(directory = process.cwd(), fileDigests = new Map(
 
 export function parseArguments(args) {
   const options = {}; let component; let all = false; let dryRun = false; let typescriptOnly = false;
-  const reuseReceiptPaths = [];
+  const reuseReceiptPaths = [], testFiles = [];
   for (let i = 0; i < args.length; i++) {
     const value = args[i];
-    if (value === '--reuse' && args[i + 1] && !args[i + 1].startsWith('--')) reuseReceiptPaths.push(args[++i]);
+    if (value === '--test-file' && args[i + 1] && !args[i + 1].startsWith('--')) testFiles.push(args[++i]);
+    else if (value === '--reuse' && args[i + 1] && !args[i + 1].startsWith('--')) reuseReceiptPaths.push(args[++i]);
     else if (['--base', '--head', '--component'].includes(value) && args[i + 1] && !args[i + 1].startsWith('--')) {
       if (value === '--component') component = args[++i]; else options[value.slice(2)] = args[++i];
     } else if (value === '--all') all = true;
@@ -59,23 +60,27 @@ export function parseArguments(args) {
     else throw Error(`Invalid argument: ${value}`);
   }
   if ((component || all) && Object.keys(options).length || component && all) throw Error('Choose a fixed component/all check or a Git diff, not both.');
-  return { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths };
+  if (testFiles.length && (component || all || typescriptOnly || Object.keys(options).length)) throw Error('Choose focused test files or a component/Git plan, not both.');
+  return { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths, testFiles: [...new Set(testFiles)] };
 }
 
 export async function main(args = process.argv.slice(2), directory = process.cwd()) {
-  const { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths } = parseArguments(args);
+  const { options, component, all, dryRun, typescriptOnly, reuseReceiptPaths, testFiles } = parseArguments(args);
   // Selection and execution must refer to the same input, including the async
   // interval while acquiring the shared repository lock.
   const fileDigests = new Map();
   const plannedIdentity = dryRun ? undefined : sourceIdentity(directory, fileDigests);
   const graph = workspaceGraph(directory);
   const broad = all || /^0{40}$/.test(options.base ?? '');
-  const paths = component || broad ? [] : changedPaths({ ...options, directory });
-  const selection = component || broad ? fixedChecks(component ?? 'all', graph) : affectedChecks(paths, graph);
-  const affected = component || broad ? {
+  for (const file of testFiles) {
+    if (!/^apps\/server\/test\/[^/]+\.test\.ts$/.test(file) || !lstatSync(resolve(directory, file)).isFile()) throw Error(`Expected an existing top-level Server test: ${file}`);
+  }
+  const paths = component || broad || testFiles.length ? [] : changedPaths({ ...options, directory });
+  const selection = testFiles.length ? { workspaces: ['@mote/server'], i18n: false } : component || broad ? fixedChecks(component ?? 'all', graph) : affectedChecks(paths, graph);
+  const affected = component || broad || testFiles.length ? {
     central: selection.workspaces.some(name => name === '@mote/server' || name === '@mote/web'),
-    desktop: selection.workspaces.includes('@mote/desktop'), android: selection.android,
-    protocol: broad, tooling: broad,
+    desktop: selection.workspaces.includes('@mote/desktop'), android: Boolean(selection.android),
+    protocol: broad, tooling: broad || Boolean(selection.tooling),
   } : affectedComponents(paths, graph);
   if (typescriptOnly) {
     selection.contracts = selection.android;
@@ -83,7 +88,13 @@ export async function main(args = process.argv.slice(2), directory = process.cwd
   }
   const tests = readdirSync(resolve(directory, 'scripts/release')).filter(file => file.endsWith('.test.mjs')).sort()
     .map(file => `scripts/release/${file}`);
-  const plan = checkPlan(selection, tests, { directory, graph });
+  let plan = checkPlan(selection, testFiles.length ? [] : tests, { directory, graph });
+  if (testFiles.length) {
+    plan = plan.filter(step => step.id === 'environment' || ['build:@mote/shared', 'build:@mote/agent'].includes(step.id));
+    plan.push({ id: 'test:@mote/server#focused', phase: 'test', command: process.execPath, cwd: 'apps/server',
+      args: ['test/run.mjs', ...testFiles.flatMap(file => ['--file', file.slice('apps/server/'.length)])], testFiles,
+      needs: plan.map(step => step.id) });
+  }
   console.log(JSON.stringify({ affected, selection, checks: plan }, null, 2));
   if (!plan.length) {
     console.log('Documentation-only or no changed inputs: review formatting, grammar, links and rendering.');

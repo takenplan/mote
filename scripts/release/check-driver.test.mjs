@@ -343,3 +343,61 @@ test('caller tool invocation metadata is absent from the actual check child envi
   assert.equal((await run.done).code, 0);
   assert.equal(await readFile(output, 'utf8'), 'absent');
 });
+
+test('declared prerequisites skip descendants while independent real commands report all failures', async t => {
+  const f = await repository(t), marker = join(f.root, 'independent');
+  const run = await f.start([
+    { ...f.node('environment', ''), needs: [] },
+    { ...f.node('build-a', 'process.exit(7)'), needs: ['environment'] },
+    { ...f.node('test-a', 'throw Error("must not consume stale build")'), needs: ['build-a'] },
+    { ...f.node('test-b', `require('node:fs').writeFileSync(${JSON.stringify(marker)},'ran')`), needs: ['environment'] },
+    { ...f.node('test-c', 'process.exit(9)'), needs: ['environment'] },
+    { ...f.node('test-a-child', 'throw Error("blocked descendant")'), needs: ['test-a'] },
+  ]);
+  const terminal = await run.done;
+  assert.equal(terminal.code, 7, terminal.output);
+  assert.equal(await readFile(marker, 'utf8'), 'ran');
+  const receipt = JSON.parse(await readFile(run.receiptPath, 'utf8'));
+  assert.deepEqual(receipt.steps.map(step => step.status), ['passed', 'failed', 'unrun', 'passed', 'failed', 'unrun']);
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.cleanupConfirmed, true);
+  assert.deepEqual(receipt.steps[2].blockedBy, ['build-a']);
+  assert.equal(receipt.steps[2].reason, 'prerequisite_failed');
+  assert.deepEqual(receipt.steps[5].blockedBy, ['test-a']);
+});
+
+test('invalid dependency graphs fail before any command starts', async t => {
+  const f = await repository(t);
+  for (const plan of [
+    [{ ...f.node('a', ''), needs: ['missing'] }],
+    [{ ...f.node('a', ''), needs: ['b'] }, { ...f.node('b', ''), needs: ['a'] }],
+    [f.node('a', ''), f.node('a', '')],
+  ]) {
+    const run = await f.start(plan), terminal = await run.done;
+    assert.notEqual(terminal.code, 0);
+    assert.doesNotMatch(terminal.output, /^RUN fixture\//m);
+  }
+});
+
+test('the Gradle-shaped child receives the same resolved SDK as its preflight task', async t => {
+  const f = await repository(t);
+  const { androidEnvironment } = await import('./check-environment.mjs');
+  await mkdir(join(f.directory, 'apps/android'), { recursive: true });
+  const sdk = join(f.root, 'generated SDK'), actual = join(f.root, 'gradle-env.json');
+  await writeFile(join(f.directory, 'apps/android/local.properties'), `sdk.dir=${sdk}\n`);
+  const env = androidEnvironment(f.directory, {});
+  const run = await f.start([
+    { ...f.node('environment', 'if(process.env.ANDROID_HOME!==process.env.ANDROID_SDK_ROOT)process.exit(3)'), env, needs: [] },
+    { ...f.node('android-unit', `require('node:fs').writeFileSync(${JSON.stringify(actual)},JSON.stringify([process.env.ANDROID_HOME,process.env.ANDROID_SDK_ROOT]))`), env, needs: ['environment'] },
+  ]);
+  assert.equal((await run.done).code, 0);
+  assert.deepEqual(JSON.parse(await readFile(actual, 'utf8')), [sdk, sdk]);
+});
+
+test('an environment failure stops even explicitly independent tasks', async t => {
+  const f = await repository(t), run = await f.start([
+    { ...f.node('environment', 'process.exit(3)'), needs: [] },
+    { ...f.node('must-not-start', 'throw Error("unexpected")'), needs: [] },
+  ]);
+  assert.equal((await run.done).code, 3);
+  assert.deepEqual(JSON.parse(await readFile(run.receiptPath, 'utf8')).steps.map(step => step.status), ['failed', 'unrun']);
+});

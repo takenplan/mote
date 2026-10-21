@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
+import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { testEmbeddingConfiguration } from './fixtures/test-embedding-config.mjs';
@@ -24,7 +25,7 @@ function nodeOptionTokens(value) {
 }
 
 export function testWorkerCount(parallelism = availableParallelism()) {
-  return Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS));
+  return Math.max(1, Math.min(parallelism, MAX_TEST_WORKERS));
 }
 
 export function testArguments({ args = [], files = ['test/*.test.ts'], parallelism = availableParallelism(), nodeOptions = process.env.NODE_OPTIONS ?? '' } = {}) {
@@ -41,14 +42,26 @@ export async function testInvocation(args = [], env = process.env) {
   const flags = ['--performance', '--live', '--live-embeddings'];
   const selected = args.filter(arg => flags.includes(arg));
   if (selected.length > 1) throw new Error('Choose exactly one optional test mode');
-  const mode = selected[0], nativeArgs = args.filter(arg => !flags.includes(arg)), childEnv = { ...env };
+  const mode = selected[0], nativeArgs = [], selectedFiles = [], childEnv = { ...env };
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (flags.includes(arg)) continue;
+    if (arg === '--file') {
+      const path = args[++index];
+      if (!path || path.startsWith('-') || !/\.test\.(?:ts|mjs)$/.test(path)) throw Error('--file requires an existing test file');
+      try { if (!statSync(path).isFile()) throw Error(); }
+      catch { throw Error(`Test file does not exist: ${path}`); }
+      selectedFiles.push(path);
+    } else nativeArgs.push(arg);
+  }
+  if (selectedFiles.length && mode) throw Error('--file cannot be combined with optional test modes');
   delete childEnv.MOTE_TEST_LIVE_EMBEDDINGS;
   delete childEnv.MOTE_MEMORY_CONTEXT_LIVE;
   if (mode === '--live') {
     childEnv.MOTE_MEMORY_CONTEXT_LIVE = '1';
     return { args: ['--import', 'tsx', 'test/live/memory-context-reading.ts', ...nativeArgs], env: childEnv };
   }
-  let files;
+  let files = selectedFiles.length ? [...new Set(selectedFiles)] : undefined;
   if (mode === '--performance') files = ['test/performance/*.test.ts'];
   if (mode === '--live-embeddings') {
     childEnv.MOTE_TEST_LIVE_EMBEDDINGS = '1';

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkEnvironment, missingDependencies, desktopRuntimeFailure } from './check-environment.mjs';
+import { checkEnvironment, missingDependencies, desktopRuntimeFailure, androidEnvironment } from './check-environment.mjs';
 
 test('dependency preflight detects undeclared installations without importing packages or building', t => {
   const directory = mkdtempSync(join(tmpdir(), 'mote-check-environment-'));
@@ -56,4 +56,21 @@ test('Desktop preflight checks the installed Electron executable without opening
   assert.match(desktopRuntimeFailure(manifest), /Electron executable is missing/);
   writeFileSync(join(module, 'generated-executable'), 'generated runtime marker; never executed');
   assert.equal(desktopRuntimeFailure(manifest), undefined);
+});
+
+test('Android SDK discovery agrees with Gradle local properties and validates packages before execution', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'mote-android-preflight-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeFileSync(join(directory, 'package.json'), '{}');
+  const put = (path, value = '') => { mkdirSync(join(directory, path, '..'), { recursive: true }); writeFileSync(join(directory, path), value); };
+  put('apps/android/gradlew');
+  const sdk = join(directory, 'configured SDK'), other = join(directory, 'other SDK');
+  put('apps/android/local.properties', `sdk.dir=${sdk.replace(/ /g, '\\ ')}\n`);
+  const env = { ...process.env, ANDROID_HOME: other, ANDROID_SDK_ROOT: other };
+  assert.deepEqual(androidEnvironment(directory, env), { ANDROID_HOME: sdk, ANDROID_SDK_ROOT: sdk });
+  assert.ok(checkEnvironment({ directory, android: true, env }).some(failure => failure.includes('platforms/android-36/android.jar')));
+  for (const path of ['platforms/android-36/android.jar', 'build-tools/36.0.0/source.properties']) put(`configured SDK/${path}`);
+  assert.ok(!checkEnvironment({ directory, android: true, env }).some(failure => failure.includes('Android SDK prerequisite')));
+  const discovered = androidEnvironment(directory, {}, directory);
+  assert.equal(discovered.ANDROID_HOME, sdk, 'local.properties also works with no environment SDK');
 });

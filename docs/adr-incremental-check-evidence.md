@@ -79,7 +79,7 @@ explains why behavior-changing environment values must affect identity. These ar
 design references, without introducing either tool or a remote cache.
 
 The current closure is intentionally broader than individual test imports: it
-includes the owning workspace's complete tests and transitive product inputs.
+includes transitive product inputs and shared fixtures. Server now partitions its complete functional inventory into 16 stable filename-hash groups; a test-only edit invalidates its group. Selected tests or fixture helpers referring to other test paths retain the full owning suite in the key. Other workspaces retain their complete suite inputs.
 Reuse is local to the original host/directory and relies on declared inputs plus
 installed-tree/tool metadata. The reviewed Vite/Vitest `.vite` and `.vite-temp`
 output caches are excluded; consumed workspace `dist/` bytes remain inputs.
@@ -93,3 +93,15 @@ The execution environment removes the caller's `CODEX_TOOL_CALL_ID` before both
 hashing and spawning tasks. This invocation trace identifier otherwise causes a
 miss on every separate tool call. Other inherited values remain inputs; ignoring
 a variable only in the hash would leave an untracked input visible to tests.
+
+## 2026-10-22 feedback delta
+
+The [bounded plan](design/test-feedback-efficiency.md) preserves the original receipt,
+lock, cleanup and candidate requirements. Explicit Server file selection runs through
+`check:affected --test-file` when shared resource control and receipts are needed.
+Focused task identities cannot satisfy unexecuted full-plan groups. Ordinary failures
+continue independent tasks under declared, validated prerequisites; failed prerequisites
+block descendants. Environment failures, signals, input changes and uncertain cleanup
+still stop the plan. Android SDK discovery is passed to both preflight and Gradle,
+and Android's real Node fixture dependencies are explicit. No product assertion,
+functional inventory, release gate or CI activation is removed.

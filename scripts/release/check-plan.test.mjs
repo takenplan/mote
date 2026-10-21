@@ -16,7 +16,7 @@ test('backup plans keep complete Server/Web suites, CLI/profile security and upd
       'test:@mote/shared', 'test:@mote/server', 'test:@mote/web', 'scope-contracts', 'central-runner']) {
       assert.ok(names.includes(id), `${path}: ${id}`);
     }
-    assert.deepEqual(steps.find(step => step.id === 'test:@mote/server').args, ['run', 'test', '-w', '@mote/server']);
+    assert.equal(steps.find(step => step.id === 'test:@mote/server').args[0], 'test/run.mjs');
     assert.deepEqual(steps.find(step => step.id === 'test:@mote/web').args, ['run', 'test', '-w', '@mote/web']);
     assert.deepEqual(steps.find(step => step.id === 'root-tests').args,
       ['--test', 'scripts/security-tests.mjs']);
@@ -134,4 +134,30 @@ test('fixed aliases retain explicit full obligations and CI uses the same plan',
   const workflow = readFileSync('.github/workflows/component-checks.yml', 'utf8');
   assert.match(workflow, /check:affected -- --base "\$CHECK_BASE" --head "\$CHECK_HEAD" --typescript-only/);
   assert.match(workflow, /needs: \[affected, typescript-and-tools\]/);
+});
+
+
+test('Server groups enumerate the complete functional inventory exactly once', () => {
+  const steps = plan('apps/server/src/app.ts');
+  const groups = steps.filter(step => step.testFiles);
+  assert.ok(groups.length > 1 && groups.length <= 16);
+  const files = groups.flatMap(step => step.testFiles);
+  assert.deepEqual(files.toSorted(), readdirSync('apps/server/test').filter(file => file.endsWith('.test.ts')).map(file => `apps/server/test/${file}`).sort());
+  assert.equal(files.length, new Set(files).size);
+  for (const group of groups) {
+    assert.ok(group.needs.includes('build:@mote/agent'));
+    assert.ok(!group.needs.includes('build:@mote/web'));
+    assert.deepEqual(group.args.slice(1), group.testFiles.flatMap(file => ['--file', file.slice('apps/server/'.length)]));
+  }
+  const seen = new Set();
+  for (const step of steps) { assert.ok(step.needs.every(id => seen.has(id)), step.id); seen.add(step.id); }
+});
+
+test('Android-only checks prepare and probe real Node backend prerequisites before Gradle', () => {
+  const steps = checkPlan(fixedChecks('android'), release);
+  const android = steps.find(step => step.id === 'android-unit');
+  for (const name of ['shared', 'agent']) assert.ok(android.needs.includes(`build:@mote/${name}`));
+  assert.ok(steps[0].args.includes('@mote/server'));
+  assert.deepEqual(android.env, steps[0].env);
+  assert.equal(android.env.ANDROID_HOME, android.env.ANDROID_SDK_ROOT);
 });

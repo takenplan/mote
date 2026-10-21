@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, renameSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -290,4 +290,59 @@ test('ordinary documentation and content-equivalent commits do not invalidate ru
   assert.equal(sourceIdentity(directory), original);
   write('docs/design/scope-inventory.json', '{}');
   assert.notEqual(sourceIdentity(directory), original, 'executable scope input must still invalidate');
+});
+
+test('focused CLI selects only explicit Server files and never claims a complete candidate plan', t => {
+  const { directory, write } = repository(t);
+  write('apps/server/test/selected.test.ts', "import test from 'node:test';test('GENERATED_FOCUSED',()=>{});");
+  write('apps/server/test/unrelated.test.ts', "throw Error('must not run');");
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { cwd: directory, env, encoding: 'utf8' });
+  const selected = run('--test-file', 'apps/server/test/selected.test.ts', '--dry-run');
+  assert.equal(selected.status, 0, selected.stderr);
+  const plan = JSON.parse(selected.stdout);
+  assert.equal(plan.affected.central, true);
+  assert.deepEqual(plan.checks.map(step => step.id), ['environment', 'test:@mote/server#focused']);
+  const focused = plan.checks.at(-1);
+  assert.deepEqual(focused.args, ['test/run.mjs', '--file', 'test/selected.test.ts']);
+  assert.deepEqual(focused.testFiles, ['apps/server/test/selected.test.ts']);
+  assert.deepEqual(focused.needs, ['environment']);
+  for (const file of ['apps/server/test/missing.test.ts', 'apps/server/test', 'apps/web/test/selected.test.ts', 'apps/server/test/../src/selected.test.ts']) {
+    assert.notEqual(run('--test-file', file, '--dry-run').status, 0, file);
+  }
+  assert.throws(() => parseArguments(['--test-file', 'apps/server/test/selected.test.ts', '--base', 'main']), /Choose/);
+  assert.throws(() => parseArguments(['--test-file']), /Invalid/);
+});
+
+
+test('actual focused CLI runs the real Server launcher under the shared driver and reuses only focused evidence', t => {
+  const { directory, write } = repository(t);
+  write('.gitignore', 'ignored/\nnode_modules/\n');
+  write('apps/server/test/performance-reporter.mjs', readFileSync(new URL('../../apps/server/test/performance-reporter.mjs', import.meta.url), 'utf8'));
+  write('apps/server/test/run.mjs', readFileSync(new URL('../../apps/server/test/run.mjs', import.meta.url), 'utf8'));
+  write('apps/server/test/fixtures/test-embedding-config.mjs', readFileSync(new URL('../../apps/server/test/fixtures/test-embedding-config.mjs', import.meta.url), 'utf8'));
+  write('apps/server/test/selected.test.ts', "import test from 'node:test';test('GENERATED_FOCUSED',()=>{});\n");
+  write('apps/server/test/unrelated.test.ts', "throw Error('GENERATED_UNRELATED_MUST_NOT_RUN');\n");
+  // Generated native adapters only satisfy the environment probe. This test
+  // exercises the real driver/launcher boundary, without product Server I/O.
+  write('node_modules/better-sqlite3/package.json', '{"main":"index.cjs"}');
+  write('node_modules/better-sqlite3/index.cjs', 'module.exports=class {prepare(){return {get(){return 1}}}close(){}}');
+  write('node_modules/mem0ai/package.json', '{"exports":{"./oss":"./oss.cjs"}}');
+  write('node_modules/mem0ai/oss.cjs', 'module.exports={}');
+  const tsx = fileURLToPath(new URL('../../node_modules/tsx', import.meta.url));
+  symlinkSync(tsx, join(directory, 'node_modules/tsx'), process.platform === 'win32' ? 'junction' : 'dir');
+  const env = { PATH: process.env.PATH, HOME: join(directory, 'ignored/home'), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
+  const run = (...extra) => spawnSync(process.execPath, [cli, '--test-file', 'apps/server/test/selected.test.ts', ...extra], { cwd: directory, encoding: 'utf8', env });
+  const first = run();
+  assert.equal(first.status, 0, first.stderr + first.stdout);
+  assert.match(first.stdout, /GENERATED_FOCUSED/);
+  assert.doesNotMatch(first.stdout, /GENERATED_UNRELATED_MUST_NOT_RUN/);
+  const receiptPath = /Check receipt: (.+)/.exec(first.stdout)[1].trim();
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  assert.equal(receipt.cleanupConfirmed, true);
+  assert.deepEqual(receipt.steps.map(step => [step.id, step.status]), [['environment', 'passed'], ['test:@mote/server#focused', 'passed']]);
+  const again = run('--reuse', receiptPath);
+  assert.equal(again.status, 0, again.stderr + again.stdout);
+  assert.match(again.stdout, /REUSED test\/test:@mote\/server#focused/);
+  assert.doesNotMatch(again.stdout, /GENERATED_FOCUSED/);
 });

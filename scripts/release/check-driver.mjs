@@ -134,6 +134,14 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
   process.on('SIGINT', onInterrupt);
   process.on('SIGTERM', onTerminate);
   try {
+    const preceding = new Set();
+    for (const step of plan) {
+      if (!step.id || preceding.has(step.id)) throw Error('Missing or duplicate check task id');
+      if (step.needs !== undefined && (!Array.isArray(step.needs) || step.needs.some(id => !preceding.has(id)))) {
+        throw Error(`Invalid check prerequisites: ${step.id}`);
+      }
+      preceding.add(step.id);
+    }
     paths = checkDriverPaths(directory);
     receipt.revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim();
     receiptPath ??= join(paths.receiptDirectory, `${startedAt.replace(/[:.]/g, '-')}-${runId}.json`);
@@ -190,6 +198,12 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
       if (interruptedSignal) { result = signalStatus(interruptedSignal); break; }
       if (!unchangedInputs()) { result = 1; break; }
       const step = plan[index], measured = receipt.steps[index], stepStarted = performance.now();
+      const blockedBy = step.needs?.filter(id => !['passed', 'reused'].includes(receipt.steps.find(value => value.id === id)?.status));
+      if (blockedBy?.length) {
+        measured.reason = 'prerequisite_failed'; measured.blockedBy = blockedBy;
+        result ||= 1;
+        continue;
+      }
       taskIdentity?.refresh?.();
       measured.inputIdentity = identifyTask(step);
       const previous = measured.inputIdentity && reusable.find(value => value.step.id === measured.id
@@ -205,7 +219,7 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
       measured.process = { spawnAttemptedAt: new Date().toISOString(), pid: null, expectedPgid: null };
       activeChild = spawn(step.command, step.args ?? [], {
         cwd: step.cwd ? resolve(directory, step.cwd) : directory,
-        env: checkExecutionEnvironment(),
+        env: { ...checkExecutionEnvironment(), ...step.env },
         stdio: 'inherit', detached: process.platform !== 'win32',
       });
       const child = activeChild;
@@ -241,7 +255,10 @@ export async function runChecks(plan, { directory = process.cwd(), lock = true, 
       taskIdentity?.refresh?.();
       if (measured.inputIdentity) measured.inputsStable = identifyTask(step) === measured.inputIdentity;
       console.log(`${measured.exitCode === 0 ? 'PASS' : 'FAIL'} ${measured.phase}/${measured.id} ${seconds(measured.elapsedMs)}${measured.exitCode ? ` exit ${measured.exitCode}` : ''}${measured.reason ? ` (${measured.reason})` : ''}`);
-      if (measured.exitCode !== 0 || measured.inputsStable === false) { result = measured.exitCode || 1; break; }
+      if (measured.exitCode !== 0 || measured.inputsStable === false) {
+        result ||= measured.exitCode || 1;
+        if (step.id === 'environment' || step.needs === undefined || measured.inputsStable === false || interruptedSignal || leftChildren || !cleanupConfirmed) break;
+      }
     }
     if (!unchangedInputs()) result = 1;
     validateTasks();
