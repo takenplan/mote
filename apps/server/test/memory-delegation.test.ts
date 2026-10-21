@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
 import {AgentYieldError} from '@mote/agent';
-import type {QueryResult} from '@mote/shared';
+import {ProviderFailure,type QueryResult} from '@mote/shared';
 import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {MaterialStore,materialId} from '../src/materials.js';
@@ -28,14 +28,14 @@ async function fixture(t:TestContext,count=4){
   const material=materials.publish({id:materialId(sourceId,externalId),kind:'mote.file',schemaVersion:1,title:'Generated original '+index,origin:{sourceId,externalId},blocks:[{id:'body',kind:'text',format:'plain',text:'Generated reference with no durable personal fact.',memberIds:[original.id]}],members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
   store.db.exec('BEGIN IMMEDIATE');work.inputs.receive({sourceId,inputKey:'raw-'+index});store.db.exec('COMMIT');work.observe(material.id,['material'],{inputKey:'raw-'+index,change:'source'});
  }
- let planning=0,extraction=0,reviews=0;const seen:QueryInput[]=[];
+ let planning=0,extraction=0,reviews=0,failExtraction=false;const seen:QueryInput[]=[];
  const zero=(input:QueryInput,runId:string):QueryResult=>({runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)})});
- const pipeline=new MemoryPipeline({store,memories,executor:engine,configured:()=>true,model:()=> 'synthetic',concurrency:()=>2,requireAdmission:true,automaticAllowed:job=>work.authorized(job),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['material'],materialAllowedForMemory:()=>true,query:async input=>{seen.push(input);extraction++;return zero(input,'generated-extraction');},review:(input,draft)=>reviewMemory(input,draft,async next=>{reviews++;return zero(next,'generated-review');})});
+ const pipeline=new MemoryPipeline({store,memories,executor:engine,configured:()=>true,model:()=> 'synthetic',concurrency:()=>2,requireAdmission:true,automaticAllowed:job=>work.authorized(job),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['material'],materialAllowedForMemory:()=>true,query:async input=>{seen.push(input);extraction++;if(failExtraction)throw new ProviderFailure({category:'permanent',code:'provider_network',retryAfterMs:0});return zero(input,'generated-extraction');},review:(input,draft)=>reviewMemory(input,draft,async next=>{reviews++;return zero(next,'generated-review');})});
  let planningHook:((input:QueryInput,catalog:MemoryWorkCandidate[])=>Promise<void>)|undefined;
  let allow:((candidate:MemoryWorkCandidate)=>boolean)=()=>true;
  const adapter=registerMemoryDelegation({runtime,pipeline,work,sourcePipelines,allowCandidate:candidate=>allow(candidate),query:async input=>{planning++;const catalog=(input.taskContext!.memoryWork as {catalog:MemoryWorkCandidate[]}).catalog;if(planningHook)await planningHook(input,catalog);else await input.hostControlChannel!.execute('delegation_submit',{units:[{id:'joint',capabilityId:'memory.package',title:'Inspect selected originals',goal:'Inspect the complete synthetic set',input:{members:catalog.map(candidate=>candidate.key),instruction:'Preserve separate source identities and verify every input'}}]});return {runId:'generated-plan',answer:'The bounded input catalog was delegated.',citations:[],trace:[]};}});
  t.after(async()=>{await engine.close();await adapter.close();await runtime.close();await pipeline.close();await sourcePipelines.close();store.close();rmSync(directory,{recursive:true,force:true});});
- return {store,engine,runtime,sourcePipelines,work,pipeline,adapter,seen,planned:()=>work.drainPlanned(pipeline,true,adapter.plan,64,()=>true,adapter.onCreated,undefined,candidate=>allow(candidate)),counts:()=>({planning,extraction,reviews}),setPlanning(hook:NonNullable<typeof planningHook>){planningHook=hook;},setAllowed(hook:typeof allow){allow=hook;},async finish(){await Promise.all(pipeline.list().filter(job=>['queued','running'].includes(job.status)).map(job=>pipeline.run(job.id)));for(let tick=0;tick<30;tick++){await runtime.tick();await sourcePipelines.drainMemory(pipeline,true);if(runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status)))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Synthetic Memory work did not settle');}};
+ return {store,engine,runtime,sourcePipelines,work,pipeline,adapter,seen,planned:()=>work.drainPlanned(pipeline,true,adapter.plan,64,()=>true,adapter.onCreated,undefined,candidate=>allow(candidate)),counts:()=>({planning,extraction,reviews}),setExtractFailure(value:boolean){failExtraction=value;},setPlanning(hook:NonNullable<typeof planningHook>){planningHook=hook;},setAllowed(hook:typeof allow){allow=hook;},async finish(){await Promise.all(pipeline.list().filter(job=>['queued','running'].includes(job.status)).map(job=>pipeline.run(job.id)));for(let tick=0;tick<30;tick++){await runtime.tick();await sourcePipelines.drainMemory(pipeline,true);if(runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status)))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Synthetic Memory work did not settle');}};
 }
 
 for(const historicalAuthority of ['stale','revoked'] as const)test(`resumed Memory rejoins its plan behind a full page of ${historicalAuthority} historical status units`,async t=>{
@@ -191,4 +191,28 @@ test('transport batching keeps every receipt semantic time and attribution in ge
  const work=f.seen[0].taskContext!.memoryWork as {members:MemoryWorkMember[];instruction:string};
  assert.deepEqual(work.members.map(member=>member.contextTime).sort(),times);assert.ok(work.members.every(member=>member.attributionContext&&member.sourceId&&member.inputKey));assert.match(work.instruction,/never the call contextTime/);
  const done=f.pipeline.get(f.pipeline.list()[0].id);assert.deepEqual(done.batches[0].coverage!.map(member=>member.contextTime).sort(),times);assert.deepEqual(f.counts(),{planning:0,extraction:1,reviews:1});
+});
+
+test('model delegation retries retain the exhausted product round; the explicit owner alone may reset it',async t=>{
+ const f=await fixture(t,1),pipeline=f.pipeline;
+ const held={create:(input:Parameters<MemoryPipeline['create']>[0])=>pipeline.create(input),get:(id:string)=>pipeline.get(id),cancel:(id:string)=>pipeline.cancel(id),run:async()=>{}};
+ const catalog=f.work.catalog(),proposals=await f.adapter.plan(catalog);f.work.acceptPackages(held,catalog,proposals,()=>true,f.adapter.onCreated);
+ const job=f.pipeline.get(f.pipeline.list()[0].id),unitId=proposals[0].id!;f.setExtractFailure(true);
+ await f.pipeline.run(job.id);
+ const batchId=f.pipeline.get(job.id).batches[0].id;
+ assert.equal(f.engine.get(batchId)!.maxAttempts,4,'legacy explicit batch override stays separate from the current default');
+ for(let expected=1;expected<=4;expected++){
+  assert.equal(f.engine.get(batchId)!.attempts,expected);assert.equal(f.engine.get(batchId)!.retryRound,1);assert.equal(f.counts().extraction,expected);
+  f.adapter.reconcile();const statusStep=f.engine.get(f.runtime.unit(unitId).stepId)!;await new Promise(resolve=>setTimeout(resolve,Math.max(0,statusStep.availableAt-Date.now())+5));await f.engine.drain([statusStep.id]);
+  const terminal=f.engine.get(f.runtime.unit(unitId).stepId)!;assert.equal(terminal.state,expected<=3?'stale':'failed');if(expected>3)assert.equal(terminal.error,'retry_budget_exhausted');
+  // Freeze the failed canonical product's projection at the model retry
+  // boundary without depending on the legacy coordinator's pump timing.
+  // No product execution, attempts, policy or round row is changed here.
+  assert.equal(f.pipeline.get(job.id).status,'failed');
+  f.store.db.prepare("UPDATE delegation_units SET json=json_set(json,'$.status','failed','$.error',?) WHERE id=?").run(terminal.error!,unitId);
+  assert.equal(f.runtime.unit(unitId).status,'failed');
+  f.runtime.retryUnit(unitId);await f.pipeline.run(job.id);
+ }
+ assert.equal(f.counts().extraction,4);assert.equal(f.engine.get(batchId)!.attempts,4);assert.equal(f.engine.get(batchId)!.retryRound,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM execution_retry_rounds WHERE step_id=?').get(batchId)!.n,0);
+ f.setExtractFailure(false);assert.equal((await f.pipeline.retry(job.id)).status,'completed');assert.equal(f.engine.get(batchId)!.retryRound,2);assert.equal(f.counts().extraction,5);
 });
