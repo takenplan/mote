@@ -1,4 +1,5 @@
 import {CODING_MEMORY_CONTRACT} from './memory-schema.js';
+import {MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT} from './memory-image-proof.js';
 const MEMORY_SCHEMA_FEEDBACK='Every candidate needs admission (layer observation|memory, reason, scope, attribution user|third_party|observed|inferred) and exact evidence quotes. Consolidated candidates must be layer memory and include only relatedMemoryIds actually used from supplied cards. Empty output is valid.';
 export const validationFeedback={
   coverage:'Work-package output requires coverage for every host member key, with checked or no_candidates or needs_context or needs_owner_input (with question), matching zero-based candidateIndexes, and capacity:{saturated:boolean}. Preserve exactly the host member identities. Do not claim completion when a range was omitted; report needs_context. The host capacity replaces the ordinary eight-candidate limit.',
@@ -16,7 +17,7 @@ export const validationFeedback={
   quote_ambiguous:'The quote matches multiple authorized positions. Use a longer unique exact quote or an explicit absolute UTF-16 offset.',
   quote_range:'A quote was outside its supplied evidence segment. Keep the entire quote within one supplied range and use an absolute UTF-16 offset in the full original text.',
   missing_quote:'When supplying evidence spans, include an exact matching quote for every ID in evidenceIds.',
-  image_evidence:'Visual evidence requires this run\'s successfully delivered original-image pixels. Use the exact authorized original-image anchor id and image:{originalSha256,viewId} from that delivery, without a quote or text offsets. A locator, interpretation, metadata-only response, draft, or another run\'s view is not pixel proof. Read the necessary authorized image, retain exact OCR quotes for text evidence, or report incomplete when required original proof is unavailable.',
+  image_evidence:'Visual evidence requires this run\'s successfully delivered original-image pixels. Use the exact authorized original-image anchor id and image:{originalSha256,viewId} from that delivery, without a quote or text offsets. A locator, interpretation, metadata-only response, draft, or another run\'s view is not pixel proof. Read the necessary authorized image, retain exact OCR quotes for text evidence, or report incomplete when required original proof is unavailable. '+MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT,
 } as const;
 export type MemoryOutputValidationCode=keyof typeof validationFeedback;
 
