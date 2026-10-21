@@ -10,6 +10,21 @@ import {scopedFilesFixture} from './fixtures/scoped-files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
 
 const stages=['memory','summary','review','import','turns'] as const;
+function completeGeneratedCalls(text:string){
+ const end=text.lastIndexOf('\n');
+ return end<0?[]:text.slice(0,end).split('\n').map(line=>JSON.parse(line));
+}
+
+test('generated consumer logs parse complete records while a concurrent record is unfinished',()=>{
+ const first='{"method":"first"}\n',partial='{"method":';
+ assert.deepEqual(completeGeneratedCalls(partial),[]);
+ assert.deepEqual(completeGeneratedCalls(first+partial),[{method:'first'}]);
+ assert.deepEqual(completeGeneratedCalls(first+'{"method":"second"}'),[{method:'first'}]);
+ assert.deepEqual(completeGeneratedCalls(first+'{"method":"second"}\n'),[{method:'first'},{method:'second'}]);
+ assert.throws(()=>completeGeneratedCalls(first+'{"method":}\n'),SyntaxError);
+ assert.throws(()=>completeGeneratedCalls('\n'),SyntaxError);
+});
+
 function generatedCodex(directory:string,failSecondSummary=false){
  const home=join(directory,'generated-consumers-codex-home'),executable=join(directory,'generated-consumers-codex.cjs'),log=join(directory,'generated-consumers-codex.jsonl');
  const release=join(directory,'generated-summary-failure-release');
@@ -19,6 +34,7 @@ function generatedCodex(directory:string,failSecondSummary=false){
  // remain the actual production implementation.
  writeFileSync(executable,'#!'+process.execPath+'\n'+String.raw`
 const fs=require('node:fs'),readline=require('node:readline');
+const completeGeneratedCalls=${completeGeneratedCalls.toString()};
 const log=${JSON.stringify(log)},send=value=>process.stdout.write(JSON.stringify(value)+'\n'),threadId='generated-thread-'+process.pid;
 let model,serviceTier;
 const record=value=>fs.appendFileSync(log,JSON.stringify({executable:process.argv[1],home:process.env.CODEX_HOME,auth:fs.realpathSync(process.env.CODEX_HOME+'/auth.json'),...value})+'\n');
@@ -31,7 +47,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  }else if(m.method==='turn/start'){
   const envelope=JSON.parse(m.params.input[0].text),evidence=envelope.untrustedEvidence??[],id=evidence[0]?.id;
   record({method:'generated.consumer.prompt',model,serviceTier,envelope});
-  if(${JSON.stringify(failSecondSummary)}&&model==='generated-native-summary'&&fs.readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(call=>call.method==='generated.consumer.prompt').length===2){const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(timer);send({id:m.id,error:{code:-32000,data:{codexErrorInfo:{responseStreamDisconnected:{}}}}});}},10);return;}
+  if(${JSON.stringify(failSecondSummary)}&&model==='generated-native-summary'&&completeGeneratedCalls(fs.readFileSync(log,'utf8')).filter(call=>call.method==='generated.consumer.prompt').length===2){const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(timer);send({id:m.id,error:{code:-32000,data:{codexErrorInfo:{responseStreamDisconnected:{}}}}});}},10);return;}
   let answer,citationIds=id?[id]:[];
   if(model==='generated-native-memory'){
    const memories=id?[{title:'Generated native Memory',statement:'Nora prefers generated tea. ['+id+']',uncertainty:'Generated explicitly attributed statement only',admission:{layer:'memory',reason:'Generated explicitly expressed preference',scope:'Nora in generated fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:evidence[0].ocrText}]}]:[];
@@ -50,7 +66,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  }
 });
 `,{mode:0o700});
- return {home,executable,log,release,calls:()=>readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line))};
+ return {home,executable,log,release,calls:()=>completeGeneratedCalls(readFileSync(log,'utf8'))};
 }
 const nativeSettings=(stage:typeof stages[number])=>({...defaultModelSettings(),provider:'codex',protocol:'codex-app-server' as const,baseUrl:'',model:'generated-native-'+stage,apiKey:'',headers:{},extraBody:{},serviceTier:'default' as const,modelRequestTimeoutMs:null,agentTimeoutMs:null});
 type Request=(token:string|undefined,url:string,method?:any,payload?:unknown)=>Promise<{statusCode:number;body:string;json:()=>any}>;
