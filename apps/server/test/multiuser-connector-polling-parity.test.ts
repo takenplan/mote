@@ -141,7 +141,7 @@ function dingtalkTransport(calls:ProviderCall[]):NonNullable<ConnectorTransports
  };
 }
 
-test('recording discovery exhausting all five transient attempts leaves an independent future cycle that recovers after restart',async t=>{
+test('recording discovery exhausting all three transient attempts leaves an independent future cycle that recovers after restart',async t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-18T00:00:00Z')});
  let fail=false,discoveryFailures=0,recover=false;
  const calls:ProviderCall[]=[],p=await pollingFixture(t,{dingtalk:scope=>async command=>{
@@ -161,20 +161,20 @@ test('recording discovery exhausting all five transient attempts leaves an indep
  await p.install('dingtalk-recordings');await p.configure(f.a.token,'dingtalk-recordings');await p.operation(f.a.token,'connect');await p.operation(f.a.token,'select',recordingSelection);await p.run(f.a.token,'sync');
  const cycle=p.timer(f.a.userId);fail=true;t.mock.timers.tick(300001);let last:any;
  let discoveryTask='';
- for(let attempt=1;attempt<=5;attempt++){
+ for(let attempt=1;attempt<=3;attempt++){
   for(let spin=0;spin<1000;spin++){
    await f.host.execution!.tick();if(discoveryFailures&&!discoveryTask)discoveryTask=f.read(db=>String(db.prepare("SELECT task_id FROM user_tasks WHERE user_id=? AND json_extract(input,'$.recordingPhase')='discover' ORDER BY rowid DESC LIMIT 1").get(f.a.userId)!.task_id));if(!discoveryTask){await delay(5);continue;}last=await p.checked(f.a.token,'/api/tasks/'+discoveryTask);
-   if(last.attempts===attempt&&last.state===(attempt===5?'failed':'waiting'))break;
+   if(last.attempts===attempt&&last.state===(attempt===3?'failed':'waiting'))break;
    await delay(5);
   }
-  assert.equal(last.attempts,attempt,JSON.stringify(last));assert.equal(last.state,attempt===5?'failed':'waiting',JSON.stringify(last));
-  if(attempt<5)t.mock.timers.tick(20000);
+  assert.equal(last.attempts,attempt,JSON.stringify(last));assert.equal(last.state,attempt===3?'failed':'waiting',JSON.stringify(last));
+  if(attempt<3)t.mock.timers.tick(20000);
  }
- assert.equal(discoveryFailures,5,'The failed discovery cycle owns the existing five-call budget');
+ assert.equal(discoveryFailures,3,'The failed discovery cycle owns its finite three-call budget');
  await p.wait(f.a.token,cycle.id,'failed');assert.equal((await p.checked(f.a.token,'/api/tasks/'+cycle.id)).attempts,1,'Coordinator waits do not consume the provider phase budget');
  const successor=p.timer(f.a.userId);assert.notEqual(successor.id,cycle.id);assert.equal(successor.state,'waiting');assert.ok(successor.input.due>Date.now());
  fail=false;recover=true;await f.restart();assert.equal(p.timer(f.a.userId).id,successor.id);t.mock.timers.tick(300001);await p.wait(f.a.token,successor.id);
- assert.equal(discoveryFailures,5,'A new periodic scan must not mutate the terminal previous cycle');
+ assert.equal(discoveryFailures,3,'A new periodic scan must not mutate the terminal previous cycle');
  const page=await p.checked(f.a.token,'/api/connectors/'+connectionId+'/recordings?limit=10');assert.equal(page.items.length,1);assert.equal(page.items[0].id,'same-recording');assert.equal(page.items[0].transcript.state,'succeeded');
  assert.equal((await p.checked(f.a.token,'/api/tasks/'+cycle.id)).state,'failed');
  assert.equal((await p.checked(f.b.token,'/api/connectors')).connections.length,0,'A successor cannot manufacture a connection or authorization for B');

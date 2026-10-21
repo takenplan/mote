@@ -198,10 +198,10 @@ export class TaskExecution {
   if(this.physical.busy(step.id))throw new TaskError('physical_cleanup_pending',409);
   if(['issued','unknown'].includes(row.external_state)){
    const repeatable=this.readReplayReady(row),legacyRead=owner&&confirmUnknown&&handler.unknownRecovery==='read-query'&&row.external_issuance&&!this.physical.receipt(row.external_issuance);
-   if(!repeatable&&!legacyRead){if(!owner||!confirmUnknown&&!handler.reconcile)throw new TaskError('external_result_unknown',409);}
+   if(!repeatable&&!legacyRead){if(!owner||!confirmUnknown)throw new TaskError('external_result_unknown',409);}
    // Same-operation reconcilers retain the exact original pointer. They never
    // get a new mutation/session identity from the automatic read policy.
-   if(repeatable||legacyRead||owner&&confirmUnknown&&!handler.reconcile){
+   if(repeatable||legacyRead||owner&&confirmUnknown){
     if(row.external_issuance){this.db.prepare("UPDATE task_external_calls SET state='unknown' WHERE issuance_id=? AND user_id=? AND state='issued'").run(row.external_issuance,context.userId);
      if(owner)this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,Date.now());
      else this.db.prepare('INSERT INTO task_external_policy_replays(id,issuance_id,user_id,authorization_epoch,attempt_id,authorized_at) VALUES(?,?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,step.attemptId!,Date.now());
@@ -252,11 +252,11 @@ export class TaskExecution {
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
-  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:handler.modelAdmission==='per-call',
+  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:Boolean(handler.modelFeature)||handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>[...(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),...this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>String(row.resource_key))],
    admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(this.physical.busy(step.id))return new ExecutionFailure('waiting','physical_cleanup_pending',1000);if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile&&!this.readReplayReady(row))return new ExecutionFailure('blocked',row.external_issuance&&this.physical.receipt(row.external_issuance)?.state!=='quiescent'&&this.physical.receipt(row.external_issuance)?'physical_cleanup_unknown':'external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
-   execute:async(step,signal,grant)=>{
+   execute:(step,signal,grant)=>this.physical.taskBoundary(async()=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
@@ -279,10 +279,11 @@ export class TaskExecution {
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
      external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);this.physical.bind(step,issuanceId);if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
     };
+    if(handler.modelFeature&&handler.modelAdmission!=='per-call')grant.startAttempt();
     await handler.reconcile?.(run);grant.assert();
     const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
     const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure(this.readReplayReady(this.row(step.id)!)?'transient':'blocked','external_result_unknown');return {value:result,run};
-   },
+   }),
    commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),

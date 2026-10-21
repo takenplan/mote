@@ -32,6 +32,8 @@ export interface ExecutionGrant {
  commit<T>(write:()=>T):T;
  /** Start operation protection only after a physical admission gate opens. */
  startBudget():void;
+ /** Charge the current logical attempt after host preparation has succeeded. */
+ startAttempt():void;
  /** Protect one physical call; capacity/resource waits stay outside its budget. */
  withBudget<T>(work:()=>Promise<T>):Promise<T>;
  /** Trusted actual query fragments retain execution across a later unexecuted capacity wait. */
@@ -396,8 +398,9 @@ export class ExecutionEngine {
     if(!this.isCurrentGrant(row.id,fence))throw new ExecutionFailure('stale','grant_revoked');
     if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
    };
-   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,recordExecution:()=>{assertGrant();this.attempts.recordExecution(attemptId);},hasExecuted:()=>this.attempts.executed(attemptId),withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
-    assertGrant();grant.commit(()=>{const charged=this.attempts.charge(row.id,attemptId,policy.maxAttempts);if(charged===undefined)throw new ExecutionFailure('permanent','retry_budget_exhausted');if(charged)step.attempts++;this.attempts.enter(attemptId);db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);});let callDeadline:ReturnType<typeof setTimeout>|undefined;
+   const chargeAttempt=()=>{const charged=this.attempts.charge(row.id,attemptId,policy.maxAttempts);if(charged===undefined)throw new ExecutionFailure('permanent','retry_budget_exhausted');if(charged)step.attempts++;db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);};
+   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,startAttempt:()=>grant.commit(chargeAttempt),recordExecution:()=>{assertGrant();this.attempts.recordExecution(attemptId);},hasExecuted:()=>this.attempts.executed(attemptId),withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
+    assertGrant();grant.commit(()=>{chargeAttempt();this.attempts.enter(attemptId);});let callDeadline:ReturnType<typeof setTimeout>|undefined;
     if(timeout!==null){callDeadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);callDeadline.unref();}
     let executed=true;try{const value=await work();assertGrant();return value;}catch(error){if(error instanceof ProviderFailure&&error.details.executionStarted===false||error instanceof ExecutionFailure&&error.facts?.executionStarted===false)executed=false;throw error;}finally{clearTimeout(callDeadline);this.attempts.finish(attemptId,executed);}
    },withResource:async<T>(key:string,work:()=>Promise<T>):Promise<T>=>{

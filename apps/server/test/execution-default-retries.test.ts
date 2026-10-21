@@ -11,6 +11,23 @@ const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(r=>res
 function fixture(t:any){const dir=mkdtempSync(join(tmpdir(),'mote-default-retry-')),store=new Store(dir),engines:ExecutionEngine[]=[];let now=Date.now();const create=(db=store)=>{const engine=new ExecutionEngine(db,()=>now);engines.push(engine);return engine;};const engine=create();t.after(async()=>{await Promise.all(engines.map(e=>e.close()));store.close();rmSync(dir,{recursive:true,force:true});});return {dir,store,engine,create,advance:(ms:number)=>{now+=ms;}};}
 const base:ExecutionHandler={kind:'generated',pool:'generated',policy:EXECUTION_POLICIES.modelCall,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
+test('host preparation stays uncharged and startAttempt charges once before reconciliation without fabricating a physical call',async t=>{
+ const f=fixture(t);let prepared=false,entered=0,stale:undefined|(()=>void);
+ f.engine.register({...base,deferAttempts:true,execute:async(step,_signal,grant)=>{
+  if(!prepared)throw new ExecutionFailure('blocked','generated_snapshot_unavailable',undefined,{executionStarted:false});
+  grant.startAttempt();grant.startAttempt();entered++;stale=()=>grant.startAttempt();
+  assert.equal(step.attempts,1);const session=f.store.db.prepare('SELECT charged,executed,pending FROM execution_attempt_sessions WHERE id=?').get(step.attemptId!);assert.deepEqual({...session},{charged:1,executed:0,pending:0});
+  assert.equal(f.store.db.prepare('SELECT charged FROM execution_attempt_charges WHERE step_id=?').get(step.id)!.charged,1);return null;
+ }});
+ const id=f.engine.enqueue('prepare-first','generated',{});await f.engine.drain([id]);assert.equal(f.engine.get(id)!.state,'blocked');assert.equal(f.engine.get(id)!.attempts,0);assert.equal(entered,0);
+ prepared=true;f.engine.retry(id);await f.engine.drain([id]);assert.equal(f.engine.get(id)!.state,'succeeded');assert.equal(f.engine.get(id)!.attempts,1);assert.equal(entered,1);assert.throws(stale!,{code:'grant_revoked'});assert.equal(f.engine.get(id)!.attempts,1);
+});
+
+test('a failure after host startAttempt still exhausts the default three actual handler entries',async t=>{
+ const f=fixture(t);let entered=0;f.engine.register({...base,deferAttempts:true,execute:async(_step,_signal,grant)=>{grant.startAttempt();entered++;throw new ExecutionFailure('transient','generated_reconciliation_failed',0);}});
+ const id=f.engine.enqueue('reconcile-first','generated',{});await f.engine.drain([id]);assert.equal(entered,3);assert.equal(f.engine.get(id)!.attempts,3);assert.equal(f.engine.get(id)!.state,'failed');assert.equal(f.store.db.prepare('SELECT count(*) n FROM execution_attempt_sessions WHERE step_id=? AND charged=1 AND pending=0 AND executed=0').get(id)!.n,3);
+});
+
 test('all default families permit two retries and internal replay cannot reset an exhausted round',async t=>{
  const f=fixture(t);let calls=0;for(const policy of Object.values(EXECUTION_POLICIES))assert.equal(policy.maxAttempts,3);
  f.engine.register({...base,execute:async()=>{calls++;throw new ExecutionFailure('transient','generated_failed',0);}});

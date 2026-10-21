@@ -112,7 +112,7 @@ for(const withdrawal of ['shared','personal'] as const)test(`real ${withdrawal} 
  release.resolve();await f.wait(job.id,'stale');assert.equal(commits,0);assert.equal((await f.usageFor(f.alice.token)).items.length,0);const sources=await f.request(f.alice.token,'/api/sources');assert.deepEqual(sources.json().items.map((value:any)=>value.id),['generated-before-withdrawal']);
  if(withdrawal==='shared')await f.publishShared();else await f.replace(f.alice.token,'models',personal(aKey));await f.restart(node=>node.execution.register(handler({execute,commit:()=>{commits++;}})));
  assert.deepEqual(await (await f.service(f.alice.token)).restoreLease(original.snapshotId,job.operationId),{status:'unavailable',reason:withdrawal==='shared'?'shared_resource_revoked':'credentials_revoked'});
- assert.equal((await f.request(f.alice.token,'/api/tasks/'+job.id+'/retry','POST',{})).statusCode,200);await f.wait(job.id,'blocked');assert.equal(f.node.execution.engine.get(job.id)!.attempts,0,'unavailable model hydration must not consume a processing attempt');assert.equal(commits,0);assert.equal((await f.usageFor(f.alice.token)).items.length,0);assert.equal((await f.usageFor(f.bob.token)).items.length,0);
+ assert.equal((await f.request(f.alice.token,'/api/tasks/'+job.id+'/retry','POST',{})).statusCode,200);await f.wait(job.id,'blocked');assert.equal(f.node.execution.engine.get(job.id)!.attempts,1,'unavailable model hydration retains only the original executed attempt');assert.equal(commits,0);assert.equal((await f.usageFor(f.alice.token)).items.length,0);assert.equal((await f.usageFor(f.bob.token)).items.length,0);
 });
 
 test('retained real model wrappers cannot call providers or write usage after cancellation, lease expiry, retry or success',async t=>{

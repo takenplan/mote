@@ -21,6 +21,9 @@ export class TaskPhysicalCalls {
  receipt(issuance:string){return this.db.prepare('SELECT * FROM task_physical_calls WHERE issuance_id=?').get(issuance);}
  active(userId:string){return Boolean(this.db.prepare("SELECT 1 FROM task_physical_calls WHERE user_id=? AND state='active' LIMIT 1").get(userId));}
  eraseQuiescent(userId:string){this.db.prepare("DELETE FROM task_physical_calls WHERE user_id=? AND state='quiescent'").run(userId);}
+ /** A genuinely scheduled task must acquire its own owner, even when its
+  * scheduler was awaited from inside another task's model callback. */
+ taskBoundary<T>(work:()=>T):T{return this.current.exit(work);}
  bind(step:ExecutionStep,issuance:string){const current=this.current.getStore();if(!current)return;if(current.taskId!==step.id)throw new ExecutionFailure('stale','physical_owner_invalid');const row=this.db.prepare("SELECT * FROM task_physical_calls WHERE id=? AND task_id=? AND owner_token=? AND state='active'").get(current.id,step.id,current.token);if(!row||row.issuance_id)throw new ExecutionFailure('stale','physical_owner_invalid');this.db.prepare('UPDATE task_physical_calls SET issuance_id=? WHERE id=? AND owner_token=?').run(issuance,current.id,current.token);}
  async run<T>(step:ExecutionStep,deploymentId:string,snapshotId:string,mode:ModelRecoveryMode,admit:<V>(write:()=>V)=>V,work:()=>Promise<T>):Promise<T>{
   const nested=this.current.getStore();
