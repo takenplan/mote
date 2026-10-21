@@ -9,7 +9,7 @@ async function until(check:()=>boolean|Promise<boolean>,message:string){const en
 const generatedAnswer=(owner:string,keys:string[],ids:string[])=>({memories:[{title:'Generated '+owner,statement:`Nora prefers generated tea. [${ids[0]}]`,uncertainty:'Generated fixture only',admission:{layer:'memory',reason:'Generated expressed preference',scope:'Generated Nora',attribution:'third_party'},evidenceIds:[ids[0]],evidence:[{id:ids[0],quote:'GENERATED_MEMORY_'+owner+': Nora prefers generated tea.'}]}],...(keys.length?{coverage:keys.map((key,index)=>({key,state:index===0?'checked':'no_candidates',candidateIndexes:index===0?[0]:[]}))}:{})});
 
 for(const phase of ['extract','review'] as const)test(`issued Memory ${phase} survives lease recovery, abort and restart without another request`,{timeout:45000},async t=>{
- const f=await scopedMemoryFixture(t),gate={entered:deferred(),release:deferred()},aMaterial=await f.publish(f.a,'A');
+ let now='2037-04-10T08:00:00.000Z';const f=await scopedMemoryFixture(t,undefined,undefined,()=>now),gate={entered:deferred(),release:deferred()},aMaterial=await f.publish(f.a,'A');
  if(phase==='extract')f.gates.set('A',gate);
  else f.answers.set('A',(_raw,keys,ids)=>{f.gates.set('A',gate);return generatedAnswer('A',keys,ids);});
  const job=await f.submit(f.a,[aMaterial.id]);await gate.entered.promise;
@@ -29,7 +29,7 @@ for(const phase of ['extract','review'] as const)test(`issued Memory ${phase} su
  assert.equal(row().error,'external_result_unknown');assert.equal(row().external_state,'issued');
  assert.equal((await f.request(f.b.token,'/api/tasks/'+taskId)).statusCode,404);
  const rejected=await f.request(f.a.token,'/api/tasks/'+taskId+'/retry','POST',{});assert.equal(rejected.statusCode,409,rejected.body);
- gate.release.resolve();await f.restart();await f.node.execution!.tick();
+ gate.release.resolve();now='2038-01-01T00:00:00.000Z';await f.restart();await f.node.execution!.tick();
  assert.equal(row().external_state,'issued');assert.equal(row().state,'blocked');assert.equal(row().review,null);assert.equal(Boolean(row().draft),phase==='review');
  assert.deepEqual(journal().find(call=>call.issuance_id===originalIssued.issuance_id),originalIssued);
  assert.equal(f.requests.filter(request=>request.key.includes('GENERATED_A_KEY')).length,before);
@@ -39,7 +39,7 @@ for(const phase of ['extract','review'] as const)test(`issued Memory ${phase} su
 });
 
 for(const phase of ['extract','review'] as const)test(`successful Memory ${phase} query checkpoint survives before its domain save and is reused after restart`,{timeout:45000},async t=>{
- const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A'),host=f.node.memory! as any,original=host.query.bind(host);let interrupted=false;
+ let now='2037-04-10T08:00:00.000Z';const f=await scopedMemoryFixture(t,undefined,undefined,()=>now),material=await f.publish(f.a,'A'),host=f.node.memory! as any,original=host.query.bind(host);let interrupted=false;
  host.query=async(run:any,input:any,args:any)=>{const value=await original(run,input,args);if(!interrupted&&(args.taskContext?.untrustedMemoryDraft?'review':'extract')===phase){interrupted=true;throw new ExecutionFailure('blocked','generated_after_query_checkpoint');}return value;};
  const job=await f.submit(f.a,[material.id]);
  const state=()=>f.read(db=>db.prepare("SELECT e.id,e.state,b.draft,b.review,u.external_state FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id JOIN mm_job_batches b ON b.user_id=u.user_id AND b.id=json_extract(u.input,'$.batchId') WHERE e.kind='memory.batch' AND u.user_id=? AND json_extract(u.input,'$.jobId')=?").get(f.a.userId,job.id));
@@ -49,8 +49,8 @@ for(const phase of ['extract','review'] as const)test(`successful Memory ${phase
  assert.ok(checkpoints.every(checkpoint=>JSON.parse(String(checkpoint.json)).runId));
  const callsBefore=f.requests.length;assert.equal(callsBefore,phase==='extract'?1:2);
  assert.equal((await f.request(f.b.token,'/api/memory/jobs/'+job.id)).statusCode,404);
- await f.restart();const retry=await f.request(f.a.token,'/api/tasks/'+before.id+'/retry','POST',{});assert.equal(retry.statusCode,200,retry.body);await f.wait(f.a,job.id);
- assert.equal(f.requests.length,2,'successful extraction and independent review each run exactly once');
+ now='2038-01-01T00:00:00.000Z';await f.restart();const retry=await f.request(f.a.token,'/api/tasks/'+before.id+'/retry','POST',{});assert.equal(retry.statusCode,200,retry.body);await f.wait(f.a,job.id);
+ assert.equal(f.requests.length,2,'successful extraction and independent review each run exactly once');for(const request of f.requests){const value=JSON.parse(typeof request.body.messages[0].content==='string'?request.body.messages[0].content:request.body.messages[0].content[0].text);assert.equal(value.currentTime,'2037-04-10T08:00:00.000Z');}
  const calls=f.read(db=>db.prepare('SELECT state FROM task_external_calls WHERE task_id=?').all(before.id));assert.equal(calls.length,2);assert.ok(calls.every(call=>call.state==='succeeded'));
  assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,1);assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,0);
  const requests=f.requests.length;await f.submit(f.a,[material.id],job.id);assert.equal(f.requests.length,requests,'completed sibling/domain checkpoints remain reusable');

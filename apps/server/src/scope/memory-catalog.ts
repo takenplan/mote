@@ -1,3 +1,4 @@
+import {memoryEvaluationTime} from './memory-evaluation-context.js';
 import {attributionContextSchema,unknownAttributionContext,type AttributionContext} from '@mote/shared';
 import type {QueryInput} from '@mote/agent';
 import {z} from 'zod';
@@ -48,7 +49,7 @@ export function frozenMemoryCatalogMembers(data:ScopedMemoryData,input:ScopedMem
  return input.ranges.map(range=>{
   const record=records.get(range.id),pin=input.inputs.find(pin=>pin.id===range.id);
   if(!record||!pin||record.hash!==pin.hash)throw restricted();
-  return {key:memoryHash([range,record.hash,input.strategy]),...range,fingerprint:record.hash,materialRef:'material:'+record.material_id+'@'+record.material_revision,sourceId:record.source_id,contextTime:record.context_at,...(record.attribution?{attributionContext:attributionContextSchema.parse(JSON.parse(record.attribution))}:{}),state:'pending',memoryIds:[]};
+  return {key:memoryHash([range,record.hash,input.strategy,memoryEvaluationTime(input,range.id)]),...range,fingerprint:record.hash,materialRef:'material:'+record.material_id+'@'+record.material_revision,sourceId:record.source_id,contextTime:record.context_at,evaluationTime:memoryEvaluationTime(input,range.id),...(record.attribution?{attributionContext:attributionContextSchema.parse(JSON.parse(record.attribution))}:{}),state:'pending',memoryIds:[]};
  });
 }
 
