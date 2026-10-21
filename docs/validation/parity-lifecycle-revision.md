@@ -1,5 +1,7 @@
 # Lifecycle revision after the c0bf80d6 gate
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 This ledger supersedes the pending-gate status in the initial
 [lifecycle ledger](parity-lifecycle.md). It records a repair candidate, not an
 accepted integration or release. The integration base remains

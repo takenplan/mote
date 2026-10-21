@@ -1,5 +1,7 @@
 # Plugin and MCP parity validation, 2026-10-18
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 Base: `2c78ca8d52a7d17fae20962cf68d09a717ffc73a`.
 Branch: `codex/parity-extensions-20261018`.
 Worktree: `/Users/utopiafar/.codex/worktrees/parity-extensions-20261018/mote`.

@@ -1,5 +1,10 @@
 # Scoped image controls and instance media assets
 
+Status: parity responsibility restoration, 2026-10-18; implementation and
+validation are recorded separately in the linked regression and
+[current progress ledger](project-progress.md). Deployment is not established by
+this ADR.
+
 The 2026-10-18 Files parity assignment restores the original ImageProcessing
 controls and MediaAssets journeys in the shared host. This records the adapted
 responsibilities; validation and remaining integration gates are recorded in the

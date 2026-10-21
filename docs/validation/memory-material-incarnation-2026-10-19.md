@@ -1,5 +1,7 @@
 # M07 Material incarnation candidate: source-only preparation
 
+> 2026-10-20 progression note: “source-only / unexecuted” below is the original preparation checkpoint. Later [first-run failures](memory-material-fixture-first-failures-2026-10-19.md) record 81 tests with 76 passed and 5 failed at `66a576fd09653ae5c30df0b35dcbc0475edd882d`; the [restoration matrix](multiuser-parity-restoration-matrix.md) retains subsequent bounded corrections and composed failures/results. That source is now in main, while full public/image/paid-checkpoint qualification must still be mapped separately. See [Project progress](../project-progress.md); neither the original all-unexecuted wording nor source presence alone describes current qualification.
+
 This candidate starts at integration `9c03b631045670ff6302aca430ba7a566c5647ab`.
 It does not modify original Memory `6f44fc26b79e71a2ac43ccd667ab192cbe6d6744`,
 the frozen image diagnostic candidate, live Core files or any other owner source.

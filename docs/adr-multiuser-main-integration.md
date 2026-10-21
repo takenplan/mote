@@ -1,6 +1,15 @@
 # Multi-user integration with the main evidence lifecycle
 
-Date: 2026-10-17. Status: implementation under validation.
+Date: 2026-10-17. Decision: owner-directed integration. Source delivery: integrated
+into main; validation and deployment are separate states.
+
+Progress update, 2026-10-20: the later parity integration merge `9a8717c3` and
+subsequent fixes are ancestors of the documentation baseline `af11ab7c`. See the
+[current progress ledger](project-progress.md) for the delivery chain and
+[latest functional check record](validation/pr-168-189-191-integration-2026-10-20.md)
+for its exact tested runtime. Full original-journey qualification remains bounded
+by the [restoration matrix](validation/multiuser-parity-restoration-matrix.md);
+deployment was not checked by this documentation update.
 
 The owner requested merging `codex/mote-multiuser-integration` into `main`,
 resolving conflicts and repeating the complete regression. The production entry

@@ -1,5 +1,7 @@
 # Final joint multi-user candidate — 2026-10-18
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 Status: T's fresh Central build and real local Codex acceptance passed. Its
 complete `check:affected` command finished naturally with exit 1: the only failure
 was an outdated scope-inventory surface string. All functional assertions and

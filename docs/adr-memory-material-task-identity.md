@@ -1,6 +1,18 @@
 # M07 Material organizer task identity
 
-Status: candidate, source review and execution qualification pending.
+Original status: candidate, source review and execution qualification pending.
+
+Progress update, 2026-10-20: source `66a576fd` and the later `60e` shipping port are
+in main at documentation baseline `af11ab7c`. The
+[first executed fixture record](validation/memory-material-fixture-first-failures-2026-10-19.md)
+retains 81 tests with 76 passed and 5 failed; the
+[restoration matrix](validation/multiuser-parity-restoration-matrix.md) records
+subsequent bounded corrections and composed results. Full public reset,
+automatic/image/save and lifecycle qualification must be matched to those exact
+inputs; source integration does not prove complete qualification or deployment.
+See the [current progress ledger](project-progress.md). The original UNKNOWN
+list below describes this proposal's required evidence, not a claim that no
+checks have since executed or a new request for a product-policy vote.
 
 The M07 organizer consumes both new M03 captures and exact M06 publications.
 The former operation key used capture ID, source ID, capture hash and event

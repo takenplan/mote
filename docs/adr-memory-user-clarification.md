@@ -2,6 +2,13 @@
 
 Date: 2026-10-10. Status: accepted; implemented in this change.
 
+The [continuous-batch decision](adr-memory-continuous-batch.md) refines commit
+timing on scoped production: after provider staging succeeds, the host saves the
+reviewed evaluation/results and actionable Owner questions in one fenced
+transaction. Failed, unfinished, unknown or cancelled saves create no answerable
+continuation. The waiting, independent-result and owner-reply semantics below
+remain; this does not add a pre-save confirmation step.
+
 ## Problem and decision
 
 A complete conversation may contain meaningful personal expression without
