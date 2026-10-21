@@ -127,6 +127,22 @@ test('shared lifecycle crash recovery cannot shorten a durable provider Retry-Af
  }finally{await lifecycle.close();await engine.close();}
 });
 
+test('a long provider deadline crosses independent engine and lifecycle clocks without moving after a crash',async t=>{
+ const store=fixture(t);let engineNow=1_900_000_000_000,domainNow=1000,calls=0;const engineStart=engineNow,domainStart=domainNow,engine=new ExecutionEngine(store,()=>engineNow);
+ let lifecycle=new MemoryLifecycle(store,()=>true,()=>domainNow,engine);
+ const register=()=>lifecycle.register({id:'consolidation',version:'fixture',stream:'memory',async run(){calls++;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:600000});}});
+ try{
+  register();lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+  await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);await lifecycle.close();
+  const raw=JSON.parse(String(store.db.prepare("SELECT json FROM memory_lifecycle_state WHERE id='consolidation'").get()!.json));raw.failures=0;delete raw.retryAt;delete raw.error;delete raw.countedFailure;
+  store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='consolidation'").run(JSON.stringify(raw));
+  engineNow=engineStart+50000;domainNow=domainStart+50000;lifecycle=new MemoryLifecycle(store,()=>true,()=>domainNow,engine);register();await lifecycle.tick();
+  assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].failures,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);
+  for(const elapsed of [120000,240000,599999]){engineNow=engineStart+elapsed;domainNow=domainStart+elapsed;await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);}
+  engineNow=engineStart+600000;domainNow=domainStart+600000;await lifecycle.tick();assert.equal(calls,2);assert.equal(lifecycle.view().extensions[0].failures,2);assert.equal(lifecycle.view().extensions[0].retryAt,domainNow+600000);
+ }finally{await lifecycle.close();await engine.close();}
+});
+
 test('480 originals across six months replay all current segments; FTS finds old scoped Chinese/English; pagination and deletion stay correct',async t=>{
   const store=fixture(t),data=await seedMemoryFixtures(store),memories=new MemoryStore(store),seen=new Set<string>();
   assert.equal(data.currentIds.length,472);assert.equal(store.list({limit:1}).totalCount,472);

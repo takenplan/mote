@@ -109,8 +109,8 @@ try {
         if(hasTable('file_steps'))snapshot.exec("UPDATE file_steps SET state='waiting' WHERE state='running'");
         // A lease belongs to the original running host, never to the restored vault.
         // Keep the fence only as the current attempt-charge correlation. A zero
-        // lease grants no authority; recovery refunds that exact charged attempt,
-        // clears its fence and lets the domain decide whether work can resume.
+        // lease grants no authority. Recovery retains each actually charged attempt,
+        // clears its fence and lets the remaining round budget and domain decide whether work can resume.
         // Interactive model calls are never replayed.
         if(hasTable('execution_steps'))snapshot.exec("UPDATE execution_steps SET lease_until=0 WHERE state='running'");
         if(hasTable('run_execution_owners'))snapshot.exec('DELETE FROM run_execution_owners');

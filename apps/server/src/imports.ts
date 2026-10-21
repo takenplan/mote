@@ -65,7 +65,7 @@ export class ImportStore {
     store.db.exec('CREATE TABLE IF NOT EXISTS import_jobs(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,json TEXT NOT NULL)');
     store.db.exec('CREATE TABLE IF NOT EXISTS import_create_requests(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
     this.executor=runtime.executor??new ExecutionEngine(store);
-    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,validate:step=>{
+    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,validate:step=>{
       const row=store.db.prepare('SELECT json FROM import_jobs WHERE id=?').get(String(step.input.jobId)) as {json:string}|undefined;
       return Boolean(!this.closed&&row&&step.input.phase===phase&&step.id===this.phaseId(JSON.parse(row.json) as InternalJob,phase));
     },execute:async(step,signal,grant)=>{
@@ -450,12 +450,12 @@ export class ImportStore {
     this.save(job);
     if(!['waiting','running'].includes(step.state)){const waiters=this.phaseWaiters.get(step.id);this.phaseWaiters.delete(step.id);for(const resolve of waiters??[])resolve();}
   }
-  private async runPhase(id:string,phase:'prepare'|'commit'){
+  private async runPhase(id:string,phase:'prepare'|'commit',ownerAction=false){
     if(this.closed)throw new StoreError('Import feature is closed',503);
     if(this.running.has(id)||this.isScheduled(id))throw new StoreError('Import is already processing',409);
     const job=this.load(id),stepId=this.admitPhase(job,phase),step=this.executor.get(stepId)!;
     if(step.state==='succeeded')return this.public(this.load(id));
-    if(step.state!=='running')this.executor.retry(stepId,false);
+    if(step.state!=='running')this.executor.retry(stepId,ownerAction);
     let resolveDone!:()=>void;
     const done=new Promise<void>(resolve=>{resolveDone=resolve;let waiters=this.phaseWaiters.get(stepId);if(!waiters){waiters=new Set();this.phaseWaiters.set(stepId,waiters);}waiters.add(resolve);});
     try{
@@ -465,16 +465,16 @@ export class ImportStore {
       await Promise.race([done,scheduled]);await this.executor.drain([stepId]);return this.public(this.load(id));
     }finally{const waiters=this.phaseWaiters.get(stepId);waiters?.delete(resolveDone);if(!waiters?.size)this.phaseWaiters.delete(stepId);}
   }
-  async prepare(id:string,resumeCancelled=false):Promise<ImportJob>{
+  async prepare(id:string,resumeCancelled=false,ownerAction=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='prepare'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.progress.processed>0||job.status==='completed')throw new StoreError('Saved records cannot be reanalyzed in the same job',409);
-    const result=await this.runPhase(id,'prepare');return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
+    const result=await this.runPhase(id,'prepare',ownerAction);return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
   }
-  async confirm(id:string,resumeCancelled=false):Promise<ImportJob>{
+  async confirm(id:string,resumeCancelled=false,ownerAction=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='commit'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.status==='completed')return this.public(job);
     if(job.status!=='awaiting_confirmation'&&!(['failed','cancelled'].includes(job.status)&&job.failurePhase==='import')&&!(job.status==='importing'&&job.resourceWait==='commit'))throw new StoreError('Analyze and review a preview before confirming the import',409);
-    return this.runPhase(id,'commit');
+    return this.runPhase(id,'commit',ownerAction);
   }
   cancel(id:string):ImportJob {
     const job=this.load(id);
@@ -487,7 +487,7 @@ export class ImportStore {
     const current=this.load(id);current.status='cancelled';current.processingStatus='blocked';current.error=undefined;this.save(current);
     return this.public(current);
   }
-  async retry(id:string):Promise<ImportJob>{const job=this.load(id);return job.failurePhase==='import'?this.confirm(id,true):this.prepare(id,true);}
+  async retry(id:string):Promise<ImportJob>{const job=this.load(id);return job.failurePhase==='import'?this.confirm(id,true,true):this.prepare(id,true,true);}
   stop(){
     if(this.closing)return this.closing;this.closed=true;this.lifetime.abort();
     const ids=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN ('imports.prepare','imports.commit') AND state IN ('waiting','running','blocked')").all().map(row=>String(row.id));

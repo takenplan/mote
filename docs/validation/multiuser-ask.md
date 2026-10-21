@@ -61,7 +61,7 @@ and whole-instance restore orchestration remain explicit later-module gates.
 | Narrow Insight research child omits the parent report's full-range coverage metadata while parent retains its snapshot | multiuser-ask: Insight research children… |
 | Explicit and online compaction retain owner, complete prior summary and every huge-turn span; budget and source validity | multiuser-ask: real compaction…; automatic working-memory compaction… |
 | Successful compaction span pause/restart/config change has no replay; current settings cannot enlarge admitted snapshot | multiuser-ask: successful compaction spans… |
-| Source/compiled two HTTP processes, SIGKILL, successful child not replayed, fixed model/price and own artifact/turn | multiuser-ask-process |
+| Source/compiled two HTTP processes: SIGKILL retains the unproven physical-cleanup barrier; SIGTERM proves original callback cleanup before recovery. Both preserve completed children, A/B snapshots and artifact isolation | multiuser-ask-process |
 | Portable export/restore exact parents, no active task/model authority or cross-user adoption; deleted parents reject | multiuser-ask: owned Ask portable data… |
 | Empty owner or zero-source host grant still supports actual dialogue without acquiring archive access | multiuser-ask: a configured empty account… |
 | Genuine Gmail ledger status → Ask + MCP tool/resource, no adapter/network metadata read | multiuser-connectors/actual source status; M11 persistent SDK status case |

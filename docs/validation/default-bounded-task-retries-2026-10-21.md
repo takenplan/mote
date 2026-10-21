@@ -36,6 +36,8 @@ device check was performed.
 | Existing consumers | Model snapshot encryption/authority, execution reads and operations: 21 passed. Connectors/OAuth, media health, usage and retry-hook rollback: 23 passed at their named focused revisions. |
 | Existing Web navigation and controls | Original operation/file/image/workflow cases passed. Added count, suspended last-attempt, historical overage and policy-authorized read-dialog controls passed. |
 | Legacy owner boundaries and lifecycle timing | 41 focused cases passed at the first legacy followup revision across existing image, perception, file, workflow, Memory, index and recording consumers. Explicit owner commands reset only their selected failed work; readiness and automatic parent wakes retain the budget. A new crash-gap regression consumes an engine failure once, preserves the original 120-second backoff across restart and keeps capacity waiting free. |
+| Integration corrections | 145 focused cases in 13 Server test files passed after correcting premature dynamic timeout evaluation, phased import owner origin and independent lifecycle clock translation. Original three-record and 400-member ZIP recovery, partial checkpoints, late fences, completed siblings, current backup below-cap recovery and final-cap no-send controls remain. A generated 600-second provider deadline survives a crash with different engine and lifecycle clocks. |
+| Real process recovery and cleanup admission | 23 additional focused cases passed. The two-account source Ask entry retains SIGKILL as a no-replay negative with original active physical facts; a separate formal SIGTERM/cleanup/restart case preserves original completion, five usage receipts, frozen model/lease, citations and isolation. Actions rejects Retry while the original callback remains active, then succeeds through its existing owner entry after exact cleanup. Matching compiled Ask entry also passed both cases. After independent review requested direct history assertions, six compiled-Ask/Actions cases passed with unchanged exact retry-round, policy-replay and owner-confirmation journals in the rejection paths. |
 | Static contracts | Server and Web type checking, bilingual message synchronization and current scope inventory passed at the named focused revisions. |
 
 The independent implementation review found two defects before delivery: stale
@@ -49,7 +51,13 @@ retained privately; later results do not rewrite them.
 The implementation and named generated integration journeys are complete.
 The first full driver stopped at Java preflight; all other steps were unrun.
 The installed JDK 21 was then located without installing software or changing
-validation criteria. The final frozen candidate still requires the full `check:affected` plan, assembled
+validation criteria. A later driver correctly invalidated Desktop inputs changed
+by its own build fixture; Desktop was prepared before the next run. That run
+found Server integration failures and was interrupted by its owner. Its original
+cleanup-unconfirmed receipt remains ineligible for reuse; independent checks
+proved its process group dead before archiving only its coordination lock.
+Focused corrections do not turn that interrupted suite into a pass. The final
+frozen candidate still requires the full `check:affected` plan, assembled
 consumers, Android compilation/unit checks and applicable remote PR rules. This
 record is not a claim of merge readiness, deployment, paid live-model validation,
 physical-device validation or full-corpus semantic quality. Current runtime

@@ -21,10 +21,10 @@ test('typed temporary transport failure resumes the same range automatically wit
  const pipeline=fixtureMemoryPipeline({...f,configured:()=>true,model:()=> 'fixture',query:async input=>{inputs.push(input);if(inputs.length===1)throw new ProviderFailure({category:'transient',code:'provider_unavailable',retryAfterMs:0});return empty();}});t.after(()=>pipeline.close());
  const job=pipeline.create({evidenceIds:[f.record.id]}),done=await pipeline.run(job.id);assert.equal(done.status,'completed');assert.equal(inputs.length,2);assert.equal(done.totalBatches,1);assert.deepEqual(inputs[0].evidenceRanges,inputs[1].evidenceRanges);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
 });
-test('temporary failure stops at the shared four attempts without recursive scope changes',async t=>{
+test('temporary failure stops at the shared three attempts without recursive scope changes',async t=>{
  const f=await fixture(t);let calls=0;
  const pipeline=fixtureMemoryPipeline({...f,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0});}});t.after(()=>pipeline.close());
- const done=await pipeline.run(pipeline.create({evidenceIds:[f.record.id]}).id);assert.equal(done.status,'failed');assert.equal(calls,4);assert.equal(done.totalBatches,1);assert.equal(done.batches[0].attempts,4);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
+ const done=await pipeline.run(pipeline.create({evidenceIds:[f.record.id]}).id);assert.equal(done.status,'failed');assert.equal(calls,3);assert.equal(done.totalBatches,1);assert.equal(done.batches[0].attempts,3);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
 });
 for(const [label,error,expected] of [['unknown generic model failure',new AgentProviderError(),'provider_failed'],['real provider context limit',new ProviderFailure({category:'permanent',code:'processing_limit'}),'processing_limit'],['unknown external write',new MemoryProviderError('unknown_result','Generated unknown receipt'),'memory_provider_unknown_result']] as const)test(`${label} is not automatically replayed`,async t=>{
  const f=await fixture(t);let calls=0;
