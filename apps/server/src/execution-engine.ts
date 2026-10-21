@@ -7,6 +7,7 @@ import {StoreError,type ExecutionStorage} from './execution-storage.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {failureContext,retainFailureContext,safeFailureContext,type FailureContext} from './execution-failures.js';
 import {EXECUTION_POLICIES,type ExecutionPolicy} from './execution-policy.js';
+import {ExecutionAttempts} from './execution-attempts.js';
 
 export type ExecutionState='waiting'|'running'|'blocked'|'succeeded'|'failed'|'cancelled'|'stale';
 export type ExecutionLane='background'|'interactive';
@@ -22,7 +23,7 @@ export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>
 /** Issued and checked by the host task adapter; never accepted from task input.
  * A session credential is deliberately absent: logout does not revoke work. */
 export type ExecutionOwnership=Readonly<{userId:string;authorizationEpoch:number;grantId?:string}>;
-export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;error?:string;ownership?:ExecutionOwnership};
+export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;attemptId?:string;maxAttempts?:number;maxRetries?:number;retriesUsed?:number;attemptsRemaining?:number;retryRound?:number;retryExhausted?:boolean;error?:string;ownership?:ExecutionOwnership};
 export type ExecutionEnqueueOptions=OperationMembership&{ownership?:ExecutionOwnership;id?:string;dependencies?:string[];initial?:{state:ExecutionState;attempts:number;availableAt:number;error?:string}};
 export type ExecutionFailureReceipt=FailureContext&{stepId:string;operationId:string;kind:string;state:ExecutionState;category:ExecutionFailure['category'];code:string;attempt:number;at:string;executionStarted?:false;admissionWaiting?:true;availableAt?:number};
 /** A running handler can publish incremental progress only through its current lease. */
@@ -33,6 +34,8 @@ export interface ExecutionGrant {
  startBudget():void;
  /** Protect one physical call; capacity/resource waits stay outside its budget. */
  withBudget<T>(work:()=>Promise<T>):Promise<T>;
+ /** Trusted actual query fragments retain execution across a later unexecuted capacity wait. */
+ recordExecution():void;hasExecuted():boolean;
  /** Release an admitted physical resource after its call stages have settled. */
  releaseResource(key:string):void;
  /** Acquire a resource only for a continuous handler's physical effect.
@@ -75,6 +78,7 @@ const interrupted=new Error('Execution interrupted');
 
 /** The host owns admission, retry, cancellation, leases and commit fences. */
 export class ExecutionEngine {
+ private readonly attempts:ExecutionAttempts;
  // Only fixed synchronous host queries use these private compiled statements.
  // Rows, bindings and authority decisions are read again on every call.
  private readonly validationStatements=new Map<string,StatementSync>();
@@ -125,6 +129,7 @@ export class ExecutionEngine {
   store.db.exec('CREATE INDEX IF NOT EXISTS execution_user_steps ON execution_steps(user_id,state,created_at); CREATE INDEX IF NOT EXISTS execution_user_position ON execution_steps(user_id,user_position)');
   store.db.exec('CREATE TABLE IF NOT EXISTS execution_failures(step_id TEXT PRIMARY KEY REFERENCES execution_steps(id) ON DELETE CASCADE,json TEXT NOT NULL)');
   store.db.exec('CREATE INDEX IF NOT EXISTS execution_recovery_deadline ON execution_steps(state,recovery_deadline)');
+  this.attempts=new ExecutionAttempts(store.db);
   installOperationProjection(store);
  }
  get closed(){return this.stopping;}
@@ -177,6 +182,7 @@ export class ExecutionEngine {
    const existing=db.prepare('SELECT 1 FROM execution_steps WHERE id=?').get(id);
    if(!existing){this.store.reserveMetadata(Buffer.byteLength(json)+1024);const position=Number(db.prepare('INSERT INTO execution_user_sequence(user_id,next) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET next=next+1 RETURNING next').get(ownership?.userId??'')!.next);db.prepare("INSERT INTO execution_steps(id,operation_id,kind,pool,input,state,created_at,updated_at,user_id,user_position,authorization_epoch,grant_id) VALUES(?,?,?,?,?,'waiting',?,?,?,?,?,?)").run(id,operationId,kind,handler.pool,json,now,now,ownership?.userId??'',position,ownership?.authorizationEpoch??null,ownership?.grantId??null);}
    const step=this.get(id)!;if(step.kind!==kind||JSON.stringify(step.input)!==json||step.ownership?.userId!==ownership?.userId||step.ownership?.authorizationEpoch!==ownership?.authorizationEpoch||step.ownership?.grantId!==ownership?.grantId)throw new StoreError('Execution identity conflict',409);
+   this.attempts.policy(id,this.policy(handler,step).maxAttempts);
    const group=handler.fairnessGroup?.(step);if(group!==undefined){if(!/^[a-zA-Z0-9_.:-]{1,128}$/.test(group))throw new StoreError('Invalid execution fairness group',400);db.prepare('INSERT INTO execution_stage_groups VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET group_key=excluded.group_key').run(id,group);}
    if(options.initial&&!existing){const seed=options.initial;db.prepare('UPDATE execution_steps SET state=?,attempts=?,available_at=?,error=? WHERE id=?').run(seed.state==='running'?'waiting':seed.state,seed.attempts,seed.availableAt,seed.state==='running'?'interrupted':seed.error??null,id);}
    for(const key of new Set(handler.resourceKeys?.(step)??[]))if(!db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(id,key)){this.store.reserveMetadata(Buffer.byteLength(key)+64);db.prepare('INSERT INTO execution_resources VALUES(?,?)').run(id,key);}
@@ -184,7 +190,8 @@ export class ExecutionEngine {
    linkOperation(this.store,operationId,id,options);handler.project?.(this.get(id)!);if(own)db.exec('COMMIT');return id;
   }catch(error){if(own)db.exec('ROLLBACK');throw error;}
  }
- get(id:string){const row=this.validationStatement('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
+ retryDefaults(kind:string){const handler=this.handlers.get(kind);if(!handler)return;const maxAttempts=handler.maxAttempts??(handler.policy??EXECUTION_POLICIES.orchestration).maxAttempts;return {maxAttempts,maxRetries:maxAttempts-1};}
+ get(id:string){const row=this.validationStatement('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?{...view(row),...this.retryDefaults(row.kind),...this.attempts.describe(id,row.attempts,row.state)}:undefined;}
  failure(id:string):ExecutionFailureReceipt|undefined {const row=this.store.db.prepare('SELECT json FROM execution_failures WHERE step_id=?').get(id);return row?JSON.parse(String(row.json)):undefined;}
  failureDiagnostics(){return {writeFailures:this.failureReceiptWriteFailures};}
  private retainFailure(step:ExecutionStep,state:ExecutionState,failure:ExecutionFailure,error?:unknown){
@@ -227,9 +234,10 @@ export class ExecutionEngine {
   this.active.get(id)?.controller.abort();
  }
  cancelKind(kind:string){for(;;){const rows=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND state NOT IN ('succeeded','cancelled','stale') LIMIT 500").all(kind);if(!rows.length)return;for(const row of rows)this.cancel(String(row.id));}}
- retry(id:string,resetAttempts=true){
+ retry(id:string,resetAttempts=false){
   if(this.get(id)?.state==='running')throw new StoreError('Cancel the active step before retrying',409);
-  this.active.get(id)?.controller.abort();this.store.db.prepare("UPDATE execution_steps SET state='waiting',attempts=CASE WHEN ? THEN 0 ELSE attempts END,available_at=0,lease_until=0,fence=NULL,error=NULL,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state!='running'").run(Number(resetAttempts),Number(resetAttempts),this.now(),id);this.project(id);
+  const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+  try{const step=this.get(id),handler=step&&this.handlers.get(step.kind);if(step&&handler)this.attempts.policy(id,this.policy(handler,step).maxAttempts);this.active.get(id)?.controller.abort();if(resetAttempts)this.attempts.reset(id,this.now());db.prepare("UPDATE execution_steps SET state='waiting',attempts=CASE WHEN ? THEN 0 ELSE attempts END,available_at=0,lease_until=0,fence=NULL,error=NULL,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state!='running'").run(Number(resetAttempts),Number(resetAttempts),this.now(),id);this.project(id);if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
  }
  /** Stop only this host's work after another writer revoked its durable grant. */
  abortLocal(id:string){this.active.get(id)?.controller.abort();}
@@ -286,10 +294,15 @@ export class ExecutionEngine {
    if(handler&&!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',fence=NULL,error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);}
    else this.fail(row.id,'recovery_window_exhausted');
   }
-  for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?").all(now) as Row[]){
-   // An expired host lease proves interruption, not a completed processing
-   // failure. Issued external calls remain protected by their domain ledger.
-   db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-coalesce((SELECT charged FROM execution_attempt_charges c WHERE c.step_id=execution_steps.id AND c.fence=execution_steps.fence),0)),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
+  for(const row of db.prepare("SELECT e.*,s.id attempt_session,s.charged attempt_charged FROM execution_steps e LEFT JOIN execution_attempt_sessions s ON s.step_id=e.id AND s.open=1 WHERE e.state='running' AND e.lease_until<=?").all(now) as (Row&{attempt_session:string|null;attempt_charged:number|null})[]){
+   // A stale scan cannot retire a renewed lease or a replacement attempt. The
+   // exact expired fence CAS and its own charged session close are one write.
+   const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');let recovered=false;
+   try{recovered=Boolean(db.prepare("UPDATE execution_steps SET state='waiting',fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND fence IS ? AND lease_until<=?").run(now,row.id,row.fence,now).changes);
+    if(recovered&&row.attempt_session&&row.attempt_charged)this.store.db.prepare('UPDATE execution_attempt_sessions SET open=0 WHERE id=? AND step_id=? AND open=1').run(row.attempt_session,row.id);
+    if(own)db.exec('COMMIT');
+   }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+   if(recovered)this.project(row.id);
   }
  }
  /** Start available slots. Return only work admitted by this call; slow older work is independent. */
@@ -341,7 +354,10 @@ export class ExecutionEngine {
    if(db.prepare("SELECT 1 FROM execution_resources requested JOIN (SELECT step_id,resource_key FROM execution_resources UNION ALL SELECT d.step_id,d.resource_key FROM execution_dynamic_resources d JOIN execution_steps e ON e.id=d.step_id AND e.fence=d.fence) held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=? AND owner.id!=? AND owner.state='running' AND owner.lease_until>? AND NOT EXISTS(SELECT 1 FROM execution_resource_releases released WHERE released.step_id=owner.id AND released.resource_key=held.resource_key AND released.fence=owner.fence) LIMIT 1").get(row.id,row.id,now)){db.exec('COMMIT');return;}
    if(!this.staticResourceTurn(view(row))){db.exec('COMMIT');return;}
    if(!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);db.exec('COMMIT');return;}
-   const admission=handler.admit?.(view(row));
+   this.attempts.policy(row.id,policy.maxAttempts);
+   const session=this.attempts.open(row.id);
+   if(this.get(row.id)!.attempts>=policy.maxAttempts&&!session.charged){db.prepare("UPDATE execution_steps SET state='failed',error='retry_budget_exhausted',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.attempts.close(row.id);this.retainFailure(this.get(row.id)!,'failed',new ExecutionFailure('permanent','retry_budget_exhausted'));this.project(row.id);db.exec('COMMIT');return;}
+   const admission=handler.admit?.(this.get(row.id)!);
    if(admission){
     db.prepare("UPDATE execution_steps SET state=?,available_at=?,error=?,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state='waiting'").run(admission.category==='waiting'?'waiting':'blocked',admission.category==='waiting'?this.now()+Math.max(1,admission.retryAfterMs??1000):0,admission.code,Number(admission.category==='waiting'),now,row.id);this.project(row.id);db.exec('COMMIT');
     // A short retry can become due again while the backlog is being checked.
@@ -349,9 +365,10 @@ export class ExecutionEngine {
     // so both background completion wakes and explicit drains allow timers.
     return admission.category==='waiting'?{pause:yieldTurn()}:undefined;
    }
-   const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+?,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(handler.deferAttempts?0:1,fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
+   if(!handler.deferAttempts)this.attempts.charge(row.id,session.id,policy.maxAttempts);
+   const claimed=db.prepare("UPDATE execution_steps SET state='running',fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}
-   db.prepare('INSERT INTO execution_attempt_charges VALUES(?,?,?) ON CONFLICT(step_id) DO UPDATE SET fence=excluded.fence,charged=excluded.charged').run(row.id,fence,handler.deferAttempts?0:1);
+   db.prepare('INSERT INTO execution_attempt_charges VALUES(?,?,?) ON CONFLICT(step_id) DO UPDATE SET fence=excluded.fence,charged=excluded.charged').run(row.id,fence,this.attempts.current(row.id)!.charged);
    if(db.prepare('SELECT 1 FROM execution_resources WHERE step_id=?').get(row.id))this.servedResource(this.get(row.id)!);
    const sequence=Number(db.prepare('INSERT INTO execution_sequence(pool,next) VALUES(?,1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next').get(row.pool)!.next);
    db.prepare('INSERT INTO execution_user_fairness(pool,user_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,user_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.user_id,sequence);
@@ -366,7 +383,8 @@ export class ExecutionEngine {
   // Dispose deadlines when work settles. Composed AbortSignal.timeout sources
   // can remain strongly retained by Node until a long deadline actually fires.
   const step=this.get(row.id)!,signal=controller.signal;
-  let deadline:ReturnType<typeof setTimeout>|undefined,budgetStarted=false,attemptStarted=!handler.deferAttempts;
+  const attemptId=step.attemptId!;
+  let deadline:ReturnType<typeof setTimeout>|undefined,budgetStarted=false;
   const startBudget=()=>{if(budgetStarted)return;budgetStarted=true;if(timeout!==null){deadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline.unref();}};
   if(!handler.deferTimeout)startBudget();
   const renewal=setInterval(()=>{if(this.stopping)return;try{const at=this.now();if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes)controller.abort();}catch{controller.abort();}},10000);renewal.unref();
@@ -376,10 +394,10 @@ export class ExecutionEngine {
     if(!this.isCurrentGrant(row.id,fence))throw new ExecutionFailure('stale','grant_revoked');
     if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
    };
-   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
-    assertGrant();if(!attemptStarted){grant.commit(()=>{db.prepare('UPDATE execution_steps SET attempts=attempts+1 WHERE id=? AND fence=?').run(row.id,fence);db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);step.attempts++;});attemptStarted=true;}let callDeadline:ReturnType<typeof setTimeout>|undefined;
+   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,recordExecution:()=>{assertGrant();this.attempts.recordExecution(attemptId);},hasExecuted:()=>this.attempts.executed(attemptId),withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
+    assertGrant();grant.commit(()=>{const charged=this.attempts.charge(row.id,attemptId,policy.maxAttempts);if(charged===undefined)throw new ExecutionFailure('permanent','retry_budget_exhausted');if(charged)step.attempts++;this.attempts.enter(attemptId);db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);});let callDeadline:ReturnType<typeof setTimeout>|undefined;
     if(timeout!==null){callDeadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);callDeadline.unref();}
-    try{const value=await work();assertGrant();return value;}finally{clearTimeout(callDeadline);}
+    let executed=true;try{const value=await work();assertGrant();return value;}catch(error){if(error instanceof ProviderFailure&&error.details.executionStarted===false||error instanceof ExecutionFailure&&error.facts?.executionStarted===false)executed=false;throw error;}finally{clearTimeout(callDeadline);this.attempts.finish(attemptId,executed);}
    },withResource:async<T>(key:string,work:()=>Promise<T>):Promise<T>=>{
     if(!key||key.length>1024)throw new ExecutionFailure('permanent','resource_invalid');
     // A dynamic reservation is a running-grant fact. It never becomes a
@@ -429,7 +447,7 @@ export class ExecutionEngine {
     if(!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
     const at=this.now();
     if(!db.prepare("UPDATE execution_steps SET state='succeeded',fence=NULL,error=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(at,row.id,fence,at).changes){db.exec('ROLLBACK');return;}
-    this.project(row.id);db.exec('COMMIT');
+    this.attempts.close(row.id);this.project(row.id);db.exec('COMMIT');
    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
   }catch(error){
    const classified=error instanceof ExecutionFailure?error:error instanceof ProviderFailure?new ExecutionFailure(error.details.category,error.details.code,error.details.retryAfterMs):handler.classify?.(error)??new ExecutionFailure('permanent','processor_failed');
@@ -439,14 +457,20 @@ export class ExecutionEngine {
    const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
    const failure=admissionWait||classified.code==='rate_limited'&&classified.category==='transient'?new ExecutionFailure('waiting',classified.code,classified.retryAfterMs):classified;
    const stopping=this.stopping||signal.reason===interrupted;
-   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(attemptStarted&&(capacityWait||stopping||failure.facts?.executionStarted===false)));
-   let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':capacityWait?'waiting':failure.category==='permanent'||attempts>=policy.maxAttempts?'failed':'waiting';
-   const at=this.now(),availableAt=stopping?0:at+Math.max(capacityWait?1:0,failure.retryAfterMs??(capacityWait?1000:Math.min(3600000,1000*2**(attempts-1))));
+   const capacityWait=failure.category==='waiting';
+   const at=this.now();
    const recoveryDeadline=capacityWait||policy.maxRecoveryWindowMs===null?0:failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,policy.maxRecoveryWindowMs)):Number(row.recovery_deadline)||0;
    let code=stopping?'interrupted':failure.code;
-   if(!stopping&&state==='waiting'&&failure.category==='transient'&&recoveryDeadline&&availableAt>=recoveryDeadline){state='failed';code='recovery_window_exhausted';}
    const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');let changed=false;
-   try{changed=Boolean(db.prepare("UPDATE execution_steps SET state=?,attempts=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,attempts,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes);if(changed)this.retainFailure(this.get(row.id)!,state,new ExecutionFailure(failure.category,code),error);if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+   try{if(this.isCurrentGrant(row.id,fence)){
+    if(capacityWait)this.attempts.refundWaiting(row.id,attemptId);
+    const attempts=this.get(row.id)!.attempts;
+    let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':capacityWait?'waiting':failure.category==='permanent'||attempts>=policy.maxAttempts?'failed':'waiting';
+    const availableAt=stopping?0:at+Math.max(capacityWait?1:0,failure.retryAfterMs??(capacityWait?1000:Math.min(3600000,1000*2**(attempts-1))));
+    if(!stopping&&state==='waiting'&&failure.category==='transient'&&recoveryDeadline&&availableAt>=recoveryDeadline){state='failed';code='recovery_window_exhausted';}
+    if(!capacityWait&&(!stopping||this.attempts.current(row.id)?.charged))this.attempts.close(row.id);
+    changed=Boolean(db.prepare("UPDATE execution_steps SET state=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes);if(changed)this.retainFailure(this.get(row.id)!,state,new ExecutionFailure(failure.category,code),error);
+   }if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
    if(changed)handler.project?.(this.get(row.id)!);
   }finally{clearTimeout(deadline);clearInterval(renewal);}
   await yieldTurn();

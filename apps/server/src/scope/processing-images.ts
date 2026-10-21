@@ -51,7 +51,7 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
     // new M05 task. A receipt must match this generation and visible product.
     const phaseFacts=steps.flatMap<{state:string;error?:string;receipt?:{step:string;artifactId:string}}>(step=>{
      const task=tasks.find(task=>task.kind==='processing.image-stage'&&task.imageStep===step.name);
-     if(task)return [{state:task.state,error:task.failure?.code??task.error??undefined}];
+     if(task)return [{state:task.state,error:task.error??undefined}];
      const primary=currentRecipe.steps.find(item=>item.kind==='ocr')?.name===step.name;
      const artifactId=primary?status.artifactId:status.derivations.find(item=>item.kind===(step.kind==='ocr'?'image-ocr:':'image:')+step.name)?.artifactId;
      const key=imageStepKey(status.appliedPolicy!.id,currentRecipe.fingerprint,step.name);
@@ -59,12 +59,12 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
      return receipt?[{state:'ready',receipt:{step:step.name,artifactId:String(receipt.artifact_id)}}]:[];
     });
     const unfinished=phaseFacts.find(fact=>!['succeeded','ready'].includes(fact.state));
-    const phase=unfinished??(phaseFacts.length===steps.length?phaseFacts[0]:coordinator?{state:coordinator.state,error:coordinator.failure?.code??coordinator.error??undefined}:undefined);
+    const phase=unfinished??(phaseFacts.length===steps.length?phaseFacts[0]:coordinator?{state:coordinator.state,error:coordinator.error??undefined}:undefined);
     return phase?[{name,state:phase.state,error:phase.error,receipts:phaseFacts.flatMap(fact=>fact.receipt?[fact.receipt]:[])}]:[];
    }
    const phaseTask=tasks.find(task=>name==='ocr'?task.kind==='processing.ocr'||task.kind==='processing.image-stage'&&task.imageStep==='ocr':task.kind==='processing.analysis'&&task.mode==='image'||task.kind==='processing.image-understanding'||task.kind==='processing.image-stage'&&task.imageStep==='understanding');
    const task=phaseTask??coordinator;
-   return task?[{name,state:task.state,error:task.failure?.code??task.error??undefined}]:[];
+   return task?[{name,state:task.state,error:task.error??undefined}]:[];
   });
   const namedProducts=status.derivations.map(d=>({id:String(d.artifactId),materialId:String(d.materialId),kind:String(d.kind)})).filter(d=>d.kind==='image'||d.kind.startsWith('image:')||d.kind.startsWith('image-ocr:')).map(d=>({...d,stepName:d.kind.includes(':')?d.kind.slice(d.kind.indexOf(':')+1):undefined,name:d.kind.startsWith('image-ocr:')?'ocr':'understanding',kind:d.kind.startsWith('image-ocr:')?'ocr':'image'}));
   const products=[...(status.artifactId?[{id:String(status.artifactId),name:'ocr',kind:'ocr',materialId:status.materialId?String(status.materialId):undefined}]:[]),...namedProducts].map(product=>{
@@ -84,7 +84,7 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
    return {state,count,error:failure?.failure?.code};
   }));
   runtime.authority.assert(context);const current=bind(context,id);if(current.proof!==proof)throw new PrivateDataError('conflict',409);
-  return {proof,original:{state:status.original.available===false?'unavailable':'ready'},automatic:settings.automatic||tasks.length>0,ocrEnabled,understandingEnabled,policy:status.appliedPolicy,wait:service.cancellation(ref).wait,canCancel:service.cancellation(ref).canCancel,processingRequired:status.processingRequired,enabled:settings.enabled,jobs,products,materials:materials.map(m=>({id:m.id,state:'indexed'})),memory};
+  return {proof,original:{state:status.original.available===false?'unavailable':'ready'},automatic:settings.automatic||tasks.length>0,ocrEnabled,understandingEnabled,policy:status.appliedPolicy,wait:service.cancellation(ref).wait,confirmUnknownRequired:service.cancellation(ref).confirmUnknownRequired,canCancel:service.cancellation(ref).canCancel,processingRequired:status.processingRequired,enabled:settings.enabled,jobs,products,materials:materials.map(m=>({id:m.id,state:'indexed'})),memory};
  };
  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/images/:id',handle:({context,request})=>read(context,params(request.params))});
  for(const action of ['retry','cancel'] as const)registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/images/:id/'+action,handle:async({context,request})=>{

@@ -9,22 +9,21 @@ call protection, resource waiting, safe failure retries and model correction.
 
 ## Registered defaults and their reasons
 
-| Task family | Execution budget | Actual failure attempts | Reason and narrower protection |
+| Current Central policy family | Execution protection | Default charged attempts | Scope |
 | --- | --- | --- | --- |
-| Ask/Insight coordinators and delegated work | No workflow total; an explicit internal caller deadline can cap an admitted fragment | Query/Insight observation 1; replayable delegation up to 4 | Can yield to children or wait for model capacity. Each admitted Agent owns its configured model/tool/correction budget. Non-replayable observations are not resubmitted on restart. |
-| File pipeline and summary coordinator | No workflow total | Child steps own finite retries | Extraction, diarization, alignment and model stages cannot inherit time already spent by earlier stages. Successful artifacts and summary pages are checkpoints. |
-| Local ASR, diarization and OCR calls | One hour by default; existing explicit file `timeoutMs` is a per-call override | Up to 4 typed safe failures | Managed audio workers already have a one-hour subprocess limit. Call time starts after admission; unknown file outcomes retain their issued-call guard. |
-| Model sessions | One hour of admitted work by default; explicit profile values or `null` preserved | Outer task policy; finite output correction remains separate | Counts actual model/tool/repair work, excluding host gate waits. HTTP requests retain their five-minute default and ten-minute maximum; Codex owns internal model requests. |
-| Actions extraction | No outer total | Up to 2 typed safe failures | Agent sessions own their admitted-work budget; an outer timer must not charge model-queue waiting. |
-| Memory batches, lifecycle windows and provider preparation | No multi-stage workflow total | Batch up to 4; lifecycle extension declares a finite bound | Individual model calls retain protection. Prerequisite and child waits are not execution failures; failed children are not reopened by an outer loop. |
-| Material organization, deterministic DAG and derived-image work | 15 minutes per admitted operation | 1 for deterministic work | Bounded current-input processing. Larger workflows keep separate checkpoints; semantic/model work has no outer model-queue timer. |
-| Material FTS, consumer planning, image exclusion and Memory input binding | 5 minutes per admitted operation | 1 | Bounded local/metadata projection without external model waits; input/version fences remain. |
-| Background embeddings | 5-minute operation protection; each HTTP call 45 seconds | Up to 4 typed temporary failures | Single-vector transport and bounded responses. Query vectors retain their explicit single-attempt deadline after pool admission and existing lexical recovery. |
-| Recording discovery, metadata, transcript and media acquisition | No combined phase deadline | Up to 5 typed temporary failures | Phases contain multiple CLI/HTTP/archive operations with concrete transport limits; readiness and invalid export structure remain separate. |
-| Import prepare/commit and source archive | No workflow total | 1; concrete children/calls own recovery | Can decode containers, organize inputs and invoke an Agent. Unknown exceptions need diagnosis, not another identical full import. |
-| Plugin installation/check and bookkeeping/reconciliation | One hour per operation, or no total for an explicit orchestrator | 1 actual failure | Generous control-work protection; pending reconciliation is a declared wait. |
-| Format decoding and asset hashing/encryption/staging | 15 minutes after a local worker slot is acquired | Caller owns recovery | Supports large originals and retains subprocess cleanup; queueing consumes no processing budget. |
-| Memory deletion comparison | No default total over all candidate/rule comparisons | Existing per-call correction/recovery | Comparison count varies; each model call has its own policy. Explicit internal caller/test limits remain supported. |
+| `orchestration` | No workflow total | 3 (initial + 2 retries) | Coordinators retain successful children; internal continuation never resets a child's cap. |
+| `deterministic` | One hour per admitted operation | 3 for eligible transient failures | Deterministic invalid input remains terminal; the cap does not make it repairable. |
+| `localProcessing` | One hour; explicit worker/file call overrides retained | 3 | Media first reconciles the original exact worker request and cleanup. No duplicate live execution. |
+| `modelCall` | One hour of admitted work; continuous Memory protects each physical query rather than a multi-stage total | 3 | Memory, Ask/Insight, file analysis and action extraction use the current M05 policy. Existing Agent correction and two-pass independent review remain separate finite budgets. |
+| `networkAcquisition` | One hour per declared operation; protocol readiness/transport deadlines remain separate | 3 | Typed temporary acquisition failures; missing credentials/readiness are prerequisites. |
+| `control` | One hour per operation | 3 for eligible transient failures | Unclassified bookkeeping errors require diagnosis; native/plugin/provider effects retain exact operation reconciliation. |
+
+Explicit current operation overrides remain: `ask.embedding-query` has one
+attempt and 1200 ms for foreground retrieval with its existing lexical
+continuation. Per-request/profile timeout values and `null` retain their existing
+meaning. The quarantined legacy composition also has explicitly narrower
+registrations; its older query/action/lifecycle bounds are not the current M05
+family defaults. No old-version migration or alternate scheduler is added.
 
 The policy families provide a one-hour baseline for an actual isolated operation.
 Registrations deliberately select narrower local work or no workflow total by
@@ -40,9 +39,10 @@ Health probes, OAuth expiration and preview lifetimes are separate protocols.
 
 Known capacity waits persist their reason and next eligible time without using a
 processing-failure attempt. They release execution leases and preserve the parent
-workflow and completed children. Normal shutdown and expired ownership leases
-represent interruption, not a confirmed processing failure. Unknown issued file
-calls still prevent automatic duplicate requests under the existing guard.
+workflow and completed children. Normal shutdown and expired ownership leases represent interruption and retain
+an already charged attempt. They do not prove that physical work ended. A
+suspended resource wait resumes its same logical attempt and count. The default
+permits two automatic retries, never an unbounded outer loop.
 
 Scoped media resolves a physical listener identity from its frozen M04 snapshot
 before task admission. Different users and originals share that listener's
@@ -63,8 +63,12 @@ unsupported provider or a former incarnation's unfinished fact remains unknown.
 There is no worker scheduling queue, provider-message classifier or result-body
 cache. A completed call without a durably accepted artifact requires an explicit
 ordinary retry (`processor_result_unavailable`); it cannot publish a missing or
-late body. Explicit unknown-outcome replay confirmations remain separate from
-evidence of completion and do not erase the old unknown fact.
+late body. For eligible read-model calls, exact completed local cleanup and fresh authority
+permit bounded policy replay without a separate confirmation dialog. A distinct
+policy replay journal retains the old unknown call; it is not an owner
+confirmation or remote settlement. Native/media/plugin/provider operations keep
+their original exact reconciliation contracts. An abrupt crash without cleanup
+proof remains a prerequisite, even if the execution lease expired.
 
 Worker metadata cleanup follows the existing account/processing deletion
 operation. Exact request/scope/snapshot cleanup intents survive execution-task

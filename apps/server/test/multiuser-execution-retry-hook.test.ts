@@ -31,6 +31,10 @@ function durableState(directory:string,userId:string){
   grants:db.prepare('SELECT * FROM task_authorizations WHERE user_id=? ORDER BY task_id').all(userId),
   calls:db.prepare('SELECT * FROM task_external_calls WHERE user_id=? ORDER BY issuance_id').all(userId),
   confirmations:db.prepare('SELECT * FROM task_external_retry_confirmations WHERE user_id=? ORDER BY confirmation_id').all(userId),
+  policyReplays:db.prepare('SELECT * FROM task_external_policy_replays WHERE user_id=? ORDER BY id').all(userId),
+  attempts:db.prepare('SELECT s.* FROM execution_attempt_sessions s JOIN user_tasks u ON u.task_id=s.step_id WHERE u.user_id=? ORDER BY s.id').all(userId),
+  retryRounds:db.prepare('SELECT r.* FROM execution_retry_rounds r JOIN user_tasks u ON u.task_id=r.step_id WHERE u.user_id=? ORDER BY r.id').all(userId),
+  retryPolicies:db.prepare('SELECT p.* FROM execution_retry_policies p JOIN user_tasks u ON u.task_id=p.step_id WHERE u.user_id=? ORDER BY p.step_id').all(userId),
   failures:db.prepare('SELECT * FROM execution_failures WHERE step_id IN (SELECT task_id FROM user_tasks WHERE user_id=?) ORDER BY step_id').all(userId),
   operations:db.prepare('SELECT * FROM operation_progress WHERE user_id=? ORDER BY id').all(userId),
   changes:db.prepare('SELECT * FROM operation_changes WHERE user_id=? ORDER BY user_seq').all(userId),
@@ -85,7 +89,7 @@ async function fixture(t:TestContext,mode:FailureMode){
    const parentId=String(step.input.parentId),service=node.execution.forUser(context);
    assert.equal(service.get(parentId).state,'blocked');
    const parent=service.retry(parentId);
-   assert.equal(parent.state,'waiting');assert.equal(parent.attempts,0);
+   assert.equal(parent.state,'waiting');assert.equal(parent.attempts,1,'internal parent recovery retains its charged round');
    assert.equal(db.isTransaction,true,'nested retry must release its savepoint, not commit the outer transaction');
    prepared.push({taskId:step.id,parentId,userId:context.userId,grantId:String(row.grant_id)});
    if(mode==='throw')throw new TaskError('generated_retry_preparation_failed',409);

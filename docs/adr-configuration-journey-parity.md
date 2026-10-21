@@ -98,3 +98,15 @@ coordinated driver window; generated contract tests alone do not prove them.
 
 The exact producer seams and validation commands are in the
 [resource consumer handoff](validation/configuration-resources-parity-2026-10-18.md).
+
+## Request tier on a new task retry (2026-10-21)
+
+The bounded recovery decision permits a new immutable snapshot for a new logical
+retry of the same original Codex model/reference, changing only `serviceTier` to
+that reference's current effective value. Restore and validate genuine original
+authority first; transport/credential withdrawal, account epoch, cancellation
+and stale inputs still fence the task. Retain original snapshots, price, input
+and all other request settings; record current-attempt lineage. Suspended waits
+keep their existing snapshot. Checkpoint identity retains the original request
+tier so previously accepted chunks survive Fast-to-ordinary recovery. This does
+not let public input select another model or revive revoked authority.

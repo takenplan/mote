@@ -70,8 +70,8 @@ test('admission waits do not spend attempts; retry is bounded and persisted',asy
  const id=engine.enqueue('retry','fixture',{});await engine.drain([id]);assert.equal(engine.get(id)!.state,'blocked');assert.equal(engine.get(id)!.attempts,0);assert.equal(calls,0);
  blocked=false;engine.retry(id);await engine.drain([id]);assert.equal(calls,1);assert.equal(engine.get(id)!.state,'waiting');
  await engine.drain([id]);assert.equal(calls,1);
- for(let i=0;i<3;i++){advance(5001);await engine.drain([id]);}assert.equal(calls,4);assert.equal(engine.get(id)!.state,'failed');
- advance(100000);await engine.drain([id]);assert.equal(calls,4);
+ for(let i=0;i<2;i++){advance(5001);await engine.drain([id]);}assert.equal(calls,3);assert.equal(engine.get(id)!.state,'failed');
+ advance(100000);await engine.drain([id]);assert.equal(calls,3);
 });
 
 test('FTS deletion receipts cannot break failure, retry, cancellation or commit fences',async t=>{
@@ -100,7 +100,7 @@ test('two database connections respect pool capacity, durable leases and fenced 
  await second.tick();assert.equal(calls,1,'second connection exceeded the shared pool limit');
  // Simulate the dead process lease; its late commit must not win over recovery.
  store.db.prepare('UPDATE execution_steps SET lease_until=0 WHERE id=?').run(a);await second.drain([a,b]);assert.equal(calls,3);assert.equal(second.get(a)!.state,'succeeded');
- release();await run;assert.equal(engine.get(a)!.state,'succeeded');assert.equal(engine.get(a)!.attempts,1);
+ release();await run;assert.equal(engine.get(a)!.state,'succeeded');assert.equal(engine.get(a)!.attempts,2);
 });
 
 
@@ -122,7 +122,7 @@ test('an expired lease cannot commit even before another host reclaims it',async
  engine.register({...base,execute:async()=>{calls++;if(calls===1)advance(30001);return calls;},commit:(_step,result)=>{committed.push(Number(result));}});
  const id=engine.enqueue('expired-before-recovery','fixture',{});await engine.drain([id]);
  assert.deepEqual(committed,[2],'the expired first attempt must be discarded and recovered');
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);
 });
 
 test('lease recovery fences the old grant immediately and waits for its local handler cleanup before restarting the same step',async t=>{
@@ -132,14 +132,14 @@ test('lease recovery fences the old grant immediately and waits for its local ha
  const id=engine.enqueue('lease-cleanup','fixture',{}),running=engine.drain([id]);await entered;advance(30001);await engine.tick();await new Promise(resolve=>setImmediate(resolve));await engine.tick();
  assert.equal(engine.get(id)!.state,'waiting');assert.throws(()=>oldGrant.assert(),{code:'grant_revoked'});assert.equal(calls,1,'an expired wrapper cannot admit the same step while its local handler remains active');
  release();await new Promise(resolve=>setImmediate(resolve));await engine.tick();assert.equal(calls,1,'asynchronous handler cleanup also belongs to the previous local execution');finishCleanup();await running;
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);assert.equal(maximumBodies,1);assert.deepEqual(committed,[2]);
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);assert.equal(maximumBodies,1);assert.deepEqual(committed,[2]);
 });
 
 test('an expired lease cannot publish a permanent failure before recovery',async t=>{
  const {engine,advance}=await fixture(t);let calls=0;
  engine.register({...base,execute:async()=>{if(++calls===1){advance(30001);throw new ExecutionFailure('permanent','late_failure');}return null;}});
  const id=engine.enqueue('expired-failure','fixture',{});await engine.drain([id]);
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);assert.equal(engine.get(id)!.error,undefined);
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);assert.equal(engine.get(id)!.error,undefined);
 });
 
 test('handler disposal interrupts local work and preserves queued, blocked and terminal tasks',async t=>{

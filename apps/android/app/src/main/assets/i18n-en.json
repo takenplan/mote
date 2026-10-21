@@ -8643,5 +8643,12 @@
   "执行未完成，请查看任务诊断。": "Execution did not complete. Check the task diagnostics.",
   "仅管理员可安装本机模型。": "Only administrators can install models on the Central node.",
   "图片处理并发": "Concurrent image processing",
-  "正在核验": "Checking capabilities"
+  "正在核验": "Checking capabilities",
+  "当前最多自动重试 {0} 次": "Current automatic retry limit: {0}",
+  "自动重试 {0}/{1}": "Automatic retries {0}/{1}",
+  "自动重试次数已用完": "Automatic retry limit reached",
+  "历史未知结果 {0}": "Historical unknown outcomes {0}",
+  "等待上次调用完成清理": "Waiting for the previous call to finish cleanup",
+  "无法确认上次调用已完成清理": "The previous call’s cleanup could not be confirmed",
+  "模型草稿未通过完整性校验": "The stored model draft failed its integrity check"
 }

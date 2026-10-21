@@ -97,7 +97,7 @@ export class ScopedAskRetrieval{
   if(!run.model)throw new ExecutionFailure('permanent','embedding_not_configured');
   const meter=run.model.startUsage({attribution:{agentId:'context-query',moduleId:'retrieval',skillId:null}});
   try{
-   const outcome=await run.model.withModel(async raw=>{try{const settings=embeddingSettings(raw);assert();const value=await requestEmbedding(settings,text,timeoutMs,AbortSignal.any([this.abort.signal,run.signal]),()=>{assert();run.grant.assert();meter.issued();});assert();return {ok:true as const,value:{vector:value.vector,modelKey:modelKey(settings)},usage:value.usage};}catch(error){return {ok:false as const,error:classify(error)};}});
+   const outcome=await run.model.withModel(async raw=>{try{const settings=embeddingSettings(raw);assert();const value=await requestEmbedding(settings,text,timeoutMs,AbortSignal.any([this.abort.signal,run.signal]),()=>{assert();run.grant.assert();meter.issued();});assert();return {ok:true as const,value:{vector:value.vector,modelKey:modelKey(settings)},usage:value.usage};}catch(error){return {ok:false as const,error:classify(error)};}},{recovery:'read-query'});
    assert();if(!outcome.ok)throw outcome.error;if(outcome.usage)meter.update(outcome.usage);meter.finish('completed');return outcome.value;
   }catch(error){try{meter.finish('failed');}catch{meter.interrupt();}throw error;}
  }

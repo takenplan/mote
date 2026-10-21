@@ -120,3 +120,13 @@ test('checksummed current archives missing the parent generation table or any re
   }
  });
 });
+
+test('current retry budgets, immutable attempt lineage and exact physical cleanup records are required before restore writes',async t=>{
+ const {f,directory,snapshot}=await archiveFixture(t);
+ const required={execution_retry_policies:'max_attempts',execution_attempt_sessions:'executed',execution_retry_rounds:'round',task_model_attempts:'receipt',task_external_policy_replays:['issuance_id','replacement_command'],task_physical_calls:['owner_token','attempt_id'],task_physical_resources:'resource_key',task_owner_retry_groups:'command_task_id',task_owner_retry_targets:'task_id'};
+ for(const [table,columns]of Object.entries(required))for(const missing of ['table',...(Array.isArray(columns)?columns:[columns])])await t.test(table+':'+missing,async()=>{
+  const name=table+'-'+missing,damaged=join(directory,'missing-'+name);cpSync(snapshot,damaged,{recursive:true});const db=new DatabaseSync(join(damaged,'mote.sqlite'));try{db.exec(missing==='table'?'DROP TABLE '+table:'ALTER TABLE '+table+' RENAME COLUMN '+missing+' TO generated_missing_'+missing);}finally{db.close();}
+  const manifestPath=join(damaged,'backup-manifest.json'),manifest=JSON.parse(readFileSync(manifestPath,'utf8'));manifest.checksums['mote.sqlite']=digest(readFileSync(join(damaged,'mote.sqlite')));writeFileSync(manifestPath,JSON.stringify(manifest));const before=bytesIn(damaged),parent=join(directory,'absent-'+name);
+  const rejected=restoreCli(damaged,join(parent,'target'),f.host.deploymentId);assert.equal(rejected.status,1,rejected.stdout||rejected.stderr);assert.match(rejected.stderr,/Instance restore failed/);assert.equal(existsSync(parent),false);await assert.rejects(verifiedScopedBackup(damaged),/Incomplete instance domain database/);assert.deepEqual(bytesIn(damaged),before);
+ });
+});

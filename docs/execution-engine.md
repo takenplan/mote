@@ -1,12 +1,32 @@
 # Common execution engine
 
-> Applicability (2026-10-20): current production uses the epoch-5 scoped composition. The earlier `Perception` and Context DAG descriptions below retain their original runtime/API scope; the scoped continuous-batch section records the current execution port. Memory's expected task clock and neutral procedures, and confirmed caller gaps, are documented in the [runtime contract investigation](audits/memory-runtime-contract-investigation-2026-10-20.md).
+> Applicability (2026-10-21): current production uses the epoch-5 scoped composition. The earlier `Perception` and Context DAG descriptions below retain their original runtime/API scope; the scoped continuous-batch section records the current execution port. Memory's expected task clock and neutral procedures, and confirmed caller gaps, are documented in the [runtime contract investigation](audits/memory-runtime-contract-investigation-2026-10-20.md).
 
 Task types register their own explicit [execution policies](task-execution-policies.md),
 following the [2026-10-15 decision](adr-task-recovery-and-execution-budgets.md).
 There is no implicit short deadline. Coordinators can declare no workflow total;
 concrete calls retain justified operation limits. Confirmed resource waiting does
 not consume processing-failure attempts or a generic recovery window.
+
+The default is initial execution plus two eligible automatic retries. Durable
+logical attempt sessions survive resource suspension; round-reset events retain
+prior counts. A successful earlier call prevents a later busy/not-started wait
+from refunding the session. Charged stop/lease interruptions remain counted.
+Only the explicit authenticated owner Retry path starts another round; internal
+parent, program and exact ACK continuations preserve it. Current task/operation
+views project maximum, retries used, remaining attempts, round and exhaustion.
+A final suspended attempt is not displayed as exhausted while it can finish.
+
+M05 stores content-free physical call ownership independently of execution
+leases. Its exact callback cleanup closure records quiescence after child/tool
+and workspace cleanup. Automatic declared read-query replay requires that
+receipt, fresh authority and budget, and records policy permission separately
+from owner confirmations. An active callback on another database connection
+still prevents sending after an engine lease expires. A crash without cleanup
+proof stays a prerequisite; neither a PID nor numeric usage clears the barrier.
+Rejected raw query artifacts retain their exact output and settlement, while a
+new bounded query generation repairs only that failed stage. See the current
+[recovery decision](adr-task-recovery-and-execution-budgets.md).
 
 `ExecutionEngine` is the authority for current steps. It persists their immutable input description, operation ID, pool, attempts, retry time, lease and commit fence. Domain handlers define admission checks, an asynchronous read/process function and a synchronous host commit. A stale or cancelled fence cannot commit. Output and the success state are one SQLite transaction; a failing commit rolls both back. Current storage epoch 5 installs its scoped schema and does not reconstruct historical jobs or receipts; see the [multi-user integration decision](adr-multiuser-main-integration.md) and [MVP baseline](adr-mvp-baseline.md).
 
@@ -61,8 +81,9 @@ account fairness, resource locks and commit fences remain in place. See the
 ## Continuous scoped batches
 
 A host-registered continuous batch may choose `modelAdmission: 'per-call'`.
-It remains one durable Execution task and retains its immutable M04 snapshot;
-each `withModel` invocation independently enters the existing account-fair
+It remains one durable Execution task. Each logical attempt retains its
+immutable M04 snapshot; a new charged attempt may derive the tier-only retry
+snapshot described above without changing earlier checkpoints. Each `withModel` invocation independently enters the existing account-fair
 physical gates and creates its own measured usage receipt. Capacity waits do not
 start the task's first physical attempt or consume a call protection budget.
 Subsequent calls receive their own protection budget inside admission.

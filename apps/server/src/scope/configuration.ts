@@ -4,7 +4,7 @@ import {constants,existsSync,rmSync,renameSync,openSync,fsyncSync,closeSync,fsta
 import {join} from 'node:path';
 import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
-import {MODEL_FEATURES,type ModelFeature,type ModelSettings} from '@mote/shared/models';
+import {MODEL_FEATURES,CODEX_SERVICE_TIERS,type ModelFeature,type ModelSettings} from '@mote/shared/models';
 import type {ConfigServiceView,ModelPrice,TokenUsage,UsageReceipt} from '@mote/shared';
 import {ConfigService,ConfigServiceError,type ConfigDocument,type ConfigDomainRegistration} from '../config-service.js';
 import {registerBuiltinDomains,diagnosticsConfigSchema} from '../config.js';
@@ -51,9 +51,9 @@ function restoreFileHash(path:string):string{
   finally{if(handle!==undefined)closeSync(handle);}
 }
 type Entry={service:ConfigService;generation:number;accessKey:string;subject:UserDataSubject;initializing:Promise<void>};
-export type ModelLease=Readonly<{id:string;snapshotId:string;deploymentId:string;userId:string;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:Readonly<UserModelReference>;provider:string;model:string}>;
+export type ModelLease=Readonly<{id:string;snapshotId:string;deploymentId:string;userId:string;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:Readonly<UserModelReference>;provider:string;model:string;checkpointServiceTier?:ModelSettings['serviceTier']}>;
 type PrivateLease={context:UserContext;generation:number;sharedGeneration?:number;credentialGeneration?:number;credentialRecoveryGeneration?:number;settings:ModelSettings;price?:ModelPrice;configuration:ConfigDocument};
-type DurableSnapshot=Omit<PrivateLease,'context'>&{version:1;deploymentId:string;userId:string;authorizationEpoch:number;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:UserModelReference;credentialFingerprint?:string};
+type DurableSnapshot=Omit<PrivateLease,'context'>&{version:1;deploymentId:string;userId:string;authorizationEpoch:number;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:UserModelReference;credentialFingerprint?:string;parentSnapshotId?:string;checkpointServiceTier?:ModelSettings['serviceTier']};
 export type ModelLeaseRestore={status:'restored';lease:ModelLease}|{status:'unavailable';reason:'snapshot_unavailable'|'authorization_changed'|'configuration_deleted'|'credentials_revoked'|'shared_resource_revoked'|'operation_mismatch'};
 type CredentialState={profile_id:string;generation:number;recovery_generation:number;present:number;has_credentials:number;fingerprint:string|null;components:string};
 const credentialsHash=(settings:ModelSettings)=>restoreHash({apiKey:settings.apiKey,headers:settings.headers,extraBody:settings.extraBody});
@@ -328,7 +328,7 @@ export class Configurations {
     const credential=reference.kind==='personal'?this.credentialState(context.userId,reference.id):undefined;
     const snapshot:DurableSnapshot={version:1,deploymentId:context.deploymentId,userId:context.userId,authorizationEpoch:context.authorizationEpoch,operationId,feature,revision:entry.service.revision,instanceRevision:this.instance.revision,reference,generation:entry.generation,...(reference.kind==='shared'?{sharedGeneration:this.resources.generation(reference.id)}:{credentialGeneration:credential?.generation,credentialRecoveryGeneration:credential?.recovery_generation,credentialFingerprint:credentialsHash(settings)}),settings:clone(settings),price:clone(prices.find(p=>p.provider===settings.provider&&p.model===settings.model)),configuration:entry.service.effectiveDocument()};
     const id=this.snapshots.save(context.userId,snapshot);
-    const lease=Object.freeze({id,snapshotId:id,deploymentId:context.deploymentId,userId:context.userId,operationId,feature,revision:snapshot.revision,instanceRevision:snapshot.instanceRevision,reference:Object.freeze(reference),provider:settings.provider,model:settings.model});
+    const lease=Object.freeze({id,snapshotId:id,deploymentId:context.deploymentId,userId:context.userId,operationId,feature,revision:snapshot.revision,instanceRevision:snapshot.instanceRevision,reference:Object.freeze(reference),provider:settings.provider,model:settings.model,...(settings.protocol==='codex-app-server'?{checkpointServiceTier:settings.serviceTier}:{})});
     this.leases.set(lease,{context,generation:snapshot.generation,sharedGeneration:snapshot.sharedGeneration,credentialGeneration:snapshot.credentialGeneration,settings:snapshot.settings,price:snapshot.price,configuration:snapshot.configuration});
     return lease;
   }
@@ -340,7 +340,7 @@ export class Configurations {
     if(!z.string().uuid().safeParse(snapshotId).success||!validScopeId(expectedOperationId))return unavailable('snapshot_unavailable');
     let raw:unknown;try{raw=this.snapshots.read(context.userId,snapshotId);}catch{return unavailable('snapshot_unavailable');}
     if(!raw)return unavailable('snapshot_unavailable');
-    const parsed=z.object({version:z.literal(1),deploymentId:z.string(),userId:z.string(),authorizationEpoch:nonnegative,operationId:z.string(),feature:z.enum(MODEL_FEATURES),revision:nonnegative,instanceRevision:nonnegative,reference:z.discriminatedUnion('kind',[z.object({kind:z.literal('shared'),id:z.string()}).strict(),z.object({kind:z.literal('personal'),id:z.string(),model:z.string().optional()}).strict()]),generation:nonnegative,sharedGeneration:nonnegative.optional(),credentialGeneration:nonnegative.optional(),credentialRecoveryGeneration:nonnegative.optional(),credentialFingerprint:z.string().optional(),settings:modelSettingsSchema,price:priceSchema.optional(),configuration:z.record(z.unknown())}).strict().safeParse(raw);
+    const parsed=z.object({version:z.literal(1),deploymentId:z.string(),userId:z.string(),authorizationEpoch:nonnegative,operationId:z.string(),feature:z.enum(MODEL_FEATURES),revision:nonnegative,instanceRevision:nonnegative,reference:z.discriminatedUnion('kind',[z.object({kind:z.literal('shared'),id:z.string()}).strict(),z.object({kind:z.literal('personal'),id:z.string(),model:z.string().optional()}).strict()]),generation:nonnegative,sharedGeneration:nonnegative.optional(),credentialGeneration:nonnegative.optional(),credentialRecoveryGeneration:nonnegative.optional(),credentialFingerprint:z.string().optional(),parentSnapshotId:z.string().uuid().optional(),checkpointServiceTier:z.enum(CODEX_SERVICE_TIERS).optional(),settings:modelSettingsSchema,price:priceSchema.optional(),configuration:z.record(z.unknown())}).strict().safeParse(raw);
     if(!parsed.success)return unavailable('snapshot_unavailable');const snapshot=parsed.data;
     if(snapshot.deploymentId!==context.deploymentId||snapshot.userId!==context.userId)return unavailable('snapshot_unavailable');
     if(snapshot.operationId!==expectedOperationId)return unavailable('operation_mismatch');
@@ -355,7 +355,7 @@ export class Configurations {
       const credential=this.credentialState(context.userId,snapshot.reference.id);
       if(this.credentialsUnavailable.has(context.userId)||!credential?.present||credential.generation!==snapshot.credentialGeneration||credential.recovery_generation!==snapshot.credentialRecoveryGeneration||credential.fingerprint!==snapshot.credentialFingerprint)return unavailable('credentials_revoked');
     }
-    const id=snapshotId,lease=Object.freeze({id,snapshotId:id,deploymentId:context.deploymentId,userId:context.userId,operationId:snapshot.operationId,feature:snapshot.feature,revision:snapshot.revision,instanceRevision:snapshot.instanceRevision,reference:Object.freeze(snapshot.reference),provider:snapshot.settings.provider,model:snapshot.settings.model});
+    const id=snapshotId,lease=Object.freeze({id,snapshotId:id,deploymentId:context.deploymentId,userId:context.userId,operationId:snapshot.operationId,feature:snapshot.feature,revision:snapshot.revision,instanceRevision:snapshot.instanceRevision,reference:Object.freeze(snapshot.reference),provider:snapshot.settings.provider,model:snapshot.settings.model,...(snapshot.settings.protocol==='codex-app-server'?{checkpointServiceTier:snapshot.checkpointServiceTier??snapshot.settings.serviceTier}:{})});
     this.leases.set(lease,{context,generation:snapshot.generation,sharedGeneration:snapshot.sharedGeneration,credentialGeneration:snapshot.credentialGeneration,settings:clone(snapshot.settings),price:clone(snapshot.price),configuration:clone(snapshot.configuration) as ConfigDocument});
     this.assertLease(lease);return {status:'restored',lease};
   }
@@ -370,6 +370,21 @@ export class Configurations {
     if(!source||source.operationId!==expectedOperationId)throw new ConfigServiceError('config_unavailable');
     const id=this.snapshots.save(context.userId,{...source,operationId}),lease=Object.freeze({...restored.lease,id,snapshotId:id,operationId});
     this.leases.set(lease,{...value,context});this.assertLease(lease);return lease;
+  }
+  /** A new logical retry may adopt only the current request tier of its exact
+   * original connection. A revoked snapshot can never be replaced to heal auth. */
+  async deriveRetryLease(context:UserContext,snapshotId:string,operationId:string):Promise<ModelLease>{
+    const restored=await this.restoreLease(context,snapshotId,operationId);
+    if(restored.status!=='restored')throw new ConfigServiceError('config_unavailable');
+    const prior=restored.lease,value=this.assertLease(prior);
+    if(value.settings.protocol!=='codex-app-server')return prior;
+    const entry=await this.entry(context);this.options.authority.assert(context);this.assertLease(prior);
+    const models=entry.service.current<UserModelConfiguration>('models'),current=this.resources.resolve({...models,selections:{...models.selections,[prior.feature]:prior.reference}},prior.feature).settings;
+    if(current.serviceTier===value.settings.serviceTier)return prior;
+    const source=this.snapshots.read(context.userId,snapshotId) as DurableSnapshot;
+    if(!source||source.operationId!==operationId)throw new ConfigServiceError('config_unavailable');
+    const settings=modelSettingsSchema.parse({...value.settings,serviceTier:current.serviceTier}),id=this.snapshots.save(context.userId,{...source,parentSnapshotId:snapshotId,checkpointServiceTier:prior.checkpointServiceTier??value.settings.serviceTier,instanceRevision:this.instance.revision,settings}),lease=Object.freeze({...prior,id,snapshotId:id,instanceRevision:this.instance.revision});
+    this.leases.set(lease,{...value,context,settings});this.assertLease(lease);return lease;
   }
   /** M05/M06/M07 hold a genuine lease, not a deserialized receipt. Logout does
    * not cancel admitted work; disable/reset/delete fences all late publications.

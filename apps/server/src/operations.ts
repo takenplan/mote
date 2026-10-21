@@ -1,4 +1,4 @@
-import {operationStepStateSchema,operationStateSchema,type OperationSummary,type OperationState,type OperationPage,type OperationDetail,type OperationChanges} from '@mote/shared';
+import {executionRetryBudget,operationStepStateSchema,operationStateSchema,type OperationSummary,type OperationState,type OperationPage,type OperationDetail,type OperationChanges} from '@mote/shared';
 import {z} from 'zod';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {StoreError,type ExecutionStorage} from './execution-storage.js';
@@ -9,7 +9,7 @@ const summary=(row:Record<string,unknown>):OperationSummary=>({id:String(row.id)
 export class Operations {
  /** Omit userId only in quarantined legacy composition. Production binds one
   * immutable host-established user for the lifetime of this reader. */
- constructor(private store:ExecutionStorage,private userId?:string){if(userId!==undefined&&!userId)throw new StoreError('Operation user required',400);}
+ constructor(private store:ExecutionStorage,private userId?:string,private retryDefaults?:(kind:string)=>{maxAttempts:number;maxRetries:number}|undefined){if(userId!==undefined&&!userId)throw new StoreError('Operation user required',400);}
  private filter(prefix=''){return this.userId===undefined?{sql:'',values:[] as string[]}:{sql:` AND ${prefix}user_id=?`,values:[this.userId]};}
  page(args:{state?:OperationState;kind?:string;cursor?:number;limit?:number}={}):OperationPage{
   const clauses=['total>0'],values:(string|number)[]=[],position=this.userId===undefined?'rowid':'user_position';
@@ -21,7 +21,7 @@ export class Operations {
  detail(id:string,cursor=0,limit=50):OperationDetail{
   const filter=this.filter(),row=this.store.db.prepare(`SELECT *,${waitingReason} FROM operation_progress WHERE id=? AND total>0${filter.sql}`).get(id,...filter.values);if(!row)throw new StoreError('Operation not found',404);
   const position=this.userId===undefined?'rowid':'user_position',stepFilter=this.filter('e.');
-  const rows=this.store.db.prepare(`SELECT e.${position} position,e.id,e.kind,e.state,e.attempts,e.available_at,e.error,e.updated_at,o.active,o.optional FROM execution_operation_steps o JOIN execution_steps e ON e.id=o.step_id WHERE o.operation_id=? AND e.${position}>?${stepFilter.sql} ORDER BY e.${position} LIMIT ?`).all(id,cursor,...stepFilter.values,limit+1);
+  const rows=this.store.db.prepare(`SELECT e.${position} position,e.id,e.kind,e.state,e.attempts,e.available_at,e.error,e.updated_at,o.active,o.optional,p.max_attempts,p.round,s.charged FROM execution_operation_steps o JOIN execution_steps e ON e.id=o.step_id LEFT JOIN execution_retry_policies p ON p.step_id=e.id LEFT JOIN execution_attempt_sessions s ON s.step_id=e.id AND s.open=1 WHERE o.operation_id=? AND e.${position}>?${stepFilter.sql} ORDER BY e.${position} LIMIT ?`).all(id,cursor,...stepFilter.values,limit+1);
   const page=rows.slice(0,limit),dependencies=new Map<string,string[]>();
   // Only the already owner-filtered output steps enter this read. Keep each
   // step's indexed ORDER/LIMIT inside the correlated read; a page-wide limit
@@ -33,7 +33,7 @@ export class Operations {
     FROM json_each(?) step`;
    for(const dependency of this.store.db.prepare(query).all(JSON.stringify(batch)))dependencies.set(String(dependency.step_id),JSON.parse(String(dependency.dependencies)) as string[]);
   }
-  return {operation:summary(row),steps:page.map(step=>({id:String(step.id),kind:String(step.kind).startsWith('file-step.')?'file-step':String(step.kind).startsWith('query.run.')?'query.run':String(step.kind).startsWith('insight.run.')?'insight.run':String(step.kind).startsWith('lifecycle-window.')?'lifecycle-window':String(step.kind).startsWith('embedding.query.')?'embedding.query':String(step.kind),state:step.state as OperationState,attempts:Number(step.attempts),current:Boolean(step.active),...(step.optional?{optional:true}:{}),notScheduled:Boolean(step.optional)&&step.state==='blocked'&&['archive_only','summary_disabled','appledouble_metadata'].includes(String(step.error)),availableAt:Number(step.available_at),updatedAt:Number(step.updated_at),...(step.error?{reason:/^[a-z][a-z0-9_]{0,80}$/.test(String(step.error))?String(step.error):'processing_failed'}:{}),dependencies:dependencies.get(String(step.id))??[]})),nextCursor:rows.length>limit?Number(rows[limit-1].position):null};
+  return {operation:summary(row),steps:page.map(step=>({id:String(step.id),kind:String(step.kind).startsWith('file-step.')?'file-step':String(step.kind).startsWith('query.run.')?'query.run':String(step.kind).startsWith('insight.run.')?'insight.run':String(step.kind).startsWith('lifecycle-window.')?'lifecycle-window':String(step.kind).startsWith('embedding.query.')?'embedding.query':String(step.kind),state:step.state as OperationState,attempts:Number(step.attempts),...(step.max_attempts?executionRetryBudget(Number(step.attempts),Number(step.max_attempts),Number(step.round),Boolean(step.charged),step.state==='succeeded'):this.retryDefaults?.(String(step.kind))??{}),current:Boolean(step.active),...(step.optional?{optional:true}:{}),notScheduled:Boolean(step.optional)&&step.state==='blocked'&&['archive_only','summary_disabled','appledouble_metadata'].includes(String(step.error)),availableAt:Number(step.available_at),updatedAt:Number(step.updated_at),...(step.error?{reason:/^[a-z][a-z0-9_]{0,80}$/.test(String(step.error))?String(step.error):'processing_failed'}:{}),dependencies:dependencies.get(String(step.id))??[]})),nextCursor:rows.length>limit?Number(rows[limit-1].position):null};
  }
  private changeCursor(){
   return this.userId===undefined?Number(this.store.db.prepare('SELECT coalesce(max(seq),0) n FROM operation_changes').get()!.n):Number(this.store.db.prepare('SELECT next_change FROM operation_user_sequences WHERE user_id=?').get(this.userId)?.next_change??0);
