@@ -74,7 +74,7 @@ export class Perception {
   retry(id:string){
     if(!this.store.imageReference(id)?.blobHash)throw new StoreError('Screenshot not found',404);
     this.store.db.prepare("INSERT INTO perception_jobs(capture_id,kind,state,created_at,auto_eligible) VALUES(?,'ocr','waiting',?,1) ON CONFLICT(capture_id,kind) DO UPDATE SET state='waiting',attempts=0,available_at=0,requested=1,auto_eligible=1").run(id,Date.now());
-    for(const step of this.engine.list({operationId:'capture:'+id,kind:'perception.ocr',limit:100}).items)if(this.valid(step)){if(step.state==='running')this.engine.cancel(step.id);if(step.input.requested)this.engine.retry(step.id);}
+    for(const step of this.engine.list({operationId:'capture:'+id,kind:'perception.ocr',limit:100}).items)if(this.valid(step)){if(step.state==='running')this.engine.cancel(step.id);if(step.input.requested)this.engine.retry(step.id,true);}
     this.store.db.prepare("UPDATE perception_jobs SET requested=1 WHERE capture_id=? AND kind='ocr'").run(id);return {queued:true};
   }
   previewHistoricalOcr(){

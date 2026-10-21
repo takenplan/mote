@@ -1,39 +1,60 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {writeFileSync,readFileSync,mkdirSync,realpathSync} from 'node:fs';
+import {writeFileSync,readFileSync,mkdirSync,realpathSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {scopedMemoryFixture} from './fixtures/scoped-memory-host.js';
 import {scopedFilesFixture} from './fixtures/scoped-files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
 
-const stages=['memory','summary','review','import'] as const;
-function generatedCodex(directory:string){
+const stages=['memory','summary','review','import','turns'] as const;
+function completeGeneratedCalls(text:string){
+ const end=text.lastIndexOf('\n');
+ return end<0?[]:text.slice(0,end).split('\n').map(line=>JSON.parse(line));
+}
+
+test('generated consumer logs parse complete records while a concurrent record is unfinished',()=>{
+ const first='{"method":"first"}\n',partial='{"method":';
+ assert.deepEqual(completeGeneratedCalls(partial),[]);
+ assert.deepEqual(completeGeneratedCalls(first+partial),[{method:'first'}]);
+ assert.deepEqual(completeGeneratedCalls(first+'{"method":"second"}'),[{method:'first'}]);
+ assert.deepEqual(completeGeneratedCalls(first+'{"method":"second"}\n'),[{method:'first'},{method:'second'}]);
+ assert.throws(()=>completeGeneratedCalls(first+'{"method":}\n'),SyntaxError);
+ assert.throws(()=>completeGeneratedCalls('\n'),SyntaxError);
+});
+
+function generatedCodex(directory:string,failSecondSummary=false){
  const home=join(directory,'generated-consumers-codex-home'),executable=join(directory,'generated-consumers-codex.cjs'),log=join(directory,'generated-consumers-codex.jsonl');
+ const release=join(directory,'generated-summary-failure-release');
  mkdirSync(home,{mode:0o700});writeFileSync(join(home,'auth.json'),JSON.stringify({OPENAI_API_KEY:'GENERATED_CONSUMERS_UNUSED_LOGIN'}),{mode:0o600});
  // The model IDs below script explicit fixture outputs. All configuration,
  // source intake, domain admission, independent review, publication and meters
  // remain the actual production implementation.
  writeFileSync(executable,'#!'+process.execPath+'\n'+String.raw`
 const fs=require('node:fs'),readline=require('node:readline');
+const completeGeneratedCalls=${completeGeneratedCalls.toString()};
 const log=${JSON.stringify(log)},send=value=>process.stdout.write(JSON.stringify(value)+'\n'),threadId='generated-thread-'+process.pid;
-let model;
+let model,serviceTier;
 const record=value=>fs.appendFileSync(log,JSON.stringify({executable:process.argv[1],home:process.env.CODEX_HOME,auth:fs.realpathSync(process.env.CODEX_HOME+'/auth.json'),...value})+'\n');
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);record({method:m.method,model});
  if(m.method==='initialize')send({id:m.id,result:{}});
  else if(m.method==='account/read')send({id:m.id,result:{account:{type:'apiKey'}}});
  else if(m.method==='thread/start'){
-  model=m.params.model;send({id:m.id,result:{thread:{id:threadId,model},model,serviceTier:m.params.serviceTier,approvalPolicy:'never',sandbox:{type:'readOnly'}}});
+  model=m.params.model;serviceTier=m.params.serviceTier;send({id:m.id,result:{thread:{id:threadId,model},model,serviceTier:m.params.serviceTier,approvalPolicy:'never',sandbox:{type:'readOnly'}}});
  }else if(m.method==='turn/start'){
   const envelope=JSON.parse(m.params.input[0].text),evidence=envelope.untrustedEvidence??[],id=evidence[0]?.id;
-  record({method:'generated.consumer.prompt',model,envelope});let answer,citationIds=id?[id]:[];
+  record({method:'generated.consumer.prompt',model,serviceTier,envelope});
+  if(${JSON.stringify(failSecondSummary)}&&model==='generated-native-summary'&&completeGeneratedCalls(fs.readFileSync(log,'utf8')).filter(call=>call.method==='generated.consumer.prompt').length===2){const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(timer);send({id:m.id,error:{code:-32000,data:{codexErrorInfo:{responseStreamDisconnected:{}}}}});}},10);return;}
+  let answer,citationIds=id?[id]:[];
   if(model==='generated-native-memory'){
    const memories=id?[{title:'Generated native Memory',statement:'Nora prefers generated tea. ['+id+']',uncertainty:'Generated explicitly attributed statement only',admission:{layer:'memory',reason:'Generated explicitly expressed preference',scope:'Nora in generated fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:evidence[0].ocrText}]}]:[];
    const members=envelope.untrustedTaskContext?.memoryWork?.members??[];
    answer=JSON.stringify({memories,...(members.length?{coverage:members.map((member,index)=>({key:member.key,state:index===0&&memories.length?'checked':'no_candidates',candidateIndexes:index===0&&memories.length?[0]:[]}))}:{})});
   }else if(model==='generated-native-summary')answer='Generated native file summary ['+id+']';
+  else if(model==='generated-native-turns')answer=JSON.stringify({groups:evidence.map((_,index)=>[index])});
   else if(model==='generated-native-review')answer=JSON.stringify({suggestions:[{chunkId:id,original:'GENERATED_FILE_ORIGINAL',replacement:'GENERATED_FILE_REVIEWED',reason:'Generated fixture correction only'}]});
   else if(model==='generated-native-import'){
    const request=JSON.parse(envelope.request);answer=JSON.stringify({summary:'Generated native import preview',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated exact decoded originals retained.'},preserveAll:true,dispositions:request.originals.map(file=>({fileId:file.id,status:'parsed',reason:'Generated exact decoded original retained.'}))});citationIds=[];
@@ -45,7 +66,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  }
 });
 `,{mode:0o700});
- return {home,executable,log,calls:()=>readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line))};
+ return {home,executable,log,release,calls:()=>completeGeneratedCalls(readFileSync(log,'utf8'))};
 }
 const nativeSettings=(stage:typeof stages[number])=>({...defaultModelSettings(),provider:'codex',protocol:'codex-app-server' as const,baseUrl:'',model:'generated-native-'+stage,apiKey:'',headers:{},extraBody:{},serviceTier:'default' as const,modelRequestTimeoutMs:null,agentTimeoutMs:null});
 type Request=(token:string|undefined,url:string,method?:any,payload?:unknown)=>Promise<{statusCode:number;body:string;json:()=>any}>;
@@ -90,4 +111,33 @@ test('actual file summary, terms review and mapped import use the configured Cod
  assert.equal((await f.request(f.a.token,'/api/imports/'+id+'/confirm','POST',{})).statusCode,202);await waitForScopedState(async()=>{job=await f.checked(f.a.token,'/api/imports/'+id);return job.status==='completed';},()=>JSON.stringify(job),20000);assert.equal(job.progress.imported,1);
  const calls=assertRuntime(native);assert.deepEqual(calls.map(call=>call.model),['generated-native-summary','generated-native-review','generated-native-import']);assert.ok(JSON.stringify(calls[0].envelope).includes('GENERATED_FILE_ORIGINAL'));assert.ok(JSON.stringify(calls[1].envelope).includes('GENERATED_FILE_ORIGINAL'));assert.ok(JSON.stringify(calls[2].envelope).includes(bytes.toString()));
  const usage=await f.checked(f.a.token,'/api/usage');assert.equal(usage.items.length,3);assert.deepEqual(new Set(usage.items.map((item:any)=>item.model)),new Set(calls.map(call=>call.model)));assert.ok(usage.items.every((item:any)=>item.provider==='codex'&&item.status==='completed'&&item.tokens.inputTokens===100));assert.equal((await f.checked(f.b.token,'/api/usage')).items.length,0);
+});
+
+
+test('actual multi-page summary preserves the accepted Fast chunk and uses ordinary mode only for its bounded retry', {timeout:45000}, async t=>{
+ const f=await scopedFilesFixture(t),native=generatedCodex(f.directory,true);t.after(()=>{if(existsSync(f.directory))writeFileSync(native.release,'release');});
+ await nativeConfiguration(f.request,f.admin.token,native);await f.restart();
+ const tier=async(value:'fast'|'default')=>{const view=await f.checked(f.admin.token,'/api/admin/configuration/models'),models=view.domains.find((d:any)=>d.id==='models').saved;models.profiles.find((p:any)=>p.id==='generated-native-summary').settings.serviceTier=value;await f.checked(f.admin.token,'/api/admin/configuration/models','PUT',{revision:view.revision,value:models,preserveRedactedSecrets:true});};
+ await tier('fast');await select(f.request,f.a.token,'file','summary');
+ const file=await f.upload(f.a.token,'generated-many-chunks','GENERATED_PARTIAL_CHUNK '.repeat(4200)),ref=file.original.ref;
+ const extract=await f.checked(f.a.token,'/api/processing','POST',{originalRef:ref,operationId:'generated-partial-extract'});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/tasks/'+extract.id)).state==='succeeded',()=> 'generated raw extraction did not settle',20000);
+ const chunks=(await f.checked(f.a.token,'/api/files/'+file.id+'/chunks')).items;assert.ok(chunks.length>20,'real extraction must produce multiple summary pages');assert.ok(chunks.length<=40,'fixture intentionally selects exactly two summary pages');
+ const read=<T>(work:(db:DatabaseSync)=>T)=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{return work(db);}finally{db.close();}};
+ const derived=await f.checked(f.a.token,'/api/processing/derivations','POST',{originalRef:ref,operationId:'generated-partial-summary',modes:['summary']});
+ await waitForScopedState(()=>Promise.resolve(existsSync(native.log)&&native.calls().filter(c=>c.method==='generated.consumer.prompt').length===2),()=> 'second generated summary page was not held',20000);
+ const taskId=String(read(db=>db.prepare("SELECT e.id FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id WHERE u.user_id=? AND e.kind='processing.analysis'").get(f.a.userId)!.id));
+ const before=read(db=>db.prepare('SELECT id,json FROM mp_artifacts WHERE user_id=? AND original_id=? ORDER BY id').all(f.a.userId,ref.slice(9)));
+ const first=before.find(row=>String(row.json).includes('Generated native file summary'));assert.ok(first,'first page must already be durably accepted');
+ const old=read(db=>db.prepare('SELECT model_receipt FROM user_tasks WHERE task_id=?').get(taskId)!.model_receipt);assert.equal(read(db=>db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(taskId)!.n),1);
+ await tier('default');writeFileSync(native.release,'release');
+ await waitForScopedState(async()=>{const task=await f.checked(f.a.token,'/api/tasks/'+derived.id);if(['failed','blocked','stale','cancelled'].includes(task.state))assert.fail(JSON.stringify(task));return task.state==='succeeded';},()=>JSON.stringify(read(db=>db.prepare('SELECT id,kind,state,attempts,error FROM execution_steps').all())),20000);
+ const prompts=assertRuntime(native);assert.equal(prompts.length,3,'first accepted page is not sent again');assert.deepEqual(prompts.map(p=>p.serviceTier),['fast','fast','default']);assert.equal(prompts[2].envelope.untrustedEvidence[0].id,prompts[1].envelope.untrustedEvidence[0].id);assert.notEqual(prompts[2].envelope.untrustedEvidence[0].id,prompts[0].envelope.untrustedEvidence[0].id);
+ assert.deepEqual(read(db=>db.prepare('SELECT id,json FROM mp_artifacts WHERE id=? AND user_id=?').get(first.id,f.a.userId)),first);
+ const task=await f.checked(f.a.token,'/api/tasks/'+taskId);assert.equal(task.attempts,2);assert.equal(task.externalUnresolved,1);assert.equal(task.externalState,'succeeded');assert.notEqual(read(db=>db.prepare('SELECT model_receipt FROM user_tasks WHERE task_id=?').get(taskId)!.model_receipt),old);
+ assert.equal(read(db=>db.prepare('SELECT count(*) n FROM task_external_policy_replays WHERE user_id=?').get(f.a.userId)!.n),1);assert.equal(read(db=>db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(taskId)!.n),0);
+ const status=await f.checked(f.a.token,'/api/processing/originals/'+ref.slice(9));assert.equal(status.derivations.length,1);
+ await select(f.request,f.a.token,'file','turns');const sibling=await f.checked(f.a.token,'/api/processing/derivations','POST',{originalRef:ref,operationId:'generated-after-unknown-turns',modes:['turns']});await waitForScopedState(async()=>{const task=await f.checked(f.a.token,'/api/tasks/'+sibling.id);if(['failed','blocked','stale','cancelled'].includes(task.state))assert.fail(JSON.stringify(task));return task.state==='succeeded';},()=> 'a historical policy-authorized unknown must not block a later sibling',20000);assert.equal(assertRuntime(native).length,4);assert.equal(read(db=>db.prepare('SELECT count(*) n FROM task_external_retry_confirmations WHERE user_id=?').get(f.a.userId)!.n),0);
+ const policyBefore=read(db=>db.prepare('SELECT * FROM task_external_policy_replays WHERE user_id=? ORDER BY id').all(f.a.userId));
+ const explicit=await f.checked(f.a.token,'/api/files/'+file.id+'/retry','POST',{operationId:randomUUID(),stage:'summary',confirmUnknown:false});assert.ok(explicit.taskId);await waitForScopedState(async()=>{const task=await f.checked(f.a.token,'/api/tasks/'+explicit.taskId);if(['failed','blocked','stale','cancelled'].includes(task.state))assert.fail(JSON.stringify(task));return task.state==='succeeded';},()=> 'explicit file replacement did not reuse current accepted summary',20000);
+ assert.deepEqual(read(db=>db.prepare('SELECT * FROM task_external_policy_replays WHERE user_id=? ORDER BY id').all(f.a.userId)),policyBefore);assert.equal(read(db=>db.prepare('SELECT count(*) n FROM task_external_retry_confirmations WHERE user_id=?').get(f.a.userId)!.n),0,'a false-confirm replacement must not manufacture owner acknowledgments for historical policy replay');assert.equal((await f.checked(f.b.token,'/api/usage')).items.length,0);
 });

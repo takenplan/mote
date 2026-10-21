@@ -834,6 +834,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             for (i in 0 until steps.length()) {
                 val step = steps.getJSONObject(i)
                 ui.disclosure(step.optString("kind") + " · " + operationState(step), target) { values(step, it) }
+                if (step.has("maxRetries")) ui.text((if (!step.has("retriesUsed") || step.optInt("retriesUsed") > step.optInt("maxRetries")) MoteI18n.text("当前最多自动重试 {0} 次", step.optInt("maxRetries")) else MoteI18n.text("自动重试 {0}/{1}", step.optInt("retriesUsed"), step.optInt("maxRetries"))) + (if (step.optBoolean("retryExhausted")) " · " + MoteI18n.text("自动重试次数已用完") else ""), NativeFontRole.SUPPORT, target)
             }
             pageButtons(cursors, result, steps.length(), target) { operation(id, it, returnTo) }
         }

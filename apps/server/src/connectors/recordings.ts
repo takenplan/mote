@@ -175,7 +175,7 @@ export class RecordingConnector {
   return {items:[...empty,...full.filter(item=>!empty.some(receipt=>receipt.id===item.id))].sort((a,b)=>b.observedAt.localeCompare(a.observedAt)).slice(0,30)};
  }
  private count(states:string[]){return Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN (SELECT value FROM json_each(?)) AND json_extract(input,'$.epoch')=?").get(JSON.stringify(phases.map(p=>this.kind(p))),JSON.stringify(states),this.saved.epoch)!.n);}
- retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id);void this.engine.tick();return this.status();}
+ retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id,true);void this.engine.tick();return this.status();}
  async close(){this.closed=true;clearInterval(this.timer);this.timer=undefined;for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
 }
 

@@ -12,6 +12,7 @@ import {openScopeStorage} from '../src/scope/storage.js';
 import {LifecycleAuthority,type LifecyclePurpose,type UserExport} from '../src/scope/lifecycle.js';
 import {TaskExecution,type TaskRun,type UserTaskHandler} from '../src/scope/task-execution.js';
 import {EXECUTION_POLICIES} from '../src/execution-policy.js';
+import {defaultModelDomain,defaultModelSettings} from '../src/model-settings.js';
 import {ExecutionFailure} from '../src/execution-engine.js';
 
 const password='Generated-lifecycle-password-01';
@@ -19,11 +20,11 @@ const headers=(token?:string)=>({'x-mote-protocol-version':'2',...(token?{author
 const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(r=>resolve=r);return {promise,resolve};};
 const handler=(patch:Partial<UserTaskHandler>={}):UserTaskHandler=>({kind:'generated.lifecycle',pool:'generated-lifecycle',concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,parseInput:input=>z.object({label:z.string()}).strict().parse(input),portableInput:input=>input,execute:async run=>({label:run.task.input.label}),...patch});
 type ProductionNode=Awaited<ReturnType<typeof buildApp>>&{execution:TaskExecution};
-async function fixture(t:TestContext,setup?:(node:ProductionNode)=>void){
+async function fixture(t:TestContext,setup?:(node:ProductionNode)=>void,productionLifecycle=false){
  const directory=mkdtempSync(join(tmpdir(),'mote-m05-lifecycle-')),initial=openScopeStorage(directory),deploymentId=initial.deploymentId;initial.close();
  const grants=new Map<string,{deploymentId:string;userId:string;domain:string;operationId:string;purpose:LifecyclePurpose}>();
  const lifecycleAuthority=new LifecycleAuthority(deploymentId,{verify:async token=>grants.get(token),isCurrent:context=>{const row=grants.get(context.operationId);return Boolean(row&&row.userId===context.userId&&row.domain===context.domain&&row.purpose===context.purpose);}});
- const node=await buildApp({dataDir:directory},{lifecycleAuthority}) as ProductionNode;assert.ok(node.execution);setup?.(node);
+ const node=await buildApp({dataDir:directory},productionLifecycle?{}:{lifecycleAuthority}) as ProductionNode;assert.ok(node.execution);setup?.(node);
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  await node.accounts!.initialize('generated-admin',password);
  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>node.app.inject({method,url,headers:headers(token),...(payload===undefined?{}:{payload})});
@@ -119,4 +120,21 @@ test('deleting an issued external task reports result_unknown, revokes late work
  const exportGrant=await f.authorize(f.a.userId,'export');assert.throws(()=>f.node.execution.settleExternalForDeletion(exportGrant,a.id,'completed'),{code:'invalid_identity'});assert.throws(()=>f.node.execution.settleExternalForDeletion({...deletion} as any,a.id,'completed'),{code:'invalid_identity'});
  const ordinary=await f.node.authority.authenticate(f.alice.token);assert.throws(()=>f.node.execution.settleExternalForDeletion(ordinary,a.id,'completed'),{code:'invalid_identity'});
  f.node.execution.settleExternalForDeletion(deletion,a.id,'completed');f.node.execution.settleExternalForDeletion(deletion,a.id,'completed');assert.deepEqual(await f.lifecycle(f.a.userId,'delete',undefined,'generated-unknown-delete'),{status:'complete',operationId:'generated-unknown-delete'});assert.deepEqual(f.rows(f.a.userId),[]);assert.equal(f.snapshot(f.b.userId),bBefore);assert.equal(commits,1);
+});
+
+
+for(const issued of [false,true])test(`formal account deletion retains ${issued?'unsettled issuance and':'pre-issuance'} physical cleanup protection without restoring a task capability`,async t=>{
+ const entered=deferred(),release=deferred();t.after(()=>release.resolve());let committed=0;
+ const f=await fixture(t,node=>node.execution.register(handler({modelFeature:'memory',execute:async run=>run.model!.withModel(async()=>{if(issued)run.external.begin('generated-deletion-read');entered.resolve();await release.promise;return null;},{recovery:'read-query'}),commit:()=>{committed++;}})),true);
+ const adminView=(await f.request(f.admin.token,'/api/admin/configuration/models')).json();let response=await f.request(f.admin.token,'/api/admin/configuration/models','PUT',{revision:adminView.revision,value:{...defaultModelDomain(),deployment:{...defaultModelSettings(),provider:'codex',protocol:'codex-app-server',baseUrl:'',model:'gpt-6.1-sol',reasoningEffort:'high',modelRequestTimeoutMs:null,agentTimeoutMs:null,serviceTier:'default'}}});assert.equal(response.statusCode,200,response.body);
+ const settings=(await f.request(f.alice.token,'/api/configuration')).json();response=await f.request(f.alice.token,'/api/configuration/models','PUT',{revision:settings.revision,value:{profiles:[],selections:{memory:{kind:'shared',id:'env:deployment'}}}});assert.equal(response.statusCode,200,response.body);
+ const task=await f.submit(f.alice.token,'generated-held-physical','held');await entered.promise;const read=<T>(work:(db:DatabaseSync)=>T)=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{return work(db);}finally{db.close();}};
+ const physical=read(db=>db.prepare("SELECT * FROM task_physical_calls WHERE task_id=? AND state='active'").get(task.id)!);assert.ok(physical.owner_token);assert.equal(Boolean(physical.issuance_id),issued);
+ const archive=await f.node.services.forUser(await f.node.authority.authenticate(f.alice.token)).exportUser('execution') as UserExport;for(const key of [String(physical.owner_token),String(physical.snapshot_id),'task_model_attempts','task_external_policy_replays','execution_attempt_sessions'])assert.equal(JSON.stringify(archive).includes(key),false,key);
+ const bBefore=f.snapshot(f.b.userId),deletion=await f.request(f.admin.token,'/api/admin/accounts/'+f.a.userId,'DELETE',{operationId:randomUUID()});assert.equal(deletion.statusCode,200,deletion.body);const deletionId=deletion.json().id;
+ const state=async()=>{const response=await f.request(f.admin.token,'/api/admin/account-deletions/'+deletionId);assert.equal(response.statusCode,200,response.body);return response.json().state;};
+ const until=async(check:()=>boolean|Promise<boolean>)=>{const deadline=Date.now()+8000;while(!await check()){assert.ok(Date.now()<deadline,JSON.stringify(await state()));await delay(5);}};
+ await until(async()=>await state()==='result_unknown');assert.equal(read(db=>db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(task.id)!.n),1);assert.equal(committed,0);release.resolve();await until(()=>read(db=>db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(task.id)!.n)===0);assert.equal(committed,0);
+ response=await f.request(f.admin.token,'/api/admin/account-deletions/'+deletionId+'/retry','POST',{});assert.equal(response.statusCode,200,response.body);await until(async()=>['completed','result_unknown'].includes(await state()));assert.equal(await state(),issued?'result_unknown':'completed');assert.equal(f.snapshot(f.b.userId),bBefore);
+ if(issued){const call=read(db=>db.prepare('SELECT state,settled_at FROM task_external_calls WHERE task_id=?').get(task.id)!);assert.ok(['issued','unknown'].includes(String(call.state)));assert.equal(call.settled_at,null);assert.equal(read(db=>db.prepare('SELECT count(*) n FROM task_external_policy_replays').get()!.n),0);}else{for(const table of ['task_physical_calls','task_model_attempts','task_owner_retry_groups'])assert.equal(read(db=>db.prepare('SELECT count(*) n FROM '+table+' WHERE '+(table==='task_model_attempts'?'task_id':'user_id')+'=?').get(table==='task_model_attempts'?task.id:f.a.userId)!.n),0);assert.deepEqual(read(db=>db.prepare('PRAGMA foreign_key_check').all()),[]);}
 });

@@ -687,3 +687,9 @@ test('dialogue detail offers summary and separation together without a content-l
  }
  assert.deepEqual(writes,[{stage:'summary'},{stage:'diarize'}]);
 });
+
+test('an already policy-authorized read unknown does not add another file retry confirmation dialog',async t=>{
+ const {FileProcessingControls}=await import('../src/FileProcessingControls.js'),{root,document:d}=await fixture(t),writes:any[]=[];
+ const api=apiWith((path,init)=>{if(path.endsWith('/retry')){writes.push(JSON.parse(String(init?.body)));return {};}return {job:{state:'failed',summary_state:'failed'},cancellation:{canCancel:true,wait:'unknown',confirmUnknownRequired:false},processingPolicy:{capabilities:{dialogue:true,summary:true},current:{profile:{summarize:true}}}};});
+ await act(async()=>root.render(React.createElement(FileProcessingControls,{api,id:ids[0]})));const retry=Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='重新生成摘要')!;assert.ok(retry);await act(async()=>retry.click());assert.equal(d.querySelector('[role="alertdialog"]'),null);assert.equal(writes.length,1);assert.equal(writes[0].stage,'summary');assert.notEqual(writes[0].confirmUnknown,true);
+});

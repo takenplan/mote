@@ -1,10 +1,12 @@
+import {RetryBudget} from './RetryBudget';
 import {useLayoutEffect,useRef,useState} from 'react';
 import {z} from 'zod';
+import {executionRetryBudgetSchema} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import {dateTime,errorMessage,type Api} from './api';
 import {useResource} from './useResource';
 const count=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),id=z.string().regex(/^[a-f0-9]{64}$/);
-const taskSchema=z.object({id,kind:z.string().min(1),state:z.enum(['waiting','running','blocked','failed','cancelled','succeeded','stale']),attempts:count,availableAt:count,reason:z.string().optional(),externalUnresolved:count,confirmUnknownRequired:z.boolean(),allowedActions:z.array(z.enum(['retry','cancel']))});
+const taskSchema=z.object({...executionRetryBudgetSchema.partial().shape,id,kind:z.string().min(1),state:z.enum(['waiting','running','blocked','failed','cancelled','succeeded','stale']),attempts:count,availableAt:count,reason:z.string().optional(),externalUnresolved:count,confirmUnknownRequired:z.boolean(),allowedActions:z.array(z.enum(['retry','cancel']))});
 type Task=z.infer<typeof taskSchema>;
 const windowsSchema=z.object({scope:z.literal('account'),items:z.array(z.object({id:z.string().uuid(),kind:z.enum(['extraction','consolidation']),state:z.enum(['pending','complete','skipped']),revoked:z.boolean(),createdAt:z.string().datetime(),dueAt:z.string().datetime(),pendingChanges:count,jobId:z.string().uuid().nullable(),task:taskSchema.nullable()}).refine(row=>!row.task||row.task.kind===(row.kind==='extraction'?'memory.intake':'memory.integration-window'))),nextCursor:z.string().nullable()});
 const policiesSchema=z.object({items:z.array(z.object({id:z.string().uuid(),generation:z.string().uuid(),state:z.enum(['active','paused','stopped','restored']),input:z.object({kind:z.enum(['insights','working'])}),observation:z.discriminatedUnion('available',[z.object({available:z.literal(true),pendingChanges:count,dueAt:z.string().datetime(),task:taskSchema.nullable()}),z.object({available:z.literal(false),reason:z.string(),task:taskSchema.nullable()})])}).refine(row=>!row.observation.task||row.observation.task.kind==='ask.automation'))});
@@ -20,7 +22,7 @@ function Contents({api}:{api:Api}){
   if(policy&&policy.action==='retry'&&task.confirmUnknownRequired){setError(moteText('结果待确认'));return;}const confirmUnknown=!policy&&action==='retry'&&task.confirmUnknownRequired;if(confirmUnknown&&!window.confirm(moteText('上次处理是否结束未知，重试可能重复执行。请确认后继续。')))return;if(!current())return;
   setBusy(task.id);setError('');try{const value=await api.request<{id:string}>(policy?'/api/ask-automations/'+encodeURIComponent(policy.id)+'/'+policy.action:'/api/tasks/'+task.id+'/'+action,{method:'POST',body:JSON.stringify(policy?{expectedGeneration:policy.generation}:confirmUnknown?{confirmUnknown:true}:{}),signal});if(!current())return;if(value.id!==(policy?.id??task.id))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));refresh();}catch(e){if(current())setError(errorMessage(e));}finally{if(current())setBusy('');}
  }
- const facts=(task:Task|null)=>task&&<><p>{moteText(labels[task.state])}{' · '}{moteText('已尝试 {0} 次',task.attempts)}{task.state==='waiting'&&task.availableAt>0&&<> · {moteText('下次检查时间')} {dateTime(new Date(task.availableAt).toISOString())}</>}{task.reason&&<> · {task.reason}</>}</p>{task.externalUnresolved>0&&<p className="notice">{moteText('结果待确认')} {task.externalUnresolved}</p>}</>;
+ const facts=(task:Task|null)=>task&&<><p>{moteText(labels[task.state])}{' · '}{moteText('已尝试 {0} 次',task.attempts)} · <RetryBudget value={task}/>{task.state==='waiting'&&task.availableAt>0&&<> · {moteText('下次检查时间')} {dateTime(new Date(task.availableAt).toISOString())}</>}{task.reason&&<> · {task.reason}</>}</p>{task.externalUnresolved>0&&<p className="notice">{moteText(task.confirmUnknownRequired?'结果待确认':'历史未知结果 {0}',task.externalUnresolved)}</p>}</>;
  return <section className="memory-operations" aria-label={moteText('记忆与洞察的运行观察')}><div className="section-heading"><h3>{moteText('记忆与洞察的运行观察')}</h3><button type="button" className="button subtle" disabled={!!busy} onClick={refresh}>{moteText('刷新运行观察')}</button></div>
   <p className="fine-print">{moteText('这里只展示已登记的本账号窗口与任务。查看不会授权新工作；重试沿用原窗口、原范围与原任务。')}</p>
   {(error||windows.error||policies.error||invalid)&&<p className="notice error" role="alert">{error||(invalid?moteText('服务返回的操作回执与当前账号不一致。'):errorMessage(windows.error||policies.error))}</p>}

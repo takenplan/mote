@@ -313,6 +313,9 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("处理状态") + " · " + processingState(job?.optString("state").orEmpty(), job?.optString("error").orEmpty(), job == null), parent = processing)
             if (job != null) {
                 ui.text(MoteI18n.text("阶段") + " · " + job.optString("stage"), parent = processing)
+                job.optJSONObject("execution")?.let { budget ->
+                    if (budget.has("maxRetries")) ui.text((if (!budget.has("retriesUsed") || budget.optInt("retriesUsed") > budget.optInt("maxRetries")) MoteI18n.text("当前最多自动重试 {0} 次", budget.optInt("maxRetries")) else MoteI18n.text("自动重试 {0}/{1}", budget.optInt("retriesUsed"), budget.optInt("maxRetries"))) + (if (budget.optBoolean("retryExhausted")) " · " + MoteI18n.text("自动重试次数已用完") else ""), parent = processing)
+                }
                 ui.text(MoteI18n.text("摘要") + " · " + processingState(job.optString("summary_state"), job.optString("error")), parent = processing)
                 if (!job.isNull("error") && job.optString("error").isNotBlank()) ui.text(job.getString("error"), parent = processing)
             }
@@ -415,9 +418,9 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             if (view.canProcess && pendingRetry == null && cancellation?.optString("wait") != "running") listOf("transcribe" to "转写", "diarize" to "说话人分离", "summary" to "摘要").forEach { (stage, label) ->
                 ui.button(MoteI18n.text("重试") + " · " + MoteI18n.text(label)) {
                     val retry = {
-                        if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.submitFileRetry(api, id, requireNotNull(originalRef), JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown")) }) { if (active()) file(id, offset) }
+                        if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.submitFileRetry(api, id, requireNotNull(originalRef), JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown" && cancellation.optBoolean("confirmUnknownRequired", true))) }) { if (active()) file(id, offset) }
                     }
-                    if (cancellation?.optString("wait") == "unknown") screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
+                    if (cancellation?.optString("wait") == "unknown" && cancellation.optBoolean("confirmUnknownRequired", true)) screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
                 }
             }
             ui.button(MoteI18n.text("删除文件")) {

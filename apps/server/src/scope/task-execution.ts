@@ -19,6 +19,7 @@ import type {ScopedServices} from './services.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {ProcessorAdmission} from '../processor-admission.js';
 import type {DomainLifecycle,UserDataSubject,UserExport} from './lifecycle.js';
+import {TaskPhysicalCalls} from './task-physical-calls.js';
 
 export const EXECUTION_DOMAIN='execution';
 export class TaskError extends Error {constructor(readonly code:string,readonly statusCode=400){super(code);}}
@@ -59,13 +60,18 @@ type TaskRow={task_id:string;user_id:string;grant_id:string;input:string;progres
 export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['forUser']>;task:ExecutionStep;signal:AbortSignal;grant:ExecutionGrant;model?:TaskModelRun;
  /** Register only abort-controlled local runtimes and their complete workspace
   * cleanup. Remote effects and arbitrary handler promises must stay outside. */
- localWork<T>(work:()=>Promise<T>):Promise<T>;
+ localWork<T>(work:()=>Promise<T>,options?:{recovery:'read-query'}):Promise<T>;
  withResource<T>(resource:{scope:'user'|'shared';key:string},work:()=>Promise<T>):Promise<T>;
  checkpoint:{read<T=unknown>(key:string):T|undefined;write(key:string,value:unknown):void};
  progress(value:unknown):void;
  external:{begin(key:string,onIssued?:(issuanceId:string)=>unknown):string;complete():void};
 };
+/** Host-only checkpoint validation has no provider, effect or write handles. */
+export type TaskLocalResume={context:UserContext;task:ExecutionStep;assert():void;checkpoint:{read<T=unknown>(key:string):T|undefined}};
 export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;policy:ExecutionPolicy;
+ /** Trusted legacy call-site declaration; new calls also need their exact
+  * read-query physical cleanup receipt before automatic unknown replay. */
+ unknownRecovery?:'read-query';
  modelFeature?:ModelFeature;
  /** Continuous domain batches wait for physical model capacity per call. */
  modelAdmission?:'per-call';
@@ -84,6 +90,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  fairnessGroup?:(step:ExecutionStep)=>string;
  /** Resolve exact issued facts before another physical request is allowed. */
  reconcile?:(run:TaskRun)=>Promise<void>;
+ /** Synchronously consume a complete already-durable local result. The host
+  * repeats this validation inside the original success transaction. */
+ resumeLocal?:(run:TaskLocalResume)=>{value:unknown}|undefined;
  validate?:(task:ExecutionStep)=>boolean;
  admit?:(task:ExecutionStep)=>ExecutionFailure|undefined;
  execute:(run:TaskRun)=>Promise<unknown>;
@@ -119,6 +128,7 @@ export class TaskExecution {
  private readonly progressViews=new Map<string,NonNullable<UserTaskHandler['publicProgress']>>();
  private readonly storage:ExecutionStorage;
  private readonly processors:ProcessorAdmission;
+ private readonly physical:TaskPhysicalCalls;
  private modelHost:TaskModelHost|undefined;
  private modelAdmission:((run:TaskRun,work:()=>Promise<unknown>)=>Promise<unknown>)|undefined;
  bindModelAdmission(admit:NonNullable<TaskExecution['modelAdmission']>){if(this.modelAdmission)throw new TaskError('model_host_conflict',409);this.modelAdmission=admit;}
@@ -133,6 +143,10 @@ export class TaskExecution {
    CREATE TABLE IF NOT EXISTS task_external_calls(issuance_id TEXT PRIMARY KEY,task_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,user_id TEXT NOT NULL,request_key TEXT NOT NULL,state TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,attempt INTEGER NOT NULL,issued_at INTEGER NOT NULL,settled_at INTEGER);
    CREATE INDEX IF NOT EXISTS task_external_unsettled ON task_external_calls(user_id,state,task_id);
    CREATE TABLE IF NOT EXISTS task_external_retry_confirmations(confirmation_id TEXT PRIMARY KEY,issuance_id TEXT NOT NULL REFERENCES task_external_calls(issuance_id) ON DELETE CASCADE,user_id TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,confirmed_at INTEGER NOT NULL);
+   CREATE TABLE IF NOT EXISTS task_external_policy_replays(id TEXT PRIMARY KEY,issuance_id TEXT NOT NULL UNIQUE REFERENCES task_external_calls(issuance_id) ON DELETE CASCADE,user_id TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,attempt_id TEXT NOT NULL,authorized_at INTEGER NOT NULL,replacement_command TEXT);
+   CREATE TABLE IF NOT EXISTS task_model_attempts(task_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,attempt_id TEXT NOT NULL,receipt TEXT NOT NULL,parent_snapshot_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(task_id,attempt_id));
+   CREATE TABLE IF NOT EXISTS task_owner_retry_groups(command_task_id TEXT PRIMARY KEY REFERENCES user_tasks(task_id) ON DELETE CASCADE,user_id TEXT NOT NULL,created_at INTEGER NOT NULL);
+   CREATE TABLE IF NOT EXISTS task_owner_retry_targets(command_task_id TEXT NOT NULL REFERENCES task_owner_retry_groups(command_task_id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,PRIMARY KEY(command_task_id,task_id));
    CREATE INDEX IF NOT EXISTS user_tasks_owner ON user_tasks(user_id,task_id);
    CREATE TABLE IF NOT EXISTS task_lifecycle_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
    CREATE TABLE IF NOT EXISTS task_restore_journal(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,payload_hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));`);
@@ -140,6 +154,7 @@ export class TaskExecution {
   this.storage={db,reserveMetadata:bytes=>{if(!Number.isSafeInteger(bytes)||bytes<0)throw new TaskError('task_metadata_invalid');}};
   this.processors=new ProcessorAdmission(this.storage);
   this.engine=new ExecutionEngine(this.storage);
+  this.physical=new TaskPhysicalCalls(db);
   this.grants.bindExecution((taskId,fence)=>this.engine.isCurrentInputGrant(taskId,fence));
  }
  /** The integration composition passes the existing M04 Configurations host. */
@@ -179,6 +194,49 @@ export class TaskExecution {
   if(receipt.id!==receipt.snapshotId||receipt.deploymentId!==this.authority.deploymentId||receipt.userId!==step.ownership!.userId||receipt.operationId!==step.operationId||receipt.feature!==handler.modelFeature)throw new TaskError('model_snapshot_unavailable',409);
   return receipt;
  }
+ private readReplayReady(row:TaskRow){
+  if(!row.external_issuance)return false;const fact=this.physical.receipt(row.external_issuance);
+  return Boolean(fact&&fact.task_id===row.task_id&&fact.user_id===row.user_id&&fact.deployment_id===this.authority.deploymentId&&fact.mode==='read-query'&&fact.state==='quiescent'&&fact.quiescent_at!==null);
+ }
+ private localResumeEligible(row:TaskRow){
+  if(!['none','succeeded'].includes(row.external_state))return false;
+  if(!row.external_issuance)return row.external_state==='none';
+  const call=this.db.prepare('SELECT state,settled_at FROM task_external_calls WHERE issuance_id=? AND task_id=? AND user_id=?').get(row.external_issuance,row.task_id,row.user_id);
+  return Boolean(call&&['succeeded','not_executed'].includes(String(call.state))&&call.settled_at!==null);
+ }
+ private localResumeView(run:TaskRun):TaskLocalResume{return Object.freeze({context:run.context,task:run.task,assert:()=>{run.grant.assert();this.authority.assert(run.context);this.assertTask(run.task);},checkpoint:Object.freeze({read:run.checkpoint.read})});}
+ private resumeLocal(handler:UserTaskHandler,run:TaskRun){const result=handler.resumeLocal?.(this.localResumeView(run));if(result&&typeof (result as {then?:unknown}).then==='function'){if(result instanceof Promise)void Promise.prototype.catch.call(result,()=>{});throw new TaskError('asynchronous_task_local_resume',409);}run.grant.assert();return result;}
+ private prepareRecovery(context:UserContext,step:ExecutionStep,owner=false,confirmUnknown=false){
+  const row=this.assertTask(step),handler=this.handlers.get(step.kind)!;
+  if(this.physical.busy(step.id))throw new TaskError('physical_cleanup_pending',409);
+  if(['issued','unknown'].includes(row.external_state)){
+   const repeatable=this.readReplayReady(row),legacyRead=owner&&confirmUnknown&&handler.unknownRecovery==='read-query'&&row.external_issuance&&!this.physical.receipt(row.external_issuance);
+   if(!repeatable&&!legacyRead){if(!owner||!confirmUnknown)throw new TaskError('external_result_unknown',409);}
+   // Same-operation reconcilers retain the exact original pointer. They never
+   // get a new mutation/session identity from the automatic read policy.
+   if(repeatable||legacyRead||owner&&confirmUnknown){
+    if(row.external_issuance){this.db.prepare("UPDATE task_external_calls SET state='unknown' WHERE issuance_id=? AND user_id=? AND state='issued'").run(row.external_issuance,context.userId);
+     if(owner)this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,Date.now());
+     else this.db.prepare('INSERT INTO task_external_policy_replays(id,issuance_id,user_id,authorization_epoch,attempt_id,authorized_at) VALUES(?,?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,step.attemptId!,Date.now());
+    }
+    this.db.prepare("UPDATE user_tasks SET external_state='none',external_key=NULL,external_issuance=NULL WHERE task_id=?").run(step.id);
+   }
+  }
+  const prepared=handler.prepareRetry?.(context,step);if(prepared&&typeof (prepared as {then?:unknown}).then==='function'){void Promise.resolve(prepared).catch(()=>{});throw new TaskError('asynchronous_task_retry',409);}
+  this.authority.assert(context);this.assertTask(step);
+ }
+ private async modelAttempt(context:UserContext,step:ExecutionStep,grant:ExecutionGrant,lease:TaskModelLease){
+  const prior=this.row(step.id)!,receipt=JSON.parse(prior.model_receipt!);
+  if(receipt.attemptId===step.attemptId)return lease;
+  const retry=Boolean(receipt.attemptId||this.db.prepare('SELECT 1 FROM task_external_calls WHERE task_id=? LIMIT 1').get(step.id));
+  const next=retry?await this.modelHost!.deriveRetryLease(context,lease.snapshotId,step.operationId):lease;grant.assert();this.modelHost!.assertLease(next);
+  grant.commit(()=>{this.assertTask(step);if(this.row(step.id)!.model_receipt!==prior.model_receipt)throw new ExecutionFailure('stale','model_snapshot_changed');
+   this.db.prepare('INSERT OR IGNORE INTO task_model_attempts VALUES(?,?,?,?,?)').run(step.id,'snapshot:'+receipt.snapshotId,json(receipt),receipt.snapshotId,Date.now());
+   const current={...receipt,...next,attemptId:step.attemptId};
+   this.db.prepare('INSERT INTO task_model_attempts VALUES(?,?,?,?,?)').run(step.id,step.attemptId!,json(current),lease.snapshotId,Date.now());
+   this.db.prepare('UPDATE user_tasks SET model_receipt=? WHERE task_id=?').run(json(current),step.id);
+  });this.modelLeases.set(step.id,next);return next;
+ }
  private async executionContext(step:ExecutionStep,handler:UserTaskHandler,grant:ExecutionGrant,grantId:string){
   if(!this.row(step.id)?.model_receipt||this.modelLeases.has(step.id)){const context=await this.authority.restoreTask(grantId);grant.assert();return context;}
   const receipt=this.recoveryReceipt(step,handler),fence=String(this.db.prepare("SELECT fence FROM execution_steps WHERE id=? AND state='running'").get(step.id)?.fence??'');
@@ -207,38 +265,46 @@ export class TaskExecution {
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
-  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:handler.modelAdmission==='per-call',
+  const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:Boolean(handler.modelFeature)||handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>[...(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),...this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>String(row.resource_key))],
-   admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile)return new ExecutionFailure('blocked','external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
-   execute:async(step,signal,grant)=>{
+   admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(this.physical.busy(step.id)&&!handler.resumeLocal)return new ExecutionFailure('waiting','physical_cleanup_pending',1000);if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile&&!this.readReplayReady(row))return new ExecutionFailure('blocked',row.external_issuance&&this.physical.receipt(row.external_issuance)?.state!=='quiescent'&&this.physical.receipt(row.external_issuance)?'physical_cleanup_unknown':'external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
+   execute:(step,signal,grant)=>this.physical.taskBoundary(async()=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
-    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,codex:this.modelHost.codex(),withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
+    let lease=this.modelLeases.get(step.id);const model=lease&&this.modelHost?{get lease(){return lease!;},codex:this.modelHost.codex(),withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1],options?:{recovery:'read-query'})=>{
      grant.assert();try{
       // M04 still cleans arbitrary callback exceptions and performs its own
       // post-callback lease assertion before a safe failure reaches the engine.
-      const physical=()=>this.modelHost!.withModel(lease,async(settings,configuration)=>{
+      const physical=async()=>{lease=await this.modelAttempt(context,step,grant,lease!);const outcome=await this.localWork(step,signal,grant,()=>this.physical.run(step,context.deploymentId,lease!.snapshotId,options?.recovery??'reconcile',grant.commit,()=>this.modelHost!.withModel(lease!,async(settings,configuration)=>{
        try{return {ok:true as const,value:await work(settings,configuration)};}
        catch(error){const failure=modelFailure(error);if(!failure)throw error;return {ok:false as const,failure};}
-      });
-      const outcome=await (handler.modelAdmission==='per-call'&&this.modelAdmission?this.modelAdmission(run,()=>grant.withBudget(physical)):handler.modelAdmission==='per-call'?grant.withBudget(physical):physical()) as Awaited<ReturnType<typeof physical>>;
-      if(!outcome.ok)throw outcome.failure;return outcome.value as T;
+      })));if(!outcome.ok)throw outcome.failure;return outcome.value;};
+      return await (handler.modelAdmission==='per-call'&&this.modelAdmission?this.modelAdmission(run,()=>grant.withBudget(physical)):grant.withBudget(physical)) as T;
      }finally{grant.assert();}
-    },startUsage:(options?:Parameters<TaskModelHost['startUsage']>[1])=>{const meter=grant.commit(()=>this.modelHost!.startUsage(lease,options));return Object.freeze({id:meter.id,issued:()=>grant.commit(()=>meter.issued()),update:(tokens:Parameters<typeof meter.update>[0])=>grant.commit(()=>meter.update(tokens)),interrupt:()=>meter.interrupt(),finish:(status:Parameters<typeof meter.finish>[0],facts?:Parameters<typeof meter.finish>[1])=>{try{return grant.commit(()=>meter.finish(status,facts));}catch(error){try{meter.interrupt();}catch{/* Receipt cleanup cannot restore the task grant. */}throw error;}}});},recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
+    },startUsage:(options?:Parameters<TaskModelHost['startUsage']>[1])=>{const meter=grant.commit(()=>this.modelHost!.startUsage(lease!,options));let issued=false;return Object.freeze({id:meter.id,issued:()=>grant.commit(()=>{meter.issued();issued=true;}),update:(tokens:Parameters<typeof meter.update>[0])=>grant.commit(()=>meter.update(tokens)),interrupt:()=>meter.interrupt(),finish:(status:Parameters<typeof meter.finish>[0],facts?:Parameters<typeof meter.finish>[1])=>{try{return grant.commit(()=>{if(issued&&facts?.executionStarted!==false)grant.recordExecution();return meter.finish(status,facts);});}catch(error){try{meter.interrupt();}catch{/* Receipt cleanup cannot restore the task grant. */}throw error;}}});},recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease!,result))}:undefined;
     const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,withResource:(resource,work)=>{
       if(!['user','shared'].includes(resource.scope)||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');
       return grant.withResource(JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',context.userId,resource.key]),()=>grant.withBudget(work));
-     },localWork:work=>this.localWork(step,signal,grant,work),
+     },localWork:(work,options)=>this.localWork(step,signal,grant,async()=>{if(!options)return work();if(!lease||handler.modelAdmission==='per-call')throw new ExecutionFailure('permanent','physical_read_span_invalid');lease=await this.modelAttempt(context,step,grant,lease);return this.physical.run(step,context.deploymentId,lease.snapshotId,'read-query',grant.commit,work);}),
      checkpoint:{read:<T>(key:string)=>{grant.assert();const values=JSON.parse(this.row(step.id)!.checkpoints);return Object.hasOwn(values,key)?values[key] as T:undefined;},write:(key,value)=>{id.parse(key);write(()=>{const checkpoints=JSON.parse(this.row(step.id)!.checkpoints);Object.defineProperty(checkpoints,key,{value,enumerable:true,writable:true,configurable:true});this.db.prepare('UPDATE user_tasks SET checkpoints=? WHERE task_id=?').run(json(checkpoints),step.id);});}},
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
-     external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
+     external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);this.physical.bind(step,issuanceId,{state:current.external_state,issuance:current.external_issuance});if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
     };
+    if(handler.resumeLocal&&this.localResumeEligible(this.row(step.id)!)){
+     const current=this.row(step.id)!,local={checkpoints:current.checkpoints,external:json([current.external_state,current.external_key,current.external_issuance])},resumed=this.resumeLocal(handler,run);
+     if(resumed){if(this.row(step.id)!.checkpoints!==local.checkpoints)throw new ExecutionFailure('stale','task_local_resume_changed');return {value:resumed.value,run,local};}
+    }
+    if(this.physical.busy(step.id))throw new ExecutionFailure('waiting','physical_cleanup_pending',1000,{executionStarted:false});
+    if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
+    if(handler.modelFeature&&handler.modelAdmission!=='per-call')grant.startAttempt();
     await handler.reconcile?.(run);grant.assert();
     const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
-    const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure('blocked','external_result_unknown');return {value:result,run};
-   },
-   commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
+    const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure(this.readReplayReady(this.row(step.id)!)?'transient':'blocked','external_result_unknown');return {value:result,run};
+   }),
+   commit:(step,result)=>{const current=this.assertTask(step),{run,value,local}=result as {run:TaskRun;value:unknown;local?:{checkpoints:string;external:string}};this.authority.assert(run.context);
+    if(local){if(!this.localResumeEligible(current)||current.checkpoints!==local.checkpoints||json([current.external_state,current.external_key,current.external_issuance])!==local.external)throw new ExecutionFailure('stale','task_local_resume_changed');const validated=this.resumeLocal(handler,run);if(!validated||json(validated.value)!==json(value))throw new ExecutionFailure('stale','task_local_resume_changed');}
+    handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });
@@ -303,7 +369,7 @@ export class TaskExecution {
     return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);parent(operationId,options,taskId);const view=this.view(prior);onAdmitted?.(view);return view;}
      for(const dependency of request.dependencies)owned(dependency);
      const grantId=this.grants.issue(context,taskId);
-     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,snapshotId:modelLease.snapshotId,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model}):null,context.userId);
+     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,snapshotId:modelLease.snapshotId,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model,...(modelLease.checkpointServiceTier?{checkpointServiceTier:modelLease.checkpointServiceTier}:{})}):null,context.userId);
      for(const resource of modelResources){if(resource.scope!=='shared'||!/^processor:[a-f0-9]{64}$/.test(resource.key))throw new TaskError('task_resource_invalid');this.db.prepare('INSERT INTO task_model_resources VALUES(?,?)').run(taskId,JSON.stringify(['shared',resource.key]));}
      this.engine.enqueue(operationId,handler.kind,input,{id:taskId,dependencies:request.dependencies,ownership:{userId:context.userId,authorizationEpoch:context.authorizationEpoch,grantId}});
      parent(operationId,options,taskId);
@@ -327,23 +393,46 @@ export class TaskExecution {
    linkParent:(parentBusinessId:string,childBusinessId:string,membership:{generation?:{slot:string;version:string}}={})=>this.transaction(()=>{assert();linkOperationParent(this.storage,privateOperationId(context.userId,parentBusinessId),privateOperationId(context.userId,childBusinessId),membership);}),
    linkTaskParent:(parentTaskId:string,childTaskId:string)=>this.transaction(()=>{assert();linkOperationParent(this.storage,taskOperation(parentTaskId),taskOperation(childTaskId));}),
    get:(taskId:string)=>this.view(owned(taskId)),
-   observe:(taskId:string)=>{const row=owned(taskId),task=this.view(row),step=this.engine.get(taskId)!,hasAuthority=this.valid(step)&&this.handlers.has(task.kind);return {id:task.id,kind:task.kind,state:task.state,attempts:task.attempts,availableAt:task.availableAt,reason:task.failure?.code??task.error,externalUnresolved:task.externalUnresolved,confirmUnknownRequired:['issued','unknown'].includes(task.externalState),allowedActions:[...(hasAuthority&&['failed','blocked','cancelled'].includes(task.state)?['retry' as const]:[]),...(!['succeeded','cancelled','stale'].includes(task.state)?['cancel' as const]:[])]};},
+   observe:(taskId:string)=>{const row=owned(taskId),task=this.view(row),step=this.engine.get(taskId)!,hasAuthority=this.valid(step)&&this.handlers.has(task.kind);return {id:task.id,kind:task.kind,state:task.state,attempts:task.attempts,maxAttempts:task.maxAttempts,maxRetries:task.maxRetries,retriesUsed:task.retriesUsed,attemptsRemaining:task.attemptsRemaining,retryRound:task.retryRound,retryExhausted:task.retryExhausted,availableAt:task.availableAt,reason:task.error,externalUnresolved:task.externalUnresolved,confirmUnknownRequired:this.confirmationRequired(this.row(task.id)!),allowedActions:[...(hasAuthority&&['failed','blocked','cancelled'].includes(task.state)?['retry' as const]:[]),...(!['succeeded','cancelled','stale'].includes(task.state)?['cancel' as const]:[])]};},
    contextSteps:(key:string,raw:unknown)=>contextStepPage(this.db,context,key,raw,assert,row=>{
     const task=this.view(row as TaskRow),step=this.engine.get(task.id)!,handler=this.handlers.get(task.kind);return {task,hasAuthority:this.valid(step)&&!!handler};
    }),
    queues:()=>{assert();return {scope:'account' as const,pools:this.db.prepare("SELECT e.pool id,sum(e.state='running') running,sum(e.state='waiting') waiting,sum(e.state='blocked') blocked,sum(e.state='failed') failed,sum(CASE WHEN u.external_state IN ('issued','unknown') OR EXISTS(SELECT 1 FROM task_external_calls c WHERE c.task_id=u.task_id AND c.user_id=u.user_id AND c.state IN ('issued','unknown')) THEN 1 ELSE 0 END) unresolvedExternal FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.user_id=? GROUP BY e.pool ORDER BY e.pool").all(context.userId,context.userId).map(row=>({id:String(row.id),running:Number(row.running),waiting:Number(row.waiting),blocked:Number(row.blocked),failed:Number(row.failed),unresolvedExternal:Number(row.unresolvedExternal)}))};},
    list:(args:{cursor?:number;limit?:number}={})=>{assert();const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.db.prepare('SELECT user_position,* FROM user_tasks WHERE user_id=? AND user_position>? ORDER BY user_position LIMIT ?').all(context.userId,args.cursor??0,limit+1) as (TaskRow&{user_position:number})[];return {items:rows.slice(0,limit).map(row=>this.view(row)),nextCursor:rows.length>limit?rows[limit-1].user_position:null};},
    cancel:(taskId:string)=>this.transaction(()=>{owned(taskId);this.engine.cancel(taskId);return this.view(this.row(taskId)!);}),
-   retry:(taskId:string,options:{confirmUnknown?:boolean}={})=>this.transaction(()=>{const row=owned(taskId),step=this.engine.get(taskId)!;this.assertTask(step);if(step.state==='succeeded'||step.state==='running')throw new TaskError('task_retry_invalid',409);if(['issued','unknown'].includes(row.external_state)){if(!options.confirmUnknown)throw new TaskError('external_result_unknown',409);if(row.external_issuance){this.db.prepare("UPDATE task_external_calls SET state='unknown' WHERE issuance_id=? AND user_id=? AND state='issued'").run(row.external_issuance,context.userId);this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,Date.now());}this.db.prepare("UPDATE user_tasks SET external_state='none',external_key=NULL,external_issuance=NULL WHERE task_id=?").run(taskId);}const prepared=this.handlers.get(step.kind)?.prepareRetry?.(context,step);if(prepared&&typeof (prepared as {then?:unknown}).then==='function'){void Promise.resolve(prepared).catch(()=>{});throw new TaskError('asynchronous_task_retry',409);}assert();this.assertTask(step);this.engine.retry(taskId);return this.view(this.row(taskId)!);}),
-   operations:()=>{assert();const operations=new Operations(this.storage,context.userId);return {page:(args:Parameters<Operations['page']>[0])=>{assert();return operations.page(args);},detail:(taskId:string,cursor?:number,limit?:number)=>{assert();return operations.detail(taskId,cursor,limit);},changes:(since:number)=>{assert();return operations.changes(since);}};},
+   retryGroupRead:(commandId:string)=>{owned(commandId);const group=this.db.prepare('SELECT command_task_id FROM task_owner_retry_groups WHERE command_task_id=? AND user_id=?').get(commandId,context.userId);return group?this.db.prepare('SELECT task_id FROM task_owner_retry_targets WHERE command_task_id=? ORDER BY task_id').all(commandId).map(row=>String(row.task_id)):undefined;},
+   retryGroup:(commandId:string,taskIds:readonly string[],attach:(ids:readonly string[])=>unknown)=>this.transaction(()=>{
+    owned(commandId);const command=this.engine.get(commandId)!;this.assertTask(command);if(command.state!=='running')throw new TaskError('task_retry_invalid',409);
+    if(this.db.prepare('SELECT 1 FROM task_owner_retry_groups WHERE command_task_id=? AND user_id=?').get(commandId,context.userId))return;
+    const selected=[...new Set(taskIds)].sort();for(const taskId of selected){owned(taskId);const task=this.engine.get(taskId)!;this.assertTask(task);if(!['failed','blocked'].includes(task.state))throw new TaskError('task_retry_invalid',409);}
+    this.db.prepare('INSERT INTO task_owner_retry_groups VALUES(?,?,?)').run(commandId,context.userId,Date.now());
+    for(const taskId of selected)this.db.prepare('INSERT INTO task_owner_retry_targets VALUES(?,?)').run(commandId,taskId);
+    const attached=attach(selected);if(attached&&typeof (attached as {then?:unknown}).then==='function'){void Promise.resolve(attached).catch(()=>{});throw new TaskError('asynchronous_task_retry',409);}
+    for(const taskId of selected){this.forUser(context).linkTaskParent(commandId,taskId);this.forUser(context).retry(taskId,{ownerAction:true});}
+    assert();this.assertTask(command);
+   }),
+   retry:(taskId:string,options:{confirmUnknown?:boolean;ownerAction?:boolean}={})=>this.transaction(()=>{owned(taskId);const step=this.engine.get(taskId)!;this.assertTask(step);if(step.state==='succeeded'||step.state==='running')throw new TaskError('task_retry_invalid',409);this.prepareRecovery(context,step,options.ownerAction===true,options.confirmUnknown===true);assert();this.assertTask(step);this.engine.retry(taskId,options.ownerAction===true&&['failed','blocked','cancelled'].includes(step.state));return this.view(this.row(taskId)!);}),
+   operations:()=>{assert();const operations=new Operations(this.storage,context.userId,kind=>this.engine.retryDefaults(kind));return {page:(args:Parameters<Operations['page']>[0])=>{assert();return operations.page(args);},detail:(taskId:string,cursor?:number,limit?:number)=>{assert();return operations.detail(taskId,cursor,limit);},changes:(since:number)=>{assert();return operations.changes(since);}};},
   });
  }
- private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
+ private confirmationRequired(row:TaskRow){return ['issued','unknown'].includes(row.external_state)&&!this.readReplayReady(row);}
+ private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,confirmUnknownRequired:this.confirmationRequired(row),cleanupPending:this.physical.busy(step.id),progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
  /** Host domain's explicit replacement operation may acknowledge old unknown
   * facts without requeuing an obsolete input or reviving its task grant. No HTTP
   * or model tool exposes this capability. Facts themselves remain unresolved. */
+ /** Existing owner file replacement can use the read policy without inventing
+  * an owner acknowledgment. Every unresolved, previously unauthorized history
+  * row must independently prove exact quiescence; effects still require consent. */
+ authorizeReadReplacement(context:UserContext,taskId:string,commandId:string){
+  return this.transaction(()=>{this.authority.assert(context);this.enabled(context.userId);const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);
+   const calls=this.db.prepare("SELECT c.issuance_id FROM task_external_calls c WHERE c.task_id=? AND c.user_id=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id) AND NOT EXISTS(SELECT 1 FROM task_external_policy_replays p WHERE p.user_id=c.user_id AND p.issuance_id=c.issuance_id)").all(taskId,context.userId);if(calls.length&&this.physical.busy(taskId))throw new TaskError('physical_cleanup_pending',409);
+   for(const call of calls){const fact=this.physical.receipt(String(call.issuance_id));if(!fact||fact.task_id!==taskId||fact.user_id!==context.userId||fact.deployment_id!==context.deploymentId||fact.mode!=='read-query'||fact.state!=='quiescent'||fact.quiescent_at===null||!this.db.prepare('SELECT 1 FROM execution_attempt_sessions WHERE id=? AND step_id=? AND charged=1').get(fact.attempt_id,taskId))throw new TaskError('external_result_unknown',409);
+    this.db.prepare('INSERT INTO task_external_policy_replays VALUES(?,?,?,?,?,?,?)').run(randomUUID(),call.issuance_id,context.userId,context.authorizationEpoch,fact.attempt_id,Date.now(),hash([context.userId,commandId]));
+   }this.authority.assert(context);
+  });
+ }
  acknowledgeExternalReplay(context:UserContext,taskId:string){
   return this.transaction(()=>{this.authority.assert(context);this.enabled(context.userId);const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);
    for(const call of this.db.prepare("SELECT issuance_id FROM task_external_calls c WHERE c.task_id=? AND c.user_id=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id)").all(taskId,context.userId))this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),String(call.issuance_id),context.userId,context.authorizationEpoch,Date.now());
@@ -398,7 +487,7 @@ export class TaskExecution {
  lifecycle():DomainLifecycle{return {
   importUser:false,
  exportUser:async subject=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');return archiveRead(subject.userId,()=>this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');const tasks=this.db.prepare('SELECT * FROM user_tasks WHERE user_id=? ORDER BY task_id').all(subject.userId) as TaskRow[];return {domain:EXECUTION_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-tasks-v1',coverage:{metadata:true,credentials:false,activeAuthorization:false,portableInputs:'registered-handlers-only',excluded:['checkpoints','progress','results','failure-receipts','model-snapshots','external-journal-details']},tasks:tasks.map(row=>{const step=this.engine.get(row.task_id)!,handler=this.handlers.get(step.kind);return {id:step.id,operationId:step.operationId,kind:step.kind,pool:step.pool,state:step.state,attempts:step.attempts,authorizationEpoch:step.ownership!.authorizationEpoch,externalState:this.db.prepare("SELECT 1 FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown') LIMIT 1").get(row.task_id,row.user_id)?'unknown':row.external_state,...(handler?.portableInput?{input:handler.portableInput(step.input)}:{inputOmitted:true}),dependencies:this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=?').all(step.id).map(row=>String(row.dependency_id))};})}};}));},
-  deleteUser:async(subject,operationId)=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');const ids=this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.db.prepare('INSERT INTO task_lifecycle_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);const rows=this.db.prepare('SELECT task_id,external_state FROM user_tasks WHERE user_id=?').all(subject.userId);for(const row of rows){this.engine.cancel(String(row.task_id),false);this.grants.revoke(String(row.task_id));}return rows;});for(const row of ids){this.engine.abortLocal(String(row.task_id));this.modelLeases.delete(String(row.task_id));}const unknown=ids.some(row=>['issued','unknown'].includes(String(row.external_state)))||Boolean(this.db.prepare("SELECT 1 FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown') LIMIT 1").get(subject.userId));if(unknown)return {status:'result_unknown',operationId};this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');for(const row of ids)this.db.prepare('DELETE FROM execution_dependencies WHERE step_id=? OR dependency_id=?').run(row.task_id,row.task_id);for(const row of ids){this.db.prepare('DELETE FROM execution_steps WHERE id=?').run(row.task_id);this.db.prepare('DELETE FROM user_tasks WHERE task_id=?').run(row.task_id);this.db.prepare('DELETE FROM task_authorizations WHERE task_id=?').run(row.task_id);}const operations=this.db.prepare('SELECT id FROM operation_progress WHERE user_id=?').all(subject.userId);for(const operation of operations){this.db.prepare('DELETE FROM operation_generations WHERE operation_id=?').run(operation.id);this.db.prepare('DELETE FROM operation_parents WHERE parent_id=? OR child_id=?').run(operation.id,operation.id);this.db.prepare('DELETE FROM execution_fairness WHERE operation_id=?').run(operation.id);}this.db.prepare('DELETE FROM operation_progress WHERE user_id=?').run(subject.userId);for(const table of ['operation_changes','operation_user_sequences','execution_user_sequence','execution_user_fairness','execution_stage_fairness','task_restore_journal'])this.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
+  deleteUser:async(subject,operationId)=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');const ids=this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.db.prepare('INSERT INTO task_lifecycle_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);const rows=this.db.prepare('SELECT task_id,external_state FROM user_tasks WHERE user_id=?').all(subject.userId);for(const row of rows){this.engine.cancel(String(row.task_id),false);this.grants.revoke(String(row.task_id));}return rows;});for(const row of ids){this.engine.abortLocal(String(row.task_id));this.modelLeases.delete(String(row.task_id));}const unknown=ids.some(row=>['issued','unknown'].includes(String(row.external_state)))||Boolean(this.db.prepare("SELECT 1 FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown') LIMIT 1").get(subject.userId));if(unknown||this.physical.active(subject.userId))return {status:'result_unknown',operationId};this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.physical.eraseQuiescent(subject.userId);for(const row of ids)this.db.prepare('DELETE FROM execution_dependencies WHERE step_id=? OR dependency_id=?').run(row.task_id,row.task_id);for(const row of ids){this.db.prepare('DELETE FROM execution_steps WHERE id=?').run(row.task_id);this.db.prepare('DELETE FROM user_tasks WHERE task_id=?').run(row.task_id);this.db.prepare('DELETE FROM task_authorizations WHERE task_id=?').run(row.task_id);}const operations=this.db.prepare('SELECT id FROM operation_progress WHERE user_id=?').all(subject.userId);for(const operation of operations){this.db.prepare('DELETE FROM operation_generations WHERE operation_id=?').run(operation.id);this.db.prepare('DELETE FROM operation_parents WHERE parent_id=? OR child_id=?').run(operation.id,operation.id);this.db.prepare('DELETE FROM execution_fairness WHERE operation_id=?').run(operation.id);}this.db.prepare('DELETE FROM operation_progress WHERE user_id=?').run(subject.userId);for(const table of ['operation_changes','operation_user_sequences','execution_user_sequence','execution_user_fairness','execution_stage_fairness','task_restore_journal'])this.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
   restoreUser:async(subject,archive,operationId)=>this.restore(subject,archive,operationId),
  };}
  private async restore(subject:UserDataSubject,archive:UserExport,operationId:string){

@@ -19,25 +19,32 @@ A candidate stores a host-authored receipt with the policy, decision, draft run,
 
 A useful recovery case is a successful model review followed by a failed database commit: the candidate and checkpoint roll back together, and retrying the same durable job may reuse the verified review without paying for another review call. All result and checkpoint writes still pass the execution engine's cancellation/version fence.
 
-Extraction drafts have a separate durable stage store. After host validation and before review, a draft is saved against its exact batch, semantic request, complete originals, model configuration and policy/skill identity. Review timeout or shutdown retains that draft for revalidation, but an uncertain issued review cannot repeat without confirmation. Review timeouts do not split extraction ranges. Drafts are private, unindexed, absent from job API payloads and excluded from Memory until review and commit succeed. Each vault retains at most 128 drafts/8 MiB, with a 512 KiB per-draft bound and normal storage accounting. Completion, source invalidation/deletion and job cancellation purge dependent drafts; changed inputs invalidate reuse. Eviction permits regeneration. No draft reuse creates another model usage receipt. The process-local verdict cache alone does not authorize replay after restart.
+Extraction drafts have a separate durable stage store. After host validation and before review, a draft is saved against its exact batch, semantic request, complete originals, model configuration and policy/skill identity. Review timeout or shutdown retains that draft for revalidation, while an uncertain issued review follows the bounded read-query recovery conditions below. Review timeouts do not split extraction ranges. Drafts are private, unindexed, absent from job API payloads and excluded from Memory until review and commit succeed. Each vault retains at most 128 drafts/8 MiB, with a 512 KiB per-draft bound and normal storage accounting. Completion, source invalidation/deletion and job cancellation purge dependent drafts; changed inputs invalidate reuse. Eviction permits regeneration. No draft reuse creates another model usage receipt. The process-local verdict cache alone does not authorize replay after restart.
 
 ## Scoped issued-query recovery
 
-The owner reaffirmed on 2026-10-20 that an issued Memory model query with an
-unknown outcome blocks after a disconnect, timeout or process death. Restart
-does not send a replacement. The existing task retry asks the authenticated
-owner to confirm possible repetition/charges; another account cannot confirm it.
-Confirmation preserves the old unknown journal and failed/interrupted usage,
-then resumes the same task using its original model and valid saved stages.
-It does not approve a candidate or restore revoked authority.
+The owner selected bounded automatic retries on 2026-10-21: at most two retries
+after the initial charged attempt, including eligible unknown read-model calls.
+Automatic replay requires the exact original physical callback to be proven
+quiescent, fresh account/input/model authority and remaining round budget.
+Restart, a PID disappearing, lease expiry or failed usage does not establish
+cleanup. Untracked historical calls are not backfilled or automatically swept.
+
+Replay retains the old unknown/unsettled journal and uncertain fees and records
+a separate policy authorization, never an invented owner acknowledgment. Calls
+without those prerequisites and side effects keep their original reconciliation
+or authenticated owner-retry requirements. Only an explicit owner Retry starts
+another finite round after exhaustion; it neither approves a candidate nor
+restores revoked authority. Valid saved stages and original frozen settings stay
+bound; a new retry attempt may apply the approved tier-only model snapshot.
 
 A definite HTTP rejection or a completed bounded host-validation failure settles
 the exact external issuance while retaining failed usage and no accepted output.
-These failures use ordinary explicit Memory retry. Proven non-execution retains
+These failures use the same finite failed-stage retry policy. Proven non-execution retains
 its separate accounting. An exact successful query result and its settlement
 are persisted atomically, revalidated after restart and reused without another
 model request even if the later domain save was interrupted. Successful siblings
-remain unchanged. See the [recovery decision](adr-task-recovery-and-execution-budgets.md#memory-query-outcomes-accepted-2026-10-20).
+remain unchanged. See the [recovery decision](adr-task-recovery-and-execution-budgets.md#default-bounded-task-retries-accepted-2026-10-21).
 
 ## Validation
 

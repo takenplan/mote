@@ -246,7 +246,7 @@ export class Actions {
       ORDER BY e.updated_at DESC`).all().find(row=>currentJobs.has(String(row.key)));
     return {configured:this.configured(),running:!!this.running,jobs:[...counts].sort(([a],[b])=>a.localeCompare(b)).map(([status,count])=>({status,count})),error:failure?moteText("日程分析未完成，可能是模型不可用、证据更新或结果未通过校验。可重试失败批次。"):null,...(failure?{errorCode:String(failure.error),availableAt:Number(failure.available_at)}:{})};
   }
-  retry(){for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale','cancelled')").all())this.engine.retry(String(row.id));}
+  retry(){for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale','cancelled')").all())this.engine.retry(String(row.id),true);}
   tick(){if(this.closed||this.running||!this.settings().enabled)return this.running??Promise.resolve();this.running=this.execute().finally(()=>{this.running=undefined;});return this.running;}
   private async execute(){
     this.discover();if(!this.configured())return;

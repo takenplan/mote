@@ -35,7 +35,7 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
         const child=memoryPipeline.get(window.checkpoint);
         // Only this exact durable backlink authorizes restarting the failed
         // checkpoint; unrelated jobs retain their terminal receipts.
-        if(child.status==='failed'&&child.importJobId==='lifecycle:'+window.id){const accepted=memoryPipeline.acceptRetry(child.id);void accepted.completion.catch(()=>{});}
+        if(child.status==='failed'&&child.importJobId==='lifecycle:'+window.id){const accepted=memoryPipeline.acceptRetry(child.id,true);void accepted.completion.catch(()=>{});}
       }
       if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())return;
       const rows=store.db.prepare("SELECT e.id,j.json FROM operation_parents p JOIN execution_steps e ON e.operation_id=p.child_id JOIN processing_jobs j ON j.id=e.id WHERE p.parent_id=? AND e.kind='context-dag.semantic' AND e.state IN ('failed','blocked')").all('workflow:lifecycle:'+window.id) as {id:string;json:string}[];
@@ -45,7 +45,7 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
         const job=JSON.parse(row.json) as {processor?:string;config?:{artifactId?:string;modelFingerprint?:string};artifactInputs?:{id:string;revision:string}[]};
         const artifactId=job.config?.artifactId,source=job.artifactInputs?.[0];
         if(job.processor!=='mote.segment-understanding'||!artifactId||!inputs.has(artifactId)||job.config?.modelFingerprint!==fingerprint||!source||source.id!==artifactId||store.archive.revision(source.id)!==source.revision)continue;
-        memoryPipeline.engine.retry(row.id);
+        memoryPipeline.engine.retry(row.id,true);
       }
     });
     void lifecycle.tick().catch(()=>{});return reply.code(202).send(result);
@@ -113,7 +113,7 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
   app.post('/api/memory-jobs/:id/pause',async req=>memoryPipeline.pause(jobId(req.params)));
   app.post('/api/memory-jobs/:id/resume',async req=>{const id=jobId(req.params);memoryPipeline.resume(id);return memoryPipeline.get(id);});
   app.post('/api/memory-jobs/:id/cancel',async req=>memoryPipeline.cancel(jobId(req.params)));
-  app.post('/api/memory-jobs/:id/retry',async(req,reply)=>{const accepted=memoryPipeline.acceptRetry(jobId(req.params));void accepted.completion.catch(()=>{});return reply.code(202).send(accepted.job);});
+  app.post('/api/memory-jobs/:id/retry',async(req,reply)=>{const accepted=memoryPipeline.acceptRetry(jobId(req.params),true);void accepted.completion.catch(()=>{});return reply.code(202).send(accepted.job);});
   app.post('/api/memories/extract',async req=>{
     const execute=async()=>{
     memoryPipeline.assertNewManualWork();

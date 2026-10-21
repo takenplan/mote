@@ -248,7 +248,7 @@ test('an actual killed host restores only the persisted owner and completed chec
  const replacement=await processHost(t,f.directory,false);await until(()=>replacement.started.length===1,'replacement process did not restore the task');assert.equal(replacement.started[0].owner,f.a.userId);assert.equal(replacement.started[0].reused,true);
  let result:any;const deadline=Date.now()+8000;
  do{const response=await replacement.call({method:'GET',url:'/api/tasks/'+task.id,headers:headers(f.alice.token)});assert.equal(response.statusCode,200,response.body);result=JSON.parse(response.body);if(result.state==='succeeded')break;assert.ok(Date.now()<deadline,'restored task did not finish');await delay(5);}while(true);
- assert.deepEqual(result.result,{owner:f.a.userId,completedStageCount:1});assert.deepEqual(result.progress,{owner:f.a.userId,reused:true});assert.equal(result.attempts,1);
+ assert.deepEqual(result.result,{owner:f.a.userId,completedStageCount:1});assert.deepEqual(result.progress,{owner:f.a.userId,reused:true});assert.equal(result.attempts,2);
  const foreign=await replacement.call({method:'GET',url:'/api/tasks/'+task.id,headers:headers(f.bob.token)});assert.equal(foreign.statusCode,404);
  replacement.child.kill('SIGKILL');await replacement.exited;
 });

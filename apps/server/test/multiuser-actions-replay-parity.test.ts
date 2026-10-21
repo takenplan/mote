@@ -81,7 +81,11 @@ test('an in-flight model result is fenced across re-enable and resumes only thro
  const calls=f.requests.length;
  await settings(f,f.a,false);await settings(f,f.a,true,'Asia/Shanghai');await watchSettled(f,f.a);
  assert.equal((await f.ok(f.a.token,'/api/tasks/'+unit.id)).state,'cancelled');
- release.resolve();await waitForState(()=>f.ok(f.a.token,'/api/actions'),page=>!page.progress.running,'retired model run settled');
+ const physical=f.read(db=>db.prepare("SELECT * FROM task_physical_calls WHERE task_id=? AND state='active'").all(unit.id));assert.equal(physical.length,1,'the negative retry must hit the actual original active callback');
+ const retryHistory=()=>f.read(db=>({rounds:db.prepare('SELECT * FROM execution_retry_rounds WHERE step_id=? ORDER BY id').all(unit.id),policy:db.prepare('SELECT * FROM execution_retry_policies WHERE step_id=?').get(unit.id),replays:db.prepare('SELECT p.* FROM task_external_policy_replays p JOIN task_external_calls c ON c.issuance_id=p.issuance_id WHERE c.task_id=? ORDER BY p.id').all(unit.id),confirmations:db.prepare('SELECT a.* FROM task_external_retry_confirmations a JOIN task_external_calls c ON c.issuance_id=a.issuance_id WHERE c.task_id=? ORDER BY a.confirmation_id').all(unit.id)})),priorHistory=retryHistory();
+ const beforeRetry=await f.ok(f.a.token,'/api/tasks/'+unit.id),rejected=await f.request(f.a.token,'/api/actions/retry','POST',{});assert.equal(rejected.statusCode,409);assert.equal(rejected.json().error,'physical_cleanup_pending');assert.deepEqual(await f.ok(f.a.token,'/api/tasks/'+unit.id),beforeRetry,'a rejected retry cannot renew the round');assert.equal(f.requests.length,calls);assert.deepEqual(retryHistory(),priorHistory,'a rejected retry cannot rewrite policy, confirmation or round history');
+ release.resolve();await waitForState(async()=>f.read(db=>db.prepare('SELECT * FROM task_physical_calls WHERE id=?').get(physical[0].id)),row=>row?.state==='quiescent'&&Number(row.quiescent_at)>0,'exact original model callback cleanup completed');
+ await waitForState(()=>f.ok(f.a.token,'/api/actions'),page=>!page.progress.running,'retired model run settled');
  assert.equal(f.requests.length,calls);assert.equal((await f.ok(f.a.token,'/api/actions')).items.length,0);
  f.scripts.delete('A');await f.ok(f.a.token,'/api/actions/retry','POST',{});
  await waitForState(()=>f.ok(f.a.token,'/api/tasks/'+unit.id),task=>task.state==='succeeded','explicit retry reuses the original interrupted unit');

@@ -41,7 +41,7 @@ test('one failed branch can retry without recreating the successful artifact',as
   if(!work.units.length){await controls.execute('delegation_submit',{units:[proposal('a'),proposal('b')]});await controls.execute('delegation_yield',{});throw new AgentYieldError();}
   const failed=work.units.find(unit=>unit.status==='failed');if(failed){await controls.execute('delegation_retry',{unitId:failed.id});await controls.execute('delegation_yield',{unitIds:[failed.id]});throw new AgentYieldError();}return 'Finished';
  }});
- runtime.start({id:'retry-work',profileId:'coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'retry-work');assert.equal(work.status,'succeeded');assert.deepEqual(calls,{a:1,b:2});assert.equal(runtime.artifactMetadata(work.id).length,2);assert.equal(work.units[1].attempts,1);
+ runtime.start({id:'retry-work',profileId:'coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'retry-work');assert.equal(work.status,'succeeded');assert.deepEqual(calls,{a:1,b:2});assert.equal(runtime.artifactMetadata(work.id).length,2);assert.equal(work.units[1].attempts,2,'model retry retains the first failed attempt');
 });
 
 test('a terminal coordinator releases running child slots and retains local retry handles',async t=>{

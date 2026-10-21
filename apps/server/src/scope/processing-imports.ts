@@ -195,7 +195,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    if(taskId&&['waiting','running','succeeded'].includes(execution.forUser(context).get(taskId).state))throw conflict();
    if(job.authorizationEpoch!==context.authorizationEpoch)throw conflict();
    job.status=phase==='commit'?'importing':'queued';job.processingStatus=phase==='commit'?'saving':'archived';delete job.error;save(sql,job);
-   if(taskId)execution.forUser(context).retry(taskId);else if(phase==='commit')submit(context,job,phase);return job;
+   if(taskId)execution.forUser(context).retry(taskId,{ownerAction:true});else if(phase==='commit')submit(context,job,phase);return job;
   });if(!job.prepareTask&&job.status==='queued')await submitPrepare(context,job);return get(job.id);},
   delete:(id:string)=>{const deleted=sql.transaction(()=>{
    owner(context);const job=load(sql,id);if(active.has(identityHash([context.userId,id])))throw conflict();

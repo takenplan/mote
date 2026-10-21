@@ -56,10 +56,10 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
           cancellation:{canCancel:false,wait:null},item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:capture.provenance.mimeType??'application/octet-stream'},processing:{current:row.current_capture_id===id,saved:true,processingRequired:false,processed:false,indexed:false,index:{material:false,memory:false},derivations:[]},job:null,artifacts:[]};
       }
       const {row,ref,info,capture,status}=owned(id),taskRow=sql.get('SELECT a.task_id FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id WHERE a.user_id=$user AND e.user_id=$user AND a.original_id=? ORDER BY e.updated_at DESC,e.id LIMIT 1',String(row.id));
-      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined,error=task?.failure?.code??task?.error??null;
+      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined,error=task?.error??null;
       return {captureId:id,originalGeneration:fileOriginalGeneration(sql,ref),sourceId:info.sourceId,originalRef:ref,sizeBytes:info.totalBytes,sha256:info.hash,hasOriginal:info.available!==false,originMissing:!!row.origin_missing,
         rawArtifactId:service.fileStageIds(ref).raw,cancellation:service.cancellation(ref),calendarLink:status.current?service.fileCalendar(ref):undefined,item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:info.mime},processing:status,
-        job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error,execution:executionEnvelope({state:task.state,attempts:task.attempts,errorCode:error})}:null,
+        job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error,execution:executionEnvelope({...task,errorCode:error,failureCategory:task.failure?.code===error?task.failure.category:undefined})}:null,
         artifacts:[...(diarization?[{...diarization,kind:'diarization',complete:true}]:[]),...(status.artifactId?[{id:status.artifactId,kind:'transcript',complete:true}]:[]),...status.derivations.map(x=>({id:x.artifactId,kind:x.kind==='turns'?'dialogue':x.kind,complete:true}))]};
     };
     return {owned,entry,detail,

@@ -12,7 +12,7 @@ type ProcessingFile={
  rawArtifactId?:string;
  item?:{mimeType?:string};
  artifacts?:{id:string;kind:string}[];
- cancellation?:{canCancel:boolean;wait:'running'|'unknown'|null};
+ cancellation?:{confirmUnknownRequired?:boolean;canCancel:boolean;wait:'running'|'unknown'|null};
  job:null|{state:string;summary_state:string};
  processingPolicy?:{capabilities?:{dialogue:boolean;summary:boolean};applied?:{profile?:{summarize?:boolean}};current?:{profile?:{summarize?:boolean}}};
 };
@@ -46,7 +46,7 @@ function FileProcessingControlView({api,id,mode='detail',disabled=false,onChange
   if(!alive.current||request.current||pending.current||disabled||loading||readError||!file?.job)return;
   if(kind==='cancel'&&!file.cancellation?.canCancel)return;
   if(kind==='retry'&&file.cancellation?.wait==='running')return;
-  const confirmUnknown=kind==='retry'&&file.cancellation?.wait==='unknown';
+  const confirmUnknown=kind==='retry'&&file.cancellation?.wait==='unknown'&&file.cancellation.confirmUnknownRequired!==false;
   if(confirmUnknown&&!unknownConfirmed){setUnknownStage({stage,scoped});return;}
   let diarization:{artifactId:string;options:FileDiarizationOptions}|undefined;
   if(scoped){const artifactId=file.rawArtifactId??file.artifacts?.find(a=>a.kind==='transcript')?.id;if(!artifactId)return;diarization={artifactId,options:{processor:model as FileDiarizationOptions['processor'],speakerCount:countMode==='exact'?Number(exact):null,range:countMode==='range'?{min:Number(minimum),max:Number(maximum)}:null}};}

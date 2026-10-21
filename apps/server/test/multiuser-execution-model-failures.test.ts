@@ -44,7 +44,7 @@ for(const kind of ['provider','execution'] as const)test(`real M04 preserves gen
  })));
  const a=await f.submit(f.a.token),b=await f.submit(f.b.token);await f.execution.engine.drain([a.id,b.id]);
  const failed=await f.task(f.a.token,a.id),other=await f.task(f.b.token,b.id);
- assert.equal(calls.get(f.a.userId),4);assert.equal(failed.state,'failed');assert.equal(failed.attempts,4);assert.equal(failed.failure.category,'transient');assert.equal(failed.failure.code,kind==='provider'?'provider_network':'generated_transport');assert.equal(failed.failure.attempt,4);
+ assert.equal(calls.get(f.a.userId),3);assert.equal(failed.state,'failed');assert.equal(failed.attempts,3);assert.equal(failed.failure.category,'transient');assert.equal(failed.failure.code,kind==='provider'?'provider_network':'generated_transport');assert.equal(failed.failure.attempt,3);
  assert.equal(other.state,'succeeded');assert.deepEqual(other.result,{owner:f.b.userId});assert.equal(calls.get(f.b.userId),1);
  assert.equal((await f.request(f.a.token,'/api/usage')).json().items.length,0);const receipts=(await f.request(f.b.token,'/api/usage')).json().items;assert.equal(receipts.length,1);assert.equal(receipts[0].attribution.operationId,b.operationId);
 });

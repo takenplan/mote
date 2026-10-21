@@ -214,7 +214,12 @@ export class ScopedRecordingAdapter {
  }
  async retry(){
   await this.init();this.assertCollection(this.saved.epoch);if(!this.tasks?.retry)throw new ConnectorError('recording_scheduler_unavailable',503);
-  for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:'))for(const phase of ['metadata','transcript','media'] as const){const key=row.value.jobs[phase];if(!key)continue;const job=this.job(key);if(job.taskId&&['failed','blocked'].includes(this.tasks.get(job.taskId).state)){if(this.tasks.parentId&&!job.requests.includes(this.tasks.parentId))this.ledger.set('recording-jobs',key,{...job,requests:[...job.requests,this.tasks.parentId]});this.tasks.retry(job.taskId);}}
+  if(this.tasks.retryGroup?.read()!==undefined)return this.status();
+  const selected:{key:string;taskId:string}[]=[];
+  for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:'))for(const phase of ['metadata','transcript','media'] as const){const key=row.value.jobs[phase];if(!key)continue;const job=this.job(key);if(job.taskId&&['failed','blocked'].includes(this.tasks.get(job.taskId).state))selected.push({key,taskId:job.taskId});}
+  const attach=()=>{this.assertCollection(this.saved.epoch);for(const item of selected){const job=this.job(item.key);if(job.taskId!==item.taskId||job.epoch!==this.saved.epoch)throw new ConnectorError('recording_job_binding_invalid',409);if(this.tasks!.parentId&&!job.requests.includes(this.tasks!.parentId))this.ledger.set('recording-jobs',item.key,{...job,requests:[...job.requests,this.tasks!.parentId]});}};
+  if(this.tasks.retryGroup)this.tasks.retryGroup.commit(selected.map(item=>item.taskId),attach);
+  else{attach();for(const item of selected)this.tasks.retry(item.taskId);}
   return this.status();
  }
  async close(){await this.provider.close?.();await Promise.allSettled([...this.pending]);await this.file.flush();}

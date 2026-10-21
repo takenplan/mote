@@ -10,5 +10,5 @@ import type {ModelUsageStart,ModelUsageMeter} from './model-usage.js';
 export type TaskModelLease=ModelLease;
 export type TaskModelConfiguration=Pick<UserConfigurationService,'lease'|'restoreLease'>;
 export type TaskModelUsage={status:'completed'|'failed';durationMs:number;tokens?:TokenUsage};
-export type TaskModelHost=Pick<Configurations,'assertLease'|'withModel'|'startUsage'|'recordUsage'|'restoreLease'|'codex'>;
-export type TaskModelRun={codex?:AgentOptions['codex'];lease:TaskModelLease;withModel:<T>(work:(settings:Readonly<ModelSettings>,configuration:Readonly<ConfigDocument>)=>Promise<T>)=>Promise<T>;startUsage:(options?:ModelUsageStart)=>ModelUsageMeter;recordUsage:(result:TaskModelUsage)=>unknown};
+export type TaskModelHost=Pick<Configurations,'assertLease'|'withModel'|'startUsage'|'recordUsage'|'restoreLease'|'deriveRetryLease'|'codex'>;
+export type TaskModelRun={codex?:AgentOptions['codex'];lease:TaskModelLease;withModel:<T>(work:(settings:Readonly<ModelSettings>,configuration:Readonly<ConfigDocument>)=>Promise<T>,options?:{recovery:'read-query'})=>Promise<T>;startUsage:(options?:ModelUsageStart)=>ModelUsageMeter;recordUsage:(result:TaskModelUsage)=>unknown};

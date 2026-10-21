@@ -124,7 +124,7 @@ test('a process exit retains the account grant, shared lease and next user turn 
  const afterLease=Number(db.prepare('SELECT lease_until FROM execution_steps WHERE id=?').get(a)!.lease_until)+1,restarted=open(()=>afterLease),order:string[]=[];
  restarted.engine.register({...base,execute:async step=>{order.push(step.ownership!.userId);return null;}});
  await restarted.engine.drain([a,b]);assert.deepEqual(order,['b','a'],'restart retains the other user next fair turn');
- assert.deepEqual(restarted.engine.get(a)!.ownership,owner('a'));assert.equal(restarted.engine.get(a)!.attempts,1);assert.equal(restarted.engine.get(b)!.attempts,1);
+ assert.deepEqual(restarted.engine.get(a)!.ownership,owner('a'));assert.equal(restarted.engine.get(a)!.attempts,2);assert.equal(restarted.engine.get(b)!.attempts,1);
  assert.equal(db.prepare('SELECT next FROM execution_sequence WHERE pool=?').get(base.pool)!.next,3);
 });
 

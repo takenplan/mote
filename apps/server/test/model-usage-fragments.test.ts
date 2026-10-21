@@ -42,9 +42,10 @@ test('another live host cannot finalize fragments; shutdown retains partial cumu
 test('safe Agent failures retain fixed reasons and host identities without provider prose or structural error authority',()=>{
  const secret='GENERATED_PRIVATE_ORIGINAL_AND_CREDENTIAL';
  const error=safeAgentFailure(new AgentResponseError(secret,'host_validation'),{jobId:'generated-job',batchId:'generated-batch',phase:'extract',causeCode:'quote_not_found'});
- assert.equal((error as any).code,'agent_host_validation');assert.equal((error as any).category,'permanent');assert.ok(!JSON.stringify(error).includes(secret));assert.ok(!String(error).includes(secret));assert.deepEqual(failureContext(error),{jobId:'generated-job',batchId:'generated-batch',phase:'extract',causeCode:'quote_not_found'});
+ assert.equal((error as any).code,'agent_host_validation');assert.equal((error as any).category,'transient');assert.ok(!JSON.stringify(error).includes(secret));assert.ok(!String(error).includes(secret));assert.deepEqual(failureContext(error),{jobId:'generated-job',batchId:'generated-batch',phase:'extract',causeCode:'quote_not_found'});
  assert.equal((safeAgentFailure(new AgentTimeoutError()) as any).code,'agent_request_timeout');
  assert.equal((safeAgentFailure({name:'AgentResponseError',reason:secret,message:secret}) as any).code,'agent_internal_error');
+ assert.equal((safeAgentFailure({name:'AgentResponseError',reason:'host_validation'}) as any).category,'permanent','a structural lookalike cannot gain typed retry authority');
 });
 
 test('an existing meter can interrupt only its retained fragment after revocation without late samples or deleted-row resurrection',t=>{

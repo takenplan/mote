@@ -1828,16 +1828,20 @@
     "status": "implemented",
     "surfaces": [
       "table:task_external_calls",
+      "table:task_external_policy_replays",
       "table:task_external_retry_confirmations",
       "table:task_lifecycle_state",
+      "table:task_model_attempts",
       "table:task_model_resources",
+      "table:task_owner_retry_groups",
+      "table:task_owner_retry_targets",
       "table:task_restore_journal",
       "table:user_tasks",
-      "task:this.engine.enqueue:privateOperationId(grant.userId,operation)",
       "task:this.engine.enqueue:operationId",
+      "task:this.engine.enqueue:privateOperationId(grant.userId,operation)",
       "task:this.engine.register:kind:handler.kind"
     ],
-    "notes": "M05 persists only host-derived M04 physical resource keys for the admitted task; resource metadata cannot choose another owner or authorize model access."
+    "notes": "M05 scopes immutable model attempt lineage, distinct policy replay events and explicit owner retry command groups to the genuine owner. Unknown history and physical cleanup facts never grant private publication or fabricate owner acknowledgments."
   },
   "apps/server/src/scope/task-routes.ts": {
     "scope": "user",
@@ -2649,5 +2653,26 @@
       "table:lifecycle_future_scopes",
       "task:execution.register:{kind,pool:kind,concurrency:()=>configuration.instance.current<{agentConcurrency:number}>('execution').agentConcurrency,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>input.parse(raw),resources:()=>[{scope:'user',key:kind}],authorizeInput:(context,raw)=>{const row=this.sql(context).get('SELECT restoration_id,epoch FROM lifecycle_future WHERE user_id=$user');if(!row||row.restoration_id!==raw.restorationId||row.epoch!==context.authorizationEpoch)throw new PrivateDataError('conflict',409);},execute:run=>this.resume(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','restore_future_requires_attention')}"
     ]
+  },
+  "apps/server/src/execution-attempts.ts": {
+    "scope": "mixed",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:execution_attempt_sessions",
+      "table:execution_retry_policies",
+      "table:execution_retry_rounds"
+    ],
+    "notes": "M05 stores durable finite logical attempt sessions and owner retry rounds, keyed only by existing task IDs; these counters contain no evidence, credentials or publication authority."
+  },
+  "apps/server/src/scope/task-physical-calls.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:task_physical_calls",
+      "table:task_physical_resources"
+    ],
+    "notes": "M05 host-only exact task/user/deployment/incarnation/attempt/snapshot ownership receipts hold physical resource barriers through full cleanup. Private ALS owner tokens are never model/request inputs or portable capabilities."
   }
 }

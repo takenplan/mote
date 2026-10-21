@@ -7,4 +7,6 @@ export interface RecordingTaskPorts {
  get(id:string):RecordingTaskView;
  submit?(phase:RecordingPhase,key:string,onAdmitted:(id:string)=>void):Promise<RecordingTaskView>;
  retry?(id:string):RecordingTaskView;
+ /** Only a genuine explicit owner command supplies this atomic one-shot group. */
+ retryGroup?:{read:()=>readonly string[]|undefined;commit:(ids:readonly string[],attach:()=>void)=>void};
 }

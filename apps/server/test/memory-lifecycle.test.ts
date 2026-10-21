@@ -8,7 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {AgentTimeoutError} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
 import {Store} from '../src/store.js';
-import {ExecutionEngine} from '../src/execution-engine.js';
+import {ExecutionEngine,ExecutionFailure} from '../src/execution-engine.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
 import {MemoryLifecycle} from '../src/memory-lifecycle.js';
@@ -88,6 +88,59 @@ test('consolidation model timeout remains visible across restart without changin
    assert.equal(calls,2);assert.equal(completed.cursor,failed.active!.through);assert.equal(completed.error,undefined);assert.equal(completed.retryAt,undefined);assert.equal(completed.failures,0);assert.equal(completed.active,undefined);
   }finally{await lifecycle.close();await engine?.close();}
  });
+});
+
+test('shared lifecycle consumes a committed failure once across the window-save crash gap; capacity preserves its count',async t=>{
+ const store=fixture(t);let now=Date.now(),calls=0;const firstAt=now,engine=new ExecutionEngine(store,()=>now);
+ let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);
+ const register=()=>lifecycle.register({id:'consolidation',version:'fixture',stream:'memory',async run(){calls++;if(calls===2)throw new ExecutionFailure('waiting','generated_capacity',1000);throw new AgentTimeoutError();}});
+ try{
+  register();lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});
+  store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+  await lifecycle.tick();assert.equal(calls,1);await lifecycle.close();
+  // Exact crash state: engine transaction committed, window failure update did not.
+  const raw=JSON.parse(String(store.db.prepare("SELECT json FROM memory_lifecycle_state WHERE id='consolidation'").get()!.json));
+  raw.failures=0;delete raw.retryAt;delete raw.error;delete raw.countedFailure;
+  store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='consolidation'").run(JSON.stringify(raw));
+  now=firstAt+50000;lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();
+  await lifecycle.tick();let view=lifecycle.view().extensions[0];assert.equal(calls,1);assert.equal(view.failures,1);assert.equal(view.retryAt,firstAt+120000);
+  for(let i=0;i<3;i++){now+=1000;await lifecycle.tick();assert.equal(lifecycle.view().extensions[0].retryAt,firstAt+120000);assert.equal(lifecycle.view().extensions[0].failures,1);assert.equal(calls,1);}
+  await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();
+  now=firstAt+120000;await lifecycle.tick();view=lifecycle.view().extensions[0];assert.equal(calls,2);assert.equal(view.failures,1);assert.equal(view.error,'generated_capacity');assert.equal(view.retryAt,now+1000);
+  now+=1000;await lifecycle.tick();view=lifecycle.view().extensions[0];assert.equal(calls,3);assert.equal(view.failures,2);assert.equal(view.retryAt,now+240000);
+ }finally{await lifecycle.close();await engine.close();}
+});
+
+test('shared lifecycle crash recovery cannot shorten a durable provider Retry-After',async t=>{
+ const store=fixture(t);let now=Date.now(),calls=0;const firstAt=now,engine=new ExecutionEngine(store,()=>now);
+ let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);
+ const register=()=>lifecycle.register({id:'consolidation',version:'fixture',stream:'memory',async run(){calls++;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:600000});}});
+ try{
+  register();lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+  await lifecycle.tick();await lifecycle.close();
+  const raw=JSON.parse(String(store.db.prepare("SELECT json FROM memory_lifecycle_state WHERE id='consolidation'").get()!.json));raw.failures=0;delete raw.retryAt;delete raw.error;delete raw.countedFailure;
+  store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='consolidation'").run(JSON.stringify(raw));
+  now=firstAt+50000;lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();await lifecycle.tick();assert.equal(lifecycle.view().extensions[0].failures,1);assert.equal(lifecycle.view().extensions[0].retryAt,firstAt+600000);
+  for(const delta of [120000,240000,599999]){now=firstAt+delta;await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,firstAt+600000);}
+  await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();await lifecycle.tick();assert.equal(calls,1);
+  now=firstAt+600000;await lifecycle.tick();assert.equal(calls,2);assert.equal(lifecycle.view().extensions[0].failures,2);assert.equal(lifecycle.view().extensions[0].retryAt,now+600000);
+ }finally{await lifecycle.close();await engine.close();}
+});
+
+test('a long provider deadline crosses independent engine and lifecycle clocks without moving after a crash',async t=>{
+ const store=fixture(t);let engineNow=1_900_000_000_000,domainNow=1000,calls=0;const engineStart=engineNow,domainStart=domainNow,engine=new ExecutionEngine(store,()=>engineNow);
+ let lifecycle=new MemoryLifecycle(store,()=>true,()=>domainNow,engine);
+ const register=()=>lifecycle.register({id:'consolidation',version:'fixture',stream:'memory',async run(){calls++;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:600000});}});
+ try{
+  register();lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+  await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);await lifecycle.close();
+  const raw=JSON.parse(String(store.db.prepare("SELECT json FROM memory_lifecycle_state WHERE id='consolidation'").get()!.json));raw.failures=0;delete raw.retryAt;delete raw.error;delete raw.countedFailure;
+  store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='consolidation'").run(JSON.stringify(raw));
+  engineNow=engineStart+50000;domainNow=domainStart+50000;lifecycle=new MemoryLifecycle(store,()=>true,()=>domainNow,engine);register();await lifecycle.tick();
+  assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].failures,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);
+  for(const elapsed of [120000,240000,599999]){engineNow=engineStart+elapsed;domainNow=domainStart+elapsed;await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,domainStart+600000);}
+  engineNow=engineStart+600000;domainNow=domainStart+600000;await lifecycle.tick();assert.equal(calls,2);assert.equal(lifecycle.view().extensions[0].failures,2);assert.equal(lifecycle.view().extensions[0].retryAt,domainNow+600000);
+ }finally{await lifecycle.close();await engine.close();}
 });
 
 test('480 originals across six months replay all current segments; FTS finds old scoped Chinese/English; pagination and deletion stay correct',async t=>{

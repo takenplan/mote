@@ -219,7 +219,7 @@ export class MemoryPipeline {
       for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
     }
     this.recover();
-    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
+    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
       validate:step=>this.validateStep(step),validateGrant:step=>{try{const job=this.storedJob(String(step.input.jobId));if(['cancelled','paused'].includes(job.status))return false;this.assertAutomatic(job);return true;}catch{return false;}},admit:step=>{
         const job=this.storedJob(String(step.input.jobId));
@@ -771,10 +771,11 @@ export class MemoryPipeline {
     const availableAt=Number(delayed?.at)||0;
     if(availableAt>Date.now())throw new ProviderFailure({category:'transient',code:typeof delayed?.code==='string'?delayed.code:'provider_unavailable',retryAfterMs:availableAt-Date.now()});
   }
-  async retry(id:string):Promise<MemoryJobDetail> {return this.acceptRetry(id).completion;}
+  /** Existing explicit owner command; delegated continuations pass false. */
+  async retry(id:string,ownerAction=true):Promise<MemoryJobDetail> {return this.acceptRetry(id,ownerAction).completion;}
   /** Admission is synchronous so HTTP can reject a stale/cancelled/cooling-down
    * retry before returning 202. The accepted execution remains asynchronous. */
-  acceptRetry(id:string):{job:MemoryJobDetail;completion:Promise<MemoryJobDetail>} {
+  acceptRetry(id:string,ownerAction:boolean):{job:MemoryJobDetail;completion:Promise<MemoryJobDetail>} {
     let job=this.storedJob(id);
     this.assertRetryWindow(job);
     if(job.status==='cancelled')throw new StoreError('Cancelled memory job cannot be retried',409);
@@ -792,14 +793,15 @@ export class MemoryPipeline {
         try{this.admitBatch(job,batch);}catch{batch.status='invalidated';batch.errorCode='evidence_changed';this.saveBatch(batch);continue;}
         // This owner action authorizes another failed preparation call. Parent
         // re-entry and resource waiting alone must never reopen these children.
-        if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id));
+        if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id),ownerAction);
+        if(this.engine.get(batch.id))this.engine.retry(batch.id,ownerAction);
         batch.status='pending';delete batch.errorCode;this.saveBatch(batch);
       }
       job.status='queued';delete job.errorCode;this.saveJob(job);
       for(const plan of this.inputPlans.list(id)){
         const step=this.engine.get(plan.id);
         if(!step||!['waiting','blocked','failed'].includes(step.state)||plan.batchIds!==undefined)continue;
-        this.engine.retry(plan.id);
+        this.engine.retry(plan.id,ownerAction);
       }
       if(own)db.exec('COMMIT');
     }catch(error){if(own)db.exec('ROLLBACK');throw error;}
