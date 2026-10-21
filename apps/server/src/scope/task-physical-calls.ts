@@ -24,7 +24,23 @@ export class TaskPhysicalCalls {
  /** A genuinely scheduled task must acquire its own owner, even when its
   * scheduler was awaited from inside another task's model callback. */
  taskBoundary<T>(work:()=>T):T{return this.current.exit(work);}
- bind(step:ExecutionStep,issuance:string){const current=this.current.getStore();if(!current)return;if(current.taskId!==step.id)throw new ExecutionFailure('stale','physical_owner_invalid');const row=this.db.prepare("SELECT * FROM task_physical_calls WHERE id=? AND task_id=? AND owner_token=? AND state='active'").get(current.id,step.id,current.token);if(!row||row.issuance_id)throw new ExecutionFailure('stale','physical_owner_invalid');this.db.prepare('UPDATE task_physical_calls SET issuance_id=? WHERE id=? AND owner_token=?').run(issuance,current.id,current.token);}
+ bind(step:ExecutionStep,issuance:string,previous?:{state:string;issuance:string|null}){
+  const current=this.current.getStore();if(!current)return;
+  const invalid=()=>new ExecutionFailure('stale','physical_owner_invalid');if(current.taskId!==step.id)throw invalid();
+  const row=this.db.prepare("SELECT * FROM task_physical_calls WHERE id=? AND task_id=? AND owner_token=? AND incarnation=? AND state='active'").get(current.id,step.id,current.token,this.incarnation);
+  if(!row||row.user_id!==step.ownership?.userId||row.attempt_id!==step.attemptId)throw invalid();
+  if(!row.issuance_id){this.db.prepare('UPDATE task_physical_calls SET issuance_id=? WHERE id=? AND owner_token=?').run(issuance,current.id,current.token);return;}
+  // A serial media recipe may finish one exact request before issuing the next
+  // inside the same full callback. Keep every binding immutable; the shared
+  // cleanup capability still attests only the end of that complete callback.
+  if(row.mode!=='reconcile'||previous?.state!=='succeeded'||!previous.issuance)throw invalid();
+  const predecessor=this.receipt(previous.issuance),identity=['task_id','user_id','deployment_id','incarnation','attempt_id','owner_token','snapshot_id','mode'];
+  if(!predecessor||predecessor.state!=='active'||identity.some(key=>predecessor[key]!==row[key]))throw invalid();
+  const unsettled=this.db.prepare("SELECT 1 FROM task_physical_calls p LEFT JOIN task_external_calls c ON c.issuance_id=p.issuance_id AND c.task_id=p.task_id AND c.user_id=p.user_id WHERE p.owner_token=? AND p.incarnation=? AND p.issuance_id IS NOT NULL AND (c.state IS NULL OR c.state<>'succeeded' OR c.settled_at IS NULL) LIMIT 1").get(current.token,this.incarnation);
+  if(unsettled)throw invalid();
+  const id=randomUUID();this.db.prepare("INSERT INTO task_physical_calls VALUES(?,?,?,?,?,?,?,?,?,'active',?,?,NULL)").run(id,row.task_id,row.user_id,row.deployment_id,row.incarnation,row.attempt_id,row.owner_token,row.snapshot_id,row.mode,issuance,Date.now());
+  this.db.prepare('INSERT INTO task_physical_resources SELECT ?,resource_key FROM task_physical_resources WHERE call_id=?').run(id,current.id);
+ }
  async run<T>(step:ExecutionStep,deploymentId:string,snapshotId:string,mode:ModelRecoveryMode,admit:<V>(write:()=>V)=>V,work:()=>Promise<T>):Promise<T>{
   const nested=this.current.getStore();
   if(nested){const owner=this.db.prepare("SELECT * FROM task_physical_calls WHERE id=? AND owner_token=? AND incarnation=? AND state='active'").get(nested.id,nested.token,this.incarnation);if(!owner||nested.taskId!==step.id||owner.task_id!==step.id||owner.user_id!==step.ownership!.userId||owner.deployment_id!==deploymentId||owner.snapshot_id!==snapshotId||owner.mode!==mode||owner.attempt_id!==step.attemptId)throw new ExecutionFailure('stale','physical_owner_invalid');return work();}
@@ -35,8 +51,9 @@ export class TaskPhysicalCalls {
   finally{
    // Deliberately no grant assertion here: this records only local cleanup,
    // even after cancellation. It cannot settle an issuance or publish a task.
-   this.db.prepare("UPDATE task_physical_calls SET state='quiescent',quiescent_at=? WHERE id=? AND owner_token=? AND incarnation=? AND state='active'").run(Date.now(),id,token,this.incarnation);
-   this.db.prepare("DELETE FROM task_physical_calls WHERE id=? AND owner_token=? AND state='quiescent' AND NOT EXISTS(SELECT 1 FROM user_tasks WHERE task_id=task_physical_calls.task_id)").run(id,token);
+   const cohort=[step.id,step.ownership!.userId,deploymentId,this.incarnation,attemptId,token,snapshotId,mode];
+   this.db.prepare("UPDATE task_physical_calls SET state='quiescent',quiescent_at=? WHERE task_id=? AND user_id=? AND deployment_id=? AND incarnation=? AND attempt_id=? AND owner_token=? AND snapshot_id=? AND mode=? AND state='active'").run(Date.now(),...cohort);
+   this.db.prepare("DELETE FROM task_physical_calls WHERE task_id=? AND user_id=? AND deployment_id=? AND incarnation=? AND attempt_id=? AND owner_token=? AND snapshot_id=? AND mode=? AND state='quiescent' AND NOT EXISTS(SELECT 1 FROM user_tasks WHERE task_id=task_physical_calls.task_id)").run(...cohort);
   }
  }
 }
