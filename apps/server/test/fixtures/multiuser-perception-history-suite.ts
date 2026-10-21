@@ -29,6 +29,6 @@ async function upload(f:Fixture,token:string,id:string,at:string,sourceId='same-
 
 const read=(f:Fixture,token:string,id:string)=>f.checked(token,'/api/files/'+id);
 
-async function done(f:Fixture,token:string,id:string){let detail:any;await waitForScopedState(async()=>{detail=await read(f,token,id);return detail.job?.state==='succeeded';},()=>JSON.stringify(detail),12000);return detail;}
+async function done(f:Fixture,token:string,id:string,timeoutMs=12000){let detail:any;await waitForScopedState(async()=>{detail=await read(f,token,id);return detail.job?.state==='succeeded';},()=>JSON.stringify(detail),timeoutMs);return detail;}
 
 export {Fixture,png,settings,policy,generated,upload,read,done};

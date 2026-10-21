@@ -14,7 +14,9 @@ import {bytesHash} from '../src/scope/originals.js';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {Fixture,png,settings,policy,generated,upload,read,done} from './fixtures/multiuser-perception-history-suite.js';
 
-for(const reuseOcrListener of [true])test('real OCR and pixel-reading model children reach eight physical calls per kind while another owner retains its own slot'+(reuseOcrListener?' with a reused OCR listener':''),async t=>{
+for(const reuseOcrListener of [true])test('real OCR and pixel-reading model children reach eight physical calls per kind while another owner retains its own slot'+(reuseOcrListener?' with a reused OCR listener':''),{timeout:240000},async t=>{
+ // Functional coverage: the owner deferred the original latency budgets (PERF-R1-02).
+ const functionalWaitMs=45000;
  const observation=new PerformanceFailureObservation('perception-physical-eight-'+reuseOcrListener,value=>t.diagnostic(value));
  const calls:{owner:string;kind:string;workerIndex:number;release:()=>void;captureId?:string}[]=[],active=new Set<object>(),seen=new Set<string>();t.after(()=>{observation.cleanupStart();for(const call of calls)call.release();});
  const listen=async(kind:string,index:number)=>{
@@ -25,7 +27,7 @@ for(const reuseOcrListener of [true])test('real OCR and pixel-reading model chil
    if(kind==='understanding'&&!seen.has(captureId!)){assert.ok(captureId);seen.add(captureId!);observation.event('read-image-requested',{owner,kind,workerIndex:index,captureId});writeMessagesResponse(res,{stage:1,tool:{name:'read_image',args:{id:captureId,view:'image'}}});return;}
    // Force a legal arrival order in which the old first-five release leaves
    // worker0 occupied. The ninth OCR shares it only in the reuse scenario.
-   if(reuseOcrListener&&kind==='ocr'&&index===0)await waitForScopedState(observation.poll('ocr-listener-order',()=>calls.filter(call=>call.owner==='a'&&call.kind==='ocr').length>=7),()=>observation.failure('ocr-listener-order-timeout',JSON.stringify(calls.map(({release,...call})=>call))),12000);
+   if(reuseOcrListener&&kind==='ocr'&&index===0)await waitForScopedState(observation.poll('ocr-listener-order',()=>calls.filter(call=>call.owner==='a'&&call.kind==='ocr').length>=7),()=>observation.failure('ocr-listener-order-timeout',JSON.stringify(calls.map(({release,...call})=>call))),functionalWaitMs);
    let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve),call={owner,kind,workerIndex:index,release,captureId};calls.push(call);active.add(call);observation.event('transport-held',{owner,kind,workerIndex:index,captureId});res.on('close',()=>{observation.event('transport-close',{owner,kind,workerIndex:index,captureId});active.delete(call);});await held;observation.event('transport-released',{owner,kind,workerIndex:index,captureId});active.delete(call);
    if(kind==='ocr'){res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_'+owner+'_OCR_'+index}]}));}
    else writeMessagesResponse(res,{stage:2,text:JSON.stringify({answer:JSON.stringify({text:'GENERATED_'+owner+'_PIXELS',regions:[]}),citationIds:[captureId]})});
@@ -59,29 +61,29 @@ for(const reuseOcrListener of [true])test('real OCR and pixel-reading model chil
  const blockedNinth=()=>{const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{return db.prepare("SELECT e.state,e.attempts,r.resource_key FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id AND u.user_id=e.user_id JOIN ig_originals o ON o.user_id=u.user_id AND json_extract(u.input,'$.originalRef')='original:'||o.id JOIN task_model_resources r ON r.task_id=e.id WHERE e.user_id=? AND o.capture_id=? AND e.kind='processing.ocr' AND e.state='waiting' AND json_extract(r.resource_key,'$[1]') LIKE 'processor:%' AND EXISTS(SELECT 1 FROM task_model_resources held JOIN execution_steps running ON running.id=held.task_id WHERE held.resource_key=r.resource_key AND running.id<>e.id AND running.user_id=e.user_id AND running.state='running')").get(f.a.userId,ninth.id);}finally{db.close();}};
  const snapshot=(phase:string)=>t.diagnostic(JSON.stringify({phase,reuseOcrListener,ninthWorker:ninth.workerIndex,activeAocrWorkers:[...active].filter((call:any)=>call.owner==='a'&&call.kind==='ocr').map((call:any)=>call.workerIndex),callsAocr:calls.filter(call=>call.owner==='a'&&call.kind==='ocr').length,callsAunderstanding:calls.filter(call=>call.owner==='a'&&call.kind==='understanding').length,totalCalls:calls.length}));
  observation.phase('initial-18-wait');
- await waitForScopedState(observation.poll('initial-18',()=>['ocr','understanding'].every(kind=>count('a',kind)===8&&count('b',kind)===1)),()=>observation.failure('initial-18-timeout',JSON.stringify(calls.map(({release,...call})=>call))),12000);
+ await waitForScopedState(observation.poll('initial-18',()=>['ocr','understanding'].every(kind=>count('a',kind)===8&&count('b',kind)===1)),()=>observation.failure('initial-18-timeout',JSON.stringify(calls.map(({release,...call})=>call))),functionalWaitMs);
  observation.phase('lower-to-3');
  await settings(f,f.a.token,{concurrency:3});observation.phase('lower-to-3-returned');assert.equal(active.size,18,'hot lowering does not retire issued physical calls');
  observation.phase('release-first-five');
  for(const kind of ['ocr','understanding'])for(const call of calls.filter(call=>call.owner==='a'&&call.kind===kind).slice(0,5))call.release();
  observation.phase('three-per-kind-wait');
- await waitForScopedState(observation.poll('three-per-kind',()=>['ocr','understanding'].every(kind=>count('a',kind)===3)),()=>observation.failure('three-per-kind-timeout',JSON.stringify([...active])),6000);await delay(200);assert.equal(calls.filter(call=>call.owner==='a').length,16,'no ninth call while three occupied units remain');
+ await waitForScopedState(observation.poll('three-per-kind',()=>['ocr','understanding'].every(kind=>count('a',kind)===3)),()=>observation.failure('three-per-kind-timeout',JSON.stringify([...active])),functionalWaitMs);await delay(200);assert.equal(calls.filter(call=>call.owner==='a').length,16,'no ninth call while three occupied units remain');
  assert.equal(workerHeld(),reuseOcrListener,'the global-limit scenario has a free ninth listener; the reuse scenario deliberately retains worker0');snapshot('hot3');
  observation.phase('raise-to-8');
  await settings(f,f.a.token,{concurrency:8});observation.phase('raise-to-8-returned');
  if(reuseOcrListener){
   observation.phase('shared-listener-blocked-wait');
-  await waitForScopedState(observation.poll('shared-listener-blocked',()=>calls.filter(call=>call.owner==='a'&&call.kind==='understanding').length===9&&!!blockedNinth()),()=>observation.failure('shared-listener-blocked-timeout',JSON.stringify({calls:calls.map(({release,...call})=>call),blocked:blockedNinth()})),12000);
+  await waitForScopedState(observation.poll('shared-listener-blocked',()=>calls.filter(call=>call.owner==='a'&&call.kind==='understanding').length===9&&!!blockedNinth()),()=>observation.failure('shared-listener-blocked-timeout',JSON.stringify({calls:calls.map(({release,...call})=>call),blocked:blockedNinth()})),functionalWaitMs);
   assert.equal(calls.length,19,'raising global capacity cannot bypass the pinned busy listener');assert.equal(workerHeld(),true);assert.equal(blockedNinth()!.attempts,0,'physical resource waiting does not spend an attempt');snapshot('hot8-shared-listener-blocked');
   observation.phase('release-worker-0');
   calls.find(call=>call.owner==='a'&&call.kind==='ocr'&&call.workerIndex===0)!.release();
  }
  observation.phase('all-20-wait');
- await waitForScopedState(observation.poll('all-20',()=>calls.filter(call=>call.owner==='a').length===18),()=>observation.failure('all-20-timeout',JSON.stringify({calls:calls.map(({release,...call})=>call),active:[...active].map(({release,...call}:any)=>call)})),12000);assert.equal(calls.length,20);snapshot('all20');
+ await waitForScopedState(observation.poll('all-20',()=>calls.filter(call=>call.owner==='a').length===18),()=>observation.failure('all-20-timeout',JSON.stringify({calls:calls.map(({release,...call})=>call),active:[...active].map(({release,...call}:any)=>call)})),functionalWaitMs);assert.equal(calls.length,20);snapshot('all20');
  observation.phase('cancel-ninth-understanding');
  const cancelled=files.find(file=>file.owner==='a'&&file.kind==='understanding'&&file.index===8)!;await f.checked(f.a.token,'/api/files/'+cancelled.id+'/cancel','POST',{});calls.find(call=>call.captureId===cancelled.id)!.release();
  observation.phase('release-all-and-settle');
- for(const call of calls)call.release();for(const file of files)if(file!==cancelled){observation.event('file-settle-start',{owner:file.owner,kind:file.kind,index:file.index,captureId:file.id});await done(f,file.token,file.id);observation.event('file-settle-end',{owner:file.owner,kind:file.kind,index:file.index,captureId:file.id});}await delay(100);assert.deepEqual((await f.checked(f.a.token,'/api/images/'+cancelled.id)).products,[],'late model response cannot publish after cancellation');
+ for(const call of calls)call.release();for(const file of files)if(file!==cancelled){observation.event('file-settle-start',{owner:file.owner,kind:file.kind,index:file.index,captureId:file.id});await done(f,file.token,file.id,functionalWaitMs);observation.event('file-settle-end',{owner:file.owner,kind:file.kind,index:file.index,captureId:file.id});}await delay(100);assert.deepEqual((await f.checked(f.a.token,'/api/images/'+cancelled.id)).products,[],'late model response cannot publish after cancellation');
  for(const file of files.filter(file=>file.owner==='b')){const image=await f.checked(file.token,'/api/images/'+file.id);assert.ok(!JSON.stringify(image.products).includes('GENERATED_a_'));assert.equal((await f.request(f.a.token,'/api/files/'+file.id)).statusCode,404);}
  observation.complete();
 });

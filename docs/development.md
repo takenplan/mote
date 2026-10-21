@@ -150,7 +150,7 @@ case 提醒不包含 suite、skip 或 TODO，失败用例的耗时仍保留。
 
 - [自动 Insight](../apps/server/test/multiuser-ask.test.ts) 的 `automatic Insight waits for interval AND increments…`，真实等待 61 秒并验证窗口冻结、撤权和重启；[重新登录后的 future authority](../apps/server/test/multiuser-restored-future-authority.test.ts) 的 `password relogin issues fresh future…`，等待恢复后的真实 60 秒周期。均保留原生默认 120 秒时限。
 - [千条原件后台导入](../apps/server/test/memory-import-background.test.ts) 的 `HTTP import of a thousand generated originals…`，保留 HTTP 准备/确认路由（Fastify inject）、周期 worker、处理中间态及完整千条收尾，保留既有 390 秒 case timeout。
-- Perception 的 [OCR/pixel 实际调用复用监听器](../apps/server/test/multiuser-perception-history.test.ts)、[独立监听器](../apps/server/test/multiuser-perception-history-02.test.ts)，以及 declared kinds 的 [limit 8](../apps/server/test/multiuser-perception-history-04.test.ts) / [limit 3](../apps/server/test/multiuser-perception-history-05.test.ts) 场景，保留同实例内的多路实际执行、限流调整、资源占用及取消顺序，均保留默认 120 秒时限。素材与模型响应为生成 fixture。
+- Perception 的 [OCR/pixel 实际调用复用监听器](../apps/server/test/multiuser-perception-history.test.ts)、[独立监听器](../apps/server/test/multiuser-perception-history-02.test.ts)，以及 declared kinds 的 [limit 8](../apps/server/test/multiuser-perception-history-04.test.ts) / [limit 3](../apps/server/test/multiuser-perception-history-05.test.ts) 场景，保留同实例内的多路实际执行、限流调整、资源占用及取消顺序，The limit-8/limit-3 cases retain the default 120 s cap. The two physical OCR/pixel-eight cases use a 240 s functional cap after the owner deferred their original latency budgets; see [deferred round-one performance work](validation/performance-round1-deferred-2026-10-21.md). 素材与模型响应为生成 fixture。
 
 其余现有慢文件继续作为性能债列出，详见[性能预算基线与验证记录](validation/server-test-performance-budgets-2026-10-20.md)。
 显式传入原生 reporter/destination（含 `NODE_OPTIONS`、下划线别名）时完全交由 Node 处理，避免改变机器可读输出。

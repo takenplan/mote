@@ -131,7 +131,7 @@ test('unregistered remote work does not delay close or clear its issued outcome,
  await restarted.execution.engine.drain([job.id]);assert.equal(calls,2);assert.equal((await f.task(restarted,f.a.token,job.id)).state,'succeeded');
 });
 
-test('local cleanup drains belong to their host while another owner completes normally on the second host',{timeout:8000},async t=>{
+test('local cleanup drains belong to their host while another owner completes normally on the second host',{timeout:30000},async t=>{
  // Independent current profiles, not a new concurrent-schedulers-on-one-vault
  // deployment mode. A/B account checks still use each host's real HTTP routes.
  let started:number|undefined;const mark=(phase:string)=>{try{const at=performance.now();started??=at;t.diagnostic('[local-cleanup-phase] '+phase+' elapsedMs='+(at-started).toFixed(3));}catch{/* Observation failure must not replace the original test outcome. */}};

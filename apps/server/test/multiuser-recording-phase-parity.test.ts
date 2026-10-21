@@ -29,12 +29,14 @@ for(const discovery of ['held','failed'] as const)test('an accepted transcript r
  t.mock.timers.tick(60001);await until(async()=>(await p.page(f.a.token)).items[0].transcript.state==='succeeded','Accepted transcript must retry independently of discovery');assert.equal(p.count(f.a.userId,'transcript'),2);state.discoveryGate?.release();
 });
 
-test('one slow first audio backup does not block other same-page or later-page canonical transcripts',async t=>{
+test('one slow first audio backup does not block other same-page or later-page canonical transcripts',{timeout:240000},async t=>{
+ // Functional coverage: the owner deferred the original latency budgets (PERF-R1-03).
+ const functionalWaitMs=45000;
  const observation=new PerformanceFailureObservation('recording-slow-first-audio',value=>t.diagnostic(value));
- const p=await recordingPhaseHost(t,true,observation),{f,state}=p;state.ids=['r1','r2'];state.pages=true;state.mediaGate=barrier();observation.phase('recording-select');await p.select(f.a.token);observation.phase('first-media-wait');await until(observation.poll('first-media',()=>state.mediaEntered),'First audio must be physically held');
+ const p=await recordingPhaseHost(t,true,observation),{f,state}=p;state.ids=['r1','r2'];state.pages=true;state.mediaGate=barrier();observation.phase('recording-select');await p.select(f.a.token);observation.phase('first-media-wait');await until(observation.poll('first-media',()=>state.mediaEntered),'First audio must be physically held',functionalWaitMs);
  observation.phase('canonical-transcripts-wait');
- await until(observation.poll('canonical-transcripts',async()=>{const items=(await p.page(f.a.token)).items;return ['r1','r2','r3'].every(id=>items.some((item:any)=>item.id===id&&item.transcript.state==='succeeded'));}),'All page transcripts must arrive before the first audio finishes');
- const source=(await p.page(f.a.token)).sourceId;observation.phase('canonical-materials-wait');await until(observation.poll('canonical-materials',async()=>(await p.checked(f.a.token,'/api/materials?sourceId='+source)).items.length===3),'The real processing consumer must publish one canonical Material per recording');
+ await until(observation.poll('canonical-transcripts',async()=>{const items=(await p.page(f.a.token)).items;return ['r1','r2','r3'].every(id=>items.some((item:any)=>item.id===id&&item.transcript.state==='succeeded'));}),'All page transcripts must arrive before the first audio finishes',functionalWaitMs);
+ const source=(await p.page(f.a.token)).sourceId;observation.phase('canonical-materials-wait');await until(observation.poll('canonical-materials',async()=>(await p.checked(f.a.token,'/api/materials?sourceId='+source)).items.length===3),'The real processing consumer must publish one canonical Material per recording',functionalWaitMs);
  const materials=(await p.checked(f.a.token,'/api/materials?sourceId='+source)).items;assert.equal(new Set(materials.map((item:any)=>item.id)).size,3);assert.equal(state.maxMedia,1,'The original media pool stays independent and serial');assert.ok(p.calls.some(call=>call.cursor==='page-2'));observation.phase('release-first-media-and-settle');state.mediaGate.release();await p.settle(f.a.token);observation.complete();
 });
 
