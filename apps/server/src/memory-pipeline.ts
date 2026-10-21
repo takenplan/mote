@@ -219,7 +219,7 @@ export class MemoryPipeline {
       for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
     }
     this.recover();
-    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
+    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
       validate:step=>this.validateStep(step),validateGrant:step=>{try{const job=this.storedJob(String(step.input.jobId));if(['cancelled','paused'].includes(job.status))return false;this.assertAutomatic(job);return true;}catch{return false;}},admit:step=>{
         const job=this.storedJob(String(step.input.jobId));

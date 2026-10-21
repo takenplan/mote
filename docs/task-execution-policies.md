@@ -21,9 +21,10 @@ call protection, resource waiting, safe failure retries and model correction.
 Explicit current operation overrides remain: `ask.embedding-query` has one
 attempt and 1200 ms for foreground retrieval with its existing lexical
 continuation. Per-request/profile timeout values and `null` retain their existing
-meaning. The quarantined legacy composition also has explicitly narrower
-registrations; its older query/action/lifecycle bounds are not the current M05
-family defaults. No old-version migration or alternate scheduler is added.
+meaning. Quarantined legacy Memory batches and delegated workers/coordinators
+also inherit three attempts; their former four-attempt defaults are removed.
+Genuinely narrower registrations remain explicit exceptions. No old-version
+migration or alternate scheduler is added.
 
 The policy families provide a one-hour baseline for an actual isolated operation.
 Registrations deliberately select narrower local work or no workflow total by

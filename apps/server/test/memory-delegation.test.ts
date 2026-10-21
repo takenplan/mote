@@ -200,11 +200,11 @@ test('model delegation retries retain the exhausted product round; the explicit 
  const job=f.pipeline.get(f.pipeline.list()[0].id),unitId=proposals[0].id!;f.setExtractFailure(true);
  await f.pipeline.run(job.id);
  const batchId=f.pipeline.get(job.id).batches[0].id;
- assert.equal(f.engine.get(batchId)!.maxAttempts,4,'legacy explicit batch override stays separate from the current default');
- for(let expected=1;expected<=4;expected++){
+ assert.equal(f.engine.get(batchId)!.maxAttempts,3);const coordinator=f.engine.list({operationId:f.runtime.list()[0].operationId}).items.find(step=>step.kind.startsWith('delegation.coordinator.'))!;assert.equal(f.engine.get(coordinator.id)!.maxAttempts,3);
+ for(let expected=1;expected<=3;expected++){
   assert.equal(f.engine.get(batchId)!.attempts,expected);assert.equal(f.engine.get(batchId)!.retryRound,1);assert.equal(f.counts().extraction,expected);
   f.adapter.reconcile();const statusStep=f.engine.get(f.runtime.unit(unitId).stepId)!;await new Promise(resolve=>setTimeout(resolve,Math.max(0,statusStep.availableAt-Date.now())+5));await f.engine.drain([statusStep.id]);
-  const terminal=f.engine.get(f.runtime.unit(unitId).stepId)!;assert.equal(terminal.state,expected<=3?'stale':'failed');if(expected>3)assert.equal(terminal.error,'retry_budget_exhausted');
+  const terminal=f.engine.get(f.runtime.unit(unitId).stepId)!;assert.equal(terminal.state,'stale');
   // Freeze the failed canonical product's projection at the model retry
   // boundary without depending on the legacy coordinator's pump timing.
   // No product execution, attempts, policy or round row is changed here.
@@ -213,6 +213,6 @@ test('model delegation retries retain the exhausted product round; the explicit 
   assert.equal(f.runtime.unit(unitId).status,'failed');
   f.runtime.retryUnit(unitId);await f.pipeline.run(job.id);
  }
- assert.equal(f.counts().extraction,4);assert.equal(f.engine.get(batchId)!.attempts,4);assert.equal(f.engine.get(batchId)!.retryRound,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM execution_retry_rounds WHERE step_id=?').get(batchId)!.n,0);
- f.setExtractFailure(false);assert.equal((await f.pipeline.retry(job.id)).status,'completed');assert.equal(f.engine.get(batchId)!.retryRound,2);assert.equal(f.counts().extraction,5);
+ assert.equal(f.counts().extraction,3);assert.equal(f.engine.get(batchId)!.attempts,3);assert.equal(f.engine.get(batchId)!.retryRound,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM execution_retry_rounds WHERE step_id=?').get(batchId)!.n,0);
+ f.setExtractFailure(false);assert.equal((await f.pipeline.retry(job.id)).status,'completed');assert.equal(f.engine.get(batchId)!.retryRound,2);assert.equal(f.counts().extraction,4);
 });

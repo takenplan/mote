@@ -89,7 +89,7 @@ export class DelegationRuntime {
  register(capability:DelegationCapability){
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(capability.id)||!capability.version||this.capabilities.has(capability.id))throw Error('Invalid or duplicate delegation capability');
   const entry=Object.freeze({...capability});this.capabilities.set(entry.id,entry);
-  if(!entry.proposal)this.unregister.push(this.engine.register({kind:`delegation.unit.${entry.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
+  if(!entry.proposal)this.unregister.push(this.engine.register({kind:`delegation.unit.${entry.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,
    validate:step=>this.currentUnit(step,entry),
    execute:(step,signal,grant)=>{const unit=this.unit(String(step.input.unitId));return entry.execute(unit,{signal,scope:unit.scope,grant,work:this.get(unit.workId)});},
    commit:(step,result)=>this.commitUnit(step,result as DelegationProduct),project:step=>this.projectUnit(step),
@@ -100,7 +100,7 @@ export class DelegationRuntime {
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(profile.id)||this.coordinators.has(profile.id))throw Error('Invalid or duplicate delegation coordinator');
   profile=Object.freeze({...profile});
   this.coordinators.set(profile.id,profile);
-  this.unregister.push(this.engine.register({kind:`delegation.coordinator.${profile.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
+  this.unregister.push(this.engine.register({kind:`delegation.coordinator.${profile.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,
    timeoutMs:step=>{const work=this.get(String(step.input.workId));return profile.timeoutMs?.(work,this.journal.payload(work.id))??null;},
    validate:step=>this.currentWork(String(step.input.workId),profile),
    execute:async(step,signal,grant)=>{const work=this.get(String(step.input.workId)),controls=this.controlChannel(work.id,grant),input=this.journal.payload(work.id);

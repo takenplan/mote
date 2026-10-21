@@ -35,7 +35,7 @@ device check was performed.
 | Backup admission and lifecycle | Existing backup/lifecycle cases passed. Twenty current-schema table/column damage controls reject before restore writes. Two additional formal account-deletion cases retain pre-issuance and unsettled physical barriers; late cleanup cannot publish or invent settlement. |
 | Existing consumers | Model snapshot encryption/authority, execution reads and operations: 21 passed. Connectors/OAuth, media health, usage and retry-hook rollback: 23 passed at their named focused revisions. |
 | Existing Web navigation and controls | Original operation/file/image/workflow cases passed. Added count, suspended last-attempt, historical overage and policy-authorized read-dialog controls passed. |
-| Legacy owner boundaries and lifecycle timing | 37 focused cases passed across existing image, perception, file, workflow, Memory, index and recording consumers. Explicit owner commands reset only their selected failed work; readiness and automatic parent wakes retain the budget. A new crash-gap regression consumes an engine failure once, preserves the original 120-second backoff across restart and keeps capacity waiting free. |
+| Legacy owner boundaries and lifecycle timing | 41 focused cases passed at the first legacy followup revision across existing image, perception, file, workflow, Memory, index and recording consumers. Explicit owner commands reset only their selected failed work; readiness and automatic parent wakes retain the budget. A new crash-gap regression consumes an engine failure once, preserves the original 120-second backoff across restart and keeps capacity waiting free. |
 | Static contracts | Server and Web type checking, bilingual message synchronization and current scope inventory passed at the named focused revisions. |
 
 The independent implementation review found two defects before delivery: stale
@@ -54,4 +54,6 @@ consumers, Android compilation/unit checks and applicable remote PR rules. This
 record is not a claim of merge readiness, deployment, paid live-model validation,
 physical-device validation or full-corpus semantic quality. Current runtime
 configuration was separately read back in ordinary mode; source deployment is a
-separate receipt.
+separate receipt. The supersession scan also removes three obsolete wider
+four-attempt registrations from legacy Memory/delegation; the same selected
+three-attempt cap and owner/internal origin apply.
