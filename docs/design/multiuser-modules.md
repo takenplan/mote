@@ -1,5 +1,7 @@
 # Mote 多用户模块计划与验收合同
 
+> 2026-10-20 适用范围：这是从 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` 出发的原始 17 模块计划与验收合同。下文 M00-only、尚需改造、实施顺序和当时授权不描述今天的生产装配或运行槽位。M00–M16 源码及后续业务恢复已进入主线；逐模块来源、后继实现和仍未完成的资格核对见[项目进展台账](../project-progress.md)。代码合入不等于每条验收已通过，原矩阵保留。
+
 本计划以提交 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` 为发现基线，
 固化规划对话
 `<internal-task>` (internal discussion reference redacted)

@@ -1,6 +1,8 @@
 # Agent 配置与权限
 
-内部 Agent 请求仅校验问题非空，不再限制为 20,000 字符；Coding 的完整覆盖合约只通过任务上下文传递一次。HTTP 接口、模型真实容量与传输边界各自保持原契约，见[共用业务流程 ADR](adr-shared-business-flows.md)。多用户生产宿主尚未恢复的理解与检索责任见[路径审计](audits/business-flow-parity-2026-10-18.md)，不能由旧运行时支持推定为新入口已支持。
+> 适用范围（2026-10-20）：当前生产为账户隔离宿主，模型配置由 M04 的账户选择与实例配置提供；下文旧 `mote.yaml` 片段与旧单用户 API 保留其原接口范围。当前任务时钟与中性程序的实现缺口见[Memory 运行合同调查](audits/memory-runtime-contract-investigation-2026-10-20.md)，既定合同不因旧 Skill 仍被调用而改变。
+
+内部 Agent 请求仅校验问题非空，不再限制为 20,000 字符；Coding 的完整覆盖合约只通过任务上下文传递一次。HTTP 接口、模型真实容量与传输边界各自保持原契约，见[共用业务流程 ADR](adr-shared-business-flows.md)。[历史路径审计](audits/business-flow-parity-2026-10-18.md)记录当时缺口，当前集成及后续验证状态以[多用户集成决定](adr-multiuser-main-integration.md)为准，不能由旧运行时支持推定为新入口已支持。
 
 Mote 的查询和洞察可由 DeepSeek Harness 或本机 Codex App Server 执行，二者共用任务上下文与只读证据授权；Harness 的通用模型协议通过 pi-ai 适配层接入。程序提供读取资料的能力，模型决定读什么、如何继续查询、如何解释证据。自然语言问题原样进入 Agent，不按“待办”“工作”“娱乐”等关键词分发。通用导入使用另一个具有原生文件与 shell 工具的 Harness 会话；完整流程与边界见[中央导入、记忆与洞察](central-memory.md)。
 
@@ -80,7 +82,7 @@ Codex 与 HTTP Harness 对最终输出最多允许 3 次修正，即首次输出
 
 网页通过 `POST /api/insight-runs` 启动回顾并立即取得 HTTP 202 和运行编号；请求包含 UUID `requestId`、可选 `prompt` 及上述时间/设备范围。同一编号同一请求可安全重试，不会重复调用模型。`GET /api/insight-runs` 返回最近的运行，`GET /api/insight-runs/:id` 返回阶段、结果或错误。界面展示启动、模型处理、实际只读工具及返回数量、结果校验、完成/失败状态；这些是执行进度，不是模型的私有思维链。刷新或离开页面后仍可恢复运行状态；网络断开自动重连，节点重启造成的中断明确标为失败。旧的同步 `POST /api/insights` 继续兼容。运行记录只保留固定阶段与计数，不复制提示词、模型对话或报告正文；报告仍受原始证据删除失效规则约束。
 
-自动回顾由 [记忆生命周期](memory-lifecycle.md) 策略调度；策略的当前设置持久化在主 YAML 的 `memory` 领域。默认已启用，有增量且数量达标或最长等待到达时使用配置的模型；可通过 `memory.insights.enabled` 关闭后续自动回顾，历史任务保留入队时的授权与策略快照。主题、习惯和待办判断属于模型推理，不是检索关键词的固定映射。
+自动回顾由 [记忆生命周期](memory-lifecycle.md) 策略调度；当前 scoped 设置持久化在账户域，旧单用户主 YAML 使用 `memory` 领域。默认已启用，必须同时满足最小间隔与增量数量阈值，最长等待不能绕过这两个条件；关闭洞察自动调度只影响后续准入，历史任务保留入队时的授权与策略快照。主题、习惯和待办判断属于模型推理，不是检索关键词的固定映射。
 
 遇到问题可在 [运行诊断](troubleshooting.md) 用 HTTP 请求编号检查 Agent 开始、完成、耗时与错误类别。诊断日志不保存模型对话或工具参数；界面中的“检索过程”属于有访问权限的回答详情。
 
@@ -123,7 +125,7 @@ npm run test -w @mote/agent
 
 Agent 额外拥有只读的 `sources`、`source_items`、`source_history`、`memories`：先发现来源、当前版本或 Memory 标题，再按需读取详情与原始证据。日历工具的时间范围按计划时间匹配；普通记录采用明确的原文发生/记录时间，未知时回退到观察时间。取消或移除的来源记录可以显式包含在查询中。历史工具允许比较旧稿，不会把旧稿当作当前版本。
 
-Memory 提取使用同一 Harness 只读运行时和 `memory-extraction` Skill，由持久任务按精确原文范围分批。每条记忆的正文引用要与自身证据列表一致，引句还要匹配原文偏移；来源指纹变化时结果不会按旧版本保存。成功检查点、失败重试和候选确认见[Memory 流程](central-memory.md#memory-如何分批并保留进度)。模型结果无法新增工具或执行被采集内容中的指令。外部 MCP 的受限写回是独立认证入口，不属于内部查询 Agent 的工具集。
+Memory 提取使用同一只读 Agent 运行时，由持久任务按精确原文范围分批。既定合同使用中性的 `memory-strategy` / `memory-integration` 程序执行固定策略，独立审核与宿主校验后自动生效；当前 scoped 调用仍注入旧 extraction/consolidation Skill，属于[已确认偏离](audits/memory-runtime-contract-investigation-2026-10-20.md#u2-中性程序与旧-skill)。每条记忆的正文引用要与自身证据列表一致，引句还要匹配原文偏移；来源指纹变化时结果不会按旧版本保存。成功检查点、失败重试和自动发布见[Memory 流程](central-memory.md#memory-如何分批并保留进度)。模型结果无法新增工具或执行被采集内容中的指令。外部 MCP 的受限写回是独立认证入口，不属于内部查询 Agent 的工具集。
 
 ## 首页 Agent 视角
 

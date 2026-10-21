@@ -1,6 +1,7 @@
 # Unified YAML configuration and in-process ConfigService
 
-Date: 2026-10-14
+Date: 2026-10-14. Status: owner-requested configuration implementation;
+ownership partially superseded by M04, transaction contract retained.
 
 Multi-user production supersession: [M04](design/multiuser-configuration.md)
 splits instance and private ownership while retaining this ConfigService

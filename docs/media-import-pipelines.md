@@ -1,5 +1,11 @@
 # 中央媒体导入与 Cordis 扩展
 
+当前范围：原件归档、处理、正式资料发布及 Memory 授权是保留的领域职责。下文
+`FileStore`/Cordis 私有服务、部署环境变量和示例模块记录旧宿主的注册方式，不是
+当前 `buildScopedApp` 的加载入口。当前账号绑定的 source/processor 扩展通过
+[固定 release 与 worker ABI](plugin-authoring.md)接入；配置归属和个人连接见
+[配置指南](server-configuration.md)及[文件策略](file-processing-policies.md)。
+
 中央导入的音频和图片现在进入 Android 文件上传使用的同一条处理链路。ZIP 是容器，展开出的媒体各自建立文件版本和持久任务；无需先让导入 Agent 编造一条文本记录，才能安排转写或 OCR。
 
 ```mermaid
@@ -61,10 +67,14 @@ flowchart LR
 MOTE_BACKEND_PLUGINS='["/absolute/path/to/mote/examples/plugins/media-intake.mjs"]'
 ```
 
-示例选择的 MIME 为 `application/vnd.mote.text`，类型处理器为 `community.text-extract`。旧 `MOTE_FILE_PROCESSOR_PLUGINS` 仍可加载部署模块；新模块建议使用统一变量。`GET /api/import-capabilities` 列出接入能力，文件处理设置的 `capabilities` 列出配方、阶段和输出类型。文件处理解释接口返回实际配置回执。
+该旧宿主示例选择 MIME `application/vnd.mote.text`、处理器 `community.text-extract`，
+使用上面的 `MOTE_BACKEND_PLUGINS` 或原 `MOTE_FILE_PROCESSOR_PLUGINS` 注册。当前生产
+不加载这两个环境变量，不能以保存实例 YAML 的旧模块字段代替实际接入。
+当前 `GET /api/import-capabilities` 和文件处理能力视图只投影已注册能力，不授予安装、
+私人读取或历史处理权限；新插件按[当前指南](plugin-authoring.md)完成实际核验。
 
 ## 恢复与验收边界
 
 之前零记录或缺少解析配置的导入，可对保留的原件执行“重试导入”，重新识别并接入文件处理。显式选择的 Python Source Pack 仍固定自身解析方案，不被自动格式识别静默替换。
 
-自动用例使用生成的 ZIP/媒体字节、生成图片及脚本 ASR/OCR/Memory 提供方，覆盖 61 文件、混合形态、去重、重启、单文件失败恢复和自定义部署模块。它们验证接入、调度和发布契约，不验证真实 MP3 解码、ASR 准确率、模型语义效果或 Android 真机行为。PR 前执行 `npm run check:local`，实际模型和真机检查单独报告。
+原自动用例使用生成的 ZIP/媒体字节、生成图片及脚本 ASR/OCR/Memory 提供方，覆盖 61 文件、混合形态、去重、重启、单文件失败恢复和旧宿主自定义模块。它们记录原接入、调度和发布合同，不证明当前 scoped worker、真实 MP3 解码、ASR 准确率、模型语义效果或 Android 真机行为；本轮没有重跑。当前工程检查使用[开发指南](development.md#pr-check-scope)的受影响计划与实际旅程要求，模型和真机另报。

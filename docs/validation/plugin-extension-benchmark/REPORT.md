@@ -1,5 +1,7 @@
 # Mote 插件扩展：五轮评估与迭代
 
+> 2026-10-20 后继交付：原五轮完整案例 0/5、七项 NOT RUN、G5 FAIL_HOST_STORAGE 和 SQLite UNKNOWN 保持。本报告之后的源码集成、定向修复及 `f92fec719dd51f7d2c28591229bc9f6e20605e6c` 的 23/23 功能门禁见[当前宿主集成附录](integration-current-host-2026-10-20.md)；它不把原实验改为全通过。[项目进展台账](../../project-progress.md)分别记录交付和剩余资格。
+
 日期：2026-10-19 UTC。原始基线：`2c78ca8d52a7d17fae20962cf68d09a717ffc73a`。
 
 本报告汇总用户提供的 Iterator / Evaluator / Optimizer 实验方法在 Mote 上的实际执行。

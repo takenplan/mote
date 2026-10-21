@@ -1,5 +1,7 @@
 # Scoped execution parity (2026-10-18)
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 This change restores the scheduling and Operations contracts from single-owner
 baseline `2c262762` on the current scoped production composition (`2c78ca8d`).
 It does not migrate a vault, replay retained personal data, deploy, or grant

@@ -1,5 +1,7 @@
 # 多用户功能对标修复：逐项验收矩阵
 
+> 2026-10-20 后继入口：本页保留 66 个原要求和各冻结输入的证据；下文“当前空台账”、Draft/HOLD/未入 main、运行槽位及最终旅程 UNRUN 均应结合各段时点阅读。PR 184 已于 `9a8717c325da04cb4346804457114b7327033394` 进入 main，后续功能门禁另有记录。逐行当前实现归属、后继证据、未验与下一步见[项目进展台账](../project-progress.md#恢复事项逐行对账)。原主行记录仍是 58 OPEN、2 VISIBLE_MAC_SUBSCOPE_PASS、3 UNKNOWN、2 IN_PROGRESS、1 OUTSIDE；它不是今天的实现完成率，也不能把全文 PASS/READY/UNRUN 关键词次数作为互斥行状态。
+
 日期：2026-10-18。管理、owner/branch/PR/候选/依赖接缝与检查排队见[集成计划](../design/multiuser-parity-restoration-plan.md)。这是验收合同和当前空台账，不是通过记录。
 
 原行为、必要隔离/例外、准确候选与正式目标、恢复证据和未闭合项见[越界恢复与方案门禁](../design/multiuser-parity-boundary-restoration-plan.md)；本矩阵仍是全部66行的验收合同。

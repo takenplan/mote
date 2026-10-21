@@ -1,5 +1,7 @@
 # Main and multi-user integration regression
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 Run started 2026-10-17 and continued 2026-10-18 (Asia/Shanghai).
 Current status: the joint runtime is frozen at `6e4032e0` (T). Its fresh Central
 build and local Codex acceptance passed. The complete affected-component command

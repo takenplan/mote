@@ -1,6 +1,11 @@
 # Central request admission without arbitrary quotas
 
-Date: 2026-10-10
+Date: 2026-10-10. Status: owner-requested quota removal; executed validation is recorded separately below.
+
+Scoped authentication exception: [M00](adr-multiuser-scope.md) explicitly permits
+M01's narrow password-attempt protection. This supersedes the inclusion of password
+login in the no-frequency-rejection wording below; it does not restore ordinary
+HTTP quotas or fixed business backlog counts. See [account authentication](design/multiuser-auth.md).
 
 ## Decision and user journey
 

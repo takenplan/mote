@@ -1,5 +1,7 @@
 # Ask parity restoration validation
 
+> 2026-10-20 delivery follow-up: this record keeps its original candidate, commands, results and UNRUN scope. Related source is now in main through the integration and later fixes; Draft/pending/under-validation statements below describe their recorded stage. Current module heads, named per-item evidence and remaining qualification are reconciled in [Project progress](../project-progress.md). This note neither changes an old FAIL into PASS nor treats functional gates as complete native/model/deployment acceptance.
+
 The comparison baseline is `2c2627621e2598332ae8169845bc7343be7ed63e`;
 the implementation starts at `2c78ca8d52a7d17fae20962cf68d09a717ffc73a`.
 The module PR and check-driver receipt identify the final frozen candidate.
