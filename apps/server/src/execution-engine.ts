@@ -360,7 +360,7 @@ export class ExecutionEngine {
    if(!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);db.exec('COMMIT');return;}
    this.attempts.policy(row.id,policy.maxAttempts);
    const session=this.attempts.open(row.id);
-   if(this.get(row.id)!.attempts>=policy.maxAttempts&&!session.charged){db.prepare("UPDATE execution_steps SET state='failed',error='retry_budget_exhausted',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.attempts.close(row.id);this.retainFailure(this.get(row.id)!,'failed',new ExecutionFailure('permanent','retry_budget_exhausted'));this.project(row.id);db.exec('COMMIT');return;}
+   if(!handler.deferAttempts&&this.get(row.id)!.attempts>=policy.maxAttempts&&!session.charged){db.prepare("UPDATE execution_steps SET state='failed',error='retry_budget_exhausted',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.attempts.close(row.id);this.retainFailure(this.get(row.id)!,'failed',new ExecutionFailure('permanent','retry_budget_exhausted'));this.project(row.id);db.exec('COMMIT');return;}
    const admission=handler.admit?.(this.get(row.id)!);
    if(admission){
     db.prepare("UPDATE execution_steps SET state=?,available_at=?,error=?,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state='waiting'").run(admission.category==='waiting'?'waiting':'blocked',admission.category==='waiting'?this.now()+Math.max(1,admission.retryAfterMs??1000):0,admission.code,Number(admission.category==='waiting'),now,row.id);this.project(row.id);db.exec('COMMIT');

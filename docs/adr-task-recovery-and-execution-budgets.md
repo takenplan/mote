@@ -40,6 +40,16 @@ but no new attempt is sent. Only an explicit authenticated owner Retry action
 can start another bounded round, retaining the previous round's count/history.
 No historical terminal work is reopened or counters reset on deployment.
 
+A complete durable checkpoint may also finish through a validated, purely local
+continuation at the cap. For Memory feedback this consumes the exact saved
+proposal under fresh original account, model and input authority, then repeats
+checkpoint and proposal validation in the existing atomic commit. It does not
+repeat the planner, charge another attempt, derive a snapshot or manufacture
+cleanup, settlement, owner confirmation or policy replay. An unproven old
+physical callback remains recorded. Any new child keeps its own original
+account, resource and physical-call gates. Missing or invalid checkpoints fall
+back through the normal cleanup and attempt limits before any new call.
+
 Automatic unknown read-query replay requires an exact trusted physical cleanup
 receipt for that call, fresh account/input/model authority and remaining budget.
 The complete callback includes local child, tool queue and workspace cleanup;

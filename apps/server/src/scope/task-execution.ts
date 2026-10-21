@@ -66,6 +66,8 @@ export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['for
  progress(value:unknown):void;
  external:{begin(key:string,onIssued?:(issuanceId:string)=>unknown):string;complete():void};
 };
+/** Host-only checkpoint validation has no provider, effect or write handles. */
+export type TaskLocalResume={context:UserContext;task:ExecutionStep;assert():void;checkpoint:{read<T=unknown>(key:string):T|undefined}};
 export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;policy:ExecutionPolicy;
  /** Trusted legacy call-site declaration; new calls also need their exact
   * read-query physical cleanup receipt before automatic unknown replay. */
@@ -88,6 +90,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  fairnessGroup?:(step:ExecutionStep)=>string;
  /** Resolve exact issued facts before another physical request is allowed. */
  reconcile?:(run:TaskRun)=>Promise<void>;
+ /** Synchronously consume a complete already-durable local result. The host
+  * repeats this validation inside the original success transaction. */
+ resumeLocal?:(run:TaskLocalResume)=>{value:unknown}|undefined;
  validate?:(task:ExecutionStep)=>boolean;
  admit?:(task:ExecutionStep)=>ExecutionFailure|undefined;
  execute:(run:TaskRun)=>Promise<unknown>;
@@ -193,6 +198,14 @@ export class TaskExecution {
   if(!row.external_issuance)return false;const fact=this.physical.receipt(row.external_issuance);
   return Boolean(fact&&fact.task_id===row.task_id&&fact.user_id===row.user_id&&fact.deployment_id===this.authority.deploymentId&&fact.mode==='read-query'&&fact.state==='quiescent'&&fact.quiescent_at!==null);
  }
+ private localResumeEligible(row:TaskRow){
+  if(!['none','succeeded'].includes(row.external_state))return false;
+  if(!row.external_issuance)return row.external_state==='none';
+  const call=this.db.prepare('SELECT state,settled_at FROM task_external_calls WHERE issuance_id=? AND task_id=? AND user_id=?').get(row.external_issuance,row.task_id,row.user_id);
+  return Boolean(call&&['succeeded','not_executed'].includes(String(call.state))&&call.settled_at!==null);
+ }
+ private localResumeView(run:TaskRun):TaskLocalResume{return Object.freeze({context:run.context,task:run.task,assert:()=>{run.grant.assert();this.authority.assert(run.context);this.assertTask(run.task);},checkpoint:Object.freeze({read:run.checkpoint.read})});}
+ private resumeLocal(handler:UserTaskHandler,run:TaskRun){const result=handler.resumeLocal?.(this.localResumeView(run));if(result&&typeof (result as {then?:unknown}).then==='function'){if(result instanceof Promise)void Promise.prototype.catch.call(result,()=>{});throw new TaskError('asynchronous_task_local_resume',409);}run.grant.assert();return result;}
  private prepareRecovery(context:UserContext,step:ExecutionStep,owner=false,confirmUnknown=false){
   const row=this.assertTask(step),handler=this.handlers.get(step.kind)!;
   if(this.physical.busy(step.id))throw new TaskError('physical_cleanup_pending',409);
@@ -255,10 +268,9 @@ export class TaskExecution {
   const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:Boolean(handler.modelFeature)||handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>[...(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),...this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id).map(row=>String(row.resource_key))],
-   admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(this.physical.busy(step.id))return new ExecutionFailure('waiting','physical_cleanup_pending',1000);if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile&&!this.readReplayReady(row))return new ExecutionFailure('blocked',row.external_issuance&&this.physical.receipt(row.external_issuance)?.state!=='quiescent'&&this.physical.receipt(row.external_issuance)?'physical_cleanup_unknown':'external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
+   admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');if(this.physical.busy(step.id)&&!handler.resumeLocal)return new ExecutionFailure('waiting','physical_cleanup_pending',1000);if(['issued','unknown'].includes(row.external_state)&&!handler.reconcile&&!this.readReplayReady(row))return new ExecutionFailure('blocked',row.external_issuance&&this.physical.receipt(row.external_issuance)?.state!=='quiescent'&&this.physical.receipt(row.external_issuance)?'physical_cleanup_unknown':'external_result_unknown');for(const resource of this.db.prepare('SELECT resource_key FROM task_model_resources WHERE task_id=?').all(step.id)){try{this.processors.checkKey(String(JSON.parse(String(resource.resource_key))[1]));}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}}return handler.admit?.(step);},
    execute:(step,signal,grant)=>this.physical.taskBoundary(async()=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
-    if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
     let lease=this.modelLeases.get(step.id);const model=lease&&this.modelHost?{get lease(){return lease!;},codex:this.modelHost.codex(),withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1],options?:{recovery:'read-query'})=>{
      grant.assert();try{
@@ -279,12 +291,20 @@ export class TaskExecution {
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
      external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);this.physical.bind(step,issuanceId,{state:current.external_state,issuance:current.external_issuance});if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
     };
+    if(handler.resumeLocal&&this.localResumeEligible(this.row(step.id)!)){
+     const current=this.row(step.id)!,local={checkpoints:current.checkpoints,external:json([current.external_state,current.external_key,current.external_issuance])},resumed=this.resumeLocal(handler,run);
+     if(resumed){if(this.row(step.id)!.checkpoints!==local.checkpoints)throw new ExecutionFailure('stale','task_local_resume_changed');return {value:resumed.value,run,local};}
+    }
+    if(this.physical.busy(step.id))throw new ExecutionFailure('waiting','physical_cleanup_pending',1000,{executionStarted:false});
+    if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
     if(handler.modelFeature&&handler.modelAdmission!=='per-call')grant.startAttempt();
     await handler.reconcile?.(run);grant.assert();
     const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
     const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure(this.readReplayReady(this.row(step.id)!)?'transient':'blocked','external_result_unknown');return {value:result,run};
    }),
-   commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
+   commit:(step,result)=>{const current=this.assertTask(step),{run,value,local}=result as {run:TaskRun;value:unknown;local?:{checkpoints:string;external:string}};this.authority.assert(run.context);
+    if(local){if(!this.localResumeEligible(current)||current.checkpoints!==local.checkpoints||json([current.external_state,current.external_key,current.external_issuance])!==local.external)throw new ExecutionFailure('stale','task_local_resume_changed');const validated=this.resumeLocal(handler,run);if(!validated||json(validated.value)!==json(value))throw new ExecutionFailure('stale','task_local_resume_changed');}
+    handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });
