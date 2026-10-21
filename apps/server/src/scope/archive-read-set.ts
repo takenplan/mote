@@ -5,6 +5,9 @@ type Witness={read:()=>unknown;hash:string};
 const active=new AsyncLocalStorage<{userId:string;reads:Witness[]}|undefined>();
 const fingerprint=(value:unknown)=>createHash('sha256').update(JSON.stringify(value,(_key,item)=>typeof item==='bigint'?{bigint:String(item)}:item)??'undefined').digest('hex');
 
+/** Internal selection only; expose no archive rows or reusable authority. */
+export function archiveReadSetActive(userId:string):boolean{return active.getStore()?.userId===userId;}
+
 /** Record only the synchronous, owner-qualified reads actually used to build
  * an archive. Other accounts and non-exported progress are not dependencies.
  * The closures stay in memory; neither SQL nor private row bodies are saved. */
