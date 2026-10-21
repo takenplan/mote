@@ -63,7 +63,7 @@ export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
  * is complete. Account administration never mounts the retired owner services. */
-export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;maxStorageBytes?:number;retentionDays?:number;media?:Partial<MediaConfiguration>;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{mediaAssets?:MediaAssetsOptions;verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
+export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;maxStorageBytes?:number;retentionDays?:number;media?:Partial<MediaConfiguration>;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{mediaAssets?:MediaAssetsOptions;verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;memoryEvaluationClock?:()=>string;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
   const storage=openScopeStorage(config.dataDir);
   let managedMedia:ManagedMedia|undefined;
   let configuration:Configurations|undefined;
@@ -116,7 +116,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey,config.importPythonPacks,managedMedia);await processing.ready();}
     registerCaptureBrowserReads(runtime,ingress,processing,(context,id)=>{if(!ask)throw new ScopeError('scope_unavailable',503);return ask.originalReadReceipt(context,id);});
-    if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
+    if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory,evaluationClock:options.memoryEvaluationClock},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
     const todos=ask?registerScopedTodos(runtime,storage.db):undefined;
     if(execution&&ask)actions=registerScopedActions(runtime,storage.db,configuration,execution,ownerQuestions,ask,ingress);

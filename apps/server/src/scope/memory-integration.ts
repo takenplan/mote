@@ -7,9 +7,10 @@ import type {TaskExecution,TaskRun} from './task-execution.js';
 import {memoryHash,memoryUUID,type MemoryRow,type ScopedMemoryData} from './memory-data.js';
 import {memoryBindingSchema,memorySettingsSchema,type ScopedMemoryTask} from './memory-schema.js';
 import {PrivateDataError} from './private-data-sql.js';
+import {freezeMemoryEvaluationTime,memoryEvaluationTimeSchema} from './memory-evaluation-context.js';
 const request=z.object({id:z.string().uuid()}).strict();
 const memoryPin=z.object({id:z.string().uuid(),version:z.number().int().positive(),fingerprint:z.string()}).strict();
-export const integrationWindowSchema=z.object({generation:z.number().int(),settings:memorySettingsSchema,binding:memoryBindingSchema,selection:z.array(memoryPin).optional(),pending:z.array(memoryPin).optional()}).strict();
+export const integrationWindowSchema=z.object({evaluationTime:memoryEvaluationTimeSchema.optional(),generation:z.number().int(),settings:memorySettingsSchema,binding:memoryBindingSchema,selection:z.array(memoryPin).optional(),pending:z.array(memoryPin).optional()}).strict().refine(window=>!window.selection||window.evaluationTime!==undefined);
 export type IntegrationWindow=z.infer<typeof integrationWindowSchema>;
 /** Scheduling and owner observations must describe the same selected set.
  * A continuation can read only its original window's frozen remaining pins;
@@ -23,7 +24,7 @@ export function integrationDueAt(createdAt:string,window:IntegrationWindow){cons
  * watermark. The window never uses another user's same-name entity as context. */
 export class MemoryIntegration {
  private readonly dispose:()=>Promise<void>;
- constructor(private readonly data:(context:UserContext)=>ScopedMemoryData,private readonly execution:TaskExecution,private readonly admit:(context:UserContext,id:string,materials:string[],memories:string[],window:IntegrationWindow)=>Promise<unknown>){
+ constructor(private readonly data:(context:UserContext)=>ScopedMemoryData,private readonly execution:TaskExecution,private readonly admit:(context:UserContext,id:string,materials:string[],memories:string[],window:IntegrationWindow)=>Promise<unknown>,private readonly clock:()=>string=()=>new Date().toISOString()){
   this.dispose=execution.register({kind:'memory.integration-window',pool:'memory.intake',concurrency:()=>2,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>request.parse(raw),authorizeInput:(context,raw)=>{this.window(context,String(raw.id));},resources:()=>[{scope:'user',key:'memory-intake'}],execute:run=>this.execute(run),classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','memory_integration_requires_attention')});
  }
  private window(context:UserContext,id:string){const data=this.data(context),row=data.sql.get('SELECT * FROM mm_integration_windows WHERE user_id=$user AND id=?',id);if(!row||row.revoked)throw new PrivateDataError('conflict',409);const window=integrationWindowSchema.parse(JSON.parse(String(row.json)));if(data.state().generation!==window.generation||memoryHash(data.binding())!==memoryHash(window.binding))throw new PrivateDataError('conflict',409);return {data,row,window};}
@@ -43,8 +44,9 @@ export class MemoryIntegration {
   const policy=window.settings.lifecycle.consolidation,valid=integrationCandidates(data,window),due=integrationDueAt(String(row.created_at),window);
   if(!window.selection&&valid.length<policy.minChanges&&data.sql.get('SELECT 1 FROM mm_binding_locks WHERE user_id=$user')){run.grant.commit(()=>data.sql.run("UPDATE mm_integration_windows SET state='complete' WHERE user_id=$user AND id=?",id));return {deferred:true};}
   if(!window.selection&&valid.length<policy.minChanges&&Date.now()<due&&!data.sql.get('SELECT 1 FROM mm_binding_locks WHERE user_id=$user'))throw new ExecutionFailure('waiting','memory_integration_window_pending',Math.min(due-Date.now(),60000),{executionStarted:false});
-  const pins=valid.map(row=>({id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint)})),pending=window.selection?window.pending??pins:pins,selection=window.selection??pins.slice(0,policy.maxItems),frozen={...window,pending,selection};
+  const pins=valid.map(row=>({id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint)})),pending=window.selection?window.pending??pins:pins,selection=window.selection??pins.slice(0,policy.maxItems);
   if(!selection.length){run.grant.commit(()=>data.sql.run("UPDATE mm_integration_windows SET state='complete' WHERE user_id=$user AND id=?",id));return {empty:true};}
+  const frozen={...window,evaluationTime:window.evaluationTime??freezeMemoryEvaluationTime(this.clock),pending,selection};
   run.grant.commit(()=>{for(const pin of pending){if(!window.selection||selection.some(selected=>selected.id===pin.id)){const current=data.row(pin.id);data.assertCurrentRecord(current);if(current.version!==pin.version||current.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);}data.sql.run('INSERT OR IGNORE INTO mm_integrated_versions VALUES($user,?,?,?,?)',pin.id,pin.version,pin.fingerprint,id);}data.sql.run('UPDATE mm_integration_windows SET json=? WHERE user_id=$user AND id=?',JSON.stringify(frozen),id);});
   const materialIds=[...new Set(selection.flatMap(pin=>data.sql.all('SELECT DISTINCT e.material_id FROM mm_dependencies d JOIN mm_evidence e ON e.user_id=d.user_id AND e.id=d.evidence_id WHERE d.user_id=$user AND e.user_id=$user AND d.memory_id=?',pin.id).map(row=>String(row.material_id))))],jobId=id;
   const result=await this.admit(run.context,jobId,materialIds,selection.map(pin=>pin.id),frozen);run.grant.assert();this.window(run.context,id);
@@ -52,7 +54,7 @@ export class MemoryIntegration {
   run.grant.commit(()=>{
    const remaining=pending.filter(pin=>!selection.some(selected=>selected.id===pin.id&&selected.version===pin.version&&selected.fingerprint===pin.fingerprint));
    if(remaining.length){
-    const nextId=memoryUUID([id,'integration-continuation',remaining]),next:IntegrationWindow={generation:window.generation,settings:window.settings,binding:window.binding,pending:remaining};
+    const nextId=memoryUUID([id,'integration-continuation',remaining]),next:IntegrationWindow={generation:window.generation,settings:window.settings,binding:window.binding,evaluationTime:frozen.evaluationTime,pending:remaining};
     data.sql.run("INSERT OR IGNORE INTO mm_integration_windows VALUES($user,?,?,0,NULL,NULL,'pending',?)",nextId,JSON.stringify(next),String(row.created_at));
     // Remaining pins are disjoint from this selection and consume none of its
     // outputs. A failed, paused or cancelled child must not gate their admission.

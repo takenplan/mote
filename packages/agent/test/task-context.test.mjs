@@ -155,17 +155,17 @@ test('host derived-context dependencies are authorization metadata and never new
 test('large Memory catalogs and review drafts share exact declaration and source metadata without a host quota',async()=>{
  const {assembleContext}=await import('../dist/task-context.js');
  const context={version:1,ownerRelation:'unknown',basis:'default',sourceContextStatements:[{description:'Generated source declaration. '.repeat(80),version:1}]};
- const members=Array.from({length:24},(_,i)=>({key:String(i).padStart(64,'a'),id:'generated-'+i,offset:i*100,length:100,fingerprint:'f'.repeat(64),contextTime:'2026-10-01T00:00:00Z',attributionContext:context,state:'pending',memoryIds:[]}));
+ const members=Array.from({length:24},(_,i)=>({key:String(i).padStart(64,'a'),id:'generated-'+i,offset:i*100,length:100,fingerprint:'f'.repeat(64),contextTime:'2026-10-01T00:00:00Z',evaluationTime:new Date(Date.parse('2037-10-01T00:00:00Z')+i*60000).toISOString(),attributionContext:context,state:'pending',memoryIds:[]}));
  const work={members,contextMembers:[],authorizedMembers:members.map(m=>({...m,scope:'generated'})),history:[],instruction:'Generated complete work contract'};
  const input={question:'Generated review',taskContext:{turns:[],memoryWork:work,untrustedMemoryDraft:'Generated draft. '.repeat(1100)}};
  assert.ok(JSON.stringify(input.taskContext).length>80000);
  const {prompt,metrics}=assembleContext(input,[],'Generated system',[],4096),wire=JSON.parse(prompt).untrustedTaskContext.memoryWork;
  assert.ok(metrics.task<80000);assert.equal(wire.members.length,24);assert.equal(wire.authorizedMembers.length,24);
- for(const [i,m] of wire.members.entries()){const shared=wire.commonContexts[m.commonContextRef];assert.equal(m.key,'member_'+i);assert.equal(m.offset,members[i].offset);assert.equal(shared.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[shared.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);assert.equal(m.fingerprint,undefined);}
+ for(const [i,m] of wire.members.entries()){const shared=wire.commonContexts[m.commonContextRef];assert.equal(m.key,'member_'+i);assert.equal(m.offset,members[i].offset);assert.equal(shared.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[shared.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);assert.equal(m.fingerprint,undefined);assert.equal(m.evaluationTime,members[i].evaluationTime);}
  assert.equal(input.taskContext.memoryWork.members[0].attributionContext,context,'wire compaction cannot mutate host authority or cache inputs');
- const changed={...members[0],attributionContext:{...context,ownerRelation:'owner'}};
+ const changed={...members[0],evaluationTime:'2038-10-01T00:00:00Z'};
  const other=JSON.parse(assembleContext({...input,taskContext:{...input.taskContext,memoryWork:{...work,authorizedMembers:[changed]}}},[],'Generated',[],4096).prompt).untrustedTaskContext.memoryWork;
- assert.equal(other.authorizedMembers[0].memberRef,undefined,'matching keys with different context must not be silently deduplicated');
+ assert.equal(other.authorizedMembers[0].memberRef,undefined,'matching keys with a different evaluation clock must not be silently deduplicated');
 });
 
 test('coverage aliases round-trip only exact identities from this call, including reviewer drafts and context references',async()=>{
