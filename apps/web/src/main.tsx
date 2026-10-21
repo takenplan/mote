@@ -1,4 +1,5 @@
 import {authChangeEvent,authChangeKey,discoverWebSession,logoutWeb} from './web-auth';
+import * as logger from './logger';
 import { ClientLoginApproval } from './ClientLoginApproval';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
@@ -58,6 +59,9 @@ import "./styles.css";
 import './workspace.css';
 import './library.css';
 import './settings-ui.css';
+
+globalThis.addEventListener?.('error',event=>logger.error('ui.unhandled_error',{detail:event.error instanceof Error?event.error.name:event.message?.slice(0,200)}));
+globalThis.addEventListener?.('unhandledrejection',event=>logger.error('ui.unhandled_rejection',{detail:event.reason instanceof Error?event.reason.name:String(event.reason).slice(0,200)}));
 import './plugin-center.css';
 import './discovery-ui.css';
 import './feature-guide.css';

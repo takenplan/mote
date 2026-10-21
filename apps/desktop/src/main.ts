@@ -295,9 +295,9 @@ else {
         if(channel!=='mote:get-status'&&bound?.accountGeneration!==expected)throw Error('Desktop account changed; reload the window');
         if (recoveryRequired && !['mote:get-status', 'mote:storage-restart', 'mote:stop', 'mote:note-draft', 'mote:connection-status', 'mote:update-status', 'mote:sources'].includes(channel)) throw new Error(recoveryRequired);
         const startedAt = Date.now();
-        if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED');
-        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if(expected!==accountGeneration&&channel!=='mote:ask'&&channel!=='mote:configure'&&channel!=='mote:connection-confirm'&&channel!=='mote:connection-resume')throw Error('Desktop account changed; reload the window'); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
-        catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt }); throw error; }
+        if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED', { name: channel });
+        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if(expected!==accountGeneration&&channel!=='mote:ask'&&channel!=='mote:configure'&&channel!=='mote:connection-confirm'&&channel!=='mote:connection-resume')throw Error('Desktop account changed; reload the window'); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt, name: channel }); return result; }
+        catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt, name: channel, detail: error instanceof Error ? error.name : undefined }); throw error; }
       });
     };
     const unboundBacklog = () => queue.binding.unbound() && localSources!.nodeBinding.unbound() && (!noteDrafts.hasPrepared() || noteDrafts.hasUnboundPrepared());

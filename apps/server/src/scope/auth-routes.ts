@@ -30,40 +30,50 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
   const unavailable=()=>{throw new AuthError('identity_required',401);};
   const handoffs=new LoginHandoffs({session:unavailable,revoke:unavailable,authenticate:unavailable,assertActive:unavailable});
   app.addHook('onClose',async()=>handoffs.close());
+  const log=(event:string,fields:Parameters<NonNullable<typeof runtime.diagnostics>['record']>[1]={},level:'debug'|'info'|'warn'|'error'='info')=>runtime.diagnostics?.record(event,fields,level);
   app.post('/api/auth/login',{bodyLimit:8192},async(req,reply)=>{
     rejectIdentitySelectors(req);
     const input=z.object({username:usernameSchema,password:z.string().max(1024),mode:z.enum(['web','client']).default('web'),durationMs:durationSchema.default(0)}).strict().parse(req.body);
-    const grant=await accounts.login(input.username,input.password,req.ip,input.mode,input.durationMs);
-    onPasswordLogin?.(await authority.authenticate(grant.token));
+    let grant;
+    try{grant=await accounts.login(input.username,input.password,req.ip,input.mode,input.durationMs);}
+    catch(error){log('auth.login_failed',{kind:input.mode,category:error instanceof AuthError?error.code:undefined,errorName:error instanceof Error?error.name:undefined},'warn');throw error;}
+    const context=await authority.authenticate(grant.token);
+    log('auth.login',{userId:context.userId,credentialId:context.credentialId,kind:input.mode});
+    onPasswordLogin?.(context);
     if(input.mode==='web'){sessionCookie(reply,grant.token,input.durationMs);const {token:_,...result}=grant;return result;}return grant;
   });
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/auth/self',discoverSession:true,handle:(c,req)=>({...accounts.self(c,authority),expiresAt:accounts.credentialInfo(c,authority).expiresAt,...(cookieCredential(req)?{csrfToken:digest('csrf:'+cookieCredential(req))}:{})})});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/logout',revokesSelf:true,handle:(c,_req,reply)=>{const result=accounts.revoke(c,authority,c.credentialId);clearCookie(reply);return result;}});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/password',revokesSelf:true,handle:async(c,req,reply)=>{const input=z.object({currentPassword:z.string().max(1024),password:passwordSchema}).strict().parse(req.body);const result=await accounts.changePassword(c,authority,input.currentPassword,input.password,req.ip);clearCookie(reply);return result;}});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/logout',revokesSelf:true,handle:(c,_req,reply)=>{const result=accounts.revoke(c,authority,c.credentialId);log('auth.logout',{userId:c.userId,credentialId:c.credentialId});clearCookie(reply);return result;}});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/password',revokesSelf:true,handle:async(c,req,reply)=>{const input=z.object({currentPassword:z.string().max(1024),password:passwordSchema}).strict().parse(req.body);const result=await accounts.changePassword(c,authority,input.currentPassword,input.password,req.ip);log('auth.password_changed',{userId:c.userId});clearCookie(reply);return result;}});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/admin/accounts',administrator:true,handle:c=>accounts.listAccounts(c,authority)});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/admin/accounts',administrator:true,handle:(c,req)=>accounts.createAccount(c,authority,z.object({username:usernameSchema,password:passwordSchema,administrator:z.boolean().default(false)}).strict().parse(req.body))});
-  registerAuthenticatedRoute(runtime,{method:'PATCH',url:'/api/admin/accounts/:id',administrator:true,revokesSelf:(c,req)=>c.userId===id(req)&&(req.body as {disabled?:boolean})?.disabled===true,handle:(c,req)=>{const input=z.object({disabled:z.boolean()}).strict().parse(req.body);return accounts.disable(c,authority,id(req),input.disabled);}});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/admin/accounts/:id/password',administrator:true,revokesSelf:(c,req)=>c.userId===id(req),handle:(c,req)=>accounts.resetPassword(c,authority,id(req),z.object({password:passwordSchema}).strict().parse(req.body).password)});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/admin/accounts',administrator:true,handle:async(c,req)=>{const input=z.object({username:usernameSchema,password:passwordSchema,administrator:z.boolean().default(false)}).strict().parse(req.body);const created=await accounts.createAccount(c,authority,input);log('auth.account_created',{userId:c.userId,accountId:created.userId,kind:input.administrator?'administrator':'member'});return created;}});
+  registerAuthenticatedRoute(runtime,{method:'PATCH',url:'/api/admin/accounts/:id',administrator:true,revokesSelf:(c,req)=>c.userId===id(req)&&(req.body as {disabled?:boolean})?.disabled===true,handle:(c,req)=>{const input=z.object({disabled:z.boolean()}).strict().parse(req.body);const result=accounts.disable(c,authority,id(req),input.disabled);log(input.disabled?'auth.account_disabled':'auth.account_enabled',{userId:c.userId,accountId:id(req)});return result;}});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/admin/accounts/:id/password',administrator:true,revokesSelf:(c,req)=>c.userId===id(req),handle:async(c,req)=>{const result=await accounts.resetPassword(c,authority,id(req),z.object({password:passwordSchema}).strict().parse(req.body).password);log('auth.password_reset',{userId:c.userId,accountId:id(req)});return result;}});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/connections',handle:c=>accounts.credentials(c,authority)});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/connections/self',discoverSession:true,handle:c=>({account:accounts.self(c,authority),credential:accounts.credentialInfo(c,authority),protocol:{min:2,max:2},capabilities:{authentication:true,ingest:true,ingressVersion:3,archiveRead:false}})});
-  registerAuthenticatedRoute(runtime,{method:'DELETE',url:'/api/connections/:id',revokesSelf:(c,req)=>c.credentialId===id(req),handle:(c,req)=>accounts.revoke(c,authority,id(req))});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/mcp',handle:(c,req)=>{const input=z.object({access:z.enum(['read','write']),sourceIds:z.array(z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/)).max(500).optional(),label:z.string().trim().min(1).max(120),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body),sourceIds=[...new Set(input.sourceIds)].sort();for(const id of sourceIds)runtime.services.forUser(c).get<PrivateData>('private-data').source(id);const sourcePins=runtime.services.forUser(c).get<ReturnType<ScopedMcp['forUser']>>('mcp').pinSources(sourceIds);return accounts.mintMcp(c,authority,{...input,sourceIds,sourcePins});}});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/session',handle:(c,req)=>{const input=device.parse(req.body);return accounts.issueClient(c,authority,{...input,label:input.deviceName});}});
+  registerAuthenticatedRoute(runtime,{method:'DELETE',url:'/api/connections/:id',revokesSelf:(c,req)=>c.credentialId===id(req),handle:(c,req)=>{const result=accounts.revoke(c,authority,id(req));log('auth.credential_revoked',{userId:c.userId,credentialId:id(req)});return result;}});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/mcp',handle:(c,req)=>{const input=z.object({access:z.enum(['read','write']),sourceIds:z.array(z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/)).max(500).optional(),label:z.string().trim().min(1).max(120),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body),sourceIds=[...new Set(input.sourceIds)].sort();for(const id of sourceIds)runtime.services.forUser(c).get<PrivateData>('private-data').source(id);const sourcePins=runtime.services.forUser(c).get<ReturnType<ScopedMcp['forUser']>>('mcp').pinSources(sourceIds);const grant=accounts.mintMcp(c,authority,{...input,sourceIds,sourcePins});log('auth.mcp_minted',{userId:c.userId,credentialId:grant.credentialId,kind:input.access,sources:sourceIds.length});return grant;}});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/session',handle:(c,req)=>{const input=device.parse(req.body);const grant=accounts.issueClient(c,authority,{...input,label:input.deviceName});log('auth.client_issued',{userId:c.userId,credentialId:grant.credentialId,name:input.deviceName,kind:input.platform});return grant;}});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/ticket',handle:(c,req)=>{
     z.object({}).strict().parse(req.body??{});const token=cookieCredential(req)??req.headers.authorization!.slice(7),deadline=accounts.credentialInfo(c,authority).expiresAt;
+    log('auth.ticket_issued',{userId:c.userId,credentialId:c.credentialId},'debug');
     return handoffs.ticket(token,()=>authority.assert(c),deadline);
   }});
-  app.post('/api/login/exchange',{bodyLimit:8192},(req,reply)=>{const exchanged=handoffs.exchange(req.body),grant=accounts.exchangeWeb(exchanged.token);sessionCookie(reply,grant.token,0);const {token:_,...result}=grant;return result;});
+  app.post('/api/login/exchange',{bodyLimit:8192},async(req,reply)=>{const exchanged=handoffs.exchange(req.body),grant=accounts.exchangeWeb(exchanged.token);const context=await authority.authenticate(grant.token);log('auth.login_exchanged',{userId:context.userId,credentialId:context.credentialId});sessionCookie(reply,grant.token,0);const {token:_,...result}=grant;return result;});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/invitations',handle:(c,req)=>{
     const input=z.object({serverUrl,label:z.string().trim().min(1).max(128),deviceId:device.shape.deviceId.optional(),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body);
-    return handoffs.invitation(input,c,()=>authority.assert(c),accounts.pairingConnections(c,authority,input.deviceId,deviceId=>runtime.services.forUser(c).get<{devices:()=>{items:Array<{id:string}>}}>('ingress').devices().items.some(d=>d.id===deviceId)||runtime.services.forUser(c).get<PrivateData>('private-data').sources().some(s=>s.deviceId===deviceId)));
+    const result=handoffs.invitation(input,c,()=>authority.assert(c),accounts.pairingConnections(c,authority,input.deviceId,deviceId=>runtime.services.forUser(c).get<{devices:()=>{items:Array<{id:string}>}}>('ingress').devices().items.some(d=>d.id===deviceId)||runtime.services.forUser(c).get<PrivateData>('private-data').sources().some(s=>s.deviceId===deviceId)));
+    log('auth.invitation_created',{userId:c.userId,name:input.label});
+    return result;
   }});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/invitations/revoke',handle:(c,req)=>handoffs.revokeInvitation(req.body,c.userId)});
-  app.post('/api/connections/redeem',{bodyLimit:8192},req=>handoffs.redeem(req.body));
-  app.post('/api/login/requests',{bodyLimit:8192},req=>handoffs.create(req.body));
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/invitations/revoke',handle:(c,req)=>{const result=handoffs.revokeInvitation(req.body,c.userId);log('auth.invitation_revoked',{userId:c.userId});return result;}});
+  app.post('/api/connections/redeem',{bodyLimit:8192},req=>{const result=handoffs.redeem(req.body);log('auth.redeemed');return result;});
+  app.post('/api/login/requests',{bodyLimit:8192},req=>{const result=handoffs.create(req.body);log('auth.login_requested',{},'debug');return result;});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/login/requests/:id',handle:(c,req)=>handoffs.detail(id(req),c.userId)});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/requests/:id/approve',handle:async(c,req)=>{
-    return handoffs.approve(id(req),()=>authority.assert(c),c.userId,accounts.handoffConnections(c,authority));
+    const result=await handoffs.approve(id(req),()=>authority.assert(c),c.userId,accounts.handoffConnections(c,authority));
+    log('auth.login_approved',{userId:c.userId});
+    return result;
   }});
   app.post('/api/login/poll',{bodyLimit:8192},req=>handoffs.poll(req.body));
   app.post('/api/login/ack',{bodyLimit:8192},req=>handoffs.poll(req.body,true));

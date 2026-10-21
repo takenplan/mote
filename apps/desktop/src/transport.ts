@@ -38,7 +38,7 @@ export async function uploadCapture(config: Config, event: CaptureEvent, image?:
 
 export async function heartbeat(config: Config, body: object, events?: EventJournal, signal?: AbortSignal): Promise<void> {
   if (!connectionToken(config)) return;
-  if(config.account){try{const receipt=await ingressRequest(config,'/api/ingress/devices/heartbeat',body,'POST',signal);if(receipt?.ok!==true)throw new TransportFailure('Device heartbeat was not acknowledged','RESPONSE');}catch(error){void events?.record('HEARTBEAT',failureCode(error,'HEARTBEAT'));}return;}
+  if(config.account){try{const receipt=await ingressRequest(config,'/api/ingress/devices/heartbeat',body,'POST',signal);if(receipt?.ok!==true)throw new TransportFailure('Device heartbeat was not acknowledged','RESPONSE');}catch(error){void events?.record('HEARTBEAT',failureCode(error,'HEARTBEAT'),{detail:error instanceof Error?error.name:undefined});}return;}
   try {
     const response = await fetch(`${validateServerUrl(config.serverUrl)}/api/devices/heartbeat`, {
       method: 'POST', headers: { 'Accept-Language': getLocale(), 'Authorization': `Bearer ${requireConnectionToken(config)}`, 'Content-Type': 'application/json' },
@@ -46,7 +46,7 @@ export async function heartbeat(config: Config, body: object, events?: EventJour
     });
     await response.body?.cancel().catch(() => undefined);
     if (!response.ok) void events?.record('HEARTBEAT', httpFailure(response.status), { httpStatus: response.status });
-  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code); }
+  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code, { detail: error instanceof Error ? error.name : undefined }); }
 }
 
 export async function uploadCaptureBatch(config: Config, entries: { event: CaptureEvent; image?: Buffer }[], signal?: AbortSignal, onBytes?: (bytes: number) => void, onReceipt?: (id: string, status: number) => void): Promise<Map<string, number>> {

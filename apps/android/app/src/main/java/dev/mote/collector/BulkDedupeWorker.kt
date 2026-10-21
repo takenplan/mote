@@ -72,7 +72,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                 SupportEvents.record(applicationContext, EventStage.DEDUPE, if (isStopped) EventCode.CANCELLED else EventCode.STOPPED, android.os.SystemClock.elapsedRealtime() - started)
             }
         } catch (error: Exception) {
-            SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE), android.os.SystemClock.elapsedRealtime() - started)
+            SupportEvents.failure(applicationContext, EventStage.DEDUPE, error, android.os.SystemClock.elapsedRealtime() - started)
             Result.failure(workDataOf("message" to (error.message ?: MoteI18n.text("操作失败，未处理记录已保留"))))
         } finally { LocalStateChanges.changed(immediate = true) }
     }
@@ -110,7 +110,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                         .put("changedPixelRatio", comparison.changedPixelRatio).put("changedBlocks", comparison.changedBlocks)
                         .put("changedRows", comparison.changedRows).put("changedCols", comparison.changedCols))
                 } else { reference = row; referenceFeatures = features }
-            } catch (error: Exception) { SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE)); errors++; reference = null; referenceFeatures = null }
+            } catch (error: Exception) { SupportEvents.failure(applicationContext, EventStage.DEDUPE, error); errors++; reference = null; referenceFeatures = null }
             progress(MoteI18n.text("比较图片"), index + 1, rows.size, pairs.length(), errors)
         }
         if (isStopped) return Result.failure()
@@ -139,7 +139,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                     val ok = source.resolveDedupe(row.getString("id"), row.getString("blob"),
                         if (source === queue) ref!!.getString("id") else null, ref?.getString("blob"), target, if (action == "restore") restoreLimit else Long.MAX_VALUE)
                     if (ok) done++ else skipped++
-                } catch (error: Exception) { SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE)); skipped++ }
+                } catch (error: Exception) { SupportEvents.failure(applicationContext, EventStage.DEDUPE, error); skipped++ }
                 progress(MoteI18n.text("处理记录"), index + 1, items.length(), done, skipped)
             }
         } }

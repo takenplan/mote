@@ -16,8 +16,9 @@ export function eventLevel(code: EventCode): EventLevel {
   if (['WAIT_NETWORK','SCHEDULER','PERMISSION','MODEL_UNAVAILABLE'].includes(code)) return 'warn';
   return 'error';
 }
-export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number }
+export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number; detail?: string; name?: string; kind?: string }
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= Number.MAX_SAFE_INTEGER;
+const text = (v: unknown, max: number): string | undefined => typeof v === 'string' && v.trim() ? v.replaceAll(/[\r\n]+/g, ' ').slice(0, max) : undefined;
 function cleanEvent(value: unknown): SupportEvent | undefined {
   if (!value || typeof value !== 'object') return;
   const v = value as SupportEvent;
@@ -25,7 +26,10 @@ function cleanEvent(value: unknown): SupportEvent | undefined {
   return { atMs: v.atMs, stage: v.stage, code: v.code,
     ...(['debug','info','warn','error'].includes(v.level ?? '') ? { level: v.level } : {}),
     ...(number(v.elapsedMs) && v.elapsedMs >= 0 ? { elapsedMs: v.elapsedMs } : {}),
-    ...(Number.isInteger(v.httpStatus) && v.httpStatus! >= 100 && v.httpStatus! <= 599 ? { httpStatus: v.httpStatus } : {}) };
+    ...(Number.isInteger(v.httpStatus) && v.httpStatus! >= 100 && v.httpStatus! <= 599 ? { httpStatus: v.httpStatus } : {}),
+    ...(text(v.detail, 400) ? { detail: text(v.detail, 400) } : {}),
+    ...(text(v.name, 160) ? { name: text(v.name, 160) } : {}),
+    ...(text(v.kind, 80) ? { kind: text(v.kind, 80) } : {}) };
 }
 export function httpFailure(status: number): EventCode { return status === 401 || status === 403 ? 'AUTH' : status === 409 || status === 410 ? 'CONFLICT' : status >= 500 ? 'SERVER' : 'RESPONSE'; }
 export class TransportFailure extends Error {
@@ -57,7 +61,7 @@ export class EventJournal {
   constructor(private readonly directory: string, private readonly enabled: () => boolean, private readonly limit = 500) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error(moteText("事件日志上限无效"));
   }
-  record(stage: EventStage, code: EventCode, metrics: { elapsedMs?: number; httpStatus?: number } = {}): Promise<void> {
+  record(stage: EventStage, code: EventCode, metrics: { elapsedMs?: number; httpStatus?: number; detail?: string; name?: string; kind?: string } = {}): Promise<void> {
     if (!this.enabled()) return Promise.resolve();
     const event = cleanEvent({ atMs: Date.now(), stage, code, level: eventLevel(code), ...metrics });
     if (!event) return Promise.resolve();

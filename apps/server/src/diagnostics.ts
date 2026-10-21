@@ -12,8 +12,8 @@ import type {PreparedConfigChange} from './config-service.js';
 
 export type LogLevel = 'debug'|'info'|'warn'|'error'|'silent';
 export type Stage = 'ingest'|'index'|'agent'|'source'|'maintenance'|'file';
-export type DiagnosticStage = Stage|'request'|'system'|'unknown';
-export const diagnosticStageFilters=['all','system','request','ingest','index','agent','source','maintenance','file','unknown'] as const;
+export type DiagnosticStage = Stage|'request'|'system'|'auth'|'config'|'device'|'import'|'connector'|'mcp'|'memory'|'task'|'plugin'|'lifecycle'|'storage'|'media'|'update'|'unknown';
+export const diagnosticStageFilters=['all','system','request','auth','config','update','device','ingest','import','file','media','source','connector','mcp','index','agent','memory','task','plugin','storage','lifecycle','maintenance','unknown'] as const;
 export type DiagnosticStageFilter=typeof diagnosticStageFilters[number];
 type RecordingOperation='recording_metadata'|'recording_discover'|'recording_transcript'|'recording_media'|'recording_decode'|'recording_publish';
 export type Operation = RecordingOperation|'capture'|'note'|'import'|'embedding'|'search'|'timeline'|'evidence'|'activity'|'devices'|'query'|'insight'|'retention'|'extract'|'diarize'|'align'|'turns'|'summary'|'file_upload'|'file_part'|'file_commit'|'file_revision'|'file_process'|'file_settings'|'file_retry';
@@ -28,10 +28,16 @@ export interface AgentTraceInput {
 }
 const levels = ['debug','info','warn','error','silent'] as const;
 const operations:Operation[] = ['recording_metadata','recording_discover','recording_transcript','recording_media','recording_decode','recording_publish','capture','note','import','embedding','search','timeline','evidence','activity','devices','query','insight','retention','extract','diarize','align','turns','summary','file_upload','file_part','file_commit','file_revision','file_process','file_settings','file_retry'];
-const events = new Set(['server.started','server.stopping','request.started','request.completed','request.failed','queue.snapshot','support.exported','agent.trace','agent.fragment_timing','agent.harness_timing','agent.tool_rejected','agent.memory_validation_failed','agent.waiting','agent.yielded','agent.heartbeat','file.waiting','file.blocked','file.retry','file.cached','file.cancelled','file.settings','file.step.started','file.step.completed','file.step.failed',...['ingest','index','agent','source','maintenance','file'].flatMap(s=>[`${s}.started`,`${s}.completed`,`${s}.failed`])]);
+/** Operational detail is deliberately logged: names are lowercase dotted paths. */
+const eventName=/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*){1,4}$/;
+const codeName=/^[a-z][a-z0-9_]{0,80}$/;
+const slugName=/^[a-z][a-z0-9-]{0,60}$/;
 const routes = new Set(['files','file-sync','file-processing','conversations','configuration','sources','memories','layers','connectors','health','status','captures','notes','image','devices','connections','updates','activity','query','insights','index','export','import','diagnostics','support','web','unknown']);
 const categories = new Set(['validation','unauthorized','forbidden','not_found','conflict','source_context_changed','deleted','too_large','rate_limited','processor_response_unknown','processor_still_running','step_failed','step_pending','provider_timeout','provider_unavailable','provider_network','interrupted','input_changed','grant_revoked','model_not_configured','agent_response','embedding_http','embedding_invalid','embedding_transport','timeout','unavailable','storage_full','internal','not_configured','archive_only','unsupported_format','summary_disabled','cancelled']);
-const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount'] as const;
+const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount','items','files','entries','total','processed','imported','duplicates','records','sizeBytes','attempts','port','pid','revision','exitCode','totalBytes','freeBytes','queueBytes','chunks','samples','lines','connections','users','batches','candidates','matches','sources','memories','inputTokens','outputTokens','tokens','depth','position','offset','limit','timeoutMs','intervalMs','delayMs','uptimeMs','rssBytes','sessions','devices','tasks','jobs','runs','errors','dropped','written','skipped','succeeded','received','accepted','rejected','remaining','available','capacity','percent','step','index','seq','size','expiresInMs'] as const;
+/** Free-text fields are bounded single-line values; detail carries error messages. */
+const textKeys = {detail:2000,errorName:160,name:300,target:400,phase:160,state:160,kind:160,provider:120,model:300,protocol:120,profile:120,channel:120} as const;
+const uuidKeys = ['requestId','jobId','batchId','runId','evidenceId','taskId','operationId','accountId','userId','deviceId','sourceId','sessionId','credentialId','captureId','materialId','workId','conversationId'] as const;
 const responseReasons:Record<string,string>={
   provider_quota:"模型服务额度不足，恢复账户额度后再继续。",
   provider_policy:"模型服务拒绝了本次请求，请调整内容或处理范围。",
@@ -71,8 +77,26 @@ const truncateUtf8=(value:string,maxBytes:number)=>Buffer.byteLength(value)<=max
 const eventStage=(event:string):DiagnosticStage=>{
   const prefix=event.split('.',1)[0];
   if(prefix==='request')return 'request';
-  if(prefix==='ingest'||prefix==='index'||prefix==='agent'||prefix==='source'||prefix==='maintenance'||prefix==='file')return prefix;
-  if(prefix==='server'||prefix==='queue'||prefix==='support')return 'system';
+  if(prefix==='ingest'||prefix==='capture')return 'ingest';
+  if(prefix==='index')return 'index';
+  if(prefix==='agent'||prefix==='ask'||prefix==='query'||prefix==='insight'||prefix==='conversation'||prefix==='dialogue')return 'agent';
+  if(prefix==='source')return 'source';
+  if(prefix==='maintenance'||prefix==='archive'||prefix==='retention')return 'maintenance';
+  if(prefix==='file')return 'file';
+  if(prefix==='auth'||prefix==='account'||prefix==='login'||prefix==='session')return 'auth';
+  if(prefix==='config'||prefix==='configuration')return 'config';
+  if(prefix==='device'||prefix==='devices'||prefix==='ingress'||prefix==='heartbeat')return 'device';
+  if(prefix==='import'||prefix==='imports')return 'import';
+  if(prefix==='connector'||prefix==='connectors'||prefix==='gmail'||prefix==='google'||prefix==='lark')return 'connector';
+  if(prefix==='mcp')return 'mcp';
+  if(prefix==='memory'||prefix==='memories')return 'memory';
+  if(prefix==='task'||prefix==='tasks'||prefix==='execution'||prefix==='job'||prefix==='jobs')return 'task';
+  if(prefix==='plugin'||prefix==='plugins')return 'plugin';
+  if(prefix==='lifecycle'||prefix==='backup'||prefix==='restore'||prefix==='erase')return 'lifecycle';
+  if(prefix==='storage'||prefix==='originals'||prefix==='content')return 'storage';
+  if(prefix==='media'||prefix==='transcribe'||prefix==='transcription')return 'media';
+  if(prefix==='update'||prefix==='updates'||prefix==='software')return 'update';
+  if(prefix==='server'||prefix==='queue'||prefix==='support'||prefix==='app'||prefix==='web')return 'system';
   return 'unknown';
 };
 const validStage=(value:unknown):value is DiagnosticStage=>typeof value==='string'&&value!=='all'&&diagnosticStageFilters.includes(value as DiagnosticStageFilter);
@@ -107,7 +131,7 @@ async function readLogLine(file:FileHandle,range:LogLineRange):Promise<string> {
   // The scanner's chunk is valid until its next iteration; ordinary short lines need no extra I/O.
   return range.chunk?range.chunk.toString('utf8',range.offset!,range.offset!+range.length):readLogText(file,range.position,range.length);
 }
-export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
+export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;taskId?:string;operationId?:string;accountId?:string;userId?:string;deviceId?:string;sourceId?:string;sessionId?:string;credentialId?:string;captureId?:string;materialId?:string;workId?:string;conversationId?:string;detail?:string;errorName?:string;name?:string;target?:string;phase?:string;state?:string;kind?:string;provider?:string;model?:string;protocol?:string;profile?:string;channel?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
 export interface DiagnosticEvent extends EventFields { seq:number;at:string;instanceId:string;event:string;level:Exclude<LogLevel,'silent'>;stage?:DiagnosticStage;truncated?:boolean;trace?:Record<string,unknown> }
 export interface ServerDiagnosticsOptions { enabled?:boolean;debug?:boolean;level?:LogLevel;directory:string;maxBytes?:number;maxFiles?:number;maxEntries?:number;now?:()=>Date;traceEnabled?:boolean }
 
@@ -154,25 +178,24 @@ function fields(raw:unknown):EventFields {
   if(value.unit==='agent_fragment'||value.unit==='harness_session')out.unit=value.unit;
   if(value.status==='completed'||value.status==='failed'||value.status==='yielded')out.status=value.status;
   for(const key of numberKeys){const n=value[key];if(typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=Number.MAX_SAFE_INTEGER)out[key]=Math.round(n*1000)/1000;}
-  if(typeof value.requestId==='string'&&uuid.test(value.requestId))out.requestId=value.requestId;
-  if(typeof value.jobId==='string'&&uuid.test(value.jobId))out.jobId=value.jobId;
-  for(const key of ['batchId','runId','evidenceId'] as const)if(typeof value[key]==='string'&&uuid.test(value[key]))out[key]=value[key];
+  for(const key of uuidKeys)if(typeof value[key]==='string'&&uuid.test(value[key]))(out as Record<string,unknown>)[key]=value[key];
+  for(const [key,limit] of Object.entries(textKeys) as [keyof typeof textKeys,number][]){const v=value[key];if(typeof v==='string'&&v.trim())(out as Record<string,unknown>)[key]=v.replace(/[\r\n\t]+/g,' ').trim().slice(0,limit);}
   if(typeof value.validationCode==='string'&&Object.hasOwn(validationFeedback,value.validationCode))out.validationCode=value.validationCode;
   if(typeof value.toolErrorCode==='string'&&['evidence_changed','invalid_tool_arguments','evidence_budget_exceeded','tool_budget_exceeded','evidence_scope_denied','invalid_evidence_range','evidence_range_exceeded','invalid_changes_view','context_tool_failed','repeated_tool_failure','image_disclosure_disabled'].includes(value.toolErrorCode))out.toolErrorCode=value.toolErrorCode;
   if(value.validationPhase==='extract'||value.validationPhase==='review')out.validationPhase=value.validationPhase;
   if(typeof value.fieldPath==='string'&&value.fieldPath.length<=200&&/^[a-zA-Z_][a-zA-Z0-9_.\[\]]*$/.test(value.fieldPath)){const path=value.fieldPath.replace(/\[(\d+)\]/g,'.$1').split('.').map(key=>/^\d+$/.test(key)?Number(key):key);if(validationLocation(path)===value.fieldPath)out.fieldPath=value.fieldPath;}
   if(typeof value.problem==='string'&&['invalid_uuid','invalid_pattern','missing_required_field','invalid_type','invalid_string','invalid_enum_value','unrecognized_keys','too_big','too_small','custom'].includes(value.problem))out.problem=value.problem;
   if(typeof value.method==='string'&&['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].includes(value.method))out.method=value.method as EventFields['method'];
-  if(operations.includes(value.operation as Operation))out.operation=value.operation as Operation;
-  if(typeof value.route==='string'&&routes.has(value.route))out.route=value.route;
-  if(typeof value.category==='string'&&categories.has(value.category))out.category=value.category;
-  if(typeof value.reason==='string'&&Object.hasOwn(responseReasons,value.reason))out.reason=value.reason;
+  if(operations.includes(value.operation as Operation)||(typeof value.operation==='string'&&codeName.test(value.operation)))out.operation=value.operation as Operation;
+  if(typeof value.route==='string'&&(routes.has(value.route)||slugName.test(value.route)))out.route=value.route;
+  if(typeof value.category==='string'&&(categories.has(value.category)||codeName.test(value.category)))out.category=value.category;
+  if(typeof value.reason==='string'&&(Object.hasOwn(responseReasons,value.reason)||codeName.test(value.reason)))out.reason=value.reason;
   return out;
 }
-function cleanEvent(value:unknown):DiagnosticEvent|undefined {
+export function cleanEvent(value:unknown):DiagnosticEvent|undefined {
   if(!value||typeof value!=='object')return;
   const v=value as Record<string,unknown>;
-  if(typeof v.event!=='string'||!events.has(v.event)||!levels.slice(0,4).includes(v.level as 'info')||typeof v.seq!=='number'||!Number.isSafeInteger(v.seq)||v.seq<1||typeof v.at!=='string'||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v.at)||!Number.isFinite(Date.parse(v.at))||typeof v.instanceId!=='string'||!uuid.test(v.instanceId))return;
+  if(typeof v.event!=='string'||v.event.length>120||!eventName.test(v.event)||!levels.slice(0,4).includes(v.level as 'info')||typeof v.seq!=='number'||!Number.isSafeInteger(v.seq)||v.seq<1||typeof v.at!=='string'||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v.at)||!Number.isFinite(Date.parse(v.at))||typeof v.instanceId!=='string'||!uuid.test(v.instanceId))return;
   const trace=v.event==='agent.trace'&&v.trace&&typeof v.trace==='object'&&!Array.isArray(v.trace)?v.trace as Record<string,unknown>:undefined;
   if(v.event==='agent.trace'&&typeof trace?.type!=='string')return;
   return {seq:v.seq,at:v.at,instanceId:v.instanceId,event:v.event,level:v.level as DiagnosticEvent['level'],stage:validStage(v.stage)?v.stage:eventStage(v.event),...fields(v),...(v.truncated===true?{truncated:true}: {}),...(trace?{trace}: {})};
@@ -337,7 +360,7 @@ export class ServerDiagnostics {
   run<T>(requestId:string,task:()=>T):T {return this.context.run(uuid.test(requestId)?requestId:randomUUID(),task);}
   requestId():string|undefined {return this.context.getStore();}
   record(event:string,value:EventFields={},level:DiagnosticEvent['level']='info') {
-    if(event==='agent.trace'||this.closed||!this.enabled||this.level==='silent'||!events.has(event)||!['debug','info','warn','error'].includes(level)||levels.indexOf(level)<levels.indexOf(this.level))return;
+    if(event==='agent.trace'||this.closed||!this.enabled||this.level==='silent'||event.length>120||!eventName.test(event)||!['debug','info','warn','error'].includes(level)||levels.indexOf(level)<levels.indexOf(this.level))return;
     const at=this.now().toISOString();
     const entry:DiagnosticEvent={seq:++this.seq,at,instanceId:this.instanceId,event,level,stage:eventStage(event),...fields({requestId:this.context.getStore(),...value})};
     const line=serializeDiagnosticEvent(entry,Math.min(maxEventBytes,this.maxBytes));

@@ -1,4 +1,5 @@
 import {ApiError,createApi,readApiError,readApiJson,type WebConnection} from './api';
+import * as logger from './logger';
 import {moteText,getLocale} from '@mote/shared/i18n';
 import {clearSession} from './session';
 
@@ -8,6 +9,7 @@ export const durationForLifetime={session:0,'1d':86400000,'7d':604800000,'30d':2
 let sequence:Promise<unknown>=Promise.resolve();
 let authenticationIntent=0;
 function announce(){
+  logger.info('auth.session_changed');
   const change=JSON.stringify({id:crypto.randomUUID()});
   try{globalThis.localStorage?.setItem(authChangeKey,change);}catch{/* Cookie/session fences work with blocked storage. */}
   globalThis.window?.dispatchEvent(new Event(authChangeEvent));
@@ -23,8 +25,10 @@ export function changeWebAuthentication<T>(action:(isCurrent:()=>boolean)=>Promi
   const result=sequence.then(run,run);sequence=result.catch(()=>{});return result;
 }
 export async function publicAuth<T>(path:string,body?:unknown):Promise<T>{
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',redirect:'error',headers:{'X-Mote-Protocol-Version':'2','Accept-Language':getLocale(),...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
-  if(!response.ok)throw await readApiError(response);
+  const startedAt=performance.now(),method=body===undefined?'GET':'POST';
+  const response=await fetch(path,{method,credentials:'same-origin',redirect:'error',headers:{'X-Mote-Protocol-Version':'2','Accept-Language':getLocale(),...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})}).catch(error=>{logger.warn('auth.request_failed',{method,route:path,durationMs:performance.now()-startedAt,detail:error instanceof Error?error.name:undefined});throw error;});
+  if(!response.ok){const failure=await readApiError(response);logger[response.status>=500?'error':'warn']('auth.request_rejected',{method,route:path,status:response.status,code:failure.code,durationMs:performance.now()-startedAt});throw failure;}
+  logger.debug('auth.request_completed',{method,route:path,status:response.status,durationMs:performance.now()-startedAt});
   return readApiJson<T>(response);
 }
 export async function discoverWebSession():Promise<WebConnection|null>{

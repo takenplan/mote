@@ -37,14 +37,14 @@ class SourceScanWorker(context: Context, params: WorkerParameters) : Worker(cont
                         }
                         is SourceEmission.Indexed -> store.scan(source, emission.scan, minOf(64L, settings.read().maxQueueMiB.toLong()) * 1024 * 1024)
                     }
-                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK)
-                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION) }
+                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, name = source.id)
+                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, name = source.id) }
                 catch (_: android.os.OperationCanceledException) { return Result.retry() }
-                catch (_: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE) }
+                catch (e: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, detail = e.javaClass.simpleName, name = source.id) }
             }
             SourceWork.upload(applicationContext, inputData.getBoolean("syncExplicit", false))
             Result.success()
-        } catch (_: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE); Result.retry() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, detail = e.javaClass.simpleName); Result.retry() }
     }
 }
 
@@ -140,7 +140,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                         store.acknowledge(source.id, target, body.getString("externalId"), body.getString("revision")); submitted++
                         settings.syncStatus("uploading", MoteI18n.text("正在同步来源记录"), uploaded = true)
                         Operations.record(applicationContext, OperationKind.SOURCE_ACK, httpStatus = code)
-                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code)
+                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code, name = source.id)
                     }
                     if (store.next(source.id, target) == null) store.status(source.id, "synced")
                     else if (submitted >= 20 || slice.exhausted) { more = true; readyMore = true }
@@ -155,7 +155,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     } catch (_: SourcePauseLookupFailure) {
                         store.status(source.id, "offline")
                         Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK)
-                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK)
+                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, name = source.id)
                         failed = true
                         continue
                     }
@@ -165,7 +165,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                         blocked = true
                         if (!source.binaryFiles()) store.next(source.id, target)?.let { store.rejectUpload(source.id, target, it) }
                     }
-                } catch (_: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK); failed = true }
+                } catch (e: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, detail = e.javaClass.simpleName, name = source.id); failed = true }
                 finally { dispatch.record(slice.bytes, slice.requests) }
             }
             if (blocked) {
@@ -182,7 +182,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
         } catch (error: SyncConditionsUnavailable) {
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
-        } catch (_: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID); failure() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID, detail = e.javaClass.simpleName); failure() }
     }
 }
 

@@ -7,12 +7,15 @@ import org.json.JSONObject
 import java.io.File
 
 object SupportEvents {
-    fun record(context: Context, stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null) {
-        runCatching { runtime(context).event(stage, code, elapsedMs, httpStatus) }
+    fun record(context: Context, stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, detail: String? = null, name: String? = null) {
+        runCatching { runtime(context).event(stage, code, elapsedMs, httpStatus, detail, name) }
         if (!context.getSharedPreferences("mote", Context.MODE_PRIVATE).getBoolean("diagnosticsEnabled", RuntimeProfile.current.detailedDiagnostics)) return
         // Diagnostic storage failure never changes capture/queue correctness.
-        runCatching { journal(context).record(stage, code, elapsedMs, httpStatus) }
+        runCatching { journal(context).record(stage, code, elapsedMs, httpStatus, detail, name) }
     }
+    /** Failure shorthand: classify the error and carry its exception class name. */
+    fun failure(context: Context, stage: EventStage, error: Throwable, elapsedMs: Long? = null, httpStatus: Int? = null, name: String? = null) =
+        record(context, stage, EventJournal.failure(error, stage), elapsedMs, httpStatus, detail = error.javaClass.simpleName, name = name)
     fun runtime(context: Context) = RuntimeLog(File(context.noBackupFilesDir, "mote.log"))
     fun journal(context: Context) = EventJournal(File(context.noBackupFilesDir, "support-events.json"))
     fun export(context: Context, hours: Int = 24): String {

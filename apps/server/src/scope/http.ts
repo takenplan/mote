@@ -3,7 +3,8 @@ import {SCOPE_BASELINE,ScopeError} from './baseline.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
 import {AuthError,type Accounts} from './accounts.js';
-export type ScopedRuntime={app:FastifyInstance;authority:UserContextAuthority;services:ScopedServices;accounts?:Accounts};
+import type {ServerDiagnostics} from '../diagnostics.js';
+export type ScopedRuntime={app:FastifyInstance;authority:UserContextAuthority;services:ScopedServices;accounts?:Accounts;diagnostics?:ServerDiagnostics};
 export const SESSION_COOKIE='__Host-mote-session';
 export function cookieCredential(request:FastifyRequest){
   const values=(request.headers.cookie??'').split(';').map(v=>v.trim()).filter(v=>v.startsWith(SESSION_COOKIE+'='));
