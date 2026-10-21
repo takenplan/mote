@@ -53,7 +53,7 @@ npm run build:central
 
 [浏览器脚本](../apps/web/test/ask-loading-browser.cjs)使用生成 HTTP 回执、独立临时 profile 和随机 loopback 端口，加载实际 Web main 入口；不读取日常中央节点，不采集个人截图，不调用外部模型。通过隐藏渲染器观察慢读取期间的 DOM、焦点、草稿与加载状态，并覆盖真实路由和页面刷新。结果写入被忽略的 `.mote/web-ask-loading/`。后台执行约束见[开发说明](development.md#background-testing)。
 
-这份文档记录回归要求和审计范围，不代表当前提交已经通过全部检查。PR 前仍按[影响范围](development.md#pr-check-scope)运行 `npm run check:affected`，并记录对应代码版本的实际测试结果。生成 DOM 测试、隐藏浏览器检查、运行中的个人部署、实体设备及真实模型验证分别报告；前两项不能证明后几项已验证。
+这份文档记录回归要求和审计范围。后续开发按[验证阶段](development.md#validation-stages)执行：开发中、中间提交和草稿 PR 更新先做定向检查，注明待完成的最终验证；最终合并候选由集成负责人完成 `npm run check:affected` 和受影响用户流程。记录对应代码版本的实际测试结果，生成 DOM 测试、隐藏浏览器检查、运行中的个人部署、实体设备及真实模型验证分别报告。
 
 <a id="multiuser-home-device-parity"></a>
 

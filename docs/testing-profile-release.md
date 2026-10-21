@@ -17,11 +17,16 @@ daily installation. Results below define coverage, not claims of execution.
 | Diagnostic defaults | New Dev enables debug/client sampling; new Prod/Test default off for extra detail. Explicit false and silent survive unrelated YAML saves and restart. Instance trace stays off and each user's trace stays opt-in. | Central config + real HTTP, client Profile tests |
 | Download entry | Dev manual-download entry opens the component Actions workflow; Beta/stable use production packages and manual installation. No unsigned online update is implied. | Client unit/UI fixtures and link review |
 
-Before a PR run `npm run check:affected`. For affected lifecycle/packaging paths,
-also build Desktop, run its Dev credential journey and packaged metadata smoke,
-run `npm run test:profiles` after `build:central`, and build/lint affected Android
-variants. Record exact executed commands and outcomes in the PR. Rerun affected
-checks after code changes; document-only edits do not require application tests.
+Follow the [validation stages](development.md#validation-stages): use focused
+checks during implementation, intermediate commits and draft PR updates, and
+state pending final validation. The integration owner completes the final merge
+candidate's `npm run check:affected` plan and required journeys. For affected
+lifecycle/packaging paths, also build Desktop, run its Dev credential journey
+and packaged metadata smoke, run `npm run test:profiles` after `build:central`,
+and build/lint affected Android variants. Record exact inputs, commands and
+outcomes in the PR; after changes, rerun invalidated checks and reuse matching
+receipts under the development guide. Documentation-only edits need formatting,
+grammar, link and rendering review.
 
 GitHub signing-secret access and actual publication, Apple Developer ID /
 notarization, real Keychain behavior, physical devices, Docker and live model
