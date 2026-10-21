@@ -63,7 +63,7 @@ function fixture(t: TestContext) {
 
 test('Server launcher bounds its CPU default and leaves native CLI overrides after the defaults', () => {
   for (const parallelism of [1, 2, 4, 6, 18, 128]) {
-    assert.equal(testWorkerCount(parallelism), Math.max(4, Math.min(parallelism, MAX_TEST_WORKERS)));
+    assert.equal(testWorkerCount(parallelism), Math.max(1, Math.min(parallelism, MAX_TEST_WORKERS)));
   }
   assert.deepEqual(testArguments({ parallelism: 18, nodeOptions: '', args: ['--test-concurrency=1', '--test-name-pattern=generated'] }),
     ['--import', 'tsx', '--test', `--test-concurrency=${testWorkerCount(18)}`, '--test-timeout=120000',
@@ -265,4 +265,20 @@ process.exitCode=await runChecks([
   assert.equal(receipt.exitCode, result.code);
   assert.deepEqual(receipt.steps.map((step: { status: string }) => step.status), ['failed', 'unrun']);
   assert.equal(existsSync(checkDriverPaths(f.directory).lockDirectory), false, 'confirmed cleanup must release the fixture lock');
+});
+
+
+test('explicit file selection replaces discovery and rejects invalid selections before running tests', async t => {
+  const f = fixture(t);
+  writeFileSync(join(f.directory, 'test/chosen.test.ts'), "import test from 'node:test';test('GENERATED_CHOSEN',()=>{});\n");
+  writeFileSync(join(f.directory, 'test/unrelated.test.ts'), "throw Error('GENERATED_UNRELATED_MUST_NOT_RUN');\n");
+  const selected = await f.start(launcher, ['--file', 'test/chosen.test.ts']).done;
+  assert.equal(selected.code, 0, selected.output);
+  assert.match(selected.output, /GENERATED_CHOSEN/);
+  assert.doesNotMatch(selected.output, /GENERATED_UNRELATED_MUST_NOT_RUN/);
+  for (const args of [['--file'], ['--file', ''], ['--file', 'test/missing.test.ts'], ['--file', 'test'], ['--performance', '--file', 'test/chosen.test.ts']]) {
+    const rejected = await f.start(launcher, args).done;
+    assert.notEqual(rejected.code, 0, rejected.output);
+    assert.doesNotMatch(rejected.output, /GENERATED_CHOSEN/);
+  }
 });

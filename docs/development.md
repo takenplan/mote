@@ -135,19 +135,24 @@ npm run build -w @mote/shared -w @mote/agent
 npm run typecheck -w @mote/server
 ```
 
-Server 的 `npm test -w @mote/server -- test/某文件.test.ts` 当前仍会追加默认 `test/*.test.ts`，并非单文件入口。需要指定文件时，直接调用原生测试器；从仓库根目录进入 Server 后执行，例如上传接口修改：
+Server 使用明确的文件选择，替换默认集合；重复 `--file` 可指定多个文件。文件不存在、为空或不是测试文件时立即失败。原有时限、reporter、真实模型关闭规则和退出/清理行为保持不变：
 
 ```sh
-cd apps/server
-env -u MOTE_TEST_LIVE_EMBEDDINGS -u MOTE_MEMORY_CONTEXT_LIVE \
-  node --import tsx --test --test-timeout=120000 test/import-upload-http.test.ts
+# 轻量包装器入口，不自动构建，不产生驱动回执
+npm test -w @mote/server -- --file test/import-upload-http.test.ts
+# 仓库根目录：共享锁、环境预检、shared/agent 构建和原始回执
+npm run check:affected -- --test-file apps/server/test/import-upload-http.test.ts --dry-run
+npm run check:affected -- --test-file apps/server/test/import-upload-http.test.ts
+# 可重复 --test-file；后续复验可显式添加 --reuse <原始回执>
+# 仅修改检查工具时，执行生成 fixture，不构建产品
+npm run check:affected -- --component tooling
 ```
 
-把文件替换为实际受影响的测试，可同时列出相邻消费者文件。两个 `env -u` 保留默认包装器关闭遗留真实模型模式的行为；显式 live/performance 测试仍用下文的专用入口。该定向执行记录命令、版本、结果与清理情况，不产生完整检查驱动的可复用回执。
+`--test-file` 当前只接受 Server 顶层功能测试，与组件/Git 范围参数互斥。该计划只证明选中的文件，不能作为候选完整检查通过。驱动每次重建 shared/agent 前置；普通包装器要求调用方按输入变化准备已有构建。直接原生 Node 命令及包装器不经过共享资源锁；同机资源冲突时使用驱动入口，不并发启动重型测试。
 
 Desktop 的 Vitest 支持 `npm test -w @mote/desktop -- test/实际文件.test.ts` 文件筛选；Android 可用 `apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest --tests '完整测试类名'`。运行前确认路径或类名存在，并保留该用例所需前置、时限与清理。
 
-当前没有 `check:fast`、`test:focused` 或 `check:full` 脚本。根 `npm test`、`check:local` 以及选中 Server 后的完整工作区测试仍可能耗时较长；开发中使用上述定向入口，最终候选遵循下文的完整范围规则。
+当前没有 `check:fast`、`test:focused` 或 `check:full` 脚本；使用上述实际入口。根 `npm test`、`check:local` 和完整受影响计划仍可能耗时较长。日常修改先定向检查，组合候选先确认所有环境前置、相关新增/修改用例及关键真实连接，再执行剩余必要回归；发布继续验证实际分发产物和 Release 配置。
 
 ### 功能、性能与真实模型入口
 
@@ -170,7 +175,7 @@ Desktop 的 Vitest 支持 `npm test -w @mote/desktop -- test/实际文件.test.t
 其他 `scripts/benchmark-*` 各有输入要求，仍单独按需运行，不由默认检查或性能入口批量启动。
 
 Server 的 `npm test -w @mote/server` 使用 Node/tsx 按文件隔离运行，默认文件并发为
-`max(4, min(可用 CPU 数, 6))`；文件内部仍按原来的顺序执行。长套件已拆成均衡文件，
+`max(1, min(可用 CPU 数, 6))`；文件内部仍按原来的顺序执行。长套件已拆成均衡文件，
 断言、真实生命周期和原有时限保持不变。需要定向测量时可显式覆盖，例如
 `npm test -w @mote/server -- --test-concurrency=4`。并发越高不一定越快：部分场景
 自身会启动多路真实子进程，当前配置及测量依据见[Server 测试并行方案](design/server-test-parallelism.md)。
@@ -299,11 +304,11 @@ npm run check:affected -- --reuse /absolute/path/to/mote-check-receipts/receipt-
 
 这些入口在同一仓库的所有 worktree 间共享 Git common dir 下的 `mote-check-driver.lock`；已有驱动时，新请求以非零状态报告 `UNRUN`，不会排队或把占用当作通过。输出包含锁的所属进程和工作目录；只有确认原驱动及其子进程都已结束后才手工移除残留锁。不确定或过期锁不会自动抢占，也不终止其他任务。
 
-当前驱动按顺序执行，遇到失败会停止后续任务。原负责人先处理失败，集成负责人用原始回执恢复后续检查。等待期间可继续独立实现、审阅或经协调的定向验证；定向命令不经过该锁，必须另行隔离端口、profile、数据库、浏览器和设备。不要启动第二个完整计划，或把 `UNRUN` 记录为已执行。
+驱动仍顺序执行，每个正式计划任务声明前置依赖。普通断言、类型检查或构建失败后继续独立任务，依赖失败的任务保留 `unrun`、`prerequisite_failed` 和 `blockedBy`；整体结果仍失败。环境失败、信号中断、运行中输入变化或清理异常立即停止。未声明依赖的外部计划仍遇错停止。不要启动第二个完整计划，或把 `UNRUN` 记录为已执行。定向驱动与完整计划共用同一把锁；原生定向命令仍需自行隔离端口、profile、数据库、浏览器和设备。
 
 每轮回执位于 Git common dir 的 `mote-check-receipts/<id>.json`，只保存输入摘要、逐步状态、耗时及退出/清理结果等元数据，不保存源码、命令输出或凭据。失败、中断和未执行步骤分别保留。一次执行仍冻结运行时输入和计划；运行期间相关输入变化时，保留已执行记录，停止把本轮作为最终候选门禁，重新选择计划。普通文档、根 `AGENTS.md` 和 PR 元数据不进入运行时输入身份；运行时 prompt、配置、scope 清单及 workspace 资源仍是输入。
 
-后续候选使用 `--reuse <receipt-path>` 显式请求按任务复用，不自动寻找旧 PASS；可重复该参数以指定多个原始回执。仅支持 schema v2、同一主机和工作目录、确认清理完成的原始回执。原轮可以因后续无关任务失败或运行时输入变化而失败；能复用的是原本实际通过、退出码为 0、执行前后输入稳定且现在仍完全匹配的任务。中断、锁占用、阻塞、旧格式回执及身份不明的任务均重新执行。驱动比较任务定义、命令参数、所属源码、传递依赖、测试与 fixture/配置、依赖安装和执行环境的摘要，包括安装树和 `PATH` 工具元数据；HEAD 只记录来源，不单独使内容相同的任务失效。测试输入范围仍保守包含所属工作区的完整测试及传递产品源码，不进行单个测试文件依赖推断。
+后续候选使用 `--reuse <receipt-path>` 显式请求按任务复用，不自动寻找旧 PASS；可重复该参数以指定多个原始回执。仅支持 schema v2、同一主机和工作目录、确认清理完成的原始回执。原轮可以因后续无关任务失败或运行时输入变化而失败；能复用的是原本实际通过、退出码为 0、执行前后输入稳定且现在仍完全匹配的任务。中断、锁占用、阻塞、旧格式回执及身份不明的任务均重新执行。驱动比较任务定义、命令参数、所属源码、传递依赖、测试与 fixture/配置、依赖安装和执行环境的摘要，包括安装树和 `PATH` 工具元数据；HEAD 只记录来源，不单独使内容相同的任务失效。Server 完整功能测试按文件名 SHA-256 分入 16 个稳定组，每个文件恰好出现一次；组内仍使用原包装器和 Node 文件隔离/并发。测试文件局部修正只使包含它的组失效，新增/删除文件改变所属组的任务定义。每组保守包含产品源码、共享 helper/fixture、配置和传递依赖；发现测试或 fixture 引用其他 `.test` 路径时，保留整个所属套件作为输入。其他工作区仍按完整套件复用。不推断产品代码的逐文件依赖；不确定输入需要重新执行。定向任务有独立身份，不能填补完整计划中尚未通过的组。
 
 安装树使用本机文件与符号链接元数据识别重装、替换及本地依赖修补；仅排除已确认由 Vite/Vitest 生成的 `node_modules/.vite` 和 `.vite-temp` 输出缓存。工作区 `dist/` 的实际内容也进入消费它的任务身份，相同字节的重建不使任务失效，缺失、篡改或多余旧产物会使其失效。非空 `MOTE_*`、外部进程入口、Node preload/模块搜索或自定义 TypeScript 配置等未建模的外部覆盖，以及无法核对的依赖或工具输入，会禁止自动复用，任务仍正常执行。
 
@@ -311,7 +316,7 @@ npm run check:affected -- --reuse /absolute/path/to/mote-check-receipts/receipt-
 
 真实 CLI、输入失效、失败轮复用和回执出处的回归记录见[2026-10-20 按任务复用验证](validation/incremental-check-evidence-2026-10-20.md)。
 
-环境预检、构建和 Android Gradle 命令每轮实际执行，构建产物不从回执恢复；可复用任务只有输入身份完全相同才记为 `REUSED`，回执保留原始执行来源与身份。`REUSED` 不表示在新 SHA 重新执行，不沿着复用链把旧证据改成新的原始执行。运行期间发现的任务输入变化会保留为 `invalidated`，恢复原内容也不能抹去本轮已发现的不稳定。输入变化、未声明的输入或不稳定的外部条件不能靠同名任务或之前成功来证明；无法建模的检查重新执行。需要设备、模型或指定生命周期状态的旅程证据仍单独验收，通用任务复用不代替它们。
+Android 预检与 Gradle 子进程使用同一份解析 SDK 环境；遵守 local.properties 优先级，并在长检查前核对 Java 17+、platform 36 和 build-tools 36.0.0。Android 单测中的真实 Node 后端 fixture 需要 shared/agent 构建与 Server 原生 SQLite 预检，计划显式保留这些前置。环境预检、构建和 Android Gradle 命令每轮实际执行，构建产物不从回执恢复；可复用任务只有输入身份完全相同才记为 `REUSED`，回执保留原始执行来源与身份。`REUSED` 不表示在新 SHA 重新执行，不沿着复用链把旧证据改成新的原始执行。运行期间发现的任务输入变化会保留为 `invalidated`，恢复原内容也不能抹去本轮已发现的不稳定。输入变化、未声明的输入或不稳定的外部条件不能靠同名任务或之前成功来证明；无法建模的检查重新执行。需要设备、模型或指定生命周期状态的旅程证据仍单独验收，通用任务复用不代替它们。
 
 选择器不能从路径证明运行时兼容性。例如 Central 即使没有改客户端文件，若改变了客户端使用的 API、授权或同步契约，仍应补测受影响客户端。反之，内部实现、网页样式或普通服务端修复不默认要求 macOS 编译和单测。仅变更文案通常只需翻译与显示检查；新增翻译目录之外的变化按实际输入范围处理。
 

@@ -188,7 +188,7 @@ export function createTaskIdentity({ directory = process.cwd(), graph = workspac
   }
   let paths, environment;
   const taskIdentity = step => {
-    const match = /^(?:test|typecheck):(.+)$/.exec(step.id ?? '');
+    const match = /^(?:test|typecheck):([^#]+)(?:#\w+)?$/.exec(step.id ?? '');
     if ((!match || !byName.has(match[1])) && !reusableRootTasks.has(step.id)) return undefined;
     if (!paths) taskIdentity.refresh();
     if (!environment) return undefined;
@@ -204,9 +204,48 @@ export function createTaskIdentity({ directory = process.cwd(), graph = workspac
       if (['@mote/web', '@mote/desktop'].includes(match[1])) { include('@mote/server'); include('@mote/agent'); }
     }
     const hash = createHash('sha256').update('mote-task-inputs-v1\0').update(environment)
-      .update(JSON.stringify({ id: step.id, phase: step.phase, command: step.command, args: step.args ?? [], cwd: step.cwd ?? '.', graph }));
+      .update(JSON.stringify({ id: step.id, phase: step.phase, command: step.command, args: step.args ?? [], cwd: step.cwd ?? '.', needs: step.needs, env: step.env, testFiles: step.testFiles, graph }));
     executable(hash, commandPath(step.command, resolve(directory, step.cwd ?? '.'),
       checkExecutionEnvironment(env ?? process.env).PATH));
+    // Suite entries are declared independent. References to other suite paths
+    // make that uncertain; keep the entire owning suite in that bucket's key.
+    const selectedFiles = step.testFiles && new Set(step.testFiles);
+    const testReference = /\.test(?:\.(?:[cm]?js|tsx?)|['"`])/;
+    let independent = Boolean(selectedFiles);
+    if (selectedFiles) {
+      const owner = byName.get(match[1]);
+      const suites = paths.filter(path => suiteEntry(path, owner));
+      // Root helpers are shared inputs too. Preserve their named suite inputs;
+      // unknown test discovery keeps the complete suite. These reviewed CLI
+      // enumerators define the plan, rather than importing fixture test code.
+      const enumerators = new Set(['apps/server/test/run.mjs', 'scripts/release/check-plan.mjs',
+        'scripts/release/check-affected.mjs', 'scripts/release/affected-components.mjs']);
+      for (const path of paths) {
+        if (enumerators.has(path) || !/\.(?:[cm]?ts|tsx|[cm]?js)$/.test(path)) continue;
+        const workspace = graph.find(entry => path.startsWith(`${entry.path}/`));
+        if (workspace && (!closure.has(workspace.name) || suiteEntry(path, workspace) && !selectedFiles.has(path))) continue;
+        if (!workspace && /\.test\.(?:[cm]?js|[cm]?ts)$/.test(path)) continue;
+        let text;
+        try { text = readFileSync(resolve(directory, path), 'utf8'); }
+        catch (error) { if (error.code === 'ENOENT') { independent = false; continue; } throw error; }
+        if (!testReference.test(text)) continue;
+        if (workspace) { independent = false; continue; }
+        const named = text.match(/[\w-]+\.test(?:\.(?:[cm]?js|tsx?))?/g) ?? [];
+        for (const name of named) {
+          const stem = name.split('.test')[0];
+          const references = suites.filter(suite => stem === basename(suite).split('.test')[0]);
+          for (const suite of references) selectedFiles.add(suite);
+          // A root helper importing a different suite can reach arbitrary
+          // additional tests. Its import graph is deliberately not inferred.
+          if (!references.length && paths.some(other => basename(other).split('.test')[0] === stem && /\.test\./.test(other))) independent = false;
+        }
+        if (/[^\w-]\.test(?:\.(?:[cm]?js|tsx?)|['"`])/.test(text)) independent = false;
+      }
+      for (const path of selectedFiles) {
+        try { if (testReference.test(readFileSync(resolve(directory, path), 'utf8'))) independent = false; }
+        catch (error) { if (error.code === 'ENOENT') independent = false; else throw error; }
+      }
+    }
     for (const path of paths) {
       if (isCheckDocumentation(path)) continue;
       const workspace = graph.find(entry => path.startsWith(`${entry.path}/`));
@@ -216,6 +255,7 @@ export function createTaskIdentity({ directory = process.cwd(), graph = workspac
       if (match && workspace && path !== `${workspace.path}/package.json`) {
         if (!closure.has(workspace.name)) continue;
         if (workspace.name !== match[1] && suiteEntry(path, workspace)) continue;
+        if (workspace.name === match[1] && independent && suiteEntry(path, workspace) && !selectedFiles.has(path)) continue;
       }
       hash.update(path).update('\0').update(fileIdentity(resolve(directory, path))).update('\0');
     }
