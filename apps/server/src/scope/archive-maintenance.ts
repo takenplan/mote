@@ -19,7 +19,7 @@ const schedule:Schedule=(work,milliseconds)=>{const timer=setInterval(work,milli
 export class ArchiveMaintenance{
  private stop?:()=>void;
  private closed=false;
- constructor(private readonly options:{db:DatabaseSync;deploymentId:string;directory:string;cursorKey:string;configuration:Configurations;contentCipher?:(userId:string)=>ContentEncryption;onFailure?:(error:unknown)=>void},private readonly every:Schedule=schedule){}
+ constructor(private readonly options:{db:DatabaseSync;deploymentId:string;directory:string;cursorKey:string;configuration:Configurations;contentCipher?:(userId:string)=>ContentEncryption;onFailure?:(error:unknown)=>void;onSweep?:(summary:Summary)=>void},private readonly every:Schedule=schedule){}
  run():Summary{
   const result:Summary={owners:0,capturesDeleted:0,objectsRemoved:0,deferredOwners:0,failedOwners:0};
   if(this.closed)return result;
@@ -43,6 +43,7 @@ export class ArchiveMaintenance{
     else{result.failedOwners++;this.options.onFailure?.(error);}
    }
   }
+  this.options.onSweep?.(result);
   return result;
  }
  start(){

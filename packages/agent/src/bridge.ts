@@ -398,6 +398,7 @@ export async function startBridge(
         )
           throw hostError("Unsafe Harness tool composition");
         ready = true;
+        reportTrace(bounds,{type:'bridge.ready',stage:'starting',status:'succeeded',payload:{tools:exposed.length}});
         res.end('{"ok":true}');
         return;
       }

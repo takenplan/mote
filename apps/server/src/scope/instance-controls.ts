@@ -31,7 +31,9 @@ export function registerInstanceControls(runtime:ScopedRuntime,configuration:Con
  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/admin/execution-settings',administrator:true,handle:(_context,request)=>{z.object({}).strict().parse(request.query);return view();}});
  registerAuthenticatedRoute(runtime,{method:'PUT',url:'/api/admin/execution-settings',administrator:true,handle:async(context,request)=>{
   const {revision:expected,...value}=executionSettingsSchema.extend({revision}).strict().parse(request.body);
-  await configuration.instance.update('execution',value,expected,()=>runtime.authority.assertAdministrator(context));return view();
+  await configuration.instance.update('execution',value,expected,()=>runtime.authority.assertAdministrator(context));
+  runtime.diagnostics?.record('config.execution_settings_updated',{userId:context.userId,name:'execution'});
+  return view();
  }});
  // The M16 writer supplies the diagnostics prepare/publish/rollback handler.
  // Its finite instance metadata never enables a private Agent trace.
@@ -39,6 +41,7 @@ export function registerInstanceControls(runtime:ScopedRuntime,configuration:Con
  registerAuthenticatedRoute(runtime,{method:'PUT',url:'/api/admin/diagnostics-settings',administrator:true,handle:async(context,request)=>{
   const {revision:expected,...value}=diagnostic.extend({revision}).strict().parse(request.body);
   await configuration.instance.update('diagnostics',value,expected,()=>runtime.authority.assertAdministrator(context));
+  runtime.diagnostics?.record('config.diagnostics_settings_updated',{userId:context.userId,name:'diagnostics'});
   const {enabled,debug,level}=configuration.instance.current<z.infer<typeof diagnosticsSettingsSchema>>('diagnostics');return {enabled,debug,level,traceEnabled:false,scope:'instance-safe-diagnostics',revision:configuration.instance.revision};
  }});
  runtime.app.addHook('onClose',async()=>{for(const gate of Object.values(gates))gate.close();});

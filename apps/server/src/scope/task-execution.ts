@@ -16,6 +16,7 @@ import {ScopeError} from './baseline.js';
 import {contextStepPage} from './task-steps.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
+import type {ServerDiagnostics,EventFields} from '../diagnostics.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {ProcessorAdmission} from '../processor-admission.js';
 import type {DomainLifecycle,UserDataSubject,UserExport} from './lifecycle.js';
@@ -130,8 +131,20 @@ export class TaskExecution {
  private readonly processors:ProcessorAdmission;
  private readonly physical:TaskPhysicalCalls;
  private modelHost:TaskModelHost|undefined;
+ private diagnostics:ServerDiagnostics|undefined;
  private modelAdmission:((run:TaskRun,work:()=>Promise<unknown>)=>Promise<unknown>)|undefined;
  bindModelAdmission(admit:NonNullable<TaskExecution['modelAdmission']>){if(this.modelAdmission)throw new TaskError('model_host_conflict',409);this.modelAdmission=admit;}
+ bindDiagnostics(diagnostics:ServerDiagnostics){this.diagnostics??=diagnostics;}
+ private logStep(step:ExecutionStep){
+  const fields:EventFields={kind:step.kind,name:step.operationId,state:step.state,attempt:step.attempts,...(step.error?{category:step.error,detail:step.error}:{})};
+  if(step.state==='succeeded')this.diagnostics?.record('task.completed',fields);
+  else if(step.state==='failed')this.diagnostics?.record('task.failed',fields,'error');
+  else if(step.state==='blocked')this.diagnostics?.record('task.blocked',fields,'warn');
+  else if(step.state==='cancelled')this.diagnostics?.record('task.cancelled',fields);
+  else if(step.state==='stale')this.diagnostics?.record('task.stale',fields,'warn');
+  else if(step.state==='running')this.diagnostics?.record('task.running',fields,'debug');
+  else this.diagnostics?.record('task.waiting',fields,'debug');
+ }
  private readonly modelLeases=new Map<string,TaskModelLease>();
  private readonly modelRecovery=new Map<string,string>();
  private readonly localChains=new Set<{kind:string;taskId:string;promise:Promise<unknown>}>();
@@ -305,7 +318,7 @@ export class TaskExecution {
    commit:(step,result)=>{const current=this.assertTask(step),{run,value,local}=result as {run:TaskRun;value:unknown;local?:{checkpoints:string;external:string}};this.authority.assert(run.context);
     if(local){if(!this.localResumeEligible(current)||current.checkpoints!==local.checkpoints||json([current.external_state,current.external_key,current.external_issuance])!==local.external)throw new ExecutionFailure('stale','task_local_resume_changed');const validated=this.resumeLocal(handler,run);if(!validated||json(validated.value)!==json(value))throw new ExecutionFailure('stale','task_local_resume_changed');}
     handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
-   project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
+   project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);this.logStep(step);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });
   let unregisterTask:Promise<void>|undefined;
@@ -374,7 +387,7 @@ export class TaskExecution {
      this.engine.enqueue(operationId,handler.kind,input,{id:taskId,dependencies:request.dependencies,ownership:{userId:context.userId,authorizationEpoch:context.authorizationEpoch,grantId}});
      parent(operationId,options,taskId);
      if(modelLease)this.modelLeases.set(taskId,modelLease);
-     const view=this.view(this.row(taskId)!);onAdmitted?.(view);return view;
+     const view=this.view(this.row(taskId)!);onAdmitted?.(view);this.diagnostics?.record('task.submitted',{userId:context.userId,kind:request.kind,name:operationId,state:view.state,count:request.dependencies.length});return view;
     });
   };
   return Object.freeze({
@@ -418,7 +431,7 @@ export class TaskExecution {
  private confirmationRequired(row:TaskRow){return ['issued','unknown'].includes(row.external_state)&&!this.readReplayReady(row);}
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,confirmUnknownRequired:this.confirmationRequired(row),cleanupPending:this.physical.busy(step.id),progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
- start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
+ start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));},100);this.timer.unref();void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));}
  /** Host domain's explicit replacement operation may acknowledge old unknown
   * facts without requeuing an obsolete input or reviving its task grant. No HTTP
   * or model tool exposes this capability. Facts themselves remain unresolved. */

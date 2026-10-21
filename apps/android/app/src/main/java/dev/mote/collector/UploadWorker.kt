@@ -201,7 +201,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                 Result.success()
             } else failed(MoteI18n.text("批量上传未确认（HTTP {0}）", error.httpStatus), error.httpStatus !in setOf(400, 401, 403, 413, 426))
         } catch (error: Exception) {
-            SupportEvents.record(applicationContext, stage, EventJournal.failure(error, stage))
+            SupportEvents.failure(applicationContext, stage, error)
             if (error !is RecordedHeartbeatFailure) Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)
             failed(MoteI18n.text("同步失败，请检查连接"))
         }

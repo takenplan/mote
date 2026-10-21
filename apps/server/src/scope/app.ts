@@ -7,6 +7,7 @@ import {registerInstanceControls} from './instance-controls.js';
 import {registerScopedContentStorage,type ScopedContentStorage} from './content-storage.js';
 import {registerScopedTodos} from './todos.js';
 import {registerScopedActions} from './action-routes.js';
+import {randomUUID} from 'node:crypto';
 import type {ScopedActions} from './actions.js';
 import {registerWebAssets} from '../web-assets.js';
 import {registerWebInventory} from './web-routes.js';
@@ -24,7 +25,7 @@ import {ScopedServices} from './services.js';
 import {openScopeStorage} from './storage.js';
 import {Accounts,AuthError} from './accounts.js';
 import {registerAuthentication} from './auth-routes.js';
-import {requestContext} from './http.js';
+import {requestContext,type ScopedRuntime} from './http.js';
 import {ConnectionError} from '../connection-error.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {TaskExecution,TaskError} from './task-execution.js';
@@ -52,7 +53,8 @@ import type {ProcessingHost} from './processing.js';
 import type {ScopedPluginHost} from './plugins.js';
 import {registerScopedMcp,type ScopedMcp} from './mcp.js';
 import {LifecycleOperations} from './lifecycle-operations.js';
-import {registerManagement,type ManagementConfig} from './management.js';
+import {registerManagement,openInstanceDiagnostics,type ManagementConfig} from './management.js';
+import type {ServerDiagnostics} from '../diagnostics.js';
 import {registerLifecycleRoutes} from './lifecycle-routes.js';
 import {registerCaptureBrowserReads} from './capture-browser-routes.js';
 import {ScopedStorageCapacity,isStorageLimit} from './storage-capacity.js';
@@ -80,20 +82,24 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
   let archiveMaintenance:ArchiveMaintenance|undefined;
   let restoreFuture:RestoreFutureAuthority|undefined;
   let management:Awaited<ReturnType<typeof registerManagement>>|undefined;
+  let instanceDiagnostics:ServerDiagnostics|undefined;
   try{
-    const app=Fastify({logger:false});
+    const app=Fastify({logger:false,genReqId:()=>randomUUID(),requestIdHeader:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
     lifecycle=!options.verifier?new LifecycleOperations(storage.db,storage.deploymentId,config.maxExportBytes):undefined;
     const lifecycleAuthority=options.lifecycleAuthority??lifecycle?.authority;
     const taskAuthorization=!options.verifier?new TaskAuthorization(storage.db,accounts,storage.deploymentId):undefined;
     const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization,!options.verifier?accounts.mcpVerifier:undefined),services=new ScopedServices(authority,lifecycleAuthority);
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
-    const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
+    const runtime:ScopedRuntime={app,authority,services,...(!options.verifier?{accounts}:{})};
     lifecycle?.bind(runtime);
     registerWebInventory(runtime);
-    app.setErrorHandler((error,_request,reply)=>{
-      if(isStorageLimit(error)||error instanceof StoreError&&error.statusCode===507)return reply.code(507).send({error:'storage_limit'});
+    app.setErrorHandler((error,request,reply)=>{
+      const storageLimit=isStorageLimit(error)||error instanceof StoreError&&error.statusCode===507;
       const failure=error instanceof AskError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ModelSettingsError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const segment=(request.routeOptions.url??request.url??'').split('/')[2]||'unknown';
+      runtime.diagnostics?.record('request.failed',{requestId:request.id,method:request.method as 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS',route:/^[a-z][a-z0-9-]{0,60}$/.test(segment)?segment:'unknown',statusCode:storageLimit?507:failure.statusCode,category:storageLimit?'storage_limit':failure.code,errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},storageLimit||failure.statusCode>=500?'error':'warn');
+      if(storageLimit)return reply.code(507).send({error:'storage_limit'});
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl,context=>restoreFuture?.admit(context));
@@ -102,6 +108,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     const privateCursorKey=registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document??(config.maxStorageBytes!==undefined||config.retentionDays!==undefined?{version:1,revision:0,storage:{...(config.maxStorageBytes!==undefined?{maxStorageBytes:config.maxStorageBytes}:{}),...(config.retentionDays!==undefined?{retentionDays:config.retentionDays}:{})}}:undefined)});
     registerConfigurationRoutes(runtime,configuration);
+    if(!options.verifier){instanceDiagnostics=await openInstanceDiagnostics(config.dataDir,configuration);runtime.diagnostics=instanceDiagnostics;execution?.bindDiagnostics(instanceDiagnostics);}
     execution?.bindConfiguration(configuration);
     if(execution){registerInstanceControls(runtime,configuration,execution);registerIndexMaintenance(runtime,storage.db,execution); }
     if(execution)contentStorage=registerScopedContentStorage(runtime,storage.db,config.dataDir,configuration,execution);
@@ -125,17 +132,19 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&plugins&&ask)restoreFuture=new RestoreFutureAuthority(runtime,storage.db,configuration,execution,plugins,connectors,ask,actions);
     capacity=new ScopedStorageCapacity(storage.db,configuration);
     registerStorageSettings(runtime,configuration);
-    archiveMaintenance=new ArchiveMaintenance({db:storage.db,deploymentId:storage.deploymentId,directory:config.dataDir,cursorKey:privateCursorKey,configuration,contentCipher:contentStorage?.cipher});
+    archiveMaintenance=new ArchiveMaintenance({db:storage.db,deploymentId:storage.deploymentId,directory:config.dataDir,cursorKey:privateCursorKey,configuration,contentCipher:contentStorage?.cipher,
+     onFailure:error=>{runtime.diagnostics?.record('maintenance.sweep_failed',{errorName:error instanceof Error?error.name:undefined},'error');},
+     onSweep:summary=>{if(summary.capturesDeleted||summary.objectsRemoved||summary.failedOwners||summary.deferredOwners)runtime.diagnostics?.record('maintenance.sweep_completed',{count:summary.capturesDeleted+summary.objectsRemoved,items:summary.owners,skipped:summary.deferredOwners,errors:summary.failedOwners},summary.failedOwners?'warn':'info');}});
     app.addHook('onReady',async()=>{archiveMaintenance?.start();});
     app.addHook('preClose',async()=>{archiveMaintenance?.close();});
     if(execution){registerTaskRoutes(runtime,execution,privateCursorKey);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await execution.close();await contentStorage?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     if(lifecycle&&ask)lifecycle.bindImportPublication((context,work)=>ask!.automations.preserveImportEvents(context,work));
-    if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);management=await registerManagement(runtime,configuration,config,options.updateDependencies);}
+    if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);management=await registerManagement(runtime,configuration,config,options.updateDependencies,runtime.diagnostics);}
     if(execution&&ask&&memory&&processing&&lifecycle)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing,lifecycle});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
+    app.addHook('onClose',async()=>{await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();if(!management){runtime.diagnostics?.record('server.stopping');await runtime.diagnostics?.close();}accounts.close();storage.close();});
     app.addHook('onClose',async()=>{archiveMaintenance?.close();capacity?.close();});
     return {...runtime,managedMedia,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,archiveMaintenance,restoreFuture,deploymentId:storage.deploymentId};
-  }catch(error){archiveMaintenance?.close();capacity?.close();await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();storage.close();throw error;}
+  }catch(error){archiveMaintenance?.close();capacity?.close();await restoreFuture?.close();await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await managedMedia?.close();await configuration?.close();await management?.close();if(!management)await instanceDiagnostics?.close();storage.close();throw error;}
 }

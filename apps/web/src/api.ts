@@ -1,4 +1,5 @@
 import {failureMessage} from './failure-message';
+import * as logger from './logger';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {httpStatusMessage,responseFailureCode} from '@mote/shared';
 import type {RecordMetadata, SourceMetadata, OcrResult, CaptureRecord} from '@mote/shared';
@@ -213,6 +214,10 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
     return value;
   }
   async function raw(path: string, init: RequestInit = {}) {
+    const startedAt = performance.now();
+    const route = path.split('?')[0];
+    const method = init.method?.toUpperCase() ?? 'GET';
+    logger.debug('api.request_started', { method, route });
     assertCurrent();
     const modelOperation = init.method?.toUpperCase() === 'POST' && ['/api/query', '/api/insights', '/api/memories/extract'].includes(path);
     // The server accounts admitted execution time. A browser wall-clock timer
@@ -241,14 +246,16 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
       credentials: isWebConnection(connection) || path.startsWith("/api/files/") ? "same-origin" : "omit",
       signal,
       headers,
-    });
+    }).catch(error => { logger.warn('api.request_failed', { method, route, durationMs: performance.now() - startedAt, detail: error instanceof Error ? error.name : undefined }); throw error; });
     assertCurrent();
     if (!response.ok) {
       const error=await readApiError(response),code=error.code;
+      logger[response.status >= 500 ? 'error' : 'warn']('api.request_rejected', { method, route, status: response.status, code, durationMs: performance.now() - startedAt });
       if ((response.status === 401 && (!code || ['unauthorized','connection_revoked','invalid_identity','session_binding_required'].includes(code)) || response.status===409&&code==='session_changed') && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
       assertCurrent();
       throw error;
     }
+    logger.debug('api.request_completed', { method, route, status: response.status, durationMs: performance.now() - startedAt });
     return new Proxy(response, {get(target,key){
       const value=Reflect.get(target,key,target);
       if(['json','text','blob','arrayBuffer','formData','bytes'].includes(String(key))&&typeof value==='function')return async(...args:unknown[])=>{assertCurrent();const body=await value.apply(target,args);assertCurrent();return body;};
