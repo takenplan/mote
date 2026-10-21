@@ -1,6 +1,8 @@
-# 开发与测试环境隔离
+# 开发、验证与环境隔离
 
 开发默认使用 dev 中央 47842，测试使用 test 中央 47852；正式部署 prod 使用 47832。不要用正式中央的配置、令牌、数据库、App profile 或实际屏幕做自动化测试。所有验证素材应由程序生成。
+
+日常修改先看[验证阶段](#validation-stages)与[定向命令](#focused-validation)；大型需求使用[Agent 协作与交接](agent-development-workflow.md)。候选版本的完整检查、回执复用见 [PR 检查范围](#pr-check-scope)，CI 返修见 [CI 反馈闭环](#ci-feedback)。这些是当前工作规则；历史方案、验证记录和旧派单中的检查频率按此更新，原执行证据保留。
 
 ## Technical plan review
 
@@ -10,7 +12,7 @@
 - 既有批准范围内、保持行为、断言含义和必要覆盖的局部实现或 fixture 状态控制修正，记录 delta 并定向验证，无需重新取得方案批准。
 - 放宽断言、超时或成功标准，或改变测试覆盖入口，同样须独立预审覆盖影响，不能用“失败改成通过”代替等价修复。
 
-纯文档修订按本文的文档检查规则处理；工程方案审查不新增人类产品审批，也不重复完整代码审查。
+纯文档修订按本文的文档检查规则处理。已有边界内的普通需求、局部修复及 CI 返修由原负责人推进，按实际变化选择验证；无需为每次提交、测试或草稿 PR 更新新建方案审批。工程方案审查不新增人类产品审批，也不重复完整代码审查。
 
 方案至少包括：准确 base/head 与计划文本身份；旧行为和预期的完整用户入口、输入、准备、处理、产物、消费、时序及失败恢复；`KEEP / CHANGE / REMOVE / EXCEPTION / UNKNOWN`；哪些差异是必要账号/数据/资源/权限隔离、哪些有明确人类例外依据；最小源码与共享文件唯一 owner；消费者、状态转换、正常入口的验证设计；风险、未知项与有界资源。单用户和多用户应使用相同领域流程，不能为隔离缩减配方、输入、独审或产物。
 
@@ -97,17 +99,69 @@ adb reverse tcp:47842 tcp:47842
 
 ## 验证命令
 
+<a id="validation-stages"></a>
+
+### 按开发阶段选择验证
+
+先确定这次要证明的行为与风险，再选择最小有效检查。测试规模由受影响行为、接口和消费者决定；“本轮对话结束”或“更新了 PR”本身不扩大范围。
+
+| 阶段 | 谁负责 | 执行与完成条件 |
+| --- | --- | --- |
+| 纯文档修订 | 作者 | 格式、语法、链接、命令示例和必要的渲染检查；无需安装应用依赖、构建或跑应用测试 |
+| 日常实现、普通修复 | 模块负责人 | 受影响测试文件、必要类型检查及直接消费者检查；确认需要的构建前置，失败先定向定位 |
+| 中间提交、草稿 PR、模块交接 | 模块负责人 | 记录本轮定向结果与剩余项；范围内行为与定向验收完成后可报告 `implementation-complete`，列出待集成与待验证项；此阶段不要求每个执行者重复完整计划 |
+| 跨模块首次接通、接口变化 | 相邻模块负责人和集成负责人 | 尽早用生成数据走真实边界；记录准确组合版本、用户入口、状态变化和结果，覆盖相关授权、隔离、删除或恢复风险 |
+| 稳定候选准备合并 | 一个集成负责人；单模块任务由作者兼任 | 冻结候选，完成 `check:affected` 所选任务、必要旅程及适用的 GitHub 检查，达到 `merge-ready` |
+| 候选修复、基线更新 | 原负责人和集成负责人 | 重新选择计划，先定向复现与验证，再执行失效任务；符合规则的原始任务回执由驱动显式复用 |
+| 发布 | 发布负责人 | 按[发布预检](releasing.md#release-preflight)验证目标 Profile/variant、构建与产物；在创建 Tag 前发现发布配置差异 |
+
+`integration-verified` 表示指定组合上的真实链路已验证，报告须写明是哪条链路；大型需求可先验证一条最小路径，再继续并行补全。最终交付还须确认提交已进入所称目标分支或版本。直接合入 `main` 的独立子 PR 需要自己的合并检查；汇入功能分支的阶段性子 PR 可以先交接定向证据，最终组合由集成负责人验收，仓库现有必需检查照常适用。
+
+授权、隐私、数据一致性、共享接口、生命周期等变化应尽早验证相关真实边界和高风险状态。规模较小不自动降低这些要求。完整套件通过后，只有新改动、新失败或具体覆盖缺口才扩大或重复验证。
+
+<a id="focused-validation"></a>
+
+### 当前可用的定向命令
+
+以下是现有入口，按改动选择执行，不是每次都要跑的清单。先安装所需依赖；只有前置输出缺失或输入变化时才重建相应库。工作区类型检查可能依赖 `shared`、`agent` 等生成声明，真实 Server fixture 还需要可用的原生 SQLite。
+
+```sh
+# 仓库根目录：仅显示计划，不执行测试，也不计为通过
+npm run check:affected -- --dry-run
+
+# 示例：Server 的 shared / agent 前置缺失或变化时构建
+npm run build -w @mote/shared -w @mote/agent
+# 按需执行受影响工作区的类型检查
+npm run typecheck -w @mote/server
+```
+
+Server 的 `npm test -w @mote/server -- test/某文件.test.ts` 当前仍会追加默认 `test/*.test.ts`，并非单文件入口。需要指定文件时，直接调用原生测试器；从仓库根目录进入 Server 后执行，例如上传接口修改：
+
+```sh
+cd apps/server
+env -u MOTE_TEST_LIVE_EMBEDDINGS -u MOTE_MEMORY_CONTEXT_LIVE \
+  node --import tsx --test --test-timeout=120000 test/import-upload-http.test.ts
+```
+
+把文件替换为实际受影响的测试，可同时列出相邻消费者文件。两个 `env -u` 保留默认包装器关闭遗留真实模型模式的行为；显式 live/performance 测试仍用下文的专用入口。该定向执行记录命令、版本、结果与清理情况，不产生完整检查驱动的可复用回执。
+
+Desktop 的 Vitest 支持 `npm test -w @mote/desktop -- test/实际文件.test.ts` 文件筛选；Android 可用 `apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest --tests '完整测试类名'`。运行前确认路径或类名存在，并保留该用例所需前置、时限与清理。
+
+当前没有 `check:fast`、`test:focused` 或 `check:full` 脚本。根 `npm test`、`check:local` 以及选中 Server 后的完整工作区测试仍可能耗时较长；开发中使用上述定向入口，最终候选遵循下文的完整范围规则。
+
+### 功能、性能与真实模型入口
+
 `npm test`、`npm test -w @mote/server`、`check:local` 和 `check:affected` 默认只执行
 功能测试；生成素材、loopback 模型响应、真实 HTTP/子进程和必要的重启、撤权、租约与
 周期等待仍属于功能回归。大输入的完整性断言和物理并发限制不按名称或耗时自动归为性能测试。
 真实模型调用与绝对速度指标使用显式可选入口：
 
-| 入口（仓库根目录） | 范围 | 默认开启 |
+| 入口（仓库根目录） | 范围 | 是否需要显式选择可选模式 |
 | --- | --- | --- |
-| `npm test` / `npm run check:affected -- --base <main>` | 生成夹具功能回归及所选组件检查 | 是 |
-| `npm run test:performance` | 120 条记录检索的 1 秒指标、2000 块转录 100 次校验的 2 秒指标；同时验证原功能断言 | 否 |
-| `npm run test:live` | 既有生成日记的真实 Codex Memory 链路；保留 8 次 query、8 次模型 turn 和既有单次 300 秒预算 | 否 |
-| `MOTE_MEM0_TEST_EMBEDDING_CONFIG=/absolute/private/config.json npm run test:live:embeddings` | 两个 Mem0/消费者套件使用明确配置的真实嵌入模型 | 否 |
+| `npm test` / `npm run check:affected -- --base origin/main` | 整仓功能回归 / 所选组件功能检查；依阶段选用 | 否；执行命令时运行功能模式 |
+| `npm run test:performance` | 120 条记录检索的 1 秒指标、2000 块转录 100 次校验的 2 秒指标；同时验证原功能断言 | 是 |
+| `npm run test:live` | 既有生成日记的真实 Codex Memory 链路；保留 8 次 query、8 次模型 turn 和既有单次 300 秒预算 | 是 |
+| `MOTE_MEM0_TEST_EMBEDDING_CONFIG=/absolute/private/config.json npm run test:live:embeddings` | 两个 Mem0/消费者套件使用明确配置的真实嵌入模型 | 是 |
 
 先构建相关工作区；可选入口也应记录版本、配置身份、结果与耗时。嵌入配置使用既有
 `baseUrl`、`apiKey`、`model`、`dimension` 字段，保存在私有本地文件中；默认入口忽略
@@ -205,7 +259,7 @@ adb -s emulator-5580 shell getprop sys.boot_completed
 
 ### PR 检查范围
 
-PR 前使用依赖图和构建输入规则选择检查范围；发布组件与检查工作区分别计算，不因 Web 属于 Central 发布就运行全部 Server 测试：
+准备验证稳定的合并候选时，使用依赖图和构建输入规则选择完整检查范围；日常开发和阶段性交接遵循上面的[验证阶段](#validation-stages)。发布组件与检查工作区分别计算，不因 Web 属于 Central 发布就运行全部 Server 测试：
 
 ```sh
 npm run check:affected -- --dry-run
@@ -241,9 +295,11 @@ npm run check:affected -- --reuse /absolute/path/to/mote-check-receipts/receipt-
 
 `check:local` 固定选择全部 TypeScript 工作区和根回归；`check:central`、`check:desktop` 固定选择各自工作区，均使用同一驱动。`check:local` 不包含 Android 测试、Desktop 原生编译、浏览器 E2E、真机或真实模型验收。`check:affected` 在共享协议、根配置、lockfile 或未知输入影响三端时仍选择全部 TypeScript 与 Android 单测。新增文案需检查翻译和 Android catalog 同步；shared 和共享翻译目录仍保守选择全部消费者。
 
-模块开发阶段、中间提交和草稿 PR 更新先运行相关定向检查，并明确最终验证尚未完成。宣布 PR 可合并或报告交付之前，完成 `check:affected` 选出的计划和所需旅程检查。纯文档变更按上表检查格式、语法、链接与渲染，不运行应用构建和测试。完整计划在计划内实现修改收敛、关键故障场景定向验证实际进入目标状态后启动。跨模块组合由一个执行者冻结候选并运行完整计划，其他任务提交自己的精确前置、定向结果和未验范围，不各自重复启动同一组合门禁。若重复试跑始终没有进入要求的租约过期、进程死亡、撤权等目标状态，应改进可观测状态控制或如实记录覆盖缺口；多个 PASS 不能代替该状态实际发生的证据。阶段是否完成取决于前置、状态转移和结果断言，不取决于尝试次数。
+完整计划在计划内实现修改收敛、关键故障场景定向验证实际进入目标状态后启动。跨模块组合由一个执行者冻结候选并运行完整计划，其他任务提交自己的精确前置、定向结果和未验范围，不各自重复启动同一组合门禁。若重复试跑始终没有进入要求的租约过期、进程死亡、撤权等目标状态，应改进可观测状态控制或如实记录覆盖缺口；阶段是否完成取决于前置、状态转移和结果断言。
 
 这些入口在同一仓库的所有 worktree 间共享 Git common dir 下的 `mote-check-driver.lock`；已有驱动时，新请求以非零状态报告 `UNRUN`，不会排队或把占用当作通过。输出包含锁的所属进程和工作目录；只有确认原驱动及其子进程都已结束后才手工移除残留锁。不确定或过期锁不会自动抢占，也不终止其他任务。
+
+当前驱动按顺序执行，遇到失败会停止后续任务。原负责人先处理失败，集成负责人用原始回执恢复后续检查。等待期间可继续独立实现、审阅或经协调的定向验证；定向命令不经过该锁，必须另行隔离端口、profile、数据库、浏览器和设备。不要启动第二个完整计划，或把 `UNRUN` 记录为已执行。
 
 每轮回执位于 Git common dir 的 `mote-check-receipts/<id>.json`，只保存输入摘要、逐步状态、耗时及退出/清理结果等元数据，不保存源码、命令输出或凭据。失败、中断和未执行步骤分别保留。一次执行仍冻结运行时输入和计划；运行期间相关输入变化时，保留已执行记录，停止把本轮作为最终候选门禁，重新选择计划。普通文档、根 `AGENTS.md` 和 PR 元数据不进入运行时输入身份；运行时 prompt、配置、scope 清单及 workspace 资源仍是输入。
 
@@ -264,6 +320,8 @@ npm run check:affected -- --reuse /absolute/path/to/mote-check-receipts/receipt-
 验收工具按[方案审查分级](#technical-plan-review)处理：既有批准范围内、保持行为与断言含义的定位、状态控制、清理或实现修正，记录差异并定向验证即可；职责、契约、安全或覆盖影响变化保留独立预审。已有决定仍适用时，复用其范围并记录新增差异，不重复发起同一决策。
 
 当前规则保留（KEEP）生成 fixture、历史回归、消费者检查、先预检、跨 worktree 单驱动和所需旅程验收；改变（CHANGE）为按任务完整输入复用原始证据及明确测试/验证工具归属；移除（REMOVE）全仓 SHA 或无关文档变化引起的任务失效，以及禁止一切跨轮复用；例外（EXCEPTION）环境和构建每轮重跑，共享协议、翻译、根配置及未知输入仍保守扩大；未知（UNKNOWN）CI 是否启用及设备/模型环境能力需实际核实，不能由本地选择器推断。CI 使用同一细分计划，Android 验证仍单独执行；本地通过不代表 GitHub workflow 已运行。历史验证报告保留当时执行记录，不改写成新的验证结果。设计依据与限制见[增量检查证据 ADR](adr-incremental-check-evidence.md)。
+
+以下保留整仓或特定行为的入口，按需要单独选择；不要把代码块作为每次提交的顺序检查清单：
 
 ```sh
 npm run typecheck
@@ -288,6 +346,51 @@ npm run test:profiles:container
 第二个脚本实际构建本仓库镜像、启动隔离 Compose project，验证命名卷重建、停止后备份、空卷恢复、镜像切换回退、Caddy 配置解析。临时镜像/容器/卷以测试唯一标识命名；不会 publish 或全局 prune。脚本已加入 GitHub Linux CI。本机没有 Docker 时应明确记录未执行，不能将 TypeScript、配置静态检查或之前版本的 CI 结果当作本次容器验证。
 
 真实 DeepSeek / Qwen 调用与实体手机测试需单独记录所用版本、输入是否合成、耗时与失败行为。macOS 权限、HyperOS 后台恢复、公网 HTTPS、launchd 登录/重启行为均不能由上述 fixture 代替。
+
+<a id="ci-feedback"></a>
+
+## CI 反馈闭环
+
+本地与 GitHub 复用现有检查脚本。日常开发做定向验证；集成负责人在候选稳定时本地预检完整受影响范围，再由 GitHub 检查目标环境。已有有效回执按上文复用，不为每次草稿更新再跑一遍完整本地检查。
+
+准备候选时核对最新目标分支，记录 base、PR head 和实际测试的 checkout。`--head` 只选择差异范围，不会检出指定提交；在与候选相符的工作树执行。GitHub 的 PR checkout 可能是测试合并提交，应同时记录其身份。CI 风格的 TypeScript 计划可使用：
+
+```sh
+npm run check:affected -- --base <base-sha> --head <head-sha> --typescript-only --dry-run
+# 确认候选工作树、环境和计划后执行；Android 在对应环境单独验证
+npm run check:affected -- --base <base-sha> --head <head-sha> --typescript-only
+```
+
+当前 [Component checks](../.github/workflows/component-checks.yml) 在启用时对草稿与非草稿 PR 使用同一套范围选择；Android Job 仍等待 TypeScript Job。[Checks](../.github/workflows/checks.yml) 是手动完整集成入口。工作流启停和仓库设置独立于文档，状态见实际 Actions；[MVP 检查开关](releasing.md#mvp-阶段的-github-检查开关)保留操作说明。草稿状态用于表达阶段，不能据此预期云端自动减少检查。
+
+PR 负责人在推送后持续处理当前 revision 的结果：
+
+1. 查看实际触发的 run、提交和必需 Job；新提交出现后跟踪新 run，旧提交成功不作为新候选的验证。
+2. 失败时读取失败步骤、测试报告和环境信息。确定性代码或断言失败交原模块负责人定向复现、修复、复测，随后更新同一 PR。跨模块接口或产品取舍由协调者处理，其余工作继续推进。
+3. 明确的 Runner、下载或服务临时故障可重试失败 Job；重复失败应定位原因。不稳定测试保留原失败与复现条件，修复等待/资源隔离等原因，保留断言与必要覆盖。
+4. 复用未失效的本地证据，执行失效范围，并核对新提交的 CI。记录当前成功、失败、取消、跳过和未执行项。环境确实不可用时保留具体阻塞与后续负责人。
+
+已安装并登录 GitHub CLI 时，可用以下命令查看状态和失败日志；确认临时故障后再重试失败 Job：
+
+```sh
+gh pr checks <pr-number> --repo utopiafar/mote
+gh run view <run-id> --repo utopiafar/mote --log-failed
+# 确认临时故障后执行；此命令会触发新的执行尝试
+gh run rerun <run-id> --repo utopiafar/mote --failed
+```
+
+按实际 CI 对齐 Node 24、lockfile、原生 SQLite、Java/SDK、操作系统与构建 variant。需要定位 Linux 特有问题时使用对应容器或 Runner；macOS 原生、Electron 和签名问题在对应 Mac 环境处理。修改 workflow 时可用已安装的 [actionlint](https://github.com/rhysd/actionlint) 静态检查；[act](https://nektosact.com/) 可用于定向调试 Linux Job，按需使用即可。
+
+### 后续工具改进
+
+以下尚未由本次文档调整实现，应作为独立工程改动验证：
+
+- 给 Server 增加真正替换默认文件集的定向入口，并在统一检查器中提供快速层；保留真实模型隔离、消费者和高风险覆盖。
+- 根据输入依赖细化工作区内部选择，继续保留完整候选验证和必要长生命周期用例。
+- 调整草稿/候选 CI 分层、Android 无关串行依赖与 Gradle 缓存，核对必需检查及 `ready_for_review` 等触发时机。
+- 在驱动中支持独立任务失败后继续、资源调度与更细粒度失效，保留真实状态、清理和回执出处。
+
+这些工具变化按[方案审查分级](#technical-plan-review)处理，验证普通修改的耗时减少和关键消费者覆盖。流程回顾利用已有 CI 与回执数据观察首次 CI 通过率、从候选就绪到通过的耗时、重型检查次数和首次真实链路接通时间，不额外跑整套测试来收集指标。
 
 ## 调试与分享诊断
 

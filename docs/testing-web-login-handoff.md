@@ -43,10 +43,12 @@ The runner resolves Node on PATH, or accepts `MOTE_WEB_FIXTURE_NODE`. Set
 `MOTE_WEB_FIXTURE_EXPECTED_HEAD` to the exact candidate and
 `MOTE_WEB_HANDOFF_OUTPUT` to an evidence directory. The result distinguishes its
 actual Web/scoped-host proof from the still separate original Desktop/IAB R3
-reacceptance. Before any PR update, run the exact candidate's `check:affected`
-plan and the existing login-handoff, Web-auth and typed-route tests under the
-driver's resource window. No frozen PR or live physical source is modified by
-preparing this follow-up.
+reacceptance. For subsequent work, follow the [validation stages](development.md#validation-stages):
+run the affected login-handoff, Web-auth and typed-route checks during implementation
+and draft PR updates, and state pending final validation. The integration owner
+completes the final candidate's `check:affected` plan and required journeys under
+the driver's resource window before declaring it ready to merge. No frozen PR
+or live physical source is modified by preparing this follow-up.
 
 
 ## Test barrier follow-up to d6adec8f (prepared, UNRUN)
