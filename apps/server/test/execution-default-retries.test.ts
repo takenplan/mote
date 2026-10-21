@@ -11,6 +11,18 @@ const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(r=>res
 function fixture(t:any){const dir=mkdtempSync(join(tmpdir(),'mote-default-retry-')),store=new Store(dir),engines:ExecutionEngine[]=[];let now=Date.now();const create=(db=store)=>{const engine=new ExecutionEngine(db,()=>now);engines.push(engine);return engine;};const engine=create();t.after(async()=>{await Promise.all(engines.map(e=>e.close()));store.close();rmSync(dir,{recursive:true,force:true});});return {dir,store,engine,create,advance:(ms:number)=>{now+=ms;}};}
 const base:ExecutionHandler={kind:'generated',pool:'generated',policy:EXECUTION_POLICIES.modelCall,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
+test('execution markers belong to the genuine claim while a consumed logical session survives restart',async t=>{
+ const f=fixture(t);let first=true,stale:import('../src/execution-engine.js').ExecutionGrant|undefined;
+ const handler:ExecutionHandler={...base,execute:async(_step,_signal,grant)=>{
+  assert.equal(grant.executionMarker(),0);assert.equal(grant.hasExecuted(),!first);
+  grant.recordExecution();assert.equal(grant.executionMarker(),1);assert.equal(grant.hasExecuted(),true);
+  if(first){first=false;stale=grant;throw new ExecutionFailure('waiting','generated_capacity',60000,{executionStarted:false});}return null;
+ }};
+ f.engine.register(handler);const id=f.engine.enqueue('marker-session','generated',{});await f.engine.drain([id]);const session=f.engine.get(id)!.attemptId;
+ assert.equal(f.engine.get(id)!.attempts,1);assert.throws(()=>stale!.recordExecution(),{code:'grant_revoked'});assert.equal(stale!.executionMarker(),1);
+ await f.engine.close();f.advance(60001);const next=f.create();next.register(handler);await next.drain([id]);assert.equal(next.get(id)!.state,'succeeded');assert.equal(next.get(id)!.attempts,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM execution_attempt_sessions WHERE step_id=?').get(id)!.n,1);assert.equal(f.store.db.prepare('SELECT id FROM execution_attempt_sessions WHERE step_id=?').get(id)!.id,session);
+});
+
 test('host preparation stays uncharged and startAttempt charges once before reconciliation without fabricating a physical call',async t=>{
  const f=fixture(t);let prepared=false,entered=0,stale:undefined|(()=>void);
  f.engine.register({...base,deferAttempts:true,execute:async(step,_signal,grant)=>{

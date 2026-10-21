@@ -8,6 +8,22 @@ import {ExecutionEngine} from '../src/execution-engine.js';
 import {EXECUTION_POLICIES} from '../src/execution-policy.js';
 import {scopedCaptureFixture} from './fixtures/scoped-capture-host.js';
 
+// The historical oracle retains the original dependency algorithm and DTO.
+// Independently check the newly specified retry fields, then compare every
+// original field (and reject any other unexpected field) against that oracle.
+function captureExpectedDetail(original:ReturnType<OriginalOperations['detail']>,db:DatabaseSync){
+ const budgets=new Map(original.steps.map(step=>{
+  const row=db.prepare('SELECT p.max_attempts,p.round,s.charged FROM execution_retry_policies p LEFT JOIN execution_attempt_sessions s ON s.step_id=p.step_id AND s.open=1 WHERE p.step_id=?').get(step.id)!;
+  assert.equal(row.max_attempts,3);assert.equal(row.round,1);
+  return [step.id,{maxAttempts:3,maxRetries:2,retriesUsed:Math.max(0,step.attempts-1),attemptsRemaining:Math.max(0,3-step.attempts),retryRound:1,retryExhausted:step.attempts>=3&&!row.charged&&step.state!=='succeeded'}] as const;
+ }));return {original,budgets};
+}
+function assertCurrentDetail(actual:ReturnType<Operations['detail']>,expected:ReturnType<typeof captureExpectedDetail>){
+ const steps=actual.steps.map(({maxAttempts,maxRetries,retriesUsed,attemptsRemaining,retryRound,retryExhausted,...original})=>{
+  assert.deepEqual({maxAttempts,maxRetries,retriesUsed,attemptsRemaining,retryRound,retryExhausted},expected.budgets.get(original.id));return original;
+ });assert.deepEqual({...actual,steps},expected.original);
+}
+
 test('scoped HTTP detail batches only returned steps and preserves the complete original output',async t=>{
  const f=await scopedCaptureFixture(t),host=f.host.execution!;
  host.register({kind:'generated.dependencies',pool:'generated.dependencies',concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,parseInput:raw=>raw as Record<string,unknown>,execute:async()=>null});
@@ -23,22 +39,22 @@ test('scoped HTTP detail batches only returned steps and preserves the complete 
  const spy=t.mock.method(db,'prepare',(sql:string)=>{const statement=prepare(sql);if(sql.includes('FROM execution_dependencies')){const all=statement.all.bind(statement);statement.all=((...args:any[])=>{queries.push({sql,args});return all(...args);}) as typeof statement.all;}return statement;});
  for(const limit of [1,10,50,100]){
   let cursor=0;do{
-   const expected=reference.detail(id,cursor,limit);queries.length=0;
-   const actual=read.detail(id,cursor,limit);assert.deepEqual(actual,expected);
+   const expected=captureExpectedDetail(reference.detail(id,cursor,limit),db);queries.length=0;
+   const actual=read.detail(id,cursor,limit);assertCurrentDetail(actual,expected);
    assert.equal(queries.length,Math.ceil(actual.steps.length/100));
    assert.deepEqual(queries.flatMap(query=>JSON.parse(String(query.args[0]))),actual.steps.map(step=>step.id),'only returned steps, without lookahead, are bound');
    for(const query of queries){assert.match(query.sql,/WHERE step_id=step.value ORDER BY dependency_id LIMIT 100/);assert.ok(JSON.parse(String(query.args[0])).length<=100);const plan=prepare('EXPLAIN QUERY PLAN '+query.sql).all(...query.args as string[]);assert.ok(plan.some(row=>String(row.detail).includes('COVERING INDEX sqlite_autoindex_execution_dependencies_1 (step_id=?)')));}
    cursor=actual.nextCursor??0;
   }while(cursor);
  }
- assert.deepEqual(read.detail(id,Number.MAX_SAFE_INTEGER),reference.detail(id,Number.MAX_SAFE_INTEGER));
+ assertCurrentDetail(read.detail(id,Number.MAX_SAFE_INTEGER),captureExpectedDetail(reference.detail(id,Number.MAX_SAFE_INTEGER),db));
  spy.mock.restore();
  // Freeze no state across the HTTP await: capture the original result as the
  // real scoped route calls the new detail method on that same synchronous read.
  const detail=Operations.prototype.detail;
  const expectedResponses:any[]=[];
- const callSpy=t.mock.method(Operations.prototype,'detail',function(this:Operations,operationId:string,cursor?:number,limit?:number){const original=reference.detail(operationId,cursor,limit);expectedResponses.push(original);return detail.call(this,operationId,cursor,limit);});
- for(const limit of [1,50,100]){const response=await f.request(f.a.token,`/api/operations/${encodeURIComponent(id)}?limit=${limit}`);assert.equal(response.statusCode,200,response.body);assert.deepEqual(response.json(),JSON.parse(JSON.stringify(expectedResponses.at(-1))));}
+ const callSpy=t.mock.method(Operations.prototype,'detail',function(this:Operations,operationId:string,cursor?:number,limit?:number){expectedResponses.push(captureExpectedDetail(reference.detail(operationId,cursor,limit),db));return detail.call(this,operationId,cursor,limit);});
+ for(const limit of [1,50,100]){const response=await f.request(f.a.token,`/api/operations/${encodeURIComponent(id)}?limit=${limit}`);assert.equal(response.statusCode,200,response.body);assertCurrentDetail(response.json(),expectedResponses.at(-1));}
  callSpy.mock.restore();
  for(const [account,operation] of [[f.b,id],[f.a,foreign.operationId],[f.a,'file:missing']] as const)assert.equal((await f.request(account.token,'/api/operations/'+encodeURIComponent(operation))).statusCode,404);
  assert.equal((await f.request(undefined,'/api/operations/'+encodeURIComponent(id))).statusCode,401);
@@ -58,7 +74,7 @@ test('direct reader retains per-step 100 cap, all output fields and large-page b
  engine.enqueue('file:large','generated',{replacement:true},{ownership,generation:{slot:'slot-1',version:'replacement'}});
  for(const owner of ['generated-a',undefined]){
   const actual=new Operations(store,owner),reference=new OriginalOperations(store,owner);
-  for(const [cursor,limit] of [[0,1],[0,100],[0,205],[0,600],[130,100],[Number.MAX_SAFE_INTEGER,100]])assert.deepEqual(actual.detail('file:large',cursor,limit),reference.detail('file:large',cursor,limit));
+  for(const [cursor,limit] of [[0,1],[0,100],[0,205],[0,600],[130,100],[Number.MAX_SAFE_INTEGER,100]])assertCurrentDetail(actual.detail('file:large',cursor,limit),captureExpectedDetail(reference.detail('file:large',cursor,limit),db));
   const page=actual.detail('file:large',0,600);assert.equal(page.steps.length,206);assert.ok(page.steps.some(step=>!step.current));
   assert.ok(page.steps.some(step=>step.optional&&step.notScheduled));assert.ok(page.steps.some(step=>step.reason==='processing_failed'));
   for(const step of page.steps)assert.deepEqual(step.dependencies,[...step.dependencies].sort());

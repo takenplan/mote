@@ -38,6 +38,9 @@ export interface ExecutionGrant {
  withBudget<T>(work:()=>Promise<T>):Promise<T>;
  /** Trusted actual query fragments retain execution across a later unexecuted capacity wait. */
  recordExecution():void;hasExecuted():boolean;
+ /** Local to this genuine grant; brackets one callback's actual fragments,
+  * independently of execution retained by the durable logical session. */
+ executionMarker():number;
  /** Release an admitted physical resource after its call stages have settled. */
  releaseResource(key:string):void;
  /** Acquire a resource only for a continuous handler's physical effect.
@@ -388,7 +391,7 @@ export class ExecutionEngine {
   // can remain strongly retained by Node until a long deadline actually fires.
   const step=this.get(row.id)!,signal=controller.signal;
   const attemptId=step.attemptId!;
-  let deadline:ReturnType<typeof setTimeout>|undefined,budgetStarted=false;
+  let deadline:ReturnType<typeof setTimeout>|undefined,budgetStarted=false,executionSequence=0;
   const startBudget=()=>{if(budgetStarted)return;budgetStarted=true;if(timeout!==null){deadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline.unref();}};
   if(!handler.deferTimeout)startBudget();
   const renewal=setInterval(()=>{if(this.stopping)return;try{const at=this.now();if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes)controller.abort();}catch{controller.abort();}},10000);renewal.unref();
@@ -399,7 +402,7 @@ export class ExecutionEngine {
     if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
    };
    const chargeAttempt=()=>{const charged=this.attempts.charge(row.id,attemptId,policy.maxAttempts);if(charged===undefined)throw new ExecutionFailure('permanent','retry_budget_exhausted');if(charged)step.attempts++;db.prepare('UPDATE execution_attempt_charges SET charged=1 WHERE step_id=? AND fence=?').run(row.id,fence);};
-   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,startAttempt:()=>grant.commit(chargeAttempt),recordExecution:()=>{assertGrant();this.attempts.recordExecution(attemptId);},hasExecuted:()=>this.attempts.executed(attemptId),withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
+   const grant:ExecutionGrant=Object.freeze({assert:assertGrant,startAttempt:()=>grant.commit(chargeAttempt),recordExecution:()=>{assertGrant();this.attempts.recordExecution(attemptId);executionSequence++;},hasExecuted:()=>this.attempts.executed(attemptId),executionMarker:()=>executionSequence,withBudget:async<T>(work:()=>Promise<T>):Promise<T>=>{
     assertGrant();grant.commit(()=>{chargeAttempt();this.attempts.enter(attemptId);});let callDeadline:ReturnType<typeof setTimeout>|undefined;
     if(timeout!==null){callDeadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);callDeadline.unref();}
     let executed=true;try{const value=await work();assertGrant();return value;}catch(error){if(error instanceof ProviderFailure&&error.details.executionStarted===false||error instanceof ExecutionFailure&&error.facts?.executionStarted===false)executed=false;throw error;}finally{clearTimeout(callDeadline);this.attempts.finish(attemptId,executed);}

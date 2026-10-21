@@ -93,13 +93,16 @@ test('a real scheduled child gets its own physical scope while the awaiting pare
  const f=await fixture(t);let parentId='',childId='',parentIssuance='',childIssuance='';
  const facts=()=>f.read(db=>db.prepare('SELECT * FROM task_physical_calls WHERE task_id IN (?,?) ORDER BY task_id').all(parentId,childId));
  f.node.execution.register(handler({kind:'generated.physical-child',pool:'generated-child',execute:run=>run.model!.withModel(async()=>{
-  childId=run.task.id;childIssuance=run.external.begin('generated-child-read');const active=facts();assert.equal(active.length,2);assert.ok(active.every(row=>row.state==='active'));assert.equal(new Set(active.map(row=>row.owner_token)).size,2);assert.equal(new Set(active.map(row=>row.attempt_id)).size,2);run.external.complete();return {child:true};
+  assert.equal(run.grant.executionMarker(),0);
+  childId=run.task.id;childIssuance=run.external.begin('generated-child-read');const active=facts();assert.equal(active.length,2);assert.ok(active.every(row=>row.state==='active'));assert.equal(new Set(active.map(row=>row.owner_token)).size,2);assert.equal(new Set(active.map(row=>row.attempt_id)).size,2);run.external.complete();run.grant.recordExecution();assert.equal(run.grant.executionMarker(),1);return {child:true};
  },{recovery:'read-query'})}));
  f.node.execution.register(handler({execute:run=>run.model!.withModel(async()=>{
+  assert.equal(run.grant.executionMarker(),0);
   parentId=run.task.id;const original=facts();assert.equal(original.length,1);assert.equal(original[0].task_id,parentId);assert.equal(original[0].state,'active');
   const child=await f.node.execution.forUser(run.context).submit({kind:'generated.physical-child',operationId:'generated-nested-child',input:{label:'generated-child'}});await f.node.execution.engine.drain([child.id]);assert.equal(f.node.execution.engine.get(child.id)!.state,'succeeded');
+  assert.equal(run.grant.executionMarker(),0,'the child execution does not enter its awaiting parent span');
   const after=facts(),parent=after.find(row=>row.task_id===parentId)!,childFact=after.find(row=>row.task_id===childId)!;assert.deepEqual(parent,original[0],'the child never replaced or cleaned the parent owner');assert.equal(childFact.state,'quiescent');assert.ok(childFact.quiescent_at);
-  parentIssuance=run.external.begin('generated-parent-read-after-child');const bound=facts().find(row=>row.task_id===parentId)!;assert.equal(bound.id,original[0].id);assert.equal(bound.owner_token,original[0].owner_token);assert.equal(bound.issuance_id,parentIssuance,'the parent continuation regained its own AsyncLocalStorage scope');run.external.complete();return {parent:true};
+  parentIssuance=run.external.begin('generated-parent-read-after-child');const bound=facts().find(row=>row.task_id===parentId)!;assert.equal(bound.id,original[0].id);assert.equal(bound.owner_token,original[0].owner_token);assert.equal(bound.issuance_id,parentIssuance,'the parent continuation regained its own AsyncLocalStorage scope');run.external.complete();run.grant.recordExecution();assert.equal(run.grant.executionMarker(),1);return {parent:true};
  },{recovery:'read-query'})}));
  const parent=await f.submit(f.alice.token,'generated-nested-physical');await f.wait(parent.id,'succeeded');assert.ok(parentIssuance&&childIssuance);const final=facts();assert.equal(final.length,2);assert.ok(final.every(row=>row.state==='quiescent'&&row.quiescent_at));assert.equal(final.find(row=>row.task_id===childId)!.issuance_id,childIssuance);assert.equal((await f.request(f.bob.token,'/api/tasks/'+childId)).statusCode,404);
 });
