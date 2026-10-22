@@ -339,6 +339,192 @@ Status: implementation-complete with the named focused/consumer evidence below; 
     the other 60 cases in that file were intentionally not selected. A resumed
     full affected invocation will reuse only eligible original passed-task receipts.
 
+
+42. The resumed frozen affected run on `ddbe596e17a619df8c893464b070646e0827fae6`
+    completed with **FAILED** status and confirmed cleanup:
+    `2026-10-22T20-23-50-786Z-daf415e7-69cb-43d8-a889-4ca0076c8140`.
+    Every guarded input remained stable. Desktop **685/685**, Shared,
+    Diagnostics, release/root/backup/client/Central-runner checks and Android
+    unit checks passed. Agent and script typecheck were **REUSED** from their
+    eligible original receipts. Server groups 1, 5 and 10 passed; the other
+    Server groups and Web failed, with **80 Server and 1 Web reported failing
+    cases**. These counts describe test outcomes, not distinct production bugs.
+    The required 1,000-original background import and 400-day Memory workloads
+    passed without reducing scale or changing deadlines.
+
+    Reviewed production repairs address stale account-epoch configuration cache
+    eligibility, contradictory processing deletion authority, lightweight typed
+    time projection, decoder dispositions, Memory-owned missing-model progress,
+    and redacted raw screen content promotion through formal Materials. The
+    privacy correction retains typed UI selected text and metadata-only activity,
+    and blocks existing unsafe evidence as well as future organizer production.
+    Reviewed fixture corrections preserve complete journeys while replacing old
+    count-window assumptions, global cross-domain call counts and observation
+    gates placed after their task has already retired. Explicitly deleted import
+    requests must remain tombstoned; unseen private preview history must still
+    restore through real portable import and require fresh owner confirmation.
+
+    Unknown account-deletion/retention settlement and selected model-target
+    failures remain diagnostic work. Exact failed cases, prospective approvals,
+    unchanged-input hashes and staged drafts are recorded in the local work log.
+    Root resumed module-only validation first; consumer corrections and diagnostic
+    fixtures remain held until the relevant module proof. No final E2E, PR or Dev
+    artifact is claimed by this checkpoint.
+
+43. After the reviewed production repairs, the module ladder completed with
+    stable inputs and confirmed cleanup. Authority and processing deletion
+    checks passed **17/17** (`2026-10-22T21-22-14-785Z-39628b7f-4217-4aef-af50-4524a35ce840`).
+    Evidence projection, typed metadata and privacy checks passed **14/15**;
+    the sole failure was a newly added fixture using noncanonical Material IDs
+    before reaching its projection assertion. Correcting those IDs retained
+    explicit hidden-before-visible ordering and the transitive before-LIMIT
+    assertions. The next module run passed **13/13**, covering both SQL privacy
+    cases, four document-ingestion cases and seven Memory progress cases
+    (`2026-10-22T21-29-37-897Z-f068a9c4-d1d8-4aae-a8a0-981d516fad66`).
+    The previous evidence receipt is
+    `2026-10-22T21-23-30-744Z-69fb9873-76cb-4bdd-bc9f-0a249eac05cd`.
+    Server compilation also passed. Named user-entry consumers and diagnostic
+    fixtures are the next stage; these module results do not supersede the
+    incomplete full-candidate qualification.
+
+44. Named consumer checks now confirm the epoch and privacy repairs through
+    actual HTTP ingress, Memory extraction/review, Ask history/followups and
+    real portable/stopped archive paths: **18/18** passed with stable inputs and
+    cleanup (`2026-10-22T21-34-26-903Z-b8dcc825-14c5-43bb-9de9-9ff8fb6a9d7c`).
+    Seven unchanged typed-evidence consumer files passed **57/58**
+    (`2026-10-22T21-36-33-345Z-e68124f6-8150-46de-9003-790574cf3e19`);
+    the daily-event case progressed past its original model error and exposed
+    a later event-count assertion, still under investigation.
+
+    Processing diagnostic consumers passed **6/9**
+    (`2026-10-22T21-31-57-110Z-3669b60f-9732-498d-adfc-dd98ac9aa0d0`).
+    Actual traces establish that the old recheck retires during real dependency
+    refresh while its linked current replacement succeeds, and that unknown
+    physical work blocks the current handoff before admitting a child. The
+    third failure is a confirmed cleanup defect: an empty configuration-authority
+    ledger was blocked by an independent unresolved external-effect fact after
+    local physical cleanup. The bounded repair preserves that external fact and
+    every nonempty-ledger fence; module proof precedes consumer reruns.
+
+    Actions recovery/device/kind/lifecycle consumers passed **13/14**
+    (`2026-10-22T21-32-48-600Z-ddbf7a79-176d-4234-b516-7ceedf4a48fa`).
+    The remaining account-deletion fixture retries while a genuine independent
+    read callback is still active. The approved correction observes that exact
+    callback's cleanup before the existing single administrator retry, sharing
+    the original final deadline. It preserves deletion during in-flight work,
+    late unpublished native ACK, explicit administrator retry and all A/B erasure
+    checks; it adds no automatic lifecycle continuation. All four receipts above
+    have confirmed cleanup and stable guarded inputs. Remaining diagnostics,
+    full qualification, final E2E and delivery are still pending.
+
+45. The empty-configuration cleanup repair passed its expanded host module
+    **11/11** (`2026-10-22T21-39-07-573Z-dfaea213-bcd3-4aa7-b824-ed873669e1b3`)
+    and the next queued/incarnation/archive/Actions-lifecycle consumer group
+    **12/12** (`2026-10-22T21-39-48-446Z-22617484-fc49-4234-b5f1-4fff67193e46`).
+    Server compilation passed after the source correction. Daily-event HTTP
+    validation passed **2/2** with the original seven positive inputs and an
+    additional redacted-screen negative, preserving local-day recall, independent
+    review, raw-read denial and restart replay checks
+    (`2026-10-22T21-41-05-995Z-e96587d2-3834-4b09-a06f-2297a3db0b4f`).
+
+    Actions fences/source metadata passed **18/18**
+    (`2026-10-22T21-41-34-790Z-43e19dac-02f0-4cc3-a8f9-9299e0b2bf15`);
+    legacy/context/Activity Memory cohorts passed **10/10**
+    (`2026-10-22T21-42-38-062Z-b78c65f3-a945-425c-ba92-ec9435ea6fab`);
+    Actions semantic/catalog and connector consumers passed **26/26**
+    (`2026-10-22T21-46-58-020Z-51da8a80-94b1-4e5f-ab7d-7412f27c79aa`).
+    The latter retain native issuance, real usage/physical bindings, cancellation,
+    independent source revocation and encrypted current-format restart history.
+
+    Processing consumers passed **26/31**, including all seven Ask authorization
+    and twelve held/shared-change fence cases
+    (`2026-10-22T21-45-04-334Z-13de4f07-7846-4cda-9f40-01472e68ffcf`).
+    Five remaining failures use obsolete control/applied-state observations;
+    approved exact target-to-handoff-to-replacement tests are landed for their
+    twelve-case follow-up. The archive case now explicitly waits for the accepted
+    asynchronous application instead of reading an immediately applied policy.
+
+    Memory/MCP diagnostics passed **20/23**
+    (`2026-10-22T21-43-33-948Z-6eac2b7c-ea89-4afb-b202-977e3256f24b`).
+    The retained failures establish separate automatic/manual image jobs, six
+    separately admitted Coding jobs instead of a queued cohort, and a generated
+    MCP model incorrectly reporting context-only keys as extraction targets.
+    Approved corrections retain the exact intended job/phase/pixel, clock and
+    authorization assertions; their focused reruns remain pending. All receipts
+    in this checkpoint have stable guarded inputs and confirmed cleanup. This
+    remains staged integration evidence, not final qualification or delivery.
+
+46. Subsequent exact consumers established additional staged evidence. The MCP
+    target-coverage helper passed **3/3**, and its real SDK representative passed
+    **3/3** inside the 14/15 boundary-consumer run
+    (`2026-10-22T21-51-20-848Z-953d2f46-b664-4600-92f9-1494feb9419d`).
+    Coding preparation then passed all twelve cases, including the original
+    six-call cohort contract, within the 25/27 Memory/policy run
+    (`2026-10-22T21-54-49-166Z-68f7573a-3873-49e2-bf60-fa0a0546122a`).
+
+    A diagnostic-only 15/17 follow-up preserved every acceptance assertion and
+    deadline (`2026-10-22T22-00-58-819Z-b8a02f74-6f2b-4a01-afd0-d9a18c55952e`).
+    It confirmed two product defects: an image-backed published Memory was
+    excluded because the shared projection expected an asset block in a
+    text-only OCR Material; and an explicit, consented full retry canceled the
+    pending configuration handoff but reused the old applied policy. Independent
+    prospective reviews approved exact host image-anchor projection parity and
+    atomic adoption of the current pending target during full retry. Both retain
+    existing privacy, source, physical execution and unknown-outcome fences.
+    Their new finite seams and complete consumer reruns remain pending here.
+
+    Real Memory process recovery passed **5/5**, covering admission, independent
+    review with SIGKILL/SIGTERM, feedback and owner-reply interruptions
+    (`2026-10-22T22-02-44-801Z-f8ec7e71-f70b-4928-bd5f-10f647cb82c3`).
+    The sixth, independent MCP process case failed because its generated model
+    still emitted context-only keys as target coverage. Actual request and
+    validation traces proved this separately; the reviewed correction reuses the
+    qualified target-key helper without changing UUID/candidate selection,
+    process lifecycle, deadlines or restart/no-replay assertions.
+
+    The next import, import-to-Memory progress, lifecycle, review and named image
+    recipe consumers passed **54 cases**, with one existing opt-in pinned Python
+    Source Pack case skipped (`2026-10-22T22-04-53-403Z-f628d86b-f1c4-4b3b-b877-a569334fbb80`).
+    These include stopped backup, unseen-history restore, durable publication
+    checkpoints, missing-model resumption of the same receipt, account erasure,
+    independent B data and actual original-image retention. All receipts in this
+    checkpoint have stable guarded inputs and confirmed cleanup. No final
+    candidate qualification, browser E2E, PR or Dev delivery is claimed yet.
+
+47. The final boundary repairs passed their finite checks before consumer
+    qualification. Explicit full retry passed its exact transaction seam **1/1**
+    (`2026-10-22T22-10-22-693Z-52996c78-5784-4140-81bc-d28890327a9a`): a generated
+    late SQL failure after admission rolled back binding, confirmation and task
+    state; the same operation subsequently used the new provider once, remained
+    idempotent and preserved the old unknown call and independent B data. Initial
+    fixture syntax and expected-error-shape failures were corrected without
+    changing acceptance. A trigger observer proves the injected late boundary
+    was reached rather than accepting an unrelated generic failure.
+
+    Exact image-anchor projection passed **3/3**
+    (`2026-10-22T22-15-50-531Z-8cd1c18f-bd00-4bcb-9099-b2eb4f5feffd`), covering
+    shared SQL/JS/page/vector source and time selection, partial named-artifact
+    readiness, empty image interpretation, canonical text identity, missing image
+    relations, owner isolation and direct/transitive privacy withdrawal. Initial
+    fixture construction errors used invalid canonical Material IDs and omitted
+    required evidence metadata; the correction retained every positive and
+    negative assertion. An independent source review found the four image/retry
+    source deltas consistent with their prospective approvals. Server compilation
+    passed after these changes.
+
+    The original real-entry consumers then passed **21/21**
+    (`2026-10-22T22-16-41-306Z-bdb3888d-8ef0-4cff-aeea-193ad3af0f83`): independent
+    automatic/manual image extraction and review retain all sixteen requests'
+    owner/job/phase attribution, eight independent pixel-read proofs and published
+    Memory visibility; explicit policy retry uses
+    the accepted new plan while preserving unknown/physical fences; actual MCP
+    listener/SDK work reaches SIGKILL/restart, credential revocation and exact
+    no-model-replay assertions. The physical lifecycle consumer retains the
+    still-held-call refusal through relogin and disable/enable. All receipts have
+    stable guarded inputs and confirmed cleanup. These named journeys are
+    integration-verified; the frozen candidate still requires the complete
+    affected plan and final generated UI/recovery E2E before PR and Dev delivery.
+
 ## Audit issue coverage ledger
 
 This ledger tracks the original audit scope; implementation is not a final

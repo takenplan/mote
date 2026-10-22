@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {sourceContentTime,type CaptureRecord,type Transcript,type UiContentObject} from '@mote/shared';
 import {codingProjectContext} from './coding-project.js';
 import {uiPageCaptureSource} from './capture-memory-source.js';
+import {materialOriginalContentVisible} from './material-original-visibility.js';
 import type {MaterialDraft,MaterialEvidenceContext} from './scope/material-model.js';
 import type {ImageMaterialProjection} from './image-materials.js';
 import type {readFileSpeakerAttributions} from './file-speaker-attribution.js';
@@ -361,7 +362,7 @@ export const screenGroup:MaterialOrganizer={
   identity:g=>g.groupKey?materialId(sourceKey('screen',g.deviceId),g.groupKey):undefined,
   build(reader,g){
     if(!g.groupKey)return;
-    const {records,truncated}=reader.screenGroup();
+    const selected=reader.screenGroup(),records=selected.records.filter(materialOriginalContentVisible),truncated=selected.truncated;
     if(!records.length)return;
     const sourceId=sourceKey('screen',g.deviceId),externalId=g.groupKey,body=new MaterialBody();
     for(const r of records)body.addMember(r);
@@ -409,7 +410,7 @@ export const captureEvent:MaterialOrganizer={
   select:r=>r.source==='ui_page'&&r.metadata?.uiPage?.version===2||r.source==='screen'&&Boolean(r.blobHash)?{deviceId:r.deviceId,captureId:r.id,sourceId:r.source==='ui_page'?uiPageCaptureSource(r.deviceId):sourceKey('screen',r.deviceId)}:undefined,
   identity:g=>materialId(g.sourceId,JSON.stringify(['daily-event',g.captureId])),
   build(reader,g){
-    const r=reader.capture();if(!r)return;
+    const r=reader.capture();if(!r||!materialOriginalContentVisible(r))return;
     const page=r.metadata?.uiPage,structured=page?.version===2,sourceId=g.sourceId;
     const image=reader.file(r.id)?.image,body=new MaterialBody();body.addMember(r);
     body.text('observation',JSON.stringify({capture:JSON.parse(captureText(r)),...(structured?{uiPage:page}:{}),

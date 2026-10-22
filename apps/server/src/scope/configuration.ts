@@ -474,7 +474,7 @@ export class Configurations {
     const state=this.state(context.userId),existing=this.entries.get(context.userId);
     // A session-owned initialization may still fail after logout. The accepted
     // operation must neither await that session nor replace its runtime entry.
-    if(existing?.initialized&&existing.generation===state.generation){guard();return read(existing);}
+    if(existing?.initialized&&existing.generation===state.generation&&existing.accessKey==='account:'+(context as UserContext).authorizationEpoch){guard();return read(existing);}
     const service=new ConfigService({path:join(this.path(context.userId),'mote.yaml'),initialDocument:{version:1,revision:0},persistInitialDocument:false,assertAccess:guard,watch:false});
     service.register({id:'models',schema:this.resources.schema(),defaultValue:{profiles:[],selections:{}},fields:userModelFields,resolve:raw=>raw});
     service.register({id:'modelPrices',schema:priceDomain,defaultValue:{items:[]},resolve:raw=>raw});

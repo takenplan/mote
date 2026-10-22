@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {fixture,modelFixture} from './fixtures/scoped-actions.js';
 import {randomUUID} from 'node:crypto';
 
+function assertUnissued(f:Awaited<ReturnType<typeof modelFixture>>,operationId:string){const facts=f.read(db=>({calls:db.prepare("SELECT c.* FROM task_external_calls c JOIN ac_operations o ON o.user_id=c.user_id AND o.task_id=c.task_id JOIN execution_steps e ON e.user_id=c.user_id AND e.id=c.task_id WHERE o.user_id=? AND o.id=? AND e.kind='actions.delivery'").all(f.a.userId,operationId),operation:db.prepare('SELECT task_id,issuance_id,claimed,ack FROM ac_operations WHERE user_id=? AND id=?').get(f.a.userId,operationId)}));assert.equal(facts.calls.length,0,'Rejected claims cannot issue an exact native calendar call');assert.deepEqual({...facts.operation},{task_id:null,issuance_id:null,claimed:0,ack:null});}
+
 test('real device credentials may register only their own targets and review only an owner-granted calendar scope',async t=>{
  const f=await fixture(t),mint=(token:string,id='same-device')=>f.ok(token,'/api/login/session','POST',{serverUrl:'https://synthetic.invalid',deviceId:id,deviceName:'Generated device',platform:'macos'}),a=await mint(f.a.token),b=await mint(f.b.token),other=await mint(f.a.token,'other-device');
  for(const credential of [a,b])await f.ok(credential.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated own device',calendars:[{id:'same-calendar',title:'Generated owned'}]});
@@ -27,12 +29,12 @@ test('calendar approval checks explicit timezone and native target before issuan
  assert.equal((await f.request(f.a.token,path,'POST',{version:a.version,event:a.event,target:{deviceId:'same-device',calendarId:'absent'}})).statusCode,409);
  const approved=await f.ok(f.a.token,path,'POST',{version:a.version,event:a.event,target}),wrong=await f.ok(f.a.token,'/api/login/session','POST',{serverUrl:'https://synthetic.invalid',deviceId:'wrong-device',deviceName:'Generated wrong device',platform:'macos'});
  assert.equal((await f.request(wrong.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,403);assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'wrong-device'})).statusCode,403);
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].operationId,approved.operationId);
+ assertUnissued(f,approved.operationId);assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].operationId,approved.operationId);
 });
 
 test('an event that expires after exact approval cannot obtain its first external issuance',async t=>{
- const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated',calendars:[{id:'same-calendar',title:'Generated'}]});const a=(await f.proposal(f.a)).items[0],now=Date.now(),event={...a.event,start:new Date(now+30000).toISOString(),end:new Date(now+60000).toISOString()};await f.ok(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{version:a.version,event,target:{deviceId:'same-device',calendarId:'same-calendar'}});
- t.mock.timers.enable({apis:['Date'],now:now+120000});assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,409);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);t.mock.timers.reset();
+ const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated',calendars:[{id:'same-calendar',title:'Generated'}]});const a=(await f.proposal(f.a)).items[0],now=Date.now(),event={...a.event,start:new Date(now+30000).toISOString(),end:new Date(now+60000).toISOString()},approved=await f.ok(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{version:a.version,event,target:{deviceId:'same-device',calendarId:'same-calendar'}});
+ t.mock.timers.enable({apis:['Date'],now:now+120000});assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,409);assertUnissued(f,approved.operationId);t.mock.timers.reset();
 });
 
 test('existing clients may use zero for the first Actions page while other positions require signed cursors',async t=>{

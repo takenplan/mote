@@ -9,8 +9,8 @@ const projection=`json_object(
  'source',${field('source')},'appId',${field('appId')},'appName',${field('appName')},
  'privacy',json(${field('privacy')}),
  'ocr',json_object('status',${field('ocr.status')}),
- 'stateSeries',json_object('samples',json_array(json_object('at',${field('stateSeries.samples[#-1].at')}))),
- 'provenance',json_object('sourceId',${field('provenance.sourceId')},'externalId',${field('provenance.externalId')},'revision',${field('provenance.revision')},'document',json_object(
+ 'stateSeries',CASE WHEN json_type(captures.json,'$.stateSeries')='object' THEN json_object('version',${field('stateSeries.version')},'samples',json((SELECT json_group_array(json_object('at',json_extract(value,'$.at'),'durationMs',json_extract(value,'$.durationMs'))) FROM json_each(captures.json,'$.stateSeries.samples')))) END,
+ 'provenance',json_object('sourceId',${field('provenance.sourceId')},'externalId',${field('provenance.externalId')},'revision',${field('provenance.revision')},'calendar',json(${field('provenance.calendar')}),'document',json_object(
   'timeBasis',${field('provenance.document.timeBasis')},'occurredAt',${field('provenance.document.occurredAt')},'recordedAt',${field('provenance.document.recordedAt')},'coding',${field('provenance.document.coding')})),
  'metadata',json_object('memoryCorrection',${field('metadata.memoryCorrection')},'media',json_object('sessions',json(coalesce((SELECT json_group_array(json_object('appId',json_extract(value,'$.appId'))) FROM json_each(captures.json,'$.metadata.media.sessions')),'[]'))))
 )`;

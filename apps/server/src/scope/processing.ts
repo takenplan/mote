@@ -370,7 +370,14 @@ export class ProcessingHost {
    if(before.wait==='unknown'&&before.confirmUnknownRequired&&!request.confirmUnknown)throw new TaskError('external_result_unknown',409);
    // Historical retries select the current policy only after physical conflict
    // refusal. Plan replacement and its admitted retry share this transaction.
-   if(replacePolicyPlan)this.policies.bindPlan(context,ref,true);
+   const pendingPlan=request.stage==='transcribe'?sql.get(`SELECT h.task_id FROM task_processing_config_handoffs h
+    JOIN mp_configuration_targets t ON t.user_id=h.user_id AND t.original_id=substr(h.original_ref,10) AND t.receipt_id=h.receipt_id
+    JOIN execution_steps e ON e.id=h.task_id AND e.user_id=h.user_id
+    WHERE h.user_id=$user AND h.original_ref=? AND h.replacement_id IS NULL AND e.kind='processing.configuration'
+    AND e.state IN('waiting','blocked','failed') AND json_extract(t.json,'$.preserveImagePlan')=0`,ref):undefined;
+   // An accepted full retry supersedes this exact pending configuration intent.
+   // Bind its current desired plan only after physical and consent refusals.
+   if(replacePolicyPlan||pendingPlan&&this.configurationTargetCurrent(context.userId,String(pendingPlan.task_id),ref))this.policies.bindPlan(context,ref,true);
    if(request.stage==='image-complete'&&this.completeImageRecipe(context,ref))return {queued:false,complete:true};
    if(request.stage==='image-complete'&&!this.customImageRecipe(context,ref)){const status=this.forUser(context).status(ref),settings=this.snapshot(context,ref).settings;if(status.indexed&&(!settings.understandingEnabled||status.derivations.some(d=>d.kind==='image'))&&(!settings.summarize||status.derivations.some(d=>d.kind==='summary'))&&!before.canCancel)return {queued:false,complete:true};}
    const previous=this.fileControl(context,ref);if(previous.generation>=Number.MAX_SAFE_INTEGER)throw new PrivateDataError('conflict',409);

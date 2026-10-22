@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {materialIntakeProgress} from '../src/scope/memory-observations.js';
+import {materialIntakeProgress,memoryModelWaiting} from '../src/scope/memory-observations.js';
 import {ScopedMemoryData} from '../src/scope/memory-data.js';
 import {PrivateCursor} from '../src/scope/private-data-sql.js';
 import {evidenceFixture} from './fixtures/evidence-projection.js';
@@ -39,4 +39,10 @@ test('exact owner, Material revision and revocation boundaries select only the c
 
 test('an invalid task reference is not silently swallowed as an absent Memory job',t=>{
  const f=fixture(t);f.receipt({taskId:'missing-task',jobId:randomUUID()});assert.throws(f.read,/missing actual task/);assert.deepEqual(f.lookups,[]);
+});
+
+
+test('Memory model prerequisites require the exact current task state and host reason',()=>{
+ for(const task of [{state:'waiting',error:'memory_model_required'},{state:'waiting',reason:'memory_model_required'},{state:'blocked',failure:{code:'model_snapshot_unavailable'}},{state:'blocked',error:'model_configuration_unavailable'},{state:'blocked',error:'model_authority_revoked'}])assert.equal(memoryModelWaiting(task),true,JSON.stringify(task));
+ for(const task of [{state:'waiting',error:'rate_limited'},{state:'waiting',error:'model_snapshot_unavailable'},{state:'stale',error:'grant_revoked'},{state:'stale',error:'memory_model_required'},{state:'failed',error:'memory_model_required'},{state:'blocked',error:'grant_revoked'},{state:'running',error:'memory_model_required'},{state:'waiting'},{state:'blocked',error:'grant_revoked',failure:{code:'model_snapshot_unavailable'}}])assert.equal(memoryModelWaiting(task),false,JSON.stringify(task));
 });

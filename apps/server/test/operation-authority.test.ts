@@ -126,3 +126,30 @@ test('operation configuration export resolves fresh defaults without creating an
   assert.equal((host as unknown as {entries:Map<string,unknown>}).entries.size,0);
   f.revoke();await assert.rejects(host.lifecycle.exportUser(operation));assert.equal(existsSync(ownerDirectory),false);
 });
+
+
+test('a new-epoch operation reads configuration without reusing or replacing the retired account runtime',async t=>{
+  const deploymentId=randomUUID(),userId=randomUUID(),directory=mkdtempSync(join(tmpdir(),'mote-operation-epoch-')),db=new DatabaseSync(':memory:');
+  let epoch=2,revoked=false;
+  const owner={deploymentId,userId,credentialId:randomUUID(),authorizationEpoch:epoch,administrator:true};
+  const identities=new Map<string,VerifiedOperationIdentity>();
+  const admit=()=>{const grant=randomUUID();identities.set(grant,{deploymentId,userId,credentialId:grant,authorizationEpoch:epoch,administrator:false,operation:{id:randomUUID(),purpose:'personal-import',digest:'a'.repeat(64),readDomains:['configuration'],writeDomains:[]}});return grant;};
+  const authority=new UserContextAuthority(deploymentId,{verify:async key=>key==='session'?owner:undefined,isCurrent:identity=>identity.authorizationEpoch===epoch&&identity.credentialId===owner.credentialId},undefined,undefined,{verify:async grant=>identities.get(grant),isCurrent:identity=>!revoked&&identity.authorizationEpoch===epoch&&JSON.stringify(identity)===JSON.stringify(identities.get(identity.credentialId))});
+  const accounts={assertAccountEnabled:(id:string,value:number)=>{assert.equal(id,userId);assert.equal(value,epoch);}} as Accounts;
+  const host=await Configurations.open({directory,db,authority,accounts});
+  t.after(async()=>{await host.close();db.close();rmSync(directory,{recursive:true,force:true});});
+  let prepared=0,effects=0;
+  host.registerDomain('generated',()=>({id:'generated',schema:z.object({enabled:z.boolean()}),defaultValue:{enabled:true},resolve:raw=>raw,prepare:()=>{prepared++;return {apply(){}};}}));
+  host.registerEffect('generated',()=>{effects++;return {apply(){}};});
+  const session=await authority.authenticate('session'),oldOperation=await authority.restoreOperation(admit());await host.forUser(session).view();
+  const entries=(host as unknown as {entries:Map<string,{accessKey:string;service:{watcher?:unknown};subject:unknown}>}).entries,entry=entries.get(userId)!;
+  const watcher=entry.service.watcher,path=join(directory,'configuration','users',userId,'mote.yaml'),before=readFileSync(path,'utf8'),counts={prepared,effects};
+  assert.ok(watcher);assert.equal(entry.accessKey,'account:2');
+  epoch=3;assert.throws(()=>authority.assert(session));assert.throws(()=>authority.assert(oldOperation));
+  const currentOperation=await authority.restoreOperation(admit());assert.equal(currentOperation.authorizationEpoch,3);assert.notEqual(currentOperation.credentialId,oldOperation.credentialId);
+  const archive=await host.lifecycle.exportUser(currentOperation);assert.equal(archive.domain,'configuration');assert.deepEqual((archive.payload as {document:{generated:unknown}}).document.generated,{enabled:true});
+  assert.equal(entries.get(userId),entry);assert.equal(entry.subject,session);assert.equal(entry.service.watcher,watcher);assert.equal(entry.accessKey,'account:2');
+  assert.equal(readFileSync(path,'utf8'),before);assert.deepEqual({prepared,effects},counts);assert.throws(()=>host.forUser(currentOperation));
+  await assert.rejects(host.lifecycle.exportUser(oldOperation));revoked=true;await assert.rejects(host.lifecycle.exportUser(currentOperation));
+  assert.equal(entries.get(userId),entry);assert.equal(readFileSync(path,'utf8'),before);assert.deepEqual({prepared,effects},counts);
+});

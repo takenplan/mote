@@ -37,10 +37,10 @@ test('PDF, DOCX and XLSX share central decoding text and locators across automat
   const document=sources.getItem(job.sourceId,value.name+':0')!.document;assert.equal(document?.timeBasis,'unknown');assert.equal(document?.recordedAt,undefined);assert.equal(document?.originalMetadata?.offset,0);if(value.mime==='application/pdf')assert.equal(document?.originalMetadata?.pageNumber,1);if(value.name.endsWith('.xlsx')){assert.equal(document?.originalMetadata?.sheetName,'Generated');assert.match(decoded.text,/"formula":"1\+1","result":2/);}
  }
 });
-test('a scanned PDF retains its original and explicitly fails extraction without inventing text',async t=>{
+test('a scanned PDF retains its original with an explicit host unsupported disposition and no invented text',async t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-empty-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
  const bytes=pdf(),decoded=await decodeOriginal(bytes,'application/pdf');assert.equal(decoded.status,'unsupported');assert.equal(decoded.coverage,'none');
- const job=await imports.create({files:[{name:'scanned.pdf',dataBase64:bytes.toString('base64')}],processing:'automatic'}),result=await imports.prepare(job.id);assert.equal(result.status,'failed');assert.match(result.error??'',/unsupported_format/);assert.deepEqual(archive.read(result.files[0].id),bytes);assert.equal(store.list().items.length,0);
+ const job=await imports.create({files:[{name:'scanned.pdf',dataBase64:bytes.toString('base64')}],processing:'automatic'}),result=await imports.prepare(job.id);assert.equal(result.status,'unsupported');assert.equal(result.processingStatus,'blocked');assert.deepEqual(result.dispositions?.items,[{fileId:result.files[0].id,path:'scanned.pdf',status:'unsupported',reason:'document_decode_unsupported'}]);assert.equal(result.dispositions?.counts.unsupported,1);assert.equal(result.dispositions?.counts.parsed,0);assert.ok(result.warnings.some(warning=>warning.includes('document_decode_unsupported')));assert.equal(result.preview,undefined);assert.deepEqual(result.captureIds,[]);assert.deepEqual(archive.read(result.files[0].id),bytes);assert.equal(store.list().items.length,0);
 });
 test('partial deterministic PDF extraction keeps valid text in preview for confirmation',async t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-partial-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
@@ -51,4 +51,12 @@ test('partial deterministic PDF extraction keeps valid text in preview for confi
  assert.equal(store.list().items.length,0);assert.deepEqual(archive.read(preview.files[0].id),bytes);
  const confirmed=await imports.confirm(job.id);assert.equal(confirmed.status,'completed');
  assert.match(confirmed.captureIds.map(id=>store.evidence([id])[0].ocrText).join(''),/Generated first page/);
+});
+
+
+test('supported and scanned originals retain separate host dispositions and require confirmation of the available text',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-mixed-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const good=pdf('GENERATED_MIXED_SUPPORTED_TEXT'),scanned=pdf(),job=await imports.create({files:[{name:'good.pdf',dataBase64:good.toString('base64')},{name:'scanned.pdf',dataBase64:scanned.toString('base64')}],processing:'automatic'}),preview=await imports.prepare(job.id);
+ assert.equal(preview.status,'awaiting_confirmation');assert.equal(preview.reviewGate?.decision,'confirmation');assert.equal(preview.dispositions?.counts.parsed,1);assert.equal(preview.dispositions?.counts.unsupported,1);assert.deepEqual(preview.dispositions?.items.map(item=>[item.path,item.status]),[['good.pdf','parsed'],['scanned.pdf','unsupported']]);assert.equal(preview.preview?.count,1);assert.ok(preview.preview?.samples.every(sample=>sample.text.includes('GENERATED_MIXED_SUPPORTED_TEXT')));assert.equal(store.list().items.length,0);
+ const confirmed=await imports.confirm(job.id);assert.equal(confirmed.status,'completed');assert.equal(confirmed.captureIds.length,1);assert.match(store.evidence(confirmed.captureIds)[0].ocrText,/GENERATED_MIXED_SUPPORTED_TEXT/);for(const file of confirmed.files)assert.deepEqual(archive.read(file.id),file.name==='good.pdf'?good:scanned);
 });

@@ -119,8 +119,8 @@ export class AskEvidence{
  /** Embedding scan reads only the current, owner/source restricted metadata
   * projection. No original body is loaded or pinned before bounded Top-K. */
  vectorQuery(modelKey:string,query:ContextQueryInput&{kind?:string}={}):VectorQuery{
-  this.assert();const materialArgs:(string|number)[]=[],captureArgs:(string|number)[]=[],materials=[this.allowed('h',materialArgs),'h.sequence>=h.min_visible_sequence','idx.anchor_hash=e.hash',"(json_extract(v.json,'$.coverage.state')='complete' OR EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') a,json_each(a.value,'$.blockIds') block WHERE json_extract(a.value,'$.state')='ready' AND block.value=e.block_id))"],captures=[this.captureConditions('c',captureArgs),'idx.anchor_hash=c.fingerprint'];
-  materials.push(materialScopeSql({...query,query:undefined},materialArgs,'h','v','e.block_id'));
+  this.assert();const materialArgs:(string|number)[]=[],captureArgs:(string|number)[]=[],materials=[this.allowed('h',materialArgs),'h.sequence>=h.min_visible_sequence','idx.anchor_hash=e.hash'],captures=[this.captureConditions('c',captureArgs),'idx.anchor_hash=c.fingerprint'];
+  materials.push(materialScopeSql({...query,query:undefined},materialArgs,'h','v','e.block_id','e.id'));
   captures.push('me_capture_matches(c.json,?)=1');captureArgs.push(JSON.stringify(query));
   if(query.kind){captures.push("json_extract(c.json,'$.source')=?");captureArgs.push(String(query.kind));}
   if(query.sourceId){this.source(query.sourceId);captures.push("coalesce(c.source_id,json_extract(c.json,'$.ingressSourceId'))=?");captureArgs.push(query.sourceId);}

@@ -1,3 +1,4 @@
+import {holdMemoryIntake,queuedMemoryIntakes} from './fixtures/memory-intake-scheduling.js';
 import {ExecutionFailure} from '../src/execution-engine.js';
 import {defaultPerceptionConfiguration} from '../src/perception-configuration.js';
 import {waitForPluginCheck} from './fixtures/plugin-check.js';
@@ -51,8 +52,9 @@ test('new Memory in an activated external provider uses real extraction/review/p
 
 test('real M06 automatic window consumes every authorized receipt once and stop fences only its owner',async t=>{
  const f=await fixture(t);for(const user of [f.a,f.b]){const settings=defaultMemorySettings();settings.lifecycle.extraction.minChanges=user===f.a?2:1;await f.replace(user.token,'memory',settings);await f.replace(user.token,'processing',{...defaultProcessingSettings(),automatic:true,understandingEnabled:false});}
+ const releaseIntake=holdMemoryIntake(f.node.execution!.engine);f.beforeClose(releaseIntake);
  await f.upload(f.a,'A','window-first');const deadline=Date.now()+10000;while(!f.read(db=>db.prepare('SELECT 1 FROM mm_intakes WHERE user_id=?').get(f.a.userId))){assert.ok(Date.now()<deadline);await delay(5);}assert.equal(f.requests.length,0);const pending=await f.request(f.a.token,'/api/work-activity?state=active&sourceId=same-source');assert.equal(pending.statusCode,200,pending.body);const work=pending.json().items.find((item:any)=>item.kind==='memory');assert.ok(work,'a durable authorized input is visible before job assignment');assert.equal(work.progress.total,1);assert.equal(work.progress.completed,0);assert.equal(work.state,'waiting');
- const gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);await f.upload(f.a,'A','window-second');await gate.entered.promise;
+ const gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);await f.upload(f.a,'A','window-second');await queuedMemoryIntakes(f,f.a.userId,2);assert.equal(f.requests.length,0);releaseIntake();await gate.entered.promise;
  const receipts=f.read(db=>db.prepare('SELECT job_id FROM mm_intakes WHERE user_id=?').all(f.a.userId));assert.equal(receipts.length,2);assert.equal(new Set(receipts.map(row=>row.job_id)).size,1);
  const state=(await f.request(f.a.token,'/api/memory')).json();assert.equal((await f.request(f.a.token,'/api/memory/stop','POST',{expectedRevision:state.revision,operationId:randomUUID()})).statusCode,200);gate.release.resolve();await f.upload(f.b,'B','other-window');
  const end=Date.now()+15000;for(;;){const rows=f.read(db=>db.prepare("SELECT user_id,id,state FROM mm_jobs WHERE user_id=?").all(f.b.userId));if(rows.length){await f.wait(f.b,String(rows[0].id));break;}assert.ok(Date.now()<end);await delay(10);}

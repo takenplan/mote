@@ -5,6 +5,7 @@ import {modelFixture} from './fixtures/scoped-actions.js';
 import {source,waitForState} from './fixtures/scoped-query-accounts.js';
 
 const target={deviceId:'same-device',calendarId:'same-calendar'};
+const nativeCalls=(f:Awaited<ReturnType<typeof modelFixture>>)=>f.read(db=>db.prepare("SELECT c.*,o.id operation_id FROM task_external_calls c JOIN ac_operations o ON o.user_id=c.user_id AND o.task_id=c.task_id JOIN execution_steps e ON e.user_id=c.user_id AND e.id=c.task_id WHERE o.user_id=? AND e.kind='actions.delivery' ORDER BY c.issuance_id").all(f.a.userId));
 async function proposals(t:Parameters<typeof modelFixture>[0]){
  const f=await modelFixture(t);
  await f.ingest(f.a,'A','pending-item');await f.ingest(f.a,'A','approved-item');await f.enable(f.a);
@@ -27,8 +28,9 @@ test('renaming or saving unchanged source metadata preserves pending reviews and
  const reply=await f.ok(f.a.token,'/api/owner-questions/'+f.review.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:f.review.revision,action:'answer',choiceId:'approve'});assert.equal(reply.state,'closed');
  await f.restart();assert.equal(sourceEpoch(f,f.a.userId),aEpoch);assert.deepEqual(await f.ok(f.b.token,'/api/sources/same-source'),beforeB);
  await f.ok(f.a.token,'/api/sources/same-source','PATCH',{name:'Generated renamed after approval'});
+ const nativeIssued:ReturnType<typeof nativeCalls>=[];
  for(const action of [f.pending,f.approved]){
-  const claim=await f.ok(f.a.token,'/api/actions/'+action.id+'/claim','POST',{deviceId:'same-device'});assert.equal(claim.mutationAllowed,true);
+  const claim=await f.ok(f.a.token,'/api/actions/'+action.id+'/claim','POST',{deviceId:'same-device'});assert.equal(claim.mutationAllowed,true);const issued=nativeCalls(f).filter(call=>call.operation_id===claim.operationId);assert.equal(issued.length,1);nativeIssued.push(issued[0]);
   if(action.id===f.approved.id){
    await f.ok(f.a.token,'/api/actions/'+action.id+'/receipt','POST',{deviceId:'same-device',operationId:claim.operationId,status:'uncertain'});
    await f.restart();await f.ok(f.a.token,'/api/sources/same-source','PATCH',{name:'Generated rename with unknown external result'});
@@ -38,7 +40,7 @@ test('renaming or saving unchanged source metadata preserves pending reviews and
   assert.deepEqual(await f.ok(f.a.token,'/api/actions/'+action.id+'/receipt','POST',receipt),{acknowledged:true,published:true});
   assert.deepEqual(await f.ok(f.a.token,'/api/actions/'+action.id+'/receipt','POST',receipt),{acknowledged:true,published:true});
  }
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),2,'renames and unknown-result recovery cannot issue another external write');
+ const nativeAfter=nativeCalls(f);assert.equal(nativeAfter.length,2,'renames and unknown-result recovery cannot issue another external write');assert.deepEqual(nativeAfter.map(({state,settled_at,...facts})=>facts),nativeIssued.sort((a,b)=>String(a.issuance_id).localeCompare(String(b.issuance_id))).map(({state,settled_at,...facts})=>facts));assert.ok(nativeAfter.every(call=>call.state==='succeeded'));
  assert.equal(sourceEpoch(f,f.b.userId),bEpoch);assert.equal((await f.ok(f.b.token,'/api/actions')).items.length,0);
 });
 
@@ -57,6 +59,6 @@ for(const control of ['disable-reenable','owner-relation','source-context','dele
  assert.equal((await f.request(f.a.token,'/api/owner-questions/'+f.review.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:f.review.revision,action:'answer',choiceId:'approve'})).statusCode,control==='delete-recreate'?404:409);
  assert.equal((await f.request(f.a.token,'/api/actions/'+f.approved.id+'/claim','POST',{deviceId:'same-device'})).statusCode,404);
  const page=await f.ok(f.a.token,'/api/actions');assert.ok(page.items.every((a:any)=>a.status==='stale'));assert.ok(page.items.every((a:any)=>a.evidence.length===0));
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);
+ assert.equal(nativeCalls(f).length,0,'Source revocation cannot acquire native delivery authority');
  assert.equal(sourceEpoch(f,f.b.userId),bEpoch);assert.deepEqual(await f.ok(f.b.token,'/api/sources/same-source'),beforeB);
 });

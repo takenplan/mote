@@ -68,7 +68,7 @@ for(const outcome of ['repair','full-read-repair','outer-recovery','twice','canc
    // Exercise each real finite review sequence under its original wall-clock
    // budget, advancing only the recorded idle backoff after known failure and
    // complete physical cleanup. No active call or execution lease is advanced.
-   if(task.state==='waiting'&&task.failure?.category==='transient'&&task.failure?.code==='memory_output_image_evidence'&&task.availableAt>Date.now()&&f.read(db=>Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE state='running'").get()!.n))===0&&f.read(db=>Number(db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(taskId)!.n))===0){t.mock.timers.setTime(task.availableAt);await f.node.execution!.tick();}
+   if(task.state==='waiting'&&task.failure?.category==='transient'&&task.failure?.code==='memory_output_image_evidence'&&task.availableAt>Date.now()&&f.read(db=>Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE state='running'").get()!.n))===0&&f.read(db=>Number(db.prepare("SELECT count(*) n FROM task_physical_calls WHERE task_id=? AND state='active'").get(taskId)!.n))===0){t.mock.timers.setTime(task.availableAt);await f.node.execution!.tick();continue;}
    assert.ok(performance.now()<deadline,'Expected terminal Memory extraction '+JSON.stringify(task));await delay(5);
   }};
  try{

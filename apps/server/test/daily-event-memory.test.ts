@@ -52,15 +52,17 @@ test('generated screenshot and field HTTP intake runs daily extraction/review, s
   const setup=async()=>{await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async input=>({durationMs:0,segments:[{startMs:0,endMs:0,text:data.ocr.get(input.file.id)!}]});};await setup();
   const publish=async()=>{await node.perception.tick();for(let i=0;i<20;i++)if(await node.materialOrganizer.tick(100)===0)break;};
   const run=async()=>{node.store.db.prepare('UPDATE material_memory_requests SET ready_at=0').run();await node.sourcePipelines.drainMemory(node.memoryPipeline,true,100);for(const job of node.memoryPipeline.list())if(['queued','running','waiting_for_model'].includes(job.status))await node.memoryPipeline.run(job.id);};
-  for(const value of data.all){const r=await node.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(r.statusCode,201,r.body);}
+  for(const value of [...data.all,data.redacted]){const r=await node.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(r.statusCode,201,r.body);}
   await publish();await run();
   const jobs=node.memoryPipeline.list().map(job=>node.memoryPipeline.get(job.id));assert.ok(jobs.every(job=>job.status==='completed'),JSON.stringify(jobs));
   const events=node.memories.list({layer:'observation',level:'detail'});assert.ok(events.length>=data.all.length);
+  assert.equal(data.all.length,7);assert.ok(data.screenshots.every(value=>value.privacy?.redacted===false));assert.ok(events.every(event=>event.evidenceIds.every(id=>!node.memories.dependencyIds(id).includes(data.redacted.id))),'redacted raw screen products never become event evidence');for(const call of calls)for(const id of call.evidenceIds??[])assert.ok(!node.memories.dependencyIds(id).includes(data.redacted.id),'Memory cannot inspect a redacted raw screen through a derived anchor');assert.ok(!JSON.stringify(calls.filter(call=>call.responseMode==='memory-extraction')).includes('GENERATED_REDACTED_DAILY_SECRET'));assert.equal(node.store.evidence([data.redacted.id])[0].privacy.redacted,true);assert.ok(node.store.image(data.redacted.id),'private original remains retained');
   assert.ok(events.every(event=>event.strategy?.recipe.id===DAILY_EVENT_RECIPE.id&&event.reviewReceipt?.decision==='independent'));
   assert.ok(calls.some(call=>call.traceContext?.phase==='extract'&&call.question.includes('daily event history')));assert.ok(calls.some(call=>call.traceContext?.phase==='review'&&call.question.includes('daily-event policy')));
   const reader=node.featureServices.evidenceReader.agent({diagnostics:node.diagnostics,currentGrantContext:()=>grant}),grant={};
   const screenshot=data.all.find(capture=>capture.imageBase64)!;
   assert.deepEqual(await reader.evidence({ids:[screenshot.id]}),[],'derived event recall does not grant arbitrary raw screenshot expansion');
+  assert.deepEqual(await reader.evidence({ids:[data.redacted.id]}),[],'redacted raw screen content stays unavailable even when its private image is retained');
   const previous=await reader.memories!({layer:'observation',after:'2026-10-08T16:00:00Z',before:'2026-10-09T16:00:00Z'});
   const today=await reader.memories!({layer:'observation',after:'2026-10-09T16:00:00Z',before:'2026-10-10T16:00:00Z'});
   assert.ok(previous.items.length);assert.ok(today.items.length);const oldIds=new Set(previous.items.map((v:any)=>v.id));assert.ok(today.items.every((v:any)=>!oldIds.has(v.id)),'adjacent local days remain separately recallable');
@@ -69,7 +71,7 @@ test('generated screenshot and field HTTP intake runs daily extraction/review, s
   for(const event of events)for(const span of event.evidence){const original=node.memories.readEvidence([span.id])[0];assert.equal(original.ocrText.slice(span.offset,span.offset!+span.length!),span.quote);}
   for(const value of data.all){assert.ok(node.store.evidence([value.id]).length);if(value.imageBase64)assert.ok(node.store.image(value.id));else assert.deepEqual(node.store.evidence([value.id])[0].metadata?.uiPage,value.metadata?.uiPage);}
   const before=calls.length;await node.app.close();node=await buildApp(config,dependencies);await node.app.ready();setup();
-  for(const value of data.all){const r=await node.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(r.statusCode,200,r.body);}await publish();await run();assert.equal(calls.length,before);
+  for(const value of [...data.all,data.redacted]){const r=await node.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(r.statusCode,200,r.body);}await publish();await run();assert.equal(calls.length,before);
   const removed=await node.app.inject({method:'DELETE',url:'/api/captures/'+data.article.id,headers});assert.equal(removed.statusCode,200,removed.body);await publish();
   assert.equal(node.store.evidence([data.article.id]).length,0);assert.ok(node.memories.list({layer:'observation',level:'detail'}).every(memory=>!memory.evidenceIds.some(id=>node.memories.dependencyIds(id).includes(data.article.id))));
 });

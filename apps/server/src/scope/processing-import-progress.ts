@@ -1,3 +1,4 @@
+import {memoryModelWaiting} from './memory-observations.js';
 import type {ImportJob,ImportMemoryProgress} from '@mote/shared';
 import type {MemoryHost} from './memory.js';
 import type {PrivateSql} from './private-data-sql.js';
@@ -6,8 +7,7 @@ import {PrivateDataError} from './private-data-sql.js';
 import {ScopeError} from './baseline.js';
 
 type State=Exclude<keyof ImportMemoryProgress,'total'|'receipts'|'jobIds'>;
-const modelWaiting=new Set(['model_snapshot_unavailable','model_authority_revoked','model_configuration_unavailable']);
-const workState=(work:readonly {state:string;failure?:{code?:string}|null}[]):State=>work.some(task=>task.state==='running')?'running':work.some(task=>task.state==='blocked'&&modelWaiting.has(task.failure?.code??''))?'waitingForModel':work.some(task=>['failed','stale','blocked'].includes(task.state))?'failed':work.some(task=>task.state==='cancelled')?'cancelled':'pending';
+const workState=(work:readonly {state:string;error?:string;failure?:{code?:string}|null}[]):State=>work.some(task=>task.state==='running')?'running':work.some(memoryModelWaiting)?'waitingForModel':work.some(task=>['failed','stale','blocked'].includes(task.state))?'failed':work.some(task=>task.state==='cancelled')?'cancelled':'pending';
 const priority:State[]=['unavailable','failed','waitingForModel','running','pending','paused','cancelled','disabled','completed'];
 /** Read-only projection of the existing M06/M08 receipt graph. A successful
  * import/Material is never treated as successful Memory or fresh permission. */

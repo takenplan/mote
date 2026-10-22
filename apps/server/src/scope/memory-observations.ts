@@ -6,6 +6,11 @@ import type {ScopedMemoryData} from './memory-data.js';
 import {intakeReceiptSchema} from './memory-intake.js';
 import {integrationCandidates,integrationDueAt,integrationWindowSchema} from './memory-integration.js';
 
+const blockedModelPrerequisites=new Set(['model_snapshot_unavailable','model_authority_revoked','model_configuration_unavailable']);
+/** The domain classifies only actual prerequisite states and exact host codes.
+ * A stale grant or another waiting reason is never a missing-model receipt. */
+export function memoryModelWaiting(task:{state:string;error?:string;reason?:string;failure?:{code?:string}|null}){const code=task.error??task.reason??task.failure?.code;return task.state==='waiting'&&code==='memory_model_required'||task.state==='blocked'&&blockedModelPrerequisites.has(code??'');}
+
 export type MaterialIntakeProgress={state:string;count:number;error?:string};
 type ObservedMemoryJob={id:string;current:boolean;state:string;tasks:Record<string,{state:string;failure?:{code?:string}|null}>};
 /** A reserved intake job identity is not proof that the Memory job exists.

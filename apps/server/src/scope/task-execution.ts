@@ -448,7 +448,8 @@ export class TaskExecution {
    SELECT DISTINCT r.task_id FROM task_processing_config_retirements r JOIN ancestry a ON a.id=r.handoff_id`).all(taskId).some(row=>this.physical.busy(String(row.task_id)));
  }
  purgeProcessingConfiguration(subject:UserDataSubject){
-  this.services.assertSubject(subject,'processing','delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);
+  this.services.assertSubject(subject,'processing','delete');
+  if(!this.db.prepare('SELECT 1 FROM task_processing_config_handoffs WHERE user_id=? LIMIT 1').get(subject.userId))return true;
   const rows=this.db.prepare("SELECT u.task_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.kind LIKE 'processing.%'").all(subject.userId);
   if(rows.some(row=>this.physical.busy(String(row.task_id))))return false;
   if(this.db.prepare(`SELECT 1 FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.kind LIKE 'processing.%'
