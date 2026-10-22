@@ -38,6 +38,21 @@ test('reviewed processing, usage and authorization helpers are allowed only from
   const failures=checkProductionImports(directory);assert.equal(failures.length,4);assert.ok(failures.every(value=>value.includes('unscoped production import: apps/server/src/scope/unreviewed.ts')));
 });
 
+test('the shared Material visibility predicate is import-free and available only to its exact scoped consumers',t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-stateless-visibility-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const src=join(directory,'apps/server/src');mkdirSync(join(src,'scope'),{recursive:true});
+  for(const path of ['index.ts','app.ts','store.ts'])writeFileSync(join(src,path),'export {};');
+  const helper='apps/server/src/material-original-visibility.ts',pure="import type {CaptureRecord} from '@mote/shared';export function visible(record:Pick<CaptureRecord,'privacy'>){return !record.privacy.excluded;}";
+  writeFileSync(join(src,'material-original-visibility.ts'),pure);writeFileSync(join(src,'material-organizer-contract.ts'),"import './material-original-visibility.js';");
+  writeFileSync(join(src,'scope/evidence-projection.ts'),"import '../material-original-visibility.js';");writeFileSync(join(src,'scope/memory-capture-materials.ts'),"import '../material-original-visibility.js';import '../material-organizer-contract.js';");
+  assert.deepEqual(checkProductionImports(directory),[]);
+  writeFileSync(join(src,'scope/unreviewed.ts'),"import '../material-original-visibility.js';");assert.deepEqual(checkProductionImports(directory),['unscoped production import: apps/server/src/scope/unreviewed.ts -> '+helper]);rmSync(join(src,'scope/unreviewed.ts'));
+  for(const [dependency,specifier] of [["import './store.js';",'./store.js'],["import 'node:fs';",'node:fs'],["import 'node:sqlite';",'node:sqlite'],["import '@mote/shared';",'@mote/shared'],["export {value} from './store.js';",'./store.js'],["import('node:fs');",'node:fs'],["require('node:sqlite');",'node:sqlite'],["import runtime = require('./store.js');",'./store.js']]){
+    writeFileSync(join(src,'material-original-visibility.ts'),pure+dependency);assert.deepEqual(checkProductionImports(directory),[`unreviewed stateless helper import: ${helper} -> ${specifier}`],dependency);
+  }
+  writeFileSync(join(src,'material-original-visibility.ts'),pure+"const target='./store.js';import(target);");assert.deepEqual(checkProductionImports(directory),['computed production import: '+helper]);
+});
+
 test('the provider canary is available only to its scoped host and cannot acquire legacy storage or file access',t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-scoped-canary-ports-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const src=join(directory,'apps/server/src');mkdirSync(join(src,'scope'),{recursive:true});

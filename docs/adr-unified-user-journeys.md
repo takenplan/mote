@@ -1,6 +1,7 @@
 # ADR: Unified account host and user-journey contracts
 
-Date: 2026-10-23. Status: accepted architecture; implementation in progress.
+Date: 2026-10-23. Status: accepted architecture; implementation-complete;
+final candidate qualification and delivery pending.
 
 The owner accepted a modular monolith with shared SQLite, one execution engine,
 one account-isolation host, shared evidence/processing capabilities and separate
@@ -55,6 +56,12 @@ authority before issuing an execution context. Authentication alone does not
 authorize a new owner grant. Only an explicit action with the required owner
 capability can create or expand one. File reload, archived settings and model
 output cannot do so.
+
+The accepted [restoration-login exception](adr-lifecycle-parity.md) remains:
+trusted password login after whole-instance restoration is the explicit owner
+action that admits a fixed restoration coordinator at the current account epoch.
+It resumes preserved future intent through current capability checks; it cannot
+replay old pending/unknown work or confer general background authority.
 
 ## User-journey contracts
 

@@ -525,6 +525,57 @@ Status: implementation-complete with the named focused/consumer evidence below; 
     integration-verified; the frozen candidate still requires the complete
     affected plan and final generated UI/recovery E2E before PR and Dev delivery.
 
+48. Complete affected run 03 on `df56c19302b31bb06a64f7e92ce7fafe6b499c00`
+    finished all 38 tasks with stable guarded inputs and confirmed cleanup
+    (`2026-10-22T22-19-43-085Z-2acabd19-e820-4db6-80f3-65c3f100805c`). It failed
+    scope preflight and seven Server cases across five groups; this candidate is
+    **not qualified**. The remaining Server groups, Desktop, Web, builds and
+    release/root/backup/client/startup checks passed. Agent, script typecheck,
+    Diagnostics and shared tests were explicitly reused from eligible original
+    receipts. Android's Gradle check succeeded with all 25 tasks up-to-date;
+    these were cached unit outputs, not newly executed device checks.
+
+    Original module owners investigated the failures read-only during the run.
+    After independent prospective approval and formal driver completion, eight
+    checker/fixture files changed; application source bytes did not change:
+
+    - Declare only the two reviewed callers of the shared supplied-record privacy
+      predicate, and reject runtime imports added to that exact stateless helper.
+      This closes both scope preflight and its architecture regression case.
+    - Keep canonical image discovery and synthetic image discovery as separate
+      positives. The latter requires a host descriptor; a prefix alone cannot
+      issue image authority. Missing and mismatched descriptors remain negatives.
+    - Hold only A's independently admitted Material organizer in the finite retry
+      transaction test. Keep all thirteen table snapshots strict, real queued
+      task admission, late SQL failure, B progress, explicit new-plan retry,
+      idempotence and the unchanged unknown-call journal.
+    - Let the five exact real ingress organizers finish before measuring manual
+      Todo side effects. Preserve the original global count assertion, add full
+      task-identity comparison and absence of relevant processing artifacts,
+      and retain all HTTP/CAS/privacy/restart assertions. The failed run did not
+      record the four extra historical task IDs, so their exact identities remain
+      unknown; no production Todo defect is claimed from that count alone.
+    - Correct three content-producing raw-screen fixture inputs to be permitted
+      screenshots. Typed selected UI remains a redacted positive. Preserve the
+      full backfill, two-owner OCR/pixel readiness, failed-OCR explicit retry,
+      recipe/call counts and original 20/25-second deadlines. Add a same-entry
+      redacted backfill negative that retains the original and receipt journal
+      while producing no Material or Memory work; current-host privacy negatives
+      remain unchanged.
+
+49. The repaired scope preflight passed. The first five-file finite gate passed
+    **19/19** (`2026-10-22T22-57-51-836Z-84f09d92-1dbd-4b26-aff4-7157858a6898`):
+    architecture, image projection and real image-anchor seam, backfill/privacy,
+    and strict retry rollback. The next three-file consumer gate passed **30/30**
+    (`2026-10-22T22-58-21-111Z-e7b07ac3-4304-421f-ad1e-e68356fc252e`), including
+    all original Memory 02/03 cases and all ten Todo evidence cases. The Todo
+    positive reached its real restart; both screenshot cases reached their actual
+    prerequisite, retry, consumption and no-replay assertions. Both receipts have
+    stable inputs and confirmed cleanup. Existing input scale and deadlines were
+    retained. These checks close the observed local failures; the checker change
+    conservatively invalidates broader receipts under the unchanged driver, so
+    complete candidate qualification remains required before final E2E and delivery.
+
 ## Audit issue coverage ledger
 
 This ledger tracks the original audit scope; implementation is not a final

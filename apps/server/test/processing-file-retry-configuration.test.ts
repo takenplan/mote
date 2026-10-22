@@ -19,7 +19,15 @@ test('accepted full file retry adopts its exact pending policy atomically withou
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(()=>{server.closeAllConnections();return new Promise<void>(resolve=>server.close(()=>resolve()));});
  const address=server.address();assert.ok(address&&typeof address!=='string');
- const f=await scopedFilesFixture(t),sql=<T>(work:(db:DatabaseSync)=>T)=>{
+ // Keep independently admitted A organizers queued while asserting the entire
+ // retry transaction's rows. B's real background work remains executable.
+ let heldMemoryOwner:string|undefined;
+ const f=await scopedFilesFixture(t,node=>{
+  const engine=node.execution!.engine,admissions=(engine as any).admissions,previous=admissions.get('memory.materials');
+  engine.configurePool('memory.materials',{...(previous??{lane:()=> 'background',concurrency:{background:()=>4,interactive:()=>4}}),available:step=>heldMemoryOwner!==undefined&&step.ownership?.userId===heldMemoryOwner?false:previous?.available?.(step)});
+  t.after(()=>{if(previous)engine.configurePool('memory.materials',previous);else admissions.delete('memory.materials');});
+ });heldMemoryOwner=f.a.userId;
+ const sql=<T>(work:(db:DatabaseSync)=>T)=>{
   const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{return work(db);}finally{db.close();}
  };
  const page=await f.checked(f.a.token,'/api/file-processing'),policy=(id:string)=>({version:1,
@@ -47,6 +55,9 @@ test('accepted full file retry adopts its exact pending policy atomically withou
  const snapshot=()=>sql(db=>Object.fromEntries(tables.map(table=>[table,table==='task_processing_config_retirements'?db.prepare('SELECT r.* FROM task_processing_config_retirements r JOIN task_processing_config_handoffs h ON h.task_id=r.handoff_id WHERE h.user_id=? ORDER BY r.rowid').all(f.a.userId):db.prepare('SELECT * FROM '+table+' WHERE user_id=? ORDER BY rowid').all(f.a.userId)])));
  const originalUnknown=sql(db=>db.prepare('SELECT * FROM task_external_calls WHERE user_id=? ORDER BY issuance_id').all(f.a.userId));
  assert.equal(originalUnknown.length,1);assert.ok(['issued','unknown'].includes(String(originalUnknown[0].state)));assert.equal(originalUnknown[0].settled_at,null);
+ const organizers=sql(db=>db.prepare("SELECT * FROM execution_steps WHERE user_id=? AND kind='memory.materials' ORDER BY rowid").all(f.a.userId));
+ assert.ok(organizers.length>0,'the real intake still admits its independent Memory organizer');
+ for(const organizer of organizers){assert.equal(organizer.state,'waiting');assert.equal(organizer.attempts,0);}
  const before=snapshot();
  assert.equal((await f.request(f.a.token,'/api/files/'+file.id+'/retry','POST',{operationId:randomUUID(),stage:'transcribe'})).statusCode,409);
  assert.deepEqual(snapshot(),before);

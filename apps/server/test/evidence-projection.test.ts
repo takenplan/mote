@@ -28,7 +28,13 @@ test('a scoped Material uses only matching trusted members and never borrows one
 });
 
 test('ready image-only assets remain discoverable with their canonical image kind and original source',()=>{
- const originals=[capture('2026-10-18T00:00:00Z')],value=draft(originals);value.blocks=[{id:'image',kind:'asset',hash:'a'.repeat(64),mimeType:'image/png',memberIds:['0']}];value.coverage={state:'partial'};value.artifacts=[{key:'original-image',state:'ready',blockIds:['image']}];const db=new DatabaseSync(':memory:');try{installEvidenceProjection(db);for(const blockId of [null,'image:'+originals[0].id])assert.equal(db.prepare('SELECT me_material_matches(?,?,?,?,?) ok').get(JSON.stringify(value),JSON.stringify(closure(originals)),'2026-10-22T00:00:00Z',JSON.stringify({source:'file',kind:'file'}),blockId)!.ok,1);assert.equal(db.prepare('SELECT me_material_matches(?,?,?,?,NULL) ok').get(JSON.stringify(value),JSON.stringify(closure(originals)),'2026-10-22T00:00:00Z',JSON.stringify({kind:'message'}))!.ok,0);}finally{db.close();}
+ const originals=[capture('2026-10-18T00:00:00Z')],value=draft(originals);value.blocks=[{id:'image',kind:'asset',hash:'a'.repeat(64),mimeType:'image/png',memberIds:['0']}];value.coverage={state:'partial'};value.artifacts=[{key:'original-image',state:'ready',blockIds:['image']}];const db=new DatabaseSync(':memory:');try{installEvidenceProjection(db);
+ const matches=(blockId:string|null,originalsInput:unknown=closure(originals),scope:unknown={source:'file',kind:'file'})=>db.prepare('SELECT me_material_matches(?,?,?,?,?) ok').get(JSON.stringify(value),JSON.stringify(originalsInput),'2026-10-22T00:00:00Z',JSON.stringify(scope),blockId)!.ok;
+ for(const blockId of [null,'image'])assert.equal(matches(blockId),1);assert.equal(matches(null,closure(originals),{kind:'message'}),0);
+ const blockId='image:'+originals[0].id,imageAnchor={evidenceId:'10000000-0000-5000-a000-000000000001',blockId,captureId:originals[0].id,canonicalSource:'file'},authorized={...closure(originals),imageAnchor};
+ assert.equal(matches(blockId),0,'an asset reference alone cannot issue a synthetic original-image anchor');assert.equal(matches(blockId,authorized),1,'an exact host-issued image anchor retains the original source and canonical image kind');assert.equal(matches(blockId,authorized,{kind:'message'}),0);
+ for(const invalid of [{...imageAnchor,captureId:null},{...imageAnchor,captureId:'00000000-0000-5000-a000-000000000002'},{...imageAnchor,blockId:'image:00000000-0000-5000-a000-000000000002'}])assert.equal(matches(blockId,{...closure(originals),imageAnchor:invalid}),0,'missing or mismatched direct original cannot grant a synthetic image anchor');
+ }finally{db.close();}
 });
 
 
