@@ -1,5 +1,9 @@
 # M16 lifecycle and archive boundaries
 
+Current contract: [Unified account host and user journeys](../adr-unified-user-journeys.md)
+(2026-10-23) refines accepted-operation authority. Earlier checkpoint results remain
+historical evidence; the current personal import contract is documented below.
+
 The current LIFE-L01–L06 parity decisions are recorded in
 [Lifecycle parity ADR](../adr-lifecycle-parity.md). The sections below retain
 prior M16 checkpoints; the L06 and portable-delivery sections describe the
@@ -233,6 +237,15 @@ posting the same operation ID; changed input returns 409. Completed replay is
 idempotent. Startup marks unfinished work failed/interrupted rather than replaying
 its input. Current authority is required for admission, reads, pagination and
 cancellation; another account or administrator cannot inspect its private receipt.
+After acceptance, the host issues a distinct bounded operation context from the
+journal grant. It pins the operation, archive digest, account epoch and exact
+read/write domains. Logout expires the interactive session and receipt access,
+but does not cancel this admitted import. Cancellation, account revocation,
+completion/failure and interrupted restart expire the operation context. It grants
+no ordinary service factory, administrator, configuration mutation or task access.
+Configuration preflight reuses only a ready account runtime or opens a temporary
+schema-only reader without runtime effects, credential synchronization or watchers;
+it never replaces the account runtime with the operation's identity.
 
 Domain-owned synchronous merge hooks publish private-data, ingress, processing,
 Memory and completed Ask data in one shared SQLite transaction with the completed

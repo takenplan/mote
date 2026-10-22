@@ -1,7 +1,7 @@
 # ADR 台账
 
 核对日期：2026-10-20，源码基线 `af11ab7c3e9fb5f38deaea4e4bae11462a7306b4`。
-本表收录该基线全部 49 份 `adr-*.md`。决定状态引用原文及明确后继依据；有代码或
+本表收录该基线全部 49 份 `adr-*.md`；2026-10-23 追加统一用户旅程决定，未重新验收历史条目。决定状态引用原文及明确后继依据；有代码或
 已合入不自动等于完整验收、所有者接受新政策或已部署。
 
 每份 ADR 保留原日期、责任边界和取代条款。局部被取代时只撤下对应责任，不把整份
@@ -14,6 +14,7 @@
 
 | ADR | 决定状态与适用范围 | 后继 / 保留边界 | 现状或原证据入口 |
 | --- | --- | --- | --- |
+| [统一架构与用户旅程](adr-unified-user-journeys.md) | 所有者已接受；统一账号宿主、配置事务、任务与证据边界，实施中 | 取代按模块恢复旧逻辑、会话决定已接收工作寿命等局部假设；保留独立 Memory 审核、Actions 审批及只读 Ask | [分层验证](testing-unified-user-journeys.md)、[本次实施记录](validation/unified-user-journeys-2026-10-23.md) |
 | [MVP 单基线](adr-mvp-baseline.md) | 已接受；当前版本唯一读写 | 原 epoch 4/Wire 1 等数值由多用户基线取代；持续新输入规则由插件暂停决定取代；无旧版本迁移 | [当前合同](project-map.md)、[原清理](audits/mvp-baseline-cleanup-2026-10-09.md) |
 | [多用户边界](adr-multiuser-scope.md) | 已采纳；M00 原决定不独自交付下游模块 | 原“其余模块规划中”是阶段边界；当前装配和后继恢复另记 | [模块要求](design/multiuser-modules.md)、[交付台账](project-progress.md) |
 | [主线集成](adr-multiuser-main-integration.md) | 所有者要求集成；源码已入 main | 缺失回执不补造；当前原文/授权和隐私删除保留；完整资格单列 | [历史集成](validation/main-multiuser-integration-2026-10-17.md)、[后继门禁](validation/pr-168-189-191-integration-2026-10-20.md) |

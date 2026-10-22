@@ -1,13 +1,17 @@
 # M07 scoped Memory
 
+Current responsibility follows the [unified journey ADR](../adr-unified-user-journeys.md).
+Dated validation records below retain their original evidence; they do not
+establish acceptance of later changes.
+
 The module uses one shared SQLite connection, the shared M05 executor and the
 existing Memory strategy, exact-evidence, independent-review and immutable
 provider publication contracts. The production builder installs MemoryHost
 before starting execution. It consumes real M06 Material publication inside the
 M05 transaction; no legacy private Store or additional scheduler is constructed.
 
-Feature readiness, independent review, final source/emitted/affected receipts and
-remaining external limits are recorded in
+Historical M07 feature readiness, independent review, source/emitted/affected
+receipts and external limits are recorded in
 [the validation ledger](../validation/multiuser-m07-memory.md#final-feature-receipts).
 Integration/main merges remain a separately authorized action.
 
@@ -27,6 +31,28 @@ when the overall Material remains partial. Summary and interpretation Materials
 lead back to original dependencies; they never become original quotations.
 Image anchors bind real M03 bytes, SHA256 and M06 Material revision. Both the
 extractor and independent reviewer must obtain actual pixels for visual claims.
+
+The shared evidence projection supplies block eligibility to lexical queries,
+vector queries, lifecycle snapshots and exact reads before pagination. It derives
+source, device and business time from the block's declared capture or nested
+Material members. A nested reference contributes only its own transitive capture
+closure. A Material with blocks on different days may be a navigation candidate;
+a scoped original read returns only eligible blocks. A block combining eligible
+and ineligible originals is not split by guessing which prose came from which
+original. Calendar scope overlaps the planned interval; documents use declared
+content time, and screen/activity uses observed sample intervals.
+
+Canonical evidence IDs, internal `source` and fingerprints remain unchanged.
+A Material text anchor's canonical kind is `message`; its proven `sourceType`
+can be `file`, `calendar` or another original source. Source filtering uses that
+trusted dimension, while kind filtering retains the canonical anchor contract.
+A common source type remains provable when device, app or source IDs differ;
+only `sourceType` is then projected and other metadata stays canonical.
+Mixed-source blocks do not borrow the first member's source. Current source
+availability and every transitive original's exclusion/deletion state guard both
+selection and exact reads. Raw redacted originals remain unavailable; a trusted
+organizer's selected text can be read without exposing the raw body or pixels.
+Image bytes retain their separate original, hash and byte-grant checks.
 
 MemoryHost.bindRead(context, {sourceIds?, assertCurrent}) is a host-only narrowed
 capability. It exposes read(id, version?), page/opening/search, exact Material
@@ -48,12 +74,64 @@ hash; failure never falls back to the SQL body mirror.
 M06 publication synchronously admits a fresh no-model M05 intake task with an
 immutable Memory policy receipt. It does not retain a completed M06 TaskRun.
 Existing source, capture, document, personal, coding and named-artifact recipes
-resolve through MemoryStrategies. The original extraction windows and integration
-policy use per-user receipts and version watermarks. Every selected original
-range receives a durable bounded batch, exact coverage and retained model output;
-long evidence is not silently truncated. Policy changes revoke incompatible
-pending automatic receipts. Pausing drains admitted work, and stopping fences
-only that owner's automatic receipts/windows; admitted manual work remains valid.
+resolve through MemoryStrategies. Ready rolling evidence advances immediately;
+the extraction count and maximum-wait fields do not debounce a newly authorized
+ready Material. Consolidation retains its separate policy/windows and version
+watermarks. Every selected original range receives a durable bounded batch,
+exact coverage and retained model output; long evidence is not silently truncated.
+Policy withdrawal revokes incompatible pending automatic receipts. Ordinary
+parameter edits retain their existing admitted snapshots. Pausing drains admitted
+work, and stopping fences only that owner's automatic receipts/windows; admitted
+manual work remains valid.
+
+The current producer receipt freezes `targetCaptureId` and exact `targetIds`.
+Only blocks whose complete trusted lineage belongs to that newly authorized
+capture become targets. Historical readable members have independent
+`readInputs`/`contextRanges`; they cannot become extraction targets, satisfy target
+coverage or authorize context-only claims. A revoked historical receipt neither
+vetoes a valid new target nor becomes authorized again. If a combined block lacks
+exact new-versus-historical lineage, intake records `target_lineage_unresolved`
+and admits no target from it. This is an explicit limitation rather than a claim
+that the whole historical block was evaluated.
+
+These fields are mandatory in the current internal receipt JSON. Missing fields
+are rejected; there is no old-receipt fallback or migration that authorizes all
+members. Restart reads the retained target IDs and rechecks producer receipt,
+generation, binding, Material revision, readiness, fingerprints and current source
+availability. Source pause affects current reads and publication without rewriting
+historical authorization. Current guards apply to both range-work-contract and
+ordinary evaluation strategies before model transmission and publication. An
+otherwise eligible automatic intake with no configured Memory model waits with
+`memory_model_required` and no physical model attempt. Model setup resumes that
+same receipt through the existing engine. Missing model selection is not account
+or source revocation; both authorities remain independently current.
+
+Actual `memory.intake` task admission separates future intent from admitted work.
+Ordinary `automatic:false` and the Memory pause action close each existing
+pre-Memory producer snapshot with sticky host-owned `admissionClosed` state.
+They do not revoke already admitted intake tasks, pending model prerequisites,
+referenced jobs or their exact evidence. Current disabled/paused state and the
+closed producer deny fresh intake rows/tasks. A producer captured while disabled
+remains unauthorized, and enable/resume never clears either closure or revocation.
+A fresh enabled capture can establish its own admission. Explicit stop still
+revokes unfinished automatic intake/windows; recipe withdrawal, source/epoch,
+privacy, Material, binding and deletion fences still apply while work drains.
+
+Ordinary automatic, integration and consolidation enable-flag disables stop new
+consolidation windows. Each already admitted unselected window freezes its current
+eligible exact pending IDs, versions and fingerprints at the cutoff. Existing
+selected inputs and pending remainders are preserved. Draining windows and their
+continuations keep their original recipe, evaluation clock and due policy; later
+publications cannot enlarge the frozen set. Memory completed during disable
+creates no new consolidation window. Recipe changes remain a separate withdrawal.
+Frozen cohorts may overlap before execution; the first eligible execution reserves
+each exact version. Another independent window cannot admit that reservation while
+its model is still running. Only the owning window's hash-proven continuation can
+consume its reserved remainder. Cutoff itself assigns no ownership, so a window's
+original due policy still determines when it can acquire work.
+Configuration rollback restores producer and window JSON together with the prior
+effective policy, following the existing saved-failed-candidate/CAS contract.
+
 
 A job and its complete child plan atomically register a no-model M05 admission
 coordinator before asynchronous child leases. Restart resumes that exact plan,

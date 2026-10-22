@@ -1,12 +1,8 @@
 # M10: user-owned external connections
 
-Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`, including
-M00/M01/M02/M03/M04/M05/M09. This module targets the unchanged integration
-branch and leaves the original checkout untouched.
-The final M10 feature also stacks accepted M06 Draft #133, published head
-`470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`, tested runtime
-`07ad9ddb17a0d2cd0004c50958670145b1457446`. This composition is confined to the
-M10 feature branch; the protected integration branch stays unchanged.
+Configuration and durable scheduling follow
+[the unified user-journey ADR](../adr-unified-user-journeys.md). Earlier dated M10
+validation records retain their original candidate and validation scope.
 
 ## Scope and supersession
 
@@ -59,8 +55,9 @@ SQLite and private connection state together.
 
 `buildApp` registers `connectors` alongside the real M03/M04/M05/M09 hosts.
 `GET /api/connectors` returns the current user's settings/status projections.
-`PUT /api/connectors/:id` creates a disabled M09 instance and writes the user's
-M04 domain with revision checks. `enable`, `pause`, `resume`, `stop`, `start`,
+`PUT /api/connectors/:id` commits a missing disabled M09 declaration and the user's
+M04 connection domain in one transaction at the caller's original revision.
+`enable`, `pause`, `resume`, `stop`, `start`,
 `sync`, `operations`, `disconnect`, and deletion all use this fixed instance.
 Provider operations are fixed names with adapter schemas; clients never supply
 argv, credential directory, context or a callback owner. M13 owns renderer wiring.
@@ -69,10 +66,11 @@ vault envelopes. Durable task input carries a random reference; its envelope is
 bound to the exact task, user/instance/epoch namespace, operation, generation and
 M09 snapshot. Failed work can retry after restart through that same reference.
 Disconnect, instance removal and configuration retirement clear payload envelopes;
-domain deletion removes the remaining scoped vault. Earlier candidate task inputs
-are upgraded transactionally before execution starts: task records survive while
-raw payloads move into encrypted envelopes, and revoked incarnations gain no new
-usable reference. Trusted connector definitions declare operation schemas too.
+domain deletion removes the remaining scoped vault. Current task input requires
+`configurationVersion:2` and a nonsecret immutable `schedule` snapshot. Unsupported persisted representations receive
+`connector_task_version_unsupported` before adapter execution; no earlier raw
+payload migration or inferred scheduling snapshot is supplied. Trusted connector
+definitions declare operation schemas too.
 
 The administrator installs bundled definitions through
 `POST /api/admin/connectors/:provider/install` and M09's catalog revision/idempotency
@@ -152,8 +150,12 @@ provider acquisition, so a terminal failure of one cycle does not stop later
 discovery. The saved Lark/recording selection's original `autoSync` switch and
 the connection's intake authority both gate background provider calls. Lark
 polls retain `automatic:true`: previewing a changed document scope never confirms
-its body collection. Pause closes future timer admission while admitted
-work drains. Resume schedules one future poll; stop/removal/account/lease fences
+its body collection. Ordinary interval/autoSync edits preserve connection authority, credentials and
+provider cursors. The admitted timer keeps its due/configuration snapshot; its
+successor adopts the current interval. Disabling autoSync leaves that authorized
+timer waiting, so reenable/reload can resume it without minting a new grant.
+Plugin pause closes future timer admission while admitted work drains. Resume
+schedules one future poll; stop/removal/account/lease fences
 reject old callbacks. Recording ledgers preserve exact bounded scan windows,
 pagination tokens and separate transcript/media checkpoints. Audio failure does
 not discard collected transcripts. Repeated discovery rereads transcript revisions

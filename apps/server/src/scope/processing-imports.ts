@@ -1,3 +1,4 @@
+import {importSourceIdentity} from './import-identity.js';
 import {randomUUID,createHash} from 'node:crypto';
 import {join,dirname} from 'node:path';
 import {readFileSync,writeFileSync,realpathSync} from 'node:fs';
@@ -42,7 +43,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
  const sourcePacks=new Map(sourcePackSpecs.map(spec=>[spec.id,{spec,revision:identityHash(spec),executor:new PythonSourcePackExecutor({...spec,outputSchema:pythonImportOutputSchema})}]));
  let closed=false;const active=new Set<string>();const unregister:(()=>Promise<void>)[]=[];
  const sqlFor=(context:UserContext)=>{const assert=()=>{if(closed)throw new ExecutionFailure('stale','import_host_closed');runtime.authority.assert(context);},sql=new PrivateSql(db,context.userId,assert);if(sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw conflict();return sql;};
- const load=(sql:PrivateSql,id:string):Job=>{z.string().uuid().parse(id);const row=sql.get('SELECT json FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(!row)throw missing();return JSON.parse(String(row.json));};
+ const load=(sql:PrivateSql,id:string):Job=>{z.string().uuid().parse(id);const row=sql.get('SELECT json FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(!row)throw missing();const value=JSON.parse(String(row.json));if(value.deleted)throw missing();return value;};
  const save=(sql:PrivateSql,job:Job)=>{job.updatedAt=stamp();sql.run('UPDATE mp_import_jobs SET json=? WHERE user_id=$user AND id=?',JSON.stringify(job),job.id);};
  const bound=(context:UserContext,input:Input)=>{const sql=sqlFor(context),job=load(sql,input.jobId);if(job.generation!==input.generation||job.authorizationEpoch!==context.authorizationEpoch||(input.phase==='prepare'?!['queued','preparing'].includes(job.status):job.status!=='importing'||!job.manifest||job.manifest!==input.manifest||job.confirmed!==input.manifest))throw conflict();return {sql,job};};
  const owner=(context:UserContext)=>{runtime.authority.assert(context);if(runtime.authority.isTask(context))throw conflict();};
@@ -98,10 +99,10 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    }else{
     privateFile(manifest,true);const decoded=await formatWork({kind:'plain',inputs,createdAt:job.createdAt,manifest},run.signal);run.grant.assert();bound(run.context,input);partial=decoded.partial;
     const bytes=readFileSync(manifest);if(bytes.length>32*1024*1024||createHash('sha256').update(bytes).digest('hex')!==decoded.hash)throw conflict();records=readRecords(manifest);if(records.length!==decoded.count)throw conflict();warnings=decoded.warnings;
-    if(deterministic(job)){decision={confidence:partial?'low':'high',ambiguous:false,reason:partial?'Decoding reported incomplete coverage.':'Deterministic document decoding preserved original text without inferred attribution or dates.'};dispositions=inputs.map(({file})=>({fileId:file.id,status:'parsed',reason:'Deterministic document decoding preserved original text.'}));}
+    if(deterministic(job)){decision={confidence:partial?'low':'high',ambiguous:false,reason:partial?'Decoding reported incomplete coverage.':'Deterministic document decoding preserved original text without inferred attribution or dates.'};dispositions=decoded.outcomes.map(outcome=>({fileId:outcome.fileId,status:outcome.status==='decoded'?'parsed':'unsupported',reason:outcome.reason}));}
     // The host accounts for containers, metadata and media independently. A
     // text mapper may describe only the originals its reader actually exposes.
-    else{const mapped=await mapImportPreview(run,{...job,files:inputs.map(input=>input.file)},records,root,()=>{run.grant.assert();bound(run.context,input);});records=mapped.records;summary=mapped.summary;warnings=[...warnings,...mapped.warnings].slice(0,200);decision=mapped.reviewDecision;dispositions=mapped.dispositions;}
+    else{const mapped=await mapImportPreview(run,{...job,files:inputs.map(input=>({...input.file,decoding:decoded.outcomes.find(outcome=>outcome.fileId===input.file.id)!}))},records,root,()=>{run.grant.assert();bound(run.context,input);});records=mapped.records;summary=mapped.summary;warnings=[...warnings,...mapped.warnings].slice(0,200);decision=mapped.reviewDecision;dispositions=mapped.dispositions;}
    }
    const lookup=(id:string)=>{const path=inputs.find(input=>input.file.id===id)?.path;if(!path)throw conflict();return path;};
    privateFile(manifest,true);writeFileSync(manifest,records.map(record=>JSON.stringify({...record,evidencePaths:record.evidencePaths.map(lookup),attachments:record.attachments.map(lookup)})+'\n').join(''),{mode:0o600});
@@ -153,10 +154,10 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
   });await submitPrepare(context,job);return publicJob(updateFromTask(context,load(sql,id)));
  };
  const forUser=(context:UserContext)=>{const sql=sqlFor(context),get=(id:string)=>{const job=publicJob(updateFromTask(context,load(sql,id)));return {...job,...projectImportProgress(sql,job,execution.forUser(context),runtime.services.forUser(context).get<ReturnType<MemoryHost['forUser']>>('memory'),ref=>readProcessing(context,ref))};};return Object.freeze({
-  capabilities:()=>intake.list(),sourcePacks:()=>({items:sourcePackSpecs.map(({id,version,description})=>({id,version,...(description?{description}:{})}))}),get,list:()=>({items:sql.all('SELECT id FROM mp_import_jobs WHERE user_id=$user ORDER BY rowid DESC LIMIT 100').map(row=>get(String(row.id)))}),
+  capabilities:()=>intake.list(),sourcePacks:()=>({items:sourcePackSpecs.map(({id,version,description})=>({id,version,...(description?{description}:{})}))}),get,list:()=>({items:sql.all("SELECT id FROM mp_import_jobs WHERE user_id=$user AND coalesce(json_extract(json,'$.deleted'),0)=0 ORDER BY rowid DESC LIMIT 100").map(row=>get(String(row.id)))}),
   create:async(raw:unknown)=>{
    owner(context);const request=importRequestSchema.parse(raw);if(request.directory)runtime.authority.assertAdministrator(context);if(request.sourcePackId&&!sourcePacks.has(request.sourcePackId))throw new PrivateDataError('invalid_data',422);
-   const fingerprint=identityHash(request),id=request.requestId??randomUUID(),existing=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(existing){if(existing.fingerprint!==fingerprint)throw conflict();return get(id);}
+   const fingerprint=identityHash(request),id=request.requestId??randomUUID(),existing=sql.get('SELECT fingerprint,json FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(existing){if(JSON.parse(String(existing.json)).deleted)throw new PrivateDataError('capture_deleted',410);if(existing.fingerprint!==fingerprint)throw conflict();return get(id);}
    let archivedFileIds=request.archivedFileIds;
    if(request.files){const service=ingress.forUser(context);archivedFileIds=[];let total=0;
     for(const [index,file] of request.files.entries()){
@@ -181,8 +182,9 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    const job=sql.transaction(()=>{
    owner(context);const prior=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',id);if(prior){if(prior.fingerprint!==fingerprint)throw conflict();return load(sql,id);}
    const files=archivedFileIds!.map(id=>ingress.forUser(context).archivedFile(id));if(new Set(files.map(file=>file.relativePath)).size!==files.length||files.reduce((size,file)=>size+file.sizeBytes,0)>256*1024*1024)throw new PrivateDataError('invalid_data',413);
-   // Preserve the original source/dedup identity, independent of request ID.
-   const sourceId='import.'+createHash('sha256').update(JSON.stringify(files.map(file=>[file.relativePath,file.hash]).sort())).digest('hex').slice(0,32),at=stamp();
+   // Content defines the logical set; the explicitly accepted request owns its
+   // new authorization lifetime. Replaying that request retains the same lifetime.
+   const sourceId=importSourceIdentity(files,id),at=stamp();
    const job:Job={id,name:request.name??files[0].name,instruction:request.instruction,sourceId,...(request.sourcePackId?{sourcePackId:request.sourcePackId,sourcePackRevision:sourcePacks.get(request.sourcePackId)!.revision}:{}),...(request.imageProfileId?{imageProfileId:request.imageProfileId}:{}),processing:request.processing,generation:0,authorizationEpoch:context.authorizationEpoch,recordsProcessed:0,sourceFileIds:files.map(file=>file.id),status:'queued',processingStatus:'archived',createdAt:at,updatedAt:at,files,summary:'',warnings:[],archive:{files:files.length,bytes:files.reduce((n,f)=>n+f.sizeBytes,0),expandedFiles:0},progress:{total:0,processed:0,imported:0,duplicates:0},captureIds:[]};
    for(const file of files){const prefix=ingress.forUser(context).archivedBytes(file.id).subarray(0,4096),container=intake.container({file,prefix});if(container){(job.containers??={})[file.id]={id:container.id,version:container.version,expanded:false};continue;}const pin=job.sourcePackId?undefined:intake.format({file,prefix});if(pin?.excluded)(job.excludedFiles??=[]).push({fileId:file.id,reason:pin.reason});else if(pin)(job.media??=[]).push({fileId:file.id,format:pin});}
    sql.run('INSERT INTO mp_import_jobs VALUES($user,?,?,?)',id,fingerprint,JSON.stringify(job));for(const file of files)sql.run('INSERT INTO mp_import_files VALUES($user,?,?)',id,file.id);return job;
@@ -202,7 +204,7 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    for(const taskId of [job.prepareTask,job.commitTask])if(taskId&&['waiting','running'].includes(execution.forUser(context).get(taskId).state))throw conflict();
    const retainedSharedSource=!!sql.get("SELECT id FROM mp_import_jobs WHERE user_id=$user AND id<>? AND json_extract(json,'$.sourceId')=? LIMIT 1",id,job.sourceId),captures=sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=?',job.sourceId);
    if(!retainedSharedSource&&sql.get('SELECT id FROM pd_sources WHERE user_id=$user AND id=?',job.sourceId)){const data=runtime.services.forUser(context).get<PrivateData>('private-data');for(const capture of captures)data.deleteCapture(String(capture.id));data.deleteSource(job.sourceId);}
-   sql.run('DELETE FROM mp_import_jobs WHERE user_id=$user AND id=?',id);const removed=ingress.forUser(context).removeArchivedFiles(job.files.map(file=>file.id));return {deleted:true,captures:retainedSharedSource?0:captures.length,retainedSharedSource,...removed};
+   sql.run('DELETE FROM mp_import_records WHERE user_id=$user AND job_id=?',id);sql.run('DELETE FROM mp_import_files WHERE user_id=$user AND job_id=?',id);sql.run('UPDATE mp_import_jobs SET json=? WHERE user_id=$user AND id=?',JSON.stringify({id,deleted:true}),id);const removed=ingress.forUser(context).removeArchivedFiles(job.files.map(file=>file.id));return {deleted:true,captures:retainedSharedSource?0:captures.length,retainedSharedSource,...removed};
   });if(db.isTransaction||deleted.garbagePending)return {...deleted,garbagePending:true};try{ingress.forUser(context).gc();return deleted;}catch{return {...deleted,garbagePending:true};}},
   cancel:(id:string)=>sql.transaction(()=>{owner(context);const job=load(sql,id);if(['completed','cancelled'].includes(job.status))return publicJob(job);for(const taskId of [job.prepareTask,job.commitTask])if(taskId){const task=execution.forUser(context).get(taskId);if(['waiting','running','blocked'].includes(task.state))execution.forUser(context).cancel(taskId);}job.status='cancelled';save(sql,job);return publicJob(job);}),
  });};

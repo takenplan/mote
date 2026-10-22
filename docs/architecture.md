@@ -1,5 +1,7 @@
 # Mote 架构
 
+账号隔离、配置发布和后台工作寿命的统一合同见[统一架构与用户旅程 ADR](adr-unified-user-journeys.md)。该决定以一致的用户体验为目标；本轮实现、验证及发布进度分别记录在[实施记录](validation/unified-user-journeys-2026-10-23.md)。
+
 生产入口 `apps/server/src/app.ts` 导出账号作用域的 `buildScopedApp`，单账号也走同一路径。实例共享 SQLite、执行器和运行资源，私人数据与配置按服务端认证账号隔离；旧单所有者组合只由 `test/fixtures/legacy-app.ts` 显式提供算法回归，不能打开 epoch 5。业务流程及音频备份不自动 ASR 的决定见[共用业务流程 ADR](adr-shared-business-flows.md)。[10 月 18 日审计](audits/business-flow-parity-2026-10-18.md)保留当时缺口，不能代替后续实现和验证状态；后继对账见[项目推进审阅](audits/project-map-and-progress-review-2026-10-20.md)。
 
 任务期限与失败恢复的目标原则见 [2026-10-15 ADR](adr-task-recovery-and-execution-budgets.md)：每种任务在开发和注册时声明自身的宽松默认超时策略，不统一套用 600 秒；资源等待、模型反馈修正、实际失败和结果未知分别处理。中央注册策略与具体默认值见[任务执行策略](task-execution-policies.md)；部署与验证范围单独记录。
@@ -79,7 +81,7 @@ Ingress 3 在当前账号与来源事务中保存原件/版本，返回固定部
 
 ExecutionEngine 负责并发、资源互斥、持久租约、输入版本、取消、超时、重试与提交 fence。当前任务中断可恢复成功检查点；删除、授权撤销和配置变化阻止晚到输出发布。没有每日调用、字符、token 或费用硬预算；实际用量和价格记录继续保留，未知用量不当作零费用。
 
-当前 Ask、Memory、Files 等账号域在同一 M05 执行器中运行。普通问题默认直接查证，模型可通过宿主研究控制提交只读子任务；等待、重启、取消及已完成检查点保持持久身份。Memory 按固定策略、原件范围和授权执行提取、独立审核、staging 与 fenced 保存，普通暂停停止新准入，立即停止撤销未完成自动工作，恢复不补暂停缺口。外部引擎只接管声明阶段，原件授权、独审和最终发布仍归宿主。重复 ACK、派生更新和重启不授历史工作。见[连续批次](adr-memory-continuous-batch.md)、[插件边界](adr-plugin-center-memory-replacement.md)和[系统改造决定](adr-system-refactor.md)。
+当前 Ask、Memory、Files 等账号域在同一 M05 执行器中运行。普通问题默认直接查证，模型可通过宿主研究控制提交只读子任务；等待、重启、取消及已完成检查点保持持久身份。Memory 按固定策略、原件范围和授权执行提取、独立审核、staging 与 fenced 保存。普通停用或暂停关闭后续生产者准入，已接收的提取、审核和发布继续排空；待整合窗口冻结截止成员并保留原到期时间，同一版本按持久占用规则避免重复准入。恢复不会重新开放旧生产者回执或补做暂停期间的输入。立即停止则撤销未完成自动工作；来源撤销、隐私变更及账号失效仍阻止迟到发布。外部引擎只接管声明阶段，原件授权、独审和最终发布仍归宿主。重复 ACK、派生更新和重启不授历史工作。见[统一旅程合同](adr-unified-user-journeys.md)、[连续批次](adr-memory-continuous-batch.md)、[插件边界](adr-plugin-center-memory-replacement.md)和[系统改造决定](adr-system-refactor.md)。
 
 查询、理解、Memory 与洞察运行时仅提供宿主授予的只读上下文工具与 Skill。原文、OCR、元数据和模型产物都是证据，不能改变权限或系统指令。引用必须指向本轮实际读取且范围允许的原始片段；派生摘要不授予未读原文的引用权限。
 

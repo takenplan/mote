@@ -1,4 +1,5 @@
 import {archiveRead} from './archive-read-set.js';
+import {processingConfigurationInput,type ProcessingConfigurationInput} from './processing-configuration-intent.js';
 import {createHash} from 'node:crypto';
 import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
@@ -164,6 +165,11 @@ export class TaskExecution {
    CREATE TABLE IF NOT EXISTS task_lifecycle_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
    CREATE TABLE IF NOT EXISTS task_restore_journal(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,payload_hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));`);
   db.exec('CREATE TABLE IF NOT EXISTS task_model_resources(task_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,resource_key TEXT NOT NULL,PRIMARY KEY(task_id,resource_key))');
+  db.exec(`CREATE TABLE IF NOT EXISTS task_processing_config_handoffs(task_id TEXT PRIMARY KEY REFERENCES user_tasks(task_id) ON DELETE CASCADE,user_id TEXT NOT NULL,
+   antecedent_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,root_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,root_hash TEXT NOT NULL,
+   original_ref TEXT NOT NULL,receipt_id TEXT NOT NULL,replacement_id TEXT REFERENCES user_tasks(task_id) ON DELETE SET NULL);
+   CREATE TABLE IF NOT EXISTS task_processing_config_retirements(handoff_id TEXT NOT NULL REFERENCES task_processing_config_handoffs(task_id) ON DELETE CASCADE,
+   task_id TEXT NOT NULL REFERENCES user_tasks(task_id) ON DELETE CASCADE,PRIMARY KEY(handoff_id,task_id));`);
   this.storage={db,reserveMetadata:bytes=>{if(!Number.isSafeInteger(bytes)||bytes<0)throw new TaskError('task_metadata_invalid');}};
   this.processors=new ProcessorAdmission(this.storage);
   this.engine=new ExecutionEngine(this.storage);
@@ -361,7 +367,97 @@ export class TaskExecution {
    });
   }
  }
+ /** Raw admitted identity deliberately excludes obsolete settings validation. */
+ private processingConfigurationTask(id:string){
+  const task=this.engine.get(id);if(!task)throw new ScopeError('invalid_identity',401);
+  const row=this.assertTask(task);if(row.input!==inputJson(task.input))throw new ScopeError('invalid_identity',401);return task;
+ }
+ private processingConfigurationAncestry(task:ExecutionStep,stack=new Set<string>(),validated=new Set<string>()){
+  if(validated.has(task.id)){this.processingConfigurationTask(task.id);return;}
+  if(stack.has(task.id))throw new ScopeError('invalid_identity',401);stack.add(task.id);
+  try{
+  const checked=this.processingConfigurationTask(task.id),owner=checked.ownership!,ref=String(checked.input.originalRef??'');
+  const predecessor=(id:string)=>{const prior=this.processingConfigurationTask(id);if(prior.ownership!.userId!==owner.userId||prior.ownership!.authorizationEpoch!==owner.authorizationEpoch||prior.input.originalRef!==ref)throw new ScopeError('invalid_identity',401);return prior;};
+  if(checked.kind==='processing.configuration'){
+   const input=processingConfigurationInput.parse(checked.input),link=this.db.prepare('SELECT * FROM task_processing_config_handoffs WHERE task_id=? AND user_id=?').get(checked.id,owner.userId);
+   if(!link||link.antecedent_id!==input.intentId||link.root_id!==input.rootIntentId||link.original_ref!==ref||link.receipt_id!==input.receiptId)throw new ScopeError('invalid_identity',401);
+   const root=predecessor(input.rootIntentId);if(root.kind!=='processing.pipeline'||root.input.plugin||hash(root.input)!==link.root_hash)throw new ScopeError('invalid_identity',401);
+   const prior=predecessor(input.intentId);
+   if(prior.id!==root.id&&(prior.kind!=='processing.configuration'||prior.input.rootIntentId!==root.id))throw new ScopeError('invalid_identity',401);
+   if(prior.state!=='cancelled'||prior.error!=='processing_config_replaced'||!this.db.prepare('SELECT 1 FROM task_processing_config_retirements WHERE handoff_id=? AND task_id=?').get(checked.id,prior.id))throw new ScopeError('invalid_identity',401);
+   this.processingConfigurationAncestry(prior,stack,validated);
+  }else{
+   if(checked.kind!=='processing.pipeline'||checked.input.plugin)throw new ScopeError('invalid_identity',401);
+   if(checked.state==='cancelled'&&(checked.error!=='processing_config_replaced'||!this.db.prepare('SELECT 1 FROM task_processing_config_retirements WHERE task_id=?').get(checked.id)))throw new ScopeError('invalid_identity',401);
+   if(typeof checked.input.intentTaskId==='string'){
+    const prior=predecessor(checked.input.intentTaskId);this.processingConfigurationAncestry(prior,stack,validated);
+   }
+   if(typeof checked.input.configurationIntentId==='string'){
+    const prior=predecessor(checked.input.configurationIntentId),link=this.db.prepare('SELECT replacement_id FROM task_processing_config_handoffs WHERE task_id=?').get(prior.id);
+    if(prior.kind!=='processing.configuration'||link?.replacement_id!==checked.id)throw new ScopeError('invalid_identity',401);this.processingConfigurationAncestry(prior,stack,validated);
+   }
+  }
+   validated.add(task.id);
+  }finally{stack.delete(task.id);}
+ }
+ /** Fixed source locator for both pending handoff recovery and descendant checks. */
+ processingConfigurationIntent(taskId:string){
+  try{const task=this.processingConfigurationTask(taskId);if(task.kind!=='processing.configuration')return;
+   this.processingConfigurationAncestry(task);const input=processingConfigurationInput.parse(task.input);return {task,input,root:this.processingConfigurationTask(input.rootIntentId)};
+  }catch{return;}
+ }
+ handoffProcessingConfiguration(rootId:string,receipt:Pick<ProcessingConfigurationInput,'receiptId'|'preserveImagePlan'>,eligible:(root:ExecutionStep)=>boolean){
+  return this.transaction(()=>{
+   const root=this.processingConfigurationTask(rootId);if(root.kind!=='processing.pipeline'||root.input.plugin||!eligible(root))return;
+   const owner=root.ownership!;let antecedent=root;
+   if(root.state==='cancelled'){
+    if(root.error!=='processing_config_replaced')return;
+    const row=this.db.prepare(`SELECT h.task_id FROM task_processing_config_handoffs h JOIN user_tasks u ON u.task_id=h.task_id JOIN execution_steps e ON e.id=u.task_id
+     WHERE h.root_id=? AND h.user_id=? AND e.state IN('waiting','running','blocked','failed','stale') ORDER BY u.user_position DESC LIMIT 1`).get(root.id,owner.userId);
+    const pending=row?this.processingConfigurationIntent(String(row.task_id)):undefined;if(!pending)return;antecedent=pending.task;
+   }else if(!['waiting','running','blocked','failed','stale'].includes(root.state))return;
+   this.processingConfigurationAncestry(antecedent);
+   const handler=this.handlers.get('processing.configuration');if(!handler||handler.modelFeature)throw new TaskError('task_handler_unavailable',503);
+   const input=canonical(processingConfigurationInput.parse({intentId:antecedent.id,rootIntentId:root.id,originalRef:root.input.originalRef,...receipt})) as ProcessingConfigurationInput,operation='processing-config:'+root.id+':'+receipt.receiptId,taskId=hash([owner.userId,operation,handler.kind,input]);
+   if(this.row(taskId))return {id:taskId,retired:[] as string[]};
+   const grant=this.grants.issueProcessingConfiguration(antecedent.id,taskId);this.enabled(grant.userId);
+   this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,user_position) SELECT ?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,grant.userId,grant.grantId,inputJson(input),grant.userId);
+   this.engine.enqueue(privateOperationId(grant.userId,operation),handler.kind,input,{id:taskId,ownership:grant});
+   this.db.prepare('INSERT INTO task_processing_config_handoffs VALUES(?,?,?,?,?,?,?,NULL)').run(taskId,grant.userId,antecedent.id,root.id,hash(root.input),input.originalRef,input.receiptId);
+   const retired=this.db.prepare(`SELECT e.id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=?
+    AND e.kind LIKE 'processing.%' AND json_extract(u.input,'$.originalRef')=? AND e.id<>? AND e.state NOT IN('succeeded','cancelled')`).all(owner.userId,input.originalRef,taskId).map(row=>String(row.id));
+   // The antecedent's retirement link is the only canceled-intent exception.
+   for(const id of retired){this.db.prepare('INSERT INTO task_processing_config_retirements VALUES(?,?)').run(taskId,id);this.engine.cancel(id,false,'processing_config_replaced');}
+   return {id:taskId,retired};
+  });
+ }
+ assertProcessingConfigurationInput(context:UserContext,intentId:string,originalRef:string){
+  this.authority.assert(context);if(!this.authority.isTask(context))throw new ScopeError('invalid_identity',401);
+  const link=this.processingConfigurationIntent(intentId),row=this.db.prepare('SELECT task_id FROM user_tasks WHERE grant_id=? AND user_id=?').get(context.credentialId.split(':')[0],context.userId),caller=row?this.processingConfigurationTask(String(row.task_id)):undefined;
+  if(!link||link.task.ownership!.userId!==context.userId||link.input.originalRef!==originalRef||!caller||caller.input.originalRef!==originalRef||caller.id!==intentId&&caller.input.configurationIntentId!==intentId)throw new ScopeError('invalid_identity',401);
+ }
+ bindProcessingConfigurationReplacement(context:UserContext,intentId:string,replacementId:string){
+  const link=this.processingConfigurationIntent(intentId),replacement=this.processingConfigurationTask(replacementId);this.assertProcessingConfigurationInput(context,intentId,String(replacement.input.originalRef));
+  if(!link||context.credentialId.split(':')[0]!==link.task.ownership!.grantId||replacement.kind!=='processing.pipeline'||replacement.input.configurationIntentId!==intentId||replacement.ownership!.userId!==context.userId)throw new ScopeError('invalid_identity',401);
+  const row=this.db.prepare('SELECT replacement_id FROM task_processing_config_handoffs WHERE task_id=?').get(intentId);if(row?.replacement_id&&row.replacement_id!==replacementId)throw new TaskError('task_identity_conflict',409);
+  this.db.prepare('UPDATE task_processing_config_handoffs SET replacement_id=? WHERE task_id=?').run(replacementId,intentId);
+ }
+ processingConfigurationBusy(taskId:string){
+  const link=this.processingConfigurationIntent(taskId);if(!link)throw new ScopeError('invalid_identity',401);
+  return this.db.prepare(`WITH RECURSIVE ancestry(id) AS (SELECT ? UNION SELECT h.antecedent_id FROM task_processing_config_handoffs h JOIN ancestry a ON a.id=h.task_id)
+   SELECT DISTINCT r.task_id FROM task_processing_config_retirements r JOIN ancestry a ON a.id=r.handoff_id`).all(taskId).some(row=>this.physical.busy(String(row.task_id)));
+ }
+ purgeProcessingConfiguration(subject:UserDataSubject){
+  this.services.assertSubject(subject,'processing','delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);
+  const rows=this.db.prepare("SELECT u.task_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.kind LIKE 'processing.%'").all(subject.userId);
+  if(rows.some(row=>this.physical.busy(String(row.task_id))))return false;
+  if(this.db.prepare(`SELECT 1 FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.kind LIKE 'processing.%'
+   AND (u.external_state IN('issued','unknown') OR EXISTS(SELECT 1 FROM task_external_calls c WHERE c.task_id=u.task_id AND c.user_id=u.user_id AND c.state IN('issued','unknown'))) LIMIT 1`).get(subject.userId))return false;
+  for(const row of this.db.prepare('SELECT task_id FROM task_processing_config_handoffs WHERE user_id=?').all(subject.userId))this.grants.revoke(String(row.task_id));
+  this.db.prepare('DELETE FROM task_processing_config_handoffs WHERE user_id=?').run(subject.userId);return true;
+ }
  forUser(context:UserContext){
+  this.authority.assertNotOperation(context);
   const assert=()=>{this.authority.assert(context);this.enabled(context.userId);};
   const owned=(taskId:string)=>{assert();const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);return row;};
   const taskOperation=(taskId:string)=>{owned(taskId);return this.engine.get(taskId)!.operationId;};
@@ -372,8 +468,9 @@ export class TaskExecution {
    if(options.parentOperationId){const parentId=privateOperationId(context.userId,options.parentOperationId),generation=options.generation?{slot:options.generation.slot,version:options.generation.version??taskId}:undefined;if(parentId!==childOperationId)linkOperationParent(this.storage,parentId,childOperationId,{generation});else if(generation)linkOperation(this.storage,parentId,taskId,{generation});}
   };
   const prepare=(value:unknown,allowModels=true)=>{
-    assert();const request=submitSchema.parse(value);if(request.kind==='processing.recheck')throw new TaskError('task_handler_unavailable',503);const handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
+    assert();const request=submitSchema.parse(value);if(['processing.recheck','processing.configuration'].includes(request.kind))throw new TaskError('task_handler_unavailable',503);const handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
     const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=inputJson(input),operationId=privateOperationId(context.userId,request.operationId),taskId=hash([context.userId,request.operationId,request.kind,input]);
+    if(typeof input.configurationIntentId==='string')this.assertProcessingConfigurationInput(context,input.configurationIntentId,String(input.originalRef));
     handler.authorizeInput?.(context,input);
     return {request,handler,input,encoded,operationId,taskId};
   };
@@ -500,7 +597,7 @@ export class TaskExecution {
  lifecycle():DomainLifecycle{return {
   importUser:false,
  exportUser:async subject=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');return archiveRead(subject.userId,()=>this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'export');const tasks=this.db.prepare('SELECT * FROM user_tasks WHERE user_id=? ORDER BY task_id').all(subject.userId) as TaskRow[];return {domain:EXECUTION_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-user-tasks-v1',coverage:{metadata:true,credentials:false,activeAuthorization:false,portableInputs:'registered-handlers-only',excluded:['checkpoints','progress','results','failure-receipts','model-snapshots','external-journal-details']},tasks:tasks.map(row=>{const step=this.engine.get(row.task_id)!,handler=this.handlers.get(step.kind);return {id:step.id,operationId:step.operationId,kind:step.kind,pool:step.pool,state:step.state,attempts:step.attempts,authorizationEpoch:step.ownership!.authorizationEpoch,externalState:this.db.prepare("SELECT 1 FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown') LIMIT 1").get(row.task_id,row.user_id)?'unknown':row.external_state,...(handler?.portableInput?{input:handler.portableInput(step.input)}:{inputOmitted:true}),dependencies:this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=?').all(step.id).map(row=>String(row.dependency_id))};})}};}));},
-  deleteUser:async(subject,operationId)=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');const ids=this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.db.prepare('INSERT INTO task_lifecycle_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);const rows=this.db.prepare('SELECT task_id,external_state FROM user_tasks WHERE user_id=?').all(subject.userId);for(const row of rows){this.engine.cancel(String(row.task_id),false);this.grants.revoke(String(row.task_id));}return rows;});for(const row of ids){this.engine.abortLocal(String(row.task_id));this.modelLeases.delete(String(row.task_id));}const unknown=ids.some(row=>['issued','unknown'].includes(String(row.external_state)))||Boolean(this.db.prepare("SELECT 1 FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown') LIMIT 1").get(subject.userId));if(unknown||this.physical.active(subject.userId))return {status:'result_unknown',operationId};this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.physical.eraseQuiescent(subject.userId);for(const row of ids)this.db.prepare('DELETE FROM execution_dependencies WHERE step_id=? OR dependency_id=?').run(row.task_id,row.task_id);for(const row of ids){this.db.prepare('DELETE FROM execution_steps WHERE id=?').run(row.task_id);this.db.prepare('DELETE FROM user_tasks WHERE task_id=?').run(row.task_id);this.db.prepare('DELETE FROM task_authorizations WHERE task_id=?').run(row.task_id);}const operations=this.db.prepare('SELECT id FROM operation_progress WHERE user_id=?').all(subject.userId);for(const operation of operations){this.db.prepare('DELETE FROM operation_generations WHERE operation_id=?').run(operation.id);this.db.prepare('DELETE FROM operation_parents WHERE parent_id=? OR child_id=?').run(operation.id,operation.id);this.db.prepare('DELETE FROM execution_fairness WHERE operation_id=?').run(operation.id);}this.db.prepare('DELETE FROM operation_progress WHERE user_id=?').run(subject.userId);for(const table of ['operation_changes','operation_user_sequences','execution_user_sequence','execution_user_fairness','execution_stage_fairness','task_restore_journal'])this.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
+  deleteUser:async(subject,operationId)=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');const ids=this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.db.prepare('INSERT INTO task_lifecycle_state VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1').run(subject.userId);const rows=this.db.prepare('SELECT task_id,external_state FROM user_tasks WHERE user_id=?').all(subject.userId);for(const row of rows){this.engine.cancel(String(row.task_id),false);this.grants.revoke(String(row.task_id));}return rows;});for(const row of ids){this.engine.abortLocal(String(row.task_id));this.modelLeases.delete(String(row.task_id));}const unknown=ids.some(row=>['issued','unknown'].includes(String(row.external_state)))||Boolean(this.db.prepare("SELECT 1 FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown') LIMIT 1").get(subject.userId));if(unknown||this.physical.active(subject.userId))return {status:'result_unknown',operationId};this.transaction(()=>{this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');this.physical.eraseQuiescent(subject.userId);this.db.prepare('DELETE FROM task_processing_config_handoffs WHERE user_id=?').run(subject.userId);for(const row of ids)this.db.prepare('DELETE FROM execution_dependencies WHERE step_id=? OR dependency_id=?').run(row.task_id,row.task_id);for(const row of ids){this.db.prepare('DELETE FROM execution_steps WHERE id=?').run(row.task_id);this.db.prepare('DELETE FROM user_tasks WHERE task_id=?').run(row.task_id);this.db.prepare('DELETE FROM task_authorizations WHERE task_id=?').run(row.task_id);}const operations=this.db.prepare('SELECT id FROM operation_progress WHERE user_id=?').all(subject.userId);for(const operation of operations){this.db.prepare('DELETE FROM operation_generations WHERE operation_id=?').run(operation.id);this.db.prepare('DELETE FROM operation_parents WHERE parent_id=? OR child_id=?').run(operation.id,operation.id);this.db.prepare('DELETE FROM execution_fairness WHERE operation_id=?').run(operation.id);}this.db.prepare('DELETE FROM operation_progress WHERE user_id=?').run(subject.userId);for(const table of ['operation_changes','operation_user_sequences','execution_user_sequence','execution_user_fairness','execution_stage_fairness','task_restore_journal'])this.db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(subject.userId);});return {status:'complete',operationId};},
   restoreUser:async(subject,archive,operationId)=>this.restore(subject,archive,operationId),
  };}
  private async restore(subject:UserDataSubject,archive:UserExport,operationId:string){

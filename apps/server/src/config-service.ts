@@ -10,6 +10,7 @@ import type { ConfigFieldMetadata, ConfigServiceView } from '@mote/shared';
 import { ScopeError } from './scope/baseline.js';
 
 export type ConfigDocument = { version: 1; revision: number; [domain: string]: unknown };
+export type ConfigTransaction = Readonly<{source:'initialize'|'update'|'reload';revision:number;requestedDomains:readonly string[];request?:unknown}>;
 export interface PreparedConfigChange {
   /** Awaitable resource installation; do not expose candidate admission, permissions or policy here. */
   apply(): void | Promise<void>;
@@ -38,10 +39,15 @@ type RegisteredDomain = ConfigDomainRegistration<any> & { documentPath?: string[
 export interface ConfigServiceOptions {
   path: string;
   initialDocument?: ConfigDocument;
+  /** Ephemeral readers may resolve defaults without creating directories or a file. */
+  persistInitialDocument?: boolean;
   watch?: boolean;
   fileSystem?: Partial<FileSystem>;
   /** Revalidate this owner's access/generation for every transaction and effective read. */
   assertAccess?: () => void;
+  /** Host publication joins derived SQL and durable coordination in one synchronous transaction. */
+  publication?: (publish:()=>void)=>void;
+  prepareTransaction?: (next:Readonly<ConfigDocument>,previous:Readonly<ConfigDocument>,transaction:ConfigTransaction)=>PreparedConfigChange|Promise<PreparedConfigChange>;
 }
 export type ConfigErrorCode = 'config_invalid' | 'config_conflict' | 'config_unavailable' | 'config_prepare_failed' | 'config_apply_failed' | 'config_save_failed' | 'config_commit_uncertain';
 export class ConfigServiceError extends Error {
@@ -308,25 +314,26 @@ export class ConfigService {
   initialize(): Promise<ConfigServiceView> {
     return this.serialize(async () => {
       if (this.raw) return this.view();
-      await this.io.mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
+      if(this.options.persistInitialDocument!==false)await this.io.mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
       const disk = await this.read();
       if (!disk && !this.options.initialDocument) throw new ConfigServiceError('config_invalid');
       const parsed = this.parse(disk?.document ?? this.options.initialDocument);
-      const prepared: PreparedConfigChange[] = [];
+      const prepared: Array<{candidate:PreparedConfigChange;final?:true}> = [];
       try {
-        for (const domain of this.domains.values()) if (domain.prepare) prepared.push(await domain.prepare(clone(parsed.values.get(domain.id)), clone(parsed.values.get(domain.id))));
-        if (!disk) await this.persist(parsed.raw, null, () => this.assertAccess());
-        for (const candidate of prepared.sort((a, b) => (a.applyOrder ?? 0) - (b.applyOrder ?? 0))) {
+        for (const domain of this.domains.values()) if (domain.prepare) prepared.push({candidate:await domain.prepare(clone(parsed.values.get(domain.id)), clone(parsed.values.get(domain.id)))});
+        if(this.options.prepareTransaction)prepared.push({candidate:await this.options.prepareTransaction(this.resolvedDocument(parsed.raw,parsed.values),this.resolvedDocument(parsed.raw,parsed.values),{source:'initialize',revision:parsed.raw.revision,requestedDomains:[]}),final:true});
+        if (!disk&&this.options.persistInitialDocument!==false) await this.persist(parsed.raw, null, () => this.assertAccess());
+        for (const {candidate} of prepared.sort((a, b) => (a.candidate.applyOrder ?? 0) - (b.candidate.applyOrder ?? 0))) {
           this.assertAccess();
           const result = candidate.apply(); if (result && typeof result.then === 'function') await result;
         }
         this.assertAccess();
-        for (const candidate of prepared) this.publishCandidate(candidate,'configuration');
+        this.publication(()=>{for (const {candidate} of [...prepared.filter(item=>!item.final),...prepared.filter(item=>item.final)]) this.publishCandidate(candidate,'configuration');});
         this.raw = parsed.raw; this.effective = parsed.values; this.diskText = disk?.text ?? stringify(parsed.raw,{aliasDuplicateObjects:false,lineWidth:0}); this.lastError = null;
-        for (const candidate of prepared) candidate.complete?.();
+        for (const {candidate} of prepared) candidate.complete?.();
         return this.view();
       } catch (error) {
-        for (const candidate of prepared.reverse()) { await cleanup(() => candidate.rollback?.()); await cleanup(() => candidate.dispose?.()); }
+        for (const {candidate} of [...prepared.filter(item=>item.final),...prepared.filter(item=>!item.final).reverse()]) { await cleanup(() => candidate.rollback?.()); await cleanup(() => candidate.dispose?.()); }
         throw error instanceof ConfigServiceError || error instanceof ScopeError ? error : new ConfigServiceError('config_prepare_failed');
       }
     });
@@ -372,13 +379,15 @@ export class ConfigService {
       throw new ConfigServiceError('config_save_failed');
     } finally { await this.io.unlink(temporary).catch(() => {}); }
   }
-  private async commit(parsed: ReturnType<ConfigService['parse']>, observedText: string | null, assertCurrent?: () => void): Promise<ConfigServiceView> {
+  private resolvedDocument(raw:ConfigDocument,values:Map<string,unknown>):ConfigDocument{const document=clone(raw);for(const domain of this.domains.values())if(!domain.documentPath)document[domain.id]=clone(values.get(domain.id));return document;}
+  private publication(work:()=>void){if(this.options.publication)this.options.publication(work);else work();}
+  private async commit(parsed: ReturnType<ConfigService['parse']>, observedText: string | null, assertCurrent?: () => void, transaction:ConfigTransaction={source:'reload',revision:this.revision,requestedDomains:[]}): Promise<ConfigServiceView> {
     let authorizationFailure: unknown;
     const assertAuthorized = () => { try { this.assertAccess(assertCurrent); } catch (error) { authorizationFailure = error; throw error; } };
     assertAuthorized();
     const previous = this.state(), next = parsed.raw;
     const changes = [...this.domains.values()].filter(domain => !isDeepStrictEqual(this.saved(domain.id), parsed.values.get(domain.id)) || !isDeepStrictEqual(this.effectiveCandidate(domain, parsed.values.get(domain.id), this.effective.get(domain.id)), this.effective.get(domain.id)));
-    if (!changes.length) {
+    if (!changes.length&&!this.options.prepareTransaction) {
       const revisionChanged = next.revision !== previous.revision; next.revision = previous.revision;
       if (revisionChanged) {
         await this.persist(next, observedText, assertAuthorized);
@@ -386,9 +395,10 @@ export class ConfigService {
       } else this.diskText = observedText;
       this.raw = next; this.lastError = null; this.notify(); return this.view();
     }
-    if (previous.revision === Number.MAX_SAFE_INTEGER) throw new ConfigServiceError('config_unavailable');
-    next.revision = previous.revision + 1;
-    const candidates: Array<{ id: string; value: unknown; candidate: PreparedConfigChange; applied: boolean; published: boolean }> = [];
+    if (changes.length&&previous.revision === Number.MAX_SAFE_INTEGER) throw new ConfigServiceError('config_unavailable');
+    next.revision = previous.revision + Number(changes.length>0);
+    const candidates: Array<{ id: string; value: unknown; candidate: PreparedConfigChange; applied: boolean; published: boolean;final?:true }> = [];
+    let publicationOrder:typeof candidates=[];
     const nextEffective = new Map(this.effective);
     let committed = false;
     try {
@@ -403,6 +413,7 @@ export class ConfigService {
           candidates.push({ id: domain.id, value, candidate, applied: false, published: false });
         }
       }
+      if(this.options.prepareTransaction){const candidate=await this.options.prepareTransaction(this.resolvedDocument(next,nextEffective),this.effectiveDocument(),transaction);candidates.push({id:'configuration',value:undefined,candidate,applied:false,published:false,final:true});}
       const uncertain = await this.persist(next, observedText, assertAuthorized);
       try {
         candidates.sort((a, b) => (a.candidate.applyOrder ?? 0) - (b.candidate.applyOrder ?? 0));
@@ -413,13 +424,14 @@ export class ConfigService {
         // Runtime permissions, intake SQL and snapshots become visible in one
         // synchronous continuation with the authoritative effective map.
         assertAuthorized();
-        for (const item of candidates) if (item.candidate.publish) { item.published = true; this.publishCandidate(item.candidate,item.id); }
+        publicationOrder=[...candidates.filter(item=>!item.final),...candidates.filter(item=>item.final)];
+        this.publication(()=>{for (const item of publicationOrder) if (item.candidate.publish) { item.published = true; this.publishCandidate(item.candidate,item.id); }});
       } catch {
         // An install can reject at the same time as revocation; do not retain that request's saved candidate.
         if (!authorizationFailure) { try { assertAuthorized(); } catch { /* Roll back before returning the safe authorization error. */ } }
         // Ordinary apply failures retain a saved candidate while effective domains keep their old values.
         let failedRollback: string | undefined;
-        const undo=[...candidates.filter(item=>item.published).reverse(),...candidates.filter(item=>item.applied&&!item.published).reverse()];
+        const undo=[...publicationOrder.filter(item=>item.published).reverse(),...candidates.filter(item=>item.applied&&!item.published).reverse()];
         for (const item of undo) {
           if (!item.candidate.rollback) { if(item.published||!item.candidate.publish)failedRollback ??= item.id; continue; }
           try {
@@ -475,7 +487,7 @@ export class ConfigService {
   replaceView(id:string,value:unknown,expectedRevision:number,assertCurrent?:()=>void):Promise<ConfigServiceView>{
     return this.updateMany({[id]:value},expectedRevision,true,assertCurrent,true);
   }
-  updateMany(patches: Record<string, unknown>, expectedRevision: number, replace = false, assertCurrent?: () => void, preserveViewSecrets=false): Promise<ConfigServiceView> {
+  updateMany(patches: Record<string, unknown>, expectedRevision: number, replace = false, assertCurrent?: () => void, preserveViewSecrets=false, request?:unknown): Promise<ConfigServiceView> {
     return this.serialize(async () => {
       try {
         if (!object(patches) || !Object.keys(patches).length || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new ConfigServiceError('config_invalid');
@@ -492,7 +504,7 @@ export class ConfigService {
           if (id === 'plugins' && object(patch) && Object.hasOwn(patch, 'configuration')) throw new ConfigServiceError('config_invalid');
           this.assignRaw(next, domain, preserveReferences(this.domainRaw(state, domain), saved, value));
         }
-        return await this.commit(this.parse(next), disk?.text ?? null, assertCurrent);
+        return await this.commit(this.parse(next), disk?.text ?? null, assertCurrent,{source:'update',revision:expectedRevision,requestedDomains:Object.keys(patches),request});
       } catch (error) { this.recordError(error); throw error; }
     }, assertCurrent);
   }

@@ -1,3 +1,4 @@
+import {ConfigurationCoordination,type ConfigurationEffect,type ConfigurationObservation,type ConfigurationPublicationEffect,type ConfigurationRequestFacts} from './configuration-coordination.js';
 import {archiveRead} from './archive-read-set.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,existsSync,rmSync,renameSync,openSync,fsyncSync,closeSync,fstatSync,readFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {MODEL_FEATURES,CODEX_SERVICE_TIERS,type ModelFeature,type ModelSettings} from '@mote/shared/models';
 import type {ConfigServiceView,ModelPrice,TokenUsage,UsageReceipt} from '@mote/shared';
-import {ConfigService,ConfigServiceError,type ConfigDocument,type ConfigDomainRegistration} from '../config-service.js';
+import {ConfigService,ConfigServiceError,type ConfigDocument,type ConfigDomainRegistration,type ConfigTransaction} from '../config-service.js';
 import {registerBuiltinDomains,diagnosticsConfigSchema} from '../config.js';
 import {privateDirectory,privateFile} from '../private-storage.js';
 import {estimateCost,priceSchema,usageTotals} from '../usage-metrics.js';
@@ -50,7 +51,7 @@ function restoreFileHash(path:string):string{
   }catch{throw new ConfigServiceError('config_conflict');}
   finally{if(handle!==undefined)closeSync(handle);}
 }
-type Entry={service:ConfigService;generation:number;accessKey:string;subject:UserDataSubject;initializing:Promise<void>};
+type Entry={service:ConfigService;generation:number;accessKey:string;subject:UserDataSubject;initializing:Promise<void>;initialized:boolean};
 export type ModelLease=Readonly<{id:string;snapshotId:string;deploymentId:string;userId:string;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:Readonly<UserModelReference>;provider:string;model:string;checkpointServiceTier?:ModelSettings['serviceTier']}>;
 type PrivateLease={context:UserContext;generation:number;sharedGeneration?:number;credentialGeneration?:number;credentialRecoveryGeneration?:number;settings:ModelSettings;price?:ModelPrice;configuration:ConfigDocument};
 type DurableSnapshot=Omit<PrivateLease,'context'>&{version:1;deploymentId:string;userId:string;authorizationEpoch:number;operationId:string;feature:ModelFeature;revision:number;instanceRevision:number;reference:UserModelReference;credentialFingerprint?:string;parentSnapshotId?:string;checkpointServiceTier?:ModelSettings['serviceTier']};
@@ -111,6 +112,8 @@ export class Configurations {
   private readonly lifecycleQueue=new Map<string,Promise<void>>();
   private readonly leases=new WeakMap<ModelLease,PrivateLease>();
   private readonly usageLedger:ModelUsageLedger;
+  private readonly coordination=new ConfigurationCoordination();
+  private readonly domainSubjects=new WeakMap<object,{service:ConfigService;generation:number}>();
   private readonly domains=new Map<string,(context:UserDataSubject)=>ConfigDomainRegistration>();
   private closed=false;
   private constructor(private readonly options:{directory:string;db:DatabaseSync;authority:UserContextAuthority;accounts?:Accounts;lifecycleAuthority?:LifecycleAuthority},readonly instance:ConfigService){
@@ -141,6 +144,21 @@ export class Configurations {
     if(this.entries.size||this.opening.size||this.closed||['models','modelPrices'].includes(id)||this.domains.has(id))throw new ConfigServiceError('config_conflict');
     this.domains.set(id,factory);
   }
+  registerEffect(domain:string,effect:ConfigurationEffect,observe?:ConfigurationObservation){if(this.entries.size||this.opening.size||this.closed)throw new ConfigServiceError('config_conflict');this.coordination.register(domain,effect,observe);}
+  registerPublicationEffect(effect:ConfigurationPublicationEffect){if(this.entries.size||this.opening.size||this.closed)throw new ConfigServiceError('config_conflict');this.coordination.registerPublication(effect);}
+  /** Narrow assertion for a registered configuration callback. Capturing this
+   * binding cannot renew the original session or authorize task admission. */
+  domainSubjectGuard(subject:UserDataSubject,{readOnly=false}:{readOnly?:boolean}={}){
+    const binding=this.domainSubjects.get(subject);
+    return ()=>{
+      if(binding){this.assertGeneration(subject.userId,binding.generation);if(this.entries.get(subject.userId)?.service!==binding.service)throw new ScopeError('invalid_identity',401);if('credentialId' in subject)this.accountFence(subject);else this.assertSubject(subject,subject.purpose);return;}
+      // Read-only export/restore schema validation keeps its existing bounded
+      // host capability; it never enrolls an operation as a runtime subject.
+      if(readOnly){if('credentialId' in subject){if(this.options.authority.operation(subject)){this.assertSubject(subject,'export');this.options.authority.assertOperationDomain(subject,'configuration','export');return;}}else{this.assertSubject(subject,subject.purpose);return;}}
+      throw new ScopeError('invalid_identity',401);
+    };
+  }
+  private coordinatedView(context:UserContext,service:ConfigService):ConfigServiceView{const view=safeView(service);return {...view,domains:view.domains.map(domain=>{const automation=this.coordination.observe(context,domain.id);return {...domain,...(automation?{automation}:{})};})};}
   private state(userId:string):State{
     this.validationStatement('INSERT OR IGNORE INTO user_configuration_state(user_id) VALUES(?)').run(userId);
     return this.validationStatement('SELECT generation,deleted,restore_operation FROM user_configuration_state WHERE user_id=?').get(userId) as State;
@@ -185,7 +203,7 @@ export class Configurations {
     }catch(error){if(error instanceof ScopeError)throw error;this.credentialsUnavailable.add(userId);throw new ConfigServiceError('config_unavailable');}
   }
   private async entry(context:UserDataSubject,bindSubject=false):Promise<Entry>{
-    this.assertSubject(context,'export');const state=this.state(context.userId);this.assertGeneration(context.userId,state.generation);
+    this.assertSubject(context,'export');if('credentialId' in context)this.options.authority.assertNotOperation(context);const state=this.state(context.userId);this.assertGeneration(context.userId,state.generation);
     const accessKey='credentialId' in context?'account:'+context.authorizationEpoch:'lifecycle:'+context.operationId;
     const prior=this.entries.get(context.userId);if(prior){
       try{await prior.initializing;}catch(error){if(prior.accessKey===accessKey)throw error;return this.entry(context,bindSubject);}
@@ -207,13 +225,14 @@ export class Configurations {
       const path=join(this.path(context.userId),'mote.yaml');privateFile(path);
       const lifecycle=!('credentialId' in context);
       const guard=()=>{this.assertGeneration(context.userId,state.generation);if(lifecycle)this.assertSubject(context,'export');else this.accountFence(context);};
-      const service=new ConfigService({path,initialDocument:{version:1,revision:0},assertAccess:guard});
+      const service=new ConfigService({path,initialDocument:{version:1,revision:0},assertAccess:guard,publication:work=>{const db=this.options.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{work();if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}},...(!lifecycle?{prepareTransaction:(next:Readonly<ConfigDocument>,previous:Readonly<ConfigDocument>,transaction:ConfigTransaction)=>this.coordination.prepare(context,next,previous,transaction)}:{})});
+      this.domainSubjects.set(context,{service,generation:state.generation});
       service.register({id:'models',schema:this.resources.schema(),defaultValue:{profiles:[],selections:{}},fields:userModelFields,resolve:raw=>raw});
       service.register({id:'modelPrices',schema:priceDomain,defaultValue:{items:[]},resolve:raw=>raw});
       for(const [id,factory] of this.domains){const domain=factory(context);if(domain.id!==id||!domain.resolve)throw new ConfigServiceError('config_invalid');service.register(lifecycle?{...domain,prepare:undefined}:domain);}
-      const entry:Entry={service,generation:state.generation,accessKey,subject:context,initializing:Promise.resolve()};
+      const entry:Entry={service,generation:state.generation,accessKey,subject:context,initializing:Promise.resolve(),initialized:false};
       if(!lifecycle)service.onChange(()=>{try{this.syncCredentials(context.userId,service,false);}catch{/* Snapshot admission remains closed until a clean restart. */}});
-      entry.initializing=(async()=>{await service.initialize();if(!lifecycle){this.syncCredentials(context.userId,service,true);await service.startWatching();}guard();})();
+      entry.initializing=(async()=>{await service.initialize();if(!lifecycle){this.syncCredentials(context.userId,service,true);await service.startWatching();}guard();entry.initialized=true;})();
       this.entries.set(context.userId,entry);
       try{await entry.initializing;return entry;}catch(error){if(this.entries.get(context.userId)===entry)this.entries.delete(context.userId);await service.close();throw error;}
     };
@@ -280,14 +299,14 @@ export class Configurations {
     return preserveRedactedSecrets?this.instance.replaceView('models',value,revision,current):this.instance.replace('models',value,revision,current);
   }
   forUser(context:UserContext){
-    this.options.authority.assert(context);
+    this.options.authority.assertNotOperation(context);
     const current=()=>this.options.authority.assert(context);
     return Object.freeze({
-      view:async()=>{current();const {service}=await this.entry(context);current();return safeView(service);},
-      update:async(patches:Record<string,unknown>,revision:number,allowCredentialReuse=false,preserveRedactedSecrets=false)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(patches.models!==undefined)assertCredentialReuse(service.saved('models'),patches.models,allowCredentialReuse,true);await service.updateMany(patches,revision,false,current,preserveRedactedSecrets);current();return safeView(service);},
-      replace:async(domain:string,value:unknown,revision:number,preserveRedactedSecrets=false,allowCredentialReuse=false)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(domain==='models'&&preserveRedactedSecrets)assertCredentialReuse(service.saved('models'),value,allowCredentialReuse);await (preserveRedactedSecrets?service.replaceView(domain,value,revision,current):service.replace(domain,value,revision,current));current();return safeView(service);},
-      replaceViews:async(values:Record<string,unknown>,revision:number)=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(values.models!==undefined)assertCredentialReuse(service.saved('models'),values.models);await service.updateMany(values,revision,true,current,true);current();return safeView(service);},
-      reload:async()=>{current();const {service}=await this.entry(context);await service.reload(current);current();return safeView(service);},
+      view:async()=>{current();const {service}=await this.entry(context);current();return this.coordinatedView(context,service);},
+      update:async(patches:Record<string,unknown>,revision:number,allowCredentialReuse=false,preserveRedactedSecrets=false,automationIntent:readonly string[]=[])=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(patches.models!==undefined)assertCredentialReuse(service.saved('models'),patches.models,allowCredentialReuse,true);await service.updateMany(patches,revision,false,current,preserveRedactedSecrets,this.coordination.request(context,patches,automationIntent));current();return this.coordinatedView(context,service);},
+      replace:async(domain:string,value:unknown,revision:number,preserveRedactedSecrets=false,allowCredentialReuse=false,automationIntent:readonly string[]=[])=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(domain==='models'&&preserveRedactedSecrets)assertCredentialReuse(service.saved('models'),value,allowCredentialReuse);await service.updateMany({[domain]:value},revision,true,current,preserveRedactedSecrets,this.coordination.request(context,{[domain]:value},automationIntent));current();return this.coordinatedView(context,service);},
+      replaceViews:async(values:Record<string,unknown>,revision:number,options:ConfigurationRequestFacts={})=>{current();const {service}=await this.entry(context);if(service.revision!==revision)throw new ConfigServiceError('config_conflict');if(values.models!==undefined)assertCredentialReuse(service.saved('models'),values.models);await service.updateMany(values,revision,true,current,true,this.coordination.request(context,values,[],options));current();return this.coordinatedView(context,service);},
+      reload:async()=>{current();const {service}=await this.entry(context);await service.reload(current);current();return this.coordinatedView(context,service);},
       models:async()=>{current();const {service}=await this.entry(context);current();this.assertResources();return {features:[...MODEL_FEATURES],shared:this.resources.listShared(),personal:(safeView(service).domains.find(d=>d.id==='models')!.effective as UserModelConfiguration).profiles,selections:service.current<UserModelConfiguration>('models').selections};},
       copyModel:(id:string,input:unknown)=>this.copyPersonalModel(context,id,input),
       modelCatalog:(input:unknown)=>this.inspectModel(context,input,async(settings,assert)=>{
@@ -445,11 +464,29 @@ export class Configurations {
     const result=previous.then(work),tail=result.then(()=>{},()=>{});this.lifecycleQueue.set(userId,tail);
     try{return await result;}finally{if(this.lifecycleQueue.get(userId)===tail)this.lifecycleQueue.delete(userId);}
   }
+  /** Accepted import preflight reads configuration without lending its bounded
+   * operation identity to runtime participants, watchers or credential effects. */
+  private async withExportEntry<T>(context:UserDataSubject,read:(entry:Entry)=>T|Promise<T>):Promise<T>{
+    const operation='credentialId' in context?this.options.authority.operation(context):undefined;
+    if(!operation)return read(await this.entry(context));
+    this.options.authority.assertOperationDomain(context as UserContext,'configuration','export');
+    const guard=()=>{this.assertSubject(context,'export');this.assertGeneration(context.userId,state.generation);};
+    const state=this.state(context.userId),existing=this.entries.get(context.userId);
+    // A session-owned initialization may still fail after logout. The accepted
+    // operation must neither await that session nor replace its runtime entry.
+    if(existing?.initialized&&existing.generation===state.generation){guard();return read(existing);}
+    const service=new ConfigService({path:join(this.path(context.userId),'mote.yaml'),initialDocument:{version:1,revision:0},persistInitialDocument:false,assertAccess:guard,watch:false});
+    service.register({id:'models',schema:this.resources.schema(),defaultValue:{profiles:[],selections:{}},fields:userModelFields,resolve:raw=>raw});
+    service.register({id:'modelPrices',schema:priceDomain,defaultValue:{items:[]},resolve:raw=>raw});
+    for(const [id,factory] of this.domains){const domain=factory(context);if(domain.id!==id||!domain.resolve)throw new ConfigServiceError('config_invalid');service.register({...domain,prepare:undefined});}
+    try{await service.initialize();guard();return await read({service,generation:state.generation,accessKey:'operation:'+operation.id,subject:context,initializing:Promise.resolve(),initialized:true});}
+    finally{await service.close();}
+  }
   readonly lifecycle:DomainLifecycle={
   // Personal archive import preserves live settings and operational authority.
   importUser:false,
     exportUser:async context=>{
-      this.assertSubject(context,'export');const entry=await this.entry(context);this.assertSubject(context,'export');
+      this.assertSubject(context,'export');return this.withExportEntry(context,async entry=>{this.assertSubject(context,'export');
       try{
       return archiveRead(context.userId,()=>{const document=entry.service.document();document.models=removeCredentials(entry.service.current('models'));
       // Registered extension projections already replace declared sensitive
@@ -459,7 +496,7 @@ export class Configurations {
         if(domain.fields.some(f=>f.sensitive))delete document[domain.id];
       }
       return {domain:'configuration',version:1,deploymentId:context.deploymentId,userId:context.userId,payload:{document,usage:this.usage(context.userId).items.map(portableUsageReceipt),credentialsIncluded:false,omittedDomains:entry.service.view().domains.filter(d=>!Object.hasOwn(document,d.id)).map(d=>d.id)}};});
-      }finally{if(!('credentialId' in context)){if(this.entries.get(context.userId)===entry)this.entries.delete(context.userId);await entry.service.close();}}
+      }finally{if(!('credentialId' in context)){if(this.entries.get(context.userId)===entry)this.entries.delete(context.userId);await entry.service.close();}}});
     },
     deleteUser:async(context,operationId)=>this.serializeLifecycle(context.userId,async()=>{
       this.assertSubject(context,'delete');if(!validScopeId(operationId))throw new ConfigServiceError('config_invalid');

@@ -1,3 +1,4 @@
+import {importTextEncoding,type ImportDecodeOutcome} from './import-text-decoding.js';
 import {decodeOriginal,documentChunks} from './document-decoder.js';
 import {validateImportManifest,ManifestValidationError} from './import-manifest-worker.js';
 import {createHash} from 'node:crypto';
@@ -12,33 +13,28 @@ import type {FormatTask} from './format-work.js';
 
 const fail=(code:string):never=>{throw Error(code);};
 function* bytes(path:string){privateFile(path);const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW),buffer=Buffer.alloc(65536);try{let size:number;while((size=readSync(fd,buffer,0,buffer.length,null))>0)yield buffer.subarray(0,size);}finally{closeSync(fd);}}
-function* textParts(path:string,limit:number){const decoder=new TextDecoder('utf-8',{fatal:true});let pending='',offset=0,emitted=false;
+function* textParts(path:string,limit:number,encoding='utf-8'){const decoder=new TextDecoder(encoding,{fatal:true});let pending='',offset=0,emitted=false;
  for(const chunk of bytes(path)){pending+=decoder.decode(chunk,{stream:true});while(pending.length>limit){let end=limit;if(pending.charCodeAt(end-1)>=0xd800&&pending.charCodeAt(end-1)<=0xdbff)end--;const text=pending.slice(0,end);yield {text,offset};emitted=true;offset+=text.length;pending=pending.slice(end);}}
  pending+=decoder.decode();if(pending.length||!emitted)yield {text:pending,offset};
 }
-function inspect(file:ArchivedFile,path:string){const hash=createHash('sha256');let total=0;for(const part of bytes(path)){hash.update(part);total+=part.length;}if(total!==file.sizeBytes||hash.digest('hex')!==file.hash)fail('original_changed');let characters=0;for(const part of textParts(path,24000))characters+=part.text.length;return characters;}
+function inspect(file:ArchivedFile,path:string){const hash=createHash('sha256');let total=0,encoding:ReturnType<typeof importTextEncoding>='utf-8';for(const part of bytes(path)){if(!total)encoding=importTextEncoding(part);hash.update(part);total+=part.length;}if(total!==file.sizeBytes||hash.digest('hex')!==file.hash)fail('original_changed');let characters=0;for(const part of textParts(path,24000,encoding)){if(part.text.includes('\u0000'))fail('unsupported_text_encoding');characters+=part.text.length;}return {characters,encoding};}
 async function plain(task:Extract<FormatTask,{kind:'plain'}>){
- privateFile(task.manifest,true);const fd=openSync(task.manifest,constants.O_WRONLY|constants.O_TRUNC|constants.O_NOFOLLOW),digest=createHash('sha256');let count=0,size=0,partial=false;const warnings:string[]=[];const samples:{title:string;text:string;kind:string;attachmentCount:number}[]=[];
+ privateFile(task.manifest,true);const fd=openSync(task.manifest,constants.O_WRONLY|constants.O_TRUNC|constants.O_NOFOLLOW),digest=createHash('sha256');let count=0,size=0,partial=false;const warnings:string[]=[],outcomes:ImportDecodeOutcome[]=[],samples:{title:string;text:string;kind:string;attachmentCount:number}[]=[];
+ const append=(item:ReturnType<typeof sourceItemSchema.parse>,path:string)=>{const line=Buffer.from(JSON.stringify({item,evidencePaths:[path],attachments:[]})+'\n');size+=line.length;if(++count>10000||size>32*1024*1024)fail('decoded_limit');writeSync(fd,line);digest.update(line);if(samples.length<12)samples.push({title:item.title,text:item.text.slice(0,1800),kind:'file',attachmentCount:0});};
+ const unsupported=(file:ArchivedFile,reason:string)=>{partial=true;outcomes.push({fileId:file.id,status:'unsupported',reason});warnings.push(file.relativePath+': '+reason);};
  try{for(const input of task.inputs){const file=input.file;
    if(/\.(pdf|docx|xlsx)$/i.test(file.name)){
     const raw=Buffer.concat(Array.from(bytes(input.path),part=>Buffer.from(part)));if(raw.length!==file.sizeBytes||createHash('sha256').update(raw).digest('hex')!==file.hash)fail('original_changed');
-    const decoded=await decodeOriginal(raw,/\.pdf$/i.test(file.name)?'application/pdf':/\.xlsx$/i.test(file.name)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/vnd.openxmlformats-officedocument.wordprocessingml.document');if(decoded.status!=='ready')fail('unsupported_format');
-    partial ||= decoded.coverage!=='full';
-    warnings.push(...decoded.warnings.map(warning=>file.name+': '+warning).slice(0,Math.max(0,30-warnings.length)));
-    let part=0;for(const {text,documentLocation} of documentChunks(decoded,24000)){
-     const item=sourceItemSchema.parse({externalId:file.relativePath+':'+part++,revision:createHash('sha256').update(JSON.stringify([file.hash,'document-v1'])).digest('hex'),observedAt:task.createdAt,title:file.name,text,kind:'file',layer:'original',mimeType:file.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown',originalMetadata:{decoder:'document-v1',...documentLocation,coverage:decoded.coverage,warnings:decoded.warnings}}});
-     const line=Buffer.from(JSON.stringify({item,evidencePaths:[input.path],attachments:[]})+'\n');size+=line.length;if(++count>10000||size>32*1024*1024)fail('decoded_limit');writeSync(fd,line);digest.update(line);if(samples.length<12)samples.push({title:item.title,text:item.text.slice(0,1800),kind:'file',attachmentCount:0});
-    }
-    const check=createHash('sha256');for(const part of bytes(input.path))check.update(part);if(check.digest('hex')!==file.hash)fail('original_changed');continue;
+    let decoded:Awaited<ReturnType<typeof decodeOriginal>>;try{decoded=await decodeOriginal(raw,/\.pdf$/i.test(file.name)?'application/pdf':/\.xlsx$/i.test(file.name)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/vnd.openxmlformats-officedocument.wordprocessingml.document');}catch{unsupported(file,'document_decode_unavailable');continue;}
+    if(decoded.status!=='ready'){unsupported(file,'document_decode_unsupported');continue;}partial ||= decoded.coverage!=='full';warnings.push(...decoded.warnings.map(warning=>file.name+': '+warning).slice(0,Math.max(0,30-warnings.length)));
+    let part=0;for(const {text,documentLocation} of documentChunks(decoded,24000))append(sourceItemSchema.parse({externalId:file.relativePath+':'+part++,revision:createHash('sha256').update(JSON.stringify([file.hash,'document-v1'])).digest('hex'),observedAt:task.createdAt,title:file.name,text,kind:'file',layer:'original',mimeType:file.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown',originalMetadata:{decoder:'document-v1',...documentLocation,coverage:decoded.coverage,warnings:decoded.warnings}}}),input.path);
+    const check=createHash('sha256');for(const part of bytes(input.path))check.update(part);if(check.digest('hex')!==file.hash)fail('original_changed');outcomes.push({fileId:file.id,status:'decoded',decoder:'document-v1',reason:'Deterministic document decoding retained the original text.'});continue;
    }
-   const totalCharacters=inspect(file,input.path);
-   let part=0;for(const {text,offset} of textParts(input.path,24000)){
-    const item=sourceItemSchema.parse({externalId:file.relativePath+':'+part++,revision:createHash('sha256').update(JSON.stringify([file.hash,'utf8-v2'])).digest('hex'),observedAt:task.createdAt,title:file.name,text,kind:'file',layer:'original',mimeType:file.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown',originalMetadata:{decoder:'utf8-v2',offset,length:text.length,totalCharacters}}});
-    const line=Buffer.from(JSON.stringify({item,evidencePaths:[input.path],attachments:[]})+'\n');size+=line.length;if(++count>10000||size>32*1024*1024)fail('decoded_limit');writeSync(fd,line);digest.update(line);if(samples.length<12)samples.push({title:item.title,text:item.text.slice(0,1800),kind:'file',attachmentCount:0});
-   }
-   // Detect an edit between the inspection and decoding passes before publication.
-   inspect(file,input.path);
-  }fsyncSync(fd);return {count,samples,hash:digest.digest('hex'),warnings,partial};
+   let inspected:ReturnType<typeof inspect>;try{inspected=inspect(file,input.path);}catch(error){if(error instanceof Error&&error.message==='original_changed')throw error;unsupported(file,'text_encoding_unsupported');continue;}
+   const {characters:totalCharacters,encoding}=inspected,decoder=encoding==='utf-8'?'utf8-v2':encoding+'-bom-v1';
+   let part=0;for(const {text,offset} of textParts(input.path,24000,encoding))append(sourceItemSchema.parse({externalId:file.relativePath+':'+part++,revision:createHash('sha256').update(JSON.stringify([file.hash,decoder])).digest('hex'),observedAt:task.createdAt,title:file.name,text,kind:'file',layer:'original',mimeType:file.mimeType,document:{fileId:file.id,path:file.relativePath,contentRole:'other',timeBasis:'unknown',originalMetadata:{decoder,offset,length:text.length,totalCharacters}}}),input.path);
+   inspect(file,input.path);outcomes.push({fileId:file.id,status:'decoded',decoder,reason:'Deterministic '+encoding+' decoding retained the original text.'});
+  }fsyncSync(fd);return {count,samples,hash:digest.digest('hex'),warnings,partial,outcomes};
  }finally{closeSync(fd);}
 }
 function zip(task:Extract<FormatTask,{kind:'zip'}>){

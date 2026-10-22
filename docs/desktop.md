@@ -104,7 +104,7 @@ default 以外的 profile 不注册系统默认登录项，避免 macOS 丢失�
 
 丢 redeem、poll、ACK 响应或退出后，可回到连接页点击「恢复中断的连接确认」，继续同一持久化 claim；应用重启不会自行切换账号。已保存 grant 不再 poll 已消耗请求。Central 重启或原请求过期后的 ACK `410 login_expired` 只有在 fresh self 仍精确有效时才能退休恢复记录，不能当作收到 ACK。撤销、禁用或身份不符时保留原配置并报告失败；新邀请可替换失效检查点。恢复只允许原连接或已经提交该精确 grant 的连接；切换账号、同地址换实例、旧页面和迟到网络回调不能借用新账号发布。
 
-队列按稳定 origin / deployment / account 归属。相同账号重新授权保留原队列、草稿、来源与隐私偏好；切换账号或实例会停止采集并打开自己的存储，原队列保留在原账号。回到 A 可继续 A 的待传，同 URL 的新实例不能接收旧实例队列。只有匹配的中央 ACK 才能移出原队列；配对本身不自动启用采集。设备邀请只授予该设备的 ingress / Actions / self / logout，普通私人 API、管理、其他凭据、ticket 和批准登录均拒绝。私人阅读和问答仍通过单独的用户名密码或明确 `central` purpose 浏览器登录授权，不提升设备凭据。
+队列按稳定 origin / deployment / account 归属。相同账号重新授权保留原队列、草稿、来源与隐私偏好；切换账号或实例会停止采集并打开自己的存储，原队列保留在原账号。回到 A 可继续 A 的待传，同 URL 的新实例不能接收旧实例队列。中央暂停来源时，采集与文件同步统一保留待传状态，恢复后可继续；真实身份冲突才阻塞对应条目。拆分上传逐批校验完整回执，并在发起下一批前持久记录已接受结果，后续网络或存储失败不会把先前成功项改回失败。只有匹配的中央 ACK 才能移出原队列；配对本身不自动启用采集。设备邀请只授予该设备的 ingress / Actions / self / logout，普通私人 API、管理、其他凭据、ticket 和批准登录均拒绝。私人阅读和问答仍通过单独的用户名密码或明确 `central` purpose 浏览器登录授权，不提升设备凭据。
 
 可复现当前配对验收：`node --import tsx apps/desktop/scripts/multiuser-pairing-runner.mjs`（先构建 Desktop）。它运行真实 Electron main / preload / renderer 和生产 host，使用生成账号/资料，只有系统凭据、原生二维码/文件选择与网络 I/O 使用替身。它不验证真实 Keychain、Swift Vision、摄像头、公网 HTTPS 或模型。准确结果见 [Desktop v2 配对验收](validation/multiuser-desktop-pairing.md)。
 

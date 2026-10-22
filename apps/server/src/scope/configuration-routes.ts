@@ -3,6 +3,7 @@ import {MODEL_FEATURES} from '@mote/shared/models';
 import {registerAuthenticatedRoute,registerUserRoute,type ScopedRuntime} from './http.js';
 import type {Configurations,UserConfigurationService} from './configuration.js';
 
+const automationIntent=z.array(z.string().max(100)).max(3).optional();
 const revision=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 /** Page editors and operator file edits use exactly the same domain registry,
  * queue and CAS. These endpoints cannot select a target account or file path. */
@@ -12,14 +13,14 @@ export function registerConfigurationRoutes(runtime:ScopedRuntime,configuration:
   const log=(event:string,fields:Parameters<NonNullable<typeof runtime.diagnostics>['record']>[1]={},level:'debug'|'info'|'warn'|'error'='info')=>runtime.diagnostics?.record(event,fields,level);
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/configuration',service:'configuration',handle:({services})=>services.get<UserConfigurationService>('configuration').view()});
   registerUserRoute(runtime,{scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration',handle:async({services,request,context})=>{
-    const input=z.object({revision,patches:z.record(z.unknown()),allowCredentialReuse:z.boolean().optional(),preserveRedactedSecrets:z.boolean().default(false)}).strict().parse(request.body);
-    const result=await services.get<UserConfigurationService>('configuration').update(input.patches,input.revision,input.allowCredentialReuse,input.preserveRedactedSecrets);
+    const input=z.object({revision,patches:z.record(z.unknown()),allowCredentialReuse:z.boolean().optional(),preserveRedactedSecrets:z.boolean().default(false),automationIntent}).strict().parse(request.body);
+    const result=await services.get<UserConfigurationService>('configuration').update(input.patches,input.revision,input.allowCredentialReuse,input.preserveRedactedSecrets,input.automationIntent);
     log('config.updated',{userId:context.userId,name:Object.keys(input.patches).join(','),revision:result.revision});
     return result;
   }});
   registerUserRoute(runtime,{scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration',handle:async({services,request,context})=>{
-    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false),allowCredentialReuse:z.boolean().optional()}).strict().parse(request.body),domain=z.object({domain:z.string().regex(/^[a-z][a-zA-Z0-9_-]*$/)}).strict().parse(request.params).domain;
-    const result=await services.get<UserConfigurationService>('configuration').replace(domain,input.value,input.revision,input.preserveRedactedSecrets,input.allowCredentialReuse);
+    const input=z.object({revision,value:z.unknown(),preserveRedactedSecrets:z.boolean().default(false),allowCredentialReuse:z.boolean().optional(),automationIntent}).strict().parse(request.body),domain=z.object({domain:z.string().regex(/^[a-z][a-zA-Z0-9_-]*$/)}).strict().parse(request.params).domain;
+    const result=await services.get<UserConfigurationService>('configuration').replace(domain,input.value,input.revision,input.preserveRedactedSecrets,input.allowCredentialReuse,input.automationIntent);
     log('config.domain_replaced',{userId:context.userId,name:domain,revision:result.revision});
     return result;
   }});

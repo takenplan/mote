@@ -160,7 +160,7 @@ test('Actions settings read and submit both configuration and device-authorizati
   await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
   revision=4;authorizationRevision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/actions?')));
   await act(async()=>d.querySelector<HTMLInputElement>('.action-settings input[type="checkbox"]')!.click());
-  assert.deepEqual(writes,[{revision:4,authorizationRevision:3,settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:['generated-phone']}}]);
+  assert.deepEqual(writes,[{revision:4,authorizationRevision:3,settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:['generated-phone']},automationIntent:['actions:enabled']}]);
 });
 test('Actions displays actual permission withdrawal after a failed runtime save and reloads both revisions',async t=>{
   const {root,d}=await fixture(t),writes:any[]=[];let authorizationRevision=2,reviewDeviceIds=['generated-phone'];
@@ -187,4 +187,11 @@ test('Actions timezone edits keep their original dual revisions across refresh a
   assert.equal(writes[0].revision,3);assert.equal(writes[0].authorizationRevision,2);assert.equal(writes[0].settings.timeZone,'Asia/Tokyo');
   assert.match(d.body.textContent!,/配置或相关操作状态已变化/);assert.equal(input.value,'Asia/Tokyo');
   await act(async()=>button(d,'重新读取并还原草稿').click());assert.equal(input.value,'UTC');
+});
+
+
+test('Actions dedicated switch shows actual authority and explicit enable intent for saved true defaults',async t=>{
+ const {root,d}=await fixture(t),writes:any[]=[];let enabled=false;
+ const api=actionApi((_path,init)=>{if(init?.method==='PUT'){const body=JSON.parse(String(init.body));writes.push(body);enabled=true;}return {...actionView(3,2,true),automation:{authorized:enabled,enabled,state:enabled?'active':'waiting_authorization'}};});
+ await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));const input=d.querySelector<HTMLInputElement>('.action-settings input[type="checkbox"]')!;assert.equal(input.checked,false);assert.match(d.body.textContent!,/自动发现未开启/);await act(async()=>input.click());assert.deepEqual(writes[0].automationIntent,['actions:enabled']);assert.equal(writes[0].settings.enabled,true);assert.equal(input.checked,true);assert.match(d.body.textContent!,/自动发现已开启/);
 });

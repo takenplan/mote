@@ -5,6 +5,7 @@ import {deferred,waitForState} from './fixtures/scoped-query-accounts.js';
 
 type Fixture=Awaited<ReturnType<typeof modelFixture>>;
 type User=Fixture['a'];
+const calendarRequest=(body:any)=>JSON.parse(typeof body.messages[0].content==='string'?body.messages[0].content:body.messages[0].content[0].text).responseMode==='calendar-extraction';
 const successful=(f:Fixture,user:User)=>f.read(db=>db.prepare("SELECT j.id,j.input,j.proof,j.task_id,e.attempts FROM ac_jobs j JOIN execution_steps e ON e.id=j.task_id WHERE j.user_id=? AND j.state='completed' ORDER BY j.id").all(user.userId));
 const position=(f:Fixture,user:User)=>f.read(db=>db.prepare('SELECT captures,materials FROM ac_discovery_state WHERE user_id=?').get(user.userId));
 async function settings(f:Fixture,user:User,enabled:boolean,timeZone='UTC'){
@@ -65,29 +66,47 @@ test('discovery lifecycle changes leave an unknown native issuance in reconcile-
  const approved=await f.ok(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{version:a.version,event:a.event,target:{deviceId:'same-device',calendarId:'same-calendar'}});
  assert.equal((await f.ok(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).mutationAllowed,true);
  await f.ok(f.a.token,'/api/actions/'+a.id+'/receipt','POST',{deviceId:'same-device',operationId:approved.operationId,status:'uncertain'});
- const before=successful(f,f.a),calls=f.requests.length;
+ const before=successful(f,f.a),calls=f.requests.length,nativeCalls=()=>f.read(db=>db.prepare('SELECT c.* FROM task_external_calls c JOIN ac_operations o ON o.user_id=c.user_id AND o.task_id=c.task_id WHERE o.user_id=? AND o.id=? ORDER BY c.issuance_id').all(f.a.userId,approved.operationId)),nativeBefore=nativeCalls();assert.equal(nativeBefore.length,1);
  await settings(f,f.a,false);await settings(f,f.a,true,'Asia/Shanghai');await watchSettled(f,f.a);await f.restart();await wake(f,f.a);
  assert.equal(f.requests.length,calls);assert.deepEqual(successful(f,f.a),before);
  const claim=await f.ok(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'});assert.equal(claim.status,'uncertain');assert.equal(claim.mutationAllowed,false);
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),1);
+ assert.deepEqual(nativeCalls(),nativeBefore,'Ordinary lifecycle changes cannot issue or rewrite the exact native call');
  assert.equal((await f.request(f.b.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,404);
 });
 
-test('an in-flight model result is fenced across re-enable and resumes only through the existing explicit retry',async t=>{
+test('an exactly cancelled in-flight model remains fenced and retry waits for its original physical cleanup',async t=>{
  const f=await modelFixture(t),entered=deferred(),release=deferred();t.after(()=>release.resolve());
- f.scripts.set('A',async(body,raw,res)=>{entered.resolve();await release.promise;respond(body,raw,res,'A');});
+ // Preserve an actual callback that ignores cancellation during cleanup.
+ // Harness itself honors cancellation, so a held HTTP server alone cannot
+ // attest that the host's physical callback is still unresolved.
+ const configuration=f.node.configuration!,withModel=configuration.withModel.bind(configuration);let heldCleanup=0;
+ configuration.withModel=async(lease,work)=>withModel(lease,async(settings,document)=>{
+  const exactPhysical=f.read(db=>Boolean(db.prepare("SELECT 1 FROM task_physical_calls p JOIN execution_steps e ON e.id=p.task_id AND e.user_id=p.user_id WHERE p.user_id=? AND p.snapshot_id=? AND p.state='active' AND e.kind='actions.extract'").get(f.a.userId,lease.snapshotId)));
+  try{return await work(settings,document);}finally{if(exactPhysical){heldCleanup++;await release.promise;}}
+ });t.after(()=>{configuration.withModel=withModel;});
+ f.scripts.set('A',async(body,raw,res)=>{if(calendarRequest(body)){entered.resolve();await release.promise;}respond(body,raw,res,'A');});
  await f.ingest(f.a,'A');await f.enable(f.a);await entered.promise;
  const tasks=await f.ok(f.a.token,'/api/tasks'),unit=tasks.items.find((task:any)=>task.kind==='actions.extract'&&task.state==='running');assert.ok(unit);
- const calls=f.requests.length;
- await settings(f,f.a,false);await settings(f,f.a,true,'Asia/Shanghai');await watchSettled(f,f.a);
+ const calendarCalls=()=>f.requests.filter(request=>calendarRequest(request.body)).length,calls=calendarCalls();
+ await f.ok(f.a.token,'/api/tasks/'+unit.id+'/cancel','POST',{});await settings(f,f.a,true,'Asia/Shanghai');await watchSettled(f,f.a);
  assert.equal((await f.ok(f.a.token,'/api/tasks/'+unit.id)).state,'cancelled');
- const physical=f.read(db=>db.prepare("SELECT * FROM task_physical_calls WHERE task_id=? AND state='active'").all(unit.id));assert.equal(physical.length,1,'the negative retry must hit the actual original active callback');
+ await waitForState(async()=>heldCleanup,count=>count===1,'actual original callback entered held cleanup');
+ const physical=f.read(db=>db.prepare("SELECT * FROM task_physical_calls WHERE task_id=? AND state='active'").all(unit.id));assert.equal(physical.length,1,'the negative retry must hit the actual original active callback');assert.equal(heldCleanup,1,'The actual owner callback remains held during uncooperative cleanup');
  const retryHistory=()=>f.read(db=>({rounds:db.prepare('SELECT * FROM execution_retry_rounds WHERE step_id=? ORDER BY id').all(unit.id),policy:db.prepare('SELECT * FROM execution_retry_policies WHERE step_id=?').get(unit.id),replays:db.prepare('SELECT p.* FROM task_external_policy_replays p JOIN task_external_calls c ON c.issuance_id=p.issuance_id WHERE c.task_id=? ORDER BY p.id').all(unit.id),confirmations:db.prepare('SELECT a.* FROM task_external_retry_confirmations a JOIN task_external_calls c ON c.issuance_id=a.issuance_id WHERE c.task_id=? ORDER BY a.confirmation_id').all(unit.id)})),priorHistory=retryHistory();
- const beforeRetry=await f.ok(f.a.token,'/api/tasks/'+unit.id),rejected=await f.request(f.a.token,'/api/actions/retry','POST',{});assert.equal(rejected.statusCode,409);assert.equal(rejected.json().error,'physical_cleanup_pending');assert.deepEqual(await f.ok(f.a.token,'/api/tasks/'+unit.id),beforeRetry,'a rejected retry cannot renew the round');assert.equal(f.requests.length,calls);assert.deepEqual(retryHistory(),priorHistory,'a rejected retry cannot rewrite policy, confirmation or round history');
+ const beforeRetry=await f.ok(f.a.token,'/api/tasks/'+unit.id),rejected=await f.request(f.a.token,'/api/actions/retry','POST',{});assert.equal(rejected.statusCode,409);assert.equal(rejected.json().error,'physical_cleanup_pending');assert.deepEqual(await f.ok(f.a.token,'/api/tasks/'+unit.id),beforeRetry,'a rejected retry cannot renew the round');assert.equal(calendarCalls(),calls);assert.deepEqual(retryHistory(),priorHistory,'a rejected retry cannot rewrite policy, confirmation or round history');
  release.resolve();await waitForState(async()=>f.read(db=>db.prepare('SELECT * FROM task_physical_calls WHERE id=?').get(physical[0].id)),row=>row?.state==='quiescent'&&Number(row.quiescent_at)>0,'exact original model callback cleanup completed');
  await waitForState(()=>f.ok(f.a.token,'/api/actions'),page=>!page.progress.running,'retired model run settled');
- assert.equal(f.requests.length,calls);assert.equal((await f.ok(f.a.token,'/api/actions')).items.length,0);
+ assert.equal(calendarCalls(),calls);assert.equal((await f.ok(f.a.token,'/api/actions')).items.length,0);
  f.scripts.delete('A');await f.ok(f.a.token,'/api/actions/retry','POST',{});
  await waitForState(()=>f.ok(f.a.token,'/api/tasks/'+unit.id),task=>task.state==='succeeded','explicit retry reuses the original interrupted unit');
  assert.equal((await f.ok(f.a.token,'/api/actions')).items.length,1);assert.equal((await f.ok(f.b.token,'/api/actions')).items.length,0);
+});
+
+
+test('ordinary discovery disable and timezone tuning let an admitted model drain its original snapshot without retry',async t=>{
+ const f=await modelFixture(t),entered=deferred(),release=deferred();t.after(()=>release.resolve());f.scripts.set('A',async(body,raw,res)=>{if(calendarRequest(body)){entered.resolve();await release.promise;}respond(body,raw,res,'A');});
+ await f.ingest(f.a,'A');await f.enable(f.a);await entered.promise;const tasks=await f.ok(f.a.token,'/api/tasks'),unit=tasks.items.find((task:any)=>task.kind==='actions.extract'&&task.state==='running');assert.ok(unit);
+ const snapshot=()=>f.read(db=>db.prepare('SELECT j.id,j.input,j.proof,j.task_id,t.model_receipt,e.input task_input FROM ac_jobs j JOIN user_tasks t ON t.user_id=j.user_id AND t.task_id=j.task_id JOIN execution_steps e ON e.user_id=t.user_id AND e.id=t.task_id WHERE j.user_id=? AND j.task_id=?').get(f.a.userId,unit.id)),before=snapshot(),count=f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_jobs WHERE user_id=?').get(f.a.userId)!.n)),rounds=f.read(db=>db.prepare('SELECT * FROM execution_retry_rounds WHERE step_id=? ORDER BY id').all(unit.id));assert.equal(JSON.parse(String(before!.input)).timeZone,'UTC');
+ await settings(f,f.a,false);await settings(f,f.a,true,'Asia/Shanghai');await watchSettled(f,f.a);assert.equal((await f.ok(f.a.token,'/api/tasks/'+unit.id)).state,'running');assert.deepEqual(snapshot(),before);assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM execution_retry_rounds WHERE step_id=? ORDER BY id').all(unit.id)),rounds);
+ release.resolve();await waitForState(()=>f.ok(f.a.token,'/api/tasks/'+unit.id),task=>task.state==='succeeded','same admitted model drains through ordinary configuration');assert.deepEqual(snapshot(),before);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_jobs WHERE user_id=?').get(f.a.userId)!.n)),count);assert.equal((await f.ok(f.a.token,'/api/actions')).items.length,1);assert.equal((await f.ok(f.b.token,'/api/actions')).items.length,0);assert.equal((await f.ok(f.a.token,'/api/actions')).settings.timeZone,'Asia/Shanghai');assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM execution_retry_rounds WHERE step_id=? ORDER BY id').all(unit.id)),rounds);
 });

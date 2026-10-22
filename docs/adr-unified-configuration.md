@@ -1,5 +1,11 @@
 # Unified YAML configuration and in-process ConfigService
 
+Current contract (2026-10-23): [Unified account host and user journeys](adr-unified-user-journeys.md)
+refines historical parity requirements. Preserve accepted user journeys and
+isolation; historical implementation structure is not an acceptance criterion.
+Automation intent, immutable admitted windows and accepted-operation authority
+follow that ADR. Unrelated credential, recovery and download decisions below remain.
+
 Date: 2026-10-14. Status: owner-requested configuration implementation;
 ownership partially superseded by M04, transaction contract retained.
 
@@ -74,11 +80,11 @@ reports a fixed error; invalid startup configuration stops startup.
 | `models.deployment`, `profiles`, feature defaults and model overrides | Prepare a registry; new requests use the new generation. Existing requests retain their old runtime and snapshot. |
 | Execution concurrency | Next admission; lowering a limit never kills work already admitted. |
 | Diagnostics enabled/debug/trace/level | Immediately reconfigure the existing writer. Log directory and size/count bounds require restart. |
-| Connector sync interval | Reconfigure scheduling. Connector modules, credentials, MCP access and OAuth transport require restart. |
+| Connector sync interval | Reconcile existing authorized future scheduling; admitted tasks keep their schedule snapshot. Credentials/transport changes remain authority-sensitive. See the current unified journey ADR. |
 | `processing.settings` and `processing.policy` | Plugin-aware validation, relevant task fingerprints, revocation and fences; existing completed results require explicit reprocessing. |
 | `perception` | Apply image permissions and behavior through the domain; concurrency affects later admission. OCR endpoint and profile are derived from `processing.policy`. Coupled image-page changes commit both domains atomically. |
 | `workflows` ordinary DAG lanes | File authority for concurrency/enabled; later admission uses new capacity, disabled lanes fence older in-flight publication. |
-| `actions.enabled/timeZone` | Runtime application; review-device authorization remains in the database and cannot be granted by YAML. |
+| `actions.enabled/timeZone` | Explicit owner enable coordinates durable discovery intent; timezone edits preserve its authority. YAML/default values cannot create owner grants. Actual waiting/active/stopped status is separate from saved enabled state. |
 | `memory` runtime schedule/budget | New admission windows use the new settings; active windows retain their pinned settings. |
 | Media workers, server listener, update transport, module loading, Codex executable/login path, embedding transport | Restart required. |
 | Storage write-encryption toggle | Immediately changes subsequent writes; existing representations remain readable. |

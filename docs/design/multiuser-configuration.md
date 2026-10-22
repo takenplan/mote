@@ -1,11 +1,9 @@
 # M04: Configuration, model resources and usage isolation
 
-M04 is based on M01 `443726d2a95ef55db9466d06aa44ea1061ca56e4`, including
-M00 `5031b754915d3fbba0dbe0c050b6d103a02966ef`. Its Draft PR targets only
-`codex/mote-multiuser-integration`. The integration branch remains at
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` while prerequisite PRs await
-integration. M02 owns private-data SQL and the startup signal registration fix;
-this module neither imports that domain nor modifies its startup path.
+Current configuration coordinates the account-bound product through
+[the unified user-journey ADR](../adr-unified-user-journeys.md). Historical M04
+validation records describe their original candidates; they are not evidence
+that a later assembled version has passed its remaining checks.
 
 ## Ownership and transaction
 
@@ -43,13 +41,45 @@ resources and restores the previous saved document using CAS. Concurrent file
 replacement makes uncertain cleanup fail closed. Provider exception text and
 guard exception payloads do not reach public errors.
 
+## Configuration and authorized future work
+
+Registered effects join ordinary domain preparation and synchronous publication.
+The account host wraps all derived SQL and non-model task admissions in one
+SQLite transaction. A later publication failure rolls them back together;
+resource retirement and existing-task wakeups run after commit. No second
+scheduler or serialized execution context is introduced. Whole-document
+publication effects run after domain snapshots and ordinary effects, regardless
+of awaitable resource apply ordering. Their task/receipt SQL shares the same
+transaction and reverse rollback; local aborts remain postcommit finalization.
+
+The host keeps the caller's original revision with the exact request snapshot.
+A dedicated editor cannot borrow a later revision for an older array. Connection
+and missing plugin declarations commit together. Opaque request provenance
+separates a current owner mutation from startup, operator reload and restore.
+Only a current ordinary owner session can create an automation grant. An actual
+false-to-true enable change is explicit; an unchanged true default needs a known
+`automationIntent` path such as `memory:lifecycle.working.enabled`. Browser
+editors send only deliberately toggled enable paths. An unrelated full-domain
+save cannot turn a serialized enabled default into authority.
+
+Each domain may expose safe `automation` facts alongside saved/effective values:
+path, authorized/enabled state and a waiting/paused/stopped reason. These facts
+are separate from a single admitted task's status. File reload can tune or pause
+existing authorized future work; it cannot create a grant. Current account epoch,
+configuration deletion and true resource withdrawal remain fences. Registered
+configuration callbacks capture an opaque account/runtime binding, so the file
+watcher can tune existing scheduling after the configuring session logs out.
+Retiring that exact runtime or changing the account epoch invalidates the binding;
+copying a context or retaining a logged-out session does not confer mutation or
+automation-admission authority.
+
 ## Production API and downstream use
 
 | Endpoint | Behavior |
 | --- | --- |
 | `GET /api/configuration` | Authenticated user's redacted saved/effective domain view and revision. |
-| `PATCH /api/configuration` | `{revision,patches:{domain:patch}}`, one ConfigService transaction. Instance domains are unregistered here and rejected. |
-| `PUT /api/configuration/:domain` | `{revision,value}`, a complete domain replacement. |
+| `PATCH /api/configuration` | `{revision,patches:{domain:patch},automationIntent?}`, one ConfigService transaction. Instance domains are unregistered here and rejected. |
+| `PUT /api/configuration/:domain` | `{revision,value,automationIntent?}`, a complete domain replacement. |
 | `POST /api/configuration/reload` | Reload the authenticated user's fixed YAML path through the same validation/CAS. |
 | `GET /api/models` | Shared immutable references plus that user's redacted personal profiles and selections. |
 | `GET /api/models/selection/:feature` | Credential-free selected-model lease receipt; no implicit fallback. |

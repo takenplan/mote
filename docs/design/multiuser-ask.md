@@ -74,19 +74,46 @@ CAS prevents a concurrent old run from publishing into a changed conversation.
 
 ## Periodic lifecycle authorization
 
+These rules follow [the unified user-journey ADR](../adr-unified-user-journeys.md),
+which supersedes freezing all future settings at policy creation.
+
 The former single-owner working/Insight lifecycle is restored with its existing
 settings and algorithms. `POST /api/ask-automations` is its ordinary-owner grant
 admission boundary: strict input selects `working` or `insights`, source scope and
-optional existing increments. It freezes the existing `memory.lifecycle` settings.
+optional existing increments. It establishes the selected future-work scope; each admitted window freezes its
+own `memory.lifecycle` settings.
 Working may select a conversation; Insight may select an exact time/device range.
 The default starts at the current journal watermark. `includeExisting:true` is an
 explicit authorization to consider retained earlier increments.
 
 This boundary is necessary because a configuration lifecycle subject or a
 capture/Memory task grant cannot authorize account-wide periodic queries. It adds
-no new model procedure. Configuration edits do not silently renew an old grant or
-change an admitted window. A stopped or restored definition requires explicit
-fresh admission. Pause/resume keeps the original M05 task, generation and grant;
+no new model procedure. Configuration edits update future-window intent without renewing a grant or
+changing an admitted window. The existing visible working/Insight switches call
+the same owner use case: explicit enable creates future-only built-in policies,
+disable stops new windows, and explicit enable resumes an API-paused built-in
+policy through its existing resume protocol. An explicit enable can also retry
+its cancelled or failed coordinator through the existing owner retry checks;
+unrelated edits cannot revive it. If the exact built-in coordinator has lost its
+task authority, deliberate enable admits a fresh future-only policy at the
+current journal watermark. It retires only that owner's old policy generation,
+keeps successful history and unknown-call journals, and aborts the retired local
+tasks only after the configuration transaction commits. A mismatched task link
+cannot authorize cancellation of unrelated work. An unchanged enabled default needs
+an explicit known enable path; defaults, file reload and archived values alone
+never grant periodic access. File reload can tune/pause an already admitted policy.
+API-specific source/range selections remain fixed; a settings edit cannot widen
+their scope. The policy settings describe future windows, while `Plan.settings`
+and child inputs preserve each active window snapshot. Missing or malformed
+scheduled window settings fail explicitly rather than borrowing current settings.
+The two settings policy IDs are reserved to the host; public policy admission
+rejects them before creating a policy or grant. A saved row at one of those IDs
+must also match the built-in kind and future-only, unfiltered definition before
+settings can adopt, resume or retire it. A mismatched historical row keeps its
+own input during unrelated tuning and causes an explicit identity conflict on
+visible enable. Owner inspection and controls remain available; settings never
+silently convert a custom policy into account-wide automation.
+A stopped or restored definition requires explicit fresh admission. Pause/resume keeps the original M05 task, generation and grant;
 explicit retry reuses the exact failed window and its original snapshots.
 
 One existing M05 coordinator waits persistently for each admitted policy. There

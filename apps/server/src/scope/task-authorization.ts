@@ -39,6 +39,16 @@ export class TaskAuthorization implements DurableIdentityVerifier {
   this.db.prepare('INSERT INTO task_authorizations VALUES(?,?,?,?,0)').run(grantId,taskId,row.user_id,row.authorization_epoch);
   return {grantId,userId:String(row.user_id),authorizationEpoch:Number(row.authorization_epoch)};
  }
+ /** Fixed configuration handoff. Account authority comes only from an existing
+  * admitted processing intent, never from a configuration factory subject. */
+ issueProcessingConfiguration(intentId:string,taskId:string){
+  const source=this.db.prepare(`SELECT a.grant_id FROM task_authorizations a JOIN execution_steps e ON e.id=a.task_id AND e.user_id=a.user_id
+   WHERE a.task_id=? AND e.state IN('waiting','running','blocked','failed','stale') AND
+   (e.kind='processing.pipeline' OR e.kind='processing.configuration' AND EXISTS(SELECT 1 FROM task_processing_config_handoffs h WHERE h.task_id=e.id AND h.user_id=e.user_id))`).get(intentId);
+  if(!source)throw new ScopeError('invalid_identity',401);const row=this.assert(String(source.grant_id)),grantId=randomUUID();
+  this.db.prepare('INSERT INTO task_authorizations VALUES(?,?,?,?,0)').run(grantId,taskId,row.user_id,row.authorization_epoch);
+  return {grantId,userId:String(row.user_id),authorizationEpoch:Number(row.authorization_epoch)};
+ }
  assert(grantId:string,userId?:string,epoch?:number){
   const row=this.validationStatement('SELECT * FROM task_authorizations WHERE grant_id=? AND revoked=0').get(grantId);
   if(!row||userId!==undefined&&row.user_id!==userId||epoch!==undefined&&row.authorization_epoch!==epoch)throw new ScopeError('invalid_identity',401);

@@ -8,6 +8,7 @@ import {meteredBody} from './upload-meter';
 import {TransportFailure,httpFailure} from './support';
 import {testConnection} from './connection';
 import {sameAccount} from './account';
+import {requireSourceRegistration,isUploadExpired} from './ingress-outcome';
 
 export const ACCOUNT_INGRESS_HEADERS={...DESKTOP_PROTOCOL_HEADERS,'X-Mote-Ingress-Version':'3'} as const;
 export const ingressKey=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -35,7 +36,7 @@ export function requireAccountReceipt(value:any,config:Pick<Config,'account'>,so
  }
  return value.captures;
 }
-export async function uploadAccountCaptures(config:Config,entries:readonly {event:CaptureEvent;image?:Buffer}[],signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<Map<string,number>>{
+export async function uploadAccountCaptures(config:Config,entries:readonly {event:CaptureEvent;image?:Buffer}[],signal?:AbortSignal,onBytes?:(bytes:number)=>void,onReceipt?:(id:string,status:number)=>void|Promise<void>):Promise<Map<string,number>>{
  signal?.throwIfAborted();
  const groups=new Map<string,typeof entries[number][]>();
  for(const entry of entries){const key=entry.event.deviceId+':'+entry.event.platform;groups.set(key,[...(groups.get(key)??[]),entry]);}
@@ -43,19 +44,31 @@ export async function uploadAccountCaptures(config:Config,entries:readonly {even
  for(const group of groups.values()){
   const first=group[0].event,sourceId='desktop-'+ingressKey([first.deviceId,first.platform]).slice(0,40);
   await ingressRequest(config,'/api/ingress/devices',{id:first.deviceId,name:first.deviceName,platform:first.platform},'POST',signal);
-  await ingressRequest(config,'/api/ingress/sources',{id:sourceId,name:first.deviceName,kind:'mote.desktop',deviceId:first.deviceId,platform:first.platform,retention:'archive'},'POST',signal);
+  const source={id:sourceId,name:first.deviceName,kind:'mote.desktop',deviceId:first.deviceId,platform:first.platform,retention:'archive'};
+  const register=async()=>requireSourceRegistration(await ingressRequest(config,'/api/ingress/sources',source,'POST',signal),source,true);
+  await register();
   // Batch identity includes the complete immutable payload. Prefix extensions
   // and split retries therefore cannot reuse a key for different bytes.
   const send=async(batch:typeof group):Promise<void>=>{
    signal?.throwIfAborted();const items=batch.map(entry=>({...entry.event,...(entry.image?{imageBase64:entry.image.toString('base64')}:{})})),batchId='capture-'+ingressKey(items);
+   let receipt:unknown,rejectedStatus:number|undefined;
    try{
-    const receipt=await ingressRequest(config,`/api/ingress/sources/${sourceId}/captures`,{batchId,items},'POST',signal,onBytes);
-    const captures=requireAccountReceipt(receipt,config,sourceId,batchId,batch.map(entry=>({id:entry.event.id})));for(const [i,entry] of batch.entries()){if(entry.image&&(captures[i].original?.hash!==createHash('sha256').update(entry.image).digest('hex')||captures[i].original?.bytes!==entry.image.length||captures[i].original?.mime!==entry.event.imageMime))throw Error('Account capture original receipt mismatch');result.set(entry.event.id,200);}
+    receipt=await ingressRequest(config,`/api/ingress/sources/${sourceId}/captures`,{batchId,items},'POST',signal,onBytes);
    }catch(error){
-    if(error instanceof TransportFailure&&[409,410,413].includes(error.httpStatus??0)&&batch.length>1){const middle=Math.ceil(batch.length/2);await send(batch.slice(0,middle));await send(batch.slice(middle));}
-    else if(error instanceof TransportFailure&&[409,410].includes(error.httpStatus??0))result.set(batch[0].event.id,error.httpStatus!);
-    else throw error;
+    if(!(error instanceof TransportFailure)||isUploadExpired(error)||![409,410,413].includes(error.httpStatus??0))throw error;
+    // Authenticated read-or-create preserves pause; failed confirmation never
+    // supplies enough evidence to quarantine a queued record.
+    if(error.httpStatus===409)await register();
+    if(batch.length>1){const middle=Math.ceil(batch.length/2);await send(batch.slice(0,middle));await send(batch.slice(middle));return;}
+    if(error.httpStatus===413)throw error;
+    rejectedStatus=error.httpStatus;
    }
+   if(rejectedStatus!==undefined){signal?.throwIfAborted();await onReceipt?.(batch[0].event.id,rejectedStatus);result.set(batch[0].event.id,rejectedStatus);return;}
+   const captures=requireAccountReceipt(receipt,config,sourceId,batchId,batch.map(entry=>({id:entry.event.id})));
+   // Validate the entire response, including originals, before any local effect.
+   for(const [i,entry] of batch.entries())if(entry.image&&(captures[i].original?.hash!==createHash('sha256').update(entry.image).digest('hex')||captures[i].original?.bytes!==entry.image.length||captures[i].original?.mime!==entry.event.imageMime))throw Error('Account capture original receipt mismatch');
+   // Local persistence failures must never enter the HTTP splitting catch.
+   for(const entry of batch){signal?.throwIfAborted();await onReceipt?.(entry.event.id,200);result.set(entry.event.id,200);}
   };
   if(config.packedUpload)await send(group);else for(const entry of group)await send([entry]);
  }

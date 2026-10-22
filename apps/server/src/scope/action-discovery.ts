@@ -8,7 +8,7 @@ import {proposedSchema} from '../action-contract.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
 import {ExecutionFailure} from '../execution-engine.js';
 import {askHash} from './ask-schema.js';
-import {PrivateDataError,missing} from './private-data-sql.js';
+import {PrivateDataError,missing,type PrivateSql} from './private-data-sql.js';
 import type {UserContext} from './context.js';
 import type {TaskRun} from './task-execution.js';
 import type {AskHost} from './ask.js';
@@ -38,14 +38,23 @@ export class ActionDiscovery{
   this.disposers.push(host.execution.register({kind:'actions.watch',pool:'actions.coordination',concurrency:()=>4,policy:EXECUTION_POLICIES.orchestration,parseInput:raw=>policyInput.parse(raw),authorizeInput:(context,raw)=>this.current(context,policyInput.parse(raw)),validate:step=>actionPolicyCurrent(host.db,step.ownership!.userId,{id:step.input.id,generation:step.input.generation},step.id),execute:run=>this.watch(run),classify}));
   this.disposers.push(host.execution.register({kind:'actions.extract',pool:'actions.models',concurrency:()=>1,policy:EXECUTION_POLICIES.modelCall,modelFeature:'chat',parseInput:raw=>modelInput.parse(raw),authorizeInput:(context,raw)=>{if(this.job(context,String(raw.jobId)).state==='completed')throw new PrivateDataError('conflict',409);},execute:run=>{const work=this.analyze(run);this.active.add(work);void work.finally(()=>this.active.delete(work)).catch(()=>{});return work;},commit:(run,value)=>this.publish(run,value as {result:QueryResult;compared:ActionRecord[]}),publicResult:()=>({retained:true}),classify}));
  }
- private current(context:UserContext,input:z.infer<typeof policyInput>){const state=this.host.state(context);if(state.deleted||state.policy_id!==input.id||state.generation!==input.generation||!JSON.parse(state.settings).enabled)throw new PrivateDataError('conflict',409);return state;}
- async enable(context:UserContext,initial?:{captures:number;materials:number}){const state=this.host.state(context),enabled=JSON.parse(state.settings).enabled;if(!enabled)return;const sql=this.host.sql(context);if(state.policy_task){const step=this.host.execution.forUser(context).get(state.policy_task);if(step.input===undefined&&['waiting','running'].includes(step.state)){const input=this.host.execution.engine.get(step.id)!.input;if(input.generation===state.generation)return;}}
-  const id=randomUUID();sql.transaction(()=>{if(state.policy_task)this.host.execution.engine.cancel(state.policy_task);sql.run('UPDATE ac_state SET policy_id=?,policy_task=NULL WHERE user_id=$user',id);const task=this.host.execution.forUser(context).submitSync({kind:'actions.watch',operationId:'workflow:actions:watch:'+id,input:{id,generation:state.generation}});sql.run('UPDATE ac_state SET policy_task=? WHERE user_id=$user',task.id);if(initial)sql.run("UPDATE user_tasks SET checkpoints=json_set(checkpoints,'$.captures',?,'$.materials',?) WHERE user_id=$user AND task_id=?",initial.captures,initial.materials,task.id);
-   // A new watch does not rediscover already consumed input. Keep unfinished
-   // owned units reachable for their existing retry protocol instead.
-   if(!initial)for(const row of sql.all("SELECT * FROM ac_jobs WHERE user_id=$user AND state<>'completed'") as Job[]){try{this.host.assertProof(context,parse(row.proof),parse<Plan>(row.input).sourceIds);this.rebind(context,row,{...parse<Plan>(row.input),generation:state.generation,timeZone:JSON.parse(state.settings).timeZone,parentTaskId:task.id});}catch(error){if(!(error instanceof PrivateDataError))throw error;}}
-  });
-  if(!initial)for(const row of sql.all("SELECT * FROM ac_jobs WHERE user_id=$user AND state<>'completed'") as Job[]){const plan=parse<Plan>(row.input);if(plan.semantic){try{await this.semantic.stage(context,plan.semantic,parse(row.proof),plan.sourceIds,plan.parentTaskId);}catch(error){if(!(error instanceof PrivateDataError))throw error;}}}
+ private current(context:UserContext,input:z.infer<typeof policyInput>){const state=this.host.state(context);if(state.deleted||state.policy_id!==input.id||state.generation!==input.generation)throw new PrivateDataError('conflict',409);return state;}
+ /** Admission is synchronous so ConfigService can publish the watch and its
+  * grant atomically. Only an explicit owner effect or owner retry calls it. */
+ ensureWatch(context:UserContext,initial?:{captures:number;materials:number}){
+  const state=this.host.state(context);if(!JSON.parse(state.settings).enabled)return;
+  if(state.policy_task){const task=this.host.execution.engine.get(state.policy_task);if(task&&['waiting','running'].includes(task.state)&&task.input.generation===state.generation&&task.input.id===state.policy_id)return;}
+  const sql=this.host.sql(context),id=randomUUID();sql.transaction(()=>{sql.run('UPDATE ac_state SET policy_id=?,policy_task=NULL WHERE user_id=$user',id);const task=this.host.execution.forUser(context).submitSync({kind:'actions.watch',operationId:'workflow:actions:watch:'+id,input:{id,generation:state.generation}});sql.run('UPDATE ac_state SET policy_task=? WHERE user_id=$user',task.id);if(initial)sql.run("UPDATE user_tasks SET checkpoints=json_set(checkpoints,'$.captures',?,'$.materials',?) WHERE user_id=$user AND task_id=?",initial.captures,initial.materials,task.id);});
+ }
+ wake(sql:PrivateSql){
+  const row=sql.get('SELECT generation,policy_id,policy_task FROM ac_state WHERE user_id=$user AND deleted=0'),task=row?.policy_task?this.host.execution.engine.get(String(row.policy_task)):undefined,input=policyInput.safeParse(task?.input);
+  if(task?.state==='waiting'&&task.kind==='actions.watch'&&task.ownership?.userId===sql.userId&&input.success&&input.data.id===row?.policy_id&&input.data.generation===row.generation&&this.host.execution.engine.isCurrentInputAuthority(task.id))this.host.execution.engine.retry(task.id,false);
+ }
+ async readiness(context:UserContext,features:readonly ('memory'|'chat')[]=['memory','chat']){for(const feature of features){try{await this.host.configuration.forUser(context).selection(feature);}catch{this.host.runtime.authority.assert(context);return {configured:false as const,reason:'actions_'+feature+'_model_required'};}}return {configured:true as const};}
+ async enable(context:UserContext,initial?:{captures:number;materials:number}){
+  this.ensureWatch(context,initial);
+  const state=this.host.state(context);if(!initial&&state.policy_task)for(const row of this.host.sql(context).all("SELECT * FROM ac_jobs WHERE user_id=$user AND state<>'completed'") as Job[]){try{const previous=parse<Plan>(row.input);this.host.assertProof(context,parse(row.proof),previous.sourceIds);this.rebind(context,row,{...previous,generation:state.generation,parentTaskId:state.policy_task});}catch(error){if(!(error instanceof PrivateDataError))throw error;}}
+  if(!initial)for(const row of this.host.sql(context).all("SELECT * FROM ac_jobs WHERE user_id=$user AND state<>'completed'") as Job[]){const plan=parse<Plan>(row.input);if(plan.semantic){try{await this.semantic.stage(context,plan.semantic,parse(row.proof),plan.sourceIds,plan.parentTaskId);}catch(error){if(!(error instanceof PrivateDataError))throw error;}}}
  }
  /** Fixed host handoff from the newly password-authorized recovery task.
   * Preserve canonical successful cursors and skip all backup-era pending input. */
@@ -54,7 +63,7 @@ export class ActionDiscovery{
   if(sql.get("SELECT name FROM sqlite_master WHERE name='ac_discovery_state' AND EXISTS(SELECT 1 FROM ac_state WHERE user_id=$user)"))sql.run('INSERT INTO ac_discovery_state VALUES($user,?,?) ON CONFLICT(user_id) DO UPDATE SET captures=MAX(captures,excluded.captures),materials=MAX(materials,excluded.materials)',boundary.captures,boundary.materials);
   await this.enable(context,boundary);assertFuture();
  }
- private job(context:UserContext,id:string){const row=this.host.sql(context).get('SELECT * FROM ac_jobs WHERE user_id=$user AND id=?',id) as Job|undefined;if(!row)throw missing();const plan=parse<Plan>(row.input),state=this.host.state(context);if(plan.parentTaskId&&!['waiting','running'].includes(this.host.execution.engine.get(plan.parentTaskId)?.state??''))throw new PrivateDataError('conflict',409);if(state.generation!==plan.generation||!JSON.parse(state.settings).enabled)throw new PrivateDataError('conflict',409);this.host.assertProof(context,parse(row.proof),plan.sourceIds);return row;}
+ private job(context:UserContext,id:string){const row=this.host.sql(context).get('SELECT * FROM ac_jobs WHERE user_id=$user AND id=?',id) as Job|undefined;if(!row)throw missing();const plan=parse<Plan>(row.input),state=this.host.state(context);if(plan.parentTaskId&&!['waiting','running'].includes(this.host.execution.engine.get(plan.parentTaskId)?.state??''))throw new PrivateDataError('conflict',409);if(state.generation!==plan.generation)throw new PrivateDataError('conflict',409);this.host.assertProof(context,parse(row.proof),plan.sourceIds);return row;}
  private rebind(context:UserContext,row:Job,plan:Plan){const sql=this.host.sql(context),previous=parse<Plan>(row.input);if(previous.generation===plan.generation&&previous.parentTaskId===plan.parentTaskId)return;
   if(row.task_id){const task=this.host.execution.forUser(context).get(row.task_id);
    // Never replace an issued/unknown task with a newly minted task. An in-flight
@@ -76,7 +85,8 @@ export class ActionDiscovery{
  async stage(context:UserContext,records:readonly CaptureRecord[],sourceIds?:readonly string[],parentTaskId?:string,semantic?:Plan['semantic']){
   sourceIds=sourceIds===undefined?undefined:Object.freeze([...new Set(sourceIds)].sort());
   const state=this.host.state(context),settings=JSON.parse(state.settings);
-  if(!settings.enabled)throw new PrivateDataError('conflict',409);
+  if(!settings.enabled)throw new ExecutionFailure('waiting','actions_paused',15000,{executionStarted:false});
+  const readiness=await this.readiness(context,[semantic?'memory':'chat']);if(!readiness.configured)throw new ExecutionFailure('waiting',readiness.reason,15000,{executionStarted:false});
   if(semantic){await this.enqueuePlan(context,{ranges:semantic.ranges,timeZone:settings.timeZone,generation:state.generation,...(parentTaskId?{parentTaskId}:{}),...(sourceIds?{sourceIds:[...sourceIds]}:{}),semantic});return;}
   // A formal Material is one existing interpretation unit. Keep neighbouring
   // short originals together, within the original extraction window budget.
@@ -92,7 +102,7 @@ export class ActionDiscovery{
   flush();
   for(const ranges of batches)await this.enqueuePlan(context,{ranges,timeZone:settings.timeZone,generation:state.generation,...(parentTaskId?{parentTaskId}:{}),...(sourceIds?{sourceIds:[...sourceIds]}:{})});
  }
- private async watch(run:TaskRun){const input=policyInput.parse(run.task.input);const policy=this.current(run.context,input);if(policy.policy_task!==run.task.id)throw new PrivateDataError('conflict',409);const sql=this.host.sql(run.context),repo=this.host.evidence(run.context);run.grant.commit(()=>sql.run('INSERT OR IGNORE INTO ac_discovery_state(user_id) VALUES($user)'));const position=sql.get('SELECT captures,materials FROM ac_discovery_state WHERE user_id=$user')!,captureAfter=Number(position.captures),materialAfter=Number(position.materials);
+ private async watch(run:TaskRun){const input=policyInput.parse(run.task.input);const policy=this.current(run.context,input);if(!JSON.parse(policy.settings).enabled)throw new ExecutionFailure('waiting','actions_paused',15000,{executionStarted:false});if(policy.policy_task!==run.task.id)throw new PrivateDataError('conflict',409);const sql=this.host.sql(run.context),repo=this.host.evidence(run.context);run.grant.commit(()=>sql.run('INSERT OR IGNORE INTO ac_discovery_state(user_id) VALUES($user)'));const position=sql.get('SELECT captures,materials FROM ac_discovery_state WHERE user_id=$user')!,captureAfter=Number(position.captures),materialAfter=Number(position.materials);
   const checkpoint=(kind:'captures'|'materials',value:number)=>{run.grant.commit(()=>sql.run(`UPDATE ac_discovery_state SET ${kind}=max(${kind},?) WHERE user_id=$user`,value));run.checkpoint.write(kind,value);};
   const stageOriginal=async(id:string)=>{if(sql.get("SELECT 1 FROM pd_captures c LEFT JOIN pd_sources s ON s.user_id=c.user_id AND s.id=c.source_id WHERE c.user_id=$user AND c.id=? AND (json_extract(s.json,'$.kind')='coding-agent' OR json_type(c.json,'$.provenance.document.coding')='object')",id))return false;let record:CaptureRecord;try{record=repo.evidence([id])[0]!;}catch(error){if(!(error instanceof PrivateDataError))throw error;return false;}const segment=this.semantic.segment(run.context,record);await this.stage(run.context,[record],undefined,run.task.id,segment);return true;};
   const rows=sql.all('SELECT rowid,id FROM pd_captures WHERE user_id=$user AND rowid>? ORDER BY rowid LIMIT 200',captureAfter);for(const row of rows){run.grant.assert();this.current(run.context,input);const file=sql.get('SELECT o.id,f.format FROM ig_originals o LEFT JOIN mp_original_formats f ON f.user_id=o.user_id AND f.original_id=o.id WHERE o.user_id=$user AND o.capture_id=?',row.id);if(!file||file.format==='source-item')await stageOriginal(String(row.id));run.grant.assert();this.current(run.context,input);}if(rows.length)checkpoint('captures',Number(rows.at(-1)!.rowid));
@@ -108,6 +118,7 @@ export class ActionDiscovery{
  private async prepareRelationship(run:TaskRun){
   const id=String(run.task.input.jobId),job=this.job(run.context,id),plan=parse<Plan>(job.input);if(job.task_id!==run.task.id||!plan.semantic)throw missing();
   const shared=this.semantic.read(run.context,plan.semantic);if(shared.consumed||!shared.products.actionCues.length)return true;
+  const readiness=await this.readiness(run.context,['chat']);if(!readiness.configured)throw new ExecutionFailure('waiting',readiness.reason,15000,{executionStarted:false});
   await this.host.execution.forUser(run.context).submit({kind:'actions.extract',operationId:'workflow:actions:relate:'+id,input:{jobId:id},dependencies:[run.task.id]},task=>{run.grant.assert();this.job(run.context,id);this.host.sql(run.context).run('UPDATE ac_jobs SET task_id=? WHERE user_id=$user AND id=?',task.id,id);});return false;
  }
 

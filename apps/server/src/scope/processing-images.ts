@@ -72,17 +72,11 @@ export function registerProcessingImages(runtime:ScopedRuntime,db:DatabaseSync,h
    if(product.kind==='image'&&product.name==='understanding'&&typeof payload==='object'&&payload!==null&&'format' in payload){const interpretation=imageProductSchema.parse(payload);return {...product,text:interpretation.interpretation.text,interpretation};}
    return {...product,text:transcriptSchema.parse(payload).segments.map(segment=>segment.text).join('\n')};
   });
-  // Exact material revision receipts only; a completed extraction alone never
-  // implies Memory completion. Read the existing scoped M07 job for live state.
+  // Memory owns exact intake/task/job readiness. A reserved job locator does
+  // not imply that model prerequisites have admitted a real Memory job yet.
   const materials=[...(status.materialId?[{id:status.materialId,revision:status.revision!}]:[]),...status.derivations.map(d=>({id:d.materialId,revision:d.revision}))];
   const memoryService=runtime.services.forUser(context).get<ReturnType<MemoryHost['forUser']>>('memory');
-  const memory=materials.flatMap(material=>sql.all('SELECT i.state,i.job_id FROM mm_intakes i WHERE i.user_id=$user AND i.material_id=? AND i.revision=? AND i.revoked=0',material.id,material.revision).map(receipt=>{
-   if(!receipt.job_id)return {state:String(receipt.state)==='pending'?'waiting':String(receipt.state),count:0};
-   const job=memoryService.job(String(receipt.job_id)),steps=Object.values(job.tasks),failure=steps.find(t=>['blocked','failed','cancelled','stale'].includes(t.state));
-   const state=!job.current?'stale':job.state==='paused'?'paused':failure?.state??(job.state==='committed'?'completed':steps.some(t=>t.state==='running')?'running':job.state==='awaiting_context'?'waiting_for_input':'waiting');
-   const batches=sql.all('SELECT prepared FROM mm_job_batches WHERE user_id=$user AND job_id=?',job.id),count=state==='completed'?batches.reduce((n,b)=>n+(b.prepared?JSON.parse(String(b.prepared)).items?.length??0:0),0):0;
-   return {state,count,error:failure?.failure?.code};
-  }));
+  const memory=materials.flatMap(material=>memoryService.materialIntakeProgress(material.id,material.revision));
   runtime.authority.assert(context);const current=bind(context,id);if(current.proof!==proof)throw new PrivateDataError('conflict',409);
   return {proof,original:{state:status.original.available===false?'unavailable':'ready'},automatic:settings.automatic||tasks.length>0,ocrEnabled,understandingEnabled,policy:status.appliedPolicy,wait:service.cancellation(ref).wait,confirmUnknownRequired:service.cancellation(ref).confirmUnknownRequired,canCancel:service.cancellation(ref).canCancel,processingRequired:status.processingRequired,enabled:settings.enabled,jobs,products,materials:materials.map(m=>({id:m.id,state:'indexed'})),memory};
  };

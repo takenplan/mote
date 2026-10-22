@@ -47,7 +47,7 @@ export function frozenMemoryCatalogMembers(data:ScopedMemoryData,input:ScopedMem
  if(!input.ranges)throw restricted();
  const records=anchors(data,input.ranges.map(range=>range.id));
  return input.ranges.map(range=>{
-  const record=records.get(range.id),pin=input.inputs.find(pin=>pin.id===range.id);
+  const record=records.get(range.id),pin=[...input.inputs,...input.readInputs??[]].find(pin=>pin.id===range.id);
   if(!record||!pin||record.hash!==pin.hash)throw restricted();
   return {key:memoryHash([range,record.hash,input.strategy,memoryEvaluationTime(input,range.id)]),...range,fingerprint:record.hash,materialRef:'material:'+record.material_id+'@'+record.material_revision,sourceId:record.source_id,contextTime:record.context_at,evaluationTime:memoryEvaluationTime(input,range.id),...(record.attribution?{attributionContext:attributionContextSchema.parse(JSON.parse(record.attribution))}:{}),state:'pending',memoryIds:[]};
  });

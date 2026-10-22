@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {importSourceIdentity} from './import-identity.js';
 import {z} from 'zod';
 import {importStatusSchema,importReviewDecisionSchema} from '@mote/shared';
 import {archivedImportFileSchema} from '../archive-contract.js';
@@ -13,7 +13,7 @@ const invalid=()=>new PrivateDataError('invalid_data');
 /** Portable journal data contains no task IDs, confirmation or authority epoch.
  * Restoring a preview requires new owner preparation/confirmation. */
 export function importJobArchive(sql:PrivateSql){return {
- export:()=>sql.all('SELECT fingerprint,json FROM mp_import_jobs WHERE user_id=$user ORDER BY id').map(row=>{
+ export:()=>sql.all("SELECT fingerprint,json FROM mp_import_jobs WHERE user_id=$user AND coalesce(json_extract(json,'$.deleted'),0)=0 ORDER BY id").map(row=>{
   const {processing,generation,authorizationEpoch,manifest,confirmed,prepareTask,commitTask,recordsProcessed,sourcePackRevision,excludedFiles,sourceFileIds,containers,...value}=JSON.parse(String(row.json));
   return {fingerprint:String(row.fingerprint),generation,processing,job:job.parse(value),...(manifest?{manifest}:{}),...(sourcePackRevision?{sourcePackRevision}:{}),...(sourceFileIds?{sourceFileIds}:{}),...(containers?{containers}:{}),...(excludedFiles?{excludedFiles}:{}),records:sql.all('SELECT json FROM mp_import_records WHERE user_id=$user AND job_id=? AND generation=? ORDER BY position',value.id,generation).map(row=>String(row.json))};
  }),
@@ -22,7 +22,7 @@ export function importJobArchive(sql:PrivateSql){return {
   for(const entry of entries){
    if(entry.records.reduce((n,line)=>n+Buffer.byteLength(line),0)>32*1024*1024)throw invalid();
    for(const file of entry.job.files){const parent=sql.get('SELECT hash,json FROM ig_archive_files WHERE user_id=$user AND id=?',file.id);if(!parent||parent.hash!==file.hash||JSON.stringify(archivedImportFileSchema.parse(JSON.parse(String(parent.json))))!==JSON.stringify(file))throw invalid();}
-   if(entry.job.sourceId!=='import.'+createHash('sha256').update(JSON.stringify(entry.job.files.filter(file=>!entry.sourceFileIds||entry.sourceFileIds.includes(file.id)).map(file=>[file.relativePath,file.hash]).sort())).digest('hex').slice(0,32))throw invalid();
+   if(entry.job.sourceId!==importSourceIdentity(entry.job.files.filter(file=>!entry.sourceFileIds||entry.sourceFileIds.includes(file.id)),entry.job.id))throw invalid();
    if(entry.sourceFileIds&&(new Set(entry.sourceFileIds).size!==entry.sourceFileIds.length||entry.sourceFileIds.some(id=>!entry.job.files.some(file=>file.id===id))))throw invalid();
    if(Object.keys(entry.containers??{}).some(id=>!entry.job.files.some(file=>file.id===id)))throw invalid();
    if(entry.job.media?.some(item=>!entry.job.files.some(file=>file.id===item.fileId))||entry.excludedFiles?.some(item=>!entry.job.files.some(file=>file.id===item.fileId)))throw invalid();
@@ -30,7 +30,7 @@ export function importJobArchive(sql:PrivateSql){return {
    for(const record of records)if([...record.evidencePaths,...record.attachments].some(id=>!entry.job.files.some(file=>file.id===id)))throw invalid();
    if(entry.job.progress.processed>entry.job.progress.total||entry.job.progress.imported+entry.job.progress.duplicates!==entry.job.progress.processed||entry.job.preview&&entry.job.preview.count!==entry.job.progress.total)throw invalid();
    if(entry.job.dispositions?.items.some(item=>!entry.job.files.some(file=>file.id===item.fileId&&file.relativePath===item.path)))throw invalid();
-   const prior=sql.get('SELECT fingerprint FROM mp_import_jobs WHERE user_id=$user AND id=?',entry.job.id);if(prior&&(!merge||prior.fingerprint!==entry.fingerprint))throw new PrivateDataError('conflict',409);
+   const prior=sql.get('SELECT fingerprint,json FROM mp_import_jobs WHERE user_id=$user AND id=?',entry.job.id);if(prior&&(JSON.parse(String(prior.json)).deleted||!merge||prior.fingerprint!==entry.fingerprint))throw new PrivateDataError('conflict',409);
   }
   for(const entry of entries){
    if(sql.get('SELECT id FROM mp_import_jobs WHERE user_id=$user AND id=?',entry.job.id))continue;

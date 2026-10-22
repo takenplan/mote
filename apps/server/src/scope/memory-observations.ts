@@ -6,6 +6,23 @@ import type {ScopedMemoryData} from './memory-data.js';
 import {intakeReceiptSchema} from './memory-intake.js';
 import {integrationCandidates,integrationDueAt,integrationWindowSchema} from './memory-integration.js';
 
+export type MaterialIntakeProgress={state:string;count:number;error?:string};
+type ObservedMemoryJob={id:string;current:boolean;state:string;tasks:Record<string,{state:string;failure?:{code?:string}|null}>};
+/** A reserved intake job identity is not proof that the Memory job exists.
+ * Consumers read real intake/task facts until actual job admission succeeds. */
+export function materialIntakeProgress(data:ScopedMemoryData,context:UserContext,execution:TaskExecution,materialId:string,revision:string,job:(id:string)=>ObservedMemoryJob):MaterialIntakeProgress[]{
+ return data.sql.all('SELECT state,task_id,job_id FROM mm_intakes WHERE user_id=$user AND material_id=? AND revision=? AND revoked=0',materialId,revision).map(receipt=>{
+  if(!receipt.job_id||!data.sql.get('SELECT 1 FROM mm_jobs WHERE user_id=$user AND id=?',receipt.job_id)){
+   const task=receipt.task_id?execution.forUser(context).observe(String(receipt.task_id)):undefined;
+   return {state:receipt.state!=='pending'?String(receipt.state):task&&task.state!=='succeeded'?task.state:'waiting',count:0,error:receipt.state==='pending'?task?.reason:undefined};
+  }
+  const current=job(String(receipt.job_id)),steps=Object.values(current.tasks),failure=steps.find(task=>['blocked','failed','cancelled','stale'].includes(task.state));
+  const state=!current.current?'stale':current.state==='paused'?'paused':failure?.state??(current.state==='committed'?'completed':steps.some(task=>task.state==='running')?'running':current.state==='awaiting_context'?'waiting_for_input':'waiting');
+  const batches=data.sql.all('SELECT prepared FROM mm_job_batches WHERE user_id=$user AND job_id=?',current.id),count=state==='completed'?batches.reduce((total,batch)=>total+(batch.prepared?JSON.parse(String(batch.prepared)).items?.length??0:0),0):0;
+  return {state,count,error:failure?.failure?.code};
+ });
+}
+
 /** Read only the existing per-owner receipts and M05 facts. No synthetic global
  * lifecycle, model/provider call, admission, cursor write or scheduler. */
 export function memoryObservationPage(data:ScopedMemoryData,context:UserContext,execution:TaskExecution,key:string,raw:unknown){
@@ -14,12 +31,12 @@ export function memoryObservationPage(data:ScopedMemoryData,context:UserContext,
  return {scope:'account' as const,items:page.map(row=>{
   const kind=String(row.kind) as 'extraction'|'consolidation',createdAt=String(row.created_at);let pendingChanges:number,dueAt:number;
   if(kind==='extraction'){
-   const receipt=intakeReceiptSchema.parse(JSON.parse(String(row.json))),policy=receipt.settings.lifecycle.extraction;
-   pendingChanges=row.state==='pending'?Number(data.sql.get("SELECT count(*) n FROM mm_intakes WHERE user_id=$user AND revoked=0 AND state='pending' AND json=?",row.json)!.n):0;dueAt=Date.parse(createdAt)+(policy.maxWaitHours??policy.intervalHours)*3600000;
+   const receipt=intakeReceiptSchema.parse(JSON.parse(String(row.json)));
+   pendingChanges=row.state==='pending'?Number(data.sql.get("SELECT count(*) n FROM mm_intakes WHERE user_id=$user AND revoked=0 AND state='pending' AND json=?",row.json)!.n):0;dueAt=Date.parse(createdAt);
   }else{
    const window=integrationWindowSchema.parse(JSON.parse(String(row.json)));
-   pendingChanges=row.state==='complete'?0:window.selection?.length??integrationCandidates(data,window).length;dueAt=integrationDueAt(createdAt,window);
+   pendingChanges=row.state==='complete'?0:window.selection?.length??integrationCandidates(data,window,String(row.id)).length;dueAt=integrationDueAt(createdAt,window);
   }
-  return {id:String(row.id),kind,state:String(row.state),revoked:Boolean(row.revoked),createdAt,dueAt:new Date(dueAt).toISOString(),pendingChanges,jobId:row.job_id?String(row.job_id):null,task:row.task_id?execution.forUser(context).observe(String(row.task_id)):null};
+  return {id:String(row.id),kind,state:String(row.state),...(kind==='extraction'&&intakeReceiptSchema.parse(JSON.parse(String(row.json))).limitation?{limitation:intakeReceiptSchema.parse(JSON.parse(String(row.json))).limitation}:{}),revoked:Boolean(row.revoked),createdAt,dueAt:new Date(dueAt).toISOString(),pendingChanges,jobId:row.job_id?String(row.job_id):null,task:row.task_id?execution.forUser(context).observe(String(row.task_id)):null};
  }),nextCursor:rows.length>input.limit&&last?cursor.encodeCompact(identity,{at:String(last.created_at),kind:String(last.kind),id:String(last.id)}):null};
 }
