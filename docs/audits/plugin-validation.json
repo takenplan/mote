@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-07",
+  "timezone": "Asia/Shanghai",
+  "auditCommit": "c72f9ae7cc03e03e92c1905e0791d3a6438d23f5",
+  "baseline": "/Users/utopiafar/.codex/worktrees/df3d/mote",
+  "isolation": "git archive to temporary checkout; external dependency symlinks; workspace packages rebuilt from audited sources",
+  "realPersonalDataUsed": false,
+  "checks": [
+    {
+      "command": "npm run build:libs",
+      "result": "pass"
+    },
+    {
+      "command": "node --import tsx --test apps/server/test/source-recipe-integration.test.ts apps/server/test/community-plugin.test.ts apps/server/test/material-processing.test.ts apps/server/test/feature-packs.test.ts apps/web/test/feature-host.test.ts",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern=\"third-party recording manifest|trusted deployment connector modules\" apps/server/test/connectors.test.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "command": "MOTE_AUDIT_ROOT=<isolated checkout> node --import tsx --test docs/audits/plugin-contract-probe.mjs",
+      "passed": 4,
+      "failed": 0,
+      "meaning": "Reproduces baseline gaps, not fixes"
+    },
+    {
+      "command": "node /tmp/mote-cordis-contract.mjs",
+      "assertionCases": 4,
+      "result": "pass",
+      "executor": "cordis subagent"
+    },
+    {
+      "command": "node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext docs/audits/plugin-contract-draft.ts",
+      "result": "pass"
+    }
+  ],
+  "notPerformed": [
+    "check:local",
+    "full repository test suite",
+    "new four product module E2Es",
+    "actual browser/visual QA",
+    "Android build",
+    "physical device capture",
+    "live model",
+    "real external account sync or writes",
+    "no-restart code installation"
+  ],
+  "initialSubagentAttempt": {
+    "result": "loader error: missing tsx in baseline worktree",
+    "testBodiesExecuted": false
+  },
+  "productCodeChanged": false,
+  "commitOrPrCreated": false
+}
