@@ -324,6 +324,21 @@ Status: implementation-complete with the named focused/consumer evidence below; 
     repairs are implementation-complete; root now owns one frozen final affected
     plan and the named current-entry E2E checks before PR and Dev delivery.
 
+41. The first frozen full affected invocation stopped before the Server groups:
+    `2026-10-22T20-15-00-859Z-ae49fbdc-5557-4f3a-a861-419ea356e79a`.
+    Preflight/build checks completed, but Desktop's existing native-host fixture
+    compiled Desktop during its suite, changing previously absent/stale `dist`
+    inputs. The driver correctly invalidated Desktop evidence and stopped with
+    `check_inputs_changed`; later groups are **UNRUN**. Cleanup was confirmed.
+    Desktop diagnostics also exposed one strict mock-argument mismatch: an existing
+    storage failure log includes sanitized `{detail: 'Error'}` metadata. Root
+    prospectively approved the exact three-argument assertion, retaining corrupt
+    image inputs, both positions, no-network, queue, attempt and deadline checks.
+    No production code or input guard changed. After explicit Desktop compilation,
+    the two targeted cases passed with matching before/after task identities;
+    the other 60 cases in that file were intentionally not selected. A resumed
+    full affected invocation will reuse only eligible original passed-task receipts.
+
 ## Audit issue coverage ledger
 
 This ledger tracks the original audit scope; implementation is not a final
