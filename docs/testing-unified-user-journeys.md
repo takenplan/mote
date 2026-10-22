@@ -49,18 +49,58 @@ it as retained algorithm/history coverage only; it cannot qualify this refactor'
 current production assembly. The final qualification must also use current host
 fixtures and hidden browser entry points, selected after module/seam repairs:
 
-- `multiuser-portable-import.test.ts`: real accepted import/logout, cancel, account
-  disable, restart, same-vault deletion and all-domain rollback.
-- Desktop `source-account-retry.test.ts`: actual Central ingress with durable
-  source queue, receipt identity, pause, retry, restart and A/B isolation.
-- Web `parity-configuration-browser.cjs` and selected
-  `multiuser-integrated-browser.cjs` journeys: actual current production host plus
-  built Web, generated accounts/model responses and hidden browser. Added controls
-  cover visible working-policy enable/disable, dedicated/generic Actions parity,
-  account isolation and diagnostics navigation to existing administrator settings.
-- Compiled current-host attachment-to-personal-export regression when affected
-  Material asset eligibility is qualified.
+- [apps/server/test/multiuser-portable-import.test.ts](../apps/server/test/multiuser-portable-import.test.ts):
+  real accepted import/logout, cancel, account disable, restart, same-vault deletion
+  and all-domain rollback. [apps/web/test/multiuser-portable-import.test.ts](../apps/web/test/multiuser-portable-import.test.ts)
+  is a separate same-named test: the Vault import UI in JSDOM uses the real host,
+  generated archives/sessions and lost-ACK handling. Record both exact paths.
+- [Desktop source-account retry](../apps/desktop/test/source-account-retry.test.ts):
+  actual Central ingress with durable source queue, receipt identity, pause, retry,
+  restart and A/B isolation.
+- [Configuration browser](../apps/web/test/parity-configuration-browser.cjs):
+  actual built Web/current host, generated accounts/provider responses and hidden renderer;
+  visible working-policy enable/disable, dedicated/generic Actions parity and
+  account isolation.
+  Evidence is under `.mote/parity-configuration-browser/`: `result.json`, generated
+  UI screenshots, or `failure.json`.
+- [Integrated browser](../apps/web/test/multiuser-integrated-browser.cjs): actual
+  current-entry journeys with generated external responses and hidden renderers,
+  including diagnostics navigation to the existing administrator settings.
+  With no group arguments it runs `models policy memories agent images files operations history`;
+  explicit group names select only those journeys and must be recorded. Evidence
+  is under `.mote/multiuser-integrated-browser/`: `result.json`, `result-<group>.json`,
+  `source-<hash>.json` manifests and generated screenshots/failure images.
+- [Attachment-to-personal-export regression](../scripts/validation/final-e2e-attachment-personal-export.test.ts):
+  actual attachment intake/text processing and portable export against the compiled
+  current host, when affected Material asset eligibility is qualified. The required
+  `MOTE_FINAL_RECOVERY_WORKSPACE` is the absolute compiled workspace root; the test
+  imports its `apps/server/dist/app.js` and reports `compiledWorkspace`/`synthetic`
+  in Node test output. Retain that output as evidence.
 
-Keep exact selected names, command, source identity and results in the validation
-record. Starting an Electron fixture requires the repository background fixture
-entry; do not activate the user's browser or running Mote profile.
+Run the standalone entries below from the repository root with matching installed
+Node/dependencies and candidate library builds (`npm run build:libs`). Browser
+entries use TypeScript host fixtures and require installed Electron/current
+`apps/web/dist/index.html` (`npm run build -w @mote/web`); the attachment entry needs
+compiled Server (`npm run build -w @mote/server`). Reuse matching affected-plan
+builds; do not rebuild during the freeze. Both browser scripts load
+`scripts/fixture-background.cjs`; leave UI opt-in and integrated discovery/CSS
+probes unset. Screenshots contain generated fixture UI, not personal screens.
+
+```sh
+set -e
+unset MOTE_TEST_SHOW_UI MOTE_WEB_FIXTURE_DISCOVERY MOTE_WEB_FIXTURE_CSS_PROBE
+CANDIDATE=$(git rev-parse HEAD)
+FIXTURE_NODE=$(command -v node)
+MOTE_WEB_FIXTURE_NODE="$FIXTURE_NODE" ./node_modules/.bin/electron apps/web/test/parity-configuration-browser.cjs
+test "$(git rev-parse HEAD)" = "$CANDIDATE"
+MOTE_WEB_FIXTURE_NODE="$FIXTURE_NODE" MOTE_WEB_FIXTURE_EXPECTED_HEAD="$CANDIDATE" ./node_modules/.bin/electron apps/web/test/multiuser-integrated-browser.cjs
+MOTE_FINAL_RECOVERY_WORKSPACE="$PWD" "$FIXTURE_NODE" --import tsx --test scripts/validation/final-e2e-attachment-personal-export.test.ts
+```
+
+`MOTE_WEB_FIXTURE_NODE` selects the Node executable for both scripts' generated
+hosts (required by integrated; parity also has a PATH fallback). The integrated
+script's optional `MOTE_WEB_FIXTURE_EXPECTED_HEAD` enables its existing candidate
+and source/dist freeze assertions; parity relies on the surrounding HEAD check.
+Keep exact selected paths/groups, commands, candidate/runner/build hashes, results
+and cleanup evidence in the validation record. Do not activate the user's browser
+or running Mote profile.

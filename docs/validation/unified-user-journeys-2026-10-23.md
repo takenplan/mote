@@ -1,6 +1,6 @@
 # Unified user journeys: implementation record
 
-Status: implementation-complete with the named focused/consumer evidence below; final candidate qualification and delivery remain pending.
+Status at checkpoint 50: implementation-complete; full local affected qualification passed. Standalone generated E2E and delivery follow this checkpoint. See the final PR and retained delivery record for their later outcomes.
 
 ## Baseline and authorization
 
@@ -18,10 +18,10 @@ Status: implementation-complete with the named focused/consumer evidence below; 
 | Work | Owner/model | Current state |
 | --- | --- | --- |
 | ADR, contracts, integration, operation authorization | Primary agent | Operation authority and real configuration seam: 5/5 passed; current import consumer passed in stable selected run |
-| Configuration → automation → worker/status | GPT-6.1 Sol, extra-high reasoning | Configuration and automation consumers passed, including original five-case Insight/working lifecycle file; final qualification pending |
-| Intake → evidence → Memory/Ask | GPT-6.1 Sol, extra-high reasoning | Memory publication, raw-source projection and original Ask consumers passed; final qualification pending |
-| Capture → receipt → queue | GPT-6.1 Sol, high reasoning | Implementation-complete; 70 new/focused + 12 selected existing tests passed; production integration pending |
-| Configuration → admitted file processing | GPT-6.1 Sol, high reasoning | Host/lifetime 19, settings/portable consumers and pending-Memory image/history consumers passed; final qualification pending |
+| Configuration → automation → worker/status | GPT-6.1 Sol, extra-high reasoning | Configuration and automation consumers passed, including original five-case Insight/working lifecycle file; complete affected qualification passed; standalone E2E follows |
+| Intake → evidence → Memory/Ask | GPT-6.1 Sol, extra-high reasoning | Memory publication, raw-source projection and original Ask consumers passed; complete affected qualification passed; standalone E2E follows |
+| Capture → receipt → queue | GPT-6.1 Sol, high reasoning | Implementation-complete; 70 new/focused + 12 selected existing tests passed; actual Central consumer and complete affected qualification passed |
+| Configuration → admitted file processing | GPT-6.1 Sol, high reasoning | Host/lifetime 19, settings/portable consumers and pending-Memory image/history consumers passed; complete affected qualification passed; standalone E2E follows |
 | Independent architecture review | GPT-6.1 Sol, high reasoning | Prospective plans approved; changed-path and final three-delta source reviews passed; execution qualification remains separate |
 | Release/validation inventory | GPT-6 Luna, high reasoning | Read-only plan completed; Dev is SHA-based artifact, separate from tagged Prod release |
 
@@ -576,21 +576,42 @@ Status: implementation-complete with the named focused/consumer evidence below; 
     conservatively invalidates broader receipts under the unchanged driver, so
     complete candidate qualification remains required before final E2E and delivery.
 
+50. Final affected qualification completed at **2026-10-22 23:40:56 UTC** on
+    `e14451065d89c75d3934a921e05215177f8e60ce`: **38/38 driver tasks passed**,
+    exit 0, all guarded inputs stable and cleanup confirmed. Receipt:
+    `2026-10-22T23-01-12-866Z-ef3982d5-aadb-46b7-b3f6-20d6fea831b7`.
+    All tasks executed through the driver; none were reported `REUSED`. Coverage
+    includes all sixteen Server groups (625 files), Agent, Desktop, Diagnostics,
+    Shared, Web (**649/649**), builds/typechecks, i18n, scope/release contracts,
+    release/root/backup/client/Central runner checks and Android unit check.
+    Android Gradle reported all 25 actionable tasks `UP-TO-DATE`; this is a
+    successful check of existing outputs, not newly executed device/unit cases.
+    Full log and the original receipt are retained with the work record.
+
+    The subsequent documentation-only checkpoint clarifies exact current-entry
+    commands, distinguishes the two same-named portable-import tests, and records
+    this result. It changes no application, test, dependency or build inputs.
+    Standalone hidden browser and compiled attachment/export qualification follow
+    this checkpoint on the frozen final documented candidate. Record their exact
+    commit, outputs and cleanup in the final PR and retained delivery record; do
+    not reinterpret this affected receipt as browser or release evidence.
+
 ## Audit issue coverage ledger
 
-This ledger tracks the original audit scope; implementation is not a final
-qualification claim. See the checkpoint evidence above and pending stages below.
+This ledger tracks the original audit scope after checkpoint 50. Complete local
+affected qualification passed; standalone browser and delivery evidence remain
+separate. See the timestamped checkpoint and final PR/delivery record.
 
 | Issues | Shared implementation | Current evidence / gap |
 | --- | --- | --- |
-| R01–R04 | Configuration CAS, intent coordination, connector task snapshots and visible automation controls | Module checks and selected real configuration consumers passed; remaining existing consumer and browser checks pending |
-| R05 | Stage-specific Actions prerequisites and explicit waiting status | Module/selected consumer checks passed; broader Actions consumer qualification pending |
-| R06–R07 | New-target Memory authorization, separate history and immediate ready intake | Module and actual intake/observation plus disable/drain consumers passed; final review and remaining consumer qualification pending |
-| R08–R10 | Shared source, typed time, lineage and eligible evidence projection | Module, actual reader and Memory consumers passed, including common source presentation across devices; final qualification pending |
-| R11–R12 | Import incarnation, tombstones, deterministic decoding and explicit unsupported outcome | Decoder/identity checks and current portable consumers passed; final compiled import journey pending |
-| R13–R14 | Shared Desktop outcomes and per-subrequest durable receipt delivery | Focused mock-HTTP checks passed; actual Central consumer pending |
+| R01–R04 | Configuration CAS, intent coordination, connector task snapshots and visible automation controls | Module and complete affected consumers passed; standalone browser controls follow checkpoint 50 |
+| R05 | Stage-specific Actions prerequisites and explicit waiting status | Module and complete affected Actions consumers passed |
+| R06–R07 | New-target Memory authorization, separate history and immediate ready intake | Module, intake/observation, independent review, disable/drain and complete affected consumers passed |
+| R08–R10 | Shared source, typed time, lineage and eligible evidence projection | Module, current readers, Memory and complete affected consumers passed; shared source presentation preserved |
+| R11–R12 | Import incarnation, tombstones, deterministic decoding and explicit unsupported outcome | Decoder/identity and current Server/Web portable consumers passed; separate compiled attachment/export entry follows checkpoint 50 |
+| R13–R14 | Shared Desktop outcomes and per-subrequest durable receipt delivery | Focused transport and complete Desktop suite passed, including actual Central source-account retry |
 | R15 | Accepted import operation authority | Module, real configuration seam and actual portable import/logout consumers passed |
-| R16 | Diagnostics links to existing instance settings | Source correction complete; browser interaction pending |
+| R16 | Diagnostics links to existing instance settings | Source correction and complete Web suite passed; standalone browser evidence follows checkpoint 50 |
 
 The audit's unmeasured capacity/export and cross-domain reuse risks are not
 represented as proven failures or resolved performance work. Matching-contract
@@ -601,6 +622,8 @@ physical-device behavior.
 
 ## Validation / remaining work
 
-Final affected checks, current-entry generated E2E, PR, Dev workflows and artifact
-inspection remain pending. Physical-device and
+At checkpoint 50, local affected qualification is complete. Standalone current-entry
+generated E2E, PR, Dev packaging and artifact inspection are the remaining delivery
+stages. Their final status belongs to the exact-head PR and retained delivery
+record under `artifacts/unified-user-journeys-2026-10-23/`. Physical-device and
 live-model checks are not performed and must not be inferred from fixture tests.

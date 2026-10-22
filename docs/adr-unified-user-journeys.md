@@ -1,7 +1,8 @@
 # ADR: Unified account host and user-journey contracts
 
-Date: 2026-10-23. Status: accepted architecture; implementation-complete;
-final candidate qualification and delivery pending.
+Date: 2026-10-23. Status: accepted architecture; implementation-complete.
+Candidate qualification and delivery evidence are recorded in the
+[implementation record](validation/unified-user-journeys-2026-10-23.md).
 
 The owner accepted a modular monolith with shared SQLite, one execution engine,
 one account-isolation host, shared evidence/processing capabilities and separate
