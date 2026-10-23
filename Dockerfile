@@ -40,4 +40,7 @@ USER node
 VOLUME ["/data"]
 EXPOSE 47832
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD node apps/server/dist/healthcheck.js
-CMD ["node", "apps/server/dist/index.js"]
+# Central's third-party CLIs keep their own credential management in the
+# instance's writable, persistent volume, including non-node deployment UIDs.
+# Media sidecars supply their own command and retain their existing environment.
+CMD ["env", "HOME=/data", "node", "apps/server/dist/index.js"]

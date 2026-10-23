@@ -18,11 +18,13 @@ const runId = randomUUID();
 const image = `mote-container-fixture:${runId}`;
 const container = `mote-container-fixture-${runId}`;
 const storageInitializer = `${container}-storage-init`;
+const backupContainer = `${container}-backup`;
 const volume = `mote-container-fixture-${runId}`;
 const modelsVolume = `${volume}-models`;
 const configurationDirectory = await mkdtemp(join(tmpdir(), 'mote-container-config-'));
 const configFile = join(configurationDirectory, 'mote.yaml');
 const fixtureOnly = process.argv.includes('--fixture-only');
+const requireNonDefaultUid = process.argv.includes('--require-non-default-uid');
 let containerUser = `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`;
 const fixtureToken = `synthetic-container-token-only-${runId}`;
 const dockerEnv = { ...process.env, MOTE_TOKEN: fixtureToken, MOTE_DATA_KEY: randomBytes(32).toString('hex') };
@@ -128,6 +130,56 @@ async function assertDuplicate(base) {
   await assertSavedNote(base);
 }
 
+async function assertVendorHome(create = false) {
+  // docker exec does not inherit CMD's environment. Read the actual Central
+  // process and use that same HOME for both the write probe and official CLIs.
+  const script = `
+    import assert from 'node:assert/strict';
+    import {readFileSync,writeFileSync,mkdirSync,statSync} from 'node:fs';
+    import {join} from 'node:path';
+    import {execFileSync} from 'node:child_process';
+    import {managedCliBinary,cliReleases} from './apps/server/src/connectors/cli-runtime.mjs';
+    const environment=Object.fromEntries(readFileSync('/proc/1/environ','utf8').split('\\0').filter(Boolean).map(entry=>{const at=entry.indexOf('=');return [entry.slice(0,at),entry.slice(at+1)];}));
+    assert.equal(environment.HOME,'/data');
+    assert.equal(process.getuid(),${Number(containerUser.split(':')[0])});
+    for(const folder of ['.config/lark-cli','.dws']) {
+      const directory=join(environment.HOME,folder),file=join(directory,'generated-persistence-fixture');
+      if(${create}) {mkdirSync(directory,{recursive:true,mode:0o700});writeFileSync(file,${JSON.stringify(runId)},{mode:0o600,flag:'wx'});}
+      assert.equal(statSync(directory).mode&0o777,0o700);assert.equal(statSync(file).mode&0o777,0o600);
+      assert.equal(readFileSync(file,'utf8'),${JSON.stringify(runId)});
+    }
+    if(${create}) for(const provider of ['lark','dingtalk']) {
+      const binary=managedCliBinary(provider),options={env:{...process.env,HOME:environment.HOME},encoding:'utf8',timeout:15000};
+      const version=execFileSync(binary,provider==='dingtalk'?['version','--format','json']:['--version'],options);
+      if(provider==='dingtalk')assert.equal(JSON.parse(version).version,cliReleases[provider].version);
+      else assert.ok(version.includes(cliReleases[provider].version));
+      assert.ok(execFileSync(binary,['--help'],options).length>0);
+    }
+    console.log(JSON.stringify({home:environment.HOME,uid:process.getuid(),privateGeneratedState:true,officialCliContracts:${create}}));
+  `;
+  console.info('[container] Vendor home: '+await docker(['exec',container,'node','--input-type=module','-e',script],{capture:true}));
+}
+
+async function assertPortableBackupExcludesVendorHome() {
+  await docker(['stop','--time','10',container],{capture:true});
+  const script = `
+    import assert from 'node:assert/strict';
+    import {readFileSync,existsSync} from 'node:fs';
+    import {execFileSync} from 'node:child_process';
+    const out='/tmp/generated-portable-backup';
+    execFileSync(process.execPath,['scripts/backup.ts','--data','/data','--out',out],{stdio:'pipe',timeout:30000});
+    const manifest=JSON.parse(readFileSync(out+'/backup-manifest.json','utf8'));
+    assert.ok(manifest.checksums['mote.sqlite']);
+    for(const prefix of ['.config','.dws']) {
+      assert.equal(existsSync(out+'/'+prefix),false);
+      assert.equal(Object.keys(manifest.checksums).some(key=>key.startsWith(prefix+'/')),false);
+    }
+    assert.equal(JSON.stringify(manifest).includes(${JSON.stringify(runId)}),false);
+    console.log('Portable backup excludes generated vendor home state');
+  `;
+  console.info('[container] '+await docker(['run','--rm','--name',backupContainer,'--label',`dev.mote.fixture=${runId}`,'--network','none','--user',containerUser,...volumeMounts(),image,'node','--input-type=module','-e',script],{capture:true}));
+}
+
 async function prepareConfiguration() {
   const document = { version: 1, revision: 0,
     server: { profile: 'test', runtime: 'docker', host: '0.0.0.0', port: 47832, token: '${MOTE_TOKEN}' },
@@ -152,11 +204,13 @@ try {
     await docker(['version', '--format', '{{.Server.Version}}'], { capture: true, timeoutMs: 30_000 });
     daemonAvailable = true;
     containerUser = await dockerConfigurationUser({ configFile }, (_command, args, options) => docker(args, options));
+    if(requireNonDefaultUid)assert.notEqual(Number(containerUser.split(':')[0]),1000,'This run must exercise a deployment UID other than the image node user');
     console.info('[container] Building the repository Dockerfile (local tag only)');
     await docker(['build', '--tag', image, '--file', 'Dockerfile', '.'], { timeoutMs: 15 * 60_000 });
     for (const name of [volume, modelsVolume]) await docker(['volume', 'create', '--label', `dev.mote.fixture=${runId}`, name], { capture: true });
     const mainConfiguration = await readFile(configFile, 'utf8');
     let base = await startContainer();
+    await assertVendorHome(true);
     assert.equal((await request(base, '/api/health', { token: null })).json().ok, true);
     const page = await request(base, '/', { token: null });
     assert.match(page.response.headers.get('content-type') ?? '', /text\/html/);
@@ -171,15 +225,19 @@ try {
     console.info('[container] Synthetic note create/read and duplicate ACK checks passed');
     await docker(['restart', '--time', '10', container], { capture: true });
     await waitForHealth(); base = await baseUrl();
+    await assertVendorHome();
     await assertSavedNote(base); await assertDuplicate(base);
     console.info('[container] Same-container restart preserved the note and idempotency key');
     // Recreating with the same named /data volume also rules out accidental storage in the writable container layer.
     await docker(['rm', '--force', container], { capture: true });
     base = await startContainer();
+    await assertVendorHome();
     await assertSavedNote(base); await assertDuplicate(base);
     await request(base, '/api/notes', { status: 401, token: null });
     assert.equal(await readFile(configFile, 'utf8'), mainConfiguration, 'Restart and replacement share the same unchanged main configuration');
-    console.info('[container] Replacement container recovered the named volumes and shared YAML; all real Docker checks passed');
+    console.info('[container] Replacement container recovered the named volumes and shared YAML');
+    await assertPortableBackupExcludesVendorHome();
+    console.info('[container] All real Docker checks passed');
   }
 } catch (error) {
   console.error(`[container] FAILED: ${error instanceof Error ? error.message : String(error)}`);
@@ -191,7 +249,7 @@ try {
 } finally {
   if (daemonAvailable) {
     // Exact UUID names only: never prune unrelated containers, volumes, images or build caches.
-    for (const name of [container, storageInitializer]) await docker(['rm', '--force', name], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
+    for (const name of [container, storageInitializer, backupContainer]) await docker(['rm', '--force', name], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
     for (const name of [volume, modelsVolume]) await docker(['volume', 'rm', name], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
     await docker(['image', 'rm', image], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
   }
