@@ -12,10 +12,10 @@ import {MemoryStore} from '../src/memory.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import {fixtureMemoryResult} from './fixtures/memory-result.js';
 
-function destination(t:TestContext){const directory=mkdtempSync(join(tmpdir(),'mote-portable-material-')),store=new Store(directory,{contentEncryptionEnabled:true,dataKey:'31'.repeat(32)});t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});return {directory,store,materials:new MaterialStore(store)};}
+function destination(t:TestContext){const directory=mkdtempSync(join(tmpdir(),'mote-portable-material-')),store=new Store(directory,{contentEncryptionEnabled:true,dataKey:'31'.repeat(32)}),beforeClose:(()=>Promise<void>)[]=[];t.after(async()=>{for(const close of beforeClose.reverse())await close();store.close();rmSync(directory,{recursive:true,force:true});});return {directory,store,materials:new MaterialStore(store),beforeClose};}
 async function fixture(t:TestContext){
   const f=destination(t),sources=new SourceStore(f.store),organizers=new MaterialOrganizerRuntime(f.store,f.materials);
-  t.after(()=>organizers.close());sources.register({id:'generated',name:'Generated authored notes',kind:'custom',deviceId:'generated',platform:'import',retention:'archive'});
+  f.beforeClose.push(()=>organizers.close());sources.register({id:'generated',name:'Generated authored notes',kind:'custom',deviceId:'generated',platform:'import',retention:'archive'});
   const firstCapture=await sources.upsert('generated',{externalId:'decision',revision:'1',observedAt:'2026-10-01T00:00:00Z',title:'Generated decision',kind:'message',layer:'original',text:'Generated owner records a scoped deployment decision.'});
   while(await organizers.tick(100));const first=f.materials.get(materialId('generated','decision'))!;
   const memories=new MemoryStore(f.store,ids=>[...f.store.evidence(ids),...f.materials.evidence(ids)],id=>f.store.isCurrentEvidence(id)||f.materials.isCurrentEvidence(id));

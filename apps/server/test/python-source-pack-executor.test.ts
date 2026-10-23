@@ -95,7 +95,7 @@ test('trusted Python pack emits dispositions and an explicit automatic publicati
   writeFileSync(join(packRoot,'main.py'),script,{mode:0o600});
   const executor=new PythonSourcePackExecutor({id:'fixture.import-pack',version:'1',packRoot,script:'main.py',scriptSha256:sha256(script),pythonExecutable:'/usr/bin/python3',outputSchema:pythonImportOutputSchema},fixtureLauncher);
   const store=new Store(join(directory,'vault')),files=new ArchivedFileStore(store),sources=new SourceStore(store),imports=new ImportStore(store,files,sources,{prepare:pythonImportPreparation(executor)});
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{await imports.stop();store.close();rmSync(directory,{recursive:true,force:true});});
   const job=await imports.create({processing:'automatic',files:[{name:'generated.custom',dataBase64:Buffer.from('Generated import evidence.').toString('base64')}]});
   const saved=await imports.prepare(job.id);assert.equal(saved.status,'completed');assert.equal(saved.preview?.count,1);
   assert.equal(saved.reviewGate?.decision,'automatic');assert.equal(saved.captureIds.length,1);
