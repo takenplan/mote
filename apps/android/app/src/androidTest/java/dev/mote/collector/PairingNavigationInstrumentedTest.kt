@@ -118,12 +118,25 @@ class PairingNavigationInstrumentedTest {
                 }
                 val invitation = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", node)
                     .put("code", "A".repeat(43)).put("expiresAt", Instant.ofEpochMilli(System.currentTimeMillis() + 600_000).toString()).toString()
+                // Use the real scanner child, recreate its parent, then let Android deliver the result.
+                instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.CAMERA)
+                val scanMonitor = instrumentation.addMonitor(ConnectionScanActivity::class.java.name, null, false)
+                instrumentation.runOnMainSync { click(connection, "扫描连接二维码") }
+                val scanner = instrumentation.waitForMonitorWithTimeout(scanMonitor, 10_000) as? ConnectionScanActivity ?: error("Scan page did not open")
+                instrumentation.removeMonitor(scanMonitor)
+                val rebuiltMonitor = instrumentation.addMonitor(ConnectionActivity::class.java.name, null, false)
+                instrumentation.runOnMainSync { connection.recreate() }
+                val rebuilt = instrumentation.waitForMonitorWithTimeout(rebuiltMonitor, 10_000) as? ConnectionActivity ?: error("Connection page did not rebuild")
+                instrumentation.removeMonitor(rebuiltMonitor)
+                instrumentation.runOnMainSync { scanner.setResult(Activity.RESULT_OK, Intent().putExtra("invitation", invitation)); scanner.finish() }
+                waitUntil {
+                    var previewed = false
+                    instrumentation.runOnMainSync { previewed = views(rebuilt.window.decorView).filterIsInstance<TextView>().any { it.text.startsWith("将连接：$node") } }
+                    previewed
+                }
                 instrumentation.runOnMainSync {
-                    val scanResult = ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java).apply { isAccessible = true }
-                    scanResult.invoke(connection, 1, Activity.RESULT_OK, Intent().putExtra("invitation", invitation))
-                    assertTrue(views(connection.window.decorView).filterIsInstance<TextView>().any { it.text.startsWith("将连接：$node") })
                     assertEquals("https://old.generated.invalid", settings.read().server)
-                    click(connection, "确认连接此节点")
+                    click(rebuilt, "确认连接此节点")
                 }
                 waitUntil {
                     var confirmed = false
@@ -135,7 +148,7 @@ class PairingNavigationInstrumentedTest {
                     confirmed
                 }
                 assertTrue(verifying.await(20, TimeUnit.SECONDS))
-                instrumentation.runOnMainSync { connection.finish() }
+                instrumentation.runOnMainSync { rebuilt.finish() }
                 instrumentation.waitForIdleSync()
                 scenario.onActivity { activity -> assertEquals("https://old.generated.invalid", editor(activity, "https://mote.example.com").text.toString()) }
                 continueVerification.countDown()

@@ -1,7 +1,7 @@
 import { useResource } from './useResource';
 import { readResource, resources } from './resource-cache';
 import { moteText } from '@mote/shared/i18n';
-import designTokens from '../../../packages/shared/design-tokens.json';
+import { connectionQrDataUrl } from './connection-qr';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Download, Link2, QrCode, RefreshCw, ShieldCheck, Unplug, X } from 'lucide-react';
 import { connectionServerUrl, type ConnectionInvitation, type ServerConfiguration } from '@mote/shared';
@@ -103,7 +103,7 @@ export function Connections({ api, serverUrl, devices }: {
         if (!invite)
             return;
         let alive = true;
-        void import('qrcode').then(({ default: QRCode }) => QRCode.toDataURL(invite.uri, { width: 360, margin: 4, errorCorrectionLevel: 'M', color: { dark: designTokens.ink, light: designTokens.surface } })).then(value => { if (alive)
+        void connectionQrDataUrl(invite.uri).then(value => { if (alive)
             setQr(value); }).catch(() => { if (alive)
             setError(moteText("二维码生成失败，可以复制或下载连接邀请 JSON。")); });
         return () => { alive = false; };

@@ -41,20 +41,25 @@ class ConnectionInstrumentedTest {
                 Settings(context).saveConnection("https://generated-new.invalid", "synthetic-owner-token-no-network-123456789", "合成设备", false)
                 scenario.resumeGeneratedTask()
                 scenario.awaitUiText(currentNodePrefix("https://generated-new.invalid"))
-                scenario.onActivity { activity ->
-                    val receive = ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java).apply { isAccessible = true }
-                    fun scan(raw: String) { receive.invoke(activity, 1, android.app.Activity.RESULT_OK, Intent().putExtra("invitation", raw)) }
-                    val texts = mutableListOf<android.widget.TextView>()
-                    fun walk(v: android.view.View) { if (v is android.widget.TextView) texts += v; if (v is android.view.ViewGroup) repeat(v.childCount) { walk(v.getChildAt(it)) } }
-                    walk(activity.window.decorView)
-                    assertTrue(texts.single { it.text.startsWith(currentNodePrefix()) }.text.startsWith(currentNodePrefix("https://generated-new.invalid")))
-                    for (server in listOf("https://first.generated.invalid", "https://second.generated.invalid")) {
-                        scan(invitation(server))
-                        assertTrue(texts.single { it.text.startsWith(previewPrefix()) }.text.startsWith(previewPrefix(server)))
-                        assertEquals("https://generated-new.invalid", Settings(context).read().server)
+                for (server in listOf("https://first.generated.invalid", "https://second.generated.invalid")) {
+                    scenario.onActivity { activity ->
+                        ConnectionActivity::class.java.getDeclaredMethod("armPicker", Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(activity, 1)
+                        ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java)
+                            .apply { isAccessible = true }.invoke(activity, 1, android.app.Activity.RESULT_OK, Intent().putExtra("invitation", invitation(server)))
                     }
-                    scan("invalid generated invitation")
-                    assertFalse(texts.any { it.text.startsWith(previewPrefix()) })
+                    scenario.awaitUiText(previewPrefix(server))
+                    assertEquals("https://generated-new.invalid", Settings(context).read().server)
+                }
+                scenario.onActivity { activity ->
+                    ConnectionActivity::class.java.getDeclaredMethod("armPicker", Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(activity, 1)
+                    ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java)
+                        .apply { isAccessible = true }.invoke(activity, 1, android.app.Activity.RESULT_OK, Intent().putExtra("invitation", "invalid generated invitation"))
+                }
+                scenario.awaitUiText(ConnectionActivity.message("invitation"))
+                scenario.onActivity { activity ->
+                    fun hasPreview(v: android.view.View): Boolean = (v is android.widget.TextView && v.text.startsWith(previewPrefix())) ||
+                        (v is android.view.ViewGroup && (0 until v.childCount).any { hasPreview(v.getChildAt(it)) })
+                    assertFalse(hasPreview(activity.window.decorView))
                 }
             }
         } finally {

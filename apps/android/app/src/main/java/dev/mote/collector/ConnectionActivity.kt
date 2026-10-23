@@ -3,6 +3,8 @@ package dev.mote.collector
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.net.Uri
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +22,10 @@ class ConnectionActivity : MoteActivity() {
     private lateinit var preview: TextView
     private lateinit var currentNode: TextView
     private var parsed: ConnectionInvitation? = null
+    private data class PickerSelection(val stamp: String, val requestCode: Int)
+    private class RetainedPicker(val selection: PickerSelection, val result: Pair<Int, String>?)
+    private var selection: PickerSelection? = null
+    private var pendingPicker: Pair<Int, String>? = null
     private val executor = Executors.newSingleThreadExecutor()
     private val task by lazy { UiTask(this, executor, ownsExecutor = false) }
     private val refreshTask by lazy { UiTask(this, executor, ownsExecutor = false) }
@@ -34,6 +40,7 @@ class ConnectionActivity : MoteActivity() {
         override fun run() {
             if (applying && ::status.isInitialized) status.text = RuntimeSettings.progressLabel()
             connectionFinished?.let { complete -> connectionFinished = null; complete() }
+            if (::input.isInitialized && !working && !task.busy) pendingPicker?.let { receivePickerResult(it) }
             if (refreshRequested && ::currentNode.isInitialized && !working && !task.busy && !refreshTask.busy) {
                 refreshRequested = false
                 refreshTask.start(MoteI18n.text("正在刷新已保存连接…"), { currentNode.text = it }, {
@@ -50,6 +57,11 @@ class ConnectionActivity : MoteActivity() {
     private data class InitialConnection(val config: CollectorConfig, val deviceId: String, val status: String, val statusAt: Long)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        savedInstanceState?.getString(SELECTION_STAMP)?.let { stamp ->
+            val request = savedInstanceState.getInt(SELECTION_REQUEST)
+            if (stamp.matches(Regex("[a-f0-9]{64}")) && request in 1..2) selection = PickerSelection(stamp, request)
+        }
+        (lastNonConfigurationInstance as? RetainedPicker)?.let { retained -> selection = retained.selection; pendingPicker = retained.result }
         val loading = moteDetailPage(title = MoteI18n.text("连接中央节点")); val label = TextView(this); loading.addView(label)
         task.start(MoteI18n.text("正在读取已保存连接…"), { label.text = it }, {
             val settings = Settings(applicationContext); val client = ConnectionClient(applicationContext)
@@ -83,8 +95,8 @@ class ConnectionActivity : MoteActivity() {
                 }
             }
         }
-        button(MoteI18n.text("扫描连接二维码")) { startActivityForResult(Intent(this, ConnectionScanActivity::class.java), 1) }
-        button(MoteI18n.text("选择连接 JSON 文件")) { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain")), 2) }
+        button(MoteI18n.text("扫描连接二维码")) { armPicker(1); startActivityForResult(Intent(this, ConnectionScanActivity::class.java), 1) }
+        button(MoteI18n.text("选择连接 JSON 文件")) { armPicker(2); startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain")), 2) }
         input = EditText(this).apply { hint = MoteI18n.text("粘贴 JSON 或 mote://connect…"); minLines = 3; maxLines = 7; isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
             filters = arrayOf(android.text.InputFilter.LengthFilter(ConnectionInvitation.MAX_BYTES * 2)) }; root.addView(input)
         allowHttp = CheckBox(this).apply { text = MoteI18n.text("开发调试：允许本机 loopback HTTP 邀请"); isChecked = config.debugHttp; isEnabled = BuildConfig.DEBUG }; root.addView(allowHttp)
@@ -92,7 +104,7 @@ class ConnectionActivity : MoteActivity() {
         preview = text(MoteI18n.text("还没有解析邀请。外部链接只填入此页，不会自动连接。"))
         button(MoteI18n.text("确认连接此节点")) {
             val invite = parseInput()
-            MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。只获取这台设备的采集凭据；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invite.serverUrl))
+            MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。将为这台设备保存所有者凭据，可使用全部中央功能；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invite.serverUrl))
                 .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("连接")) { _, _ ->
                     val chosenName = name.text.toString().trim(); val debugHttp = allowHttp.isChecked
                     changeConnection(invite.serverUrl, MoteI18n.text("正在兑换邀请并校验设备身份…"), connected = {
@@ -124,7 +136,6 @@ class ConnectionActivity : MoteActivity() {
             }
         }
         status = text(MoteI18n.text("{0}\n状态记录时间：{1}", message(initial.status), initial.statusAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it) } ?: MoteI18n.text("未测试")))
-        text(MoteI18n.text("一次性码已被兑换但网络校验中断时，原配置保持不变；可重试同一邀请，或点击“恢复中断的连接确认”使用本机加密保存的兑换结果；若一次性码已消耗但未收到响应，请重新生成绑定设备的邀请。连接失败信息不会包含令牌或邀请内容。"))
         MoteUi.styleTree(root)
         intent.dataString?.let { raw -> if (raw.length <= ConnectionInvitation.MAX_BYTES * 2) input.setText(raw) else status.text = message("invitation") }
     }
@@ -163,33 +174,69 @@ class ConnectionActivity : MoteActivity() {
             }
         }
     }
-    private fun showFailure(error: Throwable) { status.text = message((error as? ConnectionFailure)?.category ?: if (error is SettingsWriteFailure) "storage" else "response") }
+    private fun showFailure(error: Throwable) {
+        status.text = if (error is SettingsChangedFailure) error.message else message((error as? ConnectionFailure)?.category ?: if (error is SettingsWriteFailure) "storage" else "response")
+        status.post { if (!isDestroyed && !isFinishing) status.requestRectangleOnScreen(Rect(0, 0, status.width, status.height), false) }
+    }
+    private fun armPicker(requestCode: Int) {
+        selection = PickerSelection(SourceRules.hash(currentConfig.toString()), requestCode)
+        pendingPicker = null
+    }
     @Deprecated("Native Activity document result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK || data == null) return
-        if (requestCode == 1) {
-            val raw = data.getStringExtra("invitation") ?: return
-            if (raw.length <= ConnectionInvitation.MAX_BYTES * 2) { input.setText(raw); runCatching { parseInput() }.onFailure(::showFailure) }
-        } else if (requestCode == 2 && data.data != null) {
-            val debugHttp = allowHttp.isChecked
-            run(MoteI18n.text("正在读取所选连接文件…"), work = {
-                val bytes = contentResolver.openInputStream(data.data!!)!!.use { stream ->
-                    val buffer = ByteArray(ConnectionInvitation.MAX_BYTES + 1); var total = 0
-                    while (total < buffer.size) { val count = stream.read(buffer, total, buffer.size - total); if (count < 0) break; total += count }; buffer.copyOf(total)
-                }
-                if (bytes.size > ConnectionInvitation.MAX_BYTES) throw ConnectionFailure("invitation")
-                val raw = AppReleaseVerifier.utf8(bytes)
-                val invite = ConnectionInvitation.parse(raw, debugHttp, BuildConfig.DEBUG)
-                raw to invite
-            }) { (raw, invite) ->
-                input.setText(raw); parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invite.serverUrl, invite.expiresAt)
-                MoteI18n.text("连接文件已解析，尚未联网。")
+        if (requestCode !in 1..2 || selection?.requestCode != requestCode) return
+        if (resultCode != RESULT_OK || data == null) {
+            if (pendingPicker == null) selection = null
+            return
+        }
+        val payload = when (requestCode) {
+            1 -> data.getStringExtra("invitation").orEmpty().takeIf { it.length <= ConnectionInvitation.MAX_BYTES * 2 }.orEmpty()
+            else -> data.data?.toString().orEmpty()
+        }
+        pendingPicker = requestCode to payload
+        if (::input.isInitialized && !working && !task.busy) receivePickerResult(requestCode to payload)
+    }
+    private fun receivePickerResult(result: Pair<Int, String>) {
+        val expected = selection ?: return
+        if (expected.requestCode != result.first || working || task.busy) return
+        val debugHttp = allowHttp.isChecked
+        parsed = null; preview.text = MoteI18n.text("还没有解析有效邀请。")
+        working = true
+        task.start(MoteI18n.text("正在读取所选连接文件…"), { status.text = it }, {
+            if (SourceRules.hash(Settings(applicationContext).read().toString()) != expected.stamp) throw SettingsChangedFailure()
+            val bytes = if (result.first == 1) result.second.toByteArray(Charsets.UTF_8) else contentResolver.openInputStream(Uri.parse(result.second))!!.use { stream ->
+                val buffer = ByteArray(ConnectionInvitation.MAX_BYTES + 1); var total = 0
+                while (total < buffer.size) { val count = stream.read(buffer, total, buffer.size - total); if (count < 0) break; total += count }; buffer.copyOf(total)
             }
+            if (bytes.size > ConnectionInvitation.MAX_BYTES) throw ConnectionFailure("invitation")
+            val raw = AppReleaseVerifier.utf8(bytes)
+            val invite = ConnectionInvitation.parse(raw, debugHttp, BuildConfig.DEBUG)
+            if (SourceRules.hash(Settings(applicationContext).read().toString()) != expected.stamp) throw SettingsChangedFailure()
+            raw to invite
+        }) { outcome ->
+            working = false
+            if (isDestroyed || isFinishing || pendingPicker != result || selection != expected) return@start
+            // Preserve both fields until this callback: a destroyed UiTask cannot deliver it.
+            pendingPicker = null; selection = null
+            outcome.onSuccess { (raw, invite) ->
+                if (SourceRules.hash(currentConfig.toString()) != expected.stamp) { showFailure(SettingsChangedFailure()); return@onSuccess }
+                input.setText(raw); parsed = invite
+                preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invite.serverUrl, invite.expiresAt)
+                status.text = MoteI18n.text("连接文件已解析，尚未联网。")
+            }.onFailure(::showFailure)
         }
     }
+    override fun onSaveInstanceState(outState: Bundle) {
+        selection?.let { outState.putString(SELECTION_STAMP, it.stamp); outState.putInt(SELECTION_REQUEST, it.requestCode) }
+        super.onSaveInstanceState(outState)
+    }
+    @Deprecated("Native in-memory configuration retention")
+    override fun onRetainNonConfigurationInstance(): Any? = selection?.let { RetainedPicker(it, pendingPicker) }
     override fun onDestroy() { connectionFinished = null; handler.removeCallbacks(refresh); executor.shutdown(); super.onDestroy() }
     companion object {
+        private const val SELECTION_STAMP = "pickerSelectionStamp"
+        private const val SELECTION_REQUEST = "pickerSelectionRequest"
         fun message(code: String) = when (code) {
             "storage" -> MoteI18n.text("凭据持久保存失败，恢复记录仍保留。请释放空间后恢复连接，不要卸载应用。")
             "no_pending" -> MoteI18n.text("没有可恢复的兑换结果，请重新生成邀请。")
