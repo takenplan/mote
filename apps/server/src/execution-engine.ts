@@ -263,7 +263,7 @@ export class ExecutionEngine {
  wake(){this.scheduleTick();}
  private scheduleTick(){
   if(this.stopping||this.scheduled)return;
-  this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
+  this.scheduled=true;setImmediate(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
  }
  async drain(ids:string[]){
   void this.tick().catch(()=>{});
