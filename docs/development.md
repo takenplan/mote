@@ -85,7 +85,7 @@ adb reverse tcp:47842 tcp:47842
 
 ## 调试与分享诊断
 
-每个中央环境默认开启有上限的结构化诊断，`diagnostics.debug: false`。需要调试时只修改正在测试的 `mote.yaml`；enabled/debug/traceEnabled/level 经校验热应用，日志目录与容量参数需要重启。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
+每个中央环境默认开启有上限的结构化诊断。精确的 `dev` profile 在省略配置时启用 debug，其他 profile 默认关闭；显式 `false` 或 `silent` 保持有效。需要调试时只修改正在测试的 `mote.yaml`；enabled/debug/traceEnabled/level 经校验热应用，日志目录与容量参数需要重启。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
 
 原生 `logs/central.log` 默认只保存固定监督事件；未知 SDK/runtime 输出只保存类型与字节数。新 DEV 的 YAML 省略 `diagnostics.maxBytes`，每份最多 100 MiB、3 份；结构化 `central.N.ndjson` 与监督日志分别轮转，各最多 300 MiB。其它 profile 保留每份 2 MiB、3 份。已有 DEV 的显式数值保持不变，主动采用默认值见 [部署说明](deployment.md#dev-log-retention)。支持包、内存事件数和单条日志仍各有自身边界。
 

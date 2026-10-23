@@ -30,6 +30,8 @@ This supersedes the shared-account contracts in the former `adr-multiuser-scope`
 
 Appearance, unified configuration, retained historical answers and some Memory/evidence reliability already exist in the target. Restore recording, retry, Memory, plugin, client and performance requirements only where the baseline lacks desired behavior. Account-regression repairs are not automatically new features. UI prototype PR #185 is not production implementation.
 
+The [recovery inventory](single-owner-recovery-inventory.md) records the disposition of every intervening first-parent change and distinguishes restored requirements from behavior already present in the baseline.
+
 ## Development and validation
 
 The owner chose the lightweight workflow discussed at the beginning of this recovery, rather than importing later testing PRs wholesale. Short global rules, module commands and on-demand guidance replace extensive routine process obligations. No 16-bucket receipt engine or hand-maintained campaign ledger is required.
