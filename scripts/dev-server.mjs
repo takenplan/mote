@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Foreground source builds use the selected profile's identity, never its installed release.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { startMediaWorkers } from './media-workers.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, readdir, stat, lstat, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +75,21 @@ function buildEnvironment() {
   // Installation/build hooks must not inherit a profile's token, model keys or NODE_OPTIONS.
   const allowed = ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL'];
   return { ...Object.fromEntries(allowed.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]])), NODE_ENV: 'development' };
+}
+
+// Advisory launch-time snapshot only. Archives can live inside an unrelated
+// repository, and Git errors must neither block startup nor leak raw output.
+export function sourceCheckout(root = repository) {
+  const unknown = { revision: null, modified: null };
+  if (!existsSync(join(root, '.git'))) return unknown;
+  const options = { cwd: root, env: { ...buildEnvironment(), GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'], timeout: 1000, maxBuffer: 1024 * 1024 };
+  const head = spawnSync('git', ['rev-parse', '--verify', 'HEAD'], options);
+  const revision = head.stdout?.trim();
+  if (head.status !== 0 || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(revision ?? '')) return unknown;
+  const status = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=normal'], options);
+  if (status.status !== 0 || typeof status.stdout !== 'string') return unknown;
+  return { revision, modified: Boolean(status.stdout) };
 }
 
 async function dependencyFingerprint(root) {
@@ -150,6 +166,9 @@ export async function runDevServer(options = {}, root = repository) {
   for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(name, interrupt);
   let server, marker, workers;
   try {
+    const source = sourceCheckout(root);
+    console.info('[dev] Source checkout at launch: ' + (source.revision ? `${source.revision.slice(0, 12)} (${source.modified ? 'modified' : 'clean'})` : 'Git identity unavailable') + '.');
+    console.info('[dev] Building and running this checkout; the installed release selection is unchanged.');
     await withProfileLock(p, async () => {
       console.info(`[dev] Stopping the previous managed ${p.profile} server…`);
       await stopNative(p);

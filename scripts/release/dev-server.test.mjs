@@ -9,7 +9,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {DatabaseSync} from 'node:sqlite';
 import {createServer} from 'node:net';
 import {repository,profilePaths,loadProfile,updateProfileConfiguration} from '../profile-lib.mjs';
-import {developmentProfile} from '../dev-server.mjs';
+import {developmentProfile,sourceCheckout} from '../dev-server.mjs';
 import {freePort} from '../profile-fixtures.mjs';
 import {serializeConfigDocument} from '../../packages/shared/src/config-file.ts';
 
@@ -71,6 +71,27 @@ async function isolatedProfile(home,name='dev'){
  return loadProfile(profilePaths(name,home));
 }
 
+test('source identity distinguishes clean, modified and unavailable metadata without inheriting a parent repository',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-source-identity-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const unknown={revision:null,modified:null};assert.deepEqual(sourceCheckout(directory),unknown);
+ await exec('git',['init','--quiet'],{cwd:directory});
+ assert.deepEqual(sourceCheckout(directory),unknown,'an unborn HEAD is unknown');
+ const file=join(directory,'source.txt');await writeFile(file,'generated source\n');await exec('git',['add','source.txt'],{cwd:directory});
+ await exec('git',['-c','user.name=Generated Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','generated fixture'],{cwd:directory});
+ const {stdout}=await exec('git',['rev-parse','HEAD'],{cwd:directory}),revision=stdout.trim();assert.deepEqual(sourceCheckout(directory),{revision,modified:false});
+ await writeFile(file,'generated source changed\n');assert.deepEqual(sourceCheckout(directory),{revision,modified:true});
+ await exec('git',['checkout','--','source.txt'],{cwd:directory});await writeFile(join(directory,'untracked.txt'),'generated untracked\n');assert.deepEqual(sourceCheckout(directory),{revision,modified:true});
+ await rm(join(directory,'untracked.txt'));const archive=join(directory,'archive');await mkdir(archive);assert.deepEqual(sourceCheckout(archive),unknown,'a nested source archive must not claim its parent identity');
+ const priorPath=process.env.PATH;try{process.env.PATH=archive;assert.deepEqual(sourceCheckout(directory),unknown,'missing Git does not block source startup');}finally{if(priorPath===undefined)delete process.env.PATH;else process.env.PATH=priorPath;}
+});
+
+async function configurationConsumers(p,token){
+ const connectors=await request(p,'/api/connectors',undefined,token);assert.equal(connectors.status,200,JSON.stringify(connectors.value));assert.ok(Array.isArray(connectors.value.connections));
+ const configuration=await request(p,'/api/configuration',undefined,token);assert.equal(configuration.status,200,JSON.stringify(configuration.value));
+ const perception=configuration.value.domains.find(domain=>domain.id==='perception');assert.ok(perception,'the real account must load its image/privacy configuration');
+ assert.equal(perception.effective.allowExternalProcessing,false);assert.equal(perception.effective.allowQueryImages,false);
+}
+
 test('development launcher creates one fixed local admin on first start, preserves passwords and fails without stray processes',{timeout:180000,skip:process.platform==='win32'},async t=>{
  // Node resolves ESM module URLs to physical paths. Use the same canonical
  // temp root for argv so the unmodified launcher's direct-entry guard runs.
@@ -87,6 +108,7 @@ test('development launcher creates one fixed local admin on first start, preserv
  // build-failure propagation again on this fixture's random owned port.
  const failedEmpty=await launch(fixture,p).done;assert.notEqual(failedEmpty.code,0,failedEmpty.output);assert.match(failedEmpty.output,/npm ci .* failed; no server was started/);assert.equal(await exists(join(p.dataDir,'mote.sqlite')),false);
  const calls=await readFile(join(fixture.root,'generated-npm-calls.jsonl'),'utf8');assert.ok(calls.trim().split('\n').map(line=>JSON.parse(line)).some(args=>args[0]==='ci'),'the actual launcher must execute the generated npm command');
+ assert.match(failedEmpty.output,/Source checkout at launch: Git identity unavailable/);assert.match(failedEmpty.output,/Building and running this checkout; the installed release selection is unchanged/);
  await rm(join(fixture.root,'generated-build-failure'));
  // An obsolete defaults entry must identify the configuration field without
  // echoing its value, rewriting YAML or creating any account storage. Repair
@@ -102,6 +124,7 @@ test('development launcher creates one fixed local admin on first start, preserv
  active=launch(fixture,p);await ready(active);assert.match(active.output(),/Created local development account: admin \/ admin/);
  const initial=accounts(p);assert.equal(initial.length,1);assert.equal(initial[0].username,'admin');assert.equal(initial[0].administrator,1);assert.notEqual(initial[0].password_hash,'admin');
  const login=await request(p,'/api/auth/login',{username:'admin',password:'admin',mode:'client'});assert.equal(login.status,200);
+ await configurationConsumers(p,login.value.token);
  assert.equal((await request(p,'/api/admin/accounts',{username:'short-password-user',password:'admin'},login.value.token)).status,400,'ordinary HTTP creation keeps its strong-password rule');
  assert.equal((await request(p,'/api/auth/password',{currentPassword:'admin',password:'admin'},login.value.token)).status,400,'ordinary password changes keep their strong-password rule');
  assert.equal((await request(p,'/api/admin/accounts/'+login.value.userId+'/password',{password:'admin'},login.value.token)).status,400,'administrator password resets keep their strong-password rule');
@@ -111,7 +134,7 @@ test('development launcher creates one fixed local admin on first start, preserv
  const password='Generated-development-replacement-01';assert.equal((await request(p,'/api/auth/password',{currentPassword:'admin',password},login.value.token)).status,200);const changed=accounts(p);
  await stop(active);active=undefined;assert.equal(await exists(p.processFile),false);assert.equal(await exists(join(p.dataDir,'server.pid')),false);
  active=launch(fixture,p);await ready(active);assert.match(active.output(),/Existing accounts preserved/);assert.ok(!active.output().includes('admin / admin'));assert.deepEqual(accounts(p),changed,'restart must not reset the existing password or account identity');
- assert.equal((await request(p,'/api/auth/login',{username:'admin',password:'admin',mode:'client'})).status,401);assert.equal((await request(p,'/api/auth/login',{username:'admin',password,mode:'client'})).status,200);
+ assert.equal((await request(p,'/api/auth/login',{username:'admin',password:'admin',mode:'client'})).status,401);const restartedLogin=await request(p,'/api/auth/login',{username:'admin',password,mode:'client'});assert.equal(restartedLogin.status,200);await configurationConsumers(p,restartedLogin.value.token);
  await stop(active);active=undefined;
 
  const occupied=createServer();await new Promise(resolve=>occupied.listen(p.port,'127.0.0.1',resolve));
