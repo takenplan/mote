@@ -36,6 +36,16 @@ try {
   assert.notEqual(dev.project, test.project); assert.notEqual(dev.meta.volume, test.meta.volume);
   await run(dev, 'start'); await run(test, 'start');
   const literalContainer = (await run(dev,'compose',['--','ps','--quiet','mote'])).stdout.trim();
+  // An invalid generated bundle must reach asset validation as the profile's
+  // owner, rather than fail while creating the model cache as image UID 1000.
+  const emptyModelBundle=join(directory,'empty-model-bundle');await mkdir(emptyModelBundle,{mode:0o700});
+  const modelImport=await run(dev,'media-import',['--role','ocr','--from',emptyModelBundle],{fail:true});
+  assert.match(modelImport.stderr,/ENOENT.*lstat.*\/import\//);
+  assert.doesNotMatch(modelImport.stderr,/EACCES|EPERM/);
+  const modelCacheOwner=JSON.parse(await docker(['exec',literalContainer,'node','--input-type=module','-e',`import {statSync} from 'node:fs';const info=statSync(${JSON.stringify(dev.modelDirectory+'/ocr.downloads')});console.log(JSON.stringify({uid:info.uid,gid:info.gid}));`]));
+  const [modelUid,modelGid]=config.services.mote.user.split(':').map(Number);
+  assert.deepEqual(modelCacheOwner,{uid:modelUid,gid:modelGid});
+  console.info('[compose-profiles] Offline model import uses the profile owner and reaches catalog validation');
   const actualEnvironment = JSON.parse(await docker(['inspect','--format','{{json .Config.Env}}',literalContainer]));
   assert.equal(actualEnvironment.find(value=>value.startsWith('MOTE_TOKEN=')),undefined);
   await docker(['exec',literalContainer,'node','--input-type=module','-e',`import assert from 'node:assert/strict';import {readConfigDocument} from '@mote/shared/config-file';assert.equal(readConfigDocument(process.env.MOTE_CONFIG_FILE).document.server.token,${JSON.stringify(dev.env.MOTE_TOKEN)});`]);
