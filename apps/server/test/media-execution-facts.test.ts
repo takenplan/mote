@@ -98,6 +98,9 @@ test('successful worker facts cannot replace a lost body, and authenticated stat
  assert.equal((await fetch(url)).status,401);assert.equal((await fetch(url,{method:'DELETE'})).status,401);
  assert.equal((await(await fetch(url,{headers:{...f.headers,'X-Mote-Request-Scope':'b'.repeat(64)}})).json()).state,'unknown');
  await until(async()=>{await node.processing.tick();return node.processing.mediaCalls.get(call.requestId)?.fact?.state==='succeeded';},'succeeded fact without result body');
+ node.store.logicalBytes();const savedCall=node.store.db.prepare('SELECT input,fact FROM media_execution_calls WHERE request_id=?').get(call.requestId)!;
+ assert.equal(node.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='media_execution_calls'").get()!.bytes,Buffer.byteLength(String(savedCall.input))+Buffer.byteLength(String(savedCall.fact))+1024,'issued input and authenticated execution fact count against the vault quota');
+ assert.ok(Number(node.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='media_execution_instance'").get()!.bytes)>128);
  const pinned=node.processing.mediaCalls.get(call.requestId)!.fact!;
  assert.equal(node.processing.mediaCalls.observe(call.requestId,{...pinned,incarnation:randomUUID()}),false,'another physical incarnation cannot substitute its outcome');
  assert.equal(node.processing.mediaCalls.observe(call.requestId,{...pinned,stage:'diarize'}),false);
@@ -123,6 +126,7 @@ for(const action of ['cancel','delete'])test(`a ${action} during real recognitio
  const response=await f.request(action==='delete'?'/api/captures/'+id:'/api/images/'+id+'/cancel',action==='delete'?'DELETE':'POST');assert.equal(response.status,200,await response.text());
  await f.release();await running;
  await until(async()=>{await node.processing.tick();return !node.processing.mediaCalls.get(call.requestId);},'terminal-only exact receipt cleanup');
+ node.store.logicalBytes();assert.equal(node.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='media_execution_calls'").get()!.bytes,0,'terminal receipt cleanup releases its accounted bytes');
  assert.equal(node.store.db.prepare('SELECT count(*) n FROM file_processor_waits WHERE token=?').get(call.requestId)!.n,0);
  assert.equal(node.store.db.prepare('SELECT count(*) n FROM image_products WHERE capture_id=?').get(id)!.n,0);assert.equal(f.posts.length,1);
  const status=await(await fetch(f.worker()+'/executions/'+call.requestId,{headers:{...f.headers,'X-Mote-Request-Scope':call.scope}})).json();assert.equal(status.state,'unknown');

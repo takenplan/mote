@@ -12,8 +12,8 @@ import {ExecutionFailure} from '../src/execution-engine.js';
 import {EXECUTION_POLICIES} from '../src/execution-policy.js';
 import {MemoryPhaseOutputs} from '../src/memory-phase-outputs.js';
 
-async function fixture(t:import('node:test').TestContext){
- const directory=mkdtempSync(join(tmpdir(),'mote-phase-output-')),store=new Store(directory),sources=new SourceStore(store),memories=new MemoryStore(store);
+async function fixture(t:import('node:test').TestContext,storageOptions:{maxStorageBytes?:number}={}){
+ const directory=mkdtempSync(join(tmpdir(),'mote-phase-output-')),store=new Store(directory,storageOptions),sources=new SourceStore(store),memories=new MemoryStore(store);
  sources.register({id:'generated',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});
  const record=await sources.upsert('generated',{externalId:'one',revision:'1',observedAt:'2026-10-01T00:00:00Z',title:'Generated',kind:'file',layer:'original',text:'Generated original for phase recovery.'});
  const pipeline=new MemoryPipeline({store,memories,model:()=> 'generated',configured:()=>true,query:async()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:'generated'})});
@@ -31,6 +31,20 @@ test('a single-attempt coordinator can complete a three-attempt child and retain
  const id=f.engine.enqueue('generated-parent','generated-parent',{});await f.engine.drain([id]);assert.equal(calls,3);assert.deepEqual(received,expected);assert.equal(f.engine.get(id)!.attempts,1);
  const child=f.outputs.id(f.batchId,'extract','generated-large');assert.equal(f.engine.get(child)!.state,'succeeded');assert.equal(f.engine.get(child)!.attempts,3);
  f.engine.retry(id,true);await f.engine.drain([id]);assert.equal(calls,3);assert.deepEqual(received,expected);
+ f.store.logicalBytes();const saved=String(f.store.db.prepare('SELECT json FROM memory_phase_outputs WHERE step_id=?').get(child)!.json);
+ assert.equal(f.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='memory_phase_outputs'").get()!.bytes,Buffer.byteLength(saved)+256,'the complete committed output counts against the vault quota');
+});
+
+test('real phase quota rejection preserves the earlier checkpoint and cancellation releases its accounted bytes',async t=>{
+ const options={maxStorageBytes:0},f=await fixture(t,options),payload={answer:'Generated private phase quota payload '.repeat(20000)};
+ const run=(phase:'extract'|'review')=>f.outputs.run({batchId:f.batchId,jobId:f.jobId,phase,inputHash:'generated-quota-'+phase,generation:'frozen',signal:new AbortController().signal,validate:()=>true,assertCommit:()=>{},execute:async()=>payload});
+ await run('extract');const extractId=f.outputs.id(f.batchId,'extract','generated-quota-extract');
+ const bytes=f.store.logicalBytes(),accounted=Number(f.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='memory_phase_outputs'").get()!.bytes);assert.ok(accounted>512*1024);
+ options.maxStorageBytes=bytes+32768;await assert.rejects(run('review'),error=>error instanceof ExecutionFailure&&error.code==='storage_full');
+ const reviewId=f.outputs.id(f.batchId,'review','generated-quota-review');assert.equal(f.engine.get(reviewId)!.state,'blocked');assert.equal(f.outputs.read(reviewId,'generated-quota-review'),undefined);
+ assert.deepEqual(f.outputs.read(extractId,'generated-quota-extract'),payload);assert.equal(f.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='memory_phase_outputs'").get()!.bytes,accounted);
+ options.maxStorageBytes=0;f.pipeline.cancel(f.jobId);assert.equal(f.outputs.read(extractId,'generated-quota-extract'),undefined);
+ assert.equal(f.store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='memory_phase_outputs'").get()!.bytes,0,'real cancellation deletes the checkpoint and its transactional ledger charge');
 });
 
 for(const corruption of ['missing','corrupt'] as const)test(`a succeeded phase with ${corruption} output fails closed instead of calling its model again`,async t=>{
