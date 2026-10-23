@@ -68,6 +68,14 @@ drains the real Material producer and its startup backfill, then verifies a
 later real tick leaves the selected input unchanged. It retains the full grant,
 review, completion and deletion assertions.
 
+Durable extraction/review outputs and media execution receipts participate in
+the existing vault quota. Quota rejection preserves an earlier committed phase;
+terminal cleanup and cancellation release the corresponding accounted bytes.
+The recovered server also avoids a complete delegation-history scan on every
+new admission and indexes import progress by exact input/scope with a separate
+source check. Neither optimization changes authorization checks, coverage,
+retry budgets or the scale of the regression scenarios.
+
 The Docker Central command uses the owned persistent `/data` volume as its HOME
 for third-party CLI state. Native HOME and the media sidecar commands stay as
 defined by their deployment. The actual container fixture checks a non-default
