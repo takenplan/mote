@@ -204,3 +204,16 @@ test('model-facing branch retry cannot renew an exhausted automatic budget',asyn
  runtime.start({id:'bounded-work',profileId:'bounded-coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'bounded-work');
  assert.equal(retried,true);assert.equal(calls,3);assert.equal(work.units[0].attempts,3);assert.equal(work.units[0].status,'failed');assert.equal(runtime.artifactMetadata(work.id).length,0);
 });
+
+
+test('closing after work admission fences its queued engine wake before storage teardown',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-delegation-queued-close-')),store=new Store(directory),engine=new ExecutionEngine(store),runtime=new DelegationRuntime(store,engine,{autoPump:false});let ticks=0,calls=0,dbClosed=false;
+ const tick=engine.tick.bind(engine);engine.tick=()=>{ticks++;return tick();};runtime.registerCoordinator({id:'generated',execute:async()=>{calls++;return null;}});
+ try{
+  const work=runtime.start({id:'generated-close',profileId:'generated',goal:'Generated queued work',input:{},allowedCapabilities:[]});
+  assert.equal(engine.get(work.id+':coordinator:1')!.state,'waiting');assert.equal(ticks,0,'the admitted work has a queued wake before close');
+  const closing=runtime.close();store.close();dbClosed=true;await closing;await engine.close();
+  await new Promise<void>(resolve=>setImmediate(resolve));
+  assert.equal(ticks,0,'the closed runtime cannot wake the executor against closed storage');assert.equal(calls,0);
+ }finally{await runtime.close();await engine.close();if(!dbClosed)store.close();rmSync(directory,{recursive:true,force:true});}
+});
