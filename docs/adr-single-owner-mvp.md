@@ -38,6 +38,13 @@ The owner chose the lightweight workflow discussed at the beginning of this reco
 
 Develop small modules, check them locally and connect real boundaries early. The initial generated journey uses actual Central startup, owner authorization, intake, Material/query and shutdown/restart. Extend it as functionality converges. One integration owner runs the final affected plan.
 
+Functional correctness is the MVP acceptance priority. Performance that does not
+prevent practical use can be optimized later; earlier multiuser PR benchmarks
+are not recovery targets. Preserve complete input processing, authorization,
+data safety and lifecycle assertions. Distinguish a functional hang or failure
+from a fixture's elapsed-time budget, and report deferred performance work
+separately instead of expanding this recovery to match historical optimizations.
+
 R1 received independent pre-implementation **APPROVE** from GPT-6.1 Sol High against the exact starting/target revisions above. It covers rollback, initial architecture/rules and a minimal focused-test entry. Later capability or lifecycle changes receive bounded review of their actual delta; R1 does not approve unknown redesigns.
 
 See [testing](testing.md), [CI](ci.md) and [development](development.md).

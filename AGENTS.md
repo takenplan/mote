@@ -14,6 +14,7 @@
 
 - Read the affected app's `AGENTS.md` for exact commands. Use [development](docs/development.md) for setup and [testing](docs/testing.md) to choose validation.
 - Work in small modules. Run focused checks for changed behavior and connect a minimal real cross-module journey early. Do not defer first integration until every module is finished.
+- Prioritize functional correctness for this MVP. Defer performance optimization unless measured behavior is seriously slow or prevents practical use; matching historical PR performance is not a recovery requirement.
 - Run the affected candidate plan after planned changes converge. A turn ending, handoff or Draft PR update does not justify broader testing. After fixes rerun invalidated checks, not unchanged successful work.
 - Preserve meaningful assertions, input scale and lifecycle coverage. New product decisions may supersede old tests; explain the changed behavior rather than preserving obsolete requirements.
 - Use [real-world-testing](.agents/skills/real-world-testing/SKILL.md) when adding regression coverage or evaluating test quality. Keep automated UI work hidden/background by default.
