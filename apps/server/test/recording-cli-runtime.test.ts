@@ -17,3 +17,23 @@ for(const provider of ['lark','dingtalk'] as const)test(provider+' refuses missi
  const controller=new AbortController();let enter!:()=>void;const entered=new Promise<void>(resolve=>enter=resolve),pending=runner(binary).login(controller.signal,chunk=>{if(chunk.includes('https://'))enter();});await entered;const pid=Number(await readFile(pidFile,'utf8'));controller.abort();await assert.rejects(pending,{code:provider==='lark'?'lark_operation_cancelled':'dingtalk_operation_cancelled'});assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
 });
 test('authorization parser retains a complete opaque URL beyond old line bounds and never replaces it with a manual-code link',()=>{const url='https://login.dingtalk.com/device?opaque='+ 'generated%2B%2F%3D'.repeat(1200)+'&state=a+b/c==',values:string[]=[],publish=authorizationOutput('dingtalk',value=>values.push(value));publish('non-link output\n'+url.slice(0,17000));assert.equal(values.length,0);publish(url.slice(17000)+'\nhttps://login.dingtalk.com/manual\n');assert.deepEqual(values,[url]);});
+
+test('Lark metadata rate limits retain a fixed retryable code without exposing provider prose',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-lark-rate-limit-')),binary=join(directory,'vendor'),response=join(directory,'response');t.after(()=>rm(directory,{recursive:true,force:true}));
+ await writeFile(binary,`#!/usr/bin/env node\nif(process.argv.includes('--version'))console.log('lark-cli 1.0.98');else{console.error(require('node:fs').readFileSync(${JSON.stringify(response)},'utf8'));process.exitCode=1;}`,{mode:0o700});
+ const runner=createLarkRunner(directory,{localProfile:true,binary});
+ for(const [error,code] of [
+  [{type:'api',subtype:'rate_limit',code:99991400,retryable:true},'lark_rate_limited'],
+  [{type:'api',subtype:'rate_limit',retryable:true},'lark_rate_limited'],
+  [{type:'api',code:99991400},'lark_rate_limited'],
+  [{type:'authorization',subtype:'resource_permission',code:2091005},'lark_permission_required'],
+  [{type:'api',subtype:'not_found',code:2091002},'lark_command_failed'],
+  [{type:'api',subtype:'unknown',retryable:true},'lark_command_failed'],
+ ] as const){
+  await writeFile(response,JSON.stringify({ok:false,error:{...error,message:'Generated private provider prose',hint:'Generated private hint'}}));
+  await assert.rejects(runner({kind:'minutes-metadata',id:'generated-minute'}),(failure:any)=>failure.code===code&&failure.message===code);
+ }
+ await writeFile(response,JSON.stringify({ok:false,error:{type:'api',code:2091003}}));
+ await assert.rejects(runner({kind:'minutes-transcript',id:'generated-minute',outputDir:'generated'}),{code:'recording_transcript_not_ready'});
+ await assert.rejects(runner({kind:'minutes-metadata',id:'generated-minute'}),{code:'lark_command_failed'});
+});
