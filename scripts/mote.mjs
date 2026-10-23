@@ -110,7 +110,7 @@ async function main() {
         await execute(process.execPath,[script,p.modelDirectory,values.role,source],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
       }else{
         if(/[,:]/.test(source))throw Error('Docker model import source path cannot contain comma or colon');
-        await execute('docker',['run','--rm','--network','none','--mount',`type=volume,source=${p.meta.modelsVolume || p.meta.volume+'-models'},target=${p.modelDirectory}`,'--mount',`type=bind,source=${source},target=/import,readonly`,p.meta.image,'node','scripts/media-import.mjs',p.modelDirectory,values.role,'/import'],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
+        await execute('docker',['run','--rm','--network','none','--mount',`type=volume,source=${p.meta.modelsVolume || p.meta.volume+'-models'},target=${p.modelDirectory},volume-nocopy`,'--mount',`type=bind,source=${source},target=/import,readonly`,p.meta.image,'node','scripts/media-import.mjs',p.modelDirectory,values.role,'/import'],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
       }
     });return;
   }

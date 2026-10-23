@@ -74,7 +74,7 @@ async function waitForHealth() {
 }
 
 function volumeMounts() {
-  return ['--mount', `type=volume,source=${volume},target=/data`, '--mount', `type=volume,source=${modelsVolume},target=/models`];
+  return ['--mount', `type=volume,source=${volume},target=/data,volume-nocopy`, '--mount', `type=volume,source=${modelsVolume},target=/models,volume-nocopy`];
 }
 function startArguments() {
   return ['run', '--detach', '--name', container, '--label', `dev.mote.fixture=${runId}`, '--user', containerUser,
@@ -151,7 +151,7 @@ async function assertVendorHome(create = false) {
     if(${create}) for(const provider of ['lark','dingtalk']) {
       const binary=managedCliBinary(provider),options={env:{...process.env,HOME:environment.HOME},encoding:'utf8',timeout:15000};
       const version=execFileSync(binary,provider==='dingtalk'?['version','--format','json']:['--version'],options);
-      if(provider==='dingtalk')assert.equal(JSON.parse(version).version,cliReleases[provider].version);
+      if(provider==='dingtalk')assert.equal(JSON.parse(version).version.replace(/^v/,''),cliReleases[provider].version);
       else assert.ok(version.includes(cliReleases[provider].version));
       assert.ok(execFileSync(binary,['--help'],options).length>0);
     }
@@ -193,6 +193,10 @@ async function prepareConfiguration() {
   assert.equal(loaded.document.server.token, fixtureToken); assert.equal(loaded.document.storage.dataKey, dockerEnv.MOTE_DATA_KEY);
   assert.deepEqual(loaded.savedDocument, document); assert.equal(loaded.document.models.deployment.model, '');
   const argv = startArguments();
+  assert.deepEqual(argv.flatMap((value, index) => value === '--mount' && argv[index + 1].startsWith('type=volume,') ? [argv[index + 1]] : []), [
+    `type=volume,source=${volume},target=/data,volume-nocopy`,
+    `type=volume,source=${modelsVolume},target=/models,volume-nocopy`,
+  ]);
   assert.ok(argv.includes(`type=bind,source=${configurationDirectory},target=/config`)); assert.ok(!argv.some(value => value.startsWith('MOTE_ENV_FILE=')));
   assert.deepEqual(argv.flatMap((value, index) => value === '--env' ? [argv[index + 1]] : []), ['MOTE_CONFIG_FILE=/config/mote.yaml', 'MOTE_TOKEN', 'MOTE_DATA_KEY']);
   assert.ok(argv.includes(containerUser)); assert.ok(!argv.join(' ').includes(fixtureToken));
