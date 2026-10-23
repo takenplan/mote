@@ -1,6 +1,6 @@
 # Scoped media failed-fact recovery
 
-Date: 2026-10-23. Status: implementation-complete; assembled deployment verification pending.
+Date: 2026-10-23. Status: integration-verified for generated recovery and local deployment readback; not merge-ready.
 
 Scope: future scoped local OCR/ASR reconciliation and processing attempts. The
 [task recovery decision](../adr-task-recovery-and-execution-budgets.md),
@@ -66,19 +66,37 @@ physical-device check.
 
 ## Validation evidence
 
-The approved base is `d8b40f3a75c30f9e0ea860f824516d07d08279f6`.
+The approved base is `d8b40f3a75c30f9e0ea860f824516d07d08279f6`;
+the implemented and deployed candidate is `d2b09b7e5d9cb88cd2d734e6f8db6f2b40a25bf7`.
 The Server TypeScript build passed. The driver command
 `npm run check:affected -- --test-file apps/server/test/multiuser-media-queue.test.ts --test-file apps/server/test/multiuser-media-failed-fact-recovery.test.ts`
 passed 17/17 tests with no skips in 21.68 seconds. Environment, shared and agent
 build prerequisites passed; the driver confirmed cleanup and recorded receipt
 `2026-10-23T05-01-08-270Z-ecba8cad-5bc0-434a-a96c-74b1c6522837`.
-Both input files were frozen before execution. No full workspace suite, live
-model, physical device or live ASR quality check was run. Assembled local
-deployment verification remains pending.
+Both input files were frozen before execution, and their source hashes match the
+committed release. The independent Central release built successfully and was
+activated through the normal Dev upgrade command, without forced termination.
 
-After deployment, read the exact release and perform bounded formal local
-health/media/task readback. Verify that historical terminal states, attempt
-counts/rounds and protected success-without-body work remain unchanged. Do not
-issue historical Retry requests or replay captured recordings. Report this
-read-only deployment check separately from generated fixture results and any
-separately authorized live-model check.
+Formal local health, authenticated self, media model state, four fixed historical
+tasks and two original processing statuses passed after deployment. A consistent
+before/after metadata comparison retained task states, attempts `[3,2,2,2]`,
+round 1, charged sessions, exact issuance/fact/snapshot and physical cleanup
+records, model attempts, owner confirmations and zero complete artifacts. No
+historical Retry request or model invocation was made by this verification.
+The private operator receipts are `asr-repair-live-verification.json` and
+`asr-repair-before.json` / `asr-repair-after.json`.
+
+The newly started OCR worker also processed one generated PNG with exact text
+and a new-incarnation succeeded fact. The formal OCR, ASR and speaker states
+reported ready. ASR readiness is not a new audio inference or quality result.
+No full workspace suite, physical device or live ASR quality check was run;
+background Memory processing and the two protected historical audio failures
+remain outside a claim of complete processing. This evidence does not establish
+merge readiness or a Main-branch deployment.
+
+Future deployment verification must again read the exact release and perform
+bounded formal health/media/task readback. Keep historical terminal states,
+attempt counts/rounds and protected success-without-body work unchanged; do not
+issue historical Retry requests or replay captured recordings as verification.
+Report read-only deployment checks separately from generated fixture results
+and any separately authorized live-model check.
