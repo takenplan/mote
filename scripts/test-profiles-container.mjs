@@ -9,7 +9,7 @@ import { repository, loadProfile, profilePaths } from './profile-lib.mjs';
 import { cli, command, initializeFixture, updateEnvironment, request, note, capture, image } from './profile-fixtures.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'mote-compose-fixture-')), home = join(directory, 'profiles'), restoredHome = join(directory, 'restored');
-const imageTag = `mote-compose-fixture:${randomUUID()}`, profiles = [], volumes = new Set(), imageIds = new Set();
+const imageTag = `mote-compose-fixture:${randomUUID()}`, rollbackArtifactTag = `${imageTag}-rollback-artifact`, profiles = [], volumes = new Set(), imageIds = new Set();
 async function docker(args, timeoutMs = 120000) {
   const result = await command('docker', args, { timeoutMs });
   assert.equal(result.code, 0, `docker ${args[0]} failed: ${result.stderr.slice(-1600)}`); return result.stdout.trim();
@@ -115,6 +115,10 @@ try {
 
   await run(dev, 'start');
   const oldImage = await docker(['image','inspect','--format','{{.Id}}',imageTag]); imageIds.add(oldImage);
+  // Supply an available rollback artifact even when this Docker backend drops
+  // untagged image IDs. This does not test automatic product image retention;
+  // releases use immutable tags. Rollback below must still select the old ID.
+  await docker(['image','tag',oldImage,rollbackArtifactTag]);
   // Rebuild the same mutable tag while its original container is still running.
   // Rollback must restore the original image ID, not follow the overwritten tag.
   const derive = join(directory,'image-derive'); await mkdir(derive);
@@ -168,6 +172,22 @@ try {
   assert.equal(tls.services.caddy.image, 'caddy:2.11.4-alpine');
   await docker(['run', '--rm', '--env', 'MOTE_TLS_DOMAIN=synthetic-mote.invalid', '--env', 'MOTE_PORT='+test.port, '--mount', `type=bind,source=${join(repository, 'deploy/Caddyfile')},target=/etc/caddy/Caddyfile,readonly`, 'caddy:2.11.4-alpine', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']);
   console.info('[compose-profiles] Caddy configuration validation passed; public DNS/TLS deployment was not attempted');
+} catch (error) {
+  // Preserve only this journey's container state before the normal cleanup.
+  // Health output, environment, configuration and response bodies stay private.
+  for (const project of new Set(profiles.map(profile => profile.project))) {
+    try {
+      const listed = await command('docker', ['ps', '--all', '--quiet', '--filter', `label=com.docker.compose.project=${project}`], {timeoutMs: 10000});
+      if (listed.code !== 0) throw Error('Container diagnostics unavailable');
+      for (const id of listed.stdout.trim().split(/\s+/).filter(id => /^[a-f0-9]+$/.test(id))) {
+        const inspected = await command('docker', ['inspect', '--format', '{"name":{{json .Name}},"state":{{json .State}}}', id], {timeoutMs: 10000});
+        if (inspected.code !== 0) throw Error('Container diagnostics unavailable');
+        const {name, state} = JSON.parse(inspected.stdout);
+        console.error('[compose-profiles] Failure container state', JSON.stringify({name, status: state.Status, running: state.Running, exitCode: state.ExitCode, health: state.Health ? {status: state.Health.Status, log: (state.Health.Log ?? []).slice(-5).map(entry => ({start: entry.Start, end: entry.End, exitCode: entry.ExitCode}))} : null}));
+      }
+    } catch { console.error('[compose-profiles] Failure container state', JSON.stringify({available: false})); }
+  }
+  throw error;
 } finally {
   if (available) {
     for (const p of profiles.reverse()) {
@@ -176,6 +196,7 @@ try {
     }
     for (const volume of volumes) await command('docker', ['volume', 'rm', volume]).catch(() => undefined);
     await command('docker', ['image', 'rm', imageTag]).catch(() => undefined);
+    await command('docker', ['image', 'rm', rollbackArtifactTag]).catch(() => undefined);
     for (const id of Array.from(imageIds).reverse()) await command('docker',['image','rm',id]).catch(()=>undefined);
   }
   await rm(directory, { recursive: true, force: true });
