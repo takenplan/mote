@@ -18,6 +18,7 @@ import {contextStepPage} from './task-steps.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
 import type {ServerDiagnostics,EventFields} from '../diagnostics.js';
+import {executionObservability,type ExecutionObservability} from '../execution-observability.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {ProcessorAdmission} from '../processor-admission.js';
 import type {DomainLifecycle,UserDataSubject,UserExport} from './lifecycle.js';
@@ -136,9 +137,14 @@ export class TaskExecution {
  private readonly physical:TaskPhysicalCalls;
  private modelHost:TaskModelHost|undefined;
  private diagnostics:ServerDiagnostics|undefined;
+ private observability:ExecutionObservability|undefined;
  private modelAdmission:((run:TaskRun,work:()=>Promise<unknown>)=>Promise<unknown>)|undefined;
  bindModelAdmission(admit:NonNullable<TaskExecution['modelAdmission']>){if(this.modelAdmission)throw new TaskError('model_host_conflict',409);this.modelAdmission=admit;}
- bindDiagnostics(diagnostics:ServerDiagnostics){this.diagnostics??=diagnostics;}
+ bindDiagnostics(diagnostics:ServerDiagnostics){
+  if(this.diagnostics)return;
+  this.diagnostics=diagnostics;this.observability=executionObservability(diagnostics);
+  this.engine.bindObserver(value=>this.observability?.lease(value),()=>this.observability?.enabled()??false);
+ }
  private logStep(step:ExecutionStep){
   const fields:EventFields={kind:step.kind,name:step.operationId,state:step.state,attempt:step.attempts,...(step.error?{category:step.error,detail:step.error}:{})};
   if(step.state==='succeeded')this.diagnostics?.record('task.completed',fields);
@@ -533,8 +539,8 @@ export class TaskExecution {
  }
  private confirmationRequired(row:TaskRow){return ['issued','unknown'].includes(row.external_state)&&!this.readReplayReady(row);}
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,confirmUnknownRequired:this.confirmationRequired(row),cleanupPending:this.physical.busy(step.id),progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
- tick(){return this.engine.tick();}
- start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));},100);this.timer.unref();void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));}
+ tick(){return this.observability?this.observability.sync('host_tick',{phase:'host'},()=>this.engine.tick()):this.engine.tick();}
+ start(){if(this.timer)return;this.timer=setInterval(()=>{try{this.observability?.hostTick();}catch{/* Observation never changes the existing tick. */}void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));},100);this.timer.unref();void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));}
  /** Host domain's explicit replacement operation may acknowledge old unknown
   * facts without requeuing an obsolete input or reviving its task grant. No HTTP
   * or model tool exposes this capability. Facts themselves remain unresolved. */
@@ -574,6 +580,7 @@ export class TaskExecution {
  }
  close(){
   this.closing=true;
+  try{this.observability?.close();}catch{/* Observation never delays physical cleanup. */}this.engine.bindObserver(undefined);
   return this.closeTask??=Promise.resolve().then(async()=>{if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();await this.drainLocalWork();this.modelLeases.clear();this.modelRecovery.clear();});
  }
  /** M16 observes only purpose-limited journal facts after deletion admission

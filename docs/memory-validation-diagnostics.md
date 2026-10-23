@@ -77,6 +77,35 @@ added to ordinary diagnostics. IDs and measurements pass the diagnostics allowli
 Detailed Agent traces remain opt-in and use the same NDJSON envelope and rotating files as ordinary logs. Numeric candidate/span
 locations can be included in repair instructions without replaying untrusted text.
 
+## Execution timing observations
+
+Five fixed ordinary events support lease investigations: `task.loop_timing`,
+`task.lease_timing`, `task.lease_renewal`, `task.lease_recovered` and
+`memory.reader_timing`. They observe the existing host timer, renewal/recovery
+CAS outcomes and scoped Memory reader/preparation/assertion callbacks. They do
+not change leases, budgets, attempts, scheduling, authority or physical cleanup.
+The cause of the seven lease recoveries that motivated this instrumentation is
+still **unknown**; timing correlation is not a lease-failure repair.
+
+Correlation uses a dedicated `taskKey` for a controlled lowercase 64-hex task
+identity and `attemptId` under the existing UUID validator. Existing `taskId` and
+`operationId` validation is unchanged. Closed operation labels use the existing
+`name` field; they never copy arbitrary task, tool or source names. Records contain
+only allowed identifiers, fixed labels and numeric measurements, with no source
+or Memory prose, prompts, arguments/results, SQL/parameters, credentials, arbitrary
+exceptions, grant/fence values or account identifiers.
+
+Per logger, each declared 60-second monotonic window admits at most 40 routine
+entries, 20 failure/recovery entries and one suppression/window summary: at most
+61 new events. Suppression, dropped writes and missing completion records leave
+evidence **unknown**, rather than proving that work or a failure did not occur.
+Existing enabled, selected-level, silent and closed gates apply; Agent trace may
+remain off. Off/re-enable resets owned timing baselines, and close clears owned
+state through existing lifecycle paths without deleting retained history or
+adding a timer/handle. See the
+[execution observability validation record](validation/execution-observability-20261023.md)
+for measurement boundaries and pending evidence.
+
 ## September 21 investigation
 
 A read-only inspection of the local running node found 13 terminal failed batches
