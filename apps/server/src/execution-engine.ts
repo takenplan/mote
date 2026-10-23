@@ -99,7 +99,7 @@ export class ExecutionEngine {
   if(this.stopping)throw new StoreError('Execution engine is closed',503);
   const handler=this.handlers.get(kind);if(!handler)throw new StoreError('Execution handler unavailable',409);
   input=canonical(input) as Record<string,unknown>;
-  const json=JSON.stringify(input);if(json.length>32768)throw new StoreError('Execution input exceeds metadata limit',413);
+  const json=JSON.stringify(input);
   const id=options.id??hash([operationId,kind,input]),now=this.now(),db=this.store.db;
   const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
   try{
@@ -172,7 +172,7 @@ export class ExecutionEngine {
  /** Several completions in one turn need only one admission pass. */
  private scheduleTick(){
   if(this.stopping||this.scheduled)return;
-  this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
+  this.scheduled=true;setImmediate(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
  }
  async drain(ids:string[]){
   void this.tick().catch(()=>{});

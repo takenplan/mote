@@ -13,6 +13,25 @@ async function fixture(t:any){
 }
 const base:ExecutionHandler={kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
+test('complete validated inputs remain durable and idempotent beyond the former metadata cap',async t=>{
+ const {engine,store}=await fixture(t),input={members:Array.from({length:180},(_,n)=>({id:n,text:'Generated complete evidence 🌱 '.repeat(12)+' exact-tail-'+n}))};
+ assert.ok(JSON.stringify(input).length>32768);let calls=0,received:unknown;
+ engine.register({...base,execute:async step=>{calls++;assert.deepEqual(step.input,input);return step.input;},commit:(_step,value)=>{received=value;}});
+ const id=engine.enqueue('generated-full-input','fixture',input);assert.equal(engine.enqueue('generated-full-input','fixture',input),id);
+ assert.deepEqual(JSON.parse(String(store.db.prepare('SELECT input FROM execution_steps WHERE id=?').get(id)!.input)),input);
+ await engine.drain([id]);assert.equal(calls,1);assert.deepEqual(received,input);assert.equal(engine.get(id)!.state,'succeeded');
+});
+
+test('completion-driven admissions yield a turn while preserving all queued work',async t=>{
+ const {engine}=await fixture(t);let committed=0;
+ engine.register({...base,commit:()=>{committed++;}});
+ const ids=Array.from({length:80},(_,n)=>engine.enqueue('generated-yield','fixture',{n}));
+ const unrelatedTurn=new Promise<void>(resolve=>setImmediate(resolve));
+ await engine.tick();await unrelatedTurn;
+ assert.ok(committed>0&&committed<ids.length,'unrelated event-loop work runs before the completion backlog drains');
+ await engine.drain(ids);assert.equal(committed,ids.length);assert.ok(ids.every(id=>engine.get(id)!.state==='succeeded'));
+});
+
 test('one engine fills slots, fairly interleaves operations and keeps one step per immutable input',async t=>{
  const {engine}=await fixture(t),started:string[]=[],committed:string[]=[];let release!:()=>void,enter!:()=>void;
  const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
