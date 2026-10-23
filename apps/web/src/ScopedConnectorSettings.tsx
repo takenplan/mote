@@ -28,7 +28,7 @@ export function ScopedConnectorSettings({api,id,provider='gmail',onSaved,onCance
  }
  return <form className="connector-settings settings-form" onSubmit={event=>{event.preventDefault();void save();}}>
   <fieldset disabled={busy||!base}><legend>{id?moteText('编辑连接'):moteText('新建连接')}</legend>
-   <label>{moteText('连接 ID')}<input aria-label={moteText('连接 ID')} required pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}" maxLength={80} disabled={!!id} value={connectionId} onInput={event=>{setConnectionId(event.currentTarget.value);setDirty(true);}}/></label>
+   <label>{moteText('连接 ID')}<input aria-label={moteText('连接 ID')} required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,79}" maxLength={80} disabled={!!id} value={connectionId} onInput={event=>{setConnectionId(event.currentTarget.value);setDirty(true);}}/></label>
    {['gmail','google-calendar'].includes(provider)&&<><label>{moteText('Google 客户端 ID')}<input aria-label={moteText('Google 客户端 ID')} required maxLength={2000} value={clientId} onInput={event=>{setClientId(event.currentTarget.value);setDirty(true);}}/></label>
    <label>{moteText('Google 客户端密钥')}<input aria-label={moteText('Google 客户端密钥')} type="password" autoComplete="new-password" maxLength={4000} value={secret} disabled={clearSecret} onInput={event=>{setSecret(event.currentTarget.value);setDirty(true);}}/>{existing?.googleClientSecret&&<small>{moteText('留空保留已保存密钥。')}</small>}</label>
    {existing?.googleClientSecret&&<label><input type="checkbox" checked={clearSecret} onChange={event=>{setClearSecret(event.target.checked);setDirty(true);}}/>{moteText('清除已保存密钥')}</label>}
