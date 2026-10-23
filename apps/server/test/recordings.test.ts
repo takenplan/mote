@@ -17,6 +17,7 @@ import type {QueryInput} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
 import {planGeneratedMemory,generatedMemoryOutput} from './fixtures/memory-planning.js';
 import {recordingMemoryRecipe} from '../src/connectors/recording-memory.js';
+import {ConnectorError} from '../src/connectors/types.js';
 const raw='Generated diary export\n\nOwner 00:00:00.000\nI felt proud of finishing a generated prototype.\n\nOwner 00:00:02.500\nI prefer quiet mornings for focused work.\n';
 const selection={enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00:00Z',autoSync:false,backupAudio:true};
 const wav=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
@@ -60,6 +61,26 @@ test('a running transcript does not hold the media resource',async t=>{
   const status=await f.request('GET');assert.equal(status.counts.transcripts,0);assert.equal(status.counts.audio,1);assert.ok(status.steps.some((step:any)=>step.phase==='transcript'&&step.state==='running'));
  }finally{release();}
  await f.flush();
+});
+
+test('metadata rate limits wait across restart, recover without owner retry and exhaust the existing finite budget',async t=>{
+ let remaining=1,metadataCalls=0;
+ const f=await fixture(t,()=>({id:'feishu',version:'generated-rate-limit@1',account:async()=>({id:'generated-owner'}),
+  discover:async()=>({ids:['r1']}),
+  metadata:async()=>{metadataCalls++;if(remaining-->0)throw new ConnectorError('lark_rate_limited',502);return {id:'r1',title:'Generated diary',recordedAt:'2026-09-20T00:00:00Z',durationMs:5000};},
+  transcript:async()=>({rawText:raw,transcript:feishuTranscript(raw,5000)}),media:async()=>({mimeType:'audio/wav',bytes:wav}),
+ }));
+ const before=Date.now();await f.request('POST','/connect');await f.request('PUT','/selection',{...selection,start:'2026-09-10T00:00:00Z'});await f.flush();
+ const row=()=>f.node.store.db.prepare("SELECT id,operation_id,state,attempts,error,available_at FROM execution_steps WHERE kind='recording.feishu.metadata' ORDER BY rowid DESC LIMIT 1").get()!;
+ const waiting=row();assert.equal(waiting.state,'waiting');assert.equal(waiting.error,'recording_rate_limited');assert.equal(waiting.attempts,1);assert.ok(Number(waiting.available_at)>=before+60000);assert.equal((await f.request('GET')).counts.failed,0);
+ await f.restart();await f.flush();assert.equal(row().available_at,waiting.available_at);assert.equal(row().attempts,1);assert.equal(metadataCalls,1,'restart respects the retained delay');
+ // Advance only this generated receipt's eligibility after verifying the durable delay.
+ f.node.store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE id=?').run(waiting.id);await f.flush();
+ assert.equal(row().state,'succeeded');assert.equal(row().attempts,2);assert.equal((await f.request('GET')).counts.transcripts,1);assert.equal((await f.request('GET')).counts.audio,1);assert.equal(f.models.length,0);
+ const completed=await f.node.app.inject({method:'GET',url:'/api/operations/'+waiting.operation_id,headers:{authorization:'Bearer '+f.config.token}});assert.equal(completed.statusCode,200);assert.equal(completed.json().operation.state,'succeeded');
+ remaining=10;await f.request('POST','/sync');await f.flush();const repeated=row();assert.equal(repeated.state,'waiting');assert.equal(repeated.attempts,1);
+ for(let attempt=2;attempt<=3;attempt++){f.node.store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE id=?').run(repeated.id);await f.flush();assert.equal(row().attempts,attempt);assert.equal(row().state,attempt===3?'failed':'waiting');assert.equal(row().error,'recording_rate_limited');}
+ const calls=metadataCalls;await f.flush();assert.equal(metadataCalls,calls,'exhausted acquisition does not retry forever');assert.equal((await f.request('GET')).counts.failed,1);assert.equal((await f.request('GET')).counts.transcripts,1);assert.equal((await f.request('GET')).counts.audio,1);
 });
 
 test('recording intake produces complete material and Memory, bypasses ASR, preserves vendor deletion and deduplicates repeated history',async t=>{
