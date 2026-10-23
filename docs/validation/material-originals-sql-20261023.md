@@ -1,6 +1,7 @@
 # Material originals SQL validation
 
-Date: 2026-10-23. Status: implementation pending. The owner requested diagnosis,
+Date: 2026-10-23. Status: integration-verified for the named SQL/readback journey.
+Active lease-under-load regression remains unverified. The owner requested diagnosis,
 repair and regression in the existing local Dev Central, without another full
 test suite. No automated suites or new generated regression fixtures were run.
 
@@ -53,6 +54,18 @@ runtime regression evidence.
 The old runtime had delayed renewal callbacks, expired-fence recoveries and
 intermittent health-request timeouts. The measured SQL amplification is confirmed.
 It does not independently prove the complete cause of every historical 30-second
-callback gap. Runtime acceptance remains pending until the exact repaired commit
-is deployed and current process/request/task evidence is recorded. Idle time or
+callback gap. The repaired commit `c2d5129c4297ad9dff4ae002f82dabfae2afcd5d` was built in an
+independent release and selected by the ordinary profile upgrade at 07:27:16 UTC.
+The formal observer completed in 29.60 seconds: all reads completed, login/logout
+succeeded, 896 published Memories were read, and all three media roles were ready.
+A new worker recognized one generated PNG in 44 ms with its own exact successful
+execution fact. ASR readiness was checked; audio accuracy was not exercised.
+
+The four historical ASR/pipeline tasks and all retry rounds were unchanged; no
+new round, retry, import or model configuration change was made. The observed
+14 failed Memory batches had already exhausted their three-attempt rounds; six
+older tasks still waited for physical-cleanup proof. There were no running tasks.
+No new expiry was observed in the initial two-minute window, but idle time or
 absence of new tasks cannot establish successful renewal under active processing.
+This repair confirms and removes one substantial SQL amplification cause; the
+complete origin of every historical 30-second gap is not claimed resolved.
