@@ -67,3 +67,29 @@ test('a pending descendant cannot hide an unknown issued-call outcome',async t=>
  const {engine,operations}=fixture(t);engine.enqueue('file:unknown-pending','fixture',{parent:true},{initial:{state:'blocked',attempts:1,availableAt:0,error:'processor_response_unknown'}});engine.enqueue('file:unknown-pending','fixture',{child:true},{initial:{state:'waiting',attempts:1,availableAt:Number.MAX_SAFE_INTEGER,error:'provider_unavailable'}});
  const current=operations.detail('file:unknown-pending').operation;assert.equal(current.state,'waiting');assert.equal(current.waitingReason,'processor_response_unknown');assert.equal(operations.page({kind:'file'}).items[0].waitingReason,'processor_response_unknown');
 });
+
+
+test('205-step detail batches dependency reads without changing per-step limits or pagination',async t=>{
+ const {store,engine,operations}=fixture(t);
+ const dependencies=Array.from({length:125},(_,i)=>engine.enqueue('file:dependency-fixture','fixture',{i},{id:'dependency-'+String(124-i).padStart(3,'0')}));
+ const expected=new Map<string,string[]>();
+ for(let i=0;i<205;i++){
+  const selected=dependencies.slice(0,[0,1,99,100,125][i%5]);
+  const id=engine.enqueue('file:batch-fixture','fixture',{i},{dependencies:selected,initial:{state:'blocked',attempts:0,availableAt:0,error:'awaiting_confirmation'}});
+  expected.set(id,[...selected].sort().slice(0,100));
+ }
+ const prepare=store.db.prepare.bind(store.db),reads:string[][]=[];
+ const spy=t.mock.method(store.db,'prepare',(sql:string)=>{const statement=prepare(sql);if(sql.includes('FROM execution_dependencies')){const all=statement.all.bind(statement);statement.all=((...args:any[])=>{reads.push(JSON.parse(String(args[0])));return all(...args);}) as typeof statement.all;}return statement;});
+ for(const limit of [1,50,100,205,600]){
+  let cursor=0;const seen:string[]=[];
+  do{reads.length=0;const page=operations.detail('file:batch-fixture',cursor,limit);assert.equal(reads.length,Math.ceil(page.steps.length/100));assert.deepEqual(reads.flat(),page.steps.map(s=>s.id));assert.ok(reads.every(batch=>batch.length<=100));
+   for(const step of page.steps){assert.deepEqual(step.dependencies,expected.get(step.id));assert.equal(step.state,'blocked');assert.equal(step.attempts,0);seen.push(step.id);}
+   cursor=page.nextCursor??0;
+  }while(cursor);
+  assert.deepEqual(seen,[...expected.keys()]);
+ }
+ reads.length=0;assert.deepEqual(operations.detail('file:batch-fixture',Number.MAX_SAFE_INTEGER).steps,[]);assert.equal(reads.length,0);spy.mock.restore();
+ const app=Fastify();t.after(()=>app.close());registerOperations(app,operations,req=>req.headers.authorization==='Bearer collector');
+ const response=await app.inject({url:'/api/operations/file%3Abatch-fixture?limit=100'});assert.equal(response.statusCode,200);for(const step of response.json().steps)assert.deepEqual(step.dependencies,expected.get(step.id));
+ assert.equal((await app.inject({url:'/api/operations/file%3Abatch-fixture',headers:{authorization:'Bearer collector'}})).statusCode,403);
+});
