@@ -5,7 +5,9 @@ these principles to all Central task registrations and failure handling,
 reproducing failures with generated fixtures, and opening a PR after verification.
 Historical failures must not be rerun. Defaults are in [task execution
 policies](task-execution-policies.md); verification and deployment scope are
-recorded separately from this decision.
+recorded separately from this decision. The owner approved the current
+single-owner bounded-retry restoration on 2026-10-23; its implementation is
+recorded below.
 
 ## Decision
 
@@ -74,6 +76,77 @@ retries. Recheck resource eligibility and current authority before dispatch,
 preserve fair scheduling and avoid holding a transaction or physical execution
 slot while waiting. A prolonged wait remains visible and cancellable; this
 decision adds no queue cap, expiry, retention rule or automatic terminal age.
+
+## Single-owner bounded retry restoration
+
+Replayable orchestration, local processing, model calls and recording network
+acquisition default to three attempts: the initial execution plus at most two
+automatic retries of an eligible failure. Deterministic and control policies
+remain at one attempt. Explicit single-attempt registrations, including
+non-replayable interactive observations, query embeddings, import prepare/commit
+and provider preparation, remain unchanged. This supersedes the former four-call
+model/local/delegation defaults, five-call recording default and two-call Actions
+extraction default. Permanent errors and unknown external outcomes do not become
+automatically retryable, and model-output correction rounds do not increase.
+
+The executor preserves attempt counts when reopening a task unless an existing
+explicit owner command resets the applicable failed execution. Automatic
+continuation, prerequisite healing, model-facing delegation retry and repeated
+observation of a terminal child are not owner reset authority. The executor
+checks exhaustion again before dispatch, so reopening or restarting cannot
+produce a fourth execution in the same bounded round. Current-input, privacy,
+configuration, cancellation and unknown-outcome checks still apply to an owner
+retry. Successful siblings are preserved; existing explicit recompute commands
+retain their separately declared scope.
+
+Resource and child waits do not consume a failed-execution attempt. Lifecycle
+windows persist both their retry time and the exact failure receipt already
+counted; a repeated observation after restart cannot increment the failure count
+or shorten the domain's backoff. An explicit reopen keeps its existing immediate
+wake behavior, so confirmed readiness is not delayed by a new generic wake
+policy. Prerequisites such as paused or unconfigured Memory status are checked
+before claiming a bookkeeping execution.
+
+After local lease expiry, the same host must wait for its old physical task to
+settle before admitting that task again. Its final cleanup may remove only its
+own active entry. Other hosts continue to use durable leases and commit fences;
+no lease transition proves that an external effect did not execute.
+
+Memory extraction and independent review now use separate durable phase tasks.
+Their identities pin the batch, input generation and strategy, independent of a
+renewed parent lease. Each phase owns three eligible execution attempts. Child
+waiting refunds the coordinator's attempt, and a terminal failed child stops
+that path instead of acquiring another budget from the parent. An explicit
+owner retry may reset current-generation failed or blocked children; it preserves
+successful extraction and review. Automatic continuation and model-facing retry
+cannot reset them.
+
+A dedicated `memory_phase_outputs` table stores the full semantic result,
+explicit independent-review receipt, evidence/image read dependencies and native
+draft/provider pins in the existing private envelope. The row and phase success
+commit in one transaction. These are owned checkpoints, not evictable cache
+entries: outputs above 512 KiB remain complete. Every successful-phase recovery
+requires a readable, valid checkpoint; missing or corrupt output fails closed
+without repeating the model call. Publication continues through its existing
+journal, with completed review reused after publication failure. Correction
+rounds and review acceptance contracts remain unchanged.
+
+Cancellation, input invalidation, dependency retirement and deletion remove the
+private outputs, with authority checks fencing late writes. An admitted batch
+may finish while its job is pausing, preserving the existing pause-drain
+contract. Bulk decryption traverses these envelopes before key retirement.
+Generated fixtures cover restart with encrypted and decrypted storage, actual
+process exit on both sides of local commit, failed-phase owner reset and
+successful-phase reuse. A response lost before local commit is not a completed
+checkpoint; recovery does not promise exactly-once model execution across that
+boundary.
+
+The restoration was checked with generated fixtures through the recording
+connector's authenticated HTTP entrypoint, Material publication and transient
+Memory extraction/review recovery. Tests retain the 1,000-original delegation
+corpus, local and two-host lease recovery, capacity waiting, failed-phase reuse,
+unknown-call protection, cancellation/deletion and source progress while Memory
+is held. This is fixture evidence, not physical-device or live-model evidence.
 
 ## File and worker admission
 

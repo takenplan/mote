@@ -42,7 +42,7 @@ export interface ExecutionHandler {
  /** Trusted identities/stage only; the engine never persists arbitrary errors. */
  failureContext?:(step:ExecutionStep)=>FailureContext;
 }
-type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;resourceKeys?:string[];admit?:()=>ExecutionFailure|undefined;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;policy?:ExecutionPolicy;timeoutMs?:number|null;maxAttempts?:number;maxRecoveryWindowMs?:number|null;classify?:(error:unknown)=>ExecutionFailure};
+type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;resourceKeys?:string[];admit?:()=>ExecutionFailure|undefined;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;requireDurableResult?:boolean;initialAttempts?:number;policy?:ExecutionPolicy;timeoutMs?:number|null;maxAttempts?:number;maxRecoveryWindowMs?:number|null;classify?:(error:unknown)=>ExecutionFailure};
 type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number};
 const view=(row:Row):ExecutionStep=>({id:row.id,operationId:row.operation_id,kind:row.kind,pool:row.pool,input:JSON.parse(row.input),state:row.state,attempts:row.attempts,availableAt:row.available_at,...(row.error?{error:row.error}:{})});
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,canonical(v)])):value;
@@ -321,17 +321,19 @@ export class ExecutionEngine {
    // Reaching a blocked prerequisite again rechecks the current handler's
    // admission (including an issued-call guard). It never reopens cancelled,
    // stale or failed work, whose explicit retry belongs to the domain owner.
+   if(current.state==='succeeded'&&options.requireDurableResult&&options.read()===undefined)throw new ExecutionFailure('permanent','memory_phase_output_missing');
    if(current.state==='blocked'||current.state==='succeeded'&&options.read()===undefined)this.retry(options.id,false);
    await this.drain([options.id]);options.signal.throwIfAborted();
    const step=this.get(options.id)!,value=step.state==='succeeded'?options.read():undefined;
    if(value!==undefined)return value;
+   if(step.state==='succeeded'&&options.requireDurableResult)throw new ExecutionFailure('permanent','memory_phase_output_missing');
    // The child owns its real retry budget. A replayable parent yields its slot
    // and budget while that child waits, including across host restarts.
    if(step.state==='waiting')throw retainFailureContext(new ExecutionFailure('waiting',step.error??'step_pending',Math.max(1,step.availableAt-this.now())),{causeStepId:step.id,causeCode:step.error??'step_pending',causeState:step.state});
    if(step.state==='stale')throw new ExecutionFailure('stale','input_changed');
    if(step.state==='cancelled')throw new ExecutionFailure('permanent','cancelled');
    if(step.state==='blocked')throw new ExecutionFailure('blocked',step.error??'step_blocked');
-   if(step.state==='failed')throw retainFailureContext(new ExecutionFailure('permanent',step.error??'step_failed'),{...failureContext(failure),causeStepId:step.id,causeCode:step.error??'step_failed',causeState:step.state});
+   if(step.state==='failed')throw retainFailureContext(new ExecutionFailure('permanent',step.error??'step_failed',options.requireDurableResult?Math.max(0,step.availableAt-this.now()):undefined),{...failureContext(failure),causeStepId:step.id,causeCode:step.error??'step_failed',causeState:step.state});
    if(failure)throw failure;
    throw new ExecutionFailure('waiting','step_pending',Math.max(1000,step.availableAt-this.now()));
   }finally{options.signal.removeEventListener('abort',abort);await unregister();}

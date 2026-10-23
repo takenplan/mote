@@ -29,10 +29,11 @@ import type {MemoryValidationDetails} from './memory-validation.js';
 import type {ModelConfiguration} from './model-configuration.js';
 import {memoryReviewReceipt,type MemoryDraftOrigin} from './memory-review.js';
 import type {Memory} from './memory-schema.js';
-import type {MemoryReviewReceipt} from './memory-schema.js';
+import {memoryReviewReceiptSchema,type MemoryReviewReceipt} from './memory-schema.js';
 import {formatMaterialRef} from './materials.js';
+import {MemoryPhaseOutputs} from './memory-phase-outputs.js';
 import {MemoryExtractionDrafts} from './memory-extraction-drafts.js';
-import {memoryReadRanges,assertMemoryTargetSupport,mergeMemoryReadRanges} from './memory-read-context.js';
+import {memoryReadRanges,assertMemoryTargetSupport,mergeMemoryReadRanges,retainedMemoryReadReceipt} from './memory-read-context.js';
 import type {MemoryPublication,MemoryPublicationReceipt} from './memory-publication.js';
 import {MemoryProviderError} from './memory-provider-contract.js';
 import type {MemoryProviderNamespace} from './memory-provider-contract.js';
@@ -91,6 +92,7 @@ export class MemoryPipeline {
   private recordEngineStageCleanup(context:MemoryEngineDraftContext|MemoryEngineDraftPin){const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),prior=this.store.db.prepare('SELECT state FROM memory_engine_stage_cleanups WHERE id=?').get(id);if(!prior){const json=JSON.stringify(pin);this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare("INSERT INTO memory_engine_stage_cleanups VALUES(?,?,'pending')").run(id,json);}return {id,prior};}
   private finalizeEngineStep(step:ExecutionStep){if(!['succeeded','failed','cancelled','stale'].includes(step.state))return;for(const row of this.store.db.prepare('SELECT json FROM memory_engine_stage_drafts WHERE checkpoint_id=?').all(step.id))this.abandonEngineDraft(JSON.parse(String(row.json)));}
   private queueEngineStageCleanup(id:string){const operationId='memory-engine-stage-cleanup:'+id,prior=this.engine.get(operationId);if(!prior)this.engine.enqueue(operationId,'memory.engine-stage-cleanup',{id},{id:operationId});else if(['failed','stale','cancelled','blocked'].includes(prior.state)&&!this.engine.isActiveStep(operationId))this.engine.retry(operationId);void this.engine.tick().catch(()=>{});}
+  private phaseOutputs!:MemoryPhaseOutputs;
   private ownerQuestions?:MemoryOwnerQuestionHandler;
   setOwnerQuestionHandler(handler?:MemoryOwnerQuestionHandler){this.ownerQuestions=handler;}
   /** Current read/continuation authority; models never receive this control plane. */
@@ -172,7 +174,7 @@ export class MemoryPipeline {
   }
   private inputBusy(job:MemoryJob){if(this.closed)return false;return this.inputPlans.list(job.id).some(plan=>{const step=this.engine.get(plan.id);return step?.state==='running'||step?.state==='waiting'&&step.availableAt<=Date.now();});}
   private queuePosition(id:string){const row=this.store.db.prepare("SELECT count(*) n FROM memory_jobs WHERE json_extract(json,'$.status') IN ('queued','running') AND rowid<=(SELECT rowid FROM memory_jobs WHERE id=?)").get(id);return Number(row?.n)||undefined;}
-  private steps(id:string){return this.store.db.prepare("SELECT id FROM execution_steps WHERE operation_id=? AND kind IN ('memory.batch','memory.input')").all('memory:'+id).map(row=>String(row.id));}
+  private steps(id:string){return this.store.db.prepare("SELECT id FROM execution_steps WHERE operation_id=? AND (kind IN ('memory.batch','memory.input') OR kind LIKE 'memory.phase.%')").all('memory:'+id).map(row=>String(row.id));}
   pause(id:string){const job=this.storedJob(id);if(['queued','running','waiting_for_input'].includes(job.status)){job.status=Number(this.counts(id).running)>0?'pausing':'paused';this.saveJob(job);this.wake();}return this.get(id);}
   resume(id:string){const job=this.storedJob(id);if(!['paused','pausing'].includes(job.status))return;job.status='queued';this.saveJob(job);for(const plan of this.inputPlans.list(id)){const step=this.engine.get(plan.id);if(step?.state==='waiting'||step?.state==='blocked'&&['paused','pausing'].includes(step.error??''))this.engine.retry(plan.id,false);}this.prepare(id);void this.run(id).catch(()=>{});this.wake();}
   cancel(id:string,options?:{cause:'authority'}){
@@ -210,6 +212,8 @@ export class MemoryPipeline {
     this.drafts=new MemoryExtractionDrafts(this.store);
     this.inputPlans=new MemoryInputPlans(this.store);
     this.engine=options.executor??new ExecutionEngine(this.store);this.owned=!options.executor;
+    this.phaseOutputs=new MemoryPhaseOutputs(this.store,this.engine);
+    this.engine.configurePool('memory.phase',{concurrency:{background:options.concurrency??(()=>1),interactive:options.concurrency??(()=>1)},lane:()=> 'background'});
     this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_cleanups(id TEXT PRIMARY KEY,json TEXT NOT NULL,state TEXT NOT NULL);');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_drafts(id TEXT PRIMARY KEY,json TEXT NOT NULL,checkpoint_id TEXT); CREATE INDEX IF NOT EXISTS memory_engine_stage_checkpoint ON memory_engine_stage_drafts(checkpoint_id);');
     if(options.settleEngineDraft){
@@ -230,13 +234,11 @@ export class MemoryPipeline {
         if(this.options.configuration){const current=this.options.configuration(job.modelProfileId,job.modelOverride);if(job.configuration&&job.configuration.fingerprint!==current.fingerprint)return new ExecutionFailure('blocked','configuration_changed');if(!job.configuration){job.configuration=structuredClone(current);this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(current)));this.saveJob(job);}}
       },
       execute:async(step,signal)=>{const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence,current=()=>typeof fence==='string'&&this.engine.isCurrentGrant(step.id,fence);
-        const publication=this.options.publication,job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId)),contract=this.workContract(job,batch),retained=publication?.retainedOutput<BatchOutput>(step.id);
-        if(retained&&retained.workContract!==contract)throw new ExecutionFailure('stale','memory_work_contract_changed');
-        const output=retained??await this.execute(job.id,batch.id,signal,current);
+        const publication=this.options.publication,job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId));
+        const output=await this.execute(job.id,batch.id,signal,current);
         if(!output)return output;
         const assertAuthority=()=>{signal.throwIfAborted();if(!current()||!this.validateStep(step))throw new ExecutionFailure('stale','memory_publication_revoked');const job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId));this.assertAutomatic(job);this.assertConfiguration(job);this.assertStrategies(batch);this.admitBatch(job,batch);this.assertContextReadScope(job,batch,output.contextReadChunks??[]);};
-        assertAuthority();publication?.retainOutput(step.id,output,{evidenceIds:[...new Set([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[]),...(output.contextReadChunks??[])].map(chunk=>chunk.id))]});
-        if(publication?.retainedOutput(step.id))for(const pin of output.engineDrafts??[])await this.settleEngineDraft(pin);
+        assertAuthority();for(const pin of output.engineDrafts??[])await this.settleEngineDraft(pin);
         if(output.feedbackPlan)return output;
         this.assertOwnerQuestionMaterials(this.storedJob(String(step.input.jobId)),this.batch(String(step.input.batchId)),output);
         output.publication=await publication?.stageExtract(step.id,output.result,output.model,{workContract:output.workContract,maxCandidates:output.coverage&&!output.workContract?memoryWorkCandidateLimit(output.chunks.length):undefined,strategy:output.strategy,profile:output.profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?output.result.runId:undefined,skillVersion:output.skillVersion,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[]),...(output.contextReadChunks??[])].map(chunk=>[chunk.id,chunk.fingerprint]))},assertAuthority,Boolean(this.storedJob(String(step.input.jobId)).automaticGrant||this.storedJob(String(step.input.jobId)).automaticGrants?.length));
@@ -795,6 +797,7 @@ export class MemoryPipeline {
         // This owner action authorizes another failed preparation call. Parent
         // re-entry and resource waiting alone must never reopen these children.
         if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id),ownerAction);
+        this.phaseOutputs.retryFailed(batch.id,ownerAction,this.generationContract(job,batch,batch.chunks));
         if(this.engine.get(batch.id))this.engine.retry(batch.id,ownerAction);
         batch.status='pending';delete batch.errorCode;this.saveBatch(batch);
       }
@@ -972,13 +975,13 @@ export class MemoryPipeline {
           if(refs?.length&&!observeCurrent(()=>{batch.artifactRefs=refs;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
         }
         const model=job.configuration?.model??job.modelOverride??this.options.model(job.modelProfileId);
-        let feedback:MemoryOutputValidationError|undefined;
-        for(let generation=0;generation<2;generation++){
-          assertGrant();
-          // Both generations use the same host-owned scope. A changed/deleted source
-          // is never repaired by asking the model to reinterpret different evidence.
-          if(!this.validMany(processingChunks))throw new StoreError('Memory evidence changed during extraction',409);
-          if(!observeCurrent(()=>{batch.attempts++;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
+        const normalizeFailure=(error:unknown):unknown=>{
+          if(error instanceof MemoryProviderError)return retainFailureContext(new ExecutionFailure(error.code==='unknown_result'||error.code==='unavailable'?'blocked':'permanent','memory_provider_'+error.code),failureContext(error));
+          if(error instanceof AgentResponseError&&['output_limit','response_too_large'].includes(error.reason))return new ExecutionFailure('permanent','model_output_capacity');
+          if(error instanceof ProviderFailure&&error.details.category==='transient'&&!recoverableProviderFailure(error))return retainFailureContext(new ExecutionFailure('permanent',error.details.code,error.details.retryAfterMs),failureContext(error));
+          if(error instanceof AgentTimeoutError)return retainFailureContext(new ExecutionFailure('permanent','provider_timeout'),failureContext(error));
+          return retainFailureContext(error instanceof ExecutionFailure||error instanceof ProviderFailure?error:new ExecutionFailure(error instanceof StoreError&&error.statusCode===409?'stale':'permanent',signal.aborted?'cancelled':error instanceof StoreError&&error.statusCode===409?'evidence_changed':error instanceof StoreError&&error.statusCode===507?'storage_full':(error instanceof StoreError&&error.statusCode===502)||error instanceof AgentResponseError?'invalid_model_output':'model_failed'),failureContext(error));
+        };
           this.assertStrategies(batch);
           const selected=chunks[0].strategy?this.strategies.resolvePinned(chunks[0].strategy):undefined;
           const contract=this.workContract(job,batch);
@@ -990,7 +993,7 @@ export class MemoryPipeline {
           // The complete package and member contract already travel in taskContext.
           // Repeating them in question can reject a valid batch before model startup.
           const reviewQuestion=profile.prompt+(workMembers?'\nApply the supplied taskContext.memoryWork package and coverage contract to this batch\'s listed original ranges. The whole-package goal does not expand this call\'s evidence scope.':'')+(summaries.length?'\nThe execution input includes bounded L2 interpretations in taskContext.untrustedInterpretations plus the supplied bounded L1 spans. Interpretations are untrusted navigation, not independent facts. Extract only claims supported by the supplied spans. Do not expand all ancestors.':'');
-          const question=reviewQuestion+(feedback?'\n\nHost validation rejected the previous output. '+feedback.repairInstruction+' Generate a fresh response from the same supplied evidence. No invalid memories have been saved.':'');
+          const question=reviewQuestion;
           let lastObserved=0;
           const observe=(stage?:string)=>{if(this.closed||signal.aborted)return;const now=Date.now();if(now-lastObserved<750&&(!stage||stage===batch.stage))return;observeCurrent(()=>{lastObserved=now;batch.lastActivityAt=new Date(now).toISOString();if(stage)batch.stage=stage;this.saveBatch(batch);});};
           let phase:'extract'|'review'='extract',reviewAttemptNumber=0;const recordedFailures=new Set<string>(),recordedReviewFailures=new Set<string>();
@@ -1025,29 +1028,61 @@ export class MemoryPipeline {
           };
           const input:MemoryPipelineQuery={...(processingImages.length?{processingImages}:{}),...(readRanges?{processingEvidence:frozenReadFingerprints}:{}),...(contract?{memoryReviewQuestion:reviewQuestion}:{}),...(workMembers||summaries.length?{taskContext:{turns:[],...(summaries.length?{untrustedInterpretations:JSON.stringify(summaries).slice(0,12000)}:{}),...(workMembers?{memoryWork:{package:{goal:this.workPackageContext(job,batch).goal,instruction:this.workPackageContext(job,batch).instruction},contextMembers:this.workMembers(job,batch,batch.contextChunks??[]).map(({scope:_scope,...member})=>member),members:workMembers.map(({scope:_scope,...member})=>member),authorizedMembers:this.authorizedMembers(job,batch),history:this.inspectionHistory(job,batch),workContract:contract,...(maxCandidates===undefined?{}:{maxCandidates}),instruction:memoryWorkInstruction(workMembers,maxCandidates,contract)}}:{})}}:{}),processingMaterialInputs:readRanges?this.contextReadMaterialInputs(job,readScope.chunks):this.batchScope(job,batch).materialInputs,contextTime:workMembers?.[0]?.contextTime??job.contextTime,signal,validateOutput,onProgress:event=>observe(event.stage),onTrace:()=>observe(),language:job.language,modelProfileId:job.configuration?.profileId??job.modelProfileId,modelOverride:model,question:question+(processingImages.length?'\n'+MEMORY_VISUAL_EVIDENCE_CONTRACT:''),skill:profile.skill,responseMode:'memory-extraction',evidenceIds:[...new Set(processingChunks.map(c=>c.id))],evidenceRanges:ranges.map(range=>({...range})),...(readRanges?{evidenceReadRanges:readRanges.map(range=>({...range}))}:{}),timeZone:job.timeZone,traceContext:{operationId:'memory:'+id,jobId:id,batchId:batch.id,batchIndex:batch.index,attempt:batch.attempts,phase:'extract'}};
           const draftKey=sha256(JSON.stringify(['memory-extraction-draft@2',generationContract,(batch.artifactRefs??[]).map(ref=>({...ref})).sort((a,b)=>a.id.localeCompare(b.id)),summaries.slice().sort((a,b)=>a.id.localeCompare(b.id))]));
+
+        type Extracted={result:QueryResult;draftOrigin:MemoryDraftOrigin;repair?:string;nativeDraft?:StoredBatch['nativeDraft'];engineDrafts?:MemoryEngineDraftPin[]};
+        const phaseValid=()=>this.engine.isCurrentInputAuthority(batch.id)&&this.validateStep(this.engine.get(batch.id)!);
+        const extracted=await this.phaseOutputs.run<Extracted>({batchId:batch.id,jobId:id,phase:'extract',inputHash:draftKey,generation:generationContract,signal,validate:phaseValid,
+          assertCommit:()=>{validateArtifacts();},execute:async stageSignal=>{
+          let feedback:MemoryOutputValidationError|undefined;
+          for(let generation=0;generation<2;generation++){
+            if(!observeCurrent(()=>{batch.attempts++;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
+            const phaseInput={...input,signal:stageSignal,question:reviewQuestion+(feedback?'\n\nHost validation rejected the previous output. '+feedback.repairInstruction+' Generate a fresh response from the same supplied evidence. No invalid memories have been saved.':'')+(processingImages.length?'\n'+MEMORY_VISUAL_EVIDENCE_CONTRACT:''),traceContext:{...input.traceContext,attempt:batch.attempts}};
+            let attempted:QueryResult|undefined;
+            try{
           let cached:QueryResult|undefined;
           if(!observeCurrent(()=>{batch.phase='extract';this.saveBatch(batch);if(this.options.review&&generation===0)cached=this.drafts.get(batch.id,draftKey,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
-          const nativeContext:MemoryEngineDraftContext={phase:'extract',opId:batch.id+':draft:'+generation,evidenceIds:input.evidenceIds,checkpointId:batch.id,assertAuthority:validateArtifacts};
+          const nativeContext:MemoryEngineDraftContext={phase:'extract',opId:batch.id+':draft:'+generation,evidenceIds:phaseInput.evidenceIds,checkpointId:batch.id,assertAuthority:validateArtifacts};
           const cachedNative=Boolean(cached&&batch.nativeDraft?.key===draftKey&&cached.runId===batch.nativeDraft.context.opId);
-          const native=cachedNative?cached:cached?undefined:await this.engineDraft(input,nativeContext);
+          const native=cachedNative?cached:cached?undefined:await this.engineDraft(phaseInput,nativeContext);
           if(native&&!cachedNative){const pin=memoryEngineDraftPin(nativeContext);if(!observeCurrent(()=>{batch.nativeDraft={key:draftKey,context:pin};batch.engineDrafts=[...(batch.engineDrafts??[]).filter(item=>item.opId!==pin.opId),pin];this.saveBatch(batch);} ))throw new ExecutionFailure('waiting','interrupted');}
-          let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates,contract):undefined)??await withExecutionCancellation(signal,()=>this.options.query(input));
+          let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates,contract):undefined)??await withExecutionCancellation(stageSignal,()=>this.options.query(phaseInput));
+          attempted=result;
 
-          signal.throwIfAborted();
-          try{
-            validateArtifacts();
-            if(this.options.review){
+          stageSignal.throwIfAborted();
+          validateArtifacts();
+          if(this.options.review){
               if(workMembers&&!native)readMemoryWorkCoverage(result,workMembers,maxCandidates,undefined,contract);
               if(!native)this.options.memories.extract(result,model,{workContract:contract,maxCandidates,profile:profile.id,requireAdmission:true,evidenceRanges:memoryReadRanges(result,ranges,readRanges),expectedFingerprints:expectedFingerprints(result),validateOnly:true});
               if(readRanges&&!native)assertMemoryTargetSupport(result,chunks,id=>this.options.memories.readEvidence([id])[0]?.ocrText);
               if(workMembers&&!native){const accounting=readMemoryWorkCoverage(result,workMembers,maxCandidates,id=>this.options.memories.readEvidence([id])[0]?.ocrText,contract);if(accounting.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied target requires coverage',{workContract:contract});}
               if(!observeCurrent(()=>{validateArtifacts();const readChunks=observedReadChunks(result);this.assertContextReadScope(job,batch,readChunks);this.retainReadDependencies(batch.id,readChunks);this.drafts.put(batch.id,draftKey,result,Boolean(selected)&&!native);} ))throw new ExecutionFailure('waiting','interrupted');
-              phase='review';batch.phase='review';observe('model');
-              const validDraft=result;
+
+              }else{
+                const issue=await validateOutput({...result,trace:[]});if(issue)throw new MemoryOutputValidationError(issue.code as import('./memory-validation.js').MemoryOutputValidationCode,'Memory extraction failed host validation',{workContract:contract});
+              }
+              attempted=result;
+              return {result:{...result,trace:[],...retainedMemoryReadReceipt(result)},draftOrigin:native?'native-engine':'mote',repair:feedback?.repairInstruction,nativeDraft:batch.nativeDraft,engineDrafts:batch.engineDrafts};
+            }catch(error){
+              if(error instanceof MemoryOutputValidationError){observeCurrent(()=>this.drafts.clear(batch.id));if(attempted)recordFailure(error,attempted,true);if(generation===0){feedback=error;continue;}}
+              throw normalizeFailure(error);
+            }
+          }
+          throw new ExecutionFailure('permanent','invalid_model_output');
+        }});
+        if(!extracted||typeof extracted.result?.answer!=='string'||!['mote','native-engine'].includes(extracted.draftOrigin))throw new ExecutionFailure('permanent','memory_phase_output_invalid');
+        if(!observeCurrent(()=>{batch.nativeDraft=extracted.nativeDraft;batch.engineDrafts=extracted.engineDrafts;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
+        input.question=reviewQuestion+(extracted.repair?'\n\nHost validation rejected the previous output. '+extracted.repair+' Generate a fresh response from the same supplied evidence. No invalid memories have been saved.':'')+(processingImages.length?'\n'+MEMORY_VISUAL_EVIDENCE_CONTRACT:'');
+        let result=extracted.result,reviewReceipt:MemoryReviewReceipt|undefined;
+        const native=extracted.draftOrigin==='native-engine';
+        if(this.options.review){
+          phase='review';batch.phase='review';observe('model');
+          const reviewed=await this.phaseOutputs.run<{result:QueryResult;reviewReceipt?:MemoryReviewReceipt}>({batchId:batch.id,jobId:id,phase:'review',inputHash:sha256(JSON.stringify(['memory-review-phase@1',draftKey,extracted,selected?.review??defaultMemoryReviewStrategy])),generation:generationContract,signal,validate:phaseValid,assertCommit:()=>{validateArtifacts();},execute:async stageSignal=>{
+            try{
+              const validDraft=extracted.result;result=validDraft;delete input.memoryReviewRepair;
               for(let reviewAttempt=0;reviewAttempt<2;reviewAttempt++){
                 reviewAttemptNumber=reviewAttempt+1;
                 try{
-                  result=await withExecutionCancellation(signal,()=>this.options.review!(input,validDraft,selected?.review,native?'native-engine':'mote'));
+                  result=await withExecutionCancellation(stageSignal,()=>this.options.review!({...input,signal:stageSignal},validDraft,selected?.review,native?'native-engine':'mote'));
                   const failure=await validateOutput({...result,trace:[]});if(failure)throw new MemoryOutputValidationError(failure.code as import('./memory-validation.js').MemoryOutputValidationCode,'Memory review failed host validation',{workContract:contract});
                   break;
                 }catch(error){
@@ -1056,16 +1091,23 @@ export class MemoryPipeline {
                   input.memoryReviewRepair=error.repairInstruction+' Re-review the same valid draft and all supplied original target ranges.'+(workMembers?' Preserve the complete member coverage'+(contract?' contract.':' and capacity contract.'):'');
                 }
               }
-              signal.throwIfAborted();
-            }
+              stageSignal.throwIfAborted();
+
+              return {result:{...result,trace:[],...retainedMemoryReadReceipt(result)},reviewReceipt:memoryReviewReceipt(result)};
+            }catch(error){if(error instanceof MemoryOutputValidationError)recordFailure(error,result,true);throw normalizeFailure(error);}
+          }});
+          result=reviewed.result;if(typeof result?.answer!=='string')throw new ExecutionFailure('permanent','memory_phase_output_invalid');
+          reviewReceipt=reviewed.reviewReceipt?memoryReviewReceiptSchema.parse(reviewed.reviewReceipt):undefined;
+          if(reviewReceipt?.resultHash&&reviewReceipt.resultHash!==sha256(result.answer))throw new ExecutionFailure('permanent','memory_phase_output_invalid');
+        }
             validateArtifacts();
             this.options.memories.extract(result,model,{workContract:contract,maxCandidates,profile:profile.id,requireAdmission:this.options.requireAdmission,evidenceRanges:memoryReadRanges(result,ranges,readRanges),expectedFingerprints:expectedFingerprints(result),validateOnly:true});
             if(!observeCurrent(()=>{validateArtifacts();const readChunks=observedReadChunks(result);this.assertContextReadScope(job,batch,readChunks);this.retainReadDependencies(batch.id,readChunks);} ))throw new ExecutionFailure('waiting','interrupted');
             const accounting=workMembers?readMemoryWorkCoverage(result,workMembers,maxCandidates,id=>this.options.memories.readEvidence([id])[0]?.ocrText,contract):undefined;
-            if(contract&&accounting)observeCurrent(()=>{if(accounting.notAssessed.length)batch.reviewReceipt=memoryReviewReceipt(result);batch.evaluation={workContract:contract,selectedCandidates:JSON.parse(result.answer).memories.length,assessedTargets:accounting.coverage.filter(row=>row.state==='checked'||row.state==='no_candidates').length,incompleteTargets:accounting.notAssessed.length,reviewRunId:memoryReviewReceipt(result)?.reviewRunId,resultHash:sha256(result.answer),checkedAt:new Date().toISOString()};this.saveBatch(batch);});
+            if(contract&&accounting)observeCurrent(()=>{if(accounting.notAssessed.length)batch.reviewReceipt=reviewReceipt;batch.evaluation={workContract:contract,selectedCandidates:JSON.parse(result.answer).memories.length,assessedTargets:accounting.coverage.filter(row=>row.state==='checked'||row.state==='no_candidates').length,incompleteTargets:accounting.notAssessed.length,reviewRunId:reviewReceipt?.reviewRunId,resultHash:sha256(result.answer),checkedAt:new Date().toISOString()};this.saveBatch(batch);});
             if(accounting?.incomplete||accounting?.saturated)observeCurrent(()=>{batch.coverage=workMembers!.map(member=>{const row=accounting.coverage.find(row=>row.key===member.key);return {...member,state:row?.state==='needs_context'?'needs_context':row?.state==='incomplete'?'incomplete':'pending',reason:row?.reason,contextRefs:row?.contextRefs};});this.saveBatch(batch);});
             if(contract&&accounting?.notAssessed.length)throw new ExecutionFailure('blocked','memory_evaluation_incomplete');
-            if(accounting&&!accounting.saturated&&!accounting.missing.length&&(accounting.needsOwnerInput.length||this.ownerQuestions&&accounting.coverage.some(row=>row.state==='needs_context')))return {workContract:this.workContract(job,batch),engineDrafts:batch.engineDrafts,coverage:accounting.coverage,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges:memoryReadRanges(result,ranges,readRanges),contextReadChunks:observedReadChunks(result),chunks};
+            if(accounting&&!accounting.saturated&&!accounting.missing.length&&(accounting.needsOwnerInput.length||this.ownerQuestions&&accounting.coverage.some(row=>row.state==='needs_context')))return {workContract:this.workContract(job,batch),engineDrafts:batch.engineDrafts,coverage:accounting.coverage,strategy:selected?.binding,result,reviewReceipt:reviewReceipt,model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges:memoryReadRanges(result,ranges,readRanges),contextReadChunks:observedReadChunks(result),chunks};
             if(accounting?.coverage.some(row=>row.state==='needs_context')){
               if(!this.feedbackPlanner||(batch.replanRound??0)>=2)throw new ExecutionFailure('blocked','memory_context_required');
               const request=this.feedbackRequest(job,batch,workMembers!,accounting.coverage);
@@ -1077,14 +1119,7 @@ export class MemoryPipeline {
               return {workContract:this.workContract(job,batch),engineDrafts:batch.engineDrafts,feedbackPlan,coverage:accounting.coverage,result,model,profile:profile.id,skillVersion:batch.skillVersion??job.skillVersion,ranges,chunks};
             }
             if(accounting?.saturated||accounting?.incomplete)throw new ExecutionFailure('permanent',accounting.saturated?'memory_capacity_saturated':'memory_evaluation_incomplete');
-            return {workContract:this.workContract(job,batch),engineDrafts:batch.engineDrafts,coverage:accounting?.coverage,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges:memoryReadRanges(result,ranges,readRanges),contextReadChunks:observedReadChunks(result),chunks};
-          }catch(error){if(error instanceof MemoryOutputValidationError){
-              if(phase==='extract')observeCurrent(()=>this.drafts.clear(batch.id));
-              recordFailure(error,result,true);
-            }if(phase==='extract'&&generation===0&&error instanceof MemoryOutputValidationError){feedback=error;continue;}
-
-            throw error;}
-        }
+            return {workContract:this.workContract(job,batch),engineDrafts:batch.engineDrafts,coverage:accounting?.coverage,strategy:selected?.binding,result,reviewReceipt:reviewReceipt,model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges:memoryReadRanges(result,ranges,readRanges),contextReadChunks:observedReadChunks(result),chunks};
     }catch(error){
       if(error instanceof MemoryProviderError)throw error;
       if(error instanceof AgentResponseError&&['output_limit','response_too_large'].includes(error.reason))throw new ExecutionFailure('permanent','model_output_capacity');
