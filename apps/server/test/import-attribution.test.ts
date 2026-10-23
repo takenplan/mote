@@ -68,6 +68,28 @@ test('capture-scoped host notes cannot be forged by content and preserve correct
   assert.throws(()=>attribution.freeze({id,version:1,sourceId,instruction:'Changed frozen context'}),{statusCode:409});
 });
 
+test('compiled declaration lineage reads freshly bind originals, rollback, deletion and reopened storage',async t=>{
+  const f=fixture(t),{store,sources,attribution,sourceId}=f,id=randomUUID(),pin=attribution.freeze({id,version:1,sourceId,instruction:note})!;
+  const originalCapture=await sources.upsert(sourceId,original),other=await sources.upsert(sourceId,{...original,externalId:'other'});
+  const prepare=store.db.prepare.bind(store.db);let lineagePrepares=0;
+  store.db.prepare=sql=>{if(sql.startsWith('WITH RECURSIVE declaration_originals(id) AS ('))lineagePrepares++;return prepare(sql);};
+  assert.deepEqual(attribution.identities([originalCapture.id]),[]);
+  attribution.bind(originalCapture.id,pin);
+  assert.deepEqual(attribution.identities([originalCapture.id]),[{...pin,captureIds:[originalCapture.id]}]);
+  assert.deepEqual(attribution.identities([other.id]),[],'parameters cannot retain the previous original');
+  store.db.exec('BEGIN IMMEDIATE');store.db.prepare('DELETE FROM capture_import_declarations WHERE capture_id=?').run(originalCapture.id);
+  assert.deepEqual(attribution.identities([originalCapture.id]),[],'transactional removal is immediately visible');
+  store.db.exec('ROLLBACK');await setImmediate();
+  assert.deepEqual(attribution.identities([originalCapture.id]),[{...pin,captureIds:[originalCapture.id]}],'a later call rereads rollback state');
+  store.db.exec('CREATE INDEX declaration_statement_fixture ON import_owner_declarations(source_id)');
+  assert.deepEqual(attribution.identities([originalCapture.id]),[{...pin,captureIds:[originalCapture.id]}]);
+  assert.equal(lineagePrepares,1,'the fixed query compiles once, without retaining its results');
+  const reopened=f.reopen(),fresh=new ImportAttributionStore(reopened);
+  assert.throws(()=>attribution.identities([originalCapture.id]),'old compiled handles cannot survive their closed connection');
+  assert.deepEqual(fresh.identities([originalCapture.id]),[{...pin,captureIds:[originalCapture.id]}]);
+  reopened.delete(originalCapture.id);assert.deepEqual(fresh.identities([originalCapture.id]),[]);
+});
+
 test('real import duplicates retain the first context through restart and deleted import history',async t=>{
   const {directory,store,sources,materials,cleanup}=fixture(t),files=new ArchivedFileStore(store);
   const runtime={prepare:async({workspace,inputPaths}:{workspace:string;inputPaths:string[]})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:original,evidencePaths:inputPaths})+'\n');return {summary:'Generated exact original'};}};

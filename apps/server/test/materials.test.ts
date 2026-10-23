@@ -51,6 +51,35 @@ test('formal material revisions are immutable, independently readable, deduplica
   assert.equal(store.db.prepare('SELECT COUNT(*) n FROM material_block_payloads').get()!.n,0);
 });
 
+test('compiled Material metadata reads remain fresh across revisions, transactions, schema changes and reopen',async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-material-statements-'));let store=new Store(directory);
+  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  const materials=new MaterialStore(store),prepares=new Map<string,number>(),prepare=store.db.prepare.bind(store.db);
+  store.db.prepare=sql=>{
+    if(sql==='SELECT * FROM material_heads WHERE id=?'||sql.startsWith('SELECT revision,sequence,manifest,created_at AS version_created_at')||sql.startsWith('SELECT 1 FROM material_evidence e WHERE e.invalidated=1 AND e.material_id=?')||sql==='SELECT revision,state,error FROM material_index_requests WHERE material_id=?')prepares.set(sql,(prepares.get(sql)??0)+1);
+    return prepare(sql);
+  };
+  const captureId=randomUUID();await store.ingest({id:captureId,deviceId:'generated',deviceName:'Generated fixture',platform:'import',source:'note',capturedAt:'2026-10-13T00:00:00Z',durationMs:0,ocrText:'Generated source statement'});
+  const base={...draft('statement-source','statement-material'),members:[{id:'source-1',kind:'capture',ref:'capture:'+captureId}]},first=materials.publish(base);
+  assert.equal(materials.get(first.ref)?.revision,first.revision);
+  const second=materials.publish({...base,blocks:[{...base.blocks[0],text:'Generated current revision'}]},{expectedRevision:first.revision});
+  assert.equal(materials.get(base.id)?.revision,second.revision);
+  assert.equal(materials.get(first.ref)?.revision,first.revision,'the same handle binds the requested immutable revision');
+  materials.setSearchable(base.id,true);assert.equal(materials.get(base.id)?.indexing.state,'pending');
+  store.db.exec('BEGIN IMMEDIATE');materials.setSearchable(base.id,false);
+  assert.equal(materials.get(base.id)?.indexing.state,'disabled','reads observe the current transaction');
+  store.db.exec('ROLLBACK');assert.equal(materials.get(base.id)?.indexing.state,'pending','rollback is visible without invalidating a row cache');
+  store.db.exec('CREATE INDEX material_statement_fixture ON material_heads(external_id)');
+  assert.equal(materials.get(base.id)?.revision,second.revision,'SQLite recompiles handles after schema changes');
+  store.invalidateMemoryEvidence(materials.evidenceIds(second.ref)[0]);
+  assert.equal(materials.get(base.id)?.coverage.reason,'source_evidence_changed','revocation is read immediately');
+  assert.equal(prepares.size,4);assert.deepEqual([...prepares.values()],[1,1,1,1],'each private query compiles once while every read still executes');
+  store.close();assert.throws(()=>materials.get(base.id),'closed handles cannot return saved metadata');
+  store=new Store(directory);const reopened=new MaterialStore(store);
+  assert.equal(reopened.get(base.id)?.coverage.reason,'source_evidence_changed');
+  reopened.retire(base.id,{expectedRevision:second.revision});assert.equal(reopened.get(second.ref),undefined);
+});
+
 test('host processing readiness can revisit an old state with a new immutable revision, without content rollback',t=>{
   const {materials}=fixture(t),base=draft();
   const pending:MaterialDraft={...base,coverage:{state:'pending',reason:'processing_pending'},artifacts:[{key:'extracted-text',state:'pending',blockIds:[]}]};

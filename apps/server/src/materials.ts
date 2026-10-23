@@ -1,3 +1,4 @@
+import type {StatementSync} from 'node:sqlite';
 import {MaterialCatalog} from './material-catalog.js';
 import {CODING_DIALOGUE_SCHEMA_VERSION,documentSchema,attributionContextSchema,ownerRelationSchema,unknownAttributionContext,type AttributionContext,type OwnerRelation,type CaptureRecord} from '@mote/shared';
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
@@ -117,6 +118,11 @@ export function parseMaterialRef(value:string):{id:string;revision?:string} {
 
 /** Immutable formal material revisions. All content is evidence, never agent instructions. */
 export class MaterialStore {
+  // Only compiled handles are retained; every call below executes against the current transaction.
+  private headStatement?:StatementSync;
+  private versionStatement?:StatementSync;
+  private rebuildStatement?:StatementSync;
+  private indexStatusStatement?:StatementSync;
   index?:MaterialIndexRuntime;
   onContextChanged?:(materialId:string,cause?:'attribution'|'derived')=>void;
   onSourceContextChanged?:(sourceId:string)=>void;
@@ -466,7 +472,7 @@ export class MaterialStore {
     }catch{if(db.isTransaction)db.exec('ROLLBACK');/* Retain the cleanup outbox for a later sweep. */}
   }
   indexStatus(id:string):MaterialIndexStatus {
-    const row=this.store.db.prepare('SELECT revision,state,error FROM material_index_requests WHERE material_id=?').get(id);
+    const row=(this.indexStatusStatement??=this.store.db.prepare('SELECT revision,state,error FROM material_index_requests WHERE material_id=?')).get(id);
     return row?{revision:String(row.revision),state:row.state as MaterialIndexStatus['state'],...(row.error?{reason:String(row.error)}:{})}:{state:'disabled'};
   }
   /** Publication only records intent. Search authority is withdrawn immediately;
@@ -557,13 +563,13 @@ export class MaterialStore {
     return new Set(rows.filter(currentEvidenceAllowed).map(row=>row.id));
   }
   private needsRebuild(id:string,revision:string,sequence:number):boolean {
-    return Boolean(this.store.db.prepare(`SELECT 1 FROM material_evidence e WHERE e.invalidated=1 AND e.material_id=? AND (
+    return Boolean((this.rebuildStatement??=this.store.db.prepare(`SELECT 1 FROM material_evidence e WHERE e.invalidated=1 AND e.material_id=? AND (
       EXISTS(SELECT 1 FROM material_blocks b WHERE b.material_id=e.material_id AND b.revision=? AND b.anchor_id=e.id)
       OR EXISTS(SELECT 1 FROM material_block_versions b WHERE b.material_id=e.material_id AND b.anchor_id=e.id
-        AND b.from_sequence<=? AND (b.until_sequence IS NULL OR b.until_sequence>?))) LIMIT 1`).get(id,revision,sequence,sequence));
+        AND b.from_sequence<=? AND (b.until_sequence IS NULL OR b.until_sequence>?))) LIMIT 1`)).get(id,revision,sequence,sequence));
   }
-  private head(id:string):HeadRow|undefined{return this.store.db.prepare('SELECT * FROM material_heads WHERE id=?').get(id) as HeadRow|undefined;}
-  private version(id:string,revision:string):RevisionRow|undefined{return this.store.db.prepare('SELECT revision,sequence,manifest,created_at AS version_created_at,text_length,block_count,member_count,asset_count,draft_hash FROM material_revisions WHERE material_id=? AND revision=?').get(id,revision) as RevisionRow|undefined;}
+  private head(id:string):HeadRow|undefined{return (this.headStatement??=this.store.db.prepare('SELECT * FROM material_heads WHERE id=?')).get(id) as HeadRow|undefined;}
+  private version(id:string,revision:string):RevisionRow|undefined{return (this.versionStatement??=this.store.db.prepare('SELECT revision,sequence,manifest,created_at AS version_created_at,text_length,block_count,member_count,asset_count,draft_hash FROM material_revisions WHERE material_id=? AND revision=?')).get(id,revision) as RevisionRow|undefined;}
   private record(head:HeadRow,row:RevisionRow,open=true):MaterialRecord {
     const manifest=JSON.parse(row.manifest) as Omit<MaterialDraft,'blocks'|'members'>;
     const rebuilding=head.revision===row.revision&&this.needsRebuild(head.id,row.revision,row.sequence);

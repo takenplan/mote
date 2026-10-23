@@ -1,3 +1,4 @@
+import type {StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
 import type {AttributionContext} from '@mote/shared';
@@ -18,6 +19,8 @@ export type PortableImportAttribution=z.infer<typeof portableImportAttributionSc
  * can create a declaration. Text outlives deleted import history while its
  * original capture remains archived. */
 export class ImportAttributionStore {
+  // Compiled SQL only: all() still resolves current bindings and lineage on every call.
+  private identitiesStatement?:StatementSync;
   constructor(private readonly store:Store){
     store.db.exec(`CREATE TABLE IF NOT EXISTS import_owner_declarations(
       id TEXT NOT NULL,version INTEGER NOT NULL,source_id TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,
@@ -68,12 +71,12 @@ export class ImportAttributionStore {
   /** File excerpts/chunks retain the declaration of their exact original. */
   identities(captureIds:string[]):ImportDeclaration[]{
     if(!captureIds.length)return [];
-    const rows=this.store.db.prepare(`WITH RECURSIVE declaration_originals(id) AS (
+    const rows=(this.identitiesStatement??=this.store.db.prepare(`WITH RECURSIVE declaration_originals(id) AS (
       SELECT value FROM json_each(?) UNION SELECT l.parent_id FROM file_evidence_links l JOIN declaration_originals o ON l.capture_id=o.id)
       SELECT DISTINCT c.capture_id,d.id,d.version,d.fingerprint FROM declaration_originals o
       JOIN capture_import_declarations c ON c.capture_id=o.id
       JOIN import_owner_declarations d ON d.id=c.id AND d.version=c.version
-      ORDER BY d.id,d.version,c.capture_id`).all(JSON.stringify(captureIds));
+      ORDER BY d.id,d.version,c.capture_id`)).all(JSON.stringify(captureIds));
     const values=new Map<string,ImportDeclaration>();
     for(const row of rows){const key=JSON.stringify([row.id,row.version]);let value=values.get(key);if(!value){value={id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint),captureIds:[]};values.set(key,value);}value.captureIds.push(String(row.capture_id));}
     return [...values.values()];
