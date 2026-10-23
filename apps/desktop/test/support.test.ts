@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { defaultConfig, publicConfig } from '../src/config';
-import { EventJournal, buildSupportBundle, failureCode, httpFailure, TransportFailure } from '../src/support';
+import { EventJournal, buildSupportBundle, failureCode, httpFailure, safeErrorName, TransportFailure } from '../src/support';
 import { resolveProfile } from '../src/profile';
 import type { Status } from '../src/contracts';
 let directory: string;
@@ -67,4 +67,25 @@ it('records severity at the source and preserves original serialized log text', 
 it('does not import events.json history into the current NDJSON viewer or range export',async()=>{
  const path=join(directory,'events.json'),raw=JSON.stringify([{atMs:1,stage:'APP',code:'OK'}]);await writeFile(path,raw);
  const journal=new EventJournal(directory,()=>true);expect(await journal.readRaw()).toBe('');expect((await journal.exportRange(0)).events).toEqual([]);expect(await readFile(path,'utf8')).toBe(raw);
+});
+
+it('safe diagnostic metadata is filtered on write and replay, including forged error names',async()=>{
+ const id='local-c919bc95-272d-4094-92a1-7f9c0ae944ca',journal=new EventJournal(directory,()=>true);
+ await journal.record('SOURCE','NETWORK',{errorName:safeErrorName(Object.assign(new Error('PRIVATE_MESSAGE'),{name:'PRIVATE_NAME'})),sourceId:id,sourceKind:'local-files',operation:'mote:source-sync'});
+ await journal.record('SOURCE','OTHER',{errorName:'PRIVATE_NAME',sourceId:'PRIVATE_PATH',sourceKind:'PRIVATE_KIND',operation:'PRIVATE_OPERATION'});
+ const rows=await journal.read();expect(rows[0]).toMatchObject({errorName:'OtherError',sourceId:id,sourceKind:'local-files',operation:'mote:source-sync'});
+ expect(rows[1]).not.toHaveProperty('errorName');expect(JSON.stringify(rows)).not.toContain('PRIVATE');
+ expect(safeErrorName({get name(){throw Error('PRIVATE_GETTER');}})).toBe('OtherError');
+ expect((await stat(join(directory,'events.0.ndjson'))).mode&0o777).toBe(0o600);
+ const forged={...rows[0],errorName:'PRIVATE_NAME',sourceId:'PRIVATE_PATH',sourceKind:'PRIVATE_KIND',operation:'PRIVATE_OPERATION'};
+ await writeFile(join(directory,'events.0.ndjson'),JSON.stringify(forged)+'\n');
+ expect(JSON.stringify((await journal.exportRange(0,Date.now()+1)).events)).not.toContain('PRIVATE');
+});
+it('rotation keeps seven bounded private files while recording the next failure',async()=>{
+ const journal=new EventJournal(directory,()=>true);
+ for(let i=0;i<7;i++)await writeFile(join(directory,`events.${i}.ndjson`),' '.repeat(2*1024*1024),{mode:0o600});
+ await journal.record('UPLOAD','TIMEOUT',{errorName:'TimeoutError'});
+ expect((await journal.read())[0]).toMatchObject({code:'TIMEOUT',errorName:'TimeoutError'});
+ expect((await stat(join(directory,'events.0.ndjson'))).mode&0o777).toBe(0o600);
+ expect(await stat(join(directory,'events.7.ndjson')).catch(()=>undefined)).toBeUndefined();
 });

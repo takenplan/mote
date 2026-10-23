@@ -38,7 +38,7 @@ class FileSources(private val context: Context, private val cancel: Cancellation
         val started = android.os.SystemClock.elapsedRealtime()
         SupportEvents.record(context, stage, EventCode.STARTED)
         try { return work().also { SupportEvents.record(context, stage, EventCode.OK, android.os.SystemClock.elapsedRealtime() - started) } }
-        catch (error: Exception) { SupportEvents.record(context, stage, EventJournal.failure(error, stage), android.os.SystemClock.elapsedRealtime() - started); throw error }
+        catch (error: Exception) { SupportEvents.failure(context, stage, error, android.os.SystemClock.elapsedRealtime() - started); throw error }
     }
     private fun scanSlice(source: LocalSource): Boolean {
         val queue = context.fileArchives(); val state = queue.configure(source); val generation = state.getString("generation"); val root = Uri.parse(source.uri)
@@ -137,7 +137,7 @@ object FileUpload {
             requireAccepted(status)
             val bytes = connection.inputStream.use { readResponse(it) }
             return JSONObject(String(bytes, Charsets.UTF_8)).also { SupportEvents.record(context, stage, EventCode.OK, android.os.SystemClock.elapsedRealtime() - started, status) }
-        } catch (error: Exception) { SupportEvents.record(context, stage, status?.takeIf { it !in 200..299 }?.let { EventJournal.httpFailure(it) } ?: EventJournal.failure(error, stage), android.os.SystemClock.elapsedRealtime() - started, status); throw error } finally { HttpJson.untrack(connection); connection.disconnect() }
+        } catch (error: Exception) { SupportEvents.record(context, stage, status?.takeIf { it !in 200..299 }?.let { EventJournal.httpFailure(it) } ?: EventJournal.failure(error, stage), android.os.SystemClock.elapsedRealtime() - started, status, errorName = EventJournal.errorName(error)); throw error } finally { HttpJson.untrack(connection); connection.disconnect() }
     }
     /** Originals yield between acknowledged parts; a yield never spends a failure attempt. */
     fun sync(context: Context, source: LocalSource, config: CollectorConfig, stillSelected: () -> Boolean): Boolean = sync(context, source, config, UploadSlice(), stillSelected)

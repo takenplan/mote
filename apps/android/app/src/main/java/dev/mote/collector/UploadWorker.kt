@@ -216,7 +216,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
         } catch (error: Exception) {
-            SupportEvents.record(applicationContext, stage, EventJournal.failure(error, stage))
+            SupportEvents.failure(applicationContext, stage, error)
             if (error !is RecordedHeartbeatFailure) Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)
             failed(MoteI18n.text("同步失败，请检查连接"))
         }

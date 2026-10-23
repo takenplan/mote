@@ -1,3 +1,4 @@
+import {installGlobalErrorLogging,log} from './logger';
 import { ClientLoginApproval } from './ClientLoginApproval';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
@@ -64,6 +65,8 @@ import './presentation.css';
 import { confirmNavigation } from './unsaved';
 
 
+installGlobalErrorLogging(window);
+
 declare global {
   interface Window { moteCentralSession?: {close: () => void} }
 }
@@ -85,6 +88,7 @@ function App() {
   const [connection, setConnection] = useState<Connection | null>(
     readConnection,
   );
+  useEffect(()=>{if(connection)log('auth.session_started','info');},[connection]);
   const [sessionLifetime, setSessionLifetime] = useState<SessionLifetime>(readSessionLifetime);
   const connectionGeneration = useRef(0);
   const [clientLogin,setClientLogin]=useState(loginRequestId);
@@ -137,6 +141,7 @@ function App() {
   const clearConnection = useCallback(() => {
     connectionGeneration.current++;
     clearSession();
+    log('auth.session_cleared','info');
     setPeriod("week");
     setConnection(null);
     setVerified(false);
@@ -167,6 +172,7 @@ function App() {
     window.moteCentralSession?.close();
   }, [clearConnection, setEvidenceId,connection]);
   const unauthorized = useCallback(() => {
+    log('auth.session_rejected','warn');
     // A same-node re-login may continue a direct evidence link. Clear the
     // credential and private UI, but keep the URL until the owner logs in.
     clearConnection();

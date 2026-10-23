@@ -3,7 +3,7 @@ import { meteredBody } from './upload-meter';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import type { CaptureEvent, Config } from './contracts';
 import { validateServerUrl } from './config';
-import { TransportFailure, failureCode, httpFailure, type EventJournal } from './support';
+import { TransportFailure, failureCode, safeErrorName, httpFailure, type EventJournal } from './support';
 import { readResponseText } from './response-body';
 import {INGRESS_VERSION_HEADERS,requireIngressReceipt} from './ingress-protocol';
 
@@ -43,7 +43,7 @@ export async function heartbeat(config: Config, body: object, events?: EventJour
     });
     await response.body?.cancel().catch(() => undefined);
     if (!response.ok) void events?.record('HEARTBEAT', httpFailure(response.status), { httpStatus: response.status });
-  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code); }
+  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code, {errorName:safeErrorName(error)}); }
 }
 
 export async function uploadCaptureBatch(config: Config, entries: { event: CaptureEvent; image?: Buffer }[], signal?: AbortSignal, onBytes?: (bytes: number) => void, onReceipt?: (id: string, status: number) => void): Promise<Map<string, number>> {

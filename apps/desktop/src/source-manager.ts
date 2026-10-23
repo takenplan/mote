@@ -4,7 +4,7 @@ import { connectionToken, requireConnectionToken, sourceConnectionBinding, type 
 import {nativeStatusView} from './native-status';
 import { meteredBody } from './upload-meter';
 import { moteText, statusMessage } from '@mote/shared/i18n';
-import { type EventJournal, failureCode, httpFailure, TransportFailure } from './support';
+import { type EventJournal, failureCode, safeErrorName, httpFailure, TransportFailure } from './support';
 import { randomUUID } from 'node:crypto';
 import { join, basename, isAbsolute, dirname } from 'node:path';
 import { stat,readdir,rm } from 'node:fs/promises';
@@ -213,7 +213,7 @@ export class LocalSourceManager {
       // Failed attempts use a bounded retry interval as well; a timer never floods an unavailable node.
       if (!force && !this.dirtySources.has(source.id) && last?.state === 'error' && (last as SourceStatus & { attemptAt?: number }).attemptAt && Date.now() - (last as SourceStatus & { attemptAt: number }).attemptAt < Math.max(30000, source.intervalSeconds * 1000)) continue;
       const status: SourceStatus & { attemptAt: number } = { source, state: 'syncing', message: moteText("读取所选来源并同步"), pending: 0, items: 0, skipped: 0, ...last, attemptAt: Date.now() }; status.state = 'syncing'; this.states.set(source.id, status);
-      const started = Date.now(); void this.events?.record('SOURCE', 'STARTED');
+      const started = Date.now(); void this.events?.record('SOURCE', 'STARTED', {sourceId:source.id,sourceKind:source.kind});
       const wakeVersion = this.sourceWakeVersions.get(source.id) ?? 0;
       let unqueuedScan: import('./source-types').SourceScan | undefined;
       let accessValidated = false;
@@ -258,10 +258,10 @@ export class LocalSourceManager {
         if ((this.sourceWakeVersions.get(source.id) ?? 0) === wakeVersion) this.dirtySources.delete(source.id);
         const paths = this.dirtyPathVersions.get(source.id);
         if (paths) { for (const [path, version] of priorityVersions) if (paths.get(path) === version) paths.delete(path); if (!paths.size) this.dirtyPathVersions.delete(source.id); }
-        void this.events?.record('SOURCE', scan.complete ? 'OK' : 'SCHEDULER', { elapsedMs: Date.now() - started });
+        void this.events?.record('SOURCE', scan.complete ? 'OK' : 'SCHEDULER', { elapsedMs: Date.now() - started,sourceId:source.id,sourceKind:source.kind });
       } catch (e) {
         if (!accessValidated) this.readable.delete(source.id);
-        void this.events?.record('SOURCE', signal.aborted ? 'CANCELLED' : e instanceof CalendarPermissionError ? 'PERMISSION' : failureCode(e, 'SOURCE'), { elapsedMs: Date.now() - started });
+        void this.events?.record('SOURCE', signal.aborted ? 'CANCELLED' : e instanceof CalendarPermissionError ? 'PERMISSION' : failureCode(e, 'SOURCE'), { elapsedMs: Date.now() - started,sourceId:source.id,sourceKind:source.kind,errorName:safeErrorName(e) });
         Object.assign(status, this.engines.get(source.id)?.status(), { state: e instanceof CalendarPermissionError ? 'permission_required' : 'error', message: signal.aborted ? moteText("同步已取消，待传版本已保留") : e instanceof CalendarPermissionError ? e.message : moteText("同步未完成：检查权限、网络或来源路径后重试；待传版本已保留") });
       } finally { if (unqueuedScan) await this.engines.get(source.id)?.discardUnqueuedOriginals(unqueuedScan.items); }
     }

@@ -27,7 +27,7 @@ import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { resolveProfile, profileDefaults, isDevelopmentProfile } from './profile';
 import { desktopSecretStorage } from './secret-storage';
-import { EventJournal, buildSupportBundle, failureCode, type EventStage } from './support';
+import { EventJournal, buildSupportBundle, failureCode, safeErrorName, type EventStage } from './support';
 import { pathToFileURL } from 'node:url';
 import { readFile, realpath, stat, writeFile, open, mkdir } from 'node:fs/promises';
 import { currentPlatform, Collector } from './collector';
@@ -267,9 +267,9 @@ else {
         trusted(event);
         if (recoveryRequired && !['mote:get-status', 'mote:storage-restart', 'mote:stop', 'mote:note-draft', 'mote:connection-status', 'mote:update-status', 'mote:sources'].includes(channel)) throw new Error(recoveryRequired);
         const startedAt = Date.now();
-        if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED');
-        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
-        catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt }); throw error; }
+        if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED', {operation:channel});
+        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt,operation:channel }); return result; }
+        catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt,operation:channel,errorName:safeErrorName(error) }); throw error; }
       });
     };
     const unboundBacklog = () => queue.binding.unbound() && localSources!.nodeBinding.unbound() && (!noteDrafts.hasPrepared() || noteDrafts.hasUnboundPrepared());

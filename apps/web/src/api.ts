@@ -1,3 +1,4 @@
+import {log,routeCategory,safeErrorName} from './logger';
 import {failureMessage} from './failure-message';
 import {httpStatusMessage,responseFailureCode} from '@mote/shared';
 import { moteText, getLocale } from '@mote/shared/i18n';
@@ -174,7 +175,8 @@ export async function readApiJson<T>(response:Response):Promise<T> {
 export function createApi(connection: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await raw(path, init);
-    return readApiJson<T>(response);
+    try { return await readApiJson<T>(response); }
+    catch(error) { log('api.response_invalid','warn',{route:routeCategory(path),errorName:safeErrorName(error),status:response.status});throw error; }
   }
   async function raw(path: string, init: RequestInit = {}) {
     const modelOperation = init.method?.toUpperCase() === 'POST' && ['/api/query', '/api/insights', '/api/memories/extract'].includes(path);
@@ -185,7 +187,10 @@ export function createApi(connection: Connection, onUnauthorized?: () => void, i
     if (!path.startsWith('/api/') || path.includes('\\') || /[\r\n\t]/.test(path)) {
       throw new Error(moteText("管理请求必须使用当前服务的 API 路径。"));
     }
-    const response = await fetch(path, {
+    const started=performance.now(),route=routeCategory(path),method=(init.method??'GET').toUpperCase();
+    log('api.request_started','debug',{route,method});
+    let response:Response;
+    try { response = await fetch(path, {
       ...init,
       redirect: "error",
       credentials: path.startsWith("/api/files/") ? "same-origin" : "omit",
@@ -197,11 +202,14 @@ export function createApi(connection: Connection, onUnauthorized?: () => void, i
         Authorization: `Bearer ${connection.token}`,
       },
     });
+    } catch(error) { log('api.request_failed','warn',{route,method,errorName:safeErrorName(error),elapsedMs:performance.now()-started});throw error; }
     if (!response.ok) {
       const error=await readApiError(response),code=error.code;
+      log('api.request_rejected','warn',{route,method,status:response.status,code,requestId:error.requestId,elapsedMs:performance.now()-started});
       if (response.status === 401 && (!code || ['unauthorized','connection_revoked'].includes(code)) && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
       throw error;
     }
+    log('api.request_completed','debug',{route,method,status:response.status,elapsedMs:performance.now()-started});
     return response;
   }
   return { request, raw };

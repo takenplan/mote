@@ -36,14 +36,14 @@ class SourceScanWorker(context: Context, params: WorkerParameters) : Worker(cont
                         }
                         is SourceEmission.Indexed -> store.scan(source, emission.scan, minOf(64L, settings.read().maxQueueMiB.toLong()) * 1024 * 1024)
                     }
-                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK)
-                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION) }
+                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, sourceId = source.id)
+                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, sourceId = source.id) }
                 catch (_: android.os.OperationCanceledException) { return Result.retry() }
-                catch (_: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE) }
+                catch (e: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e), sourceId = source.id) }
             }
             SourceWork.upload(applicationContext, inputData.getBoolean("syncExplicit", false))
             Result.success()
-        } catch (_: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE); Result.retry() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e)); Result.retry() }
     }
 }
 
@@ -145,7 +145,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                         store.acknowledge(source.id, target, body.getString("externalId"), body.getString("revision")); submitted++
                         settings.syncStatus("uploading", MoteI18n.text("正在同步来源记录"), uploaded = true)
                         Operations.record(applicationContext, OperationKind.SOURCE_ACK, httpStatus = code)
-                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code)
+                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code, sourceId = source.id)
                     }
                     if (store.next(source.id, target) == null) store.status(source.id, "synced")
                     else if (submitted >= 20 || slice.exhausted) { more = true; readyMore = true }
@@ -160,7 +160,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false }
                     store.status(source.id, if (paused) "paused" else "ack")
                     if (!paused) blocked = true
-                } catch (_: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK); failed = true }
+                } catch (e: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, errorName = EventJournal.errorName(e), sourceId = source.id); failed = true }
                 finally { dispatch.record(slice.bytes, slice.requests) }
             }
             if (blocked) {
@@ -177,7 +177,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
         } catch (error: SyncConditionsUnavailable) {
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
-        } catch (_: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID); failure() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID, errorName = EventJournal.errorName(e)); failure() }
     }
 }
 

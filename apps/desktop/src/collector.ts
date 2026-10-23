@@ -22,7 +22,7 @@ import { imageWork } from './background';
 import { collectionForApp, permitsVisibleContent } from './app-collection';
 import { collectRecordMetadata } from './record-metadata';
 import { heartbeat, uploadCaptureBatch, uploadCapture, DeletedCaptureFailure } from './transport';
-import { EventJournal, failureCode, TransportFailure, type EventStage } from './support';
+import { EventJournal, failureCode, safeErrorName, TransportFailure, type EventStage } from './support';
 
 export const currentPlatform: Platform = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux';
 export class Collector {
@@ -329,7 +329,7 @@ export class Collector {
       this.lastSample = { at: startedAt, appId: before.appId, collection: 'content' }; this.lastCaptureAt = event.capturedAt;
       this.state = 'capturing'; this.message = gate === 'hold' ? '审查未完成，已隔离暂存，等待复核' : '已保存截图，上传后由中央识别'; this.publish(); void this.upload();
     } catch (error) {
-      void this.events?.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt });
+      void this.events?.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt, errorName:safeErrorName(error) });
       this.lastSample = undefined;
       this.diagnostics?.recordCapture({ outcome: 'failed', inferenceMs, ocrMs, durationMs: Date.now() - startedAt });
       if (!this.running || abort.signal.aborted) return;
@@ -432,7 +432,7 @@ export class Collector {
           if (historyRun) for (const item of attempted) this.history!.settle(historyRun, item.record.event.id, false, undefined, error instanceof TransportFailure ? error.httpStatus : undefined, abort.signal.aborted);
           if (abort.signal.aborted) break;
           const stage: EventStage = error instanceof TransportFailure ? 'UPLOAD' : 'QUEUE';
-          void this.events?.record(stage, failureCode(error, stage), error instanceof TransportFailure ? { httpStatus: error.httpStatus } : {});
+          void this.events?.record(stage, failureCode(error, stage), {errorName:safeErrorName(error),...(error instanceof TransportFailure ? { httpStatus: error.httpStatus } : {})});
           if (error instanceof DeletedCaptureFailure || (error instanceof TransportFailure && (error.httpStatus === 410 || error.httpStatus === 409))) {
             await this.queue.blockSync(entry.record.event.id, error.httpStatus === 409 ? moteText("中央记录冲突或已删除，本机副本保留待处理。") : moteText("中央已删除此记录，不会重新创建；本机副本保留待处理。"));
             this.lastUploadError = error.message;
@@ -457,7 +457,7 @@ export class Collector {
       }
     } catch (error) {
       if (!abort.signal.aborted) { this.lastUploadError = error instanceof Error ? error.message : moteText("同步失败，本地记录已保留"); await this.queue.syncCheckpoint(this.lastUploadAt, new Date(Date.now() + 30000).toISOString(),this.archiveAcknowledgment).catch(() => undefined); }
-      void this.events?.record('QUEUE', 'STORAGE'); }
+      void this.events?.record('QUEUE', 'STORAGE', {errorName:safeErrorName(error)}); }
     finally { try { if (historyRun) this.history!.finish(historyRun, abort.signal.aborted); } finally { this.uploading = false; this.publish(); } }
   }
   private async sendHeartbeat(explicit = false): Promise<void> {
@@ -477,7 +477,7 @@ export class Collector {
           pendingRecords: Math.min(1_000_000, sync.pendingRecords), lastUploadAt: sync.lastUploadAt, nextUploadAt: sync.nextUploadAt,
         },
       }, this.events, abort.signal);
-    } catch (error) { void this.events?.record('HEARTBEAT', failureCode(error, 'HEARTBEAT')); }
+    } catch (error) { void this.events?.record('HEARTBEAT', failureCode(error, 'HEARTBEAT'), {errorName:safeErrorName(error)}); }
     finally { this.heartbeatInFlight = false; }
   }
 }
