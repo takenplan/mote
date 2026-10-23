@@ -77,3 +77,39 @@ test('three generated 4097-anchor job inserts preserve a running default executi
  for(let index=0;index<3;index++){const value=job('generated-large-'+index,{evidenceIds:refs,materialInputs:[{materialId:'generated-large-material',fingerprint:'a'.repeat(64),evidenceIds:refs}],materialRefs:Object.fromEntries(refs.map(ref=>[ref,'generated-current-ref']))}),started=performance.now();insert(store,value);durations.push(Math.round(performance.now()-started));assert.equal(entries(store,value.id).length,4097);assert.ok(entries(store,value.id).every(row=>row.item_key==='generated-large-material:'+'a'.repeat(64)));assert.equal(engine.isCurrentGrant(stepId,fence),true,'job projection must not expire the existing unextended lease');}
  release();await execution;assert.equal(engine.get(stepId)!.state,'succeeded');assert.equal(engine.get(stepId)!.attempts,1);t.diagnostic(JSON.stringify({generated:true,jobs:3,anchorsPerJob:4097,insertDurationMs:durations,leaseAttempts:1}));
 });
+
+
+test('phase progress leaves Activity batch projections intact while each actual input change refreshes them',t=>{
+ const store=fixture(t),first=job('generated-first',{memoryIds:['job-memory']}),second=job('generated-second');insert(store,first);insert(store,second);
+ const ref=randomUUID(),other=randomUUID(),batch={id:'generated-batch',status:'running',attempts:1,evidenceRanges:[{id:ref,offset:0,length:10}],memoryIds:['batch-memory']};
+ store.db.prepare('INSERT INTO memory_batches VALUES(?,?,?,?)').run(batch.id,first.id,0,JSON.stringify(batch));
+ const projection=()=>{const row=store.db.prepare('SELECT job_id,leaf,rank FROM activity_memory_batches WHERE id=?').get(batch.id);return row?{...row}:undefined;},coverage=()=>store.db.prepare('SELECT ref,state FROM activity_memory_coverage WHERE batch_id=? ORDER BY idx').all(batch.id).map(row=>({...row})),outputs=(id:string)=>store.db.prepare('SELECT memory_id FROM activity_memory_outputs WHERE job_id=? ORDER BY memory_id').all(id).map(row=>String(row.memory_id));
+ store.db.exec("CREATE TABLE generated_projection_writes(kind TEXT);CREATE TRIGGER generated_batch_writes AFTER INSERT ON activity_memory_batches BEGIN INSERT INTO generated_projection_writes VALUES('batch');END;CREATE TRIGGER generated_coverage_writes AFTER INSERT ON activity_memory_coverage BEGIN INSERT INTO generated_projection_writes VALUES('coverage');END;CREATE TRIGGER generated_output_deletes AFTER DELETE ON activity_memory_outputs BEGIN INSERT INTO generated_projection_writes VALUES('output');END;");
+ const before={projection:projection(),coverage:coverage(),outputs:outputs(first.id)};
+ store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.phase','review','$.stage','model','$.attempts',2,'$.lastActivityAt',?) WHERE id=?").run('2026-10-01T04:00:00.000Z',batch.id);
+ assert.deepEqual({projection:projection(),coverage:coverage(),outputs:outputs(first.id)},before);assert.equal(store.db.prepare('SELECT count(*) n FROM generated_projection_writes').get()!.n,0,'phase, stage, attempt and heartbeat updates cannot rebuild unchanged projections');
+ const update=(path:string,value:unknown)=>store.db.prepare('UPDATE memory_batches SET json=json_set(json,?,json(?)) WHERE id=?').run(path,JSON.stringify(value),batch.id);
+ update('$.status','completed');assert.equal(projection()!.rank,0);assert.deepEqual(coverage(),[{ref,state:'completed'}]);
+ update('$.evidenceRanges',[{id:other,offset:0,length:10}]);assert.deepEqual(coverage(),[{ref:other,state:'completed'}]);
+ update('$.coverage',[{id:other,key:'generated-key',state:'needs_context'}]);assert.equal(projection()!.rank,5);assert.deepEqual(coverage(),[{ref:other,state:'needs_input'}]);
+ update('$.contextFeedbackChildId','generated-feedback-child');assert.equal(projection()!.rank,0);assert.deepEqual(coverage(),[]);
+ update('$.contextFeedbackChildId',null);assert.equal(projection()!.rank,5);assert.equal(coverage().length,1,'SQL null changes the handoff fence');
+ update('$.supersededBy',['generated-child']);assert.equal(projection()!.leaf,0);assert.deepEqual(coverage(),[]);
+ update('$.supersededBy',[]);assert.equal(projection()!.leaf,1);assert.equal(coverage().length,1);
+ update('$.memoryIds',['new-memory']);assert.deepEqual(outputs(first.id),['job-memory','new-memory']);
+ store.db.prepare("UPDATE memory_batches SET job_id=?,json=json_set(json,'$.stage','moved') WHERE id=?").run(second.id,batch.id);assert.equal(projection()!.job_id,second.id);assert.deepEqual(outputs(first.id),['job-memory']);assert.deepEqual(outputs(second.id),['new-memory'],'a moved batch refreshes both old and new output owners');
+ update('$.status','cancelled');assert.deepEqual(coverage(),[{ref:other,state:'needs_input'}]);
+ update('$.status','invalidated');assert.equal(projection()!.rank,4);assert.deepEqual(coverage(),[{ref:other,state:'stale'}]);
+ store.db.prepare('DELETE FROM activity_memory_batches WHERE id=?').run(batch.id);update('$.stage','repair-missing-projection');assert.equal(projection()!.job_id,second.id);assert.deepEqual(coverage(),[{ref:other,state:'stale'}]);
+ store.db.prepare('DELETE FROM memory_batches WHERE id=?').run(batch.id);assert.equal(projection(),undefined);assert.deepEqual(coverage(),[]);assert.deepEqual(outputs(second.id),[]);assert.deepEqual(outputs(first.id),['job-memory']);
+});
+
+test('startup explicitly repairs a saved feedback handoff without relying on an unchanged source update',t=>{
+ const store=fixture(t),value=job('generated-handoff',{memoryIds:['job-memory']});insert(store,value);const ref=randomUUID(),batch={id:'generated-handoff-batch',status:'completed',evidenceRanges:[{id:ref,offset:0,length:10}],memoryIds:['batch-memory'],contextFeedbackChildId:'generated-child',coverage:[{id:ref,key:'generated-key',state:'needs_context'}]};
+ store.db.prepare('INSERT INTO memory_batches VALUES(?,?,?,?)').run(batch.id,value.id,0,JSON.stringify(batch));
+ store.db.prepare('UPDATE activity_memory_batches SET leaf=0,rank=6 WHERE id=?').run(batch.id);store.db.prepare('INSERT INTO activity_memory_coverage VALUES(?,?,?,?,?)').run(batch.id,value.id,0,ref,'needs_input');store.db.prepare('DELETE FROM activity_memory_outputs WHERE job_id=?').run(value.id);
+ const json=store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(batch.id)!.json;
+ new ActivityMemoryIndex(store);
+ assert.deepEqual({...store.db.prepare('SELECT leaf,rank FROM activity_memory_batches WHERE id=?').get(batch.id)},{leaf:1,rank:0});assert.equal(store.db.prepare('SELECT count(*) n FROM activity_memory_coverage WHERE batch_id=?').get(batch.id)!.n,0);
+ assert.deepEqual(store.db.prepare('SELECT memory_id FROM activity_memory_outputs WHERE job_id=? ORDER BY memory_id').all(value.id).map(row=>row.memory_id),['batch-memory','job-memory']);assert.equal(store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(batch.id)!.json,json,'repair does not rewrite the original checkpoint');
+});
