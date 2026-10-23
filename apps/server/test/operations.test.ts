@@ -93,3 +93,20 @@ test('205-step detail batches dependency reads without changing per-step limits 
  const response=await app.inject({url:'/api/operations/file%3Abatch-fixture?limit=100'});assert.equal(response.statusCode,200);for(const step of response.json().steps)assert.deepEqual(step.dependencies,expected.get(step.id));
  assert.equal((await app.inject({url:'/api/operations/file%3Abatch-fixture',headers:{authorization:'Bearer collector'}})).statusCode,403);
 });
+
+test('real Memory phase children expose stable extraction and review kinds without their private inputs',async t=>{
+ const {store,engine,operations}=fixture(t),operationId='memory:phase-display',ids:string[]=[];
+ for(const [index,phase] of ['extract','review','future-phase',undefined].entries()){
+  const id='memory-phase:'+String(index+1).repeat(64);ids.push(id);let output:unknown;
+  await engine.runStep({id,operationId,kind:'memory.phase',pool:'fixture',input:{...(phase?{phase}:{}),privateText:'PRIVATE_MEMORY_DRAFT',token:'PRIVATE_PROVIDER_TOKEN'},signal:new AbortController().signal,validate:()=>true,
+   execute:async()=>({saved:true}),commit:value=>{output=value;},read:()=>output,project:()=>{}});
+ }
+ const sql:string[]=[];const prepare=store.db.prepare.bind(store.db);
+ const spy=t.mock.method(store.db,'prepare',(statement:string)=>{sql.push(statement);return prepare(statement);});
+ const detail=operations.detail(operationId);spy.mock.restore();
+ assert.deepEqual(detail.steps.map(step=>step.kind),['memory.extract','memory.review','memory.phase.'+ids[2],'memory.phase.'+ids[3]]);
+ assert.ok(detail.steps.every(step=>step.state==='succeeded'&&step.attempts===1));
+ assert.doesNotMatch(JSON.stringify(detail),/PRIVATE_MEMORY_DRAFT|PRIVATE_PROVIDER_TOKEN|privateText|future-phase|"phase"|"input"/);
+ const projection=sql.find(statement=>statement.includes('FROM execution_operation_steps o JOIN execution_steps'))!;
+ assert.ok(projection.includes("CASE WHEN e.kind LIKE 'memory.phase.%' THEN json_extract(e.input,'$.phase') END AS phase"));assert.ok(!projection.includes('e.*'));assert.ok(!projection.includes('e.input AS'));
+});
