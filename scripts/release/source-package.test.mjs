@@ -10,7 +10,7 @@ test('central packaging archives the committed monorepo with the central version
   const fixture = releaseFixture(t);
   for (const path of centralBuildInputs) fixture.write(path, path.endsWith('package.json') ? { name: `@mote/${path.split('/')[1]}`, version: '0.1.0', private: true } : 'Generated build input fixture');
   mkdirSync(join(fixture.root, 'scripts/release'), { recursive: true });
-  for (const script of ['asset-metadata.mjs', 'components.mjs']) copyFileSync(new URL(script, import.meta.url), join(fixture.root, 'scripts/release', script));
+  for (const script of ['asset-metadata.mjs', 'components.mjs', 'android-dev-build.mjs']) copyFileSync(new URL(script, import.meta.url), join(fixture.root, 'scripts/release', script));
   const git = args => execFileSync('git', args, { cwd: fixture.root, stdio: 'pipe' });
   git(['init']); git(['add', '.']); git(['-c', 'user.name=Generated Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Generated source fixture']);
   fixture.write('untracked-fixture.txt', 'Generated uncommitted content');

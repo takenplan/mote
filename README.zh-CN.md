@@ -23,7 +23,7 @@ Mote 是 AI-native 的个人上下文采集器与自部署归档。把电脑和�
 
 Mote 包含两部分：**中央节点（Central）** 保存归档并提供网页界面，可选的 **macOS / Android App** 负责采集和同步。中央可以放在自己的 Mac、Linux 服务器或 NAS 上。无需先开启屏幕采集，写一条笔记就能开始体验。
 
-> **开发预览阶段：** Central、macOS、Android 分别发布，当前下载为 DEV 构建，手动更新。已有用户请先阅读[升级指南](docs/updating.md)：旧归档格式会被拒绝读取，不会自动迁移。
+> **开发预览阶段：** Central、macOS、Android 分别发布，手动更新。Dev 与 Prod Beta／正式构建使用独立安装身份。已有用户请先阅读[升级指南](docs/updating.md)：旧归档格式会被拒绝读取，不会自动迁移。
 
 ### 1. 启动自己的资料库
 
@@ -56,7 +56,7 @@ node scripts/mote.mjs token --profile dev
 
 先点击中央网页的 **记录**，保存一条简短笔记，再到 **资料库** 找到它。也可以使用资料库中的导入工具添加选定材料，检查预览后确认。
 
-需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 获取 Prod 安装包，或从对应 [Actions](https://github.com/utopiafar/mote/actions) 下载对应客户端的 Dev Artifact：
+需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 获取 Prod 安装包。Android Dev 可收藏 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue&expanded=true)，在手机上打开最新 Pre-release，点击 **Download APK** 直接下载安装。Mac Dev 仍从对应 [Actions](https://github.com/utopiafar/mote/actions) 下载 Artifact：
 
 | 设备 | 安装 | 连接 |
 | --- | --- | --- |

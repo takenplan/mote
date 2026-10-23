@@ -14,11 +14,12 @@ Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配�
 
 | 场景 | 标识 | 产物位置 |
 | --- | --- | --- |
-| 日常 Dev | `<组件>-dev-<commit SHA>`，不创建 Tag | GitHub Actions Artifact，含 `build-info.json` 和校验元数据 |
+| 日常 Dev（Central / Desktop） | `<组件>-dev-<commit SHA>`，不创建 Tag | GitHub Actions Artifact，含 `build-info.json` 和校验元数据 |
+| Android Dev | `android-dev-<workflow run number>-<短 SHA>` | Dev Profile；GitHub Pre-release，直接下载 APK |
 | Beta | `<组件>-vX.Y.Z-beta.N` | Prod Profile；GitHub Pre-release |
 | 正式 | `<组件>-vX.Y.Z` | Prod Profile；GitHub Release |
 
-组件为 `central`、`desktop`、`android`，各自递增版本；Android 每次发布还递增 versionCode。Tag 不可覆盖，Pre-release 只是发布状态，不控制 Debug。Beta 与正式版使用同一 Prod 安装身份；Dev 与 Prod 的数据、配置、凭据及客户端身份隔离。当前仍手动安装/部署，不恢复签名在线更新或 GHCR 镜像。
+组件为 `central`、`desktop`、`android`，各自递增版本；Android 每次发布还递增 versionCode。Tag 不可覆盖，Pre-release 只是发布状态，不控制 Profile 或 Debug；Android Dev 与 Prod Beta 都使用 Pre-release，但安装身份不同。Beta 与正式版使用同一 Prod 安装身份；Dev 与 Prod 的数据、配置、凭据及客户端身份隔离。当前仍手动安装/部署，不恢复签名在线更新或 GHCR 镜像。
 
 | 发布单元 | 版本来源 | Prod 公开附件 |
 | --- | --- | --- |
@@ -30,7 +31,7 @@ Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配�
 
 ## MVP 阶段的 GitHub 检查开关
 
-2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Dev 构建跳过可选测试。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。单用户回归恢复 Component checks 的受影响 PR 检查；完整 Checks 保留手动用途。2026-10-23 已通过 GitHub API 确认 Component checks 为 active；完整 Checks 暂未启用。
+2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Central / Desktop Dev 构建跳过可选测试。Android Dev 公开分发前始终执行 Development 单测。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。单用户回归恢复 Component checks 的受影响 PR 检查；完整 Checks 保留手动用途。2026-10-23 已通过 GitHub API 确认 Component checks 为 active；完整 Checks 暂未启用。
 
 需要恢复时运行：
 
@@ -93,9 +94,21 @@ Mac 默认 adhoc 只提供本期可构建的分发方式，不代表 Apple 认�
 
 ## 日常 Dev 构建
 
-在对应 workflow 的 Run workflow 中选择分支与 `profile=dev`。工作流校验该组件和锁文件，构建 Dev 包并保留为 `<组件>-dev-<完整提交 SHA>` Artifact（保留 7 天）；不创建 Git Tag 或 GitHub Release。安装包本身保留组件版本；确切提交以 Artifact 名和 `build-info.json` 为准。Central 的文件名与 Prod 相同，因为它是同一份不带配置的源码。
+Central / Desktop：在对应 workflow 的 Run workflow 中选择分支与 `profile=dev`。工作流校验该组件和锁文件，构建 Dev 包并保留为 `<组件>-dev-<完整提交 SHA>` Artifact（保留 7 天）；不创建 Git Tag 或 GitHub Release。安装包本身保留组件版本；确切提交以 Artifact 名和 `build-info.json` 为准。Central 的文件名与 Prod 相同，因为它是同一份不带配置的源码。
 
-Mac Dev 使用 `dev.mote.collector.dev` / `Mote Collector Dev`；Android 使用 `dev.mote.collector.dev` 和 `-dev` versionName。Android 沿用已有固定签名证书，避免换 runner 后无法覆盖安装。
+Android：在 `Release Android` 的 Run workflow 中选择 `main` 和 `profile=dev`，或执行：
+
+```sh
+gh workflow run release-android.yml --repo utopiafar/mote --ref main -f profile=dev
+```
+
+通过 Development 单测、签名和 APK 身份校验后，自动发布独立的 `android-dev-<run number>-<短 SHA>` Pre-release。手机收藏 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue&expanded=true)，打开最上面的发布，点击说明里的 **Download APK**，下载后确认覆盖安装。公开附件只有 APK，无需登录 Actions 或解压 Artifact；构建元数据仍在 Actions 保留 7 天，Release APK 不随 Artifact 过期。
+
+每个 workflow run 对应一个不可变分发版本，`versionName` 为 `<组件版本>-dev.<run number>`，`versionCode` 为 `1000000000 + run number`，独立于 Prod 的版本码。重复运行同一次 workflow 只能修复未发布草稿；已经发布、已有更新构建或 Tag 指向不同提交时拒绝覆盖，应重新 Run workflow。Dev 发布不设置全仓库 Latest。仅可信仓库 `main` 的手动触发可以公开 Dev；其他允许的分支仍只保留 Artifact。
+
+本地 `assembleDevelopment` 默认仍使用组件版本码及 `-dev`；需要覆盖 CI Dev 包时，可显式设置 `MOTE_ANDROID_DEV_RUN=<比已安装构建更大的编号>`，并配置相同签名证书。该参数只改变 Development 的版本码，不改变 Prod 或 Test。
+
+Mac Dev 使用 `dev.mote.collector.dev` / `Mote Collector Dev`；Android 使用 `dev.mote.collector.dev`，本地 versionName 带 `-dev`，CI 带 `-dev.<run number>`。Android 沿用已有固定签名证书，避免换 runner 后无法覆盖安装。
 
 本地 Mac 出包：
 
@@ -105,7 +118,7 @@ MOTE_BUILD_PROFILE=dev node scripts/release/mac-package.mjs
 MOTE_BUILD_PROFILE=prod node scripts/release/mac-package.mjs
 ```
 
-签名 Secret 仍从 `release` Environment 读取。该 Environment 目前仅允许组件 Tag；Mac / Android 首次从分支构建 Dev 签名包前，维护者须在 Deployment branches and tags 中额外允许受信任的开发分支（通常 `main`），或采用单独受控环境并相应配置 workflow。不要开放不受信任分支。此设置不在 Git 中，本 PR 不自动扩大线上 Secret 的访问范围；未配置前 Mac / Android 的分支 Dev 签名打包会被 GitHub 拒绝；Central 的 Dev 源码打包不使用该 Environment，可直接运行。
+签名 Secret 仍从 `release` Environment 读取。该 Environment 必须允许可信开发分支；2026-10-24 已确认 `main` 在允许列表中。其他分支构建 Mac / Android Dev 签名包前，维护者须在 Deployment branches and tags 中额外允许受信任的开发分支，或采用单独受控环境并相应配置 workflow。不要开放不受信任分支。此设置不在 Git 中，发布改动不自动扩大线上 Secret 的访问范围；未允许的 Mac / Android 分支 Dev 签名打包会被 GitHub 拒绝；Central 的 Dev 源码打包不使用该 Environment，可直接运行。
 
 ## Beta / 正式发布
 

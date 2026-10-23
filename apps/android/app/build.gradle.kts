@@ -10,6 +10,10 @@ val releaseVersion = Properties().apply {
 val releaseSecrets = listOf("MOTE_ANDROID_KEYSTORE_PATH", "MOTE_ANDROID_KEYSTORE_PASSWORD", "MOTE_ANDROID_KEY_ALIAS", "MOTE_ANDROID_KEY_PASSWORD")
     .associateWith { providers.environmentVariable(it).orNull }
 val releaseSigningReady = releaseSecrets.values.all { !it.isNullOrBlank() }
+val devRun = providers.environmentVariable("MOTE_ANDROID_DEV_RUN").orNull?.takeIf { it.isNotEmpty() }?.let {
+    require(it.matches(Regex("[1-9]\\d*"))) { "Invalid Android Dev workflow run number" }
+    it.toLong().also { run -> require(run in 1..1_100_000_000L) { "Invalid Android Dev workflow run number" } }
+}
 android {
     namespace = "dev.mote.collector"
     compileSdk = 36
@@ -41,7 +45,7 @@ android {
         create("development") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
+            versionNameSuffix = if (devRun != null) "-dev.$devRun" else "-dev"
             if (releaseSigningReady) signingConfig = signingConfigs.getByName("distribution")
             buildConfigField("String", "MOTE_PROFILE", "\"dev\"")
             buildConfigField("String", "DEFAULT_SERVER", "\"http://127.0.0.1:47842\"")
@@ -83,6 +87,11 @@ android {
     testBuildType = providers.gradleProperty("mote.testBuildType").orElse("debug").get()
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/runtimeAssets"))
     lint { abortOnError = true }
+}
+androidComponents {
+    onVariants(selector().withBuildType("development")) { variant ->
+        if (devRun != null) variant.outputs.forEach { it.versionCode.set((1_000_000_000L + devRun).toInt()) }
+    }
 }
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

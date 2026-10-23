@@ -53,7 +53,7 @@ APK 位置：`apps/android/app/build/outputs/apk/debug/app-debug.apk`。Debug AP
 
 ## 开发环境与日常版本隔离
 
-日常 `debug` / `release` 使用 `dev.mote.collector` 包名；旧应用数据须按上面的格式 3 边界明确重置。新增 `development` 构建类型：名称 **Mote Dev**，包名 `dev.mote.collector.dev`，可与日常版本同时安装。Android UID、Keystore、设备 ID、配置、草稿、队列、WorkManager 数据库、诊断和模型目录均由系统按应用隔离。Dev 初始没有令牌、草稿或模型；不能读取日常采集权限与数据，各权限需单独启用。
+`release` 使用 `dev.mote.collector`，自动化 `debug` 使用独立 `dev.mote.collector.test` 包名；旧应用数据须按上面的格式 3 边界明确重置。`development` 构建类型：名称 **Mote Dev**，包名 `dev.mote.collector.dev`，可与日常版本同时安装。Android UID、凭据、设备 ID、配置、草稿、队列、WorkManager 数据库、诊断和模型目录均由系统按应用隔离。Dev 初始没有令牌、草稿或模型；不能读取日常采集权限与数据，各权限需单独启用。
 
 ```sh
 apps/android/gradlew -p apps/android :app:assembleDevelopment
@@ -64,7 +64,9 @@ Dev 默认节点 `http://127.0.0.1:47842`，仅供用户显式配令牌后的本
 
 ## 当前更新与签名兼容
 
-当前公开发布只有 Android DEV APK，使用 GitHub 手动下载并同包覆盖安装。下文签名清单下载器属于保留的历史实现；当前 DEV 发布没有 `mote-release.json`，不使用该自动更新通道。
+Android Dev 的固定入口为 [Android Dev 下载](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue&expanded=true)：选择最新 Pre-release，直接点击说明中的 **Download APK**，在手机上下载并覆盖安装。每次构建有独立 Tag，CI 版本显示为 `<版本>-dev.<构建序号>`，版本码随 workflow run number 递增；沿用 Dev 包名和固定证书。Prod Beta / 正式版仍通过 `android-v*` 标签发布，安装身份与 Dev 分开。具体触发命令见 [发布流程](releasing.md#日常-dev-构建)。
+
+下文签名清单下载器属于保留的历史实现；当前发布没有 `mote-release.json`，不使用该自动更新通道。
 
 从“设置 → 关于与更新”打开“应用更新”，保存发布仓库和渠道后检查。默认仓库 `utopiafar/mote`；稳定版 `stable` 查询正式发布，预览版 `preview` 查询预发布。检查与下载由用户发起，不会自动安装；下载默认等待非计费 Wi-Fi，可自行关闭这一下载约束。APK 下载由独立 WorkManager 任务执行，取消或中断保留断点，重新打开页面可以继续；后台时机仍由 Android 调度。
 
