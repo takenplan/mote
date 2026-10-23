@@ -1,4 +1,4 @@
-import {MEMORY_EXTRACTION_PROMPT} from './memory-contract.js';
+import {MEMORY_EXTRACTION_PROMPT} from './memory.js';
 import {CONSOLIDATION_RELATION_POLICY} from './memory-policy.js';
 import type {MemoryIntegrationStrategy,MemoryReviewStrategy} from './memory-strategy-contract.js';
 import {defaultMemoryReviewStrategy} from './memory-review-policy.js';

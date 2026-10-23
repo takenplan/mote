@@ -5,10 +5,10 @@ import {rm} from 'node:fs/promises';
 import {z} from 'zod';
 import type {FastifyInstance} from 'fastify';
 import {Store,StoreError,sha256} from './store.js';
-import {ArchivedFileStore,archiveRelativePath} from './archived-files.js';
+import {ArchivedFileStore,archiveRelativePath,MAX_FILE_BYTES} from './archived-files.js';
 import {privateDirectory} from './private-storage.js';
-import {importUploadManifestSchema as manifestSchema} from './archive-contract.js';
 const PART=4*1024*1024;
+const manifestSchema=z.object({id:z.string().uuid().optional(),name:z.string().min(1).max(1000),sizeBytes:z.number().int().min(0).max(MAX_FILE_BYTES),mimeType:z.string().max(200).optional()}).strict();
 type Manifest=z.infer<typeof manifestSchema>&{id:string;fileId?:string};
 /** Bounded binary upload. Each acknowledged part is durable and checksum checked on replay. */
 export class ImportUploads {

@@ -15,7 +15,7 @@ export async function dailyEventFixtures(){
     const svg=`<svg width="900" height="500" xmlns="http://www.w3.org/2000/svg"><rect width="900" height="500" fill="white"/><g font-family="sans-serif" font-size="23" fill="black">${[title,...lines].map((line,i)=>`<text x="25" y="${45+i*45}">${escape(line)}</text>`).join('')}</g></svg>`;
     const image=await sharp(Buffer.from(svg)).png().toBuffer();
     return {id:randomUUID(),deviceId:'generated-daily-phone',deviceName:'Generated daily phone',platform:'android',source:'screen',appId:'fixture.'+title,appName:'Generated '+title,windowTitle:title,capturedAt:at,durationMs:0,
-      imageBase64:image.toString('base64'),imageMime:'image/png',ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:false,mode:'local',collection:'content'}};
+      imageBase64:image.toString('base64'),imageMime:'image/png',ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:true,mode:'local',collection:'content'}};
   };
   const article=fields('2026-10-09T15:59:00.000Z','AI context archives','Mira writes: I believe every programmer should use daily event memory. This is my opinion as the article author.');
   const nextDay=fields('2026-10-09T16:01:00.000Z',article.metadata!.uiPage!.version===2?article.metadata!.uiPage!.objects[0].title:'AI context archives','Mira proposes keeping original articles separate from personal memories.');
@@ -27,7 +27,6 @@ export async function dailyEventFixtures(){
     {title:'Completed task',at:'2026-10-10T05:00:00.000Z',lines:['Task: submit generated expense report.','Status: completed at 2026-10-10 13:00 Asia/Shanghai.','This does not mean the reimbursement has been paid.']},
   ];
   const screenshots=await Promise.all(screenInputs.map(value=>screen(value.at,value.title,value.lines)));
-  const redacted=await screen('2026-10-10T06:00:00.000Z','Redacted generated control',['GENERATED_REDACTED_DAILY_SECRET']);redacted.privacy={...redacted.privacy,redacted:true};
-  const ocr=new Map([...screenshots.map((value,index)=>[value.id,[screenInputs[index].title,...screenInputs[index].lines].join('\n')] as const),[redacted.id,'GENERATED_REDACTED_DAILY_SECRET'] as const]);
-  return {article,nextDay,product,screenshots,redacted,ocr,all:[article,nextDay,product,...screenshots]};
+  const ocr=new Map(screenshots.map((value,index)=>[value.id,[screenInputs[index].title,...screenInputs[index].lines].join('\n')]));
+  return {article,nextDay,product,screenshots,ocr,all:[article,nextDay,product,...screenshots]};
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 test('production routing accepts generated composite work IDs and maximum source IDs',async t=>{

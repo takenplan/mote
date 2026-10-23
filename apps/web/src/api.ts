@@ -1,40 +1,14 @@
 import {failureMessage} from './failure-message';
-import * as logger from './logger';
 import { moteText, getLocale } from '@mote/shared/i18n';
-import {httpStatusMessage,responseFailureCode} from '@mote/shared';
 import type {RecordMetadata, SourceMetadata, OcrResult, CaptureRecord} from '@mote/shared';
-export interface WebConnection {
-  mode: 'web';
-  origin: string;
-  deploymentId: string;
-  userId: string;
-  credentialId: string;
-  csrfToken: string;
-  username: string;
-  administrator: boolean;
-  expiresAt?: number;
-  viewScope?: string;
-  token?: never;
-}
-/** Bearer transport is explicit for native/legacy consumers. Browser login uses WebConnection. */
-export type Connection = WebConnection | {
+export interface Connection {
   token: string;
-  mode?: never;
+  /** Browser-only expiry for a persisted management session; the server token is unchanged. */
   expiresAt?: number;
+  /** Maximum deadline imposed by the shared native/server session. */
   serverExpiresAt?: number;
+  /** Non-secret identity for tab view state; never sent to the server. */
   viewScope?: string;
-};
-export const isWebConnection = (connection: Connection): connection is WebConnection => connection.mode === 'web';
-export interface Api {
-  request<T>(path: string, init?: RequestInit): Promise<T>;
-  raw(path: string, init?: RequestInit): Promise<Response>;
-  readonly connection?: Readonly<Connection>;
-  close?(): void;
-}
-/** Draft identity survives credential rotation, but never crosses deployment/account boundaries. */
-export function apiOwnerKey(api: Api): string {
-  const value=api.connection;
-  return value && isWebConnection(value) ? JSON.stringify([value.origin,value.deploymentId,value.userId]) : globalThis.location?.origin ?? 'legacy-fixture';
 }
 export interface FileEvidence {
   captureId: string;
@@ -175,50 +149,12 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export async function readApiError(response:Response):Promise<ApiError> {
-  let requestId=response.headers.get('X-Request-Id')??undefined;
-  let code:string|undefined;
-  const retryAfter=response.headers.get('Retry-After');
-  const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):undefined;
-  let retryAfterMs=seconds!==undefined&&Number.isSafeInteger(seconds*1000)?seconds*1000:undefined;
-  try {
-    const value=await response.json();
-    code=responseFailureCode(value);
-    if(value&&typeof value==='object'){
-      if(!requestId&&typeof value.requestId==='string')requestId=value.requestId;
-      if(retryAfterMs===undefined&&Number.isSafeInteger(value.retryAfterMs)&&value.retryAfterMs>=0)retryAfterMs=value.retryAfterMs;
-    }
-  }catch{/* Proxy responses may be HTML. Never display their bodies. */}
-  if(!requestId||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))requestId=undefined;
-  return new ApiError(code?failureMessage(code,response.status):httpStatusMessage(response.status),response.status,requestId,code,retryAfterMs);
-}
-export async function readApiJson<T>(response:Response):Promise<T> {
-  try{return await response.json() as T;}
-  catch(error){if(error instanceof SyntaxError)throw new ApiError(moteText('中央响应格式无效，请刷新后重试。'),response.status,undefined,'invalid_response');throw error;}
-}
-export function createApi(input: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true): Api {
-  const connection=Object.freeze({...input});
-  let closed=false;
-  const assertCurrent=()=>{
-    if(closed || !isCurrentConnection() || (connection.expiresAt!==undefined && connection.expiresAt<=Date.now()) || (isWebConnection(connection) && globalThis.location && connection.origin!==location.origin))
-      throw new ApiError(moteText('登录会话已改变，请重新登录。'),401,undefined,'session_changed');
-  };
+export function createApi(connection: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await raw(path, init);
-    const value=await readApiJson<T>(response);
-    assertCurrent();
-    if(isWebConnection(connection)&&path==='/api/auth/self'){
-      const self=value as {credentialId?:string;deploymentId?:string;userId?:string};
-      if(self.credentialId!==connection.credentialId||self.deploymentId!==connection.deploymentId||self.userId!==connection.userId){onUnauthorized?.();throw new ApiError(moteText('登录会话已改变，请重新登录。'),401,undefined,'session_changed');}
-    }
-    return value;
+    return response.json() as Promise<T>;
   }
   async function raw(path: string, init: RequestInit = {}) {
-    const startedAt = performance.now();
-    const route = path.split('?')[0];
-    const method = init.method?.toUpperCase() ?? 'GET';
-    logger.debug('api.request_started', { method, route });
-    assertCurrent();
     const modelOperation = init.method?.toUpperCase() === 'POST' && ['/api/query', '/api/insights', '/api/memories/extract'].includes(path);
     // The server accounts admitted execution time. A browser wall-clock timer
     // cannot know how long this operation waits for resources or durable work.
@@ -227,43 +163,51 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
     if (!path.startsWith('/api/') || path.includes('\\') || /[\r\n\t]/.test(path)) {
       throw new Error(moteText("管理请求必须使用当前服务的 API 路径。"));
     }
-    const headers=new Headers(init.headers);
-    headers.set('Accept-Language',getLocale());
-    if(init.body && !headers.has('Content-Type'))headers.set('Content-Type','application/json');
-    headers.set('X-Mote-Protocol-Version','2');
-    if(path.startsWith('/api/ingress/'))headers.set('X-Mote-Ingress-Version','3');
-    if(isWebConnection(connection)){
-      headers.delete('Authorization');
-      headers.set('X-Mote-Session-Id',connection.credentialId);
-      headers.set('X-Mote-CSRF',connection.csrfToken);
-    }else headers.set('Authorization',`Bearer ${connection.token}`);
     const response = await fetch(path, {
       ...init,
-      // A held response can lock a browser cache entry before its no-store
-      // response headers arrive. New-owner reads must bypass that entry too.
-      cache: "no-store",
       redirect: "error",
-      credentials: isWebConnection(connection) || path.startsWith("/api/files/") ? "same-origin" : "omit",
+      credentials: path.startsWith("/api/files/") ? "same-origin" : "omit",
       signal,
-      headers,
-    }).catch(error => { logger.warn('api.request_failed', { method, route, durationMs: performance.now() - startedAt, detail: error instanceof Error ? error.name : undefined }); throw error; });
-    assertCurrent();
+      headers: {
+        "Accept-Language": getLocale(),
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+        Authorization: `Bearer ${connection.token}`,
+      },
+    });
     if (!response.ok) {
-      const error=await readApiError(response),code=error.code;
-      logger[response.status >= 500 ? 'error' : 'warn']('api.request_rejected', { method, route, status: response.status, code, durationMs: performance.now() - startedAt });
-      if ((response.status === 401 && (!code || ['unauthorized','connection_revoked','invalid_identity','session_binding_required'].includes(code)) || response.status===409&&code==='session_changed') && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
-      assertCurrent();
-      throw error;
+      let message = response.status === 524
+        ? moteText("入口等待服务响应超时（524）。请检查节点运行诊断；较慢的模型请求可能超过代理等待上限。")
+        : response.status === 413
+          ? moteText("上传超过中央节点或公网入口的大小限制（413）。可以分批上传，或将文件放到中央服务器后从目录导入。")
+          : response.status === 502
+            ? moteText("入口暂时无法连接中央服务（502）。请检查中央进程和隧道的 origin 地址。")
+            : moteText("请求未完成（{0}）", response.status);
+      let requestId = response.headers.get("X-Request-Id") ?? undefined;
+      let code: string | undefined;
+      const retryAfter=response.headers.get('Retry-After');
+      const retrySeconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):undefined;
+      let retryAfterMs=retrySeconds!==undefined&&Number.isSafeInteger(retrySeconds)&&retrySeconds>=0?retrySeconds*1000:undefined;
+      try {
+        const value = await response.json();
+        const candidate=value.reason??value.code??(typeof value.error==='object'?value.error?.code:value.error);
+        if(typeof candidate==='string'&&/^[a-z][a-z0-9_.-]{0,99}$/.test(candidate))code=candidate;
+        if (typeof value.message === "string") message = value.message;
+        else if (typeof value.error === "string") message = value.error;
+        if (!requestId && typeof value.requestId === "string") requestId = value.requestId;
+        if(retryAfterMs===undefined&&Number.isSafeInteger(value.retryAfterMs)&&value.retryAfterMs>=0)retryAfterMs=value.retryAfterMs;
+      } catch {
+        /* response might not be JSON */
+      }
+      if (response.status === 401 && (!code || ['unauthorized','connection_revoked'].includes(code)) && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
+      if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) requestId = undefined;
+      throw new ApiError(message, response.status, requestId, code, retryAfterMs);
     }
-    logger.debug('api.request_completed', { method, route, status: response.status, durationMs: performance.now() - startedAt });
-    return new Proxy(response, {get(target,key){
-      const value=Reflect.get(target,key,target);
-      if(['json','text','blob','arrayBuffer','formData','bytes'].includes(String(key))&&typeof value==='function')return async(...args:unknown[])=>{assertCurrent();const body=await value.apply(target,args);assertCurrent();return body;};
-      return typeof value==='function'?value.bind(target):value;
-    }});
+    return response;
   }
-  return { request, raw, connection, close:()=>{closed=true;} };
+  return { request, raw };
 }
+export type Api = ReturnType<typeof createApi>;
 export function queryString(
   range: Range,
   extra: Record<string, string | number | undefined> = {},
@@ -322,6 +266,6 @@ export const deviceLabels: Record<string, string> = {
   stale: moteText("状态待更新"),
 };
 export function errorMessage(error: unknown) {
-  const message=error instanceof ApiError&&error.code?failureMessage(error.code,error.status):error instanceof DOMException&&error.name==='TimeoutError'?moteText('请求等待超时，请检查节点和网络状态后重试。'):error instanceof TypeError?failureMessage('network'):error instanceof Error?error.message:moteText("请求未完成，请稍后重试。");
+  const message=error instanceof ApiError&&error.code?failureMessage(error.code):error instanceof TypeError?failureMessage('network'):error instanceof Error?error.message:moteText("请求未完成，请稍后重试。");
   return error instanceof ApiError&&error.requestId?moteText("{0} 请求编号：{1}",message,error.requestId):message;
 }

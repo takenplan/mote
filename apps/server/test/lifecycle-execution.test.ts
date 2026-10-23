@@ -117,9 +117,9 @@ test('automatic insight recovery replaces only its typed transient checkpoint wi
    const children=store.db.prepare('SELECT child_id FROM operation_parents WHERE parent_id=?').all('workflow:lifecycle:'+first.active!.id);assert.equal(children.length,2,'both observations belong to the same authorized window');
    assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,1);await add(2);now+=3600000;await lifecycle.tick();assert.equal(calls,3,'a recovered window no longer blocks later insights');assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,2);
   }else{
-   for(let attempt=3;attempt<=3;attempt++){now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;await lifecycle.tick();}
-   const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,3);assert.equal(stopped.status,'failed');assert.equal(stopped.failures,3);assert.equal(stopped.manualRetryRequired,true);assert.equal(stopped.retryAt,undefined);assert.equal(stopped.active!.id,first.active!.id);assert.equal(insights.list().length,3);
-   now+=86400000;await lifecycle.tick();assert.equal(calls,3,'a parent tick cannot reset the finite recovery budget');
+   for(let attempt=3;attempt<=4;attempt++){now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;await lifecycle.tick();}
+   const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,4);assert.equal(stopped.status,'failed');assert.equal(stopped.failures,4);assert.equal(stopped.manualRetryRequired,true);assert.equal(stopped.retryAt,undefined);assert.equal(stopped.active!.id,first.active!.id);assert.equal(insights.list().length,4);
+   now+=86400000;await lifecycle.tick();assert.equal(calls,4,'a parent tick cannot reset the finite recovery budget');
   }
  });
 });

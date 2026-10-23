@@ -23,7 +23,7 @@ For example, ask: “What did I work on this week?”, “Where did I see that d
 
 Mote has two parts: **Central**, your archive and web interface, and optional **macOS / Android apps** that collect and sync context. Central can run on your Mac, a Linux server, or a NAS. You can try it with a note before enabling screen collection.
 
-> **Development preview:** Central, macOS, and Android have separate releases. Dev builds are commit-addressed Actions artifacts; Beta and stable releases use the Prod profile. All use manual updates. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
+> **Development preview:** Central, macOS, and Android have separate releases. Current downloads are DEV builds and use manual updates. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
 
 ### 1. Start your archive
 
@@ -32,12 +32,21 @@ Install **Node.js 24** and npm, then run:
 ```sh
 git clone https://github.com/utopiafar/mote.git
 cd mote
-node scripts/dev-server.mjs
+npm ci
+npm run build:central
+
+node scripts/mote.mjs init --profile dev
+node scripts/mote.mjs start --profile dev
+node scripts/mote.mjs status --profile dev
 ```
 
-The launcher installs changed dependencies, builds the current checkout, and starts a local trial at [http://127.0.0.1:47842](http://127.0.0.1:47842). It creates a missing development profile under `.mote/profiles/dev/` and, only when its account database is empty, creates **username `admin`, password `admin`**. Select **Sign in to Mote** and use that account. Existing accounts and passwords are preserved; the default is not reapplied on restart. Press **Ctrl+C** in the terminal to stop the development server and its children.
+Open [http://127.0.0.1:47842](http://127.0.0.1:47842). To sign in, select **Sign in to Mote** and enter the owner token shown by:
 
-This fixed account is for the local development launcher. A production deployment uses an explicitly initialized administrator and account login; retired owner tokens do not authenticate to the current server. Current clients require Wire 2 and Ingress 3. Follow the [upgrade guide](docs/updating.md) before opening older storage with this version.
+```sh
+node scripts/mote.mjs token --profile dev
+```
+
+This creates a local trial environment, with configuration, data, and logs under `.mote/profiles/dev/`. Keep the token private: it grants full archive access. To stop this environment, run `node scripts/mote.mjs stop --profile dev`.
 
 Central prepares its local OCR and audio worker runtime in the background. Those workers need **Python 3.9+** and network access for their first installation; audio processing also needs **FFmpeg**. Install OCR/transcription models explicitly in settings when you need them. Originals remain archived while processing waits for its runtime or models. See the [media setup guide](docs/ocr-asr-implementation-plan.md).
 
@@ -47,16 +56,16 @@ For a daily archive, use a profile outside the checkout. The [deployment guide](
 
 Start with **Record** in the web interface: save a short note, then find it in **Library**. You can also use Library's import tools to add selected material, inspect the preview, and confirm it.
 
-To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases). For Dev builds, select the component workflow Artifact in [Actions](https://github.com/utopiafar/mote/actions); see the [release guide](docs/releasing.md).
+To collect from your devices, download the matching app from [Releases](https://github.com/utopiafar/mote/releases):
 
 | Device | Install | Connect |
 | --- | --- | --- |
-| macOS 13.3+ | Download the Mac ZIP for your architecture and profile, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
-| Android 10+ | Install the Android APK for your profile; Dev and Prod have separate app identities. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
+| macOS 13.3+ | Download the Mac DEV ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
+| Android 10+ | Install the Android DEV APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
 
-After signing in to Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, account, and device identity, and confirm. Invitations expire after 10 minutes and can be used once. Each paired app receives a separately revocable device credential for that account's collection; it does not grant private archive browsing or administration. Sign in separately to use Central pages and Ask. See the [account-bound invitation contract](docs/design/multiuser-qr-pairing.md).
+In Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, and confirm. Invitations expire after 10 minutes and can be used once. Each app receives its own revocable credential with full owner access; only pair devices you trust.
 
-A phone's `127.0.0.1` points to the phone itself. Cross-device use needs a reachable **HTTPS** address and the account or device credentials issued for that deployment. Use a production account for remote access; generating a QR code does not create a tunnel. See [connection setup](docs/connections.md).
+A phone's `127.0.0.1` points to the phone itself. Cross-device use needs a reachable **HTTPS** address and a strong access token; generating a QR code does not create a tunnel. See [connection setup](docs/connections.md).
 
 Choose which apps and content to record, configure privacy filters, grant the required system permissions, and explicitly start collection. You can collect locally before connecting Central, and choose real-time, scheduled, batched, or manual uploads. See [collection and sync](docs/collection-and-sync.md).
 
@@ -73,7 +82,7 @@ Presets include hosted providers, local services such as Ollama and LM Studio, a
 - **You choose what to collect.** Collection starts explicitly on each device. Per-app rules let you collect content, keep activity only, or record nothing. Masks and optional text-based privacy rules apply on the device before upload.
 - **You choose where it lives.** Central stores the archive on your infrastructure. Client content is stored in app-private directories; Central content encryption is optional and off by default. It does not encrypt all SQLite metadata.
 - **You choose the AI service.** Retrieved text is sent to the configured model for AI requests. Original screenshot disclosure requires separate authorization. Optional embeddings send text to the embedding service you configure; self-hosting the archive does not make remote AI requests local.
-- **Export and connection controls.** Export your archive, make offline backups, and revoke individual connections. The current multi-user server applies configured retention and storage capacity through account-bound maintenance and admission. See the [project map](docs/project-map.md) and [progress ledger](docs/project-progress.md) for implementation, validation and remaining journey gaps.
+- **You control retention and connections.** Set retention, export your archive, make offline backups, and revoke individual connections. Central retains data indefinitely by default, subject to its storage quota.
 
 See [privacy controls](docs/privacy-and-metadata.md), [content storage](docs/content-storage.md), and [backup and recovery](docs/deployment.md). Sampled activity shows coverage during observations, rather than continuous focus time.
 
@@ -92,7 +101,7 @@ flowchart LR
 
 The apps collect independently and keep persistent offline queues. Central preserves originals and source versions, prepares searchable material, and builds memories in the background. Queries can read available material without waiting for memory extraction. Models choose retrieval tools and interpret evidence; captured content is treated as untrusted evidence, and query agents receive only read-only context tools.
 
-The implementation uses Electron/TypeScript with Swift helpers on macOS, Kotlin on Android, and Node.js/Fastify, SQLite, and React for Central. One Central writer instance hosts isolated account archives, credentials, and tasks. Read the [multi-user architecture](docs/adr-multiuser-scope.md) and [protocol contract](protocol/contract.json) for the technical boundaries.
+The implementation uses Electron/TypeScript with Swift helpers on macOS, Kotlin on Android, and Node.js/Fastify, SQLite, and React for Central. Central is a single-owner archive with one writer instance. Read the [architecture](docs/architecture.md) and [protocol](docs/protocol.md) for the technical boundaries.
 
 ## Guides and support
 
@@ -105,10 +114,9 @@ Detailed guides are currently primarily in Chinese. Both READMEs cover the same 
 | Bring in files, calendars, or other apps | [Sources and MCP](docs/connectors.md) · [Import and memory](docs/central-memory.md) · [Coding conversations](docs/coding-agent-memory.md) |
 | Understand memory and processing | [Memory lifecycle](docs/memory-lifecycle.md) · [Local OCR and transcription](docs/ocr-asr-implementation-plan.md) |
 | Diagnose a problem | [Troubleshooting](docs/troubleshooting.md) · [Documentation index](docs/README.md) |
-| Check project status and architectural decisions | [Project map](docs/project-map.md) · [Progress ledger](docs/project-progress.md) · [ADR index](docs/architecture-decisions.md) |
 
 Current collectors support macOS and Android; Windows/Linux screen collection is not implemented. Mac DEV apps use ad-hoc signing and are not notarized. Android background behavior and battery use vary by device; fixture, emulator, physical-device, and live-model checks are documented separately.
 
 For bugs, use [GitHub Issues](https://github.com/utopiafar/mote/issues) or **Settings → Feedback** in the app. Include the component version, platform, and reproduction steps. Issues are public: check attachments for personal content and never include access tokens or private archives.
 
-For contributions, start with the [development guide](docs/development.md) and [project working rules](AGENTS.md). Follow the [validation stages](docs/development.md#validation-stages): use focused checks during implementation, intermediate commits, and draft PR updates, and state pending final validation. For a final merge candidate, the integration owner completes `npm run check:affected` and the affected user journeys. Documentation-only changes need formatting, grammar, link, and rendering review. Use generated fixtures for capture tests. Dependency and model license details are in [third-party notices](THIRD_PARTY_NOTICES.md).
+For contributions, start with the [development guide](docs/development.md) and [project working rules](AGENTS.md). For documentation-only changes, check formatting, grammar, links, and rendering. Run `npm run check:affected` for code, configuration, dependency, or runtime changes, add checks for the affected user journeys as described in the development guide, and use generated fixtures for capture tests. Dependency and model license details are in [third-party notices](THIRD_PARTY_NOTICES.md).

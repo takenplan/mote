@@ -16,8 +16,6 @@ export interface ConfigDomainView {
   fields: ConfigFieldMetadata[];
   status: 'applied' | 'restart-required' | 'invalid';
   error?: string;
-  /** Actual future-work authority, separate from saved defaults and active task snapshots. */
-  automation?: {path:string;authorized:boolean;enabled:boolean;state:'active'|'paused'|'waiting_authorization'|'stopped';reason?:string}[];
 }
 export interface ConfigServiceView {
   version: 1;

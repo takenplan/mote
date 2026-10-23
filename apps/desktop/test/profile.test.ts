@@ -20,13 +20,6 @@ it('uses the canonical default path and safely resolves explicit dev/test/prod p
   expect(() => resolveProfile(['--profile'], {}, '/private/old')).toThrow();
   expect(() => resolveProfile(['--profile=dev', '--profile=test'], {}, '/private/old')).toThrow();
 });
-it('enables development diagnostics only for a dev profile or a development build',()=>{
-  for(const name of ['default','dev','test','prod','generated']){
-    const profile=resolveProfile([`--profile=${name}`],{},directory);
-    expect(profileDefaults(profile,{}).diagnosticsEnabled).toBe(name==='dev');
-    expect(profileDefaults(profile,{},true).diagnosticsEnabled).toBe(true);
-  }
-});
 it('never seeds dev with the daily local node or credentials from an overridden profile', () => {
   const dev = resolveProfile([], { MOTE_PROFILE: 'dev' }, directory);
   for (const host of ['127.0.0.1', 'localhost', '[::1]']) expect(() => profileDefaults(dev, { MOTE_PROFILE: 'dev', MOTE_URL: `http://${host}:47832` })).toThrow('不能自动连接');

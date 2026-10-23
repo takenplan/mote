@@ -2,11 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const releaseComponents = ['central', 'desktop', 'android'];
-export function buildProfile(env = process.env) {
-  const profile = env.MOTE_BUILD_PROFILE ?? 'prod';
-  if (!['dev', 'prod'].includes(profile)) throw Error('Build profile must be dev or prod; test is reserved for fixtures');
-  return profile;
-}
 const versionPattern = /^(0|[1-9]\d{0,7})\.(0|[1-9]\d{0,7})\.(0|[1-9]\d{0,7})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const readJson = path => JSON.parse(readFileSync(path, 'utf8'));
 export function validVersion(version) {
@@ -49,20 +44,17 @@ export function loadComponent(component, root = process.cwd()) {
   if (!validVersion(version)) throw Error('Invalid release version');
   return { component, ...config, version, ...(versionCode === undefined ? {} : { versionCode }), tag: `${component}-v${version}`, notes: `release/notes/${component}/${version}.md` };
 }
-export function verifyComponent(component, { root = process.cwd(), ref, repository, profile = 'prod' } = {}) {
-  buildProfile({ MOTE_BUILD_PROFILE: profile });
+export function verifyComponent(component, { root = process.cwd(), ref, repository } = {}) {
   const release = loadComponent(component, root);
   const policy = readJson(join(root, 'release/signing-policy.json'));
-  if (profile === 'prod' && ref && ref !== `refs/tags/${release.tag}`) throw Error('Release workflow must run on its exact component version tag');
-  if (profile === 'dev' && ref?.startsWith('refs/tags/')) throw Error('Dev builds use a branch/commit, not a release tag');
-  if (profile === 'prod' && release.version.includes('-') && !/^\d+\.\d+\.\d+-beta\.(0|[1-9]\d*)$/.test(release.version)) throw Error('Release tags use X.Y.Z or X.Y.Z-beta.N');
-  if (profile === 'prod' && repository && repository !== policy.repository) throw Error('Configure a distinct release identity for a fork before publishing');
-  if (profile === 'prod' && !readFileSync(join(root, release.notes), 'utf8').trim()) throw Error('Release notes must not be empty');
+  if (ref && ref !== `refs/tags/${release.tag}`) throw Error('Release workflow must run on its exact component version tag');
+  if (repository && repository !== policy.repository) throw Error('Configure a distinct release identity for a fork before publishing');
+  if (!readFileSync(join(root, release.notes), 'utf8').trim()) throw Error('Release notes must not be empty');
   if (release.packages) {
     const lock = readJson(join(root, 'package-lock.json'));
     for (const path of release.packages) if (lock.packages[path.replace(/\/package.json$/, '')]?.version !== release.version) throw Error(`${component} package-lock version differs`);
   }
-  return { ...release, profile, repository: policy.repository, channel: profile === 'dev' ? 'dev' : release.version.includes('-') ? 'preview' : 'stable' };
+  return { ...release, repository: policy.repository, channel: release.version.includes('-') ? 'preview' : 'stable' };
 }
 export function bumpComponentVersion(component, target, root = process.cwd()) {
   const release = loadComponent(component, root);

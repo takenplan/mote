@@ -12,12 +12,10 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
     override fun doWork(): Result = ConnectionGuard.sync { run() } ?: Result.retry()
     private fun run(): Result {
         val settings = Settings(applicationContext); val config = settings.read()
-        // A retired WorkRequest cannot publish even a failure into the next
-        // account's recovery page. Validate before selecting any owner state.
-        if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) return Result.failure()
-        val state = applicationContext.accountPreferences("sync-recovery")
-        fun report(message: String) { if (!isStopped) state.edit().putString("message", message).putString("at", Instant.now().toString()).commit() }
+        val state = applicationContext.getSharedPreferences("sync-recovery", Context.MODE_PRIVATE)
+        fun report(message: String) { state.edit().putString("message", message).putString("at", Instant.now().toString()).commit() }
         try {
+            if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) { report(MoteI18n.text("连接或同步策略已变化，本次操作已停止；请重新发起")); return Result.failure() }
             config.validateConnection()
             SyncSchedule.waitingReason(applicationContext, config)?.let { report(it); return Result.retry() }
             if (inputData.getBoolean("replay", false)) {
@@ -43,8 +41,8 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
                     return Result.success()
                 }
                 SyncSchedule.requireConditions(applicationContext, config)
-                val (code, response) = CollectorHttp(applicationContext).post("${config.server}/api/ingress/devices/${settings.deviceId}/reconcile",
-                    JSONObject().put("ids", JSONArray(ids)), config.connectionToken())
+                val (code, response) = CollectorHttp(applicationContext).post("${config.server}/api/capture-browser/reconcile",
+                    JSONObject().put("deviceId", settings.deviceId).put("ids", JSONArray(ids)), config.connectionToken())
                 if (code == 401 || code == 403) { report(MoteI18n.text("检查失败：连接授权失效，请重新连接同一节点后重试")); return Result.failure() }
                 if (code == 404) { report(MoteI18n.text("中央节点尚不支持两端检查，请升级中央端代码；未修改本机状态")); return Result.failure() }
                 check(code == 200) { MoteI18n.text("检查响应未确认") }
@@ -69,19 +67,13 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
         }
     }
     companion object {
-        fun start(context: Context, replay: Boolean) = ConnectionGuard.sync {
+        fun start(context: Context, replay: Boolean) {
             val config = Settings(context).read(); config.validateConnection()
             val request = OneTimeWorkRequestBuilder<SyncRecoveryWorker>().setConstraints(SyncSchedule.constraints(config, explicit = true))
                 .setInputData(workDataOf("replay" to replay, "syncStamp" to SyncSchedule.stamp(config)))
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
-            // Persist the request message first: a fast, empty-queue worker may
-            // otherwise complete before the caller overwrites its final report.
-            context.accountPreferences("sync-recovery").edit().putString("message", MoteI18n.text("操作已请求；重复点击会合并，等待网络条件或当前操作完成")).apply()
             WorkManager.getInstance(context).enqueueUniqueWork("mote-sync-recovery", ExistingWorkPolicy.KEEP, request)
-        } ?: error(MoteI18n.text("连接正在切换"))
-        fun stop(context: Context) = ConnectionGuard.sync {
-            WorkManager.getInstance(context).cancelUniqueWork("mote-sync-recovery").result.get(10, TimeUnit.SECONDS)
-            context.accountPreferences("sync-recovery").edit().putString("message", MoteI18n.text("已请求停止检查；已进入待发队列的记录按同步策略保留")).apply()
-        } ?: error(MoteI18n.text("连接正在切换"))
+            context.getSharedPreferences("sync-recovery", Context.MODE_PRIVATE).edit().putString("message", MoteI18n.text("操作已请求；重复点击会合并，等待网络条件或当前操作完成")).apply()
+        }
     }
 }

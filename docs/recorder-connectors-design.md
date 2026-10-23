@@ -81,11 +81,11 @@ flowchart LR
 
 ## 厂商契约与证据保真
 
-飞书已验证 Lark CLI 1.0.85 的妙记搜索、基础信息、`+detail --transcript` 产物导出与 `+download` 音频下载。直接 transcript OpenAPI 需要另一组权限，本机现有 `minutes.artifacts:read` 可通过 CLI 产物路径读取；实现使用已经跑通的路径，不自行要求再次授权。当前固定版本已更新为 Lark CLI 1.0.98；历史真实账号结果不能替代新版验收。文档/日历与录音连接均使用各自实例的隔离配置，页面提供配置、授权与重新授权。换中央节点或新建实例需要重新授权，不迁移宿主登录态。
+飞书已验证 Lark CLI 1.0.85 的妙记搜索、基础信息、`+detail --transcript` 产物导出与 `+download` 音频下载。直接 transcript OpenAPI 需要另一组权限，本机现有 `minutes.artifacts:read` 可通过 CLI 产物路径读取；实现使用已经跑通的路径，不自行要求再次授权。已有文档/日历连接仍使用隔离运行配置；录音连接明确复用中央节点原生 CLI 账号。换中央节点仍需在那里授权。
 
 飞书文本导出有说话人标签和起点，段落终点以后一段起点或厂商总时长推导，并标为不确定。所有者选择 `create_time` 作为语料时间，经 `recordedAt` 交付；它仍不把正文回忆的事件一律定为当天发生。说话人标签保留原值，身份未确认。
 
-钉钉适配使用固定 DWS 1.0.64 release 契约，组织需管理员启用 CLI。固定 `corp_id:user_id`，校验 `taskUuid`、完整分页和下载收据。完整原始导出保存在原件中，规范转写只交付段落主正文一份，保留段落位置和厂商说话人标签。结构中重复的句子列表不成为重复发言；真实重复段落仍保留。来源毫秒开始/创建时间作为语料时间，媒体相对位置无可靠依据时继续标为 untimed；该锚点不独立证明物理录音设备的时间精度。见[时间与正文决定](adr-ask-evidence-quality-and-simple-context.md)。运行时仅接受固定版本和当前响应形状；版本变更需重新核验，解码失败不会静默视为空数据。
+钉钉适配参考 DWS 1.0.62 release 契约，组织需管理员启用 CLI。固定 `corp_id:user_id`，校验 `taskUuid`、完整分页和下载收据。完整原始导出保存在原件中，规范转写只交付段落主正文一份，保留段落位置和厂商说话人标签。结构中重复的句子列表不成为重复发言；真实重复段落仍保留。来源毫秒开始/创建时间作为语料时间，媒体相对位置无可靠依据时继续标为 untimed；该锚点不独立证明物理录音设备的时间精度。见[时间与正文决定](adr-ask-evidence-quality-and-simple-context.md)。兼容性依赖上述已研究的版本和响应形状；其他版本需重新验证，解码失败不会静默视为空数据。
 
 凭据留在原生 CLI 凭据设施与受保护的连接设置；仅所有者接口可以连接、改范围、重试和播放。查询 Agent 不获得厂商 CLI、授权或配置写工具。数据进入既有原始证据和 Memory 管线，正文中的指令不被执行。
 
@@ -102,6 +102,6 @@ Omi Integration Apps 区分完整对话、实时转写、原始音频和每日�
 ## 研究依据与后续验收
 
 - [飞书 × 安克产品说明](https://www.feishu.cn/content/article/7597268954498763996)、[官方 Lark CLI](https://github.com/larksuite/cli)、[妙记文字接口](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/minutes-v1/minute-transcript/get)、[媒体接口](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/minutes-v1/minute-media/get)。
-- [DWS 1.0.64 源码与文档](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.64)、[DWS 授权说明](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/v1.0.64/README_zh.md)、[A1 JSAPI](https://open.dingtalk.com/tools/explorer/jsapi?id=11937)、[闪记事件](https://open.dingtalk.com/document/development/flash-memory-status-change-open-event)。事件是否覆盖硬件按键录音仍未验证。
+- [DWS 1.0.62 源码与文档](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.62)、[DWS 授权说明](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/v1.0.62/README_zh.md)、[A1 JSAPI](https://open.dingtalk.com/tools/explorer/jsapi?id=11937)、[闪记事件](https://open.dingtalk.com/document/development/flash-memory-status-change-open-event)。事件是否覆盖硬件按键录音仍未验证。
 
 验证结果见 [0.0.76 验证记录](validation/0.0.76.md)。仍需真实钉钉账号、两款物理录音笔新录音、长期令牌刷新及更大历史库验收。首次授权的终端命令步骤也仍可改进为现有设置流程；本版已授权本机的日常同步无需重复操作。

@@ -9,7 +9,7 @@ It does not require Agent trace opt-in (ordinary diagnostics must be enabled and
 log level must include warnings). Logs obey existing rotation and retention limits.
 
 Each batch also retains its last 20 `validationFailures` in the database and the
-`GET /api/memory/jobs/:id` response. Existing historical entries remain readable;
+`GET /api/memory-jobs/:id` response. Existing historical entries remain readable;
 new optional fields do not require a database migration. The job/batch terminal
 error can report the broader `invalid_model_output`; inspect the failure history
 and retained prior-validation receipt for the precise validation code.
@@ -76,35 +76,6 @@ No source text, quote text, candidate prose or arbitrary exception messages are
 added to ordinary diagnostics. IDs and measurements pass the diagnostics allowlist.
 Detailed Agent traces remain opt-in and use the same NDJSON envelope and rotating files as ordinary logs. Numeric candidate/span
 locations can be included in repair instructions without replaying untrusted text.
-
-## Execution timing observations
-
-Five fixed ordinary events support lease investigations: `task.loop_timing`,
-`task.lease_timing`, `task.lease_renewal`, `task.lease_recovered` and
-`memory.reader_timing`. They observe the existing host timer, renewal/recovery
-CAS outcomes and scoped Memory reader/preparation/assertion callbacks. They do
-not change leases, budgets, attempts, scheduling, authority or physical cleanup.
-The cause of the seven lease recoveries that motivated this instrumentation is
-still **unknown**; timing correlation is not a lease-failure repair.
-
-Correlation uses a dedicated `taskKey` for a controlled lowercase 64-hex task
-identity and `attemptId` under the existing UUID validator. Existing `taskId` and
-`operationId` validation is unchanged. Closed operation labels use the existing
-`name` field; they never copy arbitrary task, tool or source names. Records contain
-only allowed identifiers, fixed labels and numeric measurements, with no source
-or Memory prose, prompts, arguments/results, SQL/parameters, credentials, arbitrary
-exceptions, grant/fence values or account identifiers.
-
-Per logger, each declared 60-second monotonic window admits at most 40 routine
-entries, 20 failure/recovery entries and one suppression/window summary: at most
-61 new events. Suppression, dropped writes and missing completion records leave
-evidence **unknown**, rather than proving that work or a failure did not occur.
-Existing enabled, selected-level, silent and closed gates apply; Agent trace may
-remain off. Off/re-enable resets owned timing baselines, and close clears owned
-state through existing lifecycle paths without deleting retained history or
-adding a timer/handle. See the
-[execution observability validation record](validation/execution-observability-20261023.md)
-for measurement boundaries and pending evidence.
 
 ## September 21 investigation
 

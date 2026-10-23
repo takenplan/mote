@@ -5,7 +5,7 @@ import { apiClient, resolvedConnection } from './client.js';
 import { SourceSync, sourceHash } from '../apps/desktop/src/source-sync.js';
 import { scanSourceFiles } from '../apps/desktop/src/source-files.js';
 import { DEFAULT_SOURCE_OPTIONS, normalizeSourceOptions, redactSourceText, type SourceDefinition, type SourceRequest } from '../apps/desktop/src/source-types.js';
-import {initializeCliIngressState,cliAccountDirectory} from './cli-ingress-state.js';
+import {initializeCliIngressState} from './cli-ingress-state.js';
 const args = process.argv.slice(2);
 const usage = 'Usage: npm run import:files -- --root /explicit/folder-or-file [--extensions .md,.txt,.json,.csv,.ics] [--retention snapshot|reference|archive] [--initial-sync all|new_only] [--exclude relative/path,...] [--redact-literal exact-text] [--track-deletions] [--allow-transient-upload] [--dry-run] [--watch]\nOnly explicitly selected files; no symlinks or hidden traversal. Reference sends metadata only; snapshot sends complete files for central processing then deletes temporary originals; archive retains originals. Snapshot transmission requires --allow-transient-upload. Deletion tracking is opt-in; historical versions remain. Select a node with MOTE_CONFIG_FILE pointing to mote.yaml or the profile CLI.';
 if (args.includes('--help')) { console.info(usage); process.exit(0); }
@@ -29,13 +29,12 @@ const options = normalizeSourceOptions({ ...DEFAULT_SOURCE_OPTIONS,
   excludedPaths: (get('--exclude') || '').split(',').filter(Boolean), redactLiterals: values.get('--redact-literal') || [],
 });
 if(options.retention==='snapshot'&&!values.has('--dry-run')&&!options.centralProcessingConsent)throw new Error('Snapshot sends complete file bytes to central processing. Confirm with --allow-transient-upload.');
-const client = values.has('--dry-run') ? undefined : await apiClient();
-const deviceId = client?.identity.credential.deviceId??'files-' + sourceHash(hostname() + ':' + resolvedConnection.profile).slice(0, 24);
+const deviceId = 'files-' + sourceHash(hostname() + ':' + resolvedConnection.profile).slice(0, 24);
 const id = 'files-' + sourceHash(deviceId + ':' + root).slice(0, 32);
 const source: SourceDefinition = { id, deviceId, name: redactSourceText(basename(root), options.redactLiterals).slice(0, 200) || '本地文件', kind: 'local-files', platform: 'import', retention: options.retention, initialSync:options.initialSync, enabled: true };
-const stateRoot = resolvedConnection.profileDirectory ? join(resolvedConnection.profileDirectory, 'file-sync') : resolve(resolvedConnection.baseDir, '.mote/file-sync');
-const stateDirectory=client?await cliAccountDirectory(stateRoot,client.config):stateRoot;
-const statePath = join(stateDirectory, id + '.json');
+const stateDirectory = resolvedConnection.profileDirectory ? join(resolvedConnection.profileDirectory, 'file-sync') : resolve(resolvedConnection.baseDir, '.mote/file-sync');
+const client = values.has('--dry-run') ? undefined : apiClient();
+const statePath = join(stateDirectory, id + '-' + (client?.binding.slice(0, 16) || 'dry-run') + '.json');
 const policy = sourceHash(JSON.stringify({ retention: options.retention, trackDeletions: options.trackDeletions, extensions: options.extensions, excludedPaths: options.excludedPaths, redactLiterals: options.redactLiterals }));
 const request: SourceRequest | undefined = client;
 let lock: Awaited<ReturnType<typeof open>> | undefined;
@@ -63,7 +62,7 @@ try {
     }
     await lock.writeFile(String(process.pid)); await lock.sync();
     engine = new SourceSync(statePath);
-    await initializeCliIngressState(statePath,engine,client!.config);
+    await initializeCliIngressState(statePath,engine);
     await engine.ensurePolicy(policy);await engine.ensureAdapterVersion(2);
   }
   async function scan(): Promise<void> {
@@ -71,13 +70,13 @@ try {
     let count = result.items.length;
     if (request && engine) {
       const prepare = async () => {
-      const registered = await request('/api/ingress/sources', source, 'POST', controller.signal) as { id?: unknown };
+      const registered = await request('/api/sources', source, 'POST', controller.signal) as { id?: unknown };
       if (registered?.id !== id) throw new Error('Source registration ACK mismatch');
       // Explicit CLI options are the local owner's desired retention. Never override central enabled/pause.
-      const patched = await request('/api/ingress/sources/' + id, { retention: options.retention, initialSync:options.initialSync, name: source.name }, 'PATCH', controller.signal) as { id?: unknown };
+      const patched = await request('/api/sources/' + id, { retention: options.retention, initialSync:options.initialSync, name: source.name }, 'PATCH', controller.signal) as { id?: unknown };
       if (patched?.id !== id) throw new Error('Source configuration ACK mismatch');
       };
-      // SourceSync checks every account-bound Ingress 3 receipt before removing a pending revision.
+      // SourceSync checks every v2 receipt before removing a pending revision.
       const synced = await engine.syncScan(result, options.trackDeletions, source, request, controller.signal, prepare);
       count = synced.changes; const state = synced.state;
       if (state === 'paused') { console.info('Central source is paused; pending revisions retained locally.'); return; }

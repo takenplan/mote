@@ -2,10 +2,9 @@ import {readFileSync,writeFileSync,mkdirSync,copyFileSync,statSync} from 'node:f
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {join,resolve} from 'node:path';
-import {loadComponent,buildProfile} from './components.mjs';
+import {loadComponent} from './components.mjs';
 const [component,input,variant]=process.argv.slice(2),out=resolve(process.env.MOTE_RELEASE_OUTPUT||'artifacts/release');
 const release=loadComponent(component==='server'?'central':component),version=release.version,policy=JSON.parse(readFileSync('release/signing-policy.json','utf8'));
-const profile=buildProfile(),development=profile==='dev';
 mkdirSync(out,{recursive:true});
 let asset;
 if(component==='server')asset={component,platform:'source',arch:'all',format:'tar.gz',name:`mote-server-${version}.tar.gz`};
@@ -22,17 +21,14 @@ else if(component==='android'){
   if(Number(match[2])!==expectedCode||(!match[1].endsWith('.dev')&&/^application-debuggable\s*$/m.test(badging)))throw Error('Android version code or release debug flag mismatch');
   execFileSync(join(tools,'zipalign'),['-c','-P','16','4',input],{stdio:'pipe'});
   const dev=match[1].endsWith('.dev');
-  if(dev!==development||match[3]!==version+(development?'-dev':''))throw Error('Android package does not match the selected build profile');
   asset={component,platform:'android',arch:'arm64',format:'apk',name:`mote-android-${dev?'dev-':''}arm64-${version}.apk`,packageName:match[1],versionCode:Number(match[2]),certificateSha256};
 }else if(component==='desktop'){
   if(!['arm64','x64'].includes(variant))throw Error('Unsupported Mac architecture');
   const mode=process.env.MOTE_MAC_SIGNING_MODE||'adhoc';
   if(!['adhoc','developer-id'].includes(mode))throw Error('Invalid Mac signing mode');
-  asset={component,platform:'darwin',arch:variant,format:'zip',name:`mote-desktop-macos-${development?'dev-':''}${variant}-${version}.zip`,bundleId:development?'dev.mote.collector.dev':policy.macBundleId,signing:mode,...(mode==='developer-id'?{teamId:process.env.MOTE_APPLE_TEAM_ID}:{})};
+  asset={component,platform:'darwin',arch:variant,format:'zip',name:`mote-desktop-macos-${process.env.MOTE_MAC_DEVELOPMENT==='1'?'dev-':''}${variant}-${version}.zip`,bundleId:process.env.MOTE_MAC_DEVELOPMENT==='1'?'dev.mote.collector.dev':policy.macBundleId,signing:mode,...(mode==='developer-id'?{teamId:process.env.MOTE_APPLE_TEAM_ID}:{})};
 }else throw Error('Choose a supported release component');
 const path=join(out,asset.name);if(resolve(input)!==path)copyFileSync(input,path);
-const commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
-Object.assign(asset,{profile,commit,size:statSync(path).size,sha256:createHash('sha256').update(readFileSync(path)).digest('hex'),...(!development?{url:`https://github.com/${policy.repository}/releases/download/${release.tag}/${asset.name}`}:{})});
+Object.assign(asset,{size:statSync(path).size,sha256:createHash('sha256').update(readFileSync(path)).digest('hex'),url:`https://github.com/${policy.repository}/releases/download/${release.tag}/${asset.name}`});
 writeFileSync(join(out,asset.name+'.asset.json'),JSON.stringify(asset,null,2));
-writeFileSync(join(out,'build-info.json'),JSON.stringify({component:release.component,profile,version,commit,...(!development?{tag:release.tag}:{})},null,2)+'\n');
 console.log(JSON.stringify({component:asset.component,name:asset.name,size:asset.size,sha256:asset.sha256}));

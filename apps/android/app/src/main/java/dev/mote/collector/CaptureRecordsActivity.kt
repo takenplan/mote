@@ -47,7 +47,6 @@ class CaptureRecordsActivity : MoteActivity() {
     private var nextCursor: String? = null
     private var date = LocalDate.now()
     private var central = false
-    private var pageOwner = ""
     private var localStateJob: kotlinx.coroutines.Job? = null
     private var lastRecordsRevision = -1L
     private var metadataLoading = false
@@ -63,17 +62,15 @@ class CaptureRecordsActivity : MoteActivity() {
     @Volatile private var generation = 0
     @Volatile private var loadGeneration = 0
     override fun onCreate(savedInstanceState: Bundle?) {
-        pageOwner = Settings(this).read().ownerKey()
-        val state = savedInstanceState?.takeIf { it.getString("recordOwner") == pageOwner }
-        super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { navigateBack() }
-        date = state?.getString("date")?.let(LocalDate::parse)
+        date = savedInstanceState?.getString("date")?.let(LocalDate::parse)
             ?: intent.getStringExtra("recordDate")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: date
-        central = state?.getBoolean("central") ?: false
-        album = state?.getString("album")?.let(::JSONObject)
-        recordSource = (state?.getString("recordSource") ?: intent.getStringExtra("recordSource"))?.takeIf { it in recordSources } ?: "screen"
-        sessionGrouping = state?.getBoolean("sessionGrouping", true) ?: true
-        grid = state?.getBoolean("grid", true) ?: true
+        central = savedInstanceState?.getBoolean("central") ?: false
+        album = savedInstanceState?.getString("album")?.let(::JSONObject)
+        recordSource = (savedInstanceState?.getString("recordSource") ?: intent.getStringExtra("recordSource"))?.takeIf { it in recordSources } ?: "screen"
+        sessionGrouping = savedInstanceState?.getBoolean("sessionGrouping", true) ?: true
+        grid = savedInstanceState?.getBoolean("grid", true) ?: true
         body = moteDetailPage(title = MoteI18n.text("采集记录")) { navigateBack() }
         recordHeading = window.decorView.findViewWithTag("detail-title")
         val compactFilters = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
@@ -152,7 +149,7 @@ class CaptureRecordsActivity : MoteActivity() {
         updateRecordHeading()
         load()
         val reader = if (savedInstanceState == null) intent.getStringExtra("recordId")?.let { ReaderRequest(it, false) }
-            else state?.getString("readerId")?.let { ReaderRequest(it, state.getBoolean("readerRemote")) }
+            else savedInstanceState.getString("readerId")?.let { ReaderRequest(it, savedInstanceState.getBoolean("readerRemote")) }
         reader?.let { detail(it.id, it.remote, null, generation) }
     }
     private fun updateRecordHeading() {
@@ -172,9 +169,7 @@ class CaptureRecordsActivity : MoteActivity() {
     }
     override fun onResume() {
         super.onResume()
-        retireChangedAccount()
         localStateJob = observeLocalState { snapshot ->
-            if (retireChangedAccount()) return@observeLocalState
             if (snapshot.revision.records != lastRecordsRevision) {
                 if (!central && snapshot.active != null && snapshot.error == null) {
                     lastRecordsRevision = snapshot.revision.records
@@ -182,22 +177,6 @@ class CaptureRecordsActivity : MoteActivity() {
                 }
             }
         }
-    }
-    private fun currentAccount() = Settings(this).read().ownerKey() == pageOwner
-    /** Retire pixels, readers and callbacks before displaying another account. Disk data stays owned. */
-    private fun retireChangedAccount(): Boolean {
-        val owner = Settings(this).read().ownerKey()
-        if (owner == pageOwner) return false
-        generation++; loadGeneration++
-        readerDialog?.dismiss(); openReader = null
-        clearList(); thumbnails.evictAll(); cacheConfig = null
-        imageExecutor.queue.clear(); thumbnailWriter.queue.clear()
-        album = null; albumCursors = listOf(null); cursors.clear(); cursors.add(null); nextCursor = null
-        renderedPage = null; metadataLoading = false; refreshAfterLoad = false; lastRecordsRevision = -1
-        pageOwner = owner
-        acceptDisplayedAccountAfterRetirement()
-        load()
-        return true
     }
     override fun onPause() { localStateJob?.cancel(); localStateJob = null; super.onPause() }
     private fun reload() { album = null; cursors.clear(); cursors.add(null); load() }
@@ -211,7 +190,6 @@ class CaptureRecordsActivity : MoteActivity() {
         metadataLoading = true
         val scroll = body.parent as? ScrollView
         val scrollY = scroll?.scrollY ?: 0
-        val expectedOwner = pageOwner
         val request = ++loadGeneration; val remote = central; val source = recordSource; val selected = album; val sessions = sessionGrouping
         if (!backgroundRefresh) { generation++; renderedPage = null }
         backToAlbums.visibility = if (selected != null) View.VISIBLE else View.GONE
@@ -236,30 +214,27 @@ class CaptureRecordsActivity : MoteActivity() {
         executor.execute {
             try {
                 if (request != loadGeneration) return@execute
-                val (config, localQueue, client) = ConnectionGuard.sync {
-                    val settings = Settings(this); val config = settings.read()
-                    check(request == loadGeneration && pageOwner == expectedOwner && config.ownerKey() == expectedOwner) { "Account changed" }
-                    val owner = if (remote) CentralAccess.resolve(this).client else null
-                    check(!remote || owner != null) { MoteI18n.text("当前连接没有查看此记录的权限，请检查连接凭据") }
-                    Triple(config, if (remote) null else queue(), if (remote) CaptureRecordClient(config, settings.deviceId, owner) else null)
-                } ?: error(MoteI18n.text("连接正在切换"))
-                val page = if (source == "screen" && sessions) {
-                    client?.sessions(after, before, cursor, selected?.getString("id")) ?: requireNotNull(localQueue).sessionPage(after, before, cursor, selected?.getString("id"))
+                val settings = Settings(this); val config = settings.read()
+                val owner = if (remote) CentralAccess.resolve(this).client else null
+                if (remote && !config.hasSyncConnection() && owner == null) error(MoteI18n.text("请先在连接与同步中配置中央节点"))
+                val client = if (remote) CaptureRecordClient(config, settings.deviceId, owner) else null
+        val page = if (source == "screen" && sessions) {
+                    client?.sessions(after, before, cursor, selected?.getString("id")) ?: queue().sessionPage(after, before, cursor, selected?.getString("id"))
                 } else if (source == "screen" && selected == null) {
-                    client?.albums(after, before, cursor) ?: requireNotNull(localQueue).albumPage(after, before, cursor)
+                    client?.albums(after, before, cursor) ?: queue().albumPage(after, before, cursor)
                 } else if (source == "screen" && selected != null) {
                     val start = maxOf(Instant.parse(after), Instant.parse(selected.getString("after"))).toString()
                     val end = minOf(Instant.parse(before), Instant.parse(selected.getString("before"))).toString()
                     val appId = selected.getString("appId")
-                    client?.albumImages(start, end, appId, cursor) ?: requireNotNull(localQueue).albumImages(start, end, appId, cursor)
-                } else client?.page(after, before, cursor, source) ?: requireNotNull(localQueue).capturePage(after, before, cursor, source = source)
+                    client?.albumImages(start, end, appId, cursor) ?: queue().albumImages(start, end, appId, cursor)
+                } else client?.page(after, before, cursor, source) ?: queue().capturePage(after, before, cursor, source = source)
                 val items = page.getJSONArray("items")
                 val records = (0 until items.length()).map { items.getJSONObject(it).also { item -> java.util.UUID.fromString(item.getString("id")); Instant.parse(item.getString("capturedAt")) } }
                 val total = page.getInt("totalCount")
                 val next = if (page.isNull("nextCursor")) null else page.getString("nextCursor").takeIf(String::isNotBlank)
                 val images = mutableListOf<Pair<JSONObject, ImageView>>()
                 runOnUiThread {
-                    if (isDestroyed || retireChangedAccount() || request != loadGeneration) return@runOnUiThread
+                    if (isDestroyed || request != loadGeneration) return@runOnUiThread
                     val fingerprint = page.toString()
                     // Inventory/OCR changes outside this page must not discard existing
                     // views, cancel previews or restart thumbnail decryption.
@@ -271,7 +246,7 @@ class CaptureRecordsActivity : MoteActivity() {
                         cursors.removeAt(cursors.lastIndex); load(backgroundRefresh = true); return@runOnUiThread
                     }
                     clearList()
-                    if (backgroundRefresh) list.post { if (!isDestroyed && currentAccount() && stamp == generation) scroll?.scrollTo(0, scrollY) }
+                    if (backgroundRefresh) list.post { if (!isDestroyed && stamp == generation) scroll?.scrollTo(0, scrollY) }
                     if (cacheConfig != config) { thumbnails.evictAll(); cacheConfig = config }
                     nextCursor = next
                     if (source == "screen" && selected == null) {
@@ -313,7 +288,7 @@ class CaptureRecordsActivity : MoteActivity() {
                         fun requestImage(countProgress: Boolean) {
                             placeholder.text = MoteI18n.text("正在加载…"); placeholder.setOnClickListener(null); placeholder.isClickable = false
                             fun display(bitmap: Bitmap?) {
-                                if (isDestroyed || !currentAccount() || stamp != generation) { bitmap?.recycle(); return }
+                                if (isDestroyed || stamp != generation) { bitmap?.recycle(); return }
                                 if (bitmap != null) {
                                     thumbnails.put(key, bitmap); image.setImageBitmap(bitmap); placeholder.visibility = View.GONE
                                     if (failedForImage) { failed--; failedForImage = false }
@@ -330,12 +305,12 @@ class CaptureRecordsActivity : MoteActivity() {
                             // Revisited thumbnails appear immediately, even if old network work is still finishing.
                             thumbnails.get(key)?.let { display(it); return }
                             imageExecutor.execute {
-                                if (stamp != generation || isDestroyed || !currentAccount()) return@execute
+                                if (stamp != generation || isDestroyed) return@execute
                                 var thumbnailToSave: Bitmap? = null
                                 val bitmap = runCatching {
                                     if (client != null) CapturePreview.decode(client.image(id, true), 320)
                                     else {
-                                        val local = requireNotNull(localQueue)
+                                        val local = queue()
                                         val cached = local.thumbnail(id)
                                         val bitmap = (cached ?: local.image(id))?.let { CapturePreview.decode(it, 320) }
                                         if (cached == null) thumbnailToSave = bitmap
@@ -344,7 +319,7 @@ class CaptureRecordsActivity : MoteActivity() {
                                 }.getOrNull()
                                 // Encode while this worker owns the bitmap; after posting,
                                 // the UI may discard/recycle a stale generation immediately.
-                                val thumbnailBytes = thumbnailToSave?.takeIf { stamp == generation && !isDestroyed && currentAccount() }?.let { preview ->
+                                val thumbnailBytes = thumbnailToSave?.takeIf { stamp == generation && !isDestroyed }?.let { preview ->
                                     runCatching {
                                         val output = java.io.ByteArrayOutputStream()
                                         preview.compress(Bitmap.CompressFormat.JPEG, 70, output)
@@ -355,8 +330,8 @@ class CaptureRecordsActivity : MoteActivity() {
                                 runOnUiThread { display(bitmap) }
                                 if (thumbnailBytes != null && !thumbnailWriter.isShutdown) runCatching {
                                     thumbnailWriter.execute {
-                                        if (stamp == generation && !isDestroyed && currentAccount()) runCatching {
-                                            requireNotNull(localQueue).cacheThumbnail(id, thumbnailBytes, config.maxQueueMiB * 1024L * 1024L)
+                                        if (stamp == generation && !isDestroyed) runCatching {
+                                            queue().cacheThumbnail(id, thumbnailBytes, config.maxQueueMiB * 1024L * 1024L)
                                         }
                                     }
                                 }
@@ -366,7 +341,7 @@ class CaptureRecordsActivity : MoteActivity() {
                     }
                 }
             } catch (error: Exception) {
-                runOnUiThread { if (!isDestroyed && currentAccount() && request == loadGeneration) {
+                runOnUiThread { if (!isDestroyed && request == loadGeneration) {
                     // Removing a session anchor changes its identity. Return to fresh groups
                     // instead of leaving deleted thumbnails visible in the old selection.
                     if (!remote && error is CaptureSessionChangedException) { reload(); return@runOnUiThread }
@@ -375,7 +350,7 @@ class CaptureRecordsActivity : MoteActivity() {
                 } }
             } finally {
                 runOnUiThread {
-                    if (!isDestroyed && currentAccount() && request == loadGeneration) {
+                    if (!isDestroyed && request == loadGeneration) {
                         metadataLoading = false
                         if (refreshAfterLoad) { refreshAfterLoad = false; load(backgroundRefresh = true) }
                     }
@@ -389,7 +364,6 @@ class CaptureRecordsActivity : MoteActivity() {
             setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12))
             background = MoteUi.clickable(this@CaptureRecordsActivity); isFocusable = true
             tag = "album:${item.getString("id")}"; setOnClickListener {
-                if (stamp != generation || retireChangedAccount()) return@setOnClickListener
                 albumCursors = cursors.toList(); album = item; cursors.clear(); cursors.add(null); load()
             }
         }
@@ -405,7 +379,7 @@ class CaptureRecordsActivity : MoteActivity() {
         if (appId.isNotBlank()) imageExecutor.execute {
             if (stamp != generation) return@execute
             val drawable = runCatching { packageManager.getApplicationIcon(appId) }.getOrNull()
-            runOnUiThread { if (!isDestroyed && currentAccount() && stamp == generation && drawable != null) icon.setImageDrawable(drawable) }
+            runOnUiThread { if (!isDestroyed && stamp == generation && drawable != null) icon.setImageDrawable(drawable) }
         }
     }
     private fun recordRow(item: JSONObject, remote: Boolean, client: CaptureRecordClient?, stamp: Int, parent: LinearLayout, grid: Boolean): ImageView {
@@ -435,9 +409,6 @@ class CaptureRecordsActivity : MoteActivity() {
         return image
     }
     private fun detail(id: String, remote: Boolean, client: CaptureRecordClient?, stamp: Int) {
-        if (stamp != generation || retireChangedAccount()) return
-        val expectedOwner = pageOwner
-        val localReader = if (remote) null else queue()
         readerDialog?.dismiss()
         openReader = ReaderRequest(id, remote)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(18), moteDp(10), moteDp(18), moteDp(16)) }
@@ -456,22 +427,18 @@ class CaptureRecordsActivity : MoteActivity() {
         dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         detailExecutor.execute {
             try {
-                val readerClient = ConnectionGuard.sync {
-                    check(stamp == generation && pageOwner == expectedOwner && Settings(this).read().ownerKey() == expectedOwner) { "Account changed" }
-                    if (remote && client == null) {
-                        val settings = Settings(this)
-                        CaptureRecordClient(settings.read(), settings.deviceId, CentralAccess.requireClient(this))
-                    } else client
-                }
-                if (remote) checkNotNull(readerClient) { MoteI18n.text("连接正在切换") }
+                val readerClient = if (remote && client == null) {
+                    val settings = Settings(this)
+                    CaptureRecordClient(settings.read(), settings.deviceId, CentralAccess.resolve(this).client)
+                } else client
                 val record = if (remote) requireNotNull(readerClient).detail(id)
-                    else requireNotNull(localReader).capture(id) ?: error(MoteI18n.text("本机记录已同步并清理，请切换到中央归档查看"))
-                runOnUiThread { if (currentAccount() && stamp == generation && dialog.isShowing && CapturePreview.hasImage(record)) message.text = MoteI18n.text("记录已读取，正在加载图片…") }
+                    else queue().capture(id) ?: error(MoteI18n.text("本机记录已同步并清理，请切换到中央归档查看"))
+                runOnUiThread { if (dialog.isShowing && CapturePreview.hasImage(record)) message.text = MoteI18n.text("记录已读取，正在加载图片…") }
                 require(record.getString("id") == id); Instant.parse(record.getString("capturedAt"))
-                val bytes = if (CapturePreview.hasImage(record)) if (remote) requireNotNull(readerClient).image(id, false) else requireNotNull(localReader).image(id) else null
+                val bytes = if (CapturePreview.hasImage(record)) if (remote) requireNotNull(readerClient).image(id, false) else queue().image(id) else null
                 val bitmap = bytes?.let { CapturePreview.decode(it, 1600) }
                 runOnUiThread {
-                    if (isDestroyed || !currentAccount() || stamp != generation || !dialog.isShowing) { bitmap?.recycle(); if (dialog.isShowing) dialog.dismiss(); return@runOnUiThread }
+                    if (isDestroyed || stamp != generation || !dialog.isShowing) { bitmap?.recycle(); if (dialog.isShowing) dialog.dismiss(); return@runOnUiThread }
                     content.removeAllViews(); detailBitmap = bitmap
                     val isNote = record.optString("source") == "note"
                     if (isNote) dialog.setTitle(MoteI18n.text("原文"))
@@ -509,7 +476,7 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (record.optBoolean("centralPreview")) text(content, MoteI18n.text("中央识别预览；完整内容请切换中央记录查看。"), MoteTheme.fontSupport.toFloat())
                     text(content, record.optString("ocrText").ifBlank { if (record.optJSONObject("ocr")?.optString("status") == "completed") MoteI18n.text("此图片未识别到文字。") else MoteI18n.text("暂无识别文字。") }, MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)
                 }
-            } catch (error: Exception) { runOnUiThread { if (!isDestroyed && currentAccount() && stamp == generation && dialog.isShowing) { loading.visibility = View.GONE; message.text = errorMessage(error, remote) } } }
+            } catch (error: Exception) { runOnUiThread { if (!isDestroyed && dialog.isShowing) { loading.visibility = View.GONE; message.text = errorMessage(error, remote) } } }
         }
     }
     private fun errorMessage(error: Exception, remote: Boolean): String = if (error is IllegalStateException || error is IllegalArgumentException) error.message ?: MoteI18n.text("记录读取失败，请刷新重试") else if (remote) MoteI18n.text("中央记录暂不可读取，请检查网络后重试") else MoteI18n.text("本机记录暂不可读取，请刷新重试；文件已保留")
@@ -519,7 +486,6 @@ class CaptureRecordsActivity : MoteActivity() {
     private fun button(parent: LinearLayout, label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }).also { parent.addView(it, if (parent.orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)) }
     private fun clearList() { list.removeAllViews() }
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString("recordOwner", pageOwner)
         outState.putBoolean("grid", grid); outState.putBoolean("sessionGrouping", sessionGrouping); outState.putString("date", date.toString()); outState.putString("album", album?.toString()); outState.putBoolean("central", central); outState.putString("recordSource", recordSource)
         val reader = openReader.takeIf { readerDialog?.isShowing == true }
         outState.putString("readerId", reader?.id); outState.putBoolean("readerRemote", reader?.remote ?: false)

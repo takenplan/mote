@@ -18,8 +18,9 @@ export type ConnectionCredential=z.infer<typeof credentialSchema>;
 type Saved=z.infer<typeof savedSchema>;
 type InvitationRecord={serverUrl:string;label:string;expiresAt:number;authorizedDeviceId?:string};
 export interface ConnectionFile {read():Promise<unknown>;write(value:Saved):Promise<void>}
-import {ConnectionError} from './connection-error.js';
-export {ConnectionError} from './connection-error.js';
+export class ConnectionError extends Error {
+  constructor(readonly code:string,readonly statusCode:number,readonly publicMessage:string){super(code);this.name='ConnectionError';}
+}
 const denied=()=>new ConnectionError('connection_scope_denied',403,moteText("此连接仅可同步本设备资料；中央管理和浏览需要单独使用所有者令牌。"));
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 function serverUrl(value:unknown){

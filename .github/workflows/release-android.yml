@@ -2,15 +2,8 @@ name: Release Android
 on:
   push:
     tags: ['android-v*']
+  # Select the component's exact version tag when running this manually.
   workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Branch build profile (release tags always use prod)'
-        type: choice
-        options: [dev, prod]
-        default: dev
-env:
-  MOTE_BUILD_PROFILE: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || inputs.profile || 'dev' }}
 permissions:
   contents: read
 concurrency:
@@ -22,8 +15,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      profile: ${{ steps.version.outputs.profile }}
-      build_id: ${{ steps.version.outputs.build_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -48,45 +39,31 @@ jobs:
         env:
           MOTE_ANDROID_KEYSTORE_BASE64: ${{ secrets.MOTE_ANDROID_KEYSTORE_BASE64 }}
         run: node scripts/release/prepare-android-signing.mjs
-      - name: Test the selected Android profile
-        if: needs.version.outputs.profile == 'prod' || vars.MOTE_PRE_RELEASE_CHECKS == 'true'
+      - name: Test Android DEV
+        if: vars.MOTE_PRE_RELEASE_CHECKS == 'true'
         env:
           MOTE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MOTE_ANDROID_KEYSTORE_PASSWORD }}
           MOTE_ANDROID_KEY_ALIAS: ${{ secrets.MOTE_ANDROID_KEY_ALIAS }}
           MOTE_ANDROID_KEY_PASSWORD: ${{ secrets.MOTE_ANDROID_KEY_PASSWORD }}
         run: |
           cd apps/android
-          if [ "$MOTE_BUILD_PROFILE" = dev ]; then
-            ./gradlew --no-daemon testDevelopmentUnitTest
-          else
-            ./gradlew --no-daemon testReleaseUnitTest
-          fi
-      - name: Build and sign the selected Android profile
+          ./gradlew --no-daemon testDevelopmentUnitTest
+      - name: Build and sign Android DEV
         env:
           MOTE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MOTE_ANDROID_KEYSTORE_PASSWORD }}
           MOTE_ANDROID_KEY_ALIAS: ${{ secrets.MOTE_ANDROID_KEY_ALIAS }}
           MOTE_ANDROID_KEY_PASSWORD: ${{ secrets.MOTE_ANDROID_KEY_PASSWORD }}
         run: |
           cd apps/android
-          if [ "$MOTE_BUILD_PROFILE" = dev ]; then
-            ./gradlew --no-daemon assembleDevelopment
-          else
-            ./gradlew --no-daemon assembleRelease
-          fi
+          ./gradlew --no-daemon assembleDevelopment
       - name: Verify actual APK identities and 16 KiB alignment
-        run: |
-          if [ "$MOTE_BUILD_PROFILE" = dev ]; then
-            node scripts/release/asset-metadata.mjs android apps/android/app/build/outputs/apk/development/app-development.apk
-          else
-            node scripts/release/asset-metadata.mjs android apps/android/app/build/outputs/apk/release/app-release.apk
-          fi
+        run: node scripts/release/asset-metadata.mjs android apps/android/app/build/outputs/apk/development/app-development.apk
       - name: Remove runner signing material
         if: always()
         run: node -e "require('node:fs').rmSync(require('node:path').join(process.env.RUNNER_TEMP,'mote-release-signing'),{recursive:true,force:true})"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
+        with: { name: release-android, path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
   publish:
-    if: needs.version.outputs.profile == 'prod'
     needs: [version, package]
     runs-on: ubuntu-24.04
     environment: release
@@ -98,8 +75,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: '24' }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release }
-      - name: Publish verified android Beta or stable release
+        with: { name: release-android, path: artifacts/release }
+      - name: Publish verified android DEV release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release/publish.mjs android

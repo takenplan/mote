@@ -32,17 +32,3 @@ test('malformed optional metadata and legacy missing fields never manufacture a 
  for(const lead of result.leads){assert.equal(lead.admission,undefined);assert.equal(lead.validFrom,undefined);assert.equal(lead.validUntil,undefined);}
  assert.deepEqual(result.evidenceDependencies.ids,[originalId]);
 });
-
-test('opening uses the original consolidated/question/recent/proposed order, selected detail rereads and field projection',async()=>{
- const ids=['consolidated-a','consolidated-b','question-a','question-b','recent-a','recent-b','proposed-a'],details=ids.map((id,index)=>card(id,{title:'T'.repeat(210),statement:'S'.repeat(900),uncertainty:'U'.repeat(410),tier:index<2?'consolidated':'episode',status:index===6?'proposed':'published',admission:{layer:'memory',scope:'C'.repeat(800),attribution:'observed',reason:'PRIVATE_REASON'}})),calls:any[]=[];
- const base=reader(details);base.memories=async args=>{calls.push(args);if(args.id)return {items:details.filter(item=>item.id===args.id)};return {items:args.tier?[details[0],details[1]]:args.query?[details[2],details[0],details[3]]:args.status==='proposed'?[details[6]]:[details[4],details[5]]};};
- const result=await openingMemoryContext(base,'  Generated question  ',{contextTime:'2026-09-20T00:00:00Z',deviceId:'generated-device'});
- assert.deepEqual(result.leads.map(item=>item.id),ids.slice(0,5));assert.deepEqual(calls.slice(0,4).map(({tier,query,status,limit,layer,asOf,deviceId})=>({tier,query,status,limit,layer,asOf,deviceId})),[
-  {tier:'consolidated',query:undefined,status:'published',limit:2,layer:'memory',asOf:'2026-09-20T00:00:00Z',deviceId:'generated-device'},
-  {tier:undefined,query:'Generated question',status:'published',limit:3,layer:'memory',asOf:'2026-09-20T00:00:00Z',deviceId:'generated-device'},
-  {tier:undefined,query:undefined,status:'published',limit:5,layer:'memory',asOf:'2026-09-20T00:00:00Z',deviceId:'generated-device'},
-  {tier:undefined,query:undefined,status:'proposed',limit:5,layer:'memory',asOf:'2026-09-20T00:00:00Z',deviceId:'generated-device'},
- ]);
- assert.deepEqual(calls.filter(item=>item.id).map(item=>item.id),ids.slice(0,5));for(const lead of result.leads){assert.equal(lead.title.length,160);assert.equal(lead.statement.length,700);assert.equal(lead.uncertainty.length,300);assert.equal(lead.admission!.scope.length,600);assert.equal('reason' in lead.admission!,false);}
- calls.length=0;await openingMemoryContext(base,'Q'.repeat(161),{contextTime:'2026-09-20T00:00:00Z'});assert.equal(calls.some(args=>args.query!==undefined),false,'the original long-question branch remains unchanged');
-});

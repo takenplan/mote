@@ -1,11 +1,10 @@
 import { moteText } from '@mote/shared/i18n';
-import { parseEvidenceRef } from '@mote/shared';
 import React from 'react';
 import { useResource } from '../useResource';
 import { queryString, errorMessage, type Activity } from '../api';
 import { ErrorNotice, Spinner } from '../shell-components';
 import { ActivitySummary, RecordTimeline } from '../Archive';
-import { FileDetail, Files } from '../Files';
+import { Files } from '../Files';
 import { LibraryMaterials } from '../LibraryBrowse';
 import { CodingUploads } from '../CodingUploads';
 import { webFeatures } from './registry';
@@ -30,7 +29,7 @@ export const builtinCollections: CollectionEntry[] = [
     { id: 'materials', usesTimeRange: false, featureId: 'mote.materials', label: moteText('全部资料'), order: 0, group: 'browse', layout: 'browser', requires: ['http:GET:/api/library/catalog'], render: props => <LibraryMaterials {...props} selected={props.selectedReference} onSelect={props.onOpen}/> },
     { id: 'segments', usesTimeRange: false, featureId: 'mote.capture', label: moteText('片段'), order: 1.5, group: 'records', render: props => <CaptureSessions {...props}/> },
     { id: 'sources', usesTimeRange: false, featureId: 'mote.sources', label: moteText('来源资料'), order: 2, group: 'views', render: props => <Sources {...props} mode="library" onImport={() => { location.hash = '/library/import'; }}/> },
-    { id: 'files', usesTimeRange: false, featureId: 'mote.files', label: moteText('文件与录音'), order: 3, group: 'views', render: props => <Files {...props}/>, renderDetail:({api,reference,onOpen})=>{const ref=parseEvidenceRef(reference);return ref?.kind==='capture'?<div className="panel-pad"><FileDetail api={api} id={ref.id} onOpen={onOpen}/></div>:undefined;} },
+    { id: 'files', usesTimeRange: false, featureId: 'mote.files', label: moteText('文件与录音'), order: 3, group: 'views', render: props => <Files {...props}/> },
     { id: 'activity', featureId: 'mote.capture', label: moteText('应用活动'), order: 4, group: 'views', render: props => <ActivityCollection {...props}/> },
     { id: 'media', featureId: 'mote.media', label: moteText('媒体播放'), order: 5, group: 'views', render: props => <MediaActivitySummary {...props}/> },
     { id: 'memories', featureId: 'mote.memory', label: moteText('记忆'), order: 6, group: 'views', render: props => <Memories {...props} embedded refreshVersion={props.revision}/> },

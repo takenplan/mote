@@ -337,7 +337,7 @@ class NativeCentralInstrumentedTest {
         val legacy = java.io.File(context.noBackupFilesDir, "central-owner-session.enc")
         val deadline = System.currentTimeMillis() + 86400000L
         val saved = JSONObject().put("server", origin).put("token", owner).put("expiresAt", deadline)
-        val bytes = context.secretBox().seal(saved.toString().toByteArray())
+        val bytes = SecretBox().seal(saved.toString().toByteArray())
         legacy.writeBytes(bytes)
         try {
             val session = UnifiedCentralSession(context)

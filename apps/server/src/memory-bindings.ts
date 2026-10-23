@@ -66,7 +66,7 @@ export class MemoryBindings {
   }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}void this.executor.tick().catch(()=>{});}
   prepare(raw:unknown){const input=preparationSchema.parse(raw);this.command('prepare',input,()=>{const prior=this.preparation();if(prior&&!['applied','cancelled'].includes(prior.view.state))throw new StoreError('Finish or cancel the existing Memory preparation',409);
     const plan=this.plans().find(plan=>plan.id===input.targetPlanId);if(!plan?.available||plan.id===this.binding().planId)throw new StoreError('This Memory plan is unavailable',409);
-    const target:Binding={planId:plan.id,generation:this.binding().generation+1,...(plan.instanceId?{namespace:this.plugins.namespace(plan.instanceId,this.binding().generation+1)}:{})};
+    const target:Binding={planId:plan.id,generation:this.binding().generation+1,...(plan.instanceId?{namespace:{ownerId:'mote-owner',instanceId:plan.instanceId,bindingRevision:this.binding().generation+1}}:{})};
     const preparation:Preparation={source:this.binding(),target,stepId:'memory-prepare:'+input.operationId,view:{operationId:input.operationId,state:'waiting',phase:'copy',kind:'content-migration',targetPlanId:plan.id,scope:input.scope,checks:[],oldAdmissionFrozen:false,tail:this.pendingTail(),usageUnknown:true,allowedActions:['cancel']}};
     this.savePreparation(preparation);this.executor.enqueue(input.operationId,'memory.prepare',{preparationId:input.operationId},{id:preparation.stepId});
   });return this.view();}
@@ -101,7 +101,7 @@ export class MemoryBindings {
   }
   action(kind:'activate'|'retry'|'cancel',raw:unknown){const input=memoryControlCommandSchema.extend({preparationId:z.string().uuid()}).strict().parse(raw);this.command(kind,input,()=>{const preparation=this.preparation();if(!preparation||preparation.view.operationId!==input.preparationId||!preparation.view.allowedActions.includes(kind))throw new StoreError('The Memory preparation action is unavailable',409);
     if(kind==='activate'){if(preparation.view.state!=='verified'||this.pendingTail()||preparation.snapshot!==this.snapshot())throw new StoreError('Memory changed after verification; prepare it again',409);const target=this.plans().find(plan=>plan.id===preparation.target.planId);if(!target?.available)throw new StoreError('The target instance is unavailable',409);this.saveBinding(preparation.target);if(preparation.target.namespace)this.migrationActivated?.(preparation.target.namespace);preparation.view.state='applied';preparation.view.phase='applied';preparation.view.allowedActions=[];this.automation.release(preparation.view.operationId);this.onReleased?.();}
-    else if(kind==='retry'){preparation.view.state='waiting';preparation.view.error=undefined;preparation.view.allowedActions=['cancel'];this.executor.retry(preparation.stepId,true);}
+    else if(kind==='retry'){preparation.view.state='waiting';preparation.view.error=undefined;preparation.view.allowedActions=['cancel'];this.executor.retry(preparation.stepId);}
     else{this.executor.cancel(preparation.stepId);preparation.view.state='cancelled';preparation.view.allowedActions=[];if(preparation.view.oldAdmissionFrozen){this.automation.release(preparation.view.operationId);this.onReleased?.();}}
     this.savePreparation(preparation);
   });return this.view();}

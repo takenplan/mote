@@ -1,7 +1,6 @@
-import {conversationRecords} from './coding-dialogue-projection.js';
 import {codingProjectContext} from './coding-project.js';
 import type {Context} from '@deepseek-ai/cordis';
-import {codingConversationEvidence,CODING_DIALOGUE_SCHEMA_VERSION,sourceItemSchema,type SourceConnection,type SourceItem} from '@mote/shared';
+import {codingConversationEvidence,codingDialogueText,CODING_DIALOGUE_SCHEMA_VERSION,sourceItemSchema,type SourceConnection,type SourceItem} from '@mote/shared';
 import {materialId,type CodingAppendBase,type MaterialAppendDraft,type MaterialDraft} from './materials.js';
 import {archiveHash} from './source-archive.js';
 import {StoreError} from './store.js';
@@ -15,6 +14,22 @@ const group=(item:SourceItem)=>{
   if(!coding)throw new StoreError('Coding source requires explicit session identity');
   return JSON.stringify([coding.provider,coding.projectKey,coding.sessionId]);
 };
+/** Reassemble transport parts before recognizing a complete host envelope.
+ * Legacy rows without speaker metadata remain explicitly unattributed. */
+function conversationRecords(items:SourceItem[]){
+  const active=items.filter(item=>!item.deleted),events=new Map<string,SourceItem[]>();
+  for(const item of active){const id=item.document!.coding!.eventId;const event=events.get(id)??[];event.push(item);events.set(id,event);}
+  const admitted=new Map<string,SourceItem[]>();
+  for(const [id,parts] of events){
+    const ordered=[...parts].sort((a,b)=>a.document!.coding!.part-b.document!.coding!.part),coding=ordered[0]!.document!.coding!;
+    const complete=ordered.length===coding.parts&&ordered.every((item,index)=>item.document!.coding!.part===index&&item.document!.coding!.parts===coding.parts);
+    const original=ordered.map(item=>item.text).join(''),text=codingDialogueText(coding,original);
+    if(complete&&text&&ordered.every(item=>codingConversationEvidence(item.document!.coding!))&&codingConversationEvidence(coding,text)){
+      admitted.set(id,text===original?ordered:[{...ordered[0],text,document:{...ordered[0].document,coding:{...coding,part:0,parts:1}}}]);
+    }
+  }
+  return [...admitted.values()].flat();
+}
 /** The same ordered visible events yield the same artifact identity whether
  * assembled in one pass or appended. Private archive activity is not a part. */
 const conversationRevision=(records:SourceItem[],seed=archiveHash('mote.coding.conversation-v1'))=>

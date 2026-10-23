@@ -32,13 +32,13 @@ function expectCleared(){
   expect(el('content-detail-image').getAttribute('src')).toBeNull();
 }
 
-it.each([false,true].flatMap(account=>[401,403].map(code=>({account,code}))))('closes an open central reader on a feed HTTP $code (account=$account), invalidating a late detail response',async({account,code})=>{
+it.each([401,403])('closes an open central reader on a feed HTTP %s, invalidating a late detail response',async code=>{
   await open();expect(el('content-detail-body').textContent).toBe(remote.text);expect(el('content-detail-image').getAttribute('src')).toBe(remote.image);
   let finish!:(value:SyncContent)=>void;
   vi.mocked(api.centralContentDetail).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
   (el('content-detail-refresh') as HTMLButtonElement).click();await flush();
   vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}',{status:code})));
-  vi.mocked(api.centralContent).mockImplementationOnce(()=>centralContentPage({...defaultConfig(),serverUrl:status.config.serverUrl,token:'generated-token',deviceId:id,...(account?{account:{origin:status.config.serverUrl,deploymentId:'generated-deployment',userId:'generated-a',username:'generated-a'}}:{})}));
+  vi.mocked(api.centralContent).mockImplementationOnce(()=>centralContentPage({...defaultConfig(),serverUrl:status.config.serverUrl,token:'generated-token',deviceId:id}));
   await library.refresh();expectCleared();expect(document.querySelectorAll('#content-feed .content-row')).toHaveLength(0);
   finish({...remote,text:'GENERATED LATE PRIVATE BODY'});await flush();expectCleared();
 });

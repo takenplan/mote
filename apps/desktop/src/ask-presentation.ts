@@ -2,21 +2,6 @@ import { moteText } from '@mote/shared/i18n';
 import type { AskConversation } from './ask';
 export type AskCitation = NonNullable<AskConversation['turns'][number]['result']>['citations'][number];
 
-/** Saved-history status belongs beside the original answer, in either locale. */
-export function renderAskTurn(document: Document, turn: AskConversation['turns'][number], onOpen: (id: string) => void): HTMLElement {
-  const article = document.createElement('article'), question = document.createElement('h3');
-  question.textContent = turn.question; article.append(question);
-  if (turn.evidenceDeleted || turn.evidenceStale && turn.result) {
-    const notice = document.createElement('p'); notice.className = 'helper';
-    notice.textContent = turn.evidenceDeleted ? moteText('相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。') : moteText('这是历史版本，当前资料已更新。');
-    article.append(notice);
-  }
-  if (turn.evidenceDeleted) return article;
-  article.append(renderAskAnswer(document, turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'), turn.result?.citations ?? [], onOpen));
-  for (const citation of turn.result?.citations ?? []) article.append(renderAskCitation(document, citation, onOpen));
-  return article;
-}
-
 /** A deliberately small Markdown display grammar. Evidence is always text, never HTML,
  * an image request or an executable/link destination. Only declared citations navigate. */
 export function renderAskAnswer(document: Document, text: string, citations: AskCitation[], onOpen: (id: string) => void): HTMLElement {

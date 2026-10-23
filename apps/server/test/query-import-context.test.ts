@@ -1,26 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setTimeout} from 'node:timers/promises';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {setTimeout} from 'node:timers/promises';
 import {parseAnswer} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
-type ImportHost=Awaited<ReturnType<typeof buildApp>>;
-const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return {promise,resolve};};
-async function importPhase(node:ImportHost,id:string,expected:'awaiting_confirmation'|'completed'){
-  // HTTP 202 admits asynchronous work; it makes no one-second completion
-  // promise. Observe that exact route-launched task, including its durable
-  // terminal projection/cleanup, within the server test runner's existing bound.
-  await node.featureServices.importTasks.get(id);
-  const job=node.imports.get(id);
-  assert.equal(job.status,expected,JSON.stringify({status:job.status,error:job.error,progress:job.progress,execution:job.execution}));
-}
-
-for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain readable through native Ask and current correction fences'+(delayedCommit?' with delayed source persistence':''),async t=>{
+test('HTTP-imported maximum notes remain readable through native Ask and current correction fences',async t=>{
   const dataDir=mkdtempSync(join(tmpdir(),'mote-query-import-context-')),token='generated-context-owner';
   const prefix='These generated diary narrators are mine; quoted visitors remain separate. ',instruction=prefix+'甲'.repeat(12000-prefix.length);
   assert.equal(instruction.length,12000);
@@ -70,32 +59,16 @@ for(const delayedCommit of [false,true])test('HTTP-imported maximum notes remain
       }finally{await bridge.close();}
     }}),
   });
-  const sourceEntered=deferred(),sourceRelease=deferred();let held=false,releaseTask:Promise<void>|undefined;
-  if(delayedCommit){const upsert=node.sources.upsert.bind(node.sources);t.mock.method(node.sources,'upsert',async(...args:Parameters<typeof node.sources.upsert>)=>{
-    if(!held){held=true;sourceEntered.resolve();await sourceRelease.promise;}
-    return upsert(...args);
-  });}
-  t.after(async()=>{sourceEntered.resolve();try{await releaseTask;}finally{sourceRelease.resolve();try{await node.app.close();}finally{rmSync(dataDir,{recursive:true,force:true});}}});
+  t.after(async()=>{await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
   const headers={authorization:'Bearer '+token};
   const created=await node.app.inject({method:'POST',url:'/api/imports',headers,payload:{instruction,files:[{name:'generated.custom',dataBase64:Buffer.from('Generated independent diary fixture').toString('base64')}]}});
   assert.equal(created.statusCode,202,created.body);
   const importId=created.json().id;
-  await importPhase(node,importId,'awaiting_confirmation');
+  for(let i=0;i<100&&node.imports.get(importId).status!=='awaiting_confirmation';i++)await setTimeout(10);
+  assert.equal(node.imports.get(importId).status,'awaiting_confirmation');
   const confirmed=await node.app.inject({method:'POST',url:'/api/imports/'+importId+'/confirm',headers});assert.equal(confirmed.statusCode,202,confirmed.body);
-  if(delayedCommit)releaseTask=(async()=>{
-    await sourceEntered.promise;
-    // Reproduce persistence taking longer than the former 100 × 10 ms polling
-    // assumption. The same admitted commit remains live and holds its grant.
-    await setTimeout(1500);
-    const pending=node.imports.get(importId),step=node.executor.get(node.imports.confirmationIdentity(importId));
-    assert.equal(pending.status,'importing');assert.equal(pending.progress.processed,0);assert.equal(step?.state,'running');assert.equal(node.imports.hasActiveWorker(importId),true);
-    t.diagnostic(JSON.stringify({heldPersistence:{status:pending.status,processed:pending.progress.processed,taskState:step?.state,workerActive:node.imports.hasActiveWorker(importId)}}));
-  })().finally(()=>sourceRelease.resolve());
-  if(releaseTask)void releaseTask.catch(()=>{});
-  await importPhase(node,importId,'completed');await releaseTask;
-  assert.deepEqual(node.imports.get(importId).progress,{total:2,processed:2,imported:2,duplicates:0});
-  assert.equal(node.executor.get(node.imports.confirmationIdentity(importId))?.state,'succeeded');
-  assert.equal(node.imports.hasActiveWorker(importId),false);
+  for(let i=0;i<100&&node.imports.get(importId).status!=='completed';i++)await setTimeout(10);
+  assert.equal(node.imports.get(importId).status,'completed');
   await node.materialOrganizer.tick(100);await node.sourcePipelines.tick(100);
   const answer=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Inspect generated diary context'}});
   assert.equal(answer.statusCode,200,answer.body);assert.equal(verified,1);

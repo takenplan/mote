@@ -111,15 +111,6 @@ group's visual citations removes its coverage requirement. This conservative
 grouping avoids inferring claim identity from prose when candidates are edited,
 split or merged.
 
-The review prompt and repair feedback spell out this citation requirement. A
-review that read the full original but cites only a noncovering crop remains
-invalid. The generated `full-read-repair` scenario in
-`apps/server/test/multiuser-memory.test.ts` exercises that rejection through the
-scoped Memory worker, then verifies that the existing bounded repair reuses the
-valid draft and publishes only after the independent review cites its own
-delivered covering view. The image-proof tests also preserve group discard,
-separate covering crops and the rejection of stitched partial coverage.
-
 The current Hindsight native integration protocol accepts exact text ranges,
 not visual Memory proofs. It rejects a selected visual parent with
 `memory_provider_unsupported_input` before initializing a remote bank or issuing

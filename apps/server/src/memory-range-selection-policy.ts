@@ -2,7 +2,7 @@ import {SOURCE_TIME_INSTRUCTIONS} from '@mote/agent';
 import {CONTEXT_READING_PERSONAL_POLICY} from './bounded-personal-memory-policy.js';
 import {codingMemoryReviewStrategyV2} from './coding-memory-review-policy.js';
 import {dailyEventExtractionStrategy,dailyEventReviewStrategy} from './daily-event-memory-policy.js';
-import {MEMORY_EXTRACTION_PROMPT} from './memory-contract.js';
+import {MEMORY_EXTRACTION_PROMPT} from './memory.js';
 import type {MemoryExtractionStrategy,MemoryReviewStrategy} from './memory-strategy-contract.js';
 
 export const RANGE_SELECTION_PERSONAL_RECIPE={id:'mote.personal-memory',version:'5'} as const;

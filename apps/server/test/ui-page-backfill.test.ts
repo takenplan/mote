@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {uiPageText,type UiPageV2} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {Store} from '../src/store.js';
 import type {Config} from '../src/config.js';
 import type {MaterialMemoryObservation} from '../src/material-memory-work.js';
@@ -20,7 +20,7 @@ function record(source:'screen'|'ui_page',second:number){
     observations:{firstAt:at(second),lastAt:at(second),count:1},objects:[{kind:'article',title:'Generated article',body:[{text:'Generated retained paragraph'}],
       url:'https://fixture.invalid/article/1',identity:{type:'url',value:'https://fixture.invalid/article/1'}}]};
   return {id:randomUUID(),deviceId:'fixture-backfill-phone',deviceName:'Generated phone',platform:'android',source,appId:'fixture.app',appName:'Generated App',capturedAt:at(second),durationMs:0,
-    ocrText:source==='ui_page'?uiPageText(page):'Generated screenshot transcription',privacy:{excluded:false,redacted:source==='ui_page',mode:'local',collection:'content'},
+    ocrText:source==='ui_page'?uiPageText(page):'Generated screenshot transcription',privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},
     ...(source==='ui_page'?{metadata:{version:1,observedAt:at(second),collector:{method:'accessibility'},uiPage:page}}:{})};
 }
 
@@ -45,7 +45,6 @@ test('durable screen version upgrade and field-page backfill preserve rebuild st
   }
   await application.materialOrganizer.tick(100);
   assert.deepEqual(initial.map(item=>item.change).sort(),['source','source','source']);
-  assert.deepEqual(initial.map(item=>item.kind).sort(),['mote.capture-event','mote.screen-segment','mote.ui-page-object']);
   const receipts=application.store.db.prepare('SELECT * FROM memory_input_authorizations ORDER BY source_id,input_key,scope').all();
   const authorized=application.store.db.prepare('SELECT material_id,scope,input_key,auto_authorized FROM material_memory_requests ORDER BY material_id,scope').all();
   await application.app.close();application=undefined;
@@ -75,16 +74,6 @@ test('durable screen version upgrade and field-page backfill preserve rebuild st
   }
   await application.materialOrganizer.tick(100);
   assert.deepEqual(rebuilt.map(item=>item.change).sort(),['source','source','source']);
-  assert.deepEqual(rebuilt.map(item=>item.kind).sort(),['mote.capture-event','mote.screen-segment','mote.ui-page-object']);
-});
-
-test('redacted raw screen backfill retains its original without producing content or new Material Memory work',async t=>{
-  const directory=mkdtempSync(join(tmpdir(),'mote-private-screen-backfill-')),settings=config(directory);let application:Awaited<ReturnType<typeof buildApp>>|undefined;
-  t.after(async()=>{await application?.app.close();rmSync(directory,{recursive:true,force:true});});const observations:string[]=[],watch=(runtime:Awaited<ReturnType<typeof buildApp>>)=>{const original=runtime.materialMemoryWork.observe.bind(runtime.materialMemoryWork);runtime.materialMemoryWork.observe=(id,required,observation,settle)=>{observations.push(id);original(id,required,observation,settle);};};
-  application=await buildApp(settings,{agent,backgroundWorker:false});watch(application);const value=record('screen',0);value.privacy.redacted=true;value.ocrText='GENERATED_PRIVATE_BACKFILL_RAW_SCREEN';const response=await application.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(response.statusCode,201,response.body);
-  await application.materialOrganizer.tick(100);const original=application.store.evidence([value.id])[0],canonical=String(application.store.db.prepare('SELECT json FROM captures WHERE id=?').get(value.id)!.json);assert.ok(original);assert.equal(original.privacy.redacted,true);assert.equal(original.ocrText,value.ocrText);assert.deepEqual(observations,[]);assert.equal(application.materials.list().items.length,0);assert.deepEqual(application.store.db.prepare('SELECT * FROM material_memory_requests').all(),[]);const receipts=application.store.db.prepare('SELECT * FROM memory_input_authorizations ORDER BY source_id,input_key,scope').all();
-  await application.app.close();application=undefined;const previous=new Store(directory);previous.db.prepare("UPDATE material_organizer_backfills SET version='3' WHERE organizer_id='mote.screen-segment'").run();previous.db.prepare("UPDATE material_organizer_groups SET version='3' WHERE organizer_id='mote.screen-segment'").run();previous.close();
-  application=await buildApp(settings,{agent,backgroundWorker:false});watch(application);for(let pass=0;pass<10&&application.materialOrganizer.status().backfills.some(item=>!item.complete);pass++)await application.materialOrganizer.tick(100);const status=application.materialOrganizer.status();assert.ok(status.backfills.every(item=>item.complete));assert.equal(status.pendingChanges,0);assert.equal(status.pendingSteps,0);assert.equal(String(application.store.db.prepare('SELECT json FROM captures WHERE id=?').get(value.id)!.json),canonical,'rebuilding preserves the canonical private original');const retained=application.store.evidence([value.id])[0];assert.equal(retained.id,original.id);assert.equal(retained.ocrText,original.ocrText);assert.deepEqual(retained.privacy,original.privacy);assert.deepEqual(observations,[]);assert.equal(application.materials.list().items.length,0);assert.deepEqual(application.store.db.prepare('SELECT * FROM material_memory_requests').all(),[]);assert.deepEqual(application.store.db.prepare('SELECT * FROM memory_input_authorizations ORDER BY source_id,input_key,scope').all(),receipts,'rebuilding cannot mint or renew raw receipts');
 });
 
 test('legacy queued pages and field pages share the mechanical window group but retain separate materials',async t=>{

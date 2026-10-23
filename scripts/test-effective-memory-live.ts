@@ -8,7 +8,7 @@ import {join,relative,resolve} from 'node:path';
 import {z} from 'zod';
 import type {UsageReceipt} from '@mote/shared';
 import type {Memory} from '../apps/server/src/memory.js';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {materialId} from '../apps/server/src/materials.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';

@@ -111,11 +111,11 @@ export class ManagedHindsightRuntime implements HindsightRuntime {
   private identity:string;
   container:string;
   volume:string;
-  constructor(private options:{directory:string;instanceId:string;configurationIdentity?:string;modelFingerprint?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
+  constructor(private options:{directory:string;instanceId:string;configurationIdentity?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
     this.options={...options,settings:structuredClone(options.settings)};
     // New configurations cannot reuse a retired generation's native volume.
     // An existing descriptor remains authoritative during restart or restore.
-    this.identity=hindsightDigest([options.instanceId,options.configurationIdentity??randomUUID(),options.modelFingerprint??hindsightModelFingerprint(options.settings),HINDSIGHT_IMAGE]).slice(0,24);
+    this.identity=hindsightDigest([options.instanceId,options.configurationIdentity??randomUUID(),hindsightModelFingerprint(options.settings),HINDSIGHT_IMAGE]).slice(0,24);
     this.container='mote-hindsight-'+this.identity;this.volume=this.container+'-data';
   }
   // Initialization failure stays attached to this runtime until its explicit

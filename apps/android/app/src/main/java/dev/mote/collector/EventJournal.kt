@@ -15,14 +15,12 @@ enum class EventCode { STARTED, STOPPED, OK, FILTERED, WAIT_NETWORK, PERMISSION,
 /** Fixed schema only: no exception messages, endpoints, IDs, content or arbitrary string attributes. */
 class EventJournal(private val file: File, private val limit: Int = 500) {
     init { require(limit in 1..500) }
-    fun record(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, detail: String? = null, name: String? = null) = synchronized(lock) {
+    fun record(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null) = synchronized(lock) {
         val next = JSONArray(); val old = read()
         for (index in maxOf(0, old.length() - limit + 1) until old.length()) next.put(old.getJSONObject(index))
         val event = JSONObject().put("atMs", System.currentTimeMillis()).put("stage", stage.name.lowercase()).put("code", code.name.lowercase()).put("level", level(code))
         if (elapsedMs != null && elapsedMs >= 0) event.put("elapsedMs", elapsedMs)
         if (httpStatus != null && httpStatus in 100..599) event.put("httpStatus", httpStatus)
-        cleanText(detail, 400)?.let { event.put("detail", it) }
-        cleanText(name, 160)?.let { event.put("name", it) }
         next.put(event); file.parentFile!!.mkdirs()
         val temporary = File(file.parentFile, "${file.name}.tmp")
         FileOutputStream(temporary).use { out -> out.write(("[" + (0 until next.length()).joinToString(",\n") { next.getJSONObject(it).toString() } + "]\n").toByteArray()); out.fd.sync() }
@@ -58,15 +56,12 @@ class EventJournal(private val file: File, private val limit: Int = 500) {
             (item.opt("elapsedMs") as? Number)?.takeIf { it.toDouble().isFinite() && it.toLong() >= 0 }?.let { event.put("elapsedMs", it.toLong()) }
             (item.opt("httpStatus") as? Number)?.takeIf { it.toInt() in 100..599 }?.let { event.put("httpStatus", it.toInt()) }
             item.optString("level").takeIf { it in listOf("debug", "info", "warn", "error") }?.let { event.put("level", it) }
-            cleanText(item.optString("detail", null), 400)?.let { event.put("detail", it) }
-            cleanText(item.optString("name", null), 160)?.let { event.put("name", it) }
             safe.put(event)
         }
         safe
     }
     companion object {
         private val lock = Any()
-        private fun cleanText(value: String?, max: Int) = value?.replace(Regex("[\\r\\n]+"), " ")?.trim()?.takeIf { it.isNotEmpty() }?.take(max)
         internal fun level(code: EventCode) = when (code) {
             EventCode.STARTED -> "debug"
             EventCode.STOPPED, EventCode.OK, EventCode.FILTERED, EventCode.CANCELLED -> "info"

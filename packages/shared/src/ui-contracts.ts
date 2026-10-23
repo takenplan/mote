@@ -1,6 +1,5 @@
-import type {ExecutionRetryBudget} from './execution.js';
 /** Presentation contracts keep independent facts separate and preserve backend action authority. */
-export type ProcessingJobView = Partial<ExecutionRetryBudget>&{
+export type ProcessingJobView = {
   id:string;
   engine:'context-dag';
   title:string;

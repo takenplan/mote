@@ -53,33 +53,4 @@ npm run build:central
 
 [浏览器脚本](../apps/web/test/ask-loading-browser.cjs)使用生成 HTTP 回执、独立临时 profile 和随机 loopback 端口，加载实际 Web main 入口；不读取日常中央节点，不采集个人截图，不调用外部模型。通过隐藏渲染器观察慢读取期间的 DOM、焦点、草稿与加载状态，并覆盖真实路由和页面刷新。结果写入被忽略的 `.mote/web-ask-loading/`。后台执行约束见[开发说明](development.md#background-testing)。
 
-这份文档记录回归要求和审计范围。后续开发按[验证阶段](development.md#validation-stages)执行：开发中、中间提交和草稿 PR 更新先做定向检查，注明待完成的最终验证；最终合并候选由集成负责人完成 `npm run check:affected` 和受影响用户流程。记录对应代码版本的实际测试结果，生成 DOM 测试、隐藏浏览器检查、运行中的个人部署、实体设备及真实模型验证分别报告。
-
-<a id="multiuser-home-device-parity"></a>
-
-## 多用户首页与设备对标恢复（WEB-W01 / WEB-W02）
-
-Web 登录后继续使用原 `Overview` 的入口与组件：导入、新增数据源、随手记、最近四条记录及原文、最近洞察预览和证据数、设备提示、模型配置提示，以及 `FeatureHome` 宿主。账号适配读取 `/api/data/statistics`、`/api/ingress/devices`、带原时间范围的 `/api/captures?limit=4`、`/api/insights` 和 `/api/models/selection/chat`。模型配置提示以现有账号配置解析结果为准，不调用模型探测，也不把仅存在的选择引用当作可用配置。
-
-设备页沿用 `DeviceOverview`，可见页面每 30 秒读取当前账号的设备状态；隐藏时暂停该读取，恢复可见后在下个周期继续。首页和设备页共用已有 per-Api 资源缓存，最后一个订阅卸载后停止轮询并中止在途读取。普通后台刷新保留已有展示；原设备选择与已展开详情不随心跳重新挂载。首页同一逻辑时间选择使用既有 `rangeSelectionKey` 展示连续性，实际请求仍携带推进后的时间端点。账号或明确的时间选择变化不延续旧展示。
-
-| 取代检查 | 处理 |
-| --- | --- |
-| KEEP | 原首页信息架构、导航、最近记录/洞察及证据入口、扩展 Home slot、设备 30 秒可见页刷新与设备选择。 |
-| CHANGE | 原全局首页数据供应改为现有账号 API；首页只接收其实际需要的状态字段，不伪造实例统计。 |
-| REMOVE | Web 的精简统计/工作卡首页；原工作列表仍从既有“后台工作”入口访问。 |
-| EXCEPTION | 登录、每请求会话绑定、per-Api 缓存、账号草稿命名、迟到响应退役继续沿用多用户边界；实例管理不授予其他账号数据读取。 |
-| UNKNOWN | 真机心跳、真实供应商/模型质量及个人部署不由生成 fixture 证明。根时间窗口推进时超过 30 秒的慢记录初读沿用现有生命周期，未在本项改造通用时间窗口调度。 |
-
-新增持久回归为 `apps/web/test/multiuser-home-refresh.test.ts`、`apps/web/test/multiuser-device-overview.test.ts` 和隐藏浏览器入口 `apps/web/test/multiuser-home-browser.cjs`，由 `apps/web/test/fixtures/multiuser-home-host.ts` 启动真实 scoped 服务、临时 SQLite、生成账号及本地生成供应商。浏览器通过正式 Web main 登录与导航；fixture 不读取日常中央目录，也不收集个人屏幕。模块冻结时另记录实际命令、SHA、退出状态和生成证据，源码中的场景不代表已执行通过。
-
-
-定向入口（在仓库根目录，使用依赖安装时的同一 Node runtime）：
-
-```sh
-node_modules/.bin/tsx --tsconfig apps/web/tsconfig.json --test apps/web/test/multiuser-home-refresh.test.ts apps/web/test/multiuser-device-overview.test.ts apps/web/test/resource-cache.test.ts
-npm run build:central
-node_modules/.bin/electron apps/web/test/multiuser-home-browser.cjs
-```
-
-浏览器宿主默认从 `PATH` 解析 `node`，也可通过 `MOTE_WEB_FIXTURE_NODE` 指定同一 runtime 的绝对路径。`MOTE_WEB_HOME_OUTPUT` 可指定生成证据目录；`MOTE_WEB_FIXTURE_EXPECTED_HEAD` 在冻结候选运行时校验 HEAD，默认结果标记 `preFreeze:true`，不能冒充冻结验收。此脚本实际等待设备 30 秒更新和离开页面后的完整停止周期，不加速生产计时器。
+这份文档记录回归要求和审计范围，不代表当前提交已经通过全部检查。PR 前仍按[影响范围](development.md#pr-check-scope)运行 `npm run check:affected`，并记录对应代码版本的实际测试结果。生成 DOM 测试、隐藏浏览器检查、运行中的个人部署、实体设备及真实模型验证分别报告；前两项不能证明后几项已验证。

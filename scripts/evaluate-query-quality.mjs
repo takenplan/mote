@@ -21,7 +21,7 @@ if(!Array.isArray(cases)||!cases.length||cases.some(c=>typeof c.id!=='string'||!
 for(const key of Object.keys(process.env))if(key.startsWith('MOTE_'))delete process.env[key];
 // Keep enabled traces in the isolated private log directory; console output carries experiment metadata only.
 Object.assign(process.env,{MOTE_ENV_FILE:resolve(values['env-file']),MOTE_DATA_DIR:dataDir,MOTE_PROFILE:'quality',MOTE_TOKEN:randomBytes(32).toString('hex'),MOTE_HOST:'127.0.0.1',MOTE_PORT:'47852',MOTE_LOG_DIR:join(dataDir,'logs'),MOTE_LOG_LEVEL:'info',MOTE_AGENT_TRACE_ENABLED:'1',MOTE_CONNECTOR_PLUGINS:'[]',MOTE_BACKEND_PLUGINS:'[]',MOTE_FILE_PROCESSOR_PLUGINS:'[]',MOTE_EMBEDDING_MODEL:'',MOTE_MCP_ENABLED:'0',MOTE_MCP_WRITE_ENABLED:'0'});
-const {configFromEnv}=await import('../apps/server/src/config.ts'),{buildApp}=await import('../apps/server/test/fixtures/legacy-app.ts');
+const {configFromEnv}=await import('../apps/server/src/config.ts'),{buildApp}=await import('../apps/server/src/app.ts');
 const config=configFromEnv();config.connectors={...config.connectors,directory:join(dataDir,'.quality-empty-connectors'),modules:[]};
 config.fileProcessorModules=[];config.backendPluginModules=[];config.retentionDays=0;config.insightIntervalHours=0;
 const output=resolve(values.output),report={version:1,strategy:values.strategy,contextTime,dataDir,startedAt:new Date().toISOString(),cases:[]};

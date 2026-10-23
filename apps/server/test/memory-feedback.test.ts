@@ -124,7 +124,7 @@ test('two unresolved feedback rounds wait for input and cannot repeat completed 
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_feedback_plans WHERE job_id=?').get(done.id)!.n,2);
 });
 
-for(const [mode,calls,code] of [['planner-transient',3,'provider_network'],['planner-unknown',1,'provider_failed'],['planner-crash',1,'memory_feedback_planner_failed']] as const)test(`${mode} preserves completed siblings and reports internal failure through progress and restart`,{timeout:20000},async t=>{
+for(const [mode,calls,code] of [['planner-transient',4,'provider_network'],['planner-unknown',1,'provider_failed'],['planner-crash',1,'memory_feedback_planner_failed']] as const)test(`${mode} preserves completed siblings and reports internal failure through progress and restart`,{timeout:20000},async t=>{
  const f=await fixture(t,mode),done=await f.start();await f.settle();
  assert.equal(done.status,'failed');assert.equal(done.errorCode,'memory_feedback_planning_failed');assert.equal(f.feedback.length,calls);assert.equal(done.completedBatches,1);assert.equal(done.failedBatches,1);assert.equal(done.pendingBatches,0);assert.equal(f.checkpoints().length,1);
  const planner=f.runtime.list().find(work=>work.profileId==='memory.feedback')!;assert.equal(planner.status,'failed');assert.equal(planner.units.length,0);assert.equal(planner.planningComplete,undefined);assert.equal(planner.failureReceipt?.code,code);assert.equal(planner.failureReceipt?.attempt,calls);assert.equal(planner.failureReceipt?.jobId,done.id);assert.equal(planner.failureReceipt?.phase,'feedback-planning');assert.equal(planner.failureReceipt?.runId,'generated-feedback-failed-'+calls);

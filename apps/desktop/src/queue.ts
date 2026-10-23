@@ -34,8 +34,7 @@ export interface QueueLimits { maxQueueBytes: number; maxQueueEvents: number }
 export interface QueueStats { archiveAcknowledgment?:{at:string;origin:string}; depth: number; bytes: number; nextRetryAt?: string; oldestPendingAt?: string; lastUploadAt?: string; eligibleDepth: number; blocked: number }
 export interface QueueArchive {
   format: 'mote-desktop-queue';
-  version: typeof DESKTOP_STORAGE_VERSION;
-  binding?:import('./connection-binding').Binding;
+  version: 3;
   records: QueueRecord[];
   blobs: Record<string, string>;
 }
@@ -148,7 +147,7 @@ export class DurableQueue {
         await readFile(join(target, 'connection-binding.json'));
         const binding = new ConnectionBindingStore(join(target, 'connection-binding.json'), async (path, value) => { await this.storageGuard?.(); await atomicWrite(path, JSON.stringify(value)); });
         const config = this.limits as QueueLimits & Partial<Config>;
-        await binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token,account:config.account }, activeUsage(this.records.values()).depth > 0);
+        await binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token }, activeUsage(this.records.values()).depth > 0);
         await commitConfig();
         // No fallible operation after the durable pointer commit and before activation.
         this.storageDirectory = target; this.storageBinding = binding;
@@ -231,7 +230,7 @@ export class DurableQueue {
         if (name.endsWith('.tmp') || (name.endsWith('.jpg') && HASH.test(name.slice(0, -4)) && !checked.has(name.slice(0, -4)))) await unlink(join(this.directory, 'blobs', name));
       }
       const config = this.limits as QueueLimits & Partial<Config>;
-      await this.binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token,account:config.account }, activeUsage(restored.values()).depth > 0);
+      await this.binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token }, activeUsage(restored.values()).depth > 0);
       try { const checkpoint = JSON.parse(await readFile(join(this.directory, 'sync-checkpoint.json'), 'utf8')); this.lastUploadAt = checkpoint.lastUploadAt; this.sourceRetryAt = checkpoint.nextRetryAt; this.archiveAcknowledgment = checkpoint.archiveAcknowledgment; } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       this.initialized = true;
     });
@@ -389,7 +388,7 @@ export class DurableQueue {
   async next(now = Date.now(), preferSince?:number): Promise<{ record: QueueRecord; image?: Buffer } | undefined> {
     return (await this.nextBatch(1, now, preferSince))[0];
   }
-  async nextBatch(limit = 25, now = Date.now(), preferSince?:number, onFirst?: (entry: { record: QueueRecord; image?: Buffer }) => void): Promise<{ record: QueueRecord; image?: Buffer }[]> {
+  async nextBatch(limit = 25, now = Date.now(), preferSince?:number): Promise<{ record: QueueRecord; image?: Buffer }[]> {
     return this.exclusive(async () => {
       this.assertReady();
       const records = [...this.records.values()].filter(r => !r.syncBlocked && r.nextAttemptAt <= now).sort((a, b) => (preferSince===undefined?0:Number(Date.parse(b.event.capturedAt)>=preferSince)-Number(Date.parse(a.event.capturedAt)>=preferSince))||a.event.capturedAt.localeCompare(b.event.capturedAt));
@@ -400,9 +399,6 @@ export class DurableQueue {
         if (result.length && bytes + size > 4 * 1024 * 1024) break;
         if (image) { validateImage(image); if (await imageWork.run<string>({ kind: 'hash', bytes: image }) !== record.blobHash) throw new Error(moteText("队列图片校验和不正确")); }
         result.push({ record: structuredClone(record), image }); bytes += size;
-        // Internal observer only records the first validated attempt. If a later
-        // read fails, the caller retains the same first-item failure bookkeeping.
-        if(result.length===1)onFirst?.(result[0]);
       }
       return result;
     });
@@ -460,8 +456,6 @@ export class DurableQueue {
       try {
         await chmod(staging, 0o700);
         await archiveWork.run({ kind: 'archive-prepare', path, staging }, progress);
-        const archivedBinding=JSON.parse(await readFile(join(staging,'connection-binding.json'),'utf8'));
-        if(JSON.stringify(archivedBinding)!==JSON.stringify(this.binding.snapshot()))throw Error('Queue archive belongs to another account');
         const names = await readdir(join(staging, 'events'));
         const unique: QueueRecord[] = [];
         for (const name of names) {
@@ -497,7 +491,7 @@ export class DurableQueue {
       if (this.stats().bytes > 256 * 1024 * 1024) throw new Error(moteText("队列超过 256 MiB，请退出采集器后备份整个 queue 文件夹"));
       const blobs: Record<string, string> = {};
       for (const record of this.records.values()) if (record.blobHash && !blobs[record.blobHash]) blobs[record.blobHash] = (await readFile(this.blobPath(record.blobHash))).toString('base64');
-      return { format: 'mote-desktop-queue', version: DESKTOP_STORAGE_VERSION,binding:this.binding.snapshot(),records: structuredClone([...this.records.values()]), blobs };
+      return { format: 'mote-desktop-queue', version: DESKTOP_STORAGE_VERSION, records: structuredClone([...this.records.values()]), blobs };
     });
   }
   async importArchive(input: unknown): Promise<number> {
@@ -505,7 +499,6 @@ export class DurableQueue {
       this.assertReady();
       const archive = input as QueueArchive;
       if (archive?.format !== 'mote-desktop-queue' || archive.version !== DESKTOP_STORAGE_VERSION || !Array.isArray(archive.records) || archive.records.length > 1000000 || !archive.blobs || typeof archive.blobs !== 'object') throw new Error(moteText("不是 Mote 电脑端队列备份"));
-      if(JSON.stringify(archive.binding)!==JSON.stringify(this.binding.snapshot()))throw Error('Queue archive belongs to another account');
       const unique = new Map<string, QueueRecord>();
       const images = new Map<string, Buffer>();
       // Validate every record before the first write.

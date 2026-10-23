@@ -50,7 +50,7 @@ internal class UiTask(
             executor.execute {
                 SupportEvents.record(activity.applicationContext, EventStage.UI, EventCode.STARTED)
                 val outcome = runCatching { work(state) }
-                outcome.exceptionOrNull()?.let { SupportEvents.failure(activity.applicationContext, EventStage.UI, it, SystemClock.elapsedRealtime() - state.started) } ?: SupportEvents.record(activity.applicationContext, EventStage.UI, EventCode.OK, SystemClock.elapsedRealtime() - state.started)
+                SupportEvents.record(activity.applicationContext, EventStage.UI, outcome.exceptionOrNull()?.let { EventJournal.failure(it, EventStage.UI) } ?: EventCode.OK, SystemClock.elapsedRealtime() - state.started)
                 result.set(outcome)
                 handler.post { if (!closed && visible) { handler.removeCallbacks(tick); tick.run() } }
             }

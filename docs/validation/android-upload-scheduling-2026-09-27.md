@@ -17,7 +17,7 @@ Only a newly created API 35 / Android 15 / en-US emulator (`mote_fixture_api35`)
 
 The first 24-test run had four failures. Its realtime timeout lacked sufficient counters for unique causal attribution. Separate deterministic WorkManager failures established the lost-wake window and concurrent outbox access; both before-fix logs remain available. A later 28-test run also exposed the duplicate-send counter before the upload gate was added. None of these failures was overwritten.
 
-External evidence: `<redacted-personal-path>` (SHA-256 `ded1b606957f885bd1257987ba4df28504587fef910fcf5ca250ae5abce777b0`). The earlier three-round complex-note run used 18 generated notes and is separate from these 30 tests. That original validation did not cover post-repair process termination; a subsequent bounded check is recorded below.
+External evidence: `/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27/android-emulator-validation-001/ROOT_SAFE_android-sync-fix-validation.json` (SHA-256 `ded1b606957f885bd1257987ba4df28504587fef910fcf5ca250ae5abce777b0`). The earlier three-round complex-note run used 18 generated notes and is separate from these 30 tests. That original validation did not cover post-repair process termination; a subsequent bounded check is recorded below.
 
 ## Process termination and explicit resynchronization
 
@@ -28,7 +28,7 @@ This harness explicitly schedules synchronization and deliberately repeats six P
 The offline build requires both the SDK location and the development test variant:
 
 ```sh
-ANDROID_HOME=<redacted-personal-path> \
+ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
 JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' \
 apps/android/gradlew -p apps/android --offline -Pmote.testBuildType=development \
   :app:assembleDevelopment :app:assembleDevelopmentAndroidTest
@@ -36,7 +36,7 @@ apps/android/gradlew -p apps/android --offline -Pmote.testBuildType=development 
 
 Two earlier configuration-stage failures omitted these settings and are preserved separately; no instrumentation ran in those attempts. The successful check changed no source or harness. Root verification matched four source files, two harness files, two APKs and seven evidence hashes. All owned app, emulator, central, logcat and runner processes closed, with the test reverse mapping removed. Existing user emulators and physical devices were untouched.
 
-External report: `<redacted-personal-path>` (SHA-256 `27a2417a5b3fd0ab570d8e1b26c659cb04370677dbf2c917e5312dbfa76d79ec`). This single six-note round is distinct from the earlier 18-note run and the 30-test instrumentation suite.
+External report: `/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27/android-process-recovery-validation-002/ROOT_SAFE_android-process-recovery.json` (SHA-256 `27a2417a5b3fd0ab570d8e1b26c659cb04370677dbf2c917e5312dbfa76d79ec`). This single six-note round is distinct from the earlier 18-note run and the 30-test instrumentation suite.
 
 ## Automatic recovery on ordinary app launch
 
@@ -46,4 +46,4 @@ The poll at 21.003 seconds still showed six queued notes and no central records;
 
 The closed central database had zero model usage and provider admissions. All owned app, emulator, central and logcat processes exited, and the reverse mapping was removed. Root review verified the report, 19 linked file hashes and absent host PIDs. This proves ordinary-launch automatic recovery for this generated API 35 emulator run; it does not generalize to physical devices or all OEM background policies.
 
-External report: `<redacted-personal-path>` (SHA-256 `8f8edbed39e09ba5228da6a9c034c7b5ee88010a3e6524afae7d7a5a357919b1`). Source, fixture and APK hashes match the preceding explicit-sync check.
+External report: `/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27/android-auto-start-recovery-validation-001/ROOT_SAFE_verification.json` (SHA-256 `8f8edbed39e09ba5228da6a9c034c7b5ee88010a3e6524afae7d7a5a357919b1`). Source, fixture and APK hashes match the preceding explicit-sync check.

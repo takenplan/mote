@@ -45,7 +45,7 @@ test('same-format shutdown and recovery retain lane identity and reject an uncoo
  assert.equal(engine.get(id)!.state,'waiting');assert.equal(engine.get(id)!.error,'interrupted');
  const replacement=new ExecutionEngine(store);lanes(replacement,1,1);t.after(()=>replacement.close());replacement.register({...handler,commit:()=>{commits++;}});replacement.register({...handler,kind:'generated.interactive'});
  const ask=replacement.enqueue('generated-ask','generated.interactive',{});await replacement.drain([id,ask]);release();await turn();
- assert.equal(commits,1);assert.equal(replacement.get(id)!.attempts,2,'the interrupted charged call and its replacement both remain accounted');assert.equal(replacement.get(ask)!.state,'succeeded');
+ assert.equal(commits,1);assert.equal(replacement.get(id)!.attempts,1);assert.equal(replacement.get(ask)!.state,'succeeded');
  assert.ok(!String(store.db.prepare('SELECT input FROM execution_steps WHERE id=?').get(id)!.input).includes('background'),'lane is derived rather than added to durable input');
 });
 

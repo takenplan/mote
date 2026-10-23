@@ -1,4 +1,3 @@
-import {measureActivity} from './activity-measurement.js';
 import {centralOcrState} from './central-ocr-state.js';
 import {CAPTURE_BATCH_MAX_RECORDS,CAPTURE_BATCH_MAX_BYTES} from './capture-limits.js';
 import {AssetStore} from './assets.js';
@@ -30,8 +29,7 @@ import {mediaActivity,type MediaActivityRange} from './media-activity.js';
 import {ArchivedFileStore} from './archived-files.js';
 import {ContentEncryption,replaceContentFile} from './content-encryption.js';
 
-import {StoreError} from './execution-storage.js';
-export {StoreError} from './execution-storage.js';
+export class StoreError extends Error { constructor(message:string, public statusCode=400) {super(message);} }
 export const sha256 = (v:Buffer|string) => createHash('sha256').update(v).digest('hex');
 export type Range = {sourceId?:string;projectKey?:string;repositoryKey?:string;provider?:string;sessionId?:string;includeTotal?:boolean;after?:string;before?:string;deviceId?:string;appId?:string;source?:CaptureInput['source'];collection?:'content'|'activity';limit?:number;cursor?:string;ocrStatus?:OcrState['status']};
 type Prepared = {input:CaptureInput;bytes?:Buffer;hash:string|null;fingerprint:string;receivedAt?:string};
@@ -601,9 +599,32 @@ export class EvidenceStore {
     const extended:Range={deviceId:range.deviceId,after:range.after?new Date(Date.parse(range.after)-21600000).toISOString():undefined,before:range.before?new Date(Date.parse(range.before)+300000).toISOString():undefined};
     const {where,values}=this.clauses(extended);
     const rows=this.db.prepare(`SELECT * FROM captures${where} ORDER BY captured_at ASC,id ASC`).all(...values) as unknown as Row[];
-    return measureActivity(rows.map(row=>this.record(row)),range,onContributor);
+    type Counts={durationMs:number;captures:number;activityEvents:number;contentCaptures:number};
+    const apps=new Map<string,Counts&{appId:string;appName:string}>(),devices=new Map<string,Counts&{deviceId:string;deviceName:string}>(),ends=new Map<string,number>();
+    const lower=range.after?Date.parse(range.after):-Infinity,upper=range.before?Date.parse(range.before):Infinity;
+    let totalDurationMs=0,captures=0,activityEvents=0,contentCaptures=0;
+    const observations=rows.flatMap(row=>{const c=this.record(row);return stateSamples(c).map(s=>({...c,capturedAt:s.at,durationMs:s.durationMs}));}).sort((a,b)=>a.capturedAt.localeCompare(b.capturedAt)||a.id.localeCompare(b.id));
+    for(const c of observations) {
+      if(c.source!=='screen'&&c.source!=='activity')continue;
+      const t=Date.parse(c.capturedAt),end=Math.min(t,upper),start=Math.max(t-c.durationMs,lower,ends.get(c.deviceId)??-Infinity),durationMs=Math.max(0,end-start);
+      if((t<lower||t>=upper)&&!durationMs)continue;
+      if(durationMs>0){
+        ends.set(c.deviceId,Math.max(ends.get(c.deviceId)??-Infinity,end));
+        // Earlier samples can clip a later selected app even when this sample
+        // is excluded by the requested app/source/collection filter.
+        onContributor?.(c.id);
+      }
+      const activity=c.source==='activity';
+      if(range.source&&c.source!==range.source||range.appId!==undefined&&c.appId!==range.appId||range.collection==='activity'&&!activity||range.collection==='content'&&(activity||c.privacy.collection==='activity'))continue;
+      onContributor?.(c.id);
+      const appKey=JSON.stringify(c.appId?['id',c.appId]:['name',c.appName]);
+      const app=apps.get(appKey)??{appId:c.appId,appName:c.appName||moteText("未识别应用"),durationMs:0,captures:0,activityEvents:0,contentCaptures:0};
+      const d=devices.get(c.deviceId)??{deviceId:c.deviceId,deviceName:c.deviceName,durationMs:0,captures:0,activityEvents:0,contentCaptures:0};
+      for(const bucket of [app,d]){bucket.durationMs+=durationMs;bucket.captures++;if(activity)bucket.activityEvents++;else bucket.contentCaptures++;}
+      apps.set(appKey,app);devices.set(c.deviceId,d);totalDurationMs+=durationMs;captures++;if(activity)activityEvents++;else contentCaptures++;
+    }
+    return {apps:[...apps.values()].sort((a,b)=>b.durationMs-a.durationMs),devices:[...devices.values()],totalDurationMs,captures,activityEvents,contentCaptures};
   }
-
   mediaActivity(range:MediaActivityRange={},onContributor?:(id:string)=>void) {
     // Intervals end at capturedAt and can overlap the exclusive upper bound.
     // Snapshot metadata on screen/activity events never participates in media accounting.

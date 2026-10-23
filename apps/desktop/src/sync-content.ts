@@ -1,5 +1,3 @@
-import {accountJson,accountOriginal,accountOriginalDescriptor,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
-import {DESKTOP_PROTOCOL_HEADERS} from './account';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
 import { readResponseText } from './response-body';
@@ -28,7 +26,7 @@ function recordText(source: SyncHistoryItem['source'], record: Record<string, un
   return text(record.ocrText);
 }
 async function request(config: Config, path: string): Promise<Response> {
-  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { ...DESKTOP_PROTOCOL_HEADERS,'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { 'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000) });
   if (!response.ok) { await response.body?.cancel(); if (response.status === 404 || response.status === 410) throw Error(moteText('归档内容不存在或已按保留策略清理；同步凭据仍可查看。')); if (response.status === 401 || response.status === 403) {const error=Error(moteText('无法访问采集记录，请检查中央连接权限'));error.name='ArchiveAuthorizationError';throw error;} throw Error(moteText('中央节点返回 HTTP {0}，请稍后重试', response.status)); }
   return response;
 }
@@ -59,7 +57,7 @@ export async function syncContent(history: SyncHistory, queue: DurableQueue, sou
 }
 export async function readCentralContent(config:Config,item:SyncHistoryItem,chunkOffset=0,includeImage=false):Promise<SyncContent>{
   if (!item.captureId || !uuid.test(item.captureId)) throw Error(moteText('本机副本已变化；尚无可读取的中央接收凭据。'));
-  const record = config.account?await accountJson(config,`/api/captures/${item.captureId}`):await json(config, `/api/capture-browser/${item.captureId}`);
+  const record = await json(config, `/api/capture-browser/${item.captureId}`);
   if (record.id !== item.captureId || record.deviceId !== config.deviceId) throw Error(moteText('记录不属于当前设备'));
   if(typeof record.source==='string'&&['screen','ui_page','note','activity','notification','file','calendar','message'].includes(record.source)) item.source=record.source==='message'?'coding':record.source as SyncHistoryItem['source'];
   item.title=typeof record.windowTitle==='string'?record.windowTitle:typeof record.appName==='string'?record.appName:item.title;
@@ -67,15 +65,6 @@ export async function readCentralContent(config:Config,item:SyncHistoryItem,chun
   const provenance = record.provenance as Record<string, unknown> | undefined;
   if (item.sourceId && provenance?.sourceId !== item.sourceId) throw Error(moteText('记录不属于当前设备'));
   const result: SyncContent = { truncated:typeof record.ocrText==='string'&&record.ocrText.length>100000,item, location: 'central', captureId: item.captureId, text: recordText(item.source, record), metadataOnly: item.layer === 'reference'||provenance?.layer==='reference', metadata: JSON.stringify({ capturedAt: record.capturedAt, appName: record.appName, provenance, metadata: record.metadata }, null, 2).slice(0, 100000) };
-  if(config.account){
-    result.hasImage=Boolean(record.imageMime);result.readiness=result.metadataOnly?'metadata':'unknown';
-    if(record.imageMime&&includeImage){const original=await accountOriginal(config,record);if(original){if(original.descriptor.bytes>MAX_IMAGE_BYTES){await original.response.body?.cancel();throw Error('Original image exceeds limit');}const bytes=Buffer.from(await original.response.arrayBuffer());if(bytes.length>MAX_IMAGE_BYTES)throw Error('Original image exceeds limit');result.image=await previewWork.run<string>({kind:'preview',bytes,thumbnail:false});result.retainsOriginal=true;}}
-    if(record.imageMime||provenance?.document){const descriptor=await accountOriginalDescriptor(config,record);result.retainsOriginal=Boolean(descriptor&&descriptor.available!==false);}
-    const found=provenance?.sourceId||!record.ocrText||record.ocr?.status==='pending'?await accountCaptureMaterial(config,record):undefined;
-    if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'&&found.indexing?.state==='indexed'?'ready':found.indexing?.state==='failed'?'failed':'pending';result.processing=false;}
-    else{const central=record.ocr?.status==='pending'||!record.ocrText&&(record.imageMime||provenance?.document)?await accountCaptureProcessing(config,record):undefined;result.readiness=result.metadataOnly?'metadata':central??(provenance?.document||record.ocr?.status==='pending'?'pending':record.ocr?.status==='failed'?'failed':'unknown');result.processing=result.readiness==='pending';}
-    return result;
-  }
   const ocr = record.ocr as { status?: string } | undefined;
   result.processing = ocr?.status === 'pending';
   result.hasImage=Boolean(record.imageMime && item.source==='screen'); if(record.imageMime)result.retainsOriginal=true;

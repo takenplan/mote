@@ -14,7 +14,7 @@ test('central packaging archives the committed monorepo with the central version
   const git = args => execFileSync('git', args, { cwd: fixture.root, stdio: 'pipe' });
   git(['init']); git(['add', '.']); git(['-c', 'user.name=Generated Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Generated source fixture']);
   fixture.write('untracked-fixture.txt', 'Generated uncommitted content');
-  const env = { ...process.env, MOTE_BUILD_PROFILE: 'prod', GITHUB_REF: 'refs/tags/central-v1.4.0', GITHUB_REPOSITORY: fixture.policy.repository };
+  const env = { ...process.env, GITHUB_REF: 'refs/tags/central-v1.4.0', GITHUB_REPOSITORY: fixture.policy.repository };
   execFileSync(process.execPath, [new URL('./source-package.mjs', import.meta.url).pathname], { cwd: fixture.root, env, stdio: 'pipe' });
   const archive = join(fixture.root, 'artifacts/release/mote-server-1.4.0.tar.gz'), metadata = JSON.parse(readFileSync(archive + '.asset.json', 'utf8'));
   assert.equal(metadata.component, 'server'); assert.equal(metadata.url, 'https://github.com/fixture/mote/releases/download/central-v1.4.0/mote-server-1.4.0.tar.gz');
@@ -22,13 +22,6 @@ test('central packaging archives the committed monorepo with the central version
   assert.ok(files.includes('mote-1.4.0/apps/server/package.json'));
   assert.ok(files.every(name => name.startsWith('mote-1.4.0/')));
   assert.ok(files.every(name => !name.includes('untracked-fixture')));
-  const commit = git(['rev-parse', 'HEAD']).toString().trim();
-  const devEnv = { ...env, MOTE_BUILD_PROFILE: 'dev', GITHUB_REF: 'refs/heads/main' };
-  execFileSync(process.execPath, [new URL('./source-package.mjs', import.meta.url).pathname], { cwd: fixture.root, env: devEnv, stdio: 'pipe' });
-  const devMetadata = JSON.parse(readFileSync(archive + '.asset.json', 'utf8'));
-  assert.equal(devMetadata.profile, 'dev'); assert.equal(devMetadata.commit, commit); assert.equal(devMetadata.url, undefined);
-  const buildInfo = JSON.parse(readFileSync(join(fixture.root, 'artifacts/release/build-info.json'), 'utf8'));
-  assert.equal(buildInfo.commit, commit); assert.equal(buildInfo.tag, undefined);
   git(['rm', 'apps/web/src/main.tsx']); git(['-c', 'user.name=Generated Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Generated incomplete source fixture']);
   const incomplete = spawnSync(process.execPath, [new URL('./source-package.mjs', import.meta.url).pathname], { cwd: fixture.root, env, encoding: 'utf8' });
   assert.notEqual(incomplete.status, 0); assert.match(incomplete.stderr, /missing build input: apps\/web\/src\/main.tsx/);

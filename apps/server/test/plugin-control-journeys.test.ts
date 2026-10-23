@@ -26,7 +26,7 @@ import {reviewMemory, memoryReviewReceipt} from '../src/memory-review.js';
 import {SourceStore} from '../src/sources.js';
 import {memoryProviderKey} from '../src/memory-provider-contract.js';
 import {fixtureMemoryResult} from './fixtures/memory-result.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 // Generated executable release, not a Mem0/Hindsight substitute or capability
@@ -108,7 +108,7 @@ function fixture(t: TestContext, release = generatedRelease(), durablePublicatio
   let tail = 0;
   function open() {
     store = new Store(directory); executor = new ExecutionEngine(store, () => clock);
-    plugins = new PluginCenter(store, executor, new GitHubPluginReleases(join(directory, 'packages'), release.transport),{ownerId:'mote-owner'});
+    plugins = new PluginCenter(store, executor, new GitHubPluginReleases(join(directory, 'packages'), release.transport));
     automation = new MemoryAutomation(store, () => clock); memories = new MemoryStore(store);
     bindings = new MemoryBindings(store, memories, automation, plugins, executor);
     publication = durablePublication ? new MemoryPublication(store, memories, bindings) : undefined;

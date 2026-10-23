@@ -91,7 +91,7 @@ export class MaterialIndexRuntime {
     if(this.closed)throw new StoreError('Material indexing is closed',503);
     const row=this.request(id);if(!row||!this.materials.get(id))throw new StoreError('Material not found',404);
     if(!row.enabled)throw new StoreError('Material indexing is disabled',409);
-    const step=this.enqueue(row);if(this.engine.get(step)?.state!=='running')this.engine.retry(step,true);
+    const step=this.enqueue(row);if(this.engine.get(step)?.state!=='running')this.engine.retry(step);
     return this.materials.indexStatus(id);
   }
   async close(){if(this.closed)return;this.closed=true;await this.unregister();}

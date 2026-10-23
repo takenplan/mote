@@ -1,7 +1,5 @@
 import {EXECUTION_POLICIES} from './execution-policy.js';
-import {ProviderFailure,type TokenUsage} from '@mote/shared';
-import {requestEmbedding,EMBEDDING_INPUT_CODE_UNITS} from './embedding-request.js';
-import {fuseEvidenceRanks} from './evidence-retrieval.js';
+import {ProviderFailure,providerHttpFailure,type TokenUsage} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {sha256} from './store.js';
@@ -12,6 +10,14 @@ import type { ServerDiagnostics } from './diagnostics.js';
 import { randomUUID } from 'node:crypto';
 import {join} from 'node:path';
 import {scanVectors,type VectorQuery,type VectorScan} from './vector-work.js';
+
+const EMBEDDING_INPUT_CODE_UNITS=20000;
+
+class EmbeddingError extends ProviderFailure {
+  constructor(readonly code:'embedding_http'|'embedding_invalid'|'embedding_transport',readonly httpStatus?:number,retryAfter?:string|null) {
+    super(code==='embedding_http'?providerHttpFailure(httpStatus!,retryAfter):{category:code==='embedding_invalid'?'permanent':'transient',code},code==='embedding_http'?`Embedding provider returned HTTP ${httpStatus}`:code==='embedding_invalid'?'Embedding provider returned an invalid vector':'Embedding transport failed');
+  }
+}
 
 export class Indexer {
   private current?:Promise<void>;
@@ -45,7 +51,7 @@ export class Indexer {
     return stepId;
   }
 
-  retry(){const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=this.store.retryIndex();for(const row of db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state!='running'").all())this.engine.retry(String(row.id),true);if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}}
+  retry(){const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=this.store.retryIndex();for(const row of db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state!='running'").all())this.engine.retry(String(row.id));if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}}
   get configured() {return Boolean(this.config.embeddingModel&&this.config.embeddingBaseUrl);}
   private queryCache=new Map<string,{at:number;vector:number[]}>();
   async embed(text:string,timeoutMs=45000,signal?:AbortSignal,operationId?:string):Promise<number[]> {
@@ -71,8 +77,28 @@ export class Indexer {
     };
     return this.diagnostics?this.diagnostics.measure('index','embedding',task,()=>({count:1})):task();
   }
-  private requestEmbedding(text:string,timeoutMs:number,signal?:AbortSignal) {
-    return requestEmbedding({model:this.config.embeddingModel,baseUrl:this.config.embeddingBaseUrl,apiKey:this.config.embeddingApiKey},text,timeoutMs,AbortSignal.any([this.abort.signal,...(signal?[signal]:[])]));
+  private async requestEmbedding(text:string,timeoutMs:number,signal?:AbortSignal) {
+    const url=this.config.embeddingBaseUrl.replace(/\/$/,'')+'/embeddings';
+    let response:Response;
+    try{response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',...(this.config.embeddingApiKey?{Authorization:`Bearer ${this.config.embeddingApiKey}`}:{})},body:JSON.stringify({model:this.config.embeddingModel,input:text.slice(0,EMBEDDING_INPUT_CODE_UNITS)}),signal:AbortSignal.any([this.abort.signal,AbortSignal.timeout(timeoutMs),...(signal?[signal]:[])]),redirect:'error'});}catch{throw new EmbeddingError('embedding_transport');}
+    if(!response.ok){await response.body?.cancel();throw new EmbeddingError('embedding_http',response.status,response.headers.get('retry-after'));}
+    let data:{data?:{embedding?:number[]}[];usage?:{prompt_tokens?:number;total_tokens?:number}};
+    try {
+      // A provider controls the complete body, including ignored JSON fields and decompressed bytes.
+      const limit=2*1024*1024,reader=response.body?.getReader(),bytes=Buffer.allocUnsafe(limit);let size=0;
+      if(!reader)throw new Error('Missing embedding response body');
+      try {
+        if(Number(response.headers.get('content-length'))>limit)throw new Error('Embedding response too large');
+        for(;;){const {value,done}=await reader.read();if(done)break;if(size+value.byteLength>limit)throw new Error('Embedding response too large');bytes.set(value,size);size+=value.byteLength;}
+        data=JSON.parse(bytes.subarray(0,size).toString('utf8')) as typeof data;
+      }catch(error){await reader.cancel().catch(()=>{});throw error;}
+      finally{reader.releaseLock();}
+    }catch{throw new EmbeddingError('embedding_invalid');}
+    const vector=data?.data?.[0]?.embedding;
+    if(!Array.isArray(vector)||!vector.length||vector.length>16384||!vector.every(n=>Number.isFinite(n)))throw new EmbeddingError('embedding_invalid');
+    const count=data.usage?.prompt_tokens,total=data.usage?.total_tokens;
+    const usage:TokenUsage|undefined=Number.isSafeInteger(count)&&count!>=0&&total===count?{requests:1,reportedRequests:1,inputTokens:count!,outputTokens:0,totalTokens:count!,cacheReadTokens:0,cacheWriteTokens:0}:undefined;
+    return {vector,usage};
   }
   tick():Promise<void> {
     if(this.current)return this.current;
@@ -116,8 +142,15 @@ export class Indexer {
     // An asynchronous provider/worker may overlap deletion or source replacement.
     // Refresh bounded lexical results as well before exposing this response.
     if(this.configured&&args.query){const current=readLexical();lexical[0]=current[0];lexical[1]=current[1];if(channels!==lexical){channels[0]=current[0];channels[1]=current[1];}}
+    // Reciprocal rank fusion across independent channels; no file-table priority.
+    const ranked=new Map<string,{record:(typeof lexical)[number][number];score:number}>();
+    for(const channel of channels){const seen=new Set<string>();channel.forEach((record,index)=>{
+      if(seen.has(record.id))return;seen.add(record.id);
+      const previous=ranked.get(record.id);
+      ranked.set(record.id,{record:previous?.record??record,score:(previous?.score??0)+1/(60+index+1)});
+    });}
     const retrieval={mode:channels===lexical?'lexical':'hybrid',degraded,...(embeddingInput?{embeddingInput}:{}),...(vectorCoverage?{vectorCoverage}:{}),...(degraded?{reason}:{})};
-    const result=fuseEvidenceRanks(channels,args.limit??50).map(record=>({...record,retrieval}));
+    const result=[...ranked.values()].sort((a,b)=>b.score-a.score||a.record.id.localeCompare(b.record.id)).slice(0,args.limit??50).map(({record})=>({...record,retrieval}));
     // Preserve degradation even for an empty result, without changing the public array API.
     return Object.assign(result,{retrieval});
   }

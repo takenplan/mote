@@ -2,25 +2,24 @@
 
 An installed, fixed Python parser for `YYYY-MM-DD.md` exports containing a `# YYYY-MM-DD` heading and `## HH:MM:SS` entries. It preserves exact body slices, associates included local Markdown image links, and records every input's disposition. It does not classify intent, decide what becomes Memory, run captured instructions, or infer event dates from prose.
 
-Register it in the selected instance YAML's private `plugins.importPythonPacks` list, then restart Central. `MOTE_IMPORT_PYTHON_PACKS` is not the current configuration entry point:
+Register it in the node's private `MOTE_IMPORT_PYTHON_PACKS` JSON array:
 
-```yaml
-plugins:
-  importPythonPacks:
-    - id: memex.markdown
-      version: "1"
-      description: Timestamped Memex Markdown exports with original image attachments
-      packRoot: /absolute/mote/plugins/source-packs/memex-markdown
-      script: main.py
-      scriptSha256: REPLACE_WITH_SHA256_OF_MAIN_PY
-      pythonExecutable: /Library/Developer/CommandLineTools/usr/bin/python3
-      maxInputFiles: 256
-      maxOutputBytes: 2097152
-      config:
-        timeZoneOffset: "+08:00"
+```json
+[
+  {
+    "id": "memex.markdown",
+    "version": "1",
+    "description": "Timestamped Memex Markdown exports with original image attachments",
+    "packRoot": "/absolute/mote/plugins/source-packs/memex-markdown",
+    "script": "main.py",
+    "scriptSha256": "REPLACE_WITH_SHA256_OF_MAIN_PY",
+    "pythonExecutable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "maxInputFiles": 256,
+    "maxOutputBytes": 2097152,
+    "config": { "timeZoneOffset": "+08:00" }
+  }
+]
 ```
-
-This installs fixed parser code for the host; the current account still owns import authorization, originals and publication. See [configuration ownership](../../../docs/configuration-ownership.md) and [the current plugin guide](../../../docs/plugin-authoring.md).
 
 Select the offset that actually applies to the export. It is required because the format has no zone; `recordedAt` explicitly records this configuration basis. `observedAt` is the host's current import time, and no `occurredAt` is invented. For exports spanning offset changes, split into explicitly configured inputs or extend the parser; a fixed offset is not an IANA time zone.
 

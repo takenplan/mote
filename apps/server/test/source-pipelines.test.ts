@@ -194,7 +194,7 @@ test('Memory waits for named outputs while a partial material remains queryable'
 });
 
 test('HTTP source upload, material search and actual agent bridge cite assembled evidence end to end',async t=>{
-  const {buildApp}=await import('./fixtures/legacy-app.js');
+  const {buildApp}=await import('../src/app.js');
   const {startBridge}=await import('../../../packages/agent/dist/bridge.js');
   const {parseAnswer}=await import('@mote/agent');
   const directory=mkdtempSync(join(tmpdir(),'mote-source-http-'));

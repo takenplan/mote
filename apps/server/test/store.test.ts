@@ -26,10 +26,10 @@ test('pre-created storage and restored databases gain private permissions before
 });
 test('vault, asset directories, database and sidecar links cannot redirect private storage',t=>{
   const root=mkdtempSync(join(tmpdir(),'mote-store-links-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const external=join(root,'external');mkdirSync(external,{mode:0o755});chmodSync(external,0o755);
+  const external=join(root,'external');mkdirSync(external,{mode:0o755});
   const linked=join(root,'linked');symlinkSync(external,linked);assert.throws(()=>new Store(linked),/owned directory/);
   assert.equal(statSync(external).mode&0o777,0o755);
-  const outside=join(root,'outside-file');writeFileSync(outside,'synthetic external file',{mode:0o644});chmodSync(outside,0o644);
+  const outside=join(root,'outside-file');writeFileSync(outside,'synthetic external file',{mode:0o644});
   for(const [index,name] of ['files','mote.sqlite','mote.sqlite-wal','mote.sqlite-shm','mote.sqlite-journal'].entries()){
     const directory=join(root,`vault-${index}`);mkdirSync(directory);
     symlinkSync(name==='files'?external:outside,join(directory,name));assert.throws(()=>new Store(directory));

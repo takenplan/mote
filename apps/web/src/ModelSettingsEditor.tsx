@@ -9,7 +9,6 @@ import { ApiError, errorMessage, type Api } from './api';
 import { createModelDraft, modelDraftChanged, modelSettingsRequest, retainedCredentialsNeedConfirmation, type CredentialAction, type ModelSettingsDraft } from './model-settings-form';
 import { codexReasoningChoices, type CatalogModel } from './model-reasoning';
 const protocolNames: Record<ModelSettingsDraft['protocol'], string> = {
-    'mote-media': 'Mote Media',
     'codex-app-server': "本机 Codex App Server",
     deepseek: "DeepSeek 原生",
     'openai-completions': "OpenAI Chat Completions 兼容",
@@ -191,9 +190,9 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId }: {
         catch (e) {
             if (controller.signal.aborted || requestEpoch !== epoch.current)
                 return;
-            if (e instanceof ApiError && ['config_conflict','model_settings_conflict'].includes(e.code??'')) {
+            if (e instanceof ApiError && e.status === 409) {
                 setConflict(true);
-                setError(errorMessage(e));
+                setError(moteText("配置已被其他会话更新。请重新读取生效配置，再编辑并保存。"));
             }
             else
                 setError(errorMessage(e));

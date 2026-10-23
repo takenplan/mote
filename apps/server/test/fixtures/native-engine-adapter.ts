@@ -1,4 +1,4 @@
-import type {buildApp} from './legacy-app.js';
+import type {buildApp} from '../../src/app.js';
 import type {HindsightEngine} from '../../src/hindsight-engine.js';
 
 /** Replace plugin discovery/native transport only. Actual app admission,

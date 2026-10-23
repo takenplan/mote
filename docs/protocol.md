@@ -1,80 +1,178 @@
-# Mote Wire 2 与 Ingress 3
+# Mote protocol v1
 
-本文描述当前生产入口 `buildScopedApp` 的操作与数据合同。机器声明见 [contract.json](../protocol/contract.json)，握手与生成 fixture 见 [Wire compatibility](../protocol/README.md)。Central 使用 epoch 5，Desktop / Android 本机格式为 4，个人便携归档为 version 3；这些版本与产品版本、页面字段版本和备份 manifest 版本分别独立。旧 Wire 1、Ingress 2、owner token 和旧库不作为生产兼容入口，跨代处置见[更新说明](updating.md)。
+Current collectors send empty screenshot `ocrText` and `ocr.status=disabled`; local text review is not archived. Central OCR results are separate derived evidence. Retired client OCR backfill queues are not replayed. Batch/bundle capture transport is described in [upload protocol](android-power-optimization.md#同步协议), and binary files use the separate [file-sync protocol](files.md#协议与存储扩展).
 
-## 认证与连接
-
-`GET /api/health` 公开返回 `{ok,mode,protocol,storageEpoch,authentication,privateCapabilities}`，当前为 `multiuser-auth`、`{min:2,max:2}`、epoch 5 和 `username-password`，没有产品 `version` 字段。健康、能力列表和握手均不授予私人访问权限。
-
-账号使用用户名密码登录。原生/API 客户端发送 bearer 凭据与 `X-Mote-Protocol-Version: 2`；Web 使用服务端 HttpOnly 会话 cookie，并发送当前会话绑定和 CSRF 头。身份来自认证上下文，不能由请求中的 userId、路径或模型内容选择。公开登录、票据交换、邀请兑换和 PKCE poll/ACK 使用各自临时凭据合同，不能据此匿名访问私人 API。具体旅程见[账号与设备连接](connections.md)。
-
-`GET /api/connections/self` 返回 `{account,credential,protocol,capabilities}`，协议范围在顶层。客户端核对整数范围及重叠、准确部署/账号/设备和能力后使用连接，不把缺失信息当作旧服务器兼容。`archiveRead:false` 是此接口的能力投影，实际私人读取由账号会话和对应路由授权决定。
-
-设备邀请 v2 固定部署、账号、origin 和 `purpose:device`。设备凭据只允许自身 ingress、获准 Actions、self 与 logout，不能浏览私人归档、管理、签发其他凭据或批准登录。MCP 凭据另按只读或明确来源写入授权。实例管理员的管理权限不提供其他账号私人资料的选择器。
-
-默认监听 `127.0.0.1:47832`。远程部署使用 HTTPS，邀请只接受 HTTPS 或 loopback HTTP。手机上的 localhost 指手机自身。客户端不跟随重定向向另一 origin 传递凭据。
+All `/api/*` routes require authentication except public `/api/health`, the one-use invitation exchange `POST /api/connections/redeem`, and CORS OPTIONS requests. Bearer is the normal API credential; authorized file playback also supports a short-lived, file-scoped HttpOnly credential. `MOTE_TOKEN` remains the node owner credential. Clients pair using a QR/JSON invitation and receive a separate revocable owner credential. Native clients require that owner identity; the retired collector-to-owner alias is rejected. MCP credentials remain separate read or source-scoped write capabilities. See [connection protocol](connections.md) for the invitation, identity check, permission matrix and revocation behavior. Health contains no private data. Server default port is 47832, bound to 127.0.0.1. Remote clients require HTTPS; only loopback is allowed for HTTP invitations. `localhost` on a phone means the phone.
 
 ## Capture upload
 
-所有 `/api/ingress/*` 请求另外发送 `X-Mote-Ingress-Version: 3`。先注册当前账号设备与来源：
+`POST /api/captures` JSON (max 12 MiB). One event per sampled interval, including unchanged screens; server deduplicates image bytes separately, preserving observations. Retry with the SAME event id, timestamp, metadata, and image to guarantee idempotency. Delete local queued image only after 200/201 acknowledgement.
 
-| 操作 | 路由与正文 |
-| --- | --- |
-| 注册设备 | `POST /api/ingress/devices`：`{id,name,platform}` |
-| 设备状态 | `POST /api/ingress/devices/heartbeat`：heartbeatSchema 的实际设备状态 |
-| 注册来源 | `POST /api/ingress/sources`：sourceConnectionSchema 的稳定来源、设备、平台与保留方式 |
-| 更新来源 | `PATCH /api/ingress/sources/:id`；注册不能重新启用已暂停来源 |
-| 上传采集 | `POST /api/ingress/sources/:id/captures`：`{batchId,items:[CaptureInput,...],importDeclaration?}` |
-| 上传来源版本 | `POST /api/ingress/sources/:id/items`：`{batchId,items:[SourceItem,...],importDeclaration?}` |
-| 读取接收凭据 | `GET /api/ingress/sources/:id/receipts/:batchId` |
+```json
+{
+  "id": "uuid",
+  "deviceId": "stable-device-uuid",
+  "deviceName": "My Mac",
+  "platform": "macos",
+  "capturedAt": "2026-09-13T02:00:00.000Z",
+  "durationMs": 15000,
+  "appId": "com.example.app",
+  "appName": "Example",
+  "windowTitle": "Optional, omit under strict privacy",
+  "imageBase64": "base64 JPEG/PNG/WebP, no data URL prefix",
+  "imageMime": "image/jpeg",
+  "ocrText": "",
+  "ocr": {"status": "disabled"},
+  "source": "screen",
+  "privacy": { "excluded": false, "redacted": true, "mode": "local", "reason": "configured masks applied" }
+}
+```
 
-一次批次为 1–500 项，batchId 长度为 1–256。采集 JSON 请求体上限为 16 MiB。压缩发送仍使用同一 captures 路由，Content-Type 为 `application/x-ndjson+gzip`，`X-Mote-Batch-Id` 固定该批身份；不切换到旧 `/api/captures`、`/batch` 或 `/bundle`。解包和单项校验仍适用；413 可拆小批次，单条仍超限时保留失败记录。
+`platform`: `macos|windows|linux|android|import`. `source`: `screen|ui_page|activity|media|file|note|calendar|event|message|metric|memory`. `imageBase64` and `imageMime` optional together for text/file imports. `durationMs` integer 0..300000, measures observed sampling exposure, NOT guaranteed attention. Response: `{id, duplicate, blobHash, indexingStatus}`. Same id with different content returns 409. Excluded events must never be queued; server rejects `privacy.excluded=true`.
 
-采集对象继续使用[共享 CaptureInput schema](../packages/shared/src/index.ts)。来源、设备及 platform 必须与注册和凭据范围一致，采集不能伪造来源 provenance。同批身份和内容幂等返回原回执，同身份不同内容冲突。正文、UUID、观察时间和图片字节在重试中不变。暂停、撤权、墓碑和真实冲突分别处理，不以新 ID 绕过。
+Android field pages use the existing capture/batch transport and `metadata.uiPage.version=2`.
+Each immutable event contains one article/product object, exact source text and observation times;
+it must not contain an image, raw UI nodes or coordinates. `capturedAt` and `metadata.observedAt`
+equal `observations.lastAt`, duration is zero, and `ocrText` is the exact field-text projection.
+Articles require title/body; products require title; author and actually observed URL/item ID are
+optional. Reliable identity must equal that URL or ID. Central preserves originals and organizes
+these fields independently of lossy screenshot segments. See [field rules and full shape](ui-page-capture.md).
+Legacy v1 pages remain accepted. Upgrade Central before Android; rejected v2 events remain queued
+with their original IDs for retry, rather than being downgraded or acknowledged. Wire protocol v1,
+Ingress 2, ACK validation and storage epochs are unchanged. A sample may emit multiple product
+events and a separate measured activity event.
 
-接收凭据为 `{version:3,id,deploymentId,userId,sourceId,batchId,state:'received',captures:[...]}`，成员包含服务端确认的采集 ID、重复状态及存在时的原件引用。客户端验证准确部署/账号/来源/批次、成员身份和原件散列/大小后，才清理待传输入。HTTP 200 或任务状态不能代替校验。回执只证明接收，不证明 OCR、索引、Memory 或问答可用。
+Deleted event IDs have tombstones: later upload/import of that ID into the same vault returns 410 instead of resurrecting deleted private evidence. Restore a full backup into a fresh vault when intentional recovery is needed. Export limits account for repeated base64 image references, not only unique blob bytes.
 
-## Activity-only and metadata
+`POST /api/devices/heartbeat`: `{deviceId,deviceName,platform,status,queueDepth,lastCaptureAt?,error?,metadata?}`; status `capturing|paused|permission_required|error|offline`. Response `{ok:true}`. This route records status only and never starts capture.
 
-每次样本保留独立观察身份，图片按内容散列复用，同图不合并观察时间。`durationMs` 为 0–300000 的实测采样覆盖，不是持续注意力。每设备先去除重叠再计算应用活动，设备之间不合并为连续使用时长。
+## Activity-only and metadata (0.7.0)
 
-应用规则在本机解析为 `content`、`activity` 或 `off`。off 不创建记录，activity 不取得像素、窗口标题或正文。应用标识存在时应用名也必须存在；未知名称使用明确标签，不从正文猜测。活动不制造正文或 embedding 工作，媒体/通知的 activity 模式也不读取对应私有文本。
+Every record with a nonempty `appId` must also include a nonblank `appName` (maximum 200 characters), including screen, activity, notification and media records. Media sessions carry the same pair. Names are the platform-reported application labels at collection time, independent of the optional device metadata switch. If the platform cannot provide a label, collectors use the explicit `未知应用` label and preserve the identifier; they never infer a name from content. The server rejects missing/blank names. Already archived evidence is not rewritten. Records without an application, such as device state observations, remain unattributed.
 
-可选元数据采用严格的 [recordMetadataSchema](../packages/shared/src/metadata.ts)。元数据观察时间、capturedAt 和首次 receivedAt 分别保留，未知值不补零。文件来源可保留系统给出的创建、修改、访问及删除观察时间；已不可见不证明人为删除。同一不可变版本重试不能重新测量这些字段。
+App collection rules resolve locally to `content`, `activity`, or `off` from the current complete user-configured rule set. `off` creates no event. `activity` never acquires pixels, a window title or body. Example:
 
-当前截图发送空 `ocrText` 与 `ocr.status=disabled`，本机 OCR 仅服务隐私规则，不作为归档正文。中央 OCR、图片理解和索引是独立产物。Android 页面字段使用 `metadata.uiPage.version=2`，保存对象原文、可靠 URL/item ID、观察时段和 `visible_window` 覆盖，不上传 UI 节点、坐标或图片。Desktop 的 v1 页面形状是另一条当前字段合同，不等于支持 Wire 1。详见[页面采集](ui-page-capture.md)、[媒体上下文](media-context.md)和[通知/设备事件](android-system-events.md)。
+```json
+{
+  "id": "9782b311-b209-4ffa-a8a4-b417a2d70cb4",
+  "deviceId": "example-device", "deviceName": "My phone", "platform": "android",
+  "capturedAt": "2026-09-13T02:00:15.000Z", "durationMs": 15000,
+  "appId": "com.example.app", "appName": "Example", "source": "activity",
+  "privacy": {"excluded": false, "redacted": false, "mode": "none", "collection": "activity"},
+  "metadata": {
+    "version": 1, "observedAt": "2026-09-13T02:00:15.020Z",
+    "collector": {"version": "0.7.0", "method": "accessibility"},
+    "device": {"osVersion": "15", "timeZone": "Asia/Shanghai"},
+    "state": {"batteryPercent": 72, "charging": false, "networkType": "wifi"},
+    "capture": {"intervalMs": 15000}
+  }
+}
+```
+
+Activity requires a nonblank app identity, `privacy.collection=activity`, no image fields, and empty/omitted `ocrText` and `windowTitle`; mood, provenance and redaction claims are rejected. Its `metadata.capture` permits only `intervalMs`. Media observations may also use activity collection, which forbids media titles, artists, albums, subtitles and content identifiers. Other records cannot claim the activity collection mode. For current content inputs, optional collection and metadata fields follow their declared schemas; missing measurements are not fabricated.
+
+Optional capture/note/heartbeat metadata uses the bounded, strict `recordMetadataSchema` in `packages/shared/src/metadata.ts`. Version and `observedAt` are required if metadata is present; all collector/device/state/capture fields are optional. Unknown keys, identifiers such as serial number/SSID/location, invalid numbers and timestamps longer than 64 characters are rejected. `false` and zero are preserved; missing fields mean unavailable. A metadata observation time is distinct from `capturedAt` and server `receivedAt`.
+
+Source items and capture `provenance` accept `metadata: {version:1,file?:{sizeBytes?,createdAt?,accessedAt?,metadataChangedAt?,deletionObservedAt?},provider?:{createdAt?,updatedAt?}}`. File attributes belong only to file sources. `deletionObservedAt` requires a deleted revision. Existing `modifiedAt` stays at the source-item/provenance level. These stable attributes participate in immutable revision hashes and archive checksum validation. Retries must retain the same metadata; recomputing it under the same revision/event ID yields 409.
+
+Activity is stored without a fabricated text body or embedding task. `GET /api/captures`, model timeline/search/activity and MCP equivalents support exact `appId`, `source` and `collection`; keep filters fixed across pages. Activity totals return `captures` (all measured sample records), `contentCaptures`, `activityEvents`, plus the same counters per app/device. App groups include appId. Intervals are overlap-adjusted per device before applying app/collection filters, so filtered totals cannot reassign another application's duration.
+
+All record metadata survives capture export/import and incremental changes. Heartbeats remain the latest device report rather than a durable historical log in portable capture exports; full database backup also retains the device table. New wire fields require a 0.7.0 central node before clients start uploading them. See [privacy and metadata](privacy-and-metadata.md) for UI settings, filesystem semantics and limitations.
+
+## Media observations
+
+`source: "media"` stores standalone media-session observations without screenshots or OCR. `metadata.media` also attaches to other samples and device reports, with an independent optional `observedAt` for cached snapshots. Media intervals end at `capturedAt`, are bounded to 60000 ms, and count only one matching playing session. `/api/media-activity` and the read-only Agent/MCP media tools measure playback independently from foreground activity; unavailable observations never imply zero listening. See [media protocol, modes and accounting](media-context.md) for fields, privacy rules, queries and limitations.
 
 ## User notes / 随手记
 
-笔记以 `source:note`、时长 0、无图像、非空原文保存，正文最多 100000 字符；可选 mood 是用户提供的非空自由文本，最多 80 字符，不由模型或关键词推断。原生离线笔记使用来源绑定的采集通道，中央 Web 命令保存同类证据。笔记不需要屏幕权限。
+Notes are ordinary capture events with `source: "note"`. The author's original words are stored in `ocrText` without rewriting, trimming, summarization or inferred tags. An optional `mood` is a **user-supplied free-text label**, at most 80 characters and not blank. The program never infers mood from the text, application or keywords. A note must have nonblank text, `durationMs: 0`, and no image; notes do not count toward sampled screen time. Other sources cannot supply `mood`.
 
-提交前持久保存准确 UUID、时间和正文，丢 ACK 后重用原身份。主动再写相同正文可以有新 UUID。未同步草稿属于客户端，不因中央导出而自动备份；换号、换节点和存储失败不能把旧草稿或队列归给新账号。
+Native clients can use their existing durable capture queue and `POST /api/captures`:
 
-## 版本化外部来源
+```json
+{
+  "id": "6b0908c9-4558-4798-8e9c-3d8913d7443d",
+  "deviceId": "stable-device-uuid",
+  "deviceName": "My phone",
+  "platform": "android",
+  "capturedAt": "2026-09-13T02:00:00.000Z",
+  "durationMs": 0,
+  "source": "note",
+  "appId": "dev.mote.notes",
+  "appName": "随手记",
+  "windowTitle": "",
+  "ocrText": "今天想留给自己的原文。\n空格和换行原样保存。",
+  "mood": "松了一口气",
+  "privacy": { "excluded": false, "redacted": false, "mode": "none" }
+}
+```
 
-SourceItem 使用稳定 externalId、不可变 revision、原文、观察时间及已知元信息。中央维护头指针和历史，重试不覆盖内容。来源说明是用户控制的版本化上下文，不由标题、路径或第一人称推断身份，修改不补发历史付费处理授权。
+Use the above app identity/default fields when interoperating with the convenience endpoint. In TypeScript, `noteSchema` validates a convenience request and `noteCapture()` from `@mote/shared` creates the exact canonical capture payload. Omitting `mood` leaves it absent; it does not select a default emotion. Text is limited to 100,000 characters.
 
-文件原件使用同一个 Ingress 3 归属和确认边界：
+`POST /api/notes` accepts `{id,deviceId,deviceName,platform,capturedAt,text,mood?,metadata?}` and maps it to that same capture, using `text` as `ocrText`. Its response is the same `{id,duplicate,blobHash,indexingStatus}` acknowledgement as `/api/captures`, with 201 on first insert and 200 for an identical retry. API list/detail responses remain `CaptureRecord` objects, including `ocrText`, optional `mood`, `source`, `receivedAt` and indexing status, rather than introducing a second stored note shape.
 
-1. `GET /api/ingress/sources/:id/head?externalId=...` 读取前驱。
-2. `POST /api/ingress/sources/:id/uploads` 发送 `{batchId,revision:<FileRevision>}`，返回归属、upload id、4 MiB partBytes、已确认 parts 或最终 receipt。
-3. `PUT /api/ingress/uploads/:id/parts/:part` 发送 `{bytes:<base64>,checksum:<sha256>}`，沿原会话补缺失块。
-4. `POST /api/ingress/uploads/:id/commit` 发送 `{}`，复核完整原件后返回 Ingress 3 凭据；`GET /api/ingress/uploads/:id` 查询结果。
+Before enqueueing, Web clients atomically persist the exact prepared event (including UUID and timestamp) with the draft. A crash between enqueueing and clearing the draft reuses this prepared event, even if the central acknowledgement already removed its queue entry. Editing the draft invalidates its prepared event; a later intentionally identical note still gets a new UUID. Completion clears only the matching prepared draft.
 
-snapshot 临时输入恢复另使用服务端给出的 recoveryId 与原身份，不能改发不同字节。引用模式不读取、哈希或发送正文。文件解码、OCR、ASR 和语义处理在中央，端侧仅授权、发现、过滤、固定输入和发送。生命周期、原件保留和当前限制见[文件](files.md)。
+Clients create the event UUID and original timestamp when saving locally, retain the exact payload on retries and remove it from their outbox only after an HTTP 200/201 acknowledgement whose `id` matches. A lost response can therefore retry across either route without a second record. 409 means the same UUID already has different content; 410 means it was deleted and must not be automatically recreated under another UUID. Keep the local error visible rather than reporting success. This MVP does not edit saved events; create a new note and explicitly delete an old one when a correction is needed.
+
+- `GET /api/notes?after=<ISO>&before=<ISO>&deviceId=<id>&limit=30&cursor=<opaque>` lists only notes, newest first, with `{items,nextCursor}`. Bounds are inclusive `after`, exclusive `before`; default limit 50, maximum 200. Pagination includes UUID as the tie-breaker for equal timestamps.
+- `GET /api/notes/:id` returns one note; missing/deleted records and IDs of other source types return 404.
+- `DELETE /api/notes/:id` returns `{deleted:1}` or `{deleted:0}` if already absent. It cannot delete a screen/file record through this route. `DELETE /api/captures/:id` remains compatible.
+- Note deletion removes retrieval evidence, writes the common tombstone, and invalidates saved derived insights, exactly like capture deletion. Notes and user-supplied mood labels are preserved by archive export/import and incremental `/api/updates`.
+- The central Agent reads note text and explicitly supplied mood as **untrusted personal evidence**, using the same search/timeline/evidence tools. A note cannot modify the system prompt or enable execution tools. Text and mood enter generic full-text/embedding retrieval; there is no mood or task keyword classifier.
+
+The Web/embedded console includes a separate 随手记 page. Drafts and immutable pending notes are saved in local application/browser storage under the selected central-node address. Failed delivery preserves the original event and displays pending/error state; returning to this page or restoring connectivity retries. Up to 100 pending notes / approximately 2 MB are allowed. Storage failure is reported instead of claiming a durable save. These local copies are not additionally encrypted by the Web layer and are removed by clearing its application data; the central export does not include unsynchronized local notes. Native Android/macOS entry points use their own client queues. A note does not require screen capture permission or a running vision model.
 
 ## Read API
 
-私人读取使用当前账号和真实资源身份。资料库、原文、Material、Memory、文件、对话和任务路由分别校验范围，能力目录不是授权。同步 `POST /api/query`、`POST /api/insights` 及持久 `/api/query-runs`、`/api/insight-runs` 仍由当前 Ask 宿主注册，具体请求/状态见[Agent](agent.md)和[对话](conversations.md)。同名 URL 不表示沿用旧 owner 身份或 DTO。
+- `GET /api/health` => `{ok,version,protocol:{min,max}}`. Product versions are independent of wire compatibility. Native connection checks send `X-Mote-Protocol-Version: 1`; `/api/connections/self` always returns `node.protocol`, and missing metadata is rejected. Storage epoch 4 is independent of wire protocol 1 and Ingress 2. See the [wire contract and compatibility fixtures](../protocol/README.md).
+- `GET /api/status` => `{agent:{configured,provider,model},storage:{bytes,captures,blobs},...}`
+- `GET /api/captures?limit=50&before=<ISO>&after=<ISO>&deviceId=<id>&source=<type>&appId=<exact-id>&collection=<content|activity>` => `{items,nextCursor}`. Items include `id,deviceId,deviceName,platform,capturedAt,durationMs,appId,appName,windowTitle,ocrText,source,mood?,privacy,blobHash,indexingStatus,summary?`.
+- `GET /api/captures/:id/image` authenticated image bytes.
+- `GET /api/captures/:id` one complete evidence record; 404 if deleted or missing.
+- `GET /api/devices` => `{items}`
+- `GET /api/updates?cursor=0&limit=100` => `{items:[{seq,id,operation,changed_at,record}],nextCursor}`; arrival-ordered upsert/delete changes. `record` may be null when evidence was subsequently deleted.
+- `GET /api/activity?after=<ISO>&before=<ISO>` => `{apps:[{appName,durationMs,captures}],devices:[...],totalDurationMs,captures}`. Overlapping devices count separately; UI must label this as sampled device time.
+- `POST /api/query` `{question,after?,before?,deviceId?,timeZone?}` => `{answer,citations:[{id,capturedAt,appName,excerpt}],trace:[{tool,arguments,count}],runId}`. Unconfigured model responds 503; NEVER fabricate a keyword-based answer.
+- `POST /api/insights` `{after?,before?,deviceId?,timeZone?}` => same evidence-linked Agent query response for a retrospective.
+- `POST /api/index/retry` `{}` retries failed/pending records.
+- `GET /api/export` => complete portable JSON archive version 2, captures including base64 image, `receivedAt`, `blobHash` checksums. Secrets not included. Bounded by configured archive size; CLI backup is recommended for large vaults.
+- `POST /api/import` archive JSON => `{imported,duplicates}` with all entries validated before ingestion. Version 1 and incomplete archives are rejected before mutation.
+- `DELETE /api/captures/:id` deletes record and unreferenced image.
 
-`POST /api/ingress/devices/:id/reconcile` 正文为 `{ids:[...]}`，最多 100 个采集 UUID，返回 `{checkedAt,items:[{id,state:'present'|'unavailable'}]}`。它检查本账号、显式设备及获准来源的可见记录，设备凭据只查自身设备；结果不是上传 ACK，不改变本机清理期限。
+Data model is source-agnostic so NAS/files/hardware can implement the same ingestion protocol. No directory is watched without explicit configuration.
 
-模型检索和引用保持显式设备/时间范围、分页、准确版本和删除栅栏。原文、OCR、字段、附件与派生产物是不可信证据，不能指挥 Agent 或增加权限。原图披露另需获准，原件引用不表示模型已看原图。
+### Agent scope and source presentation
 
-## Screenshot albums
+Query `after` is inclusive and `before` exclusive. An explicit `deviceId` cannot be broadened by a model tool call. `timeZone` accepts a valid IANA zone and defaults to UTC; the embedded UI supplies the browser zone. Original timestamps remain UTC in storage. Agent evidence includes an explicit display timestamp with offset, the optional measured `durationMs`, explicit `sampleInterval` start/end for positive-duration samples, and paged `textRange` metadata. Timeline returns an opaque continuation and scoped `totalCount`; the model must inspect subsequent pages for a complete review. Current device heartbeat is a client report, not proof of historical recording coverage.
 
-Session 按同设备、同应用连续样本组织；超过五分钟间隙、切换应用或未知应用身份会分组，正好五分钟不分组。分组在分页前计算，稳定 ID 选择准确成员。App 相册使用固定十五分钟时钟桶。分组只说明观察范围，不推断主题、任务或持续阅读。
+Final answers must have a string body and declared retrieved citation IDs. Only successful tool responses authorize citations. Prose inline UUID citations must match the retrieved and declared IDs; code and authored Markdown links remain opaque. The UI presents verified inline sources as buttons opening the original record. Model-emitted literal JSON control characters are losslessly escaped; other malformed responses get at most one model-authored correction in the same read-only evidence session and original time budget. No semantic classifier or template fallback is used.
 
-列表先读有界元数据，图片及原文按需打开。中央读取绑定当前账号和设备/日期范围，本机与中央因保留不同可有不同分组。详情、图片及分页请求以当前[采集浏览路由](../apps/server/src/scope/capture-browser-routes.ts)为准，不开放旧全局 capture-gallery API。界面及索引责任见[相册](capture-albums.md)。
+`MOTE_MODEL_REASONING_EFFORT` is `auto|off|low|high|max` for HTTP providers (DeepSeek defaults to `high`, others to `auto`); Codex App Server also accepts `minimal|medium|xhigh|ultra` when the selected model lists them. `MOTE_MODEL_MAX_TOKENS` defaults to 65536 and is bounded to 1–128000. Codex manages its own output budget. See [model configuration](model-providers.md). Reasoning is performed by the configured model through the Harness; no reasoning transcript is exposed as a user-facing answer. [DeepSeek's official thinking-mode documentation](https://api-docs.deepseek.com/guides/thinking_mode/) describes the provider controls and multi-round tool support. Higher effort can increase latency and usage.
 
-本文整理没有重新运行协议、设备、模型或端到端测试。历史验收保留原冻结输入。
+## 版本化外部来源
+
+客户端文件、日历和外部 Agent 使用来源接口，不覆盖不可变截图或笔记。
+
+- `POST /api/sources`：注册 `{id,name,kind,deviceId,platform,retention,enabled}`。重复注册保持服务器已有的启停设置。
+- `PATCH /api/sources/:id`：所有者编辑名称、保存策略或启停状态。
+- `PUT /api/sources/:id/items`：提交 `externalId,revision,observedAt,title,text,kind,layer`，以及可选 `modifiedAt,uri,mimeType,calendar,deleted`。确认包含 `id,sourceId,externalId,revision,duplicate`，客户端必须逐一核对。
+- `GET /api/source-items`：当前版本，支持 `sourceId,deviceId,kind,after,before,limit,cursor,includeDeleted`。日历按计划时间重叠匹配；其他记录按观察时间。
+- `GET /api/sources/:id/history?externalId=...`：不可变版本历史。
+- `GET /api/memories`：默认概要。`/:id` 展开模型陈述，`/:id/evidence` 读取原始证据。`POST /extract` 显式调用模型；`POST /:id/publish` 确认候选，`DELETE /:id` 删除记忆。
+
+`calendar` 使用带时区的 `start/end`、`allDay`、`timeZone` 和 `status`。来源记录的 `durationMs` 固定为零，会议计划不能计入实际采样时长。正文可以为空；空文件不被改写成说明文本。`reference` 和删除版本只保存元数据，正文必须为空。
+
+相同版本重复提交安全；相同版本但内容不同返回冲突。离线客户端需持久化版本与请求正文，严格确认后再移除。参考实现使用内容与前一版本的哈希链，支持“修改→删除→恢复相同内容”，而旧重试不会移动当前指针。
+
+外部 Chatbot 接口另见 [MCP 与连接器](connectors.md)。内部查询 Agent 没有写入能力。
+
+### Screenshot albums
+
+`GET /api/capture-browser/sessions` accepts required ISO `after`/`before` (inclusive/exclusive, at most 32 days), optional `deviceId`, opaque `cursor`, and `limit` (1–60, default 20). It groups same-device, same-app consecutive screenshot samples; app switches, unknown identity or gaps greater than 300,000 ms split groups. Responses contain `items`, `totalCount`, `sessionCount`, `gapMs` and `nextCursor`. Session rows use the album row fields below, but `id` is the first capture ID and the range is the observed group range. Add `sessionId` to retrieve that group's exact image references with `totalCount` and `nextCursor`. Keep the original date/device scope unchanged when selecting a group or paging. The server groups before pagination and resolves membership by timestamp/ID order, including app switches at equal timestamps. Owner credentials authorize browsing; an optional device filter narrows the request.
+
+`GET /api/capture-browser/albums` and `GET /api/capture-browser/album-images` require ISO `after` (inclusive), `before` (exclusive), and accept `deviceId`, `limit` (1–60, default 20), and an opaque `cursor`. Grid requests also require exact `appId`, including an empty string for system/unknown apps. Keep the range and device/app filters unchanged across pages. Owner requests may specify a device.
+
+Albums group screenshots into fixed 15-minute UTC clock buckets per device and app. These are browsing buckets, not inferred activities, sessions or tasks. Album rows return `id`, `deviceId`, `appId`, `appName`, `firstAt`, `capturedAt`, bucket `after`/`before`, `count` and `imageCount`. The response includes `totalCount`, `albumCount`, and `nextCursor`. Albums use bucket/device/app keyset pagination; images use capture-time/ID keyset pagination, so new captures do not shift already-read pages.
+
+Grid rows contain only `id`, `deviceId`, `source`, `capturedAt`, `appId`, `appName`, and `hasImage`, plus response `totalCount` and `nextCursor`. Neither endpoint returns OCR, raw metadata or image bytes. SQLite maintains a separate `capture_gallery` projection on capture insertion and cascades deletion with its parent capture; epoch 4 creates the complete schema without historical backfill. The existing detail/image routes remain available. Image authorization reads only ownership and blob reference, without loading full evidence JSON.

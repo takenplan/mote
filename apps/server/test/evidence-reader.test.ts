@@ -10,7 +10,7 @@ import {randomUUID} from 'node:crypto';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type {ContextReader} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {parseEvidenceRef} from '../src/evidence-reader.js';
 const token='generated-context-owner-token-123456789',readToken='generated-context-mcp-token-123456789';

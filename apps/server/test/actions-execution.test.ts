@@ -37,7 +37,7 @@ test('legacy action receipts migrate without replay and settings changes cannot 
 });
 
 test('application action analysis usage and semantic children resolve to the admitted parent operation',async t=>{
- const {buildApp}=await import('./fixtures/legacy-app.js'),directory=mkdtempSync(join(tmpdir(),'mote-action-operation-api-'));let node:Awaited<ReturnType<typeof buildApp>>;
+ const {buildApp}=await import('../src/app.js'),directory=mkdtempSync(join(tmpdir(),'mote-action-operation-api-'));let node:Awaited<ReturnType<typeof buildApp>>;
  node=await buildApp({dataDir:directory,token:'generated-owner',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture-model',modelBaseUrl:'https://synthetic.invalid',apiKey:'generated',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{agent:{configured:true,close:async()=>{},query:async input=>{
   if(node.executor.get(input.traceContext!.jobId!)?.kind==='context-dag.semantic'){const id=input.evidenceIds![0];return {...empty(),answer:JSON.stringify({summary:'Generated appointment',evidence:[{id,quote:text}],events:[],memoryCandidates:[],actionCues:[{kind:'calendar.create',event,uncertainty:'proposed',evidence:[{id,quote:text}]}]}),citations:[{id,capturedAt:'2026-01-01T00:00:00Z',appName:'Generated',excerpt:text}]};}
   assert.equal(input.skill,'calendar-extraction');assert.equal(node.executor.get('actions:'+input.traceContext!.jobId)?.operationId,input.traceContext!.operationId);return answer(input.evidenceIds![0]);

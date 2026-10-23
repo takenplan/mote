@@ -1,18 +1,15 @@
-import {ProviderAuthorization} from './ProviderAuthorization';
 import {useResource} from './useResource';
 import {readResource,resources} from './resource-cache';
 import {ApiError} from './api';
-import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {CheckCircle2,Link2,RefreshCw} from 'lucide-react';
+import React,{useEffect,useRef,useState} from 'react';
+import {CheckCircle2,ExternalLink,Link2,RefreshCw} from 'lucide-react';
 import type {LarkStatus,LarkSelection,LarkCalendar,LarkJob,SourceConnection} from '@mote/shared';
 import {type Api,errorMessage} from './api';
 import {moteText} from '@mote/shared/i18n';
 import {SourceContextEditor} from './SourceContextEditor';
-import {ScopedConnectorSettings} from './ScopedConnectorSettings';
-import {scopedLarkApi} from './scoped-lark-api';
 
 const errors:Record<string,string>={
- lark_cli_missing:'缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。',
+ lark_cli_missing:'服务端尚未安装 Lark CLI。请点击安装，然后重新检测。',
  lark_not_configured:'尚未配置飞书应用。请创建应用或填写已有应用凭据。',
  lark_not_connected:'尚未连接飞书账号，请完成只读授权。',
  lark_permission_required:'读取权限未完整授予。请在飞书应用后台开通下方只读权限，然后重新授权。',
@@ -43,32 +40,17 @@ const hasDocumentScope=(selection:LarkSelection)=>Boolean(selection.documents.le
 const hasScope=(selection:LarkSelection)=>Boolean(hasDocumentScope(selection)||selection.calendarIds.length);
 const activeJob=(job?:LarkJob)=>Boolean(job&&['running','waiting'].includes(job.state));
 export function LarkJobStatus({job}:{job:LarkJob}){
+ const [qr,setQr]=useState(''),[qrError,setQrError]=useState(false),[copyState,setCopyState]=useState('');
+ useEffect(()=>{let disposed=false;setQr('');setQrError(false);setCopyState('');if(job.authorizationUrl)void import('qrcode').then(({default:QRCode})=>QRCode.toDataURL(job.authorizationUrl!,{width:220,margin:2})).then(v=>{if(!disposed)setQr(v);}).catch(()=>{if(!disposed)setQrError(true);});return()=>{disposed=true;};},[job.authorizationUrl]);
  const name={install:moteText('安装 CLI'),setup:moteText('配置应用'),configure:moteText('保存应用'),login:moteText('账号授权'),selection:moteText('保存范围'),preview:moteText('预览文档范围'),sync:moteText('同步资料')}[job.kind];
  return <div className="lark-job" aria-live="polite">
   <strong>{name} · {job.state==='waiting'?moteText('等待扫码或网页授权'):job.state==='running'?moteText('正在处理…'):job.state==='completed'?moteText('已完成'):job.state==='cancelled'?moteText('已取消'):moteText('未完成')}</strong>
   {job.error&&<p role="alert">{larkError(job.error)}</p>}
   {job.result&&<>{job.kind==='preview'?<p>{moteText('发现 {0} 篇文档，尚未读取正文。',job.result.discovered??0)}</p>:<p>{moteText('新增 {0} 条，已有 {1} 条。',job.result.imported,job.result.duplicates)}</p>}{job.result.activities!==undefined&&<p>{moteText('保存 {0} 条文档活动线索。',job.result.activities)}</p>}{!!job.result.documentFailures&&<p>{moteText('{0} 篇文档读取失败，成功资料已保留；可在下方逐篇重试。',job.result.documentFailures)}</p>}</>}
-  {job.authorizationUrl&&<ProviderAuthorization url={job.authorizationUrl} expiresAt={job.expiresAt}/>}
+  {job.authorizationUrl&&<div className="lark-authorization"><p>{moteText('在你的手机或当前浏览器完成授权，页面会自动更新。')}</p><a className="button" href={job.authorizationUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{moteText('打开飞书授权页面')}<ExternalLink size={15}/></a><button className="button subtle" onClick={async()=>{try{await navigator.clipboard.writeText(job.authorizationUrl!);setCopyState(moteText('授权链接已复制。'));}catch{setCopyState(moteText('复制失败，请使用二维码或授权链接。'));}}}>{moteText('复制授权链接')}</button><p className="fine-print">{copyState||moteText('如果无法打开，可复制链接到浏览器，或扫码。')}</p>{qr&&<img src={qr} alt={moteText('飞书授权二维码')} width={220} height={220}/>} {qrError&&<p>{moteText('二维码生成失败，请使用上方授权链接。')}</p>}{job.expiresAt&&<p className="fine-print">{moteText('链接有效至')} {new Date(job.expiresAt).toLocaleTimeString()}</p>}</div>}
  </div>;
 }
-export function LarkSettings(props:{api:Api;onSources:()=>void}){
- return props.api.connection?.mode==='web'?<OwnedLarkSettings key={JSON.stringify(props.api.connection)} {...props}/>:<LarkSettingsContent {...props}/>;
-}
-function OwnedLarkSettings({api,onSources}:{api:Api;onSources:()=>void}){
- const inventory=useResource<{revision:number;connections:{id:string;provider:string;generation:number}[]}>(api,'/api/connectors'),plugins=useResource<{revision:number;instances:{id:string;desired:boolean}[]}>(api,'/api/plugins');
- const [selected,setSelected]=useState(''),[editor,setEditor]=useState<'new'|{id:string}>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),alive=useRef(true),running=useRef(false);
- useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[api]);
- const connection=inventory.data?.connections.find(c=>c.provider==='lark'&&c.id===selected),plugin=plugins.data?.instances.find(p=>p.id==='connector.'+selected);
- async function lifecycle(action:'enable'|'pause'|'stop'){
-  if(!alive.current||running.current||!plugins.data||!connection)return;running.current=true;setBusy(true);setError('');try{await api.request('/api/connectors/'+encodeURIComponent(connection.id)+'/'+action,{method:'POST',body:JSON.stringify({expectedRevision:plugins.data.revision})});if(!alive.current)return;resources(api).invalidate(key=>key==='/api/plugins'||key==='/api/connectors');}catch(error){if(alive.current)setError(errorMessage(error));}finally{if(alive.current){running.current=false;setBusy(false);}}
- }
- return <><div className="source-toolbar"><label>{moteText('连接 ID')}<select aria-label={moteText('连接 ID')} value={selected} onChange={event=>{setSelected(event.target.value);setEditor(undefined);setError('');}}><option value="">{moteText('选择连接')}</option>{inventory.data?.connections.filter(c=>c.provider==='lark').map(c=><option key={c.id} value={c.id}>{c.id}</option>)}</select></label><button className="button" disabled={!inventory.data||!!editor} onClick={()=>setEditor('new')}>{moteText('新建连接')}</button></div>
- {(error||inventory.error||plugins.error)&&<p role="alert">{error||errorMessage(inventory.error??plugins.error)}</p>}
- {editor?<ScopedConnectorSettings key={editor==='new'?'new':editor.id} api={api} provider="lark" id={editor==='new'?undefined:editor.id} onSaved={id=>{setSelected(id);setEditor(undefined);inventory.refresh();plugins.refresh();}} onCancel={()=>setEditor(undefined)}/>:connection&&<><div className="source-toolbar"><button className="button" disabled={busy} onClick={()=>setEditor({id:connection.id})}>{moteText('编辑连接')}</button>{plugin&&<><button className="button" disabled={busy} onClick={()=>void lifecycle(plugin.desired?'pause':'enable')}>{plugin.desired?moteText('暂停'):moteText('启用')}</button><button className="button" disabled={busy} onClick={()=>void lifecycle('stop')}>{moteText('停止')}</button></>}</div>{plugin?.desired&&<OwnedLarkConnection key={connection.id+':'+connection.generation} api={api} id={connection.id} onSources={onSources}/>}</>}
- </>;
-}
-function OwnedLarkConnection({api,id,onSources}:{api:Api;id:string;onSources:()=>void}){const adapter=useMemo(()=>scopedLarkApi(api,id),[api,id]);return <LarkSettingsContent api={adapter} onSources={onSources} owned/>;}
-function LarkSettingsContent({api,onSources,owned=false}:{api:Api;onSources:()=>void;owned?:boolean}){
+export function LarkSettings({api,onSources}:{api:Api;onSources:()=>void}){
  const [status,setStatus]=useState<LarkStatus>(),[selection,setSelection]=useState<LarkSelection>(emptySelection),[documents,setDocuments]=useState(''),[folders,setFolders]=useState(''),[wikiRoots,setWikiRoots]=useState(''),[excludedDocuments,setExcludedDocuments]=useState(''),[calendars,setCalendars]=useState<LarkCalendar[]>([]),[calendarLoaded,setCalendarLoaded]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[appId,setAppId]=useState(''),[secret,setSecret]=useState(''),[brand,setBrand]=useState<'feishu'|'lark'>('feishu'),[disconnecting,setDisconnecting]=useState(false);
  const alive=useRef(true),dirty=useRef(false),wasConnected=useRef(false);
@@ -98,12 +80,12 @@ function LarkSettingsContent({api,onSources,owned=false}:{api:Api;onSources:()=>
   {Boolean(error||read.error)&&<div className="notice error" role="alert">{error||requestError(read.error)}<button className="button subtle" disabled={running} onClick={()=>void perform(async()=>accept(await request<LarkStatus>('/api/connectors/lark/check',{method:'POST'})))}>{moteText('重试')}</button></div>}{notice&&<p role="status" className="notice">{notice}</p>}
   {!status&&<p role="status">{moteText('正在检测服务端环境…')}</p>}
   {status&&<>
-   <section className="panel lark-step"><div className="section-heading"><h2>1 · {moteText('服务端环境')}</h2><span className={`badge ${status.installed?'green':'muted'}`}>{status.installed?`Lark CLI ${status.version??''}`:moteText('未安装')}</span></div><p>{moteText('CLI 由当前中央部署准备，账号凭据仅保存在当前连接的隔离目录。')}</p>{owned&&<p>{moteText('缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。')}</p>}<div className="lark-buttons"><button className="button subtle" disabled={running} onClick={()=>command('check')}><RefreshCw size={15}/>{moteText('重新检测')}</button></div></section>
+   <section className="panel lark-step"><div className="section-heading"><h2>1 · {moteText('服务端环境')}</h2><span className={`badge ${status.installed?'green':'muted'}`}>{status.installed?`Lark CLI ${status.version??''}`:moteText('未安装')}</span></div><p>{moteText('复用服务端已安装的 CLI；如未安装，可安装到 Mote 专用目录，无需修改全局软件。')}</p><div className="lark-buttons"><button className="button subtle" disabled={running} onClick={()=>command('check')}><RefreshCw size={15}/>{moteText('重新检测')}</button><button className="button subtle" disabled={running} onClick={()=>command('install')}>{status.installed?moteText('安装兼容版本到专用目录'):moteText('安装 Lark CLI')}</button></div></section>
    <section className="panel lark-step"><div className="section-heading"><h2>2 · {moteText('连接飞书账号')}</h2><span className={`badge ${status.connected?'green':'muted'}`}>{status.connected?moteText('已连接'):status.configured?moteText('应用已配置'):moteText('待配置应用')}</span></div>
     {status.accountName&&<p><CheckCircle2 size={15}/> {status.accountName}</p>}
     <p>{moteText('Mote 使用独立的 CLI 配置。首次使用先创建应用，也可以填写已有应用的 App ID 和 App Secret。')}</p>
     <div className="lark-buttons"><button className="button subtle" disabled={running||!status.installed||status.configured} onClick={()=>command('setup')}>{moteText('创建飞书应用')}</button><button className="button primary" disabled={running||!status.configured} onClick={()=>command('login')}>{status.connected?moteText('重新授权 / 更换账号'):moteText('扫码登录并授权只读权限')}</button></div>
-    <details className="lark-manual"><summary>{moteText('使用已有应用')}</summary><p>{moteText('凭据仅发往当前中央节点，并通过标准输入写入此连接的隔离配置。')}</p><form onSubmit={e=>{e.preventDefault();const value=secret;setSecret('');void perform(async()=>{await request('/api/connectors/lark/configure',{method:'POST',body:JSON.stringify({appId,secret:value,brand})});accept(await request<LarkStatus>('/api/connectors/lark'));});}}><label>App ID<input value={appId} required pattern="cli_[A-Za-z0-9]+" disabled={running} onChange={e=>setAppId(e.target.value)}/></label><label>App Secret<input type="password" autoComplete="new-password" value={secret} required disabled={running} onChange={e=>setSecret(e.target.value)}/></label><label>{moteText('服务区域')}<select value={brand} disabled={running} onChange={e=>setBrand(e.target.value as 'feishu'|'lark')}><option value="feishu">{moteText('飞书（中国）')}</option><option value="lark">Lark</option></select></label><button className="button primary" disabled={running||!appId||!secret} type="submit">{moteText('保存应用配置')}</button></form></details>
+    <details className="lark-manual"><summary>{moteText('使用已有应用')}</summary><p>{moteText('凭据仅发往当前中央节点。建议使用专用飞书应用；同一系统账号下，CLI 钥匙串可能与其他配置共享同一应用的凭据。')}</p><form onSubmit={e=>{e.preventDefault();const value=secret;setSecret('');void perform(async()=>{await request('/api/connectors/lark/configure',{method:'POST',body:JSON.stringify({appId,secret:value,brand})});accept(await request<LarkStatus>('/api/connectors/lark'));});}}><label>App ID<input value={appId} required pattern="cli_[A-Za-z0-9]+" disabled={running} onChange={e=>setAppId(e.target.value)}/></label><label>App Secret<input type="password" autoComplete="new-password" value={secret} required disabled={running} onChange={e=>setSecret(e.target.value)}/></label><label>{moteText('服务区域')}<select value={brand} disabled={running} onChange={e=>setBrand(e.target.value as 'feishu'|'lark')}><option value="feishu">{moteText('飞书（中国）')}</option><option value="lark">Lark</option></select></label><button className="button primary" disabled={running||!appId||!secret} type="submit">{moteText('保存应用配置')}</button></form></details>
     <details><summary>{moteText('所需只读权限与授权帮助')}</summary><p>{moteText('文档搜索、文档读取与知识库读取；选择文件夹或日历时再增加对应只读权限。保存新增范围后，如有缺失权限，请重新授权。')}</p><code>search:docs:read<br/>docx:document:readonly<br/>wiki:wiki:readonly<br/>space:document:retrieve<br/>calendar:calendar:readonly</code><p><a href={brand==='lark'?'https://open.larksuite.com/app':'https://open.feishu.cn/app'} target="_blank" rel="noopener noreferrer">{moteText('打开飞书应用后台')}</a></p></details>
     {status.missingScopes.length>0&&status.configured&&<p className="fine-print">{moteText('尚未授予：')}{status.missingScopes.join('、')}</p>}
     {status.job&&<LarkJobStatus job={status.job}/>}{activeJob(status.job)&&<button className="button subtle" disabled={busy} onClick={()=>command('cancel')}>{moteText('取消当前操作')}</button>}

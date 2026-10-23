@@ -4,7 +4,7 @@ import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
 import {createWorkActivityUi} from './work-activity-ui';
 import {nativeStatusSummary} from './native-status';
-import { renderAskTurn } from './ask-presentation';
+import { renderAskAnswer, renderAskCitation } from './ask-presentation';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {builtinUiRules} from '@mote/shared';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
@@ -79,7 +79,6 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   window.scrollTo({ top: pageScroll.get(page) || 0, behavior: 'instant' });
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
   if (page === 'ask') void refreshAsk();
-  if (page === 'connection') void refreshPendingConnection();
   if (page === 'permissions') void refreshPermissions();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records') { void loadRecords(); void refreshContent(); }
@@ -335,7 +334,6 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
-let pendingConnectionRevision=0;
 function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
@@ -349,7 +347,6 @@ function render(status: import('./contracts').Status): void {
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status; renderStorage();
-  if(currentPage==='connection')void refreshPendingConnection();
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -387,7 +384,7 @@ function render(status: import('./contracts').Status): void {
   setText('central-status-message', centralMessage);
   setText('central-status-origin', hasCentralConnection ? `${status.config.deviceName} · ${status.config.serverUrl}` : moteText("连接后，采集记录会按同步设置发送"));
   setText('central-status-action', hasCentralConnection ? moteText("连接详情") : moteText("连接节点"));
-  byId('settings-connection-summary').textContent = status.config.tokenConfigured ? moteText("{0} · 已保存连接", status.config.account?.username??status.config.deviceName) : moteText("连接你的中央节点，让记录开始同步");
+  byId('settings-connection-summary').textContent = status.config.tokenConfigured ? moteText("{0} · 已保存连接", status.config.deviceName) : moteText("连接你的中央节点，让记录开始同步");
   byId<HTMLInputElement>('login').disabled = status.environment?.defaultProfile === false;
   byId('login-hint').textContent = status.environment?.defaultProfile === false ? moteText("命名环境使用带 --profile 的启动命令；不会注册可能丢失环境参数的系统登录项。") : moteText("应用启动后保持停止状态，需手动开始采集；已有记录按上传策略处理。");
   setText('message', status.message);
@@ -408,7 +405,7 @@ function render(status: import('./contracts').Status): void {
   byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即上传");
   fields.disabled = busy;
   byId<HTMLInputElement>('device-name').disabled = busy;
-  for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test','connection-recover']) byId<HTMLButtonElement>(id).disabled = busy;
+  for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test']) byId<HTMLButtonElement>(id).disabled = busy;
   byId<HTMLButtonElement>('connection-cancel').disabled = busy;
   byId<HTMLTextAreaElement>('connection-input').disabled = busy;
   byId<HTMLInputElement>('connection-confirm-origin').disabled = busy;
@@ -428,9 +425,7 @@ function render(status: import('./contracts').Status): void {
   if (status.lastUploadError) uploadInfo.push(status.lastUploadError);
   if (status.lastUploadAt) uploadInfo.push(moteText("最近上传 {0}", new Date(status.lastUploadAt).toLocaleTimeString(getLocale(), { hour12: false })));
   setText('upload-info', uploadInfo.join(' · '));
-  byId('token-hint').textContent = status.credentialStorage === 'json'
-    ? moteText("开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。")
-    : status.encryptedTokenStorage ? moteText("使用系统密钥存储加密；不会展示已有令牌。") : moteText("系统加密存储不可用，无法保存令牌。");
+  if (!status.encryptedTokenStorage) byId('token-hint').textContent = moteText("系统加密存储不可用，无法保存令牌。");
 
   if (status.diagnostics) {
     const d = status.diagnostics, latest = d.latest;
@@ -723,10 +718,10 @@ async function refreshSources(): Promise<void> {
 }
 async function sourceAction(action: () => Promise<void>): Promise<void> {
   if (sourceBusy) return; sourceBusy = true; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
-  for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'calendar-actions-connect', 'calendar-actions-review', 'calendar-actions-deliver', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
+  for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
   try { await action(); byId('source-feedback').textContent = moteText("已处理，下面显示各来源的当前同步状态。"); }
   catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
-  finally { sourceBusy = false; for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'calendar-actions-connect', 'calendar-actions-review', 'calendar-actions-deliver', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
+  finally { sourceBusy = false; for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
 }
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
@@ -744,9 +739,6 @@ byId('source-agent-discover').addEventListener('click', () => void sourceAction(
   if (!select.options.length) throw new Error(moteText("本机默认目录中尚未发现受支持的 Agent 会话"));
 }));
 byId('source-agent-add').addEventListener('click', () => void sourceAction(() => desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider, sourceOptions())));
-byId('calendar-actions-connect').addEventListener('click',()=>void sourceAction(async()=>{await desktopApi.connectCalendarActions();}));
-byId('calendar-actions-deliver').addEventListener('click',()=>void sourceAction(()=>desktopApi.deliverCalendarActions()));
-byId('calendar-actions-review').addEventListener('click',()=>void sourceAction(()=>desktopApi.openCentral('actions')));
 byId('source-calendar-add').addEventListener('click', () => void sourceAction(async () => { await desktopApi.addCalendarSource(readInput('source-calendar-choice'), sourceOptions()); }));
 byId('source-sync').addEventListener('click', () => void sourceAction(() => desktopApi.syncSources()));
 byId('source-calendar-permissions').addEventListener('click', () => void sourceAction(() => desktopApi.openCalendarPermissions()));
@@ -764,7 +756,7 @@ function renderUpdate(value: import('./updater').UpdateStatus): void {
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
   byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
   byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
-  byId('update-notes').textContent=value.manualDownload?moteText('查看 Dev 构建产物'):moteText('查看版本说明与安装包');
+  byId('update-notes').textContent=value.manualDownload?moteText('下载 DEV 安装包'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;
   byId('update-message').textContent = value.message; byId('update-install-reason').textContent = value.installReason;
@@ -808,13 +800,13 @@ setInterval(() => {
 
 function renderConnection(value: import('./connection').ConnectionStatus): void {
   byId('connection-state').textContent = value.message + (value.checkedAt ? ' · ' + new Date(value.checkedAt).toLocaleTimeString(getLocale()) : '');
-  byId('connection-capabilities').textContent = value.identity ? `${value.identity.account.username} · ${value.identity.account.userId} · ${value.identity.account.deploymentId}` : currentStatus?.config.account?.username ?? '';
+  byId('connection-capabilities').textContent = value.identity ? moteText("权限：{0} · 中央 {1} · 环境 {2}", moteText("管理员"), value.identity.node.version, value.identity.node.profile) : currentStatus?.config.credentialScope === 'owner' ? moteText("登录凭据已安全保存，所有中央功能共用此登录。") : '';
 }
 function clearConnectionPreview(): void { connectionPreview = undefined; byId('connection-confirmation').hidden = true; byId<HTMLInputElement>('connection-confirm-origin').checked = false; }
 function showConnectionPreview(value: import('./connection').ConnectionPreview): void {
   connectionPreview = value; byId<HTMLTextAreaElement>('connection-input').value = ''; byId<HTMLInputElement>('connection-confirm-origin').checked = false;
-  byId('connection-origin').textContent = value.serverUrl+' · '+value.userId+' · '+value.deploymentId; byId('connection-expiry').textContent = moteText("邀请到期：") + new Date(value.expiresAt).toLocaleString(getLocale());
-  byId('connection-resume').textContent = moteText('连接按中央实例和账号归属。同一账号重新授权会保留原队列；切换账号或实例会停止采集，旧队列保留在原账号，不会改投新账号。');
+  byId('connection-origin').textContent = value.serverUrl; byId('connection-expiry').textContent = moteText("邀请到期：") + new Date(value.expiresAt).toLocaleString(getLocale());
+  byId('connection-resume').textContent = value.serverUrl === currentStatus?.config.serverUrl ? moteText("同一节点重新授权后，现有待传截图、随手记和来源版本将继续发往此地址。节点身份以此地址和 HTTPS 证书为准；请确认它仍由你控制。") : moteText("更换节点时，本机必须没有待传截图、随手记或来源版本；设备 ID、隐私设置和本地模型将保留。");
   byId('connection-confirmation').hidden = false; byId<HTMLButtonElement>('connection-connect').disabled = true;
 }
 byId('connection-input').addEventListener('input', () => { clearConnectionPreview(); void desktopApi.cancelConnection(); });
@@ -838,24 +830,12 @@ byId('connection-connect').addEventListener('click', () => void perform(async ()
   settingsApplying = true; wasRunningBeforeSave = currentStatus.running; render(currentStatus);
   let status: import('./contracts').Status;
   try { status = await desktopApi.confirmConnection(connectionPreview.id, connectionPreview.serverUrl, readInput('device-name')); }
-  finally { settingsApplying = false; wasRunningBeforeSave = false; void refreshPendingConnection(); }
+  finally { settingsApplying = false; wasRunningBeforeSave = false; }
   clearConnectionPreview();
   // Invitation confirmation replaces the connection page draft with the committed config.
   render(status); fillConfig(status.config);
   renderConnection(await desktopApi.connectionStatus()); feedback(moteText("连接已安全保存；原设备 ID、隐私设置和本地模型保留。"), true);
 }));
-async function refreshPendingConnection():Promise<void>{
-  const request=++pendingConnectionRevision,revision=pageRevision,generation=currentStatus?.authorizationGeneration;
-  const current=()=>request===pendingConnectionRevision&&revision===pageRevision&&generation===currentStatus?.authorizationGeneration;
-  try{const pending=await desktopApi.pendingConnection();if(!current())return;const button=byId<HTMLButtonElement>('connection-recover');button.hidden=!pending;button.title=pending?pending.serverUrl+' · '+pending.userId+' · '+pending.deploymentId:'';}
-  catch{if(current())byId('connection-recover').hidden=true;}
-}
-byId('connection-recover').addEventListener('click',()=>void perform(async()=>{
-  settingsApplying=true;
-  try{const status=await desktopApi.resumeConnection();clearConnectionPreview();render(status);fillConfig(status.config);}
-  finally{settingsApplying=false;void refreshPendingConnection();}
-}));
-void refreshPendingConnection();
 byId('connection-test').addEventListener('click', () => void perform(async () => renderConnection(await desktopApi.testConnection())));
 void desktopApi.connectionStatus().then(renderConnection).catch(() => {});
 
@@ -1133,10 +1113,14 @@ function askControls(): void {
 function renderAsk(): void {
   const messages = byId('ask-messages'); messages.replaceChildren();
   for (const turn of askConversation?.turns ?? []) {
-    const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', 'context:'+id));
-    messages.append(renderAskTurn(document, turn, openEvidence));
+    const article = document.createElement('article'), question = document.createElement('h3');
+    question.textContent = turn.question;
+    const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', id));
+    article.append(question, renderAskAnswer(document, turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'), turn.result?.citations ?? [], openEvidence));
+    for (const citation of turn.result?.citations ?? []) article.append(renderAskCitation(document, citation, openEvidence));
+    messages.append(article);
   }
-  if (askConversation?.turns.some(turn => !turn.evidenceDeleted && turn.result?.citations?.length)) {
+  if (askConversation?.turns.some(turn => turn.result?.citations?.length)) {
     const hint = document.createElement('p'); hint.className = 'helper';
     hint.textContent = moteText('中央仓库将在浏览器中打开，并接续客户端的登录。');
     messages.append(hint);
@@ -1219,6 +1203,6 @@ byId('ask-refresh').addEventListener('click', () => void refreshAsk());
 byId('ask-more').addEventListener('click', () => void askAction(() => askHistory(true)));
 byId('ask-stop').addEventListener('click', () => void askAction(async () => { if (askRun) { askRun = await askCall('cancel', {id: askRun.id}); renderAsk(); scheduleAskPoll(); } }));
 byId('ask-new').addEventListener('click', () => { if (askBusy || askRun?.status === 'running') return; askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; renderAsk(); });
-byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'),username=readInput('ask-username'),password=readInput('ask-password'); byId<HTMLInputElement>('ask-token').value = '';byId<HTMLInputElement>('ask-password').value=''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {...(username?{username,password}:{token}),durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; renderAsk(); await askHistory(); }); });
+byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; renderAsk(); await askHistory(); }); });
 byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
 byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); renderAsk(); }));

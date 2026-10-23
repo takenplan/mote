@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout} from 'node:timers/promises';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {SourceStore} from '../src/sources.js';
 import type {Config} from '../src/config.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';

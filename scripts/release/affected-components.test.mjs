@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { affectedChecks, affectedComponents, workspaceGraph } from './affected-components.mjs';
+import { affectedComponents, workspaceGraph } from './affected-components.mjs';
 
 const graph = [
   { name: '@mote/server', path: 'apps/server', dependencies: ['@mote/agent', '@mote/shared'] },
   { name: '@mote/web', path: 'apps/web', dependencies: ['@mote/shared'] },
   { name: '@mote/desktop', path: 'apps/desktop', dependencies: ['@mote/diagnostics', '@mote/shared'] },
-  { name: '@mote/diagnostics', path: 'packages/diagnostics', dependencies: ['@mote/shared'] },
+  { name: '@mote/diagnostics', path: 'packages/diagnostics', dependencies: [] },
   { name: '@mote/agent', path: 'packages/agent', dependencies: ['@mote/shared'] },
   { name: '@mote/shared', path: 'packages/shared', dependencies: [] },
 ];
@@ -52,174 +52,9 @@ test('component release workflows check only their platform and release tools', 
   assert.deepEqual(groups(changed('.github/workflows/release-android.yml', 'apps/web/src/App.tsx')), ['central', 'android']);
 });
 test('check-selection infrastructure runs its own regressions without app builds', () => {
-  for (const name of ['affected-components', 'check-affected', 'check-plan', 'check-driver', 'check-environment', 'check-inputs']) for (const suffix of ['.mjs', '.test.mjs']) {
+  for (const name of ['affected-components', 'check-affected']) for (const suffix of ['.mjs', '.test.mjs']) {
     const result = changed(`scripts/release/${name}${suffix}`);
     assert.deepEqual(groups(result), []);
     assert.equal(result.tooling, true);
   }
-});
-
-const checks = (...paths) => affectedChecks(paths, graph);
-const allWorkspaces = graph.map(workspace => workspace.name).sort();
-
-const backupInputs = ['scripts/backup.ts', 'scripts/scoped-backup-schema.mjs', 'scripts/scoped-backup.mjs'];
-test('reviewed instance backup inputs retain Server, Web and root backup obligations', () => {
-  for (const path of backupInputs) {
-    assert.deepEqual(checks(path), {
-      workspaces: ['@mote/server', '@mote/web'], android: false, i18n: true, tooling: true, all: false,
-      rootTests: path === 'scripts/backup.ts' ? ['backup', 'scripts-types'] : ['backup'],
-    }, path);
-    assert.deepEqual(groups(changed(path)), ['central'], path);
-  }
-  for (const path of ['scripts/backup-new.ts', 'scripts/scoped-backup-new.mjs', 'scripts/restore-instance.mjs',
-    'scripts/profile-lib.mjs', 'new-location/scoped-backup.mjs', 'scripts/scoped-backup-schema.json', 'new-input.png']) {
-    assert.deepEqual(checks(path).workspaces, allWorkspaces, path);
-    assert.equal(checks(path).android, true, path);
-    assert.equal(checks(path).all, true, path);
-  }
-});
-
-test('backup ownership unions independent Kotlin, Desktop, shared and unknown inputs', () => {
-  for (const helper of backupInputs) {
-    const android = checks(helper, 'apps/android/app/src/main/java/Collector.kt');
-    assert.equal(android.android, true);
-    assert.deepEqual(android.workspaces, ['@mote/server', '@mote/web']);
-    assert.equal(android.all, false);
-    const desktop = checks(helper, 'apps/desktop/src/main.ts');
-    assert.deepEqual(desktop.workspaces, ['@mote/desktop', '@mote/server', '@mote/web']);
-    assert.equal(desktop.android, false);
-    for (const path of ['packages/shared/src/connection.ts', 'protocol/contract.json', 'unknown-root.mjs']) {
-      const mixed = checks(helper, path);
-      assert.deepEqual(mixed.workspaces, allWorkspaces, `${helper}: ${path}`);
-      assert.equal(mixed.android, true, path);
-      assert.equal(mixed.all, true, path);
-      assert.ok(mixed.rootTests.includes('backup'));
-    }
-  }
-});
-
-test('check workspaces follow npm consumers and the Server HTTP consumer without grouping unrelated Central code', () => {
-  assert.deepEqual(checks('apps/web/src/App.tsx').workspaces, ['@mote/web']);
-  assert.deepEqual(checks('apps/server/src/index.ts').workspaces, ['@mote/server', '@mote/web']);
-  assert.deepEqual(checks('packages/agent/src/index.ts').workspaces, ['@mote/agent', '@mote/server', '@mote/web']);
-  assert.deepEqual(checks('packages/diagnostics/src/index.ts').workspaces, ['@mote/desktop', '@mote/diagnostics']);
-  assert.deepEqual(checks('apps/desktop/src/main.ts').workspaces, ['@mote/desktop']);
-  const actual = workspaceGraph(fileURLToPath(new URL('../../', import.meta.url)));
-  assert.deepEqual(affectedChecks(['apps/server/src/index.ts'], actual).workspaces, ['@mote/server', '@mote/web']);
-  const cyclic = [...graph, {name: '@mote/cyclic', path: 'packages/cyclic', dependencies: ['@mote/cyclic', '@mote/web']}];
-  assert.deepEqual(affectedChecks(['apps/web/src/App.tsx'], cyclic).workspaces, ['@mote/cyclic', '@mote/web']);
-});
-
-test('reviewed workspace test entries check the owner suite without product consumers', () => {
-  const entries = [
-    ['apps/server/test/multiuser-ingress.test.ts', '@mote/server'],
-    ['apps/web/test/navigation.test.ts', '@mote/web'],
-    ['apps/desktop/test/queue.test.ts', '@mote/desktop'],
-    ['packages/agent/test/agent.test.mjs', '@mote/agent'],
-    ['packages/shared/test/protocol.test.mjs', '@mote/shared'],
-    ['packages/diagnostics/test/diagnostics.test.ts', '@mote/diagnostics'],
-  ];
-  for (const [path, owner] of entries) {
-    assert.deepEqual(checks(path), {
-      workspaces: [owner], android: false, i18n: true, tooling: false, all: false, rootTests: [],
-    }, path);
-    assert.equal(changed(path).protocol, false, path);
-  }
-  assert.deepEqual(checks('apps/server/test/new-regression.test.ts').workspaces, ['@mote/server']);
-});
-
-test('fixtures, helpers, unreviewed test locations and externally consumed entries retain consumers', () => {
-  for (const path of ['apps/server/test/fixtures/legacy-app.ts', 'apps/server/test/support.ts', 'apps/server/test/nested/new.test.ts', 'apps/server/src/runtime.test.ts']) {
-    assert.deepEqual(checks(path).workspaces, ['@mote/server', '@mote/web'], path);
-  }
-  assert.deepEqual(checks('packages/agent/test/material-page-fixture.mjs').workspaces, ['@mote/agent', '@mote/server', '@mote/web']);
-  assert.deepEqual(checks('packages/diagnostics/test/fixture.ts').workspaces, ['@mote/desktop', '@mote/diagnostics']);
-  assert.deepEqual(checks('packages/shared/test/fixtures/wire.json').workspaces, allWorkspaces);
-  assert.equal(checks('packages/shared/test/fixtures/wire.json').android, true);
-  const external = checks('apps/server/test/plugin-control-journeys.test.ts');
-  assert.deepEqual(external.workspaces, ['@mote/server', '@mote/web']);
-  assert.equal(external.android, true);
-});
-
-test('owned test changes union with production obligations instead of narrowing them', () => {
-  assert.deepEqual(checks('apps/server/test/multiuser-ingress.test.ts', 'apps/web/src/App.tsx').workspaces, ['@mote/server', '@mote/web']);
-  assert.deepEqual(checks('packages/agent/test/agent.test.mjs', 'packages/agent/src/index.ts').workspaces, ['@mote/agent', '@mote/server', '@mote/web']);
-  const shared = checks('packages/shared/test/protocol.test.mjs', 'packages/shared/src/connection.ts');
-  assert.deepEqual(shared.workspaces, allWorkspaces);
-  assert.equal(shared.android, true);
-  assert.equal(shared.all, true);
-});
-
-test('shared code, protocol and either English catalog retain full consumer suites and Android checks', () => {
-  for (const path of ['packages/shared/src/connection.ts', 'packages/shared/src/i18n-en.ts', 'apps/android/app/src/main/assets/i18n-en.json', 'protocol/contract.json']) {
-    const result = checks(path);
-    assert.deepEqual(result.workspaces, allWorkspaces, path);
-    assert.equal(result.android, true, path);
-    assert.equal(result.i18n, true, path);
-    assert.equal(result.all, true, path);
-    assert.deepEqual(groups(changed(path)), ['central', 'desktop', 'android'], path);
-  }
-  assert.deepEqual(checks('apps/android/app/src/main/java/Collector.kt'), {
-    workspaces: [], android: true, i18n: true, tooling: false, all: false, rootTests: [],
-  });
-});
-
-test('reviewed root UI scripts have explicit consumers while unknown future script names stay broad', () => {
-  for (const name of ['connections', 'content-storage', 'conversations', 'diagnostics', 'evidence-focus', 'feature-packs', 'i18n', 'login', 'markdown', 'metadata', 'navigation', 'operations', 'owner-questions', 'presentation', 'sessions-insights', 'sources', 'tasks-imports']) {
-    const path = `scripts/test-web-${name}.cjs`;
-    assert.deepEqual(checks(path).workspaces, ['@mote/web'], path);
-    assert.deepEqual(groups(changed(path)), ['central'], path);
-    assert.equal(checks(path).tooling, true, path);
-  }
-  for (const path of ['scripts/test-appearance-ui.cjs', 'scripts/test-background-ui.cjs', 'scripts/fixture-background.cjs', 'scripts/fixture-language.cjs', 'scripts/fixture-language-preload.cjs']) {
-    assert.deepEqual(checks(path).workspaces, ['@mote/desktop', '@mote/web'], path);
-    assert.deepEqual(groups(changed(path)), ['central', 'desktop'], path);
-    assert.equal(checks(path).android, false, path);
-  }
-  for (const path of ['scripts/test-web-new.cjs', 'scripts/new-helper.mjs', 'package.json', 'package-lock.json', '.github/workflows/component-checks.yml']) {
-    assert.deepEqual(checks(path).workspaces, allWorkspaces, path);
-    assert.equal(checks(path).android, true, path);
-    assert.equal(checks(path).all, true, path);
-  }
-});
-
-test('reviewed standalone validation entries select their actual product owners', () => {
-  for (const path of ['scripts/validation/profile-scoped-startup.test.mjs']) {
-    assert.deepEqual(checks(path), {
-      workspaces: ['@mote/server'], android: false, i18n: true, tooling: true, all: false, rootTests: [],
-    }, path);
-    assert.deepEqual(groups(changed(path)), ['central'], path);
-  }
-  // TS validation tools retain the full plan, including typecheck:scripts,
-  // until their own typecheck and journey duties have an explicit plan entry.
-  for (const path of ['scripts/validation/new-regression.test.ts', 'scripts/validation/final-e2e-attachment-personal-export.test.ts']) {
-    assert.deepEqual(checks(path).workspaces, allWorkspaces, path);
-    assert.equal(checks(path).android, true, path);
-    assert.equal(checks(path).all, true, path);
-  }
-});
-
-test('fine selection preserves documentation exceptions, executable scope inventory and infrastructure-only regressions', () => {
-  assert.deepEqual(checks('README.md', 'docs/development.md'), {
-    workspaces: [], android: false, i18n: false, tooling: false, all: false, rootTests: [],
-  });
-  assert.deepEqual(checks('docs/design/scope-inventory.json'), {
-    workspaces: [], android: false, i18n: false, tooling: true, all: false, rootTests: ['scope'],
-  });
-  assert.deepEqual(checks('scripts/check-scope-contracts.mjs').workspaces, ['@mote/server', '@mote/web']);
-  assert.deepEqual(checks('scripts/check-scope-contracts.mjs').rootTests, ['scope']);
-  for (const name of ['affected-components', 'check-affected', 'check-plan', 'check-driver', 'check-environment', 'check-inputs']) for (const suffix of ['.mjs', '.test.mjs']) {
-    assert.deepEqual(checks(`scripts/release/${name}${suffix}`), {
-      workspaces: [], android: false, i18n: false, tooling: true, all: false, rootTests: [],
-    });
-  }
-});
-
-test('mixed ownership unions workspace, platform and root obligations without widening known inputs', () => {
-  const result = checks('apps/web/src/App.tsx', 'packages/diagnostics/src/index.ts', 'docs/design/scope-inventory.json', 'apps/android/app/src/main/java/Collector.kt');
-  assert.deepEqual(result, {
-    workspaces: ['@mote/desktop', '@mote/diagnostics', '@mote/web'],
-    android: true, i18n: true, tooling: true, all: false, rootTests: ['scope'],
-  });
-  assert.deepEqual(checks('apps/web/src/App.tsx', 'new-unknown-input').workspaces, allWorkspaces);
 });

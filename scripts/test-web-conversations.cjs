@@ -23,7 +23,7 @@ async function run() {
   await app.whenReady();
   const port = await freePort(), endpoint = 'http://127.0.0.1:' + port, token = randomBytes(32).toString('hex');
   const runner = join(root, 'server.mjs'), queries = join(root, 'queries.jsonl'), released = join(root, 'release-answer');
-  writeFileSync(runner, `import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo, 'apps/server/test/fixtures/legacy-app.mjs')).href)};
+  writeFileSync(runner, `import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo, 'apps/server/dist/app.js')).href)};
     import {appendFileSync,existsSync} from 'node:fs'; import {randomUUID} from 'node:crypto';
     const config = ${JSON.stringify({dataDir: join(root, 'data'), token, tokenPath: 'fixture-only', host: '127.0.0.1', port,
       maxStorageBytes: 10000000, maxExportBytes: 1000000, retentionDays: 0, insightIntervalHours: 0, allowedOrigins: [],

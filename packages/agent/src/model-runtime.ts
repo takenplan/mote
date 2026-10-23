@@ -1,10 +1,9 @@
 import {DEFAULT_MODEL_MAX_TOKENS,MODEL_REASONING_EFFORTS,type ModelProtocol} from '@mote/shared/models';
 import {AgentConfigurationError, type AgentOptions} from './types.js';
 
-const protocols: ModelProtocol[] = ['deepseek', 'openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai', 'codex-app-server', 'mote-media'];
+const protocols: ModelProtocol[] = ['deepseek', 'openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai', 'codex-app-server'];
 const defaults: Record<ModelProtocol, string> = {
   'codex-app-server': '',
-  'mote-media': '',
   deepseek: 'https://api.deepseek.com/anthropic',
   'openai-completions': 'https://api.openai.com/v1',
   'openai-responses': 'https://api.openai.com/v1',
@@ -29,7 +28,6 @@ type ConnectionOptions = Pick<AgentOptions, 'protocol' | 'provider' | 'model' | 
 
 /** Keep errors value-free: advanced fields can contain credentials. */
 export function validateModelOptions(options: ConnectionOptions): void {
-  if(options.protocol==='mote-media'&&(Object.keys(options.headers??{}).length||Object.keys(options.extraBody??{}).length))throw new AgentConfigurationError('Media connections use the fixed binary transport.');
   if(options.serviceTier!==undefined&&(options.protocol!=='codex-app-server'||!['default','fast'].includes(options.serviceTier)))throw new AgentConfigurationError('This service tier requires Codex App Server.');
   if(options.protocol==='codex-app-server'&&(options.baseUrl||Object.keys(options.headers??{}).length||Object.keys(options.extraBody??{}).length))throw new AgentConfigurationError('Codex uses its local login and does not accept HTTP endpoints or advanced request parameters.');
   if (options.protocol !== undefined && !protocols.includes(options.protocol)) throw new AgentConfigurationError('Unsupported model protocol.');
@@ -87,7 +85,6 @@ export function harnessPrivacyEntries(): unknown[] {
 
 /** Route selection is explicit protocol configuration, never semantic dispatch. */
 export function modelRuntimeEntries(options: ConnectionOptions): unknown[] {
-  if(options.protocol==='mote-media')throw new AgentConfigurationError('Media connections require the processing runtime.');
   if(options.protocol==='codex-app-server')throw new AgentConfigurationError('Codex requires the App Server runtime.');
   const {protocol, baseUrl, effort, route} = modelConnection(options);
   const maxTokens = options.maxTokens ?? DEFAULT_MODEL_MAX_TOKENS;

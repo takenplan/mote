@@ -18,8 +18,11 @@ import { actionsRuntimeSettingsSchema, type ActionsRuntimeSettings } from './act
 const settingsSchema=z.object({enabled:z.boolean(),timeZone:actionZone,reviewDeviceIds:z.array(z.string().min(1).max(200)).max(100)}).strict();
 const authorizationSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),reviewDeviceIds:settingsSchema.shape.reviewDeviceIds}).strict();
 const settingsUpdateSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),authorizationRevision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:settingsSchema}).strict();
-import {ActionSettingsSaveError,proposedSchema} from './action-contract.js';
-export {ActionSettingsSaveError,proposedSchema} from './action-contract.js';
+/** Runtime file failures must report an already committed permission withdrawal. */
+export class ActionSettingsSaveError extends Error {
+  constructor(readonly code:string,readonly statusCode:number,readonly revokedDeviceIds:string[],readonly authorizationRevision:number,readonly revision:number|undefined){super('Action authorization was revoked; refresh the settings before retrying');this.name='ActionSettingsSaveError';}
+}
+const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
 const fingerprint=(r:CaptureRecord)=>sha256(JSON.stringify([r.id,r.ocrText,r.metadata,r.provenance,(r as CaptureRecord & {fileEvidence?:{captureId:string}}).fileEvidence]));
 type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 /** Host-owned durable proposals and execution receipts. The query agent has only a read-only comparison catalog, never mutation tools. */
@@ -246,7 +249,7 @@ export class Actions {
       ORDER BY e.updated_at DESC`).all().find(row=>currentJobs.has(String(row.key)));
     return {configured:this.configured(),running:!!this.running,jobs:[...counts].sort(([a],[b])=>a.localeCompare(b)).map(([status,count])=>({status,count})),error:failure?moteText("日程分析未完成，可能是模型不可用、证据更新或结果未通过校验。可重试失败批次。"):null,...(failure?{errorCode:String(failure.error),availableAt:Number(failure.available_at)}:{})};
   }
-  retry(){for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale','cancelled')").all())this.engine.retry(String(row.id),true);}
+  retry(){for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale','cancelled')").all())this.engine.retry(String(row.id));}
   tick(){if(this.closed||this.running||!this.settings().enabled)return this.running??Promise.resolve();this.running=this.execute().finally(()=>{this.running=undefined;});return this.running;}
   private async execute(){
     this.discover();if(!this.configured())return;

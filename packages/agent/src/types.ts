@@ -62,8 +62,7 @@ export interface ContextReader {
   activity(args: ContextRange): Promise<unknown>;
   mediaActivity?(args: MediaContextRange): Promise<unknown>;
   devices(): Promise<unknown>;
-  /** An offset accompanies a full canonical original; legacy excerpts omit it. */
-  readFileEvidence?(args:ContextRange & {id:string;offset:number;length:number}):Promise<{status:string;record?:ContextRecord;offset?:number;reason?:string}>;
+  readFileEvidence?(args:ContextRange & {id:string;offset:number;length:number}):Promise<{status:string;record?:ContextRecord;reason?:string}>;
   fileChunks?(args:ContextRange & {id:string;offset?:number}):Promise<ContextRecord[]>;
   sourceHistory?(args:ContextRange & {id:string}): Promise<ContextRecord[]>;
   sources?(args:ContextRange & {query?:string}): Promise<unknown>;
@@ -73,8 +72,6 @@ export interface ContextReader {
 }
 
 export interface AgentOptions {
-  /** Host-only private root for grant-owned temporary runtime data. */
-  temporaryRoot?:string;
   /** Trusted benchmark arm only; no profile, HTTP or product setting. */
   contextToolMode?:'all-native'|'catalog';
   /** Host-only evidence authorization before each outbound HTTP model attempt, including SDK turns/repairs. */
@@ -157,7 +154,7 @@ export interface QueryInput {
   onUsage?: (usage: import('@mote/shared').TokenUsage) => void;
   question: string;
   /** Bounded host-owned input for background tasks, separate from the user question. */
-  taskContext?: {queryWorkspace?:unknown;delegation?:unknown;memoryWork?:unknown;memoryEvaluation?:unknown;ownerClarificationReply?:unknown;untrustedMemoryDraft?:unknown;untrustedInterpretations?:string;previousSummary?:string;turns: {turnId:string;[key:string]:unknown}[]};
+  taskContext?: {queryWorkspace?:unknown;delegation?:unknown;memoryWork?:unknown;ownerClarificationReply?:unknown;untrustedMemoryDraft?:unknown;untrustedInterpretations?:string;previousSummary?:string;turns: {turnId:string;[key:string]:unknown}[]};
   responseMode?: 'answer'|'personal-insight'|'memory-extraction'|'calendar-extraction';
   /** Host-selected procedure, never selected from captured text. */
   skill?: Exclude<MoteSkillId,'document-import'>;
@@ -300,14 +297,6 @@ export class AgentConfigurationError extends Error {
   constructor(message = 'Invalid model connection settings.') {
     super(message);
     this.name = 'AgentConfigurationError';
-  }
-}
-
-/** A host request contract failure cannot be repaired by retrying a provider. */
-export class AgentInputError extends ProviderFailure {
-  constructor() {
-    super({category:'permanent',code:'invalid_agent_input',executionStarted:false},'The agent question must contain non-whitespace text.');
-    this.name = 'AgentInputError';
   }
 }
 

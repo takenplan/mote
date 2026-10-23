@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import {ProviderFailure} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store,StoreError,sha256} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';

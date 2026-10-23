@@ -6,7 +6,7 @@ import {join,resolve,relative} from 'node:path';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import type {QueryInput} from '@mote/agent';
@@ -23,7 +23,7 @@ if(previous){assert.equal(previous.personalDataUsed,false);assert.equal(previous
 const token=randomBytes(32).toString('hex'),directory=join(output,'vault');
 const cfg:Config={dataKey:undefined,dataDir:directory,token,tokenPath:join(directory,'token'),host:'127.0.0.1',port:0,maxStorageBytes:200_000_000,maxExportBytes:10_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model,modelProvider:'codex',modelProtocol:'codex-app-server',modelReasoningEffort:effort,modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',agentConcurrency:2,llmConcurrency:2,memoryConcurrency:2,agentTimeoutMs:300000,diagnosticsEnabled:true,agentTraceEnabled:false,logLevel:'warn',codexBin:process.env.MOTE_CODEX_BIN,codexHome:process.env.MOTE_CODEX_HOME};
 const report:any={status:'running',startedAt:new Date(startedAt).toISOString(),model,reasoningEffort:effort,personalDataUsed:false,physicalDevicesTested:false,providerInternalRequests:'unobservable',http:true,productionBackgroundWorker:true,calls:previous?.calls??[],queries:[],...(previous?{continuedGeneratedRun:{previousHead:previous.head,previousCodeHashes:previous.codeHashes,importId:previous.import.id}}:{}),benchmark:{purpose:'bounded diagnostic; no P95 or production speed claim',arms:['catalog','all-native']},head:process.env.MOTE_TEST_RELEASE_COMMIT??execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim()};
-report.codeHashes=Object.fromEntries(await Promise.all(['apps/server/test/fixtures/legacy-app.ts','apps/server/src/source-pipelines.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','apps/server/src/delegation-runtime.ts','apps/server/src/evidence-reader.ts','packages/agent/dist/bridge.js','packages/agent/dist/task-context.js','packages/agent/dist/tool-contributions.js'].map(async path=>[path,createHash('sha256').update(await readFile(join(repositoryRoot,path))).digest('hex')])));
+report.codeHashes=Object.fromEntries(await Promise.all(['apps/server/src/app.ts','apps/server/src/source-pipelines.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','apps/server/src/delegation-runtime.ts','apps/server/src/evidence-reader.ts','packages/agent/dist/bridge.js','packages/agent/dist/task-context.js','packages/agent/dist/tool-contributions.js'].map(async path=>[path,createHash('sha256').update(await readFile(join(repositoryRoot,path))).digest('hex')])));
 let node:Awaited<ReturnType<typeof buildApp>>|undefined,base='',arm:'catalog'|'all-native'='catalog',repairInjected=Boolean(previous),forbidModel=false;
 const save=()=>writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
 function progress(stage:string,details:Record<string,unknown>={}){console.log(JSON.stringify({stage,...details}));}

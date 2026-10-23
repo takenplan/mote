@@ -6,7 +6,7 @@ import java.io.FileOutputStream
 
 /** Breaking local boundary: preserve retired files and require an explicit app-storage reset. */
 object LocalDataFormat {
-    const val VERSION = 4
+    const val VERSION = 3
     const val RESET_MESSAGE = "本机数据格式已退役，请清除应用存储后重新设置。"
     private const val MARKER = ".mote-local-format"
     // WorkManager opens these framework files before Application.onCreate on a fresh install.
@@ -21,12 +21,8 @@ object LocalDataFormat {
         check(directory.isDirectory || directory.mkdirs())
         FileOutputStream(marker).use { it.write(VERSION.toString().toByteArray()); it.fd.sync() }
     }
-    fun requireCurrent(context: Context) {
-        val directory = context.applicationContext.noBackupFilesDir
-        val hasConfiguration = context.applicationContext.getSharedPreferences("mote", Context.MODE_PRIVATE).all.isNotEmpty()
-        requireCurrent(directory, hasConfiguration, FRAMEWORK_FILES)
-        if (RuntimeProfile.current.fileCredentials) DevCredentialFormat.requireCurrent(directory, hasConfiguration)
-    }
+    fun requireCurrent(context: Context) = requireCurrent(context.applicationContext.noBackupFilesDir,
+        context.applicationContext.getSharedPreferences("mote", Context.MODE_PRIVATE).all.isNotEmpty(), FRAMEWORK_FILES)
     fun validateEvent(event: org.json.JSONObject) {
         require(event.keys().asSequence().none { it in setOf("_ocrResult", "_ocrUploaded", "_ocrAttempts", "_ocrConflict") }) { MoteI18n.text(RESET_MESSAGE) }
         require(event.optJSONObject("ocr")?.optString("status") != "pending") { MoteI18n.text(RESET_MESSAGE) }

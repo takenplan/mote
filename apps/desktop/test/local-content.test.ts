@@ -15,7 +15,7 @@ it('writes directly readable current records, originals and drafts and survives 
  const sources=new SourceSync(join(directory,'sources','state.json'));await sources.initialize();await sources.stage({items:[{externalId:'generated',title:'Generated',text:'Generated body',kind:'message',layer:'snapshot',deleted:false}],seen:['generated'],complete:true,skipped:0},false);
  const reopened=new DurableQueue(queue.directory,config);await reopened.initialize();expect(reopened.stats().depth).toBe(1);
  const restartedDraft=new NoteDraftStore(join(directory,'notes'));await restartedDraft.initialize();expect(restartedDraft.get().text).toBe('Generated draft');
- const archive=join(directory,'archive.json');await reopened.exportArchiveFile(archive);expect(JSON.parse(await readFile(archive,'utf8')).version).toBe(4);
+ const archive=join(directory,'archive.json');await reopened.exportArchiveFile(archive);expect(JSON.parse(await readFile(archive,'utf8')).version).toBe(3);
  const target=new DurableQueue(join(directory,'target'),config);await target.initialize();await target.importArchiveFile(archive);expect(await target.imageForBrowser(event().id)).toEqual(image);
 });
 it('preserves arbitrary format3 bytes and authored text resembling retired envelope prefixes',async()=>{

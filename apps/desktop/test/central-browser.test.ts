@@ -31,10 +31,6 @@ it('keeps the central Feishu source destination through an owner login handoff',
  expect(new URLSearchParams(url.hash.split('?')[1]).get('loginRequest')).toBe('generated-request');
  expect(url.search).toBe('');expect(fallback).not.toHaveBeenCalled();
 });
-it('preserves the current Actions approval page through an owner login handoff',async()=>{
- const chrome=vi.fn();await openCentralBrowser('https://central.example','actions','darwin',chrome,vi.fn(),undefined,'generated-ticket');
- const url=new URL(chrome.mock.calls[0][0]);expect(url.hash.split('?')[0]).toBe('#/actions');expect(new URLSearchParams(url.hash.split('?')[1]).get('loginTicket')).toBe('generated-ticket');
-});
 it('falls back when Chrome is unavailable and rejects unsafe URLs', async () => {
   const chrome = vi.fn().mockRejectedValue(new Error('missing')), fallback = vi.fn();
   await openCentralBrowser('https://central.example', 'unknown', 'darwin', chrome, fallback);
@@ -72,11 +68,6 @@ it('hands off an expiring login code while preserving the requested evidence and
  await openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,'capture:11111111-2222-4333-8444-555555555555',ticket);
  const url=new URL(chrome.mock.calls[0][0]),params=new URLSearchParams(url.hash.split('?')[1]);
  expect(params.get('loginTicket')).toBe(ticket);expect(params.get('evidence')).toBe('capture:11111111-2222-4333-8444-555555555555');expect(url.search).toBe('');expect(params.has('token')).toBe(false);
-});
-it('retains the declared Ask context reader without changing raw ingestion evidence or admitting other namespaces',async()=>{
- const id='11111111-2222-4333-8444-555555555555';
- for(const reference of ['context:'+id,'context:capture:'+id]){const chrome=vi.fn();await openCentralBrowser('https://central.example','ask','darwin',chrome,vi.fn(),reference,'generated-ticket');const params=new URLSearchParams(new URL(chrome.mock.calls[0][0]).hash.split('?')[1]);expect(params.get('evidence')).toBe('context:capture:'+id);expect(params.get('loginTicket')).toBe('generated-ticket');}
- const chrome=vi.fn(),fallback=vi.fn();for(const reference of ['context:memory:'+id,'context:context:capture:'+id,'context:https://elsewhere.example'])await expect(openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,reference)).rejects.toThrow('Invalid evidence reference');expect(chrome).not.toHaveBeenCalled();expect(fallback).not.toHaveBeenCalled();
 });
 it.each(['overview', 'about', 'guide', 'activity'])('preserves the %s destination through both login handoffs', async page => {
   for (const handoff of ['ticket', 'request']) {

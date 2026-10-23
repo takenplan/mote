@@ -1,46 +1,96 @@
-# 账号登录、设备配对与独立连接
+# 设备配对与独立连接
 
-当前生产使用用户名密码账号、Wire 2 和设备邀请 v2。Central epoch 5、客户端本机格式 4 的跨代边界见[更新说明](updating.md)；旧 owner token、v1 邀请和 collector-to-owner 别名不作为生产登录方式。
-
-## 登录与权限
-
-| 身份 | 用途与边界 |
-| --- | --- |
-| Web / 原生账号会话 | 本账号私人资料、问答、设置和显式授权，Web 会话与原生 bearer 各有生命周期 |
-| 设备凭据 | 固定本账号设备 ID，允许自身 ingress、获准 Actions、self、logout，不授予私人归档、管理或凭据签发 |
-| MCP 凭据 | 单独的只读或明确来源写权限，不能作为管理或邀请批准身份 |
-| 实例管理员 | 管理账号与共享资源，普通私人 API 仍只选择自己的资料 |
-
-生产中央启动不会自动创建管理员，操作员按[部署步骤](deployment.md)初始化空账号库。本地试用的 `scripts/dev-server.mjs` 有明确例外：仅在开发账号库为空时创建 `admin` / `admin`，不会重置已有密码，见[快速开始](../README.md#quick-start)。原生中央页面使用账号登录，设备采集连接可从本账号中央界面签发邀请。配对不会把设备凭据提升为完整账号会话。
+所有者在中央生成连接邀请，采集端导入二维码、JSON 或 `mote://connect` 链接，确认其中显示的节点地址后兑换。邀请不包含中央所有者令牌。每次兑换生成独立随机凭据，所有者可以在连接列表中单独撤销。
 
 ## 在 App 中连接
 
-1. 使用本账号登录中央设备/连接页面，创建邀请。填写设备可访问的 HTTPS origin；loopback HTTP 仅适用于本机。手机 localhost 指手机自身，邀请不创建公网地址、TLS 或 Tunnel。
-2. 填写连接名称。新设备不指定原设备 ID；同设备重新授权时明确选择已有设备，不能用新设备邀请接管旧身份。
-3. Android 可扫码、粘贴链接/JSON 或导入 JSON；Mac 可粘贴或导入 JSON/文本及二维码图片。二维码本机生成/解析，不发送第三方服务。输入与权限边界见 [Mac](desktop.md)和 [Android](android.md)。
-4. 客户端预览完整 origin、部署/账号、期限和设备范围，明确确认后兑换。配对不授予屏幕、日历或 SAF 权限，也不开始采集。
-5. 固定邀请、设备元数据与随机 verifier，经 poll、fresh self 和 ACK 核对后保存连接。丢应答恢复同一 claim，不重复创建连接或发布未经确认的账号。
+中央与客户端应使用本次同代实现。Central epoch 4 的破坏升级需先按 [MVP 基线说明](adr-mvp-baseline.md) 备份并处理旧库；客户端本机格式保持 3。当前手工 owner 令牌入口保留，旧 collector 身份不会转换为 owner。
 
-邀请含 `format:mote.connection`、`version:2`、deploymentId、userId、serverUrl、`purpose:device`、code、expiresAt 和可选 deviceId。URI 为 `mote://connect?data=<base64url JSON>`。code 是十分钟临时能力，不含长期凭据，不应进入日志、公开报告或版本控制。
+1. 用所有者令牌打开中央界面的「设备」页，在「添加设备与 Chatbot」填写手机或电脑可访问的 HTTPS 地址。配置了 `MOTE_PUBLIC_URL` 时优先填入该地址；Cloudflare Tunnel 可以提供入口。手机的 `localhost` 指手机自身，二维码不会自动建立隧道。
+2. 填写连接名称。首次连接使用「新设备」；凭据撤销后重连或重试一次未保存成功的兑换，选择原设备身份。
+3. 点击「生成连接邀请」。Android 在 App 中选择扫码，也可粘贴邀请或导入 JSON；Mac 可导入 JSON、邀请文字或保存的二维码图片。二维码在中央浏览器本机生成，不发往第三方二维码服务。
+4. 在客户端核对节点地址，确认后连接。配对不自动授予截图或日历权限，也不自动开启采集。
 
-## 协议与确认
+同一节点、同一设备重新授权时，客户端说明原待同步资料将继续上传；确认后保留队列、草稿和来源版本，替换凭据。更换节点地址时若仍有待同步资料，则先阻止切换。连接时暂停或等待在途操作，避免上传途中换凭据。邀请过期只影响尚未兑换的邀请，已建立的连接继续有效。
 
-`POST /api/connections/invitations` 由当前完整账号会话确认范围。`POST /api/connections/redeem` 固定 expected subject、设备、platform 和 verifier 的 SHA-256 challenge，只返回 request ID/期限。`POST /api/login/poll` 使用 `{id,verifier}` 取得固定 `scope:client,purpose:device` grant；旧页面和账号代际不能覆盖新连接。
+中央列表可按连接名称单独撤销，并保留归档资料。隐藏 MCP 配置或离开页面不会撤销凭据；邀请需要点击「取消邀请」才能提前失效。若设备尚未来得及上报心跳，中央仍会从连接记录中提供该设备的重新配对选项。
 
-客户端核对 `GET /api/connections/self` 的 account.deploymentId/userId/credentialId、credential.deviceId、Wire 2 / Ingress 3。self 没有 credential.id 或 purpose 字段，purpose 来自 poll。安全保存恢复状态后 `POST /api/login/ack` 确认交付，不返回 token。字段与异常细节见[邀请合同](design/multiuser-qr-pairing.md)和[桌面恢复](design/multiuser-desktop-pairing.md)。
+当前邀请签发独立、可撤销的 owner 凭据，具有同步、全归档浏览、Agent 查询、导出、删除和中央管理权限。绑定设备信息用于核验连接身份，不会将 owner 的浏览权限缩小为本设备。客户端只接受当前 owner 身份；MCP 凭据不能用于原生客户端登录。
 
-账号登录支持应用/标签页会话、1/7/30 天；退出先停止本机使用凭据，再尝试服务端撤销。浏览器交接使用一次性 ticket/PKCE，不把长期 token 放入 URL。私人中央阅读需要账号会话或明确 `central` purpose 的浏览器授权，设备邀请不能替代。
+## 创建与兑换
 
-## 重新授权、换号与恢复
+所有者认证调用：
 
-队列、来源、草稿和回执按已核验 origin、deployment、account 绑定。同账号轮换凭据保留原数据；换号/换实例停止旧采集并切换存储，旧账号待传版本保留。回到原账号可继续原字节，同 URL 的新实例不能接收旧部署队列。未绑定资料仍沿明确首绑确认，不猜测历史归属。
+```http
+POST /api/connections/invitations
+Authorization: Bearer <owner-token>
+Content-Type: application/json
 
-丢 redeem、poll 或 ACK 后恢复原 claim；退出/重启不会批准另一账号。桌面“恢复中断的连接确认”继续固定检查点，ACK 过期时仅在 fresh self 精确有效后退休检查点，不能伪称收到 ACK。平台自己的原子提交和恢复入口保留。
+{"serverUrl":"https://mote.example.com","label":"我的手机","deviceId":"existing-device-id"}
+```
 
-当前账号可在连接列表单独撤销凭据，归档仍保留。取消未完成邀请使用 `POST /api/connections/invitations/revoke`，已 ACK 连接需 `DELETE /api/connections/:credentialId` 撤销。关页不等于取消。账号禁用、密码重置和凭据撤销阻止迟到请求，不扩大后台权限。
+`deviceId` 可省略。普通邀请只允许尚未在中央出现的新设备 ID；旧客户端保持原 ID 时，所有者须明确选择该设备并创建绑定邀请。绑定信息只保存在服务端，不扩展可携带的 v1 邀请格式。成功兑换绑定邀请后，该设备此前的采集凭据一并撤销；其它设备不受影响。
 
-## 本机秘密与验证边界
+响应包含 `invitation` 和 `uri`：
 
-Dev 的 Mote 自有凭据使用私有本地文件，Prod 保持 Desktop safeStorage / Android Keystore，第三方 CLI 继续自行管理。应用会话、不持久 token、Android 进程绑定和退出标记沿平台合同。目录及导出边界见[内容存储](content-storage.md)和[Profile 决策](adr-profile-release-policy.md)。
+```json
+{
+  "format": "mote.connection",
+  "version": 1,
+  "serverUrl": "https://mote.example.com",
+  "code": "<32-random-bytes-as-base64url>",
+  "expiresAt": "<UTC-ISO-time>"
+}
+```
 
-产品与生成 fixture 结果分别记录在[桌面配对](validation/multiuser-desktop-pairing.md)、[设备邀请](validation/multiuser-qr-pairing.md)和[Android 回归](validation/multiuser-pr159-android-regression-2026-10-17.md)。原记录不等于本次重新运行；真实扫码、系统权限、外网和 OEM 行为只在明确执行的范围成立。旧单所有者协议保留在 Git 历史，不能照旧 token 流程连接当前节点。
+URI 为 `mote://connect?data=<base64url-UTF8-JSON>`。邀请有效期为 10 分钟，只能兑换一次。邀请码在内存中仅保存 SHA-256，中央重启后邀请失效。邀请包含一次性授权能力，发送给预期设备前应确认接收方。
+
+客户端无须携带任何旧令牌：
+
+```http
+POST /api/connections/redeem
+Content-Type: application/json
+
+{"code":"<invitation-code>","deviceId":"existing-device-id","deviceName":"我的手机","platform":"android"}
+```
+
+`platform` 支持 `android`、`macos`、`windows`、`linux` 和 `other`。兑换响应为 `{serverUrl, token, credentialId, scope:"owner"}`；随后通过 `/api/connections/self` 验证节点、设备及必需的协议元数据，验证完成再保存凭据。客户端应只将该 token 用于已确认的 `serverUrl`，不跟随重定向传递凭据。现有采集协议的通用 `other` 客户端使用 `platform:"import"`；当前 Android 和 Mac 直接使用各自平台名称。
+
+`serverUrl` 必须是所有者显式填写的 HTTPS origin；仅 `localhost`、`127.0.0.1`、`[::1]` 允许 HTTP。地址不能包含用户名、密码、路径、查询或片段。服务端不会从 `Host` 或转发请求头猜测地址，也不会替所有者探测这个地址。
+
+中央不按每分钟请求数或有效邀请数量拒绝操作；授权、设备绑定和邀请有效期仍逐次检查。`410 invitation_invalid_or_expired` 表示已使用、取消、过期或因重启失效；`409 device_already_registered` 要求所有者生成设备绑定邀请；`403 invitation_device_mismatch` 表示邀请绑定的设备与当前客户端不一致。
+
+## 检查与撤销
+
+- `GET /api/connections/self`：所有者或独立凭据可读取自身 `credential`、节点 `node:{version,profile,protocol}` 及 `capabilities:{ingest,ownSources,archiveRead}`。不返回 token 或 token 哈希，可用作客户端连接测试。原生客户端必须验证当前 owner、设备身份和协议范围。
+- `GET /api/connections`：仅所有者；返回 `items` 和 `mcp:{enabled,writeEnabled,writeSourceIds}`。每项只有身份、标签、创建／撤销时间、设备信息、范围和基于公开连接 ID 的遮罩提示。
+- `DELETE /api/connections/:id`：仅所有者；持久撤销该凭据，重复撤销同一记录仍成功，返回 `{revoked:true,id}`。
+- `POST /api/connections/invitations/revoke`，body `{code}`：仅所有者；幂等取消尚未兑换的邀请。code 不放入 URL。已兑换的邀请应通过连接 ID 撤销其凭据。
+
+配对中的设备 ID 必须与绑定邀请一致，重新授权已有设备必须由所有者明确选择该身份。owner 的归档权限不会按设备隐式收窄；浏览时可显式选择设备筛选。来源版本通过 `/api/sources/:id/items` 写入，仍需符合当前 schema、版本和幂等确认。查询 Agent 继续只有读取工具，没有新增写入能力。
+
+## MCP 配置
+
+所有者调用 `POST /api/connections/mcp`，body `{serverUrl,label,access:"read"|"write"}`，得到 `{credential,config}`。`config` 的结构为：
+
+```json
+{"mcpServers":{"mote":{"type":"http","url":"https://mote.example.com/mcp","headers":{"Authorization":"Bearer <independent-token>"}}}}
+```
+
+完整 token 只在创建成功时返回。之后的列表和 self 接口无法再次取出它；需要时重新创建并撤销旧连接。
+
+读取凭据可通过标准 MCP 工具读取中央完整归档，包括笔记、截图文本、来源版本和渐进展开的派生记忆。写入凭据只注册 `mote_put_item`，不包含读取工具，也不能建立来源。其允许来源是创建时的 `MOTE_MCP_WRITE_SOURCE_IDS` 与当前配置的交集：扩大配置不会扩大已发凭据；缩小配置立即收紧已有凭据。
+
+必须先按现有节点启动要求配置至少 32 字符的 `MOTE_MCP_READ_TOKEN`，再开启 `MOTE_MCP_ENABLED`。写入还需要至少 32 字符的 `MOTE_MCP_WRITE_TOKEN`、`MOTE_MCP_WRITE_ENABLED` 和非空 `MOTE_MCP_WRITE_SOURCE_IDS`；修改后重启中央。未开启时创建连接返回带说明的 `409 mcp_disabled` 或 `409 mcp_write_disabled`。发给聊天客户端的是新生成的独立凭据，不是这些静态配置 token。静态 token 继续遵循原设置，需要通过配置轮换，不能在独立连接列表中撤销。
+
+这份 JSON 适用于支持 Streamable HTTP 与自定义 Bearer 请求头的 MCP 客户端。只支持 OAuth 授权的聊天产品不能直接使用此配置；本功能不提供 MCP OAuth 授权服务器。需要本地 stdio 的客户端可按 [连接器文档](connectors.md) 配置桥接：将中央下载的 `mote-mcp.json` 放到本机私有位置，在 macOS/Linux 执行 `chmod 600 /绝对路径/mote-mcp.json`，再使用 `node scripts/mcp-stdio.mjs --connection /绝对路径/mote-mcp.json`。桥接只接受当前 `mcpServers.mote` HTTP 配置，拒绝旧的 `{url,token}` 文件，不会执行导入 JSON 中的 `command` 或 `args`。
+
+## 持久性与边界
+
+独立凭据仅以随机 token 的 SHA-256 和权限元数据保存在 `data/connectors/client-connections.json`，目录权限 700、文件权限 600。与现有连接器凭据一样，它不包含在可携带的资料导出中；部署回退会通过私有连接器移交保持当前凭据和撤销状态。凭据数量和撤销历史数量不作为配对门槛；凭据文件仍限制在 2 MiB，并为已发凭据的撤销标记预留空间。达到字节容量时拒绝新增，既有凭据仍可读取和撤销。
+
+兑换和撤销通过串行、临时文件、文件同步及原子替换完成。持久化失败不会消费邀请、替换旧凭据或报告撤销成功。凭据文件无法安全读取时中央启动失败，不自动丢弃撤销记录。正在准备的采集或来源写入会在数据库事务内再次验证凭据，撤销后不能继续提交。已经成功提交的资料保留在归档中。
+
+如果保存成功后网络在响应到达客户端前断开，邀请仍视为已兑换。所有者可在连接列表中撤销这条连接并重新邀请；服务端不会为了重试而长期保存可恢复的明文 token。
+
+自动化测试使用生成数据，覆盖真实 MCP SDK HTTP 连接、权限、重放、过期、并发兑换、写入失败、重启与上传中撤销。真实手机相机扫码、跨公网连接及第三方聊天产品的具体配置界面需要分别验收。

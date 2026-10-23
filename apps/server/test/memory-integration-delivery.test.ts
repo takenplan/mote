@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import type {QueryInput,ContextReader} from '@mote/agent';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {memoryEvidenceFingerprint} from '../src/memory.js';
 import type {Config} from '../src/config.js';
 import type {RecordingProvider} from '../src/connectors/recordings.js';

@@ -5,7 +5,7 @@ import {memoryRecipeKey,memoryRecipeLabel,type MemoryRecipeRef} from './memory-r
 
 type Choice=MemoryRecipeRef&{available:boolean;requires?:string[]};
 export function ManualMemoryRecipes({api,value,onChange,disabled=false}:{api:Api;value:MemoryRecipeRef[];onChange:(value:MemoryRecipeRef[])=>void;disabled?:boolean}){
-  const catalog=useResource<{items:Choice[]}>(api,api.connection?.mode==='web'?'/api/memory/recipes':'/api/memory-recipes');
+  const catalog=useResource<{items:Choice[]}>(api,'/api/memory-recipes');
   const choices=new Map((catalog.data?.items??[]).map(choice=>[memoryRecipeKey(choice),choice]));
   for(const ref of value)if(!choices.has(memoryRecipeKey(ref)))choices.set(memoryRecipeKey(ref),{...ref,available:false});
   return <details className="manual-memory-recipes"><summary>{moteText('本次提取方案')} · {value.length?moteText('已选 {0} 项',value.length):moteText('默认提取方式')}</summary>

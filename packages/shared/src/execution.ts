@@ -45,22 +45,10 @@ export const retryPolicySchema=z.object({
 }).strict();
 export type RetryPolicy=z.infer<typeof retryPolicySchema>;
 
-export const executionRetryBudgetSchema=z.object({
- maxAttempts:z.number().int().positive(),maxRetries:z.number().int().nonnegative(),
- retriesUsed:z.number().int().nonnegative(),attemptsRemaining:z.number().int().nonnegative(),
- retryRound:z.number().int().positive(),retryExhausted:z.boolean(),
-}).strict();
-export type ExecutionRetryBudget=z.infer<typeof executionRetryBudgetSchema>;
-/** Presentation of trusted durable counts; never an admission permission. A
- * suspended final attempt can finish even when no new attempt remains. */
-export function executionRetryBudget(attempts:number,maxAttempts:number,retryRound=1,continuing=false,completed=false):ExecutionRetryBudget{
- return {maxAttempts,maxRetries:maxAttempts-1,retriesUsed:Math.max(0,attempts-1),attemptsRemaining:Math.max(0,maxAttempts-attempts),retryRound,retryExhausted:attempts>=maxAttempts&&!continuing&&!completed};
-}
-
 export const executionEnvelopeSchema=z.object({
   status:runStatusSchema,
   attempts:z.number().int().nonnegative(),
-  ...executionRetryBudgetSchema.partial().shape,
+  maxAttempts:z.number().int().positive().optional(),
   failure:taskFailureSchema.optional(),
   waiting:waitConditionSchema.optional(),
   allowedActions:z.array(executionActionSchema),
@@ -70,15 +58,13 @@ export const executionEnvelopeSchema=z.object({
 }).strict();
 export type ExecutionEnvelope=z.infer<typeof executionEnvelopeSchema>;
 
-export type DomainExecutionInput=Partial<Record<keyof ExecutionRetryBudget,unknown>>&{
+export type DomainExecutionInput={
   status?:unknown;
   state?:unknown;
   attempts?:unknown;
   maxAttempts?:unknown;
   errorCode?:unknown;
   error?:unknown;
-  failureCategory?:unknown;
-  confirmUnknownRequired?:unknown;
   availableAt?:unknown;
   inputVersion?:unknown;
   definitionVersion?:unknown;
@@ -108,17 +94,13 @@ export function canonicalRunStatus(input:DomainExecutionInput):RunStatus {
 function failureFor(input:DomainExecutionInput,status:RunStatus):TaskFailure|undefined {
   const code=stringValue(input.errorCode)??(typeof input.error==='object'&&input.error&&'code' in input.error?stringValue((input.error as {code?:unknown}).code):undefined);
   if(!code)return undefined;
-  const retryable=new Set(['physical_cleanup_pending','provider_failed','model_failed','agent_response','timeout','network','rate_limited','worker_interrupted','provider_unavailable','provider_timeout','provider_network']);
-  const waiting=new Set(['retry_budget_exhausted','physical_cleanup_unknown','provider_quota','recovery_window_exhausted','configuration_changed','model_unconfigured','provider_authentication','provider_endpoint','provider_redirect','worker_offline','awaiting_confirmation','processor_response_unknown','processor_not_configured','not_configured']);
-  const recovery:FailureRecovery=input.failureCategory==='transient'||input.failureCategory==='waiting'?(status==='failed'?'needs_action':'auto_retry'):input.failureCategory==='blocked'?'needs_action':input.failureCategory==='permanent'||input.failureCategory==='stale'?'permanent':code==='interrupted'?(status==='failed'?'needs_action':'auto_retry'):code==='processing_disabled'||waiting.has(code)?'needs_action':retryable.has(code)?(status==='failed'?'needs_action':'auto_retry'):'permanent';
+  const retryable=new Set(['provider_failed','model_failed','agent_response','timeout','network','rate_limited','worker_interrupted','provider_unavailable','provider_timeout','provider_network']);
+  const waiting=new Set(['provider_quota','recovery_window_exhausted','configuration_changed','model_unconfigured','provider_authentication','provider_endpoint','provider_redirect','worker_offline','awaiting_confirmation','processor_response_unknown','processor_not_configured','not_configured']);
+  const recovery:FailureRecovery=code==='interrupted'?(status==='failed'?'needs_action':'auto_retry'):code==='processing_disabled'||waiting.has(code)?'needs_action':retryable.has(code)?(status==='failed'?'needs_action':'auto_retry'):'permanent';
   const scope:FailureScope=code==='interrupted'?'system':waiting.has(code)||['rate_limited','processor_capacity','processor_still_running','provider_unavailable','provider_timeout','provider_network'].includes(code)?'provider':code==='worker_offline'?'system':'item';
   const safeMessage=code==='recovery_window_exhausted'?'The automatic recovery window ended. Retry explicitly to start a new window.':code==='provider_quota'?'The provider quota is exhausted. Restore the account quota before continuing.':code==='configuration_changed'?'The relevant model configuration changed. Retry to use the current configuration; completed batches are preserved.':code==='model_unconfigured'?'Model configuration is required before this step can continue.':
     code==='interrupted'?(status==='failed'?'The server stopped during processing. Retry explicitly to resume.':'The server stopped during processing. The retained task can resume.'):
-    code==='retry_budget_exhausted'?'Automatic retries are exhausted. Retry explicitly to start another bounded round.':
-    code==='physical_cleanup_pending'?'Waiting for the previous call to finish local cleanup.':
-    code==='physical_cleanup_unknown'?'The previous call has no confirmed local cleanup receipt.':
-    code==='external_result_unknown'?'The previous call outcome remains unknown. Bounded read recovery requires confirmed local cleanup and current authorization.':
-    code==='processor_response_unknown'?'The previous processing outcome is unknown. Its task policy and exact execution receipt determine recovery.':
+    code==='processor_response_unknown'?'The previous processing outcome is unknown. Acknowledge possible duplicate execution before retrying.':
     code==='processing_disabled'?'The processing lane is disabled. Enable it to continue.':
     code==='rate_limited'||code==='processor_capacity'?'The processing resource is busy. The task will resume when capacity is available.':
     code==='processor_still_running'?'The previous processing call is still running.':
@@ -132,10 +114,10 @@ function failureFor(input:DomainExecutionInput,status:RunStatus):TaskFailure|und
 function waitFor(input:DomainExecutionInput,status:RunStatus,failure?:TaskFailure):WaitCondition|undefined {
   if(status!=='waiting')return undefined;
   const code=failure?.code??stringValue(input.errorCode);
-  const reason:WaitReason=['physical_cleanup_pending','rate_limited','processor_capacity','processor_still_running'].includes(code??'')?'resource_limit':['model_unconfigured','provider_unavailable','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?'provider_unavailable':
-    ['external_result_unknown','physical_cleanup_unknown','processor_response_unknown'].includes(code??'')?'outcome_unknown':['not_configured','processor_not_configured'].includes(code??'')?'configuration':code==='awaiting_confirmation'?'user_confirmation':code==='worker_offline'?'worker_offline':
+  const reason:WaitReason=['rate_limited','processor_capacity','processor_still_running'].includes(code??'')?'resource_limit':['model_unconfigured','provider_unavailable','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?'provider_unavailable':
+    code==='processor_response_unknown'?'outcome_unknown':['not_configured','processor_not_configured'].includes(code??'')?'configuration':code==='awaiting_confirmation'?'user_confirmation':code==='worker_offline'?'worker_offline':
     code==='dependency'?'dependency':code==='configuration'?'configuration':'dependency';
-  return {reason,...(failure?.scope==='provider'?{resource:'configured-provider'}:{}),...(failure?.retryAfterMs!==undefined?{retryAfterMs:failure.retryAfterMs}:{}),...(reason==='outcome_unknown'&&input.confirmUnknownRequired!==false?{requiredAction:'acknowledge_unknown_execution'}:{}),...(['model_unconfigured','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?{requiredAction:'update_configuration'}:{})};
+  return {reason,...(failure?.scope==='provider'?{resource:'configured-provider'}:{}),...(failure?.retryAfterMs!==undefined?{retryAfterMs:failure.retryAfterMs}:{}),...(reason==='outcome_unknown'?{requiredAction:'acknowledge_unknown_execution'}:{}),...(['model_unconfigured','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?{requiredAction:'update_configuration'}:{})};
 }
 
 function actions(status:RunStatus, failure?:TaskFailure):ExecutionAction[] {
@@ -149,8 +131,7 @@ function actions(status:RunStatus, failure?:TaskFailure):ExecutionAction[] {
 export function executionEnvelope(input:DomainExecutionInput):ExecutionEnvelope {
   const status=canonicalRunStatus(input),failure=failureFor(input,status),waiting=waitFor(input,status,failure);
   const attempts=numberValue(input.attempts)??0,maxAttempts=numberValue(input.maxAttempts);
-  const budget=executionRetryBudgetSchema.partial().parse(Object.fromEntries(Object.keys(executionRetryBudgetSchema.shape).filter(key=>key in input).map(key=>[key,(input as Record<string,unknown>)[key]])));
-  return executionEnvelopeSchema.parse({status,attempts,...budget,...(maxAttempts===undefined?{}:{maxAttempts}),...(failure?{failure}:{}),...(waiting?{waiting}:{}),allowedActions:actions(status,failure),...(stringValue(input.inputVersion)?{inputVersion:stringValue(input.inputVersion)}:{}),...(stringValue(input.definitionVersion)?{definitionVersion:stringValue(input.definitionVersion)}:{}),...(stringValue(input.updatedAt)?{updatedAt:stringValue(input.updatedAt)}:{})});
+  return executionEnvelopeSchema.parse({status,attempts,...(maxAttempts===undefined?{}:{maxAttempts}),...(failure?{failure}:{}),...(waiting?{waiting}:{}),allowedActions:actions(status,failure),...(stringValue(input.inputVersion)?{inputVersion:stringValue(input.inputVersion)}:{}),...(stringValue(input.definitionVersion)?{definitionVersion:stringValue(input.definitionVersion)}:{}),...(stringValue(input.updatedAt)?{updatedAt:stringValue(input.updatedAt)}:{})});
 }
 
 /** Exponential backoff with injected randomness for deterministic tests. */

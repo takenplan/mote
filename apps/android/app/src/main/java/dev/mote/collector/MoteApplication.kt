@@ -75,7 +75,6 @@ class MoteApplication : Application() {
                     RetentionWorker.schedule(this@MoteApplication)
                     UploadWorker.schedule(this@MoteApplication, current)
                     SourceWork.schedule(this@MoteApplication)
-                    CalendarActionWorker.schedule(this@MoteApplication)
                 } catch (error: Exception) {
                     SupportEvents.record(this@MoteApplication, EventStage.QUEUE, EventCode.STORAGE)
                     if (QueueStorage.recovering) {

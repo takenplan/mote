@@ -1,4 +1,4 @@
-import {isWebConnection,type Connection} from './api';
+import type { Connection } from './api';
 
 export const connectionStorageKey = 'mote.connection';
 export const periodStorageKey = 'mote.period';
@@ -57,7 +57,6 @@ export function connectionForLifetime(token: string, lifetime: SessionLifetime, 
 
 /** Persist only the browser session credential; the central owner token itself remains server-managed. */
 export function persistSession(connection: Connection, lifetime: SessionLifetime, now = Date.now()): Connection {
-  if(isWebConnection(connection)){clearSession();return {...connection,viewScope:connection.credentialId};}
   const selected=connectionForLifetime(connection.token,lifetime,now);
   const deadline=connection.serverExpiresAt===undefined?selected.expiresAt:selected.expiresAt===undefined?connection.serverExpiresAt:Math.min(selected.expiresAt,connection.serverExpiresAt);
   const stored = {...selected,...(connection.serverExpiresAt!==undefined?{serverExpiresAt:connection.serverExpiresAt}:{}),...(deadline!==undefined?{expiresAt:deadline}:{}),viewScope:validScope(connection.viewScope)?connection.viewScope:crypto.randomUUID()};

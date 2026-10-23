@@ -1,5 +1,4 @@
 import {z} from 'zod';
-import {sourceMetadataIdentity} from './source-context-identity.js';
 import {createHash} from 'node:crypto';
 import {sourceContextDeclarationSchema,sourceDescriptionDeclarationSchema,sourceContextSnapshotSchema,sourceContextUpdateSchema,type AttributionContext,type SourceContextDeclaration,type SourceContextSnapshot} from '@mote/shared';
 import {StoreError,type Store} from './store.js';
@@ -47,7 +46,8 @@ export class SourceContextStore {
   /** Stable owner configuration disclosed by the source directory. Runtime
    * progress is point-in-time metadata and cannot revoke an ordinary query. */
   metadataIdentity(sourceId:string):SourceContextDeclaration{
-    return sourceMetadataIdentity(this.source(sourceId) as unknown as import('@mote/shared').SourceConnection);
+    const source=this.source(sourceId),value={sourceId,name:source.name,kind:source.kind,deviceId:source.deviceId,retention:source.retention,enabled:source.enabled};
+    return {sourceId,version:1,kind:'metadata',fingerprint:createHash('sha256').update(JSON.stringify(['source-directory-metadata@1',value])).digest('hex')};
   }
   getAtVersion(sourceId:string,version:number,expectedFingerprint?:string):SourceContextSnapshot|undefined{
     sourceContextDeclarationSchema.shape.sourceId.parse(sourceId);z.number().int().positive().parse(version);

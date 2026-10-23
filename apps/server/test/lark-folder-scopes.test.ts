@@ -26,7 +26,7 @@ async function fixture(t:any,folderScope?:string){
   const runner:LarkRunner=async command=>{
     calls.push(command);
     switch(command.kind){
-      case 'version':return 'lark-cli version 1.0.98';
+      case 'version':return 'lark-cli version 1.0.85';
       case 'status':return JSON.stringify({appId:'cli_generated_folder_scope',identities:{user:{available:true,openId:'generated-folder-owner',scope:[...state.granted].join(' ')}}});
       case 'login':state.requested=command.scopes;return JSON.stringify({verification_url:'https://accounts.feishu.cn/authorize?fixture=folder-scopes',device_code:'generated-folder-device-code',expires_in:600});
       case 'complete':if(state.grantRequested)for(const scope of state.requested)state.granted.add(scope);return '{}';

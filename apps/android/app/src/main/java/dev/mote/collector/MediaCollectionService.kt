@@ -56,7 +56,7 @@ class MediaCollectionService : NotificationListenerService() {
     }
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         // Settings status/counters also use this preferences file; they must not trigger observation loops.
-        if (key in configurationKeys || key?.startsWith("collectorPreferences.") == true) worker.post { refresh() }
+        if (key in configurationKeys) worker.post { refresh() }
     }
     private val tick = object : Runnable {
         override fun run() { refresh(); worker.postDelayed(this, 30_000) }

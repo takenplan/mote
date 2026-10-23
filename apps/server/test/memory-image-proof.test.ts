@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import type {ImageView,QueryResult} from '@mote/shared';
-import {memoryImageReadReceipts,hasMemoryImageProof,imageViewCovers,MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT} from '../src/memory-image-proof.js';
-import {MemoryOutputValidationError} from '../src/memory-errors.js';
+import {memoryImageReadReceipts,hasMemoryImageProof,imageViewCovers} from '../src/memory-image-proof.js';
 import {assertMemoryTargetSupport,retainedMemoryReadReceipt} from '../src/memory-read-context.js';
 import {readMemoryWorkCoverage} from '../src/memory-work-contract.js';
 import {reviewMemory} from '../src/memory-review.js';
@@ -63,22 +62,6 @@ test('rewriting a visual statement cannot bypass the extraction view coverage re
   const approved=await reviewMemory(input,draft,async()=>reviewed(covering));
   assert.equal(JSON.parse(approved.answer).memories[0].statement,'The image shows a generated shape.');
  }
-});
-
-test('an uncited full-image read still needs a covering citation and precise repair feedback',async()=>{
- const id=randomUUID(),draftView=image({x:0,y:0,width:40,height:40}),other={...image({x:50,y:50,width:20,height:20}),viewId:'e'.repeat(64)},whole=image();
- const candidate=(view:ImageView)=>({statement:'A generated visible shape.',evidence:[{id,image:{originalSha256:view.original.sha256,viewId:view.viewId}}]});
- const draft=result({memories:[candidate(draftView)]},[{id,imageView:draftView}]);let feedback='';
- await assert.rejects(()=>reviewMemory({question:'Generated visual review'},draft,async request=>{
-  assert.ok(request.question.includes(MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT));
-  return result({memories:[candidate(other)]},[{id,imageView:whole},{id,imageView:other}]);
- }),error=>{assert.ok(error instanceof MemoryOutputValidationError);assert.equal(error.details.problem,'review_image_coverage');feedback=error.repairInstruction;assert.ok(feedback.includes(MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT));return true;});
- const reviewed=await reviewMemory({question:'Generated visual review',memoryReviewRepair:feedback},draft,async request=>{
-  assert.ok(request.question.includes('Host review repair: '+feedback));
-  return result({memories:[candidate(whole)]},[{id,imageView:whole}]);
- });
- assert.equal(JSON.parse(reviewed.answer).memories[0].evidence[0].image.viewId,whole.viewId);
- assert.notEqual(reviewed.runId,draft.runId);
 });
 
 test('visual coverage follows cited original groups across rewritten and reordered candidates',async()=>{

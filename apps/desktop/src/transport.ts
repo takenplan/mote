@@ -6,7 +6,6 @@ import { validateServerUrl } from './config';
 import { TransportFailure, failureCode, httpFailure, type EventJournal } from './support';
 import { readResponseText } from './response-body';
 import {INGRESS_VERSION_HEADERS,requireIngressReceipt} from './ingress-protocol';
-import {uploadAccountCaptures,ingressRequest} from './ingress-client';
 
 // Authentication is the explicit Bearer header. Omit ambient HTTP credentials so
 // fetch does not attempt to replay a streaming upload after a 401 response.
@@ -14,7 +13,6 @@ export class DeletedCaptureFailure extends TransportFailure {}
 
 
 export async function uploadCapture(config: Config, event: CaptureEvent, image?: Buffer, signal?: AbortSignal, onBytes?: (bytes: number) => void): Promise<void> {
-  if(config.account){const receipts=await uploadAccountCaptures(config,[{event,image}],signal,onBytes),status=receipts.get(event.id);if(status!==200)throw new DeletedCaptureFailure('Account capture was not acknowledged',httpFailure(status??500),status);return;}
   const origin = validateServerUrl(config.serverUrl);
   if (!connectionToken(config)) throw new TransportFailure(moteText("请配置中央节点访问令牌"), 'CONFIG_INVALID');
   let response: Response;
@@ -38,7 +36,6 @@ export async function uploadCapture(config: Config, event: CaptureEvent, image?:
 
 export async function heartbeat(config: Config, body: object, events?: EventJournal, signal?: AbortSignal): Promise<void> {
   if (!connectionToken(config)) return;
-  if(config.account){try{const receipt=await ingressRequest(config,'/api/ingress/devices/heartbeat',body,'POST',signal);if(receipt?.ok!==true)throw new TransportFailure('Device heartbeat was not acknowledged','RESPONSE');}catch(error){void events?.record('HEARTBEAT',failureCode(error,'HEARTBEAT'),{detail:error instanceof Error?error.name:undefined});}return;}
   try {
     const response = await fetch(`${validateServerUrl(config.serverUrl)}/api/devices/heartbeat`, {
       method: 'POST', headers: { 'Accept-Language': getLocale(), 'Authorization': `Bearer ${requireConnectionToken(config)}`, 'Content-Type': 'application/json' },
@@ -46,11 +43,10 @@ export async function heartbeat(config: Config, body: object, events?: EventJour
     });
     await response.body?.cancel().catch(() => undefined);
     if (!response.ok) void events?.record('HEARTBEAT', httpFailure(response.status), { httpStatus: response.status });
-  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code, { detail: error instanceof Error ? error.name : undefined }); }
+  } catch (error) { const code = failureCode(error, 'HEARTBEAT'); void events?.record('HEARTBEAT', code === 'RESPONSE' ? 'NETWORK' : code); }
 }
 
-export async function uploadCaptureBatch(config: Config, entries: { event: CaptureEvent; image?: Buffer }[], signal?: AbortSignal, onBytes?: (bytes: number) => void, onReceipt?: (id: string, status: number) => void | Promise<void>): Promise<Map<string, number>> {
-  if(config.account)return uploadAccountCaptures(config,entries,signal,onBytes,onReceipt);
+export async function uploadCaptureBatch(config: Config, entries: { event: CaptureEvent; image?: Buffer }[], signal?: AbortSignal, onBytes?: (bytes: number) => void, onReceipt?: (id: string, status: number) => void): Promise<Map<string, number>> {
   if (!connectionToken(config)) throw new TransportFailure(moteText("请配置中央节点访问令牌"), 'CONFIG_INVALID');
   const origin = validateServerUrl(config.serverUrl);
   let response: Response;
@@ -81,6 +77,6 @@ export async function uploadCaptureBatch(config: Config, entries: { event: Captu
     else if(receipt.receipt!==undefined)throw new TransportFailure('Invalid batch receipts', 'RESPONSE');
     result.set(receipt.id, receipt.status);
   }
-  for (const [id, status] of result) { signal?.throwIfAborted(); await onReceipt?.(id, status); }
+  for (const [id, status] of result) onReceipt?.(id, status);
   return result;
 }

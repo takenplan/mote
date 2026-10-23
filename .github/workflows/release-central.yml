@@ -2,15 +2,8 @@ name: Release Central
 on:
   push:
     tags: ['central-v*']
+  # Select the component's exact version tag when running this manually.
   workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Branch build profile (release tags always use prod)'
-        type: choice
-        options: [dev, prod]
-        default: dev
-env:
-  MOTE_BUILD_PROFILE: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || inputs.profile || 'dev' }}
 permissions:
   contents: read
 concurrency:
@@ -22,8 +15,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      profile: ${{ steps.version.outputs.profile }}
-      build_id: ${{ steps.version.outputs.build_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -46,14 +37,13 @@ jobs:
       - name: Build central workspaces
         run: npm run build:central
       - name: Verify central workspaces and generated fixtures
-        if: needs.version.outputs.profile == 'prod' || vars.MOTE_PRE_RELEASE_CHECKS == 'true'
+        if: vars.MOTE_PRE_RELEASE_CHECKS == 'true'
         run: npm run check:central
       - name: Package committed central source and verify archive metadata
         run: node scripts/release/source-package.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
+        with: { name: release-central, path: artifacts/release/*, if-no-files-found: error, retention-days: 7 }
   publish:
-    if: needs.version.outputs.profile == 'prod'
     needs: [version, package]
     runs-on: ubuntu-24.04
     environment: release
@@ -65,8 +55,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: '24' }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release }
-      - name: Publish verified central Beta or stable release
+        with: { name: release-central, path: artifacts/release }
+      - name: Publish verified central DEV release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release/publish.mjs central

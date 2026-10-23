@@ -45,8 +45,6 @@ object HttpJson {
             connection.doOutput = body != null
             if (body != null) connection.setRequestProperty("Content-Type", contentType)
             connection.setRequestProperty("Accept-Language", MoteI18n.language())
-            ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
-            if (URL(url).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             if (IngressV2Protocol.uploadWrite(method, url)) connection.setRequestProperty(IngressV2Protocol.HEADER, IngressV2Protocol.VERSION)
             token?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
@@ -115,7 +113,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
             if (!config.hasSyncConnection()) { settings.syncStatus("unconfigured", MoteI18n.text("仅保存在本机 · 尚未配置完整连接")); return Result.success() }
             if (config.syncMode == "manual" && !explicit) { settings.syncStatus("manual", MoteI18n.text("手动同步 · 记录持续保存在本机")); return Result.success() }
             val requestedStamp = inputData.getString("syncStamp")
-            if (requestedStamp != SyncSchedule.stamp(config)) { SyncSchedule.schedule(applicationContext, config); return Result.success() }
+            if (requestedStamp != null && requestedStamp != SyncSchedule.stamp(config)) { SyncSchedule.schedule(applicationContext, config); return Result.success() }
             config.validate(); config.validateConnection()
             if (runAttemptCount == 0 && !inputData.getBoolean("continuation", false) && (SyncSchedule.delay(applicationContext, config, explicit) ?: Long.MAX_VALUE) > 0) {
                 SyncSchedule.schedule(applicationContext, config); return Result.success()
@@ -133,7 +131,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
             // operation. Compressed JSONL transport supports up to 500.
             var remaining = config.syncBatchSize.coerceIn(1, 500)
             val slice = UploadSlice()
-            val turns = applicationContext.accountPreferences("capture-upload-turns")
+            val turns = applicationContext.getSharedPreferences("capture-upload-turns", Context.MODE_PRIVATE)
             val stamp = SyncSchedule.stamp(config)
             val continuing = inputData.getBoolean("continuation", false) && turns.getString("stamp", null) == stamp
             val preferSince = if (continuing) turns.getLong("since", System.currentTimeMillis()) else System.currentTimeMillis()
@@ -146,7 +144,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                 }
                 stage = EventStage.QUEUE
                 val preferNew = liveBytes < 16L * 1024 * 1024
-                val events = queue.peekUploadBatch(remaining, config.packedUpload, config.jsonlWindowMinutes, if (preferNew) preferSince else null)
+                val events = queue.peekBatch(maxCount = remaining, maxBytes = 4 * 1024 * 1024, metadataWindowMinutes = config.jsonlWindowMinutes, preferSince = if (preferNew) preferSince else null)
                 if (events.isEmpty()) {
                     finishStatus()
                     runCatching { PerceptionSync.pull(applicationContext, settings, config, queue) }
@@ -154,14 +152,39 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                     return Result.success()
                 }
                 stage = EventStage.UPLOAD
-                val sent = if (config.packedUpload) events else events.take(1)
+                var sent = if (config.packedUpload) events else events.take(1)
                 pendingRecordId = sent.first().getString("id")
+                var wireBytes = 0L
                 val individual = !config.packedUpload
-                val wireBytes = sent.sumOf { it.toString().toByteArray(Charsets.UTF_8).size.toLong() }
-                val client = applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }
+                val response: Pair<Int, JSONObject?> = if (individual) {
+                    wireBytes = sent.first().toString().toByteArray(Charsets.UTF_8).size.toLong()
+                    SyncSchedule.requireConditions(applicationContext, config)
+                    CollectorHttp(applicationContext).post("${config.server}/api/captures", sent.first(), config.connectionToken())
+                } else {
+                    val result = UploadNegotiation.sendShrinking(sent) { batch ->
+                        val bundle = CaptureBundle.encode(batch); wireBytes += bundle.size
+                        SyncSchedule.requireConditions(applicationContext, config)
+                        CollectorHttp(applicationContext).postBytes("${config.server}/api/captures/bundle", bundle, config.connectionToken(), CaptureBundle.CONTENT_TYPE)
+                    }
+                    sent = result.first; result.second
+                }
+                slice.record(wireBytes)
+                liveBytes = if (preferNew) liveBytes + wireBytes else 0L
+                retainTurn()
+                Diagnostics(applicationContext).add("uploadBytes", wireBytes)
+                val receipts = if (individual) {
+                    if (response.first in setOf(200, 201) && !IngressV2Protocol.validCapture(pendingRecordId!!, response.second)) return failed(MoteI18n.text("上传确认 ID 不匹配"))
+                    mapOf(pendingRecordId!! to response.first)
+                } else {
+                    if (response.first != 200) return failed(MoteI18n.text("批量上传未确认（HTTP {0}）", response.first), response.first !in setOf(400, 401, 403, 413))
+                    BatchUpload.receipts(sent.map { it.getString("id") }.toSet(), response.second)
+                }
+                var retry = false
+                var permanent = false
                 var acknowledged = 0
-                client.settleCaptures(sent) { event, code ->
+                for (event in sent) {
                     val id = event.getString("id")
+                    val code = receipts[id]
                     when (code) {
                         200, 201 -> {
                             val bytes = event.toString().toByteArray(Charsets.UTF_8).size.toLong()
@@ -172,15 +195,13 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                         }
                         409 -> queue.uploadConflict(id)
                         410 -> queue.archiveMissing(id)
+                        else -> { retry = true; if (code in setOf(400, 401, 403, 413, 426)) permanent = true }
                     }
                 }
-                slice.record(wireBytes)
-                liveBytes = if (preferNew) liveBytes + wireBytes else 0L
-                retainTurn()
-                Diagnostics(applicationContext).add("uploadBytes", wireBytes)
-                if (!individual && acknowledged > 0) SupportEvents.record(applicationContext, EventStage.UPLOAD, EventCode.OK, httpStatus = 200)
+                if (!individual && acknowledged > 0) SupportEvents.record(applicationContext, EventStage.UPLOAD, EventCode.OK, httpStatus = response.first)
                 pendingRecordId = null
                 remaining -= sent.size
+                if (retry) return failed(MoteI18n.text("部分记录未确认"), !permanent)
 
             }
             retainTurn()
@@ -194,14 +215,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
         } catch (error: SyncConditionsUnavailable) {
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
-        } catch (error: FileTransportFailure) {
-            SupportEvents.record(applicationContext, stage, EventJournal.httpFailure(error.httpStatus), httpStatus = error.httpStatus)
-            if (error is FileIngressRejection && error.paused) {
-                settings.syncStatus("paused", MoteI18n.text("中央来源已暂停，请在中央来源页恢复"))
-                Result.success()
-            } else failed(MoteI18n.text("批量上传未确认（HTTP {0}）", error.httpStatus), error.httpStatus !in setOf(400, 401, 403, 413, 426))
         } catch (error: Exception) {
-            SupportEvents.failure(applicationContext, stage, error)
+            SupportEvents.record(applicationContext, stage, EventJournal.failure(error, stage))
             if (error !is RecordedHeartbeatFailure) Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)
             failed(MoteI18n.text("同步失败，请检查连接"))
         }
@@ -221,7 +236,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
 
 internal object SyncHeartbeat {
     @Synchronized fun send(context: Context, settings: Settings, config: CollectorConfig, queue: DurableQueue): Boolean {
-        val prefs = context.accountPreferences("sync-heartbeat")
+        val prefs = context.getSharedPreferences("sync-heartbeat", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val state = "${SyncSchedule.stamp(config)}:${settings.enabled}:${settings.state()}"
         val last = prefs.getLong("at", 0)
@@ -245,7 +260,7 @@ internal object SyncHeartbeat {
         else if (status == "error") body.put("error", settings.message())
         SyncSchedule.requireConditions(context, config)
         Diagnostics(context).add("heartbeatRequests")
-        val (code, response) = CollectorHttp(context).post("${config.server}/api/ingress/devices/heartbeat", body, config.connectionToken())
+        val (code, response) = CollectorHttp(context).post("${config.server}/api/devices/heartbeat", body, config.connectionToken())
         if (code !in 200..299 || response?.optBoolean("ok") != true) SupportEvents.record(context, EventStage.HEARTBEAT, EventJournal.httpFailure(code), httpStatus = code)
         if (code !in 200..299 || response?.optBoolean("ok") != true) {
             Operations.record(context, OperationKind.HEARTBEAT_FAILED, Operations.httpReason(code), httpStatus = code)

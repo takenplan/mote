@@ -1,4 +1,3 @@
-import type {ImportDecodeOutcome} from './import-text-decoding.js';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {createWriteStream} from 'node:fs';
@@ -12,7 +11,7 @@ import type {ManifestTask} from './import-manifest-worker.js';
 import type {Transcript,ArchivedFile} from '@mote/shared';
 import {StoreError} from './store.js';
 export type FormatTask=ManifestTask|{kind:'document';path:string;mimeType:string}|{kind:'text';path:string;maxBytes:number;chunkCharacters:number}|{kind:'zip';path:string;output:string;maxFiles:number;maxBytes:number}|{kind:'plain';inputs:{file:ArchivedFile;path:string}[];createdAt:string;manifest:string};
-type Results={document:Transcript;manifest:ReturnType<typeof import('./import-manifest-worker.js').validateImportManifest>;text:{durationMs:number;segments:{startMs:number;endMs:number;text:string}[]};zip:{files:{name:string;path:string;bytes:number}[];bytes:number};plain:{outcomes:ImportDecodeOutcome[];count:number;warnings:string[];partial:boolean;samples:{title:string;text:string;kind:string;attachmentCount:number}[];hash:string}};
+type Results={document:Transcript;manifest:ReturnType<typeof import('./import-manifest-worker.js').validateImportManifest>;text:{durationMs:number;segments:{startMs:number;endMs:number;text:string}[]};zip:{files:{name:string;path:string;bytes:number}[];bytes:number};plain:{count:number;warnings:string[];partial:boolean;samples:{title:string;text:string;kind:string;attachmentCount:number}[];hash:string}};
 // A single decoding/manifest subprocess can cover a large configured import.
 const FORMAT_EXECUTION_TIMEOUT_MS=15*60*1000;
 let active=0;const queue:(()=>void)[]=[];

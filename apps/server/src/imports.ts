@@ -1,11 +1,9 @@
-import {importReviewGate as reviewGate} from './import-review.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import { moteText } from './i18n.js';
 import {randomUUID} from 'node:crypto';
-import {constants,openSync,createReadStream,createWriteStream,existsSync,readFileSync,realpathSync,renameSync,rmSync,writeFileSync} from 'node:fs';
-import {basename,dirname,join,relative,resolve} from 'node:path';
-import {hostImportDirectory,readImportParts as readParts,MAX_IMPORT_INPUT_BYTES as MAX_INPUT_BYTES,MAX_IMPORT_FILES as MAX_FILES} from './import-host-directory.js';
-export {ImportInputError} from './import-host-directory.js';
+import {readdir,lstat} from 'node:fs/promises';
+import {constants,closeSync,createReadStream,createWriteStream,existsSync,fstatSync,lstatSync,openSync,readSync,readFileSync,realpathSync,renameSync,rmSync,writeFileSync} from 'node:fs';
+import {basename,dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
 import {formatWork} from './format-work.js';
 import {createInterface} from 'node:readline';
 import {importRecordSchema,type PreparedRecord} from './import-record.js';
@@ -30,14 +28,27 @@ import {withExecutionCancellation} from './execution-cancellation.js';
 import {importMemoryProgress} from './import-memory-progress.js';
 import {ImportAttributionStore} from './import-attribution.js';
 
-const MAX_EXPANDED_BYTES=512*1024*1024;
+const MAX_INPUT_BYTES=256*1024*1024,MAX_EXPANDED_BYTES=512*1024*1024,MAX_FILES=4000;
+export class ImportInputError extends StoreError {
+  constructor(public code:'import_directory_missing'|'import_directory_unreadable'|'import_directory_required',message:string){super(message,422);}
+}
 export type ImportPreparation={operationId?:string;signal?:AbortSignal;workspace:string;inputPaths:string[];instruction:string;previous?:{summary:string;error?:string}};
 export type ImportPreparationResult={summary:string;recordsPath?:string;warnings?:string[];reviewDecision?:ImportReviewDecision};
 export type ImportRuntime={executor?:ExecutionEngine;intake?:ImportIntakeRegistry;fileStore?:FileStore;prepare?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;sourcePacks?:ReadonlyMap<string,{revision:string;prepare:(input:ImportPreparation)=>Promise<ImportPreparationResult>}>;onImported?:(captureIds:string[],importJobId:string)=>Promise<{memoryJobId?:string}>};
 type InternalJob=ImportJob&{resourceWait?:'prepare'|'commit';excludedFiles?:{fileId:string;reason:string}[];containerIds?:string[];recordsProcessed:number;processing:'automatic'|'preview';sourcePackRevision?:string;archiveWarnings?:string[];createFingerprint?:string;preparationRevision:number;originalsPending?:boolean;expansion?:{originalIds:string[];completedIds:string[];pins?:Record<string,{id:string;version:string}>};parserMode?:'plain';workspace:string;inputs:{path:string;fileId:string}[];manifestHash?:string;failurePhase?:'prepare'|'import';memoryNotified?:boolean;blockedArchive?:boolean};
 const responseSchema=z.object({summary:z.string().max(20000),recordsPath:z.string().max(4000).optional(),warnings:z.array(z.string().max(2000)).max(200).optional(),reviewDecision:importReviewDecisionSchema.optional()}).strict();
 const message=(error:unknown)=>error instanceof Error?error.message.slice(0,2000):'Import failed';
-
+const inside=(root:string,path:string)=>{const rel=relative(root,path);return rel===''||(!rel.startsWith(`..${sep}`)&&rel!=='..'&&!isAbsolute(rel));};
+function reviewGate(job:InternalJob,decision:ImportReviewDecision|undefined,informationalWarnings=false):ImportReviewGate {
+  if(job.processing!=='automatic')return {decision:'confirmation',reason:'This import was requested for manual preview.'};
+  if(!decision)return {decision:'confirmation',reason:'The parser did not provide a confidence and ambiguity assessment.'};
+  if(decision.confidence!=='high'||decision.ambiguous)return {decision:'confirmation',reason:decision.reason??'The parser reported low confidence or ambiguity.'};
+  if(!decision.reason)return {decision:'confirmation',reason:'The parser did not explain its high-confidence assessment.'};
+  if(job.warnings.length&&!informationalWarnings)return {decision:'confirmation',reason:'Processing reported warnings; review the preview before publishing.'};
+  if(!job.dispositions||job.dispositions.items.length!==job.files.length)return {decision:'confirmation',reason:'The parser did not account for every original file.'};
+  if(job.dispositions.counts.unsupported||job.dispositions.counts.excluded||(!job.dispositions.counts.parsed&&!job.dispositions.counts.processing))return {decision:'confirmation',reason:'Some originals were not parsed as evidence.'};
+  return {decision:'automatic',reason:'The parsed records passed host validation with high confidence and no ambiguity.'};
+}
 
 /** Deterministic formats decode locally; models map unfamiliar structures into reviewed records. */
 export class ImportStore {
@@ -65,7 +76,7 @@ export class ImportStore {
     store.db.exec('CREATE TABLE IF NOT EXISTS import_jobs(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,json TEXT NOT NULL)');
     store.db.exec('CREATE TABLE IF NOT EXISTS import_create_requests(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
     this.executor=runtime.executor??new ExecutionEngine(store);
-    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,validate:step=>{
+    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,validate:step=>{
       const row=store.db.prepare('SELECT json FROM import_jobs WHERE id=?').get(String(step.input.jobId)) as {json:string}|undefined;
       return Boolean(!this.closed&&row&&step.input.phase===phase&&step.id===this.phaseId(JSON.parse(row.json) as InternalJob,phase));
     },execute:async(step,signal,grant)=>{
@@ -159,7 +170,24 @@ export class ImportStore {
     }else if(request.files){
       for(const file of request.files){if(!validBase64(file.dataBase64))throw new StoreError('Invalid file base64');add(file.name,Buffer.from(file.dataBase64,'base64'),file.mimeType);}
     }else{
-      entries.push(...await hostImportDirectory(request.directory!,this.store.directory,()=>this.lifetime.signal.throwIfAborted()));
+      try{
+      const source=realpathSync(resolve(request.directory!)),vault=realpathSync(this.store.directory);
+      if(inside(source,vault)||inside(vault,source))throw new StoreError('Choose a directory outside the Mote data directory');
+      if(!lstatSync(source).isDirectory())throw new ImportInputError('import_directory_required',moteText('该路径不是目录，请填写中央服务器上可读取的目录。'));
+      const walk=async(directory:string,depth:number):Promise<void>=>{this.lifetime.signal.throwIfAborted();if(depth>30)throw new StoreError('Directory nesting exceeds 30 levels',413);for(const name of (await readdir(directory)).sort()){
+        this.lifetime.signal.throwIfAborted();
+        const path=join(directory,name),info=await lstat(path,{bigint:true});if(info.isSymbolicLink())throw new StoreError('Directory imports cannot follow symbolic links');
+        if(info.isDirectory())await walk(path,depth+1);else if(info.isFile()){
+          const size=Number(info.size);if(size>MAX_FILE_BYTES||total+size>MAX_INPUT_BYTES||entries.length>=MAX_FILES)throw new StoreError('Directory exceeds import size limits',413);
+          const name=archiveRelativePath(relative(source,path).split(sep).join('/'));entries.push({name,path,sizeBytes:size,identity:fileIdentity(info)});total+=size;
+        }
+      }};await walk(source,0);
+      }catch(error){
+        const code=(error as NodeJS.ErrnoException).code;
+        if(code==='ENOENT'||code==='ENOTDIR')throw new ImportInputError('import_directory_missing',moteText('中央服务器上的目录不存在或文件已移动，请检查路径后重新提交。'));
+        if(code==='EACCES'||code==='EPERM')throw new ImportInputError('import_directory_unreadable',moteText('中央服务器无法读取该目录，请检查访问权限后重新提交。'));
+        throw error;
+      }
     }
     this.lifetime.signal.throwIfAborted();
     if(!entries.length)throw new StoreError('No files were supplied');
@@ -309,12 +337,11 @@ export class ImportStore {
       for(const input of attempt.inputs)await this.materialize(input);
       const decoded=await formatWork({kind:'plain',inputs:attempt.inputs.map(input=>({path:input.path,file:this.files.get(input.fileId)})),createdAt:job.createdAt,manifest:join(attempt.workspace,'prepared.jsonl')},signal);
       signal?.throwIfAborted();grant.assert();
-      const counts:ImportDispositions['counts']={parsed:0,attachment:0,container:0,excluded:0,unsupported:0},items=decoded.outcomes.map(outcome=>{const file=this.files.get(outcome.fileId),status=outcome.status==='decoded'?'parsed' as const:'unsupported' as const;counts[status]++;return {fileId:file.id,path:file.relativePath,status,reason:outcome.reason};});
-      job.warnings=decoded.warnings;job.dispositions=this.dispositions(job,{counts,items});
       if(!decoded.count&&!job.media?.length&&!job.excludedFiles?.length)return grant.commit(()=>{job.status='unsupported';job.processingStatus='blocked';job.error='Original files are archived; no searchable text or media work was produced.';this.save(job);return this.public(job);});
       const prepared=await this.stagePrepared(job,attempt,join(attempt.workspace,'prepared.jsonl'),signal);
       job.manifestHash=prepared.hash;job.summary='Source document text archived directly; author and original dates remain unspecified.';job.warnings=decoded.warnings;
       job.preview={count:decoded.count+(job.media?.length??0),samples:decoded.samples};job.progress.total=job.preview.count;job.status='awaiting_confirmation';job.processingStatus='preview_ready';
+      job.dispositions=this.dispositions(job,{counts:{parsed:attempt.inputs.length,attachment:0,container:0,excluded:0,unsupported:0},items:attempt.inputs.map(input=>this.files.get(input.fileId)).map(file=>({fileId:file.id,path:file.relativePath,status:'parsed',reason:'Deterministic document decoder; no attribution or original date inferred'}))});
       job.reviewDecision=decoded.partial?
         {confidence:'low',ambiguous:false,reason:'Document decoding reported incomplete coverage; review the available text before publishing.'}:
         {confidence:'high',ambiguous:false,reason:'Deterministic document decoding preserved original text without inferred attribution or dates.'};
@@ -451,12 +478,12 @@ export class ImportStore {
     this.save(job);
     if(!['waiting','running'].includes(step.state)){const waiters=this.phaseWaiters.get(step.id);this.phaseWaiters.delete(step.id);for(const resolve of waiters??[])resolve();}
   }
-  private async runPhase(id:string,phase:'prepare'|'commit',ownerAction=false){
+  private async runPhase(id:string,phase:'prepare'|'commit'){
     if(this.closed)throw new StoreError('Import feature is closed',503);
     if(this.running.has(id)||this.isScheduled(id))throw new StoreError('Import is already processing',409);
     const job=this.load(id),stepId=this.admitPhase(job,phase),step=this.executor.get(stepId)!;
     if(step.state==='succeeded')return this.public(this.load(id));
-    if(step.state!=='running')this.executor.retry(stepId,ownerAction);
+    if(step.state!=='running')this.executor.retry(stepId,false);
     let resolveDone!:()=>void;
     const done=new Promise<void>(resolve=>{resolveDone=resolve;let waiters=this.phaseWaiters.get(stepId);if(!waiters){waiters=new Set();this.phaseWaiters.set(stepId,waiters);}waiters.add(resolve);});
     try{
@@ -466,16 +493,16 @@ export class ImportStore {
       await Promise.race([done,scheduled]);await this.executor.drain([stepId]);return this.public(this.load(id));
     }finally{const waiters=this.phaseWaiters.get(stepId);waiters?.delete(resolveDone);if(!waiters?.size)this.phaseWaiters.delete(stepId);}
   }
-  async prepare(id:string,resumeCancelled=false,ownerAction=false):Promise<ImportJob>{
+  async prepare(id:string,resumeCancelled=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='prepare'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.progress.processed>0||job.status==='completed')throw new StoreError('Saved records cannot be reanalyzed in the same job',409);
-    const result=await this.runPhase(id,'prepare',ownerAction);return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
+    const result=await this.runPhase(id,'prepare');return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
   }
-  async confirm(id:string,resumeCancelled=false,ownerAction=false):Promise<ImportJob>{
+  async confirm(id:string,resumeCancelled=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='commit'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.status==='completed')return this.public(job);
     if(job.status!=='awaiting_confirmation'&&!(['failed','cancelled'].includes(job.status)&&job.failurePhase==='import')&&!(job.status==='importing'&&job.resourceWait==='commit'))throw new StoreError('Analyze and review a preview before confirming the import',409);
-    return this.runPhase(id,'commit',ownerAction);
+    return this.runPhase(id,'commit');
   }
   cancel(id:string):ImportJob {
     const job=this.load(id);
@@ -488,7 +515,7 @@ export class ImportStore {
     const current=this.load(id);current.status='cancelled';current.processingStatus='blocked';current.error=undefined;this.save(current);
     return this.public(current);
   }
-  async retry(id:string):Promise<ImportJob>{const job=this.load(id);return job.failurePhase==='import'?this.confirm(id,true,true):this.prepare(id,true,true);}
+  async retry(id:string):Promise<ImportJob>{const job=this.load(id);return job.failurePhase==='import'?this.confirm(id,true):this.prepare(id,true);}
   stop(){
     if(this.closing)return this.closing;this.closed=true;this.lifetime.abort();
     const ids=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN ('imports.prepare','imports.commit') AND state IN ('waiting','running','blocked')").all().map(row=>String(row.id));
@@ -510,4 +537,11 @@ export class ImportStore {
     const retained=new Set(otherJobs.flatMap(other=>other.files.map(file=>file.id))),removed=this.files.removeUnreferenced(job.files.map(file=>file.id),retained);
     return {deleted:true,captures,files:removed.files,bytes:removed.bytes,retainedSharedSource};
   }
+}
+
+const fileIdentity=(info:import('node:fs').BigIntStats)=>[info.dev,info.ino,info.size,info.mtimeNs,info.ctimeNs].join(':');
+function* readParts(path:string,expected?:string){
+ const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW),buffer=Buffer.alloc(4*1024*1024);
+ const check=()=>{const info=fstatSync(fd,{bigint:true});if(!info.isFile()||expected&&(fileIdentity(info)!==expected||realpathSync(path)!==path))throw new StoreError('Original file changed during import',409);};
+ try{check();let size:number;while((size=readSync(fd,buffer,0,buffer.length,null))>0)yield buffer.subarray(0,size);check();}finally{closeSync(fd);}
 }

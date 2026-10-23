@@ -1,14 +1,10 @@
 # Mote 架构
 
-账号隔离、配置发布和后台工作寿命的统一合同见[统一架构与用户旅程 ADR](adr-unified-user-journeys.md)。该决定以一致的用户体验为目标；本轮实现、验证及发布进度分别记录在[实施记录](validation/unified-user-journeys-2026-10-23.md)。
-
-生产入口 `apps/server/src/app.ts` 导出账号作用域的 `buildScopedApp`，单账号也走同一路径。实例共享 SQLite、执行器和运行资源，私人数据与配置按服务端认证账号隔离；旧单所有者组合只由 `test/fixtures/legacy-app.ts` 显式提供算法回归，不能打开 epoch 5。业务流程及音频备份不自动 ASR 的决定见[共用业务流程 ADR](adr-shared-business-flows.md)。[10 月 18 日审计](audits/business-flow-parity-2026-10-18.md)保留当时缺口，不能代替后续实现和验证状态；后继对账见[项目推进审阅](audits/project-map-and-progress-review-2026-10-20.md)。
-
 任务期限与失败恢复的目标原则见 [2026-10-15 ADR](adr-task-recovery-and-execution-budgets.md)：每种任务在开发和注册时声明自身的宽松默认超时策略，不统一套用 600 秒；资源等待、模型反馈修正、实际失败和结果未知分别处理。中央注册策略与具体默认值见[任务执行策略](task-execution-policies.md)；部署与验证范围单独记录。
 
 问答覆盖、无字符近似配额的正常分页、录音语料时间与规范正文，以及质量对照和实际恢复边界，以[2026-10-14简化决定](adr-ask-evidence-quality-and-simple-context.md)为准。Memory不再自动二分恢复，历史验证与已固定记录仍保留各自日期和身份。
 
-Mote 是 AI-native 的个人上下文采集器与中央归档。当前生产基线为 Central epoch 5、Desktop / Android 本机格式 4、Wire 2、Ingress 3、个人便携归档 version 3，各自独立于产品版本。旧库、旧 owner token 和旧协议不迁移或双写，见[多用户决定](adr-multiuser-scope.md)、[主线集成](adr-multiuser-main-integration.md)和[更新说明](updating.md)。
+Mote 是 AI-native 的个人上下文采集器与中央归档。当前实现采用单一 MVP 基线：Central 存储 epoch 4，Desktop / Android 本机格式 3，不安装旧库迁移器。产品版本、wire protocol 1、collector Ingress 2、便携归档 v2 各自独立，见 [MVP 基线决策](adr-mvp-baseline.md)。
 
 导入说明是确切新增原件的宿主背景，不是整份来源的身份分类。个人 v5 保留 v4 的声明、日记主叙述者、时间框架与续文解释，并组合范围评估与模型择要；真实身份未知时仍保留有限观察。新 Memory 任务区分产出目标与同一任务的已授权解释范围，提取和独立审核模型可按具体缺口补读原件。实际披露范围提供精确引用资格并保留阶段依赖；未读许可不成为本批上下文依赖，另一未读原件的变化不撤出独立目标。Ask 逐事实核对主体和时间。版本与旧任务边界见[上下文读取 ADR](adr-memory-context-reading.md)，v3 固定定义见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
 
@@ -19,7 +15,7 @@ Android 文件任务另有选填来源说明：所有者原文以私有版本化
 ```mermaid
 flowchart LR
   C[Android / macOS 采集与隐私规则] --> Q[本机持久队列 / 原件快照]
-  Q --> I[Ingress 3 / 账号与来源回执]
+  Q --> I[Ingress 2 / 幂等确认]
   S[连接器 / 来源 / 显式导入] --> I
   I --> R[原件与来源版本]
   R --> M[正式资料 Material / 不可变修订]
@@ -35,7 +31,7 @@ flowchart LR
   X --- A
 ```
 
-中央操作员选定的实例 YAML 与每账号私人 YAML 分别使用 ConfigService；各自的网页/文件编辑共用校验、revision、准备和应用事务，共享资源引用不复制共享秘密。业务数据库、不可变 Memory 策略与历史授权、任务配置快照、设备本地隐私仍属于各领域。热更新与需重启/迁移字段明确区分，见 [统一配置 ADR](adr-unified-configuration.md) 和 [配置归属](configuration-ownership.md)。
+中央当前系统配置统一为私有 `mote.yaml` 与 Cordis 生命周期中的 ConfigService：网页和文件编辑共用校验、revision、准备和应用事务。业务数据库、不可变 Memory 策略与历史授权、任务配置快照、设备本地隐私仍属于各领域。热更新与需重启/迁移字段明确区分，见 [统一配置 ADR](adr-unified-configuration.md) 和 [配置归属](configuration-ownership.md)。
 
 ## 代码目录与责任
 
@@ -59,11 +55,11 @@ flowchart LR
 
 客户端独立采集，Central 不远程开启屏幕采集。应用规则、遮罩和用户指定的文字隐私规则在本机处理；只有开启文字审查且规则非空时调用本机 OCR。Central 模型不参与接入授权。来源适配器提供协议身份、原文、可靠时间和稳定版本，不用语义关键词推断主题或用户意图。
 
-Ingress 3 在当前账号与来源事务中保存原件/版本，返回固定部署、账号、来源、批次和成员的回执，确认只证明输入已接收。来源适配器、处理器和 Coding preparation 分别拥有其规范表示、fidelity 和发布规则；接收成功、Material 发布、理解与 Memory 完成是独立状态。当前路由见[协议](protocol.md)，Coding 的语义与产物合同见[编码记忆](coding-agent-memory.md)。
+接入事务保存原件和版本并返回 Ingress 2 回执，确认只证明输入可恢复。普通来源保存观察/来源版本；Coding 原始事件写私有 `source-archive` 批次和清单，经声明的 recipe 发布 schema 6 的干净对话 Material。过程、工具、推理、未确认发言和超长消息在模型曝光前排除，并保留 fidelity 说明。来源发布、理解与 Memory 完成是分别可见的状态。
 
 `capturedAt` 是观察时间，`receivedAt` 是首次接收时间，journal 游标是到达/变化顺序。文档另保留 `recordedAt / occurredAt / timeBasis`；没有可靠发生时间时不以上传日期代替。重试相同身份和字节；冲突不会覆盖原版本。
 
-中央原件位于 `originals/<部署与账号散列>/objects/<sha256>/<part>.plain|.aes`，每片最多 4 MiB，账号引用、pin 与实际活动约束 GC。SQLite 保存账号限定的规范记录、索引和任务；共享库文件不提供跨账号读取权。个人原件加密默认关闭，启用后不等于整个 SQLite 加密。客户端格式 4 内容原样保存在私有目录，Prod 凭据用系统保护，Dev 的 Mote 自有凭据使用私有文件；详见[内容存储](content-storage.md)。
+原件统一使用 `files/objects/<sha256>/<part>.plain|.aes`，每片最多 4 MiB，引用与 pin 控制 GC。SQLite 保存元数据、来源状态、索引和执行记录；Coding 原始正文在 `source-archive/`。中央内容加密默认关闭，启用后只保护内容对象及明确的私有载荷，不等于整个 SQLite 加密。客户端格式 3 内容原样存放于应用私有目录，凭据仍使用系统安全存储。
 
 图片默认绑定中央本地 OCR 策略；图片理解是独立的模型阶段，由当前方案、授权与模型可用性控制。Agent 读取原图另受披露开关与范围约束。音频默认本地 ASR 与匿名说话人分离；模型和 Worker 未就绪时保留原件并等待。文件快照索引单独保存，处理结果不改写接入时的原始回执。
 
@@ -81,7 +77,7 @@ Ingress 3 在当前账号与来源事务中保存原件/版本，返回固定部
 
 ExecutionEngine 负责并发、资源互斥、持久租约、输入版本、取消、超时、重试与提交 fence。当前任务中断可恢复成功检查点；删除、授权撤销和配置变化阻止晚到输出发布。没有每日调用、字符、token 或费用硬预算；实际用量和价格记录继续保留，未知用量不当作零费用。
 
-当前 Ask、Memory、Files 等账号域在同一 M05 执行器中运行。普通问题默认直接查证，模型可通过宿主研究控制提交只读子任务；等待、重启、取消及已完成检查点保持持久身份。Memory 按固定策略、原件范围和授权执行提取、独立审核、staging 与 fenced 保存。普通停用或暂停关闭后续生产者准入，已接收的提取、审核和发布继续排空；待整合窗口冻结截止成员并保留原到期时间，同一版本按持久占用规则避免重复准入。恢复不会重新开放旧生产者回执或补做暂停期间的输入。立即停止则撤销未完成自动工作；来源撤销、隐私变更及账号失效仍阻止迟到发布。外部引擎只接管声明阶段，原件授权、独审和最终发布仍归宿主。重复 ACK、派生更新和重启不授历史工作。见[统一旅程合同](adr-unified-user-journeys.md)、[连续批次](adr-memory-continuous-batch.md)、[插件边界](adr-plugin-center-memory-replacement.md)和[系统改造决定](adr-system-refactor.md)。
+问答统一通过 DelegatedQueryRuns 和 DelegationRuntime，普通问题默认直接查证；模型可提交有界只读研究子任务，等待时释放模型槽，重启复用已完成子任务和 journal。普通就绪自动 Memory 按冻结的配方/授权合同结构装成有界滚动 package，直接交给现有 MemoryPipeline；需要语义规划或额外上下文时仍由模型决定。逐成员覆盖与独立审核决定长期记忆，模型语义结论不会由宿主关键词替代。新接收输入持续记录自动 Memory 授权，重复确认、派生更新和重启不产生新授权。可信前后台 lane 在同一执行器中准入，工具采用小原生核心与版本固定的按需能力目录；见 [本轮ADR](adr-system-refactor.md)。
 
 查询、理解、Memory 与洞察运行时仅提供宿主授予的只读上下文工具与 Skill。原文、OCR、元数据和模型产物都是证据，不能改变权限或系统指令。引用必须指向本轮实际读取且范围允许的原始片段；派生摘要不授予未读原文的引用权限。
 
@@ -89,12 +85,12 @@ ExecutionEngine 负责并发、资源互斥、持久租约、输入版本、取�
 
 ## 产品与运维边界
 
-Central 不设置普通业务 HTTP 次数额度，不按前台/同步接口分配请求配额；积压任务由执行并发、取消和生命周期调度。M01 密码登录保留已批准的认证尝试保护，用户配置的存储容量和上游实际限流仍适用，见[请求准入](adr-central-request-admission.md)与[多用户认证例外](adr-multiuser-scope.md)。
+Central 不设置 HTTP 请求次数额度，不按前台/同步接口划分频控，也不因上传、查询、导入、登录、原件读取或文件准备队列达到固定总数而拒绝新请求。积压任务由现有执行并发、取消和生命周期机制调度；用户配置的存储容量和上游实际限流仍适用，见 [请求准入决策](adr-central-request-admission.md)。
 
-Central 是单实例写入、账号私人数据隔离的多用户节点，server/web 同版本发布；Desktop 与 Android 独立发布。连接校验 Wire、Ingress 和当前凭据能力，不用产品版本猜权限。设备邀请只授自身 ingress / 获准 Actions，账号会话访问本人归档，管理员管理账号与共享资源而不通过普通 API 读取他人私有资料；MCP 另有独立 scope。
+Central 是单所有者仓库，server/web 同版本发布。Desktop 与 Android 是独立产品；连接时严格验证 wire 元数据、Ingress 和当前凭据能力，不用产品版本号猜权限。配对凭据授予采集与声明的仓库读取范围；管理员会话管理整个归档，独立 MCP scope 按授权约束来源读写。
 
-命名环境隔离配置、凭据、队列、目录与进程。默认绑定 loopback；远程部署使用 TLS、强账号密码和受保护的访问凭据。当前格式的队列位置迁移和同 epoch 备份恢复是显式功能，旧 epoch 库会保留并拒绝启动。日志和支持包只记录固定类别、数值与状态，不记录私人正文或凭据。
+命名环境隔离配置、令牌、队列、目录与进程。默认绑定 loopback；远程部署使用 TLS 和强令牌。当前格式的队列位置迁移和同 epoch 备份恢复是显式功能，旧 epoch 库会保留并拒绝启动。日志和支持包只记录固定类别、数值与状态，不记录私人正文或凭据。
 
-扩展应复用宿主来源、recipe、processor、Material 与只读证据契约。更大存储、其他硬件或新模型运行时需要各自明确设计与验证，不能从现有接口推断已经支持。
+扩展应复用宿主来源、recipe、processor、Material 与只读证据契约。更大存储、多租户、其他硬件或新模型运行时需要各自明确设计与验证，不能从现有接口推断已经支持。
 
 细节见 [正式资料](material-architecture.md)、[来源流水线](source-pipelines.md)、[执行器](execution-engine.md)、[委派与活动](delegation-and-activity.md)、[Memory](memory-lifecycle.md)、[部署](deployment.md) 和 [文档索引](README.md)。

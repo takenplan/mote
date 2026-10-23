@@ -2,14 +2,13 @@ import { moteText } from './i18n.js';
 import {spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {normalizeCodexServiceTier,type ModelSettings} from '@mote/shared/models';
-import {StoreError} from './execution-storage.js';
+import {StoreError} from './store.js';
 export interface CatalogModel {id:string;name:string;reasoningEfforts?:string[];defaultReasoningEffort?:string;serviceTiers?:string[]}
 export class ModelCatalogError extends StoreError {constructor(){super(moteText("无法读取模型列表。请检查节点上的服务、凭据及目录接口；仍可手动填写模型 ID。"),502);}}
 const failure=()=>new ModelCatalogError();
 
 /** Read-only JSON-RPC: initializes the local server and calls model/list, never starts a thread. */
-export async function codexModels(launch:typeof spawn=spawn,options:{executable?:string;home?:string}={},authorize:()=>void=()=>{}):Promise<{items:CatalogModel[]}> {
-  authorize();
+export async function codexModels(launch:typeof spawn=spawn,options:{executable?:string;home?:string}={}):Promise<{items:CatalogModel[]}> {
   const child=launch(options.executable??'codex',['app-server'],{cwd:tmpdir(),...(options.home?{env:{...process.env,CODEX_HOME:options.home}}:{}),stdio:['pipe','pipe','pipe']});
   const items:CatalogModel[]=[];
   let buffer='',bytes=0,nextId=1;
@@ -22,7 +21,7 @@ export async function codexModels(launch:typeof spawn=spawn,options:{executable?
       if(error)reject(failure());else resolve({items});
     };
     const deadline=setTimeout(()=>finish(failure()),20000);
-    const send=(method:string,params:unknown,id?:number)=>{if(settled)return;try{authorize();child.stdin?.write(JSON.stringify({...(id!==undefined?{id}:{}),method,params})+'\n');}catch(error){finish(error);}};
+    const send=(method:string,params:unknown,id?:number)=>child.stdin?.write(JSON.stringify({...(id!==undefined?{id}:{}),method,params})+'\n');
     child.on('error',finish);child.on('exit',()=>{if(!settled)finish(failure());});child.stdin?.on('error',finish);
     child.stderr?.on('data',()=>{});
     child.stdout?.setEncoding('utf8');

@@ -31,13 +31,11 @@ async function releaseFixture(home, kind) {
   if (kind === 'capable') await writeFile(join(release, 'apps/server/dist/log-retention-config.mjs'), '// Generated capacity capability marker\n');
   const reader = new URL('packages/shared/src/config-file.ts', 'file://' + repository + '/').href;
   // Exercise actual CLI/supervisor ordering with a generated strict YAML target.
-  // Capability markers vary only YAML/log support; every fixture uses current scoped health.
   await writeFile(join(release, 'apps/server/dist/index.js'), `import {createServer} from 'node:http';import {writeFileSync} from 'node:fs';import {resolve,dirname} from 'node:path';import {readConfigDocument} from ${JSON.stringify(reader)};
 const document=readConfigDocument(process.env.MOTE_CONFIG_FILE).document,diagnostics=document.diagnostics??{},max=diagnostics.maxBytes??${kind === 'capable' ? "(document.server.profile==='dev'?100:2)*1024*1024" : '2*1024*1024'};
 if(!Number.isFinite(max)||max<0.1*1024*1024||max>${kind === 'capable' ? 100 : 8}*1024*1024)throw Error('Generated strict capacity parser rejected configuration');
 writeFileSync(resolve(dirname(process.env.MOTE_CONFIG_FILE),document.storage.dataDir,'generated-entry-ran'),'Generated entry reached');
-const health={ok:true,mode:'multiuser-auth',authentication:'username-password',storageEpoch:5,protocol:{min:2,max:2}};
-const server=createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/api/diagnostics'?{limits:{maxFileBytes:Math.floor(max),maxFiles:diagnostics.maxFiles??3,maxEvents:diagnostics.maxEntries??2000}}:req.url==='/api/health'?health:{ok:true}));});
+const server=createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/api/diagnostics'?{limits:{maxFileBytes:Math.floor(max),maxFiles:diagnostics.maxFiles??3,maxEvents:diagnostics.maxEntries??2000}}:{ok:true}));});
 server.listen(document.server.port,'127.0.0.1');process.on('SIGTERM',()=>server.close(()=>process.exit(0)));\n`);
   return release;
 }

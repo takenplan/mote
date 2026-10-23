@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {materialId} from '../src/materials.js';
 import type {Config} from '../src/config.js';
 import type {ModelSettings,ModelSettingsView} from '@mote/shared/models';

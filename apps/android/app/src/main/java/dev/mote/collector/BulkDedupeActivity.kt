@@ -251,7 +251,7 @@ class BulkDedupeActivity : MoteActivity() {
                 val manager = WorkManager.getInstance(this)
                 check(manager.getWorkInfosForUniqueWork(BulkDedupeWorker.NAME).get().none { !it.state.isFinished }) { MoteI18n.text("已有后台任务正在执行") }
                 if (plan != null) BulkDedupeStore(this).write("plan", plan)
-                manager.enqueueUniqueWork(BulkDedupeWorker.NAME, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<BulkDedupeWorker>().setInputData(androidx.work.Data.Builder().putAll(data).putString("owner", Settings(this).read().ownerKey()).build()).build()).result.get()
+                manager.enqueueUniqueWork(BulkDedupeWorker.NAME, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<BulkDedupeWorker>().setInputData(data).build()).result.get()
                 refresh = true
             } catch (error: Exception) { runOnUiThread { if (!isDestroyed) { status.text = MoteI18n.text("提交失败：{0}", error.message); busy = false; controls.forEach { it.isEnabled = true } } } }
         }

@@ -5,7 +5,7 @@ import {ProviderFailure} from '@mote/shared';
 import {MemoryProviderError} from './memory-provider-contract.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {Store,StoreError,sha256} from './store.js';
+import {Store,StoreError} from './store.js';
 import type {ConfigService} from './config-service.js';
 import {lifecycleSettingsSchema,defaultLifecycleSettings,type LifecycleSettings} from './memory-configuration.js';
 export {lifecycleSettingsSchema,defaultLifecycleSettings,type LifecycleSettings} from './memory-configuration.js';
@@ -27,7 +27,7 @@ export function freezeSemanticContextTime(clock:()=>string=()=>new Date().toISOS
   return z.string().max(64).datetime({offset:true}).refine(value=>Number.isFinite(Date.parse(value)),'Invalid semantic context time').parse(clock());
 }
 export type LifecycleWindow={manual?:boolean;id:string;version:string;from:number;through:number;ids:string[];startedAt:number;contextTime:string;settings:LifecycleSettings;checkpoint?:string};
-type State={cancelled?:boolean;cancellationCause?:'owner'|'authority';manualRetryRequired?:boolean;stream?:LifecycleExtension['stream'];drainThrough?:number;cursor:number;lastSuccess:number;retryAt?:number;failures:number;countedFailure?:string;active?:LifecycleWindow;lastRun?:{id:string;through:number;completedAt:number};error?:string};
+type State={cancelled?:boolean;cancellationCause?:'owner'|'authority';manualRetryRequired?:boolean;stream?:LifecycleExtension['stream'];drainThrough?:number;cursor:number;lastSuccess:number;retryAt?:number;failures:number;active?:LifecycleWindow;lastRun?:{id:string;through:number;completedAt:number};error?:string};
 export type LifecycleExecution={operationId:string;jobId:string;signal:AbortSignal;interrupted:()=>boolean;commit:<T>(write:()=>T)=>T;recovery?:'transient'};
 export type LifecycleExtension={id:keyof Pick<LifecycleSettings,'extraction'|'consolidation'|'insights'|'working'>;version:string;stream:'evidence'|'artifact'|'memory'|'conversation';maxAttempts?:number;
   cancel?:(window:LifecycleWindow,cause:'owner'|'authority')=>void;
@@ -84,7 +84,7 @@ export class MemoryLifecycle {
     if(this.running.has(id)||state.active&&!state.cancelled&&this.executor?.get('lifecycle:'+state.active.id)?.state!=='cancelled')throw new StoreError('Finish or cancel the active lifecycle task first',409);
     if(!ids.length||ids.length>settings[id].maxItems||new Set(ids).size!==ids.length||checkpoint.length>32000)throw new StoreError('Choose a smaller unique set of inputs',413);
     state.active={manual:true,id:randomUUID(),version:extension.version,from:state.cursor,through:state.cursor,ids,startedAt:this.now(),contextTime:freezeSemanticContextTime(this.semanticContextTime),settings,checkpoint};
-    delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;delete state.countedFailure;this.saveState(id,state);if(own)db.exec('COMMIT');return state.active.id;
+    delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.saveState(id,state);if(own)db.exec('COMMIT');return state.active.id;
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   cancel(id:LifecycleExtension['id'],windowId:string,options?:{cause:'authority'}){
@@ -99,8 +99,8 @@ export class MemoryLifecycle {
       const state=this.state(id);if(state.active?.id!==windowId)throw new StoreError('Active lifecycle task not found',404);
       if(this.running.has(id)||this.executor?.get('lifecycle:'+windowId)?.state==='running')throw new StoreError('Wait for the current task to stop before retrying',409);
       prepare?.(structuredClone(state.active));
-      if(this.executor?.get('lifecycle:'+windowId))this.executor.retry('lifecycle:'+windowId,true);
-      delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;delete state.countedFailure;this.saveState(id,state);
+      if(this.executor?.get('lifecycle:'+windowId))this.executor.retry('lifecycle:'+windowId);
+      delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.saveState(id,state);
       if(own)db.exec('COMMIT');return this.view();
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
@@ -110,7 +110,7 @@ export class MemoryLifecycle {
     const state=this.state(id);if(state.cursor>=through||state.active&&state.active.through>through)return;
     if(state.active?.manual)return;
     if(state.active)this.executor?.cancel('lifecycle:'+state.active.id);
-    state.cursor=through;delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;delete state.drainThrough;state.failures=0;delete state.countedFailure;this.saveState(id,state);
+    state.cursor=through;delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;delete state.drainThrough;state.failures=0;this.saveState(id,state);
   }
   private applySettings(settings:LifecycleSettings){this.policy=lifecycleSettingsSchema.parse(settings);projectMemoryLifecycleSettings(this.store,this.policy);}
   /** Standalone tests can configure their in-memory runtime; the app always uses a revisioned transaction. */
@@ -158,13 +158,6 @@ export class MemoryLifecycle {
     }
     return Promise.all([...this.running.values()]).then(()=>{});
   }
-  private invocationFailure(state:State){
-    if(!state.active||!this.executor)return;
-    const id='lifecycle:'+state.active.id,step=this.executor.get(id),receipt=this.executor.failure(id);
-    if(!step||!receipt||receipt.stepId!==id||receipt.category!=='transient'||receipt.code==='interrupted'||receipt.admissionWaiting||step.error!==receipt.code||step.attempts!==receipt.attempt)return;
-    if(step.state!==receipt.state||!['waiting','failed'].includes(step.state)||step.state==='waiting'&&step.availableAt!==receipt.availableAt)return;
-    return {receipt,key:sha256(JSON.stringify([id,step.retryRound,receipt]))};
-  }
   private async execute(extension:LifecycleExtension){
       if(this.closed||!this.configured())return;
       const settings=this.settings(),p=settings[extension.id],state=this.state(extension.id),now=this.now();
@@ -181,13 +174,7 @@ export class MemoryLifecycle {
         const events=this.events(extension,state.cursor,p.maxItems).filter(e=>!state.drainThrough||e.seq<=state.drainThrough);if(!events.length)return;
         state.active={id:randomUUID(),version:extension.version,from:state.cursor,through:events.at(-1)!.seq,ids:[...new Set(events.map(e=>e.entity))],startedAt:now,contextTime:freezeSemanticContextTime(this.semanticContextTime),settings};this.saveState(extension.id,state);
       }
-      let recoveredFailure=false;
       try{
-        // Engine failure and window state use separate commits. Consume an
-        // exact outstanding failure before starting another invocation, even
-        // after a crash between those commits.
-        const pendingFailure=this.invocationFailure(state);
-        if(pendingFailure&&pendingFailure.key!==state.countedFailure){recoveredFailure=true;throw new ExecutionFailure('waiting',pendingFailure.receipt.code);}
         if(state.active.version!==extension.version)throw new StoreError('Active window requires its original extension version',409);
         const window=structuredClone(state.active),checkpoint=(id:string)=>{state.active!.checkpoint=id;this.saveState(extension.id,state);};
         if(this.executor){
@@ -197,7 +184,7 @@ export class MemoryLifecycle {
           // The scheduled finite recovery survives a yielded admission slot or
           // interruption. A child still has to establish its own replay safety.
           const recovery=state.retryAt!==undefined&&state.failures>0?'transient' as const:undefined;
-          if(recovery&&['failed','waiting'].includes(executor.get(id)?.state??'')&&executor.get(id)?.error===executor.failure(id)?.code&&executor.failure(id)?.category==='transient')executor.retry(id,false);
+          if(recovery&&executor.get(id)?.state==='failed'&&executor.failure(id)?.category==='transient')executor.retry(id,false);
           await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,policy:EXECUTION_POLICIES.orchestration,
             classify:error=>error instanceof AgentTimeoutError?new ExecutionFailure('transient','provider_timeout'):new ExecutionFailure('permanent',error instanceof MemoryProviderError&&error.code==='unsupported_input'?'memory_provider_unsupported_input':error instanceof StoreError?'workflow_'+error.statusCode:'step_failed'),
             validate:()=>!this.closed&&this.state(extension.id).active?.id===window.id,
@@ -211,37 +198,25 @@ export class MemoryLifecycle {
         if(this.closed||this.state(extension.id).active?.id!==state.active.id)return;
         // An explicitly retired historical prefix can be ahead of a retained
         // authorized window. Completing that window never undoes the cutoff.
-        state.cursor=Math.max(state.cursor,this.state(extension.id).cursor,state.active.through);if(!state.drainThrough||state.cursor>=state.drainThrough){delete state.drainThrough;if(!state.active.manual)state.lastSuccess=this.now();}state.lastRun={id:state.active.id,through:state.cursor,completedAt:this.now()};delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.error;delete state.retryAt;state.failures=0;delete state.countedFailure;
+        state.cursor=Math.max(state.cursor,this.state(extension.id).cursor,state.active.through);if(!state.drainThrough||state.cursor>=state.drainThrough){delete state.drainThrough;if(!state.active.manual)state.lastSuccess=this.now();}state.lastRun={id:state.active.id,through:state.cursor,completedAt:this.now()};delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.error;delete state.retryAt;state.failures=0;
       }catch(error){
         if(this.closed)return;
         if(state.active){
           if(this.executor?.get('lifecycle:'+state.active.id)?.state==='running')return;
           const latest=this.state(extension.id);if(latest.active?.id!==state.active.id)return;Object.assign(state,latest);
         }
-        const receipt=state.active&&this.executor?.failure('lifecycle:'+state.active.id),invocation=state.active&&this.executor?.get('lifecycle:'+state.active.id);
-        const actualFailure=this.invocationFailure(state),completedFailure=actualFailure&&actualFailure.key!==state.countedFailure;
-        // The shared engine now retains a bounded retry as waiting. Preserve
-        // this window's original failed-invocation count and domain backoff;
-        // capacity waits and observing the same receipt cannot consume it.
-        if(actualFailure&&!completedFailure)return;
-        if(completedFailure)state.countedFailure=actualFailure.key;
-        const waiting=(error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&error.details.admissionWaiting===true)&&!completedFailure;
+        const waiting=error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&error.details.admissionWaiting===true;
+        const receipt=state.active&&this.executor?.failure('lifecycle:'+state.active.id);
         const retryable=error instanceof ProviderFailure&&error.details.category==='transient'||error instanceof ExecutionFailure&&error.category==='transient'||error instanceof AgentTimeoutError||receipt?.category==='transient';
         const maxAttempts=extension.maxAttempts??EXECUTION_POLICIES.modelCall.maxAttempts;
         const unsupportedInput=error instanceof MemoryProviderError&&error.code==='unsupported_input';
         const semanticTerminal=unsupportedInput||error instanceof ExecutionFailure&&error.category==='blocked'&&(extension.id==='extraction'&&['semantic_processing_failed','semantic_processing_blocked'].includes(error.code)||extension.id==='consolidation'&&['memory_integration_unreadable','memory_integration_no_delivery'].includes(error.code));
         if(!waiting&&(!semanticTerminal||error.code==='semantic_processing_failed'))state.failures++;
-        if(semanticTerminal||!waiting&&(!retryable||state.failures>=maxAttempts||invocation?.retryExhausted))state.manualRetryRequired=true;
+        if(semanticTerminal||!waiting&&(!retryable||state.failures>=maxAttempts))state.manualRetryRequired=true;
         state.error=unsupportedInput?'memory_provider_unsupported_input':error instanceof ExecutionFailure?error.code:error instanceof ProviderFailure?error.details.code:error instanceof AgentTimeoutError?'provider_timeout':error instanceof StoreError?'workflow_'+error.statusCode:'workflow_failed';
         if(!state.cancelled&&!state.manualRetryRequired&&(waiting||state.failures<maxAttempts)){
           const requestedDelay=error instanceof ExecutionFailure?error.retryAfterMs:error instanceof ProviderFailure?error.details.retryAfterMs:undefined;
-          // Execution and domain clocks may be independently injected. Carry
-          // measured delays/elapsed age, never an absolute execution deadline
-          // into the domain schedule. Fresh failures keep its original clock.
-          const failureAge=completedFailure&&recoveredFailure?Math.max(0,this.executor!.clockNow()-Date.parse(actualFailure.receipt.at)):0;
-          const recordedDelay=completedFailure?Math.max(0,(actualFailure.receipt.availableAt??Date.parse(actualFailure.receipt.at))-Date.parse(actualFailure.receipt.at)):0;
-          const failedAt=this.now()-failureAge;
-          state.retryAt=failedAt+(waiting?Math.max(1,requestedDelay??60000):Math.max(requestedDelay??0,recordedDelay,Math.min(6*3600000,60000*2**Math.min(state.failures,8))));
+          state.retryAt=this.now()+(waiting?Math.max(1,requestedDelay??60000):Math.max(requestedDelay??0,Math.min(6*3600000,60000*2**Math.min(state.failures,8))));
         }else delete state.retryAt;
       }
       this.saveState(extension.id,state);

@@ -173,7 +173,7 @@ export class ProcessingRuntime {
         allowedActions:[...(['failed','blocked','cancelled'].includes(state)?['retry-step' as const]:[]),...(!['succeeded','cancelled'].includes(state)?['cancel' as const]:[])]};
     });
     return {...(this.configService?{revision:this.configService.revision}:{}),jobs,limit,nextCursor:rows.length>limit?Number(rows[limit-1].rowid):null,settings:this.settings(),processors:this.registry.list(),consumers:this.consumers.list(),queues:this.store.db.prepare('SELECT lane,state,COUNT(*) AS count FROM processing_jobs GROUP BY lane,state').all(),delivery:'at_least_once; output commit is fenced; provider retries may incur additional cost'};}
-  retry(id:string){this.job(id);const state=this.engine.get(id)?.state;if(!state||!['failed','blocked','cancelled'].includes(state))throw new StoreError('Workflow step cannot be retried in its current state',409);this.engine.retry(id,true);}
+  retry(id:string){this.job(id);const state=this.engine.get(id)?.state;if(!state||!['failed','blocked','cancelled'].includes(state))throw new StoreError('Workflow step cannot be retried in its current state',409);this.engine.retry(id);}
   cancel(id:string){this.job(id);const state=this.engine.get(id)?.state;if(!state||state==='succeeded'||state==='cancelled')throw new StoreError('Workflow step cannot be cancelled in its current state',409);this.engine.cancel(id);}
   private job(id:string):Job{const row=this.store.db.prepare('SELECT json FROM processing_jobs WHERE id=?').get(id);if(!row)throw new StoreError('Workflow step unavailable',404);return JSON.parse(String(row.json));}
   private project(step:ExecutionStep){

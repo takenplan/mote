@@ -19,9 +19,6 @@ export type ImageStageContext={
 };
 export type ImageStage=ComponentRef&{kind:'ocr'|'understanding'|'derived';reuseByContent?:boolean;run(input:ImageStageContext):Promise<unknown>};
 export type ImageRecipe=ComponentRef&{steps:{name:string;stage:ComponentRef;dependsOn:string[];optionalDependencies?:string[];when?:'understanding'}[]};
-/** Permission only: callers must establish current authority and a trusted
- * terminal task fact before treating an absent optional product as usable. */
-export function imageDependencyPermits(state:string|undefined,optional:boolean){return state==='succeeded'||optional&&['blocked','failed','cancelled'].includes(state??'');}
 const key=(ref:ComponentRef)=>`${ref.id}@${ref.version}`;
 /** Installed capability is separate from the owner's selected, versioned recipe. */
 export class ImageRecipeRegistry {

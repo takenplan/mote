@@ -1,15 +1,13 @@
 import {EXECUTION_POLICIES} from './execution-policy.js';
-import {createHash,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {z} from 'zod';
 import type {PluginCenterView,PluginInstanceView,PluginPackageView,PluginCapability} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {GitHubPluginReleases,type PluginManifest,type ResolvedPluginRelease} from './plugin-release.js';
 import {WorkerPluginRuntime,type PluginRuntime} from './plugin-runtime.js';
-import {StoreError,type ExecutionStorage} from './execution-storage.js';
-
-const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
-const memoryControlCommandSchema=z.object({expectedRevision:z.number().int().positive(),operationId:z.string().uuid()}).strict();
+import {memoryControlCommandSchema} from './memory-automation.js';
+import {sha256,StoreError,type Store} from './store.js';
 
 const configurationSchema=z.record(z.union([z.string(),z.number().finite(),z.boolean()]));
 const instanceSchema=z.object({name:z.string().trim().min(1).max(160),scope:z.literal('default'),configuration:configurationSchema,expectedRevision:z.number().int().positive(),operationId:z.string().uuid()}).strict();
@@ -30,14 +28,15 @@ export class PluginCenter {
   runtimeFactory?:(pkg:StoredPackage,instance:PluginInstanceView)=>PluginRuntime;
   configurationAllowed?:(field:PluginManifest['configuration'][number],value:string|number|boolean)=>boolean;
   probe?:(instanceId:string,signal:AbortSignal)=>Promise<{capabilities:PluginCapability[];issues:string[]}>;
-  constructor(readonly store:ExecutionStorage,readonly executor:ExecutionEngine,readonly releases:GitHubPluginReleases,private readonly options:{catalogOnly?:boolean;ownerId?:string}={}){
+  constructor(readonly store:Store,readonly executor:ExecutionEngine,readonly releases:GitHubPluginReleases){
     store.db.exec(`CREATE TABLE IF NOT EXISTS plugin_center(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL);
       INSERT OR IGNORE INTO plugin_center VALUES(1,1);
       CREATE TABLE IF NOT EXISTS plugin_release_previews(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_packages(id TEXT PRIMARY KEY,json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS plugin_instances(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_retired_packages(id TEXT PRIMARY KEY,json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS plugin_retired_instances(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_commands(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL);`);
-    if(!options.catalogOnly)store.db.exec('CREATE TABLE IF NOT EXISTS plugin_instances(id TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS plugin_retired_instances(id TEXT PRIMARY KEY,json TEXT NOT NULL);');
     this.disposeHandlers.push(executor.register({kind:'plugin.install',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,
       validate:step=>Boolean(this.package(String(step.input.packageId))?.view.state==='installing'),
       execute:async(step,signal)=>{const value=this.preview(String(step.input.previewId));const directory=await releases.install(value);if(signal.aborted)throw new ExecutionFailure('stale','plugin_install_cancelled');return directory;},
@@ -45,9 +44,9 @@ export class PluginCenter {
       project:step=>{if(['failed','blocked','stale','cancelled'].includes(step.state)){const pkg=this.package(String(step.input.packageId));pkg.view.state='failed';pkg.view.observed=step.state;pkg.view.issues=[step.error??'plugin_install_failed'];this.savePackage(pkg);}},
       classify:()=>new ExecutionFailure('blocked','plugin_install_requires_attention'),
     }));
-    if(!options.catalogOnly)this.disposeHandlers.push(executor.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,timeoutMs:3600000,
+    this.disposeHandlers.push(executor.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,timeoutMs:3600000,
       validate:step=>{const instance=this.instance(String(step.input.instanceId));return instance.view.revision===step.input.revision&&instance.stepId===step.id;},
-      execute:async(step,signal)=>healthSchema.parse(this.probe?await this.probe(String(step.input.instanceId),signal):await this.runtime(String(step.input.instanceId)).call('health',{namespace:this.namespace(String(step.input.instanceId),1)},signal)),
+      execute:async(step,signal)=>healthSchema.parse(this.probe?await this.probe(String(step.input.instanceId),signal):await this.runtime(String(step.input.instanceId)).call('health',{namespace:{ownerId:'mote-owner',instanceId:String(step.input.instanceId),bindingRevision:1}},signal)),
       commit:(step,result)=>{const instance=this.instance(String(step.input.instanceId)),health=healthSchema.parse(result),pkg=this.package(instance.view.packageId);
         instance.view.capabilities=pkg.manifest.capabilities.map(id=>health.capabilities.find(capability=>capability.id===id)??{id,state:'unknown',reason:'The runtime did not verify this capability'});
         instance.view.issues=health.issues;instance.view.observed=health.issues.length?'blocked':'ready';instance.view.revision++;delete instance.stepId;this.saveInstance(instance);this.bump();},
@@ -55,8 +54,6 @@ export class PluginCenter {
       classify:()=>new ExecutionFailure('blocked','plugin_check_requires_attention'),
     }));
   }
-  namespace(instanceId:string,bindingRevision:number){if(!this.options.ownerId)throw new StoreError('A host-bound provider owner is required',503);return {ownerId:this.options.ownerId,instanceId,bindingRevision};}
-  private privateMode(){if(this.options.catalogOnly)throw new StoreError('Private instances require the scoped plugin host',503);}
   revision(){return Number(this.store.db.prepare('SELECT revision FROM plugin_center WHERE id=1').get()!.revision);}
   private bump(){this.store.db.prepare('UPDATE plugin_center SET revision=revision+1 WHERE id=1').run();}
   private package(id:string):StoredPackage{const row=this.store.db.prepare('SELECT json FROM plugin_packages WHERE id=? UNION ALL SELECT json FROM plugin_retired_packages WHERE id=? LIMIT 1').get(id,id);if(!row)throw new StoreError('Plugin package not found',404);return JSON.parse(String(row.json));}
@@ -75,8 +72,8 @@ export class PluginCenter {
     return true;
   }
   view():PluginCenterView{
-    const instances=this.options.catalogOnly?[]:this.store.db.prepare('SELECT id FROM plugin_instances ORDER BY rowid').all().map(row=>this.instanceView(String(row.id))),packages=this.store.db.prepare('SELECT json FROM plugin_packages ORDER BY rowid').all().map(row=>JSON.parse(String(row.json)) as StoredPackage);
-    return {revision:this.revision(),installation:{supported:true,runtime:'worker',restartRequired:false},packages:packages.map(pkg=>({...pkg.view,configurationSchema:pkg.manifest.configuration,instanceIds:instances.filter(instance=>instance.packageId===pkg.view.id).map(instance=>instance.id),allowedActions:pkg.view.state==='installed'?['configure',...(!(this.options.catalogOnly?this.references(pkg.view.id).length:instances.some(instance=>instance.packageId===pkg.view.id&&(instance.desired||this.references(instance.id).length)))?['uninstall' as const]:[])]:pkg.view.state==='failed'?['uninstall']:[]})),instances,catalog:[{repository:'mem0ai/mem0',name:'Mem0',description:'Pinned ts-v3.3.1 with the bundled Mote storage/retrieval adapter'},{repository:'vectorize-io/hindsight',name:'Hindsight',description:'Pinned v0.10.2; controlled engine capability verification required'}]};
+    const instances=this.store.db.prepare('SELECT id FROM plugin_instances ORDER BY rowid').all().map(row=>this.instanceView(String(row.id))),packages=this.store.db.prepare('SELECT json FROM plugin_packages ORDER BY rowid').all().map(row=>JSON.parse(String(row.json)) as StoredPackage);
+    return {revision:this.revision(),installation:{supported:true,runtime:'worker',restartRequired:false},packages:packages.map(pkg=>({...pkg.view,configurationSchema:pkg.manifest.configuration,instanceIds:instances.filter(instance=>instance.packageId===pkg.view.id).map(instance=>instance.id),allowedActions:pkg.view.state==='installed'?['configure',...(!instances.some(instance=>instance.packageId===pkg.view.id&&(instance.desired||this.references(instance.id).length))?['uninstall' as const]:[])]:pkg.view.state==='failed'?['uninstall']:[]})),instances,catalog:[{repository:'mem0ai/mem0',name:'Mem0',description:'Pinned ts-v3.3.1 with the bundled Mote storage/retrieval adapter'},{repository:'vectorize-io/hindsight',name:'Hindsight',description:'Pinned v0.10.2; controlled engine capability verification required'}]};
   }
   instanceView(id:string):PluginInstanceView{const {view,stepId}=this.instance(id),references=this.references(id),pending=stepId&&['waiting','running'].includes(this.executor.get(stepId)?.state??'');
     if(!this.store.db.prepare('SELECT 1 FROM plugin_instances WHERE id=?').get(id))return {...view,desired:false,observed:'disabled',issues:references,allowedActions:[]};
@@ -87,7 +84,7 @@ export class PluginCenter {
   packageForInstance(id:string){const value=this.package(this.instance(id).view.packageId);return {...value,directory:join(this.releases.directory,value.view.source.digest)};}
   async resolve(raw:unknown){const input=z.object({repository:z.string().min(1).max(2000),tag:z.string().min(1).max(200).optional()}).strict().parse(raw),value=await this.releases.resolve(input),json=JSON.stringify(value);this.store.reserveMetadata(Buffer.byteLength(json));this.store.db.prepare('INSERT INTO plugin_release_previews VALUES(?,?)').run(value.preview.id,json);return value.preview;}
   install(raw:unknown){const input=memoryControlCommandSchema.extend({previewId:z.string().uuid()}).strict().parse(raw);
-    this.command('install',input,()=>this.revision(),()=>{const release=this.preview(input.previewId),id=release.manifest.id+'@'+sha256(JSON.stringify({source:release.preview.source,manifest:release.manifest}));
+    this.command('install',input,()=>this.revision(),()=>{const release=this.preview(input.previewId),id=release.manifest.id+'@'+release.preview.source.digest;
       if(this.store.db.prepare('SELECT 1 FROM plugin_packages WHERE id=?').get(id)){
         const existing=this.package(id);if(existing.view.state!=='failed')return;
         existing.view.state='installing';existing.view.observed='installing';existing.view.issues=[];existing.view.operationId=input.operationId;existing.previewId=input.previewId;this.savePackage(existing);
@@ -97,9 +94,6 @@ export class PluginCenter {
       this.executor.enqueue(input.operationId,'plugin.install',{packageId:id,previewId:input.previewId},{id:'plugin-install:'+input.operationId});
     });return this.view();
   }
-  /** Trusted bundled definitions are supplied by the host, never a request manifest.
-   * Installation records shared code availability only and invokes no user runtime. */
-  installBundled(pkg:StoredPackage,raw:unknown){const input=memoryControlCommandSchema.parse(raw);this.command('install-bundled:'+pkg.view.id,input,()=>this.revision(),()=>{if(!this.store.db.prepare('SELECT 1 FROM plugin_packages WHERE id=?').get(pkg.view.id))this.savePackage(pkg);});return this.view();}
   private validateConfiguration(manifest:PluginManifest,configuration:Record<string,string|number|boolean>,complete=false){
     if(Object.keys(configuration).some(key=>!manifest.configuration.some(field=>field.id===key)))throw new StoreError('Unknown plugin configuration field');
     for(const field of manifest.configuration){const value=configuration[field.id];if(value===undefined||value===''){if(complete&&field.required)throw new StoreError('A required plugin configuration value is missing');continue;}
@@ -108,7 +102,7 @@ export class PluginCenter {
       if(['model-profile','secret-reference'].includes(field.type)&&!this.configurationAllowed?.(field,value))throw new StoreError('The referenced model profile or secret is unavailable');
     }
   }
-  configure(id:string|undefined,raw:unknown){this.privateMode();const input=instanceSchema.extend({packageId:z.string().min(1).optional()}).parse(raw);if(!id&&!input.packageId)throw new StoreError('Choose an installed plugin package');let resultId=id;
+  configure(id:string|undefined,raw:unknown){const input=instanceSchema.extend({packageId:z.string().min(1).optional()}).parse(raw);if(!id&&!input.packageId)throw new StoreError('Choose an installed plugin package');let resultId=id;
     const applied=this.command(id?'configure:'+id:'create',input,()=>id?this.instance(id).view.revision:this.revision(),()=>{
       if(id&&!this.store.db.prepare('SELECT 1 FROM plugin_instances WHERE id=?').get(id))throw new StoreError('Plugin instance is uninstalled',409);
       const existing=id?this.instance(id):undefined,packageId=existing?.view.packageId??input.packageId!;if(!this.store.db.prepare('SELECT 1 FROM plugin_packages WHERE id=?').get(packageId))throw new StoreError('Plugin package is uninstalled',409);const pkg=this.package(packageId);if(pkg.view.state!=='installed')throw new StoreError('Wait for plugin installation to complete',409);
@@ -120,19 +114,19 @@ export class PluginCenter {
       this.saveInstance({configurationId:input.operationId,view:{id:resultId!,packageId:pkg.view.id,name:input.name,scope:input.scope,revision:(existing?.view.revision??0)+1,configurationSchema:pkg.manifest.configuration,configuration:{...configuration,...Object.fromEntries(Object.entries(input.configuration).filter(([key])=>pkg.manifest.configuration.find(field=>field.id===key)?.type==='secret-reference'))},secretStatus:Object.fromEntries(pkg.manifest.configuration.filter(field=>field.type==='secret-reference').map(field=>[field.id,Boolean(input.configuration[field.id])])),capabilities,desired:false,observed:'configured',issues:[],allowedActions:[]}});
     });if(applied&&id){const old=this.runtimes.get(id);this.runtimes.delete(id);void old?.close().catch(()=>{});}return this.instanceView(resultId??input.operationId);
   }
-  action(id:string,kind:'check'|'enable'|'disable',raw:unknown){this.privateMode();const input=memoryControlCommandSchema.parse(raw);
+  action(id:string,kind:'check'|'enable'|'disable',raw:unknown){const input=memoryControlCommandSchema.parse(raw);
     this.command(kind+':'+id,input,()=>this.instance(id).view.revision,()=>{const instance=this.instance(id),view=this.instanceView(id);if(!view.allowedActions.includes(kind))throw new StoreError('This plugin action is unavailable in its current state',409);
       if(kind==='check'){this.validateConfiguration(this.package(instance.view.packageId).manifest,instance.view.configuration,true);instance.view.observed='checking';instance.view.issues=[];instance.stepId='plugin-check:'+input.operationId;instance.view.revision++;this.saveInstance(instance);this.executor.enqueue(input.operationId,'plugin.check',{instanceId:id,revision:instance.view.revision},{id:instance.stepId});}
       else{instance.view.desired=kind==='enable';instance.view.observed=kind==='enable'?'ready':this.references(id).length?'draining':'disabled';instance.view.revision++;this.saveInstance(instance);this.admissionChanged?.(id,kind==='enable');}
     });return this.instanceView(id);
   }
   uninstall(id:string,raw:unknown){const input=memoryControlCommandSchema.parse(raw);let retired:string[]=[];const applied=this.command('uninstall:'+id,input,()=>this.revision(),()=>{
-    const instances=this.view().instances.filter(value=>value.packageId===id);if(this.references(id).length||instances.some(value=>value.desired||this.references(value.id).length||value.observed==='checking'))throw new StoreError('Disable and migrate the plugin before uninstalling it',409);
+    const instances=this.view().instances.filter(value=>value.packageId===id);if(instances.some(value=>value.desired||this.references(value.id).length||value.observed==='checking'))throw new StoreError('Disable and migrate the plugin before uninstalling it',409);
     const pkg=this.package(id);if(pkg.view.state==='installing')throw new StoreError('Wait for installation to settle before uninstalling',409);
     for(const instance of instances){this.store.db.prepare('INSERT OR REPLACE INTO plugin_retired_instances SELECT id,json FROM plugin_instances WHERE id=?').run(instance.id);this.store.db.prepare('DELETE FROM plugin_instances WHERE id=?').run(instance.id);}this.store.db.prepare('INSERT OR REPLACE INTO plugin_retired_packages SELECT id,json FROM plugin_packages WHERE id=?').run(id);this.store.db.prepare('DELETE FROM plugin_packages WHERE id=?').run(id);retired=instances.map(instance=>instance.id);
     // Immutable code remains cached; uninstall never destroys retained Memory.
   });if(applied)for(const id of retired){const runtime=this.runtimes.get(id);this.runtimes.delete(id);void runtime?.close().catch(()=>{});this.retired?.(id);}return this.view();}
-  runtime(id:string){this.privateMode();if(this.closed)throw new StoreError('Plugin center is closing',503);const existing=this.runtimes.get(id);if(existing)return existing;const instance=this.instance(id).view,pkg=this.packageForInstance(id);if(!pkg.directory||pkg.view.state!=='installed')throw new StoreError('The plugin artifact is unavailable',409);
+  runtime(id:string){if(this.closed)throw new StoreError('Plugin center is closing',503);const existing=this.runtimes.get(id);if(existing)return existing;const instance=this.instance(id).view,pkg=this.packageForInstance(id);if(!pkg.directory||pkg.view.state!=='installed')throw new StoreError('The plugin artifact is unavailable',409);
     this.releases.verifyInstalled(pkg.directory,pkg.view.source.digest,pkg.manifest,Boolean(pkg.hostAdapter));
     const runtime=this.runtimeFactory?.(pkg,instance)??new WorkerPluginRuntime(join(pkg.directory,pkg.manifest.entry),instance.configuration,pkg.directory);this.runtimes.set(id,runtime);return runtime;
   }

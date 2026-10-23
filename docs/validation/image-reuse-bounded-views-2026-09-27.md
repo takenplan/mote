@@ -13,15 +13,15 @@ Use a new external output directory for every run. The generated-only preflight 
 ```sh
 MOTE_IMAGE_CONTEXT_MODE=preflight \
 MOTE_IMAGE_CONTEXT_MANIFEST=/external/new-generated-reuse-manifest.json \
-<redacted-personal-path> --import tsx scripts/test-image-context-live.ts
+/Users/utopiafar/.nvm/versions/node/v24.15.0/bin/node --import tsx scripts/test-image-context-live.ts
 ```
 
 Mechanical tests:
 
 ```sh
-<redacted-personal-path> --import tsx --test scripts/composed-image-disclosure.test.ts
+/Users/utopiafar/.nvm/versions/node/v24.15.0/bin/node --import tsx --test scripts/composed-image-disclosure.test.ts
 MOTE_IMAGE_REUSE_TEST_OUTPUT=/external/new-generated-guard-tests \
-<redacted-personal-path> --import tsx --test scripts/test-image-context-live.test.ts
+/Users/utopiafar/.nvm/versions/node/v24.15.0/bin/node --import tsx --test scripts/test-image-context-live.test.ts
 ```
 
 This is harness transport validation, not semantic assessment, provider efficiency or live-model validation. The subsequent pagination fix in `a69afb0` passed `check-local-008`; its authorization regression also verifies that discarded page candidates cannot expose evidence through tools or citations.

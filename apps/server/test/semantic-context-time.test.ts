@@ -9,7 +9,7 @@ import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import type {ContextReader,QueryInput} from '@mote/agent';
 import {ProviderFailure,type QueryResult} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {MemoryLifecycle,freezeSemanticContextTime,type LifecycleWindow} from '../src/memory-lifecycle.js';
 import {requestMemoryIntegration} from '../src/memory-integration.js';

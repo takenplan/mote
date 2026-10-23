@@ -28,13 +28,13 @@ class AppUpdatesActivity : MoteActivity() {
     private val refresh = object : Runnable { override fun run() { render(); handler.postDelayed(this, 1000) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        if (RuntimeProfile.current == RuntimeProfile.DEV) {
+        if (BuildConfig.APPLICATION_ID.endsWith(".dev")) {
             val body = moteDetailPage(title = MoteI18n.text("应用更新"))
             body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; MoteUi.type(this, NativeFontRole.SECTION, medium = true); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceItem), 0, moteDp(MoteTheme.spaceInline)) })
-            body.addView(TextView(this).apply { text = MoteI18n.text("DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceItem)) })
+            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceItem)) })
             body.addView(MoteUi.button(Button(this).apply {
                 text = MoteI18n.text("下载 DEV 安装包")
-                setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/actions/workflows/release-android.yml"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }
+                setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/releases"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }
             }, true))
             MoteUi.styleTree(body)
             return
@@ -133,7 +133,7 @@ class AppUpdatesActivity : MoteActivity() {
             "manifest", "manifest_signature", "host", "redirect" -> MoteI18n.text("发布清单签名、格式或来源不可信，已拒绝")
             "not_found" -> MoteI18n.text("该渠道尚无可用的已签名发布，或 GitHub 未找到发布清单")
             "asset_missing" -> MoteI18n.text("请先检查更新；该发布可能没有匹配当前包名的 Android 资产")
-            "rate_limit" -> MoteI18n.text("GitHub 暂时限流，稍后重试"); "access_denied" -> MoteI18n.text("更新服务器拒绝访问，请检查网络入口或发布资源的访问权限。"); "network" -> MoteI18n.text("网络暂不可用，断点保留，等待重试")
+            "rate_limit" -> MoteI18n.text("GitHub 暂时限流，稍后重试"); "network" -> MoteI18n.text("网络暂不可用，断点保留，等待重试")
             "storage" -> MoteI18n.text("更新空间不足或文件保存失败；应用数据未删除"); "configuration" -> MoteI18n.text("仓库应为 owner/repository，渠道为 stable 或 preview")
             "cancelled" -> MoteI18n.text("操作已取消；旧应用数据及下载断点保留"); "install_failed" -> MoteI18n.text("系统未确认安装成功；旧应用保留，可重新检查或安装")
             else -> MoteI18n.text("更新未完成，请重试；旧应用和数据保留")

@@ -3,11 +3,10 @@ import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {buildProfile} from './components.mjs';
 if(process.platform!=='darwin')throw Error('Mac packaging requires macOS');
 const pkg=JSON.parse(readFileSync('apps/desktop/package.json','utf8')),mode=process.env.MOTE_MAC_SIGNING_MODE||'adhoc';
-const development=buildProfile()==='dev';
-const config=structuredClone(pkg.build);if(development){config.appId='dev.mote.collector.dev';config.productName='Mote Collector Dev';config.directories.output='release-dev';config.extraMetadata={moteDevelopment:true,productName:config.productName};}
+const development=process.env.MOTE_MAC_DEVELOPMENT==='1';
+const config=structuredClone(pkg.build);if(development){config.appId='dev.mote.collector.dev';config.productName='Mote Collector Dev';config.directories.output='release-dev';config.extraMetadata={moteDevelopment:true};}
 const temp=join(tmpdir(),'mote-mac-release-'+randomUUID());mkdirSync(temp,{mode:0o700});
 try{
   if(mode==='developer-id'){

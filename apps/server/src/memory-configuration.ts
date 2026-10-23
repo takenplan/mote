@@ -7,8 +7,6 @@ const settings = z.object({
   contextCharacters: z.number().int().min(4000).max(60000), summaryCharacters: z.number().int().min(1000).max(12000),
 }).strict().refine(value => value.summaryCharacters < value.contextCharacters, { message: 'Working summary must be smaller than the context budget', path: ['summaryCharacters'] });
 export type LifecycleSettings = z.infer<typeof settings>;
-/** Persisted window snapshots are complete; configuration preprocessing is separate. */
-export const lifecycleSettingsSnapshotSchema = settings;
 export const defaultLifecycleSettings: LifecycleSettings = {
   extraction: { enabled: true, intervalHours: 6, minChanges: 25, maxItems: 100 },
   consolidation: { enabled: true, intervalHours: 24, minChanges: 20, maxItems: 30 },

@@ -1,7 +1,7 @@
 /** Dedicated generated-only browser fixture. No model or personal archive access. */
 import {join} from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {buildContextEnvelope} from '@mote/agent';
 import {openingMemories} from '../apps/server/src/opening-memory.js';
 const directory=process.argv[2];if(!directory)throw Error('Fixture directory required');

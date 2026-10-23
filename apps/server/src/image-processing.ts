@@ -8,7 +8,7 @@ import {FileProcessing} from './file-processing.js';
 import {processorSettingsFingerprint,processorContract} from './file-configuration.js';
 import type {AppliedFilePolicy} from './file-policy.js';
 import {ImageInputRegistry,ImageAttachmentIntake,installImageInputs,installImageSchema,type ImageInputRow,type ImageOriginal} from './image-inputs.js';
-import {DEFAULT_IMAGE_RECIPE,imageDependencyPermits,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
+import {DEFAULT_IMAGE_RECIPE,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
 import {linkOperationParent} from './operation-projection.js';
 import {imageOutput} from './evidence-image.js';
 import {writeFileTranscriptChunks} from './file-transcript-chunks.js';
@@ -280,7 +280,7 @@ export class ImageProcessing {
      const job=db.prepare('SELECT * FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,stage.name) as JobRow;
      if(['succeeded','cancelled'].includes(job.state)||job.attempts>=4||job.available_at>Date.now())continue;
      if(!settingsSchema.parse(this.settings()).enabled){db.prepare("UPDATE perception_jobs SET state='blocked',error='processing_disabled' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
-     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return imageDependencyPermits(String(dependency?.state??''),stage.optionalDependencies?.includes(name)??false);})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
+     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return dependency?.state==='succeeded'||stage.optionalDependencies?.includes(name)&&['blocked','failed','cancelled'].includes(String(dependency?.state));})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
      const fingerprint=this.fingerprint(row,stage),input={captureId:row.capture_id,hash:row.hash,name:stage.name,generation:row.generation,fingerprint,adapterVersion:this.inputs.get(row.adapter)?.version??'',stage:stage.stage};
      linkOperationParent(this.store,(row.adapter==='mote.file-image'?'file:':'capture:')+row.capture_id,'image:'+row.capture_id);
      const stepId=this.engine.enqueue('image:'+row.capture_id,'images.'+stage.kind,input,{generation:{slot:stage.name,version:sha256(JSON.stringify([row.generation,fingerprint]))}}),step=this.engine.get(stepId)!;
@@ -340,7 +340,7 @@ export class ImageProcessing {
   this.cancel(id,false);this.store.db.prepare('UPDATE image_inputs SET semantic_withdrawn=0 WHERE capture_id=?').run(id);this.store.db.prepare('UPDATE image_inputs SET auto_eligible=1,generation=generation+?,reuse_allowed=?,policy_json=NULL,understanding_enabled=? WHERE capture_id=?').run(Number(recompute),Number(!recompute),Number(this.settings().understandingEnabled),id);
   // Explicit completion grants a fresh budget to the unfinished current plan.
   // Successful OCR and superseded generations keep their existing receipts.
-  if(!recompute)for(const pending of this.store.db.prepare("SELECT e.id FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND json_extract(e.input,'$.generation')=? AND e.state='cancelled'").all('image:'+id,row.generation))this.engine.retry(String(pending.id),true);
+  if(!recompute)for(const pending of this.store.db.prepare("SELECT e.id FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND json_extract(e.input,'$.generation')=? AND e.state='cancelled'").all('image:'+id,row.generation))this.engine.retry(String(pending.id));
   this.store.db.prepare("UPDATE perception_jobs SET state='waiting',attempts=0,available_at=0,error=NULL,auto_eligible=1 WHERE capture_id=? AND (?=1 OR state!='succeeded')").run(id,Number(recompute));return {queued:true};
  }
  previewHistoricalOcr(raw:unknown={}){

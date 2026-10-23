@@ -66,7 +66,7 @@ describe('durable capture queue', () => {
   });
   it('rejects obsolete pending OCR records and old portable archives before any write',async()=>{
     await expect(queue.enqueue({...event(),ocr:{status:'pending'}},image)).rejects.toThrow();
-    const archive=await queue.exportArchive();expect(archive.version).toBe(4);
+    const archive=await queue.exportArchive();expect(archive.version).toBe(3);
     await expect(queue.importArchive({...archive,version:1})).rejects.toThrow();
     expect(queue.stats().depth).toBe(0);
     expect(await readdir(join(directory,'blobs'))).toEqual([]);

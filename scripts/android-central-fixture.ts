@@ -2,7 +2,7 @@ import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {buildApp,type QueryAgent} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp,type QueryAgent} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {noteCapture} from '@mote/shared';
 import {prepareAndroidDetailFixture} from './android-ui-detail-fixture.js';

@@ -43,30 +43,6 @@ test('YAML profiles isolate paths and private generated credentials across resta
   assert.notEqual(configs[0].token, configs[1].token);
 });
 
-test('profile diagnostic defaults preserve explicit opt-outs and survive unrelated YAML saves', async t => {
-  const { file, write } = fixture(t, 'profile-diagnostics');
-  for (const profile of ['dev', 'test', 'prod', 'default']) {
-    write({ server: { profile } });
-    const loaded = configFromFile(file, { initializeCredentials: false });
-    assert.equal(loaded.diagnosticsDebug, profile === 'dev');
-    assert.equal(loaded.logLevel, 'info');
-    write({ server: { profile }, diagnostics: { debug: false, traceEnabled: false, level: 'silent' } });
-    const explicit = configFromFile(file, { initializeCredentials: false });
-    assert.equal(explicit.diagnosticsDebug, false); assert.equal(explicit.agentTraceEnabled, false); assert.equal(explicit.logLevel, 'silent');
-  }
-  write({ server: { profile: 'dev' } });
-  const config = configFromFile(file, { initializeCredentials: false });
-  const service = new ConfigService({ path: file, watch: false, initialDocument: config.configuration.document });
-  registerBuiltinDomains(service, config); t.after(() => service.close()); await service.initialize();
-  await service.update('execution', { agentConcurrency: 9 }, service.revision);
-  assert.equal(service.current<{ debug: boolean }>('diagnostics').debug, true);
-  assert.equal(Object.hasOwn(readConfigDocument(file).diagnostics as object, 'debug'), false);
-  await service.update('diagnostics', { debug: false }, service.revision);
-  await service.update('execution', { agentConcurrency: 10 }, service.revision);
-  assert.equal(configFromFile(file, { initializeCredentials: false }).diagnosticsDebug, false);
-  assert.equal((readConfigDocument(file).diagnostics as { debug: boolean }).debug, false);
-});
-
 test('YAML retention preserves explicit capacities and enforces profile limits before creating storage', t => {
   const { file, write, vault } = fixture(t, 'log-retention');
   const mib = 1024 * 1024;

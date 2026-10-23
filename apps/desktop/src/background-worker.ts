@@ -64,8 +64,7 @@ async function execute(request: BackgroundRequest, progress: (value: WorkProgres
       const file = await open(temporary, 'wx', 0o600);
       const blobs = new Set<string>();
       try {
-        const binding=JSON.parse((await readLocalContent(join(request.directory,'connection-binding.json'))).toString('utf8'));
-        await file.writeFile(`{"format":"mote-desktop-queue","version":${DESKTOP_STORAGE_VERSION},"binding":${JSON.stringify(binding)},"records":[`);
+        await file.writeFile('{"format":"mote-desktop-queue","version":3,"records":[');
         for (let i = 0; i < names.length; i++) {
           const record = validateRecord(JSON.parse((await readLocalContent(join(request.directory, 'events', names[i]))).toString('utf8')));
           if (record.blobHash) blobs.add(record.blobHash);
@@ -97,7 +96,6 @@ async function execute(request: BackgroundRequest, progress: (value: WorkProgres
       if (archive?.format !== 'mote-desktop-queue' || archive.version !== DESKTOP_STORAGE_VERSION || !Array.isArray(archive.records) || archive.records.length > 1_000_000 || !archive.blobs || typeof archive.blobs !== 'object') throw new Error(moteText("不是 Mote 电脑端队列备份"));
       await mkdir(join(request.staging, 'events'), { mode: 0o700 });
       await mkdir(join(request.staging, 'blobs'), { mode: 0o700 });
-      await writeFile(join(request.staging,'connection-binding.json'),JSON.stringify(archive.binding),{mode:0o600});
       const unique = new Map<string, QueueRecord>(), images = new Map<string, number>();
       for (let i = 0; i < archive.records.length; i++) {
         const record = validateRecord(archive.records[i]);

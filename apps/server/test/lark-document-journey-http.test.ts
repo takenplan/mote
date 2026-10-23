@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {ContextReader,QueryInput} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {larkDocumentJourneys,larkJourneyOwnerContext} from './fixtures/lark-document-journeys.js';
 import {larkJourneyRunner} from './fixtures/lark-journey-runner.js';

@@ -1,8 +1,6 @@
 # Memory 策略组合
 
-> 适用范围（2026-10-20）：本文的配方准入、评估时刻和中性程序描述保留既定合同；下面的 `ConnectorManifest`、`MemoryPipeline` 与旧 API 示例属于单用户 EvidenceArchive 接口，当前账户隔离实现见 [M07 设计](design/multiuser-memory.md)。在 `af11ab7c` 审计基线中，scoped 调用者的评估时刻和 Skill 选择有已确认偏离，见[原调查](audits/memory-runtime-contract-investigation-2026-10-20.md)。后续[独立修复候选](https://github.com/utopiafar/mote/pull/203)及其[验证记录](https://github.com/utopiafar/mote/blob/42cd862ac5c025803276466145526948f75c0976/docs/validation/memory-evaluation-context-restoration-2026-10-20.md)有后续证据；候选、main 合入和部署分别记录于[进度台账](project-progress.md#2026-10-20-u1u2-后续候选)，不以历史验证代替。
-
-Memory 的提取与语义审核可以由本地受信插件分别注册，通过具名配方组合；当前 scoped 实现复用同一执行器、正式资料、模型准入和私有草稿，不另建任务引擎。旧 `MemoryPipeline` 的原始接口保留在下述历史说明中。2026-10-07 的持续新输入决定后来由[插件替换 ADR](adr-plugin-center-memory-replacement.md)局部取代：当前可暂停新自动准入、排空先前授权工作或立即停止，恢复不补历史。策略组合仍非空，暂停不靠空配方或旧来源 `memory` 字段实现；归属合同见[归属 ADR](adr-material-attribution.md)。
+Memory 的提取与语义审核可以由本地受信插件分别注册，通过具名配方组合。它们复用 `MemoryPipeline`、现有执行引擎、正式资料锚点、模型预算和私有草稿缓存，不另建任务引擎或模型客户端。2026-10-07 起，已授权来源的新输入持续处理，普通自动提取关闭语义被取代；归属与迁移契约见 [ADR](adr-material-attribution.md)。
 
 ## 安装与执行
 
@@ -110,7 +108,7 @@ Memory 配方可声明 `requires: ['extracted-text']`，`requires: ['source-body
 
 自动任务创建时读取所有者的「提取批次字符上限」，把实际值和具体范围固定在任务中；手工请求仍可显式指定批次上限。后续修改只作用于新任务，不能改写在途或恢复任务的范围，也不触发历史重算。
 
-手工任务的评估时刻按既定合同默认固定为创建时刻；同次自动接收的各组合共享接收时刻。旧重放接口可显式传 `contextTime`（带时区的 ISO 时间）；它只决定模型的评估语境，不改变原件接收时间、收费授权或证据可见性。`af11ab7c` 的 scoped 手工任务未持久固定该评估时钟，并从本批原件时间派生模型的当前时刻，属于[原调查](audits/memory-runtime-contract-investigation-2026-10-20.md#u1-评估时刻)确认的偏离。后续候选 `c9b6c116` 按既有合同持久固定私人评估语境并传至相关消费者；它不新增公共 HTTP 时间覆盖，main 合入及部署以[后续记录](project-progress.md#2026-10-20-u1u2-后续候选)分别核对。只有评估时刻也相同，跨任务才可能命中同一生成缓存或完成检查点；需要复现同次评估时应沿用该时刻。缓存仍受原有条数、体积及库配额约束，复用不产生新的模型用量记录，也不是审核通过的凭据。
+手工任务的评估时刻默认固定为创建时刻；同次自动接收的各组合共享接收时刻。重放可显式传 `contextTime`（带时区的 ISO 时间）；它只决定模型的评估语境，不改变原件接收时间、收费授权或证据可见性。只有评估时刻也相同，跨任务才可能命中同一生成缓存或完成检查点；需要复现同次评估时应沿用该时刻。缓存仍受原有条数、体积及库配额约束，复用不产生新的模型用量记录，也不是审核通过的凭据。
 
 ## 失败、恢复与删除
 

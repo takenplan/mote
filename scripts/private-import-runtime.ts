@@ -117,7 +117,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {extractFile,validateRecords} from './mote-files.mjs';
 const decoded=await extractFile(${JSON.stringify(inputPath)});assert.equal(decoded.status,'parsed');
 assert.equal(decoded.data.text,${JSON.stringify(text)});
-for(const path of ${JSON.stringify([outsideCanary,ownerEnvCanary,join(repository,'apps/server/test/fixtures/legacy-app.ts')])})await assert.rejects(readFile(path),error=>['EPERM','EACCES'].includes(error.code));
+for(const path of ${JSON.stringify([outsideCanary,ownerEnvCanary,join(repository,'apps/server/src/app.ts')])})await assert.rejects(readFile(path),error=>['EPERM','EACCES'].includes(error.code));
 const item={externalId:decoded.data.id,revision:'generated-v1',observedAt:'2026-09-16T00:00:00Z',title:'生成测试',text:decoded.data.text,kind:'file',layer:'original',document:{contentRole:'authored'}};
 await writeFile('records.jsonl',JSON.stringify({item,evidencePaths:[${JSON.stringify(inputPath)}]})+'\\n');
 assert.equal((await validateRecords('records.jsonl')).valid,true);
@@ -178,7 +178,7 @@ async function selfTest(){
     await writeFile(probePath,`import assert from 'node:assert/strict';import{readFile,writeFile,symlink}from'node:fs/promises';import{spawnSync}from'node:child_process';
 assert.equal(await readFile('selected.txt','utf8'),'GENERATED_SELECTED_INPUT');
 await import(${JSON.stringify(sdkUrl)});await import(${JSON.stringify(sharedUrl)});
-for(const path of ${JSON.stringify([outsideCanary,ownerEnvCanary,join(repository,'apps/server/test/fixtures/legacy-app.ts')])}){let denied=false;try{await readFile(path);}catch(error){denied=['EPERM','EACCES'].includes(error.code);}assert.ok(denied,'Read must be denied: '+path);}
+for(const path of ${JSON.stringify([outsideCanary,ownerEnvCanary,join(repository,'apps/server/src/app.ts')])}){let denied=false;try{await readFile(path);}catch(error){denied=['EPERM','EACCES'].includes(error.code);}assert.ok(denied,'Read must be denied: '+path);}
 await symlink(${JSON.stringify(ownerEnvCanary)},'escape-link');let linkDenied=false;try{await readFile('escape-link');}catch(error){linkDenied=['EPERM','EACCES'].includes(error.code);}assert.ok(linkDenied,'Symlink escape must be denied');
 let writeDenied=false;try{await writeFile(${JSON.stringify(join(other,'forbidden-write'))},'generated');}catch(error){writeDenied=['EPERM','EACCES'].includes(error.code);}assert.ok(writeDenied,'Sibling write must be denied');
 await writeFile('allowed-output.txt','generated');await writeFile(${JSON.stringify(join(runtimeRoot,'allowed-runtime.txt'))},'generated');

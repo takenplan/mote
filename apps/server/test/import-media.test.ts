@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {zipSync} from 'fflate';
 import sharp from 'sharp';
 import type {ImportJob} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store,StoreError,sha256} from '../src/store.js';
 import {ArchivedFileStore} from '../src/archived-files.js';

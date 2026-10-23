@@ -17,8 +17,7 @@ import java.util.UUID
 
 class ConnectionAndOperationsTest {
     private val now = Instant.parse("2026-09-14T00:00:00Z")
-    private fun invitation() = JSONObject().put("format", "mote.connection").put("version", 2).put("serverUrl", "https://mote.example")
-        .put("deploymentId", "generated-deployment").put("userId", "generated-A").put("purpose", "device")
+    private fun invitation() = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", "https://mote.example")
         .put("code", "A".repeat(43)).put("expiresAt", "2026-09-14T00:10:00Z")
     @Test fun invitationAndGeneratedQrDecodeWithoutPlayServices() {
         val json = invitation().toString()
@@ -42,15 +41,6 @@ class ConnectionAndOperationsTest {
         for (raw in listOf(invitation().put("token", "secret").toString(), invitation().put("code", "A".repeat(42)).toString(), "{\"format\":\"mote.connection\",\"format\":\"other\"}", "x".repeat(8193), "mote://connect?data=e30&redirect=https://bad.example")) {
             assertThrows(ConnectionFailure::class.java) { ConnectionInvitation.parse(raw, false, false, now) }
         }
-    }
-    @Test fun accountBoundInvitationsRejectLegacyOwnerGrantsAndChangedPurposeBeforeNetwork() {
-        val legacy = invitation().apply {put("version",1);remove("deploymentId");remove("userId");remove("purpose")}
-        assertThrows(ConnectionFailure::class.java) { ConnectionInvitation.parse(legacy.toString(),false,false,now) }
-        for (field in listOf("deploymentId","userId","purpose")) {
-            assertThrows(ConnectionFailure::class.java) { ConnectionInvitation.parse(invitation().apply {remove(field)}.toString(),false,false,now) }
-        }
-        for (purpose in listOf("central","owner","mcp","")) assertThrows(ConnectionFailure::class.java) {ConnectionInvitation.parse(invitation().put("purpose",purpose).toString(),false,false,now)}
-        assertEquals("https://mote.example",ConnectionInvitation.parse(invitation().put("deviceId","generated-original-device").toString(),false,false,now).serverUrl)
     }
     @Test fun ledgerSurvivesReopenBoundsEventsAndResetsHonestEpoch() {
         val directory = Files.createTempDirectory("mote-ledger").toFile()

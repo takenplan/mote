@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 for(const transition of ['heartbeat','delete-before-followup','delete-during-query'] as const)test(`formal Ask aggregate lineage survives ${transition} with precise original and device scope`,async t=>{

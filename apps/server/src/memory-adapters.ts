@@ -72,7 +72,7 @@ export class MemoryAdapters {
     this.providers.set(key,provider);return provider;
   }
   private async restart(id:string){const key=id+':'+this.plugins.configurationIdentity(id),prior=this.providers.get(key);this.providers.delete(key);await prior?.close();await this.plugins.resetRuntime(id);return this.provider(id);}
-  async probe(id:string,signal:AbortSignal){const pkg=this.plugins.packageForInstance(id),provider=await this.restart(id),namespace=this.plugins.namespace(id,1);signal.throwIfAborted();
+  async probe(id:string,signal:AbortSignal){const pkg=this.plugins.packageForInstance(id),provider=await this.restart(id),namespace={ownerId:'mote-owner',instanceId:id,bindingRevision:1};signal.throwIfAborted();
     if(provider instanceof HindsightEngine)this.assertFrozenModel(this.plugins.instanceView(id),this.plugins.configurationIdentity(id));
     const health=provider instanceof HindsightEngine?await provider.probe(signal):pkg.hostAdapter?await provider.recover({namespace}):await probeMemoryProvider({provider,restart:()=>this.restart(id),namespace,providerId:pkg.manifest.id,version:pkg.manifest.version,signal});signal.throwIfAborted();
     return {capabilities:pkg.manifest.capabilities.map(capability=>{

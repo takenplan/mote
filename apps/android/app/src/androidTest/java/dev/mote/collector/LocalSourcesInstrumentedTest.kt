@@ -59,7 +59,7 @@ class LocalSourcesInstrumentedTest {
         val connectionFile = File(context.filesDir, "source-fixture.json")
         org.junit.Assume.assumeTrue("Only explicit synthetic central fixture configuration enables network testing", connectionFile.exists())
         val connection = org.json.JSONObject(connectionFile.readText()); val base = connection.optString("url", connection.optString("server")); val token = connection.getString("token")
-        require(base == "http://127.0.0.1:57559" && token.length >= 32 && RuntimeProfile.current.developerTools)
+        require(base == "http://127.0.0.1:57559" && token.length >= 32 && BuildConfig.MOTE_PROFILE == "dev")
         val directory = File(context.noBackupFilesDir, "source-wire-test-${System.nanoTime()}"); val store = LocalSourceStore(directory, LocalContentCipher())
         val authority = context.packageName + ".source-fixtures"; val prefs = context.getSharedPreferences("source-fixture", 0)
         val scanner = SourceProviders(context.contentResolver, calendarsUri = Uri.parse("content://$authority/calendar/calendars"), instancesUri = Uri.parse("content://$authority/calendar/instances"))

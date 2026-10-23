@@ -1,4 +1,3 @@
-import {memoryRangeChunks} from './memory-range-chunks.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import {MEMORY_VISUAL_EVIDENCE_CONTRACT} from './memory-image-proof.js';
 import {memoryImageGrants,assertMemoryImageGrants,uninspectedMemoryImageTargets} from './memory-image-grants.js';
@@ -219,7 +218,7 @@ export class MemoryPipeline {
       for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
     }
     this.recover();
-    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,
+    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
       validate:step=>this.validateStep(step),validateGrant:step=>{try{const job=this.storedJob(String(step.input.jobId));if(['cancelled','paused'].includes(job.status))return false;this.assertAutomatic(job);return true;}catch{return false;}},admit:step=>{
         const job=this.storedJob(String(step.input.jobId));
@@ -502,7 +501,9 @@ export class MemoryPipeline {
       const ranges=[...selected.map(range=>({range,target:true})),...(contextEvidenceRanges??[]).filter(range=>range.id===id).map(range=>({range,target:false}))];
       for(const {range,target} of ranges){if(range.offset+range.length>record.ocrText.length)throw new StoreError('Semantic evidence range changed',409);
         if([range.offset,range.offset+range.length].some(at=>at>0&&at<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[at-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[at])))throw new StoreError('Memory evidence range splits a UTF-16 pair');
-        for(const {offset,length} of memoryRangeChunks(record.ocrText,range,budget,Boolean(plan.strategy?plan.strategy.workContract:job.workContract))){const end=offset+length;
+        for(let offset=range.offset;offset<range.offset+range.length;){let end=Math.min(offset+budget,range.offset+range.length);
+          if((plan.strategy?plan.strategy.workContract:job.workContract)&&end<range.offset+range.length){const boundary=record.ocrText.lastIndexOf('\n',end-1);if(boundary>=offset)end=boundary+1;}
+          if(end<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[end-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[end]))end--;
           const reviewFingerprint=this.options.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined,strategy=plan.strategy;
           const materialInputFingerprints=plan.inputs.filter(pin=>pin.evidenceIds.includes(id)).map(pin=>pin.fingerprint);
           const chunk:Chunk={...(materialInputFingerprints.length?{materialInputFingerprints}:{}),id,profile:profile.id,profileVersion:profile.version,strategy,reviewFingerprint:strategy?undefined:reviewFingerprint,group:JSON.stringify([strategy??null,profile.group]),offset,length:end-offset,fingerprint,key:sha256(JSON.stringify([id,fingerprint,offset,end-offset,strategy??(profile.id==='coding'?profile.version:job.skillVersion),strategy?[job.contextTime,job.timeZone??'UTC',job.language??'zh-CN']:reviewFingerprint]))};
@@ -511,7 +512,7 @@ export class MemoryPipeline {
           if(job.artifactRefs?.length)chunk.key=sha256(JSON.stringify([chunk.key,refsByEvidence.get(id)??[]]));
           if(!authorizedKeys.has(chunk.key)){authorizedKeys.add(chunk.key);authorizedChunks.push({...chunk});}
           if(target){if(this.checkpoint(chunk))skippedChunks++;else all.push(chunk);}
-          if(all.length>10000)throw new StoreError('Memory input exceeds 10000 chunks; use smaller jobs',413);
+          if(all.length>10000)throw new StoreError('Memory input exceeds 10000 chunks; use smaller jobs',413);offset=end;
         }
       }
     }
@@ -771,11 +772,10 @@ export class MemoryPipeline {
     const availableAt=Number(delayed?.at)||0;
     if(availableAt>Date.now())throw new ProviderFailure({category:'transient',code:typeof delayed?.code==='string'?delayed.code:'provider_unavailable',retryAfterMs:availableAt-Date.now()});
   }
-  /** Existing explicit owner command; delegated continuations pass false. */
-  async retry(id:string,ownerAction=true):Promise<MemoryJobDetail> {return this.acceptRetry(id,ownerAction).completion;}
+  async retry(id:string):Promise<MemoryJobDetail> {return this.acceptRetry(id).completion;}
   /** Admission is synchronous so HTTP can reject a stale/cancelled/cooling-down
    * retry before returning 202. The accepted execution remains asynchronous. */
-  acceptRetry(id:string,ownerAction:boolean):{job:MemoryJobDetail;completion:Promise<MemoryJobDetail>} {
+  acceptRetry(id:string):{job:MemoryJobDetail;completion:Promise<MemoryJobDetail>} {
     let job=this.storedJob(id);
     this.assertRetryWindow(job);
     if(job.status==='cancelled')throw new StoreError('Cancelled memory job cannot be retried',409);
@@ -793,15 +793,14 @@ export class MemoryPipeline {
         try{this.admitBatch(job,batch);}catch{batch.status='invalidated';batch.errorCode='evidence_changed';this.saveBatch(batch);continue;}
         // This owner action authorizes another failed preparation call. Parent
         // re-entry and resource waiting alone must never reopen these children.
-        if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id),ownerAction);
-        if(this.engine.get(batch.id))this.engine.retry(batch.id,ownerAction);
+        if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id));
         batch.status='pending';delete batch.errorCode;this.saveBatch(batch);
       }
       job.status='queued';delete job.errorCode;this.saveJob(job);
       for(const plan of this.inputPlans.list(id)){
         const step=this.engine.get(plan.id);
         if(!step||!['waiting','blocked','failed'].includes(step.state)||plan.batchIds!==undefined)continue;
-        this.engine.retry(plan.id,ownerAction);
+        this.engine.retry(plan.id);
       }
       if(own)db.exec('COMMIT');
     }catch(error){if(own)db.exec('ROLLBACK');throw error;}

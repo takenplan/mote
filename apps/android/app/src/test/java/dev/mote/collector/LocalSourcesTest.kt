@@ -159,23 +159,4 @@ class LocalSourcesTest {
         assertFalse(SourceRules.validAck("source-a", item, null))
     }
 
-    @Test fun permanentUploadRejectionPersistsOnlyForItsTargetAndExactImmutableRevision() {
-        val directory = folder.newFolder(); val store = LocalSourceStore(directory, cipher); val source = source()
-        store.save(source); store.selectTarget(source.id, "target-a")
-        store.scan(source, SourceScan(listOf(body()), true, at))
-        val pending = store.next(source.id, "target-a")!!
-        store.rejectUpload(source.id, "wrong-target", pending)
-        assertFalse(store.state(source.id).has("uploadRejection"))
-        store.rejectUpload(source.id, "target-a", pending)
-        val restored = LocalSourceStore(directory, cipher)
-        assertEquals(pending.getString("revision"), restored.state(source.id).getJSONObject("uploadRejection").getString("revision"))
-        restored.acknowledge(source.id, "target-a", pending.getString("externalId"), "wrong-revision")
-        assertTrue(restored.state(source.id).has("uploadRejection"))
-        restored.selectTarget(source.id, "target-b")
-        assertFalse(restored.state(source.id).has("uploadRejection"))
-        restored.rejectUpload(source.id, "target-b", pending)
-        restored.acknowledge(source.id, "target-b", pending.getString("externalId"), pending.getString("revision"))
-        assertFalse(restored.state(source.id).has("uploadRejection"))
-    }
-
 }

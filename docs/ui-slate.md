@@ -12,14 +12,14 @@ Mac 与 Android 的一级入口为内容、问一问、来源、活动，首页�
 
 内容阅读统一解释本机保存、中央接收与处理输出。客户端不得将 ACK、OCR 完成或已有正文替代真实索引状态；归档已清理与历史接收凭据分别呈现。完整文件发送去向与中央原件保留方式放在任务确认中，技术参数放入高级设置。暂停屏幕、暂停来源与暂停全部发送各有明确范围；全部发送暂停独立于原策略保存，覆盖立即同步、来源写入和心跳，本机记录与来源检查继续。
 
-Android 使用 Kotlin 原生 Activity 和 Android Views。中央工作台、资料库、问答、随手记及中央管理页共用原生登录；当前账号会话只访问本人归档；设备邀请 v2 签发受限 ingress / Actions 凭据，不授予私人阅读或管理。设备筛选不能扩大账号授权。原有 MCP 权限范围和节点绑定保护保留。Android 后台切换不丢弃配置草稿，离开编辑页会询问；草稿不写入系统 Bundle。
+Android 使用 Kotlin 原生 Activity 和 Android Views。中央工作台、资料库、问答、随手记及中央管理页共用原生登录；当前设备邀请签发 owner 凭据，可管理全归档，设备筛选只限定视图。原有 MCP 权限范围和节点绑定保护保留。Android 后台切换不丢弃配置草稿，离开编辑页会询问；草稿不写入系统 Bundle。
 
 2026-10-13 的 [用户反馈续迭代](design/ui-focus-and-consistency-2026-10-13.md) 保留 Slate 配色与原生导航，Android 采用一致的表面、动作、表单和阅读角色：同类间距、圆角、图标与字体跨页面复用，不再混用桌面纸页和原生大圆角面板。设置围绕配置与维护，采集和同步操作在首页现有区域承接；Web 与 Mac 设置也隐藏通用新记录动作。原五项评估继续保留，另检查页面职责及视觉一致性，当前截图必须证明目标内容完成加载。
 
 共享角色源在 `packages/shared/design-tokens.json`，包括颜色、字体层级、间距、控件尺寸和表面 / 控件 / 阅读圆角。运行 `node scripts/generate-design-tokens.mjs` 生成 Web/Electron CSS、共享主题和 Android Kotlin/XML/JSON；`--check` 验证产物同步。当前共同方向为 Linear 方案 A 的暖石墨暗色、紫强调、暖白主动作、系统无衬线和紧凑桌面控件；平台导航、触控尺寸、系统权限与文件选择器仍用原生实现。2026-10-14 选定第五轮的 [落地范围与取舍](design/ui-rollout-2026-10-14.md)、五轮历史评价和原图保留原始记录。
 
-处理任务页使用 账号作用域 `/api/operations` 分页读取 Operation 及步骤状态；原 `/api/processing` 上下文任务入口仍保留。截图感知、文件、Memory、导入、问答、洞察、生命周期、日程分析和 embedding 已接入共享执行器，各领域保留自己的配置与进度入口。支持的操作由服务端状态确定，不返回私人步骤输入，见 [Operations](operations.md)。结果不明的日程仍走原有核实流程。
+处理任务页使用 owner-only `/api/operations` 分页读取 Operation 及步骤状态；原 `/api/processing` 上下文任务入口仍保留。截图感知、文件、Memory、导入、问答、洞察、生命周期、日程分析和 embedding 已接入共享执行器，各领域保留自己的配置与进度入口。支持的操作由服务端状态确定，不返回私人步骤输入，见 [Operations](operations.md)。结果不明的日程仍走原有核实流程。
 
-当前发布策略：Dev 使用组件与完整提交 SHA 标识的 Actions Artifact，不创建 Tag 或 Release；Beta / 正式组件标签构建 Prod 身份并分别发布为 Pre-release / Release。单条发布只附所属组件产物。CI 校验包身份、签名/证书、平台兼容性与上传完整性；`.asset.json` 等构建元数据不对外发布。已发布版本不可覆盖，失败时仅重试草稿发布。历史签名更新实现仍保留，不允许降级绕过校验。Dev 客户端使用 Actions 手动下载入口；中央源码包独立构建部署。操作见 [发布流程](releasing.md)。
+开发期发布策略：Central、macOS、Android 分别创建 DEV prerelease；单条发布只附该端的中央源码包、Mac DEV ZIP 或 Android DEV APK。CI 校验包身份、签名/证书、平台兼容性与上传完整性；`.asset.json` 等构建元数据不对外发布。已发布版本不可覆盖，失败时仅重试草稿发布。历史签名更新实现仍保留，不允许降级绕过校验。DEV 客户端使用 GitHub 手动安装入口；中央源码包独立构建部署。操作见 [发布流程](releasing.md)。
 
 测试区分：TypeScript/Kotlin 编译、单元与生成资料的 Electron 测试可以自动执行；真实设备的采集权限、后台行为、实际模型费用和质量需要独立实机验收。

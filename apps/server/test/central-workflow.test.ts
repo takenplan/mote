@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {MEMORY_SKILL_VERSION} from '../src/memory.js';
 import {materialId} from '../src/materials.js';
 import {staticReportHtml} from '../src/insights.js';

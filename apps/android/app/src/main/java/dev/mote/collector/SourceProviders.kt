@@ -16,7 +16,7 @@ import org.json.JSONObject
 fun Context.localSources(): LocalSourceStore {
 
     LocalDataFormat.requireCurrent(this)
-    return LocalSourceStore(File(accountDirectory(), "local-sources"), localContentCipher()).apply {
+    return LocalSourceStore(File(noBackupFilesDir, "local-sources"), localContentCipher()).apply {
         onMutation = { LocalStateChanges.changed() }
     }
 }

@@ -76,7 +76,7 @@ const memoryAnswer=async(reader:ContextReader,input:QueryInput):Promise<QueryRes
 type DeadlineRecord={origin:'outer'|'host-timer'|'host-signal'|'session'|'local-deletion'|'unknown';ms:number};
 function deadlineProbe(scale=false){const records:DeadlineRecord[]=[],original=globalThis.setTimeout,signal=AbortSignal.timeout.bind(AbortSignal);
  const timer=mock.method(globalThis,'setTimeout',((fn:any,ms:number,...args:any[])=>{if(ms===600000||ms===300000){const stack=new Error().stack??'';const origin=stack.includes('/apps/server/src/agent-deadline.')?'host-timer':stack.includes('/codex-session.')?'session':stack.includes('/apps/server/src/memory-deletions.')?'local-deletion':stack.includes('/scripts/test-heldout-memory-replay-stage.')?'outer':'unknown';records.push({origin,ms});}return original(fn,scale&&ms===600000?6000:scale&&ms===300000?3000:ms,...args);}) as typeof setTimeout);
- const abort=mock.method(AbortSignal,'timeout',(ms:number)=>{if(ms===600000||ms===300000)records.push({origin:(new Error().stack??'').includes('/apps/server/test/fixtures/legacy-app.')?'host-signal':'unknown',ms});return signal(scale&&ms===600000?6000:scale&&ms===300000?3000:ms);});
+ const abort=mock.method(AbortSignal,'timeout',(ms:number)=>{if(ms===600000||ms===300000)records.push({origin:(new Error().stack??'').includes('/apps/server/src/app.')?'host-signal':'unknown',ms});return signal(scale&&ms===600000?6000:scale&&ms===300000?3000:ms);});
  return {records,restore:()=>{timer.mock.restore();abort.mock.restore();}};
 }
 function assertDeadlineOwners(records:DeadlineRecord[],owner:'outer'|'session',calls:number){

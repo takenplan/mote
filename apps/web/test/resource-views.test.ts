@@ -15,8 +15,6 @@ import {SourceMaterialView} from '../src/features/source-material.js';
 import {resources} from '../src/resource-cache.js';
 import {ApiError,dateTime,type Api} from '../src/api.js';
 import {DatabaseSync} from 'node:sqlite';
-import {resolveObjectURL} from 'node:buffer';
-import sharp from 'sharp';
 import {requestMemoryIntegration} from '../../server/src/memory-integration.js';
 const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
 function deferred(){let resolve!:(value:any)=>void,reject!:(value:unknown)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
@@ -226,9 +224,9 @@ test('agent material views cannot fall back to owner routes when a corrected ref
  unavailable=true;await act(async()=>resources(api).invalidate(()=>true));assert.doesNotMatch(d.body.textContent!,/生成的原文/);assert.match(d.body.textContent!,/Generated unavailable/);assert.ok(paths.length>=2);
 });
 test('source presentation pages decoded text, preserves raw fallback, escapes content and hides pending cached bodies',async t=>{
- const {root,document:d}=await fixture(t),paths:string[]=[];let pending=false,failureCode='conflict';
+ const {root,document:d}=await fixture(t),paths:string[]=[];let pending=false;
  const value={kind:'mote.file',schemaVersion:1,representation:'owner-material',ref:'material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),revision:'b'.repeat(64),title:'Generated recording',text:'Raw original'};
- const api=apiWith(path=>{paths.push(path);if(pending)throw new ApiError('Generated pending',409,undefined,failureCode);const next=path.includes('offset=4000');return {items:[{blockId:'generated',type:'text',text:next?'Generated continuation':'<img src=x onerror=bad()>\nGenerated first page',speaker:'SPEAKER_0',confirmedName:'Generated owner',offset:next?4000:0,total:8000,continued:!next,startMs:3000}],next:next?null:{block:1,offset:4000}};});
+ const api=apiWith(path=>{paths.push(path);if(pending)throw new ApiError('Generated pending',409);const next=path.includes('offset=4000');return {items:[{blockId:'generated',type:'text',text:next?'Generated continuation':'<img src=x onerror=bad()>\nGenerated first page',speaker:'SPEAKER_0',confirmedName:'Generated owner',offset:next?4000:0,total:8000,continued:!next,startMs:3000}],next:next?null:{block:1,offset:4000}};});
  await act(async()=>root.render(React.createElement(SourceMaterialView,{api,value,onOpen:()=>{},fallback:React.createElement('pre',null,'Raw original')})));
  assert.match(d.body.textContent!,/已确认说话人：Generated owner/);assert.match(d.body.textContent!,/Generated first page/);assert.equal(d.querySelector('img'),null);
  const click=async(label:string)=>act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent===label)!.click());
@@ -236,7 +234,6 @@ test('source presentation pages decoded text, preserves raw fallback, escapes co
  await click('上一页');assert.match(d.body.textContent!,/Generated first page/);
  await click('查看原始结构');assert.match(d.body.textContent!,/Raw original/);assert.doesNotMatch(d.body.textContent!,/Generated first page/);
  await click('返回阅读视图');pending=true;await act(async()=>resources(api).invalidate(()=>true));assert.match(d.body.textContent!,/正在重新整理/);assert.doesNotMatch(d.body.textContent!,/Generated first page/);
- failureCode='session_changed';await act(async()=>resources(api).invalidate(()=>true));assert.match(d.body.textContent!,/登录会话已改变/);assert.doesNotMatch(d.body.textContent!,/正在重新整理|Generated first page/);
 });
 test('the source plugin renders imported messages and distinguishes recorded, occurred and collected times',async t=>{
  const {featuresReady}=await import('../src/features/runtime.js');await featuresReady;
@@ -586,28 +583,26 @@ test('explicit memory source rejects invalid or revoked records and fences a lat
 });
 
 test('generated archived JPEG renders after authorized load and supports native-size reading',async t=>{
- const {root,document:d}=await fixture(t);let loads=0,byteReads=0;const image=await sharp({create:{width:1,height:1,channels:3,background:'#234567'}}).jpeg().toBuffer();
+ const {root,document:d}=await fixture(t);let loads=0;
  const api=apiWith(path=>{if(path.endsWith('/playback')){loads++;return {url:'/api/files/'+ids[0]+'/content'};}return {captureId:ids[0],item:{title:'Generated diagram.jpg',mimeType:'image/jpeg'},sizeBytes:100,hasOriginal:true,job:null,artifacts:[]};});
- api.raw=async path=>{assert.equal(path,'/api/files/'+ids[0]+'/content');byteReads++;return new Response(image,{headers:{'content-type':'image/jpeg'}});};
  await act(async()=>root.render(React.createElement(FileDetail,{api,id:ids[0],onOpen:()=>{}})));
  await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>/加载原件|查看原图/.test(b.textContent!))!.click());
- const img=d.querySelector('img');assert.ok(img,'authorized image original must be visible');assert.ok(img.src.startsWith('blob:'));assert.deepEqual(Buffer.from(await resolveObjectURL(img.src)!.arrayBuffer()),image);assert.equal(img.getAttribute('alt'),'Generated diagram.jpg');
- await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='原始尺寸')!.click());assert.ok(d.querySelector('.native-size'));assert.equal(loads,1,'resizing reuses authorized URL');assert.equal(byteReads,1);
+ const img=d.querySelector('img');assert.ok(img,'authorized image original must be visible');assert.equal(img.getAttribute('src'),'/api/files/'+ids[0]+'/content');assert.equal(img.getAttribute('alt'),'Generated diagram.jpg');
+ await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='原始尺寸')!.click());assert.ok(d.querySelector('.native-size'));assert.equal(loads,1,'resizing reuses authorized URL');
  await act(async()=>img.dispatchEvent(new d.defaultView!.Event('error')));assert.ok(d.querySelector('[role=alert]'));
 });
 
 for(const outcome of ['resolve','reject'] as const)test('archived image ignores late '+outcome+' after API session changes',async t=>{
- const {root,document:d}=await fixture(t),pending=deferred();let oldSignal:AbortSignal|undefined,oldBytes=0;const image=await sharp({create:{width:1,height:1,channels:3,background:'#654321'}}).jpeg().toBuffer();
+ const {root,document:d}=await fixture(t),pending=deferred();let oldSignal:AbortSignal|undefined;
  const file={captureId:ids[0],item:{title:'Generated image.jpg',mimeType:'image/jpeg'},sizeBytes:100,hasOriginal:true,job:null,artifacts:[]};
  const oldApi=apiWith((path,init)=>{if(path.endsWith('/playback')){oldSignal=init?.signal as AbortSignal;return pending.promise;}return file;});
  const newApi=apiWith(path=>path.endsWith('/playback')?{url:'/generated-current.jpg'}:file);
- oldApi.raw=async()=>{oldBytes++;return new Response(image);};newApi.raw=async path=>{assert.equal(path,'/generated-current.jpg');return new Response(image,{headers:{'content-type':'image/jpeg'}});};
  const render=(api:Api)=>root.render(React.createElement(FileDetail,{api,id:ids[0],onOpen:()=>{}}));
  await act(async()=>render(oldApi));await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='查看原图')!.click());
  await act(async()=>render(newApi));assert.equal(oldSignal?.aborted,true);
  await act(async()=>{if(outcome==='resolve')pending.resolve({url:'/generated-stale.jpg'});else pending.reject(new Error('generated stale failure'));});
- assert.equal(d.querySelector('img'),null);assert.doesNotMatch(d.body.textContent!,/generated stale failure/);assert.equal(oldBytes,0,'retired playback ACK cannot start a stale byte read');
- await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='查看原图')!.click());const img=d.querySelector('img')!;assert.ok(img.src.startsWith('blob:'));assert.deepEqual(Buffer.from(await resolveObjectURL(img.src)!.arrayBuffer()),image);
+ assert.equal(d.querySelector('img'),null);assert.doesNotMatch(d.body.textContent!,/generated stale failure/);
+ await act(async()=>Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='查看原图')!.click());assert.equal(d.querySelector('img')!.getAttribute('src'),'/generated-current.jpg');
 });
 
 test('source drawer decodes only declared organizer text once and separates actions from the body heading',async t=>{
@@ -686,10 +681,4 @@ test('dialogue detail offers summary and separation together without a content-l
   const button=Array.from(d.querySelectorAll('button')).find(b=>b.textContent===label)!;assert.ok(button);await act(async()=>button.click());
  }
  assert.deepEqual(writes,[{stage:'summary'},{stage:'diarize'}]);
-});
-
-test('an already policy-authorized read unknown does not add another file retry confirmation dialog',async t=>{
- const {FileProcessingControls}=await import('../src/FileProcessingControls.js'),{root,document:d}=await fixture(t),writes:any[]=[];
- const api=apiWith((path,init)=>{if(path.endsWith('/retry')){writes.push(JSON.parse(String(init?.body)));return {};}return {job:{state:'failed',summary_state:'failed'},cancellation:{canCancel:true,wait:'unknown',confirmUnknownRequired:false},processingPolicy:{capabilities:{dialogue:true,summary:true},current:{profile:{summarize:true}}}};});
- await act(async()=>root.render(React.createElement(FileProcessingControls,{api,id:ids[0]})));const retry=Array.from(d.querySelectorAll('button')).find(b=>b.textContent==='重新生成摘要')!;assert.ok(retry);await act(async()=>retry.click());assert.equal(d.querySelector('[role="alertdialog"]'),null);assert.equal(writes.length,1);assert.equal(writes[0].stage,'summary');assert.notEqual(writes[0].confirmUnknown,true);
 });

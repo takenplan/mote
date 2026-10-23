@@ -5,7 +5,7 @@ import {randomBytes} from 'node:crypto';
 import {cp,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join,relative,resolve} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {safeError} from '../apps/server/src/diagnostics.js';
 import {usageTotals} from '../apps/server/src/usage.js';
 import {AgentYieldError} from '@mote/agent';

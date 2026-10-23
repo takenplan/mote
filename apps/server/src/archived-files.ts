@@ -8,10 +8,15 @@ import {privateDirectory} from './private-storage.js';
 import {Store,StoreError,sha256} from './store.js';
 import type {Asset} from './assets.js';
 
-import {MAX_FILE_BYTES,archiveRelativePath} from './archive-contract.js';
-export {MAX_FILE_BYTES,archiveRelativePath} from './archive-contract.js';
+export const MAX_FILE_BYTES=64*1024*1024;
 const portableFileSchema=z.object({id:z.string().uuid(),hash:z.string().regex(/^[a-f0-9]{64}$/),name:z.string().min(1).max(1000),relativePath:z.string().min(1).max(1000),mimeType:z.string().min(1).max(200),sizeBytes:z.number().int().min(0).max(FILE_MAX_BYTES),createdAt:z.string().datetime({offset:true}),dataBase64:z.string().max(Math.ceil(FILE_MAX_BYTES/3)*4)}).strict();
 export type PreparedPortableFile={file:ArchivedFile;bytes:Buffer};
+/** Structural path validation only; content interpretation belongs to the import agent. */
+export function archiveRelativePath(raw:string):string {
+  if(!raw||raw.length>1000||/[\u0000-\u001f]/.test(raw)||raw.includes('\\')||raw.startsWith('/')||/^[a-zA-Z]:/.test(raw))throw new StoreError('Invalid archive path');
+  const parts=raw.split('/');if(parts.some(p=>!p||p==='.'||p==='..'))throw new StoreError('Archive paths must be relative and cannot traverse directories');
+  return parts.join('/');
+}
 export class ArchivedFileStore {
   readonly directory:string;
   constructor(public store:Store){

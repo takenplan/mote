@@ -9,7 +9,7 @@ import {SourceStore} from '../src/sources.js';
 import {assertSourceContextDependencies} from '../src/source-context-lineage.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import {DelegationRuntime,registerQueryDelegation} from '../src/delegation-runtime.js';
-import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
+import {buildApp,type QueryAgent} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {randomUUID} from 'node:crypto';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';

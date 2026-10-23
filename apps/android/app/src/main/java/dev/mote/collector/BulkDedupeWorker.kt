@@ -13,7 +13,7 @@ import java.time.Instant
 /** Only local metadata is persisted; pixels live in bounded worker-local buffers. */
 class BulkDedupeStore(context: Context) {
     companion object { private val fileLock = Any() }
-    private val dir = requireStorageDirectory(File(context.accountDirectory(), "bulk-dedupe"))
+    private val dir = requireStorageDirectory(File(context.noBackupFilesDir, "bulk-dedupe"))
     private val cipher = context.localContentCipher()
     fun quarantine() = DurableQueue(File(dir, "pending"), cipher, role = DurableQueue.Role.QUARANTINE).apply { onMutation = { LocalStateChanges.changed(records = it, storage = true) } }
     fun read(name: String): JSONObject = synchronized(fileLock) {
@@ -62,9 +62,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
             setProgressAsync(workDataOf("stage" to stage, "done" to done, "total" to total, "found" to found, "errors" to errors))
         }
     }
-    override fun doWork(): Result = ConnectionGuard.sync { work() } ?: Result.retry()
-    private fun work(): Result {
-        if (inputData.getString("owner") != Settings(applicationContext).read().ownerKey()) return Result.success()
+    override fun doWork(): Result {
         val started = android.os.SystemClock.elapsedRealtime()
         SupportEvents.record(applicationContext, EventStage.DEDUPE, EventCode.STARTED)
         return try {
@@ -72,7 +70,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                 SupportEvents.record(applicationContext, EventStage.DEDUPE, if (isStopped) EventCode.CANCELLED else EventCode.STOPPED, android.os.SystemClock.elapsedRealtime() - started)
             }
         } catch (error: Exception) {
-            SupportEvents.failure(applicationContext, EventStage.DEDUPE, error, android.os.SystemClock.elapsedRealtime() - started)
+            SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE), android.os.SystemClock.elapsedRealtime() - started)
             Result.failure(workDataOf("message" to (error.message ?: MoteI18n.text("操作失败，未处理记录已保留"))))
         } finally { LocalStateChanges.changed(immediate = true) }
     }
@@ -110,7 +108,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                         .put("changedPixelRatio", comparison.changedPixelRatio).put("changedBlocks", comparison.changedBlocks)
                         .put("changedRows", comparison.changedRows).put("changedCols", comparison.changedCols))
                 } else { reference = row; referenceFeatures = features }
-            } catch (error: Exception) { SupportEvents.failure(applicationContext, EventStage.DEDUPE, error); errors++; reference = null; referenceFeatures = null }
+            } catch (error: Exception) { SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE)); errors++; reference = null; referenceFeatures = null }
             progress(MoteI18n.text("比较图片"), index + 1, rows.size, pairs.length(), errors)
         }
         if (isStopped) return Result.failure()
@@ -139,7 +137,7 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
                     val ok = source.resolveDedupe(row.getString("id"), row.getString("blob"),
                         if (source === queue) ref!!.getString("id") else null, ref?.getString("blob"), target, if (action == "restore") restoreLimit else Long.MAX_VALUE)
                     if (ok) done++ else skipped++
-                } catch (error: Exception) { SupportEvents.failure(applicationContext, EventStage.DEDUPE, error); skipped++ }
+                } catch (error: Exception) { SupportEvents.record(applicationContext, EventStage.DEDUPE, EventJournal.failure(error, EventStage.DEDUPE)); skipped++ }
                 progress(MoteI18n.text("处理记录"), index + 1, items.length(), done, skipped)
             }
         } }

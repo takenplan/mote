@@ -49,7 +49,6 @@ function buildEnvironment() {
 async function buildSource(directory) {
   const options = { cwd: directory, env: buildEnvironment(), capture: true, timeoutMs: 20 * 60 * 1000 };
   await execute('npm', ['ci', '--include=dev', '--no-audit', '--no-fund'], options);
-  await execute('npm', ['run', 'connectors:prepare'], options);
   await execute('npm', ['run', 'build:libs'], options);
   await execute('npm', ['run', 'build', '-w', '@mote/server', '-w', '@mote/web'], options);
 }

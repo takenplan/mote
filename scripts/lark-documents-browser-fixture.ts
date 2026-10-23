@@ -1,7 +1,7 @@
 /** Generated-only provider fixture for the real central application and browser entry points. */
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {LARK_SCOPES} from '../apps/server/src/connectors/lark.js';
 import type {LarkCommand,LarkRunner} from '../apps/server/src/connectors/lark-cli.js';
 import {ConnectorError} from '../apps/server/src/connectors/types.js';
@@ -11,7 +11,7 @@ let meetingFails=true;
 const runner:LarkRunner=async command=>{
  calls.push(command);
  switch(command.kind){
-  case 'version':return 'lark-cli version 1.0.98';
+  case 'version':return 'lark-cli version 1.0.85';
   case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated-document-owner',userName:'Generated document owner',scope:[...LARK_SCOPES,'drive:drive:readonly','calendar:calendar:readonly'].join(' ')}}});
   case 'login':return JSON.stringify({verification_url:'https://accounts.feishu.cn/authorize?generated-only',device_code:'generated-private-code',expires_in:600});
   case 'complete':return '{}';

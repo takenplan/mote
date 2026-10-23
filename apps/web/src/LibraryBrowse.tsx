@@ -9,7 +9,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { type Api, type Capture, ApiError, dateTime, duration, errorMessage } from './api';
 import { evidencePresentation, ocrPresentation } from './capture-presentation';
 import { EvidenceState } from './EvidenceState';
-import { contextReaderReference } from './evidence-route';
 import { FileDetail } from './Files';
 import { type Material } from './Materials';
 import { MediaSnapshot } from './Media';
@@ -26,19 +25,18 @@ function validLibraryDay(value:string){
     return Number.isFinite(date.getTime())&&date.getFullYear()===Number(value.slice(0,4))&&date.getMonth()+1===Number(value.slice(5,7))&&date.getDate()===Number(value.slice(8,10));
 }
 /** A single object browser: wide screens keep the list, narrow screens return to it. */
-export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen, supporting = false, detail }: {
+export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen, supporting = false }: {
     children: ReactNode;
     reference?: string;
     api: Api;
     onClose: () => void;
     onOpen: (ref: string) => void;
     supporting?: boolean;
-    detail?: ReactNode;
 }) {
     return <div className={'library-browser' + (reference ? ' has-selection' : '') + (supporting ? ' supporting' : '')}>
     <div className="library-master" aria-label={moteText('资料列表')}>{children}</div>
     <section className="library-detail" aria-label={moteText('资料详情')}>
-      {reference ? <><header className="library-detail-heading"><button className="text-button library-back" onClick={onClose}><ArrowLeft size={16}/>{moteText('返回资料列表')}</button><span>{moteText('资料详情')}</span><button className="icon-button library-close" aria-label={moteText('关闭详情')} onClick={onClose}><X size={17}/></button></header>{detail??<LibraryReference key={reference} api={api} reference={reference} onOpen={onOpen}/>}</> : <Empty icon={FileText} title={moteText('选择一条资料')}><p>{moteText('在这里查看内容、原始来源和支持证据。')}</p></Empty>}
+      {reference ? <><header className="library-detail-heading"><button className="text-button library-back" onClick={onClose}><ArrowLeft size={16}/>{moteText('返回资料列表')}</button><span>{moteText('资料详情')}</span><button className="icon-button library-close" aria-label={moteText('关闭详情')} onClick={onClose}><X size={17}/></button></header><LibraryReference key={reference} api={api} reference={reference} onOpen={onOpen}/></> : <Empty icon={FileText} title={moteText('选择一条资料')}><p>{moteText('在这里查看内容、原始来源和支持证据。')}</p></Empty>}
     </section>
   </div>;
 }
@@ -48,7 +46,7 @@ function LibraryReference({ api, reference, onOpen }: {
     onOpen: (ref: string) => void;
 }) {
     const capture = parseEvidenceRef(reference)?.kind === 'capture';
-    return capture ? <LibraryCaptureDetail api={api} reference={reference} onOpen={onOpen}/> : <ReferenceDetail api={api} reference={contextReaderReference(reference)??reference} onOpen={onOpen}/>;
+    return capture ? <LibraryCaptureDetail api={api} reference={reference} onOpen={onOpen}/> : <ReferenceDetail api={api} reference={reference} onOpen={onOpen}/>;
 }
 /** The same authenticated original and provenance shown by the full evidence reader. */
 function LibraryCaptureDetail({ api, reference, onOpen }: {
@@ -75,7 +73,7 @@ function LibraryCaptureDetail({ api, reference, onOpen }: {
     <h3>{presentation.textLabel}</h3><pre className="library-original-text">{capture.source === 'media' ? mediaExplanation : capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || text || (capture.provenance?.deleted ? moteText('来源已报告删除；本次只保留来源元数据。') : capture.provenance?.layer === 'reference' ? moteText('此来源仅保留引用与元数据，未导入正文。') : presentation.nativeFile && capture.provenance?.layer === 'original' ? moteText('原件单独保存；转写与摘要见上方。') : capture.blobHash ? moteText('暂无文字。') : moteText('此记录没有正文。'))}</pre>
     {(capture.source === 'media' || capture.metadata?.media) && <MediaSnapshot media={capture.metadata?.media} observedAt={capture.metadata?.observedAt ?? capture.capturedAt} screenLocked={capture.metadata?.state?.screenLocked} collection={capture.privacy.collection}/>}
     <section className="library-provenance"><h3>{moteText('来源与定位')}</h3><dl><dt>{moteText('来源')}</dt><dd>{sourceLabels[capture.source] ?? capture.source}</dd><dt>{moteText('设备')}</dt><dd>{capture.deviceName}</dd>{capture.appId && <><dt>{moteText('应用标识')}</dt><dd>{capture.appId}</dd></>}{(capture.source === 'screen' || capture.source === 'activity') && <><dt>{moteText('前台应用采样时长')}</dt><dd>{duration(capture.durationMs)}</dd></>}<dt>{moteText('隐私处理')}</dt><dd>{capture.source === 'activity' ? moteText('仅记应用活动，不采集内容') : capture.source === 'media' ? (capture.privacy.collection === 'activity' ? moteText('仅应用与播放状态，不采集标题等内容') : moteText('保留应用上报的媒体信息，不录制音频')) : capture.privacy.redacted ? moteText('客户端报告已脱敏') : moteText('未标记脱敏')}</dd></dl>
-      <Metadata stateSeries={capture.stateSeries} metadata={capture.metadata} source={capture.provenance?.metadata} modifiedAt={capture.provenance?.modifiedAt}/><SourceDocumentDetails api={api} document={capture.provenance?.document} parentId={capture.revisionState!=='historical'&&!capture.provenance?.deleted?capture.id:undefined} onOpen={onOpen}/>{capture.privacy.reason && <p className="field-note">{capture.privacy.reason}</p>}<code className="record-id">{reference}</code>
+      <Metadata stateSeries={capture.stateSeries} metadata={capture.metadata} source={capture.provenance?.metadata} modifiedAt={capture.provenance?.modifiedAt}/><SourceDocumentDetails api={api} document={capture.provenance?.document}/>{capture.privacy.reason && <p className="field-note">{capture.privacy.reason}</p>}<code className="record-id">{reference}</code>
     </section>
     <button className="button subtle" onClick={() => onOpen(reference)}>{moteText('打开完整详情')}</button>
   </article>;
@@ -125,7 +123,7 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
       {(current.sourceId || current.deviceId || current.after || current.before) && <button className="text-button" onClick={() => update({ sourceId: '', deviceId: '', after: '', before: '' })}>{moteText('清除筛选')}</button>}
     </div>
     {invalidDate&&<p role="alert">{moteText('请选择有效日期')}</p>}
-    {page.error !== undefined && <ErrorNotice text={page.error instanceof ApiError && page.error.status === 409 && page.error.code === 'invalid_cursor' ? moteText('资料目录已变化，请返回第一页继续浏览。') : errorMessage(page.error)} retry={() => current.cursor ? update({ cursor: undefined }) : page.refresh()}/>}
+    {page.error !== undefined && <ErrorNotice text={page.error instanceof ApiError && page.error.status === 409 ? moteText('资料目录已变化，请返回第一页继续浏览。') : errorMessage(page.error)} retry={() => current.cursor ? update({ cursor: undefined }) : page.refresh()}/>}
     {page.loading && !page.data && <Spinner />}
     {page.error === undefined && page.data && <><div className="library-record-list">{page.data.items.map(item => {
                 const type = page.data!.types.find(type => type.kind === item.kind && type.schemaVersion === item.schemaVersion);

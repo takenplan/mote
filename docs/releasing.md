@@ -2,35 +2,17 @@
 
 Mote 保留 npm Monorepo，按独立安装/部署单元发布。根 `package.json` 是私有工作区控制入口，不再代表产品版本；共享内部库随使用它的产品从同一提交构建。
 
-## 最简规范：先 Profile，再 Tag
+| 发布单元 | 版本来源 | 标签 | DEV 公开附件 |
+| --- | --- | --- | --- |
+| Central | server 与 web 的 package.json，两者一致 | `central-vX.Y.Z` | `mote-server-X.Y.Z.tar.gz` 源码包 |
+| macOS | desktop 的 package.json | `desktop-vX.Y.Z` | Mac DEV ZIP |
+| Android | `apps/android/version.properties` | `android-vX.Y.Z` | Android DEV APK |
 
-| Profile | 用途 | 默认行为 |
-| --- | --- | --- |
-| `dev` | 开发、自测 | 详细结构化日志、客户端诊断与调试入口；Mote 自有凭据使用私有本地文件，不调用系统密钥存储 |
-| `prod` | Beta 内测与正式使用 | 常规诊断，关闭开发入口和额外采样；客户端保留系统密钥存储 |
-| `test` | 自动化 fixture | 独立身份、生成素材；不作为分发 Profile |
-
-Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配置。Mac / Android 的构建 Profile 用于选择安装身份和默认能力；Mac 正式构建显式选择 `--profile=dev` 时同样使用 Dev 文件凭据。第三方 Lark / DingTalk CLI 等组件继续管理自己的密钥。Central 现有私有 YAML、SQLite 和 secret 文件保持归属，不重写为另一份 JSON。多用户个人正文 trace 仍由本人显式开启，Dev 的结构化 debug 不扩大任何资料授权。
-
-| 场景 | 标识 | 产物位置 |
-| --- | --- | --- |
-| 日常 Dev | `<组件>-dev-<commit SHA>`，不创建 Tag | GitHub Actions Artifact，含 `build-info.json` 和校验元数据 |
-| Beta | `<组件>-vX.Y.Z-beta.N` | Prod Profile；GitHub Pre-release |
-| 正式 | `<组件>-vX.Y.Z` | Prod Profile；GitHub Release |
-
-组件为 `central`、`desktop`、`android`，各自递增版本；Android 每次发布还递增 versionCode。Tag 不可覆盖，Pre-release 只是发布状态，不控制 Debug。Beta 与正式版使用同一 Prod 安装身份；Dev 与 Prod 的数据、配置、凭据及客户端身份隔离。当前仍手动安装/部署，不恢复签名在线更新或 GHCR 镜像。
-
-| 发布单元 | 版本来源 | Prod 公开附件 |
-| --- | --- | --- |
-| Central | server / web 的 package.json，两者一致 | `mote-server-X.Y.Z.tar.gz` |
-| macOS | desktop 的 package.json | `mote-desktop-macos-<arch>-X.Y.Z.zip` |
-| Android | `apps/android/version.properties` | `mote-android-arm64-X.Y.Z.apk` |
-
-版本中的 Beta 后缀原样出现在附件名。三个单元分别走 [Central](../.github/workflows/release-central.yml)、[Desktop](../.github/workflows/release-desktop.yml)、[Android](../.github/workflows/release-android.yml) workflow；一个标签只构建和分发一个组件。架构和升级边界见 [独立发布架构](release-architecture.md)、[Profile 与发版 ADR](adr-profile-release-policy.md) 和 [更新说明](updating.md)。
+三个单元分别走 [Central](../.github/workflows/release-central.yml)、[Desktop](../.github/workflows/release-desktop.yml)、[Android](../.github/workflows/release-android.yml) workflow。只推送要发布的组件标签，只构建、验证和上传该组件的产物。当前依然是 DEV prerelease、手动安装/部署，不恢复签名在线更新，也不发布 GHCR 镜像。架构、协议和迁移边界见 [独立发布架构](release-architecture.md)，安装见 [更新说明](updating.md)。
 
 ## MVP 阶段的 GitHub 检查开关
 
-2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Dev 构建跳过可选测试。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。此 PR 不修改线上工作流启停状态或仓库权限。
+2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks` 工作流，并将仓库变量 `MOTE_PRE_RELEASE_CHECKS` 设为 `false`。三个发布工作流保持启用，默认跳过 Central/Desktop 的测试与独立类型检查、Android 单元测试，以及 Mac 打包后的兼容性 smoke。构建、组件版本、签名、应用身份与发布附件完整性校验继续执行。未设置变量时同样跳过发布测试；本地检查命令仍可手动使用，本地 Mac 打包未设置该环境变量时仍执行 smoke。
 
 需要恢复时运行：
 
@@ -50,7 +32,7 @@ gh variable set MOTE_PRE_RELEASE_CHECKS --repo utopiafar/mote --body true
 
 此前 Mac 和中央节点的自动更新按语义版本比较，因此不会将 0.0.1 当作更新；切换时应手动更新中央部署、退出并覆盖替换 Mac App，保留配置、凭据、模型与数据目录。Android 按内部版本码比较，原有更新流程仍可识别 code 12。不要绕过签名校验、复用较低 Android 版本码或卸载应用来完成切换。项目仍处于开发早期，当前版本不承诺功能和协议稳定。
 
-## 历史完整发布产物（含尚未恢复的在线更新附件）
+## 历史完整发布产物（当前 DEV 不发布）
 
 | 产物 | 用途 |
 | --- | --- |
@@ -62,7 +44,7 @@ gh variable set MOTE_PRE_RELEASE_CHECKS --repo utopiafar/mote --body true
 | `SHA256SUMS` | 供人工核对下载；自动更新仍须验证签名清单 |
 | `ghcr.io/utopiafar/mote:X.Y.Z` | Linux amd64/arm64 中央镜像；更新实际按签名中的不可变 digest 拉取 |
 
-模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包从已提交快照归档；Prod 对应精确 Tag，Dev 对应提交。忽略目录、个人配置和签名材料不在其中。
+模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包仅从 Git 标签归档，忽略目录、个人配置和签名材料不在其中。
 
 ## 签名配置与历史清单密钥
 
@@ -91,62 +73,33 @@ Android 0.5.1 延续本项目 0.4.0 包的原有签名密钥，转换为强密�
 
 Mac 默认 adhoc 只提供本期可构建的分发方式，不代表 Apple 认可的正式签名。选择 `developer-id` 后，缺少证书或公证凭据会使构建失败，不会静默降级为 adhoc；构建验证签名、公证票据和 Gatekeeper。Apple 账户、证书费用与公证服务由应用维护者配置，流程不会代为创建这些账户。[electron-builder v26 签名说明](https://www.electron.build/v26/docs/code-signing)。
 
-## 日常 Dev 构建
+## 当前 DEV 发布流程
 
-在对应 workflow 的 Run workflow 中选择分支与 `profile=dev`。工作流校验该组件和锁文件，构建 Dev 包并保留为 `<组件>-dev-<完整提交 SHA>` Artifact（保留 7 天）；不创建 Git Tag 或 GitHub Release。安装包本身保留组件版本；确切提交以 Artifact 名和 `build-info.json` 为准。Central 的文件名与 Prod 相同，因为它是同一份不带配置的源码。
+1. 运行 `npm run release:version -- android patch`（或 `central`、`desktop`，也可给出更高的完整版本）。脚本只修改该发布单元；Central 同步 server/web 和对应 lockfile 条目，Android 单独递增 versionCode。
+2. 编写 `release/notes/<组件>/<版本>.md`，记录这个端的变化与实际验证范围。
+3. 涉及代码、配置、依赖或运行行为的提交/PR 前运行 `npm run check:affected`，并按[开发指南](development.md#pr-check-scope)补充受影响流程的检查；纯文档 PR 只检查格式、语法、链接和渲染，无需完整测试。发布前运行 `npm run release:verify -- android`。MVP 阶段平台测试由维护者按需手动运行：Central 可运行 `npm run check:central`，macOS 可运行 `npm run check:desktop`；Android 用 Gradle 单元测试、构建与 lint。GitHub 的默认暂停策略见上面的检查开关。
+4. 合并后在对应提交推送不可变组件标签，例如 `android-v0.0.78`。手动启动 workflow 也必须选择准确的组件标签，普通分支无法发版。
+5. 对应工作流构建、验证并上传唯一组件产物。Mac 使用 `MOTE_MAC_DEVELOPMENT=1`；Android 使用原证书并核验包名、版本码和 16 KiB 对齐；Central 构建 server/web 后从标签归档所需源码，并验证结构与版本。`.asset.json` 等 CI 校验数据不作为公开附件。
 
-Mac Dev 使用 `dev.mote.collector.dev` / `Mote Collector Dev`；Android 使用 `dev.mote.collector.dev` 和 `-dev` versionName。Android 沿用已有固定签名证书，避免换 runner 后无法覆盖安装。
-
-本地 Mac 出包：
-
-```sh
-MOTE_BUILD_PROFILE=dev node scripts/release/mac-package.mjs
-# Beta / 正式包使用正式安装身份：
-MOTE_BUILD_PROFILE=prod node scripts/release/mac-package.mjs
-```
-
-签名 Secret 仍从 `release` Environment 读取。该 Environment 目前仅允许组件 Tag；Mac / Android 首次从分支构建 Dev 签名包前，维护者须在 Deployment branches and tags 中额外允许受信任的开发分支（通常 `main`），或采用单独受控环境并相应配置 workflow。不要开放不受信任分支。此设置不在 Git 中，本 PR 不自动扩大线上 Secret 的访问范围；未配置前 Mac / Android 的分支 Dev 签名打包会被 GitHub 拒绝；Central 的 Dev 源码打包不使用该 Environment，可直接运行。
-
-<a id="release-preflight"></a>
-
-## 发布前预检
-
-发布负责人在稳定候选上验证目标组件的实际 Profile/variant，再创建发布 Tag。日常 `debug` 测试、模块定向测试和发布配置各自记录；发布配置中的确定性错误应在推送 Tag 前暴露。
-
-先把版本、lockfile 和发布说明提交到发布候选，再验证打包。Central 源码包从 `HEAD` 归档，工作树中的未提交修改不会进入产物；记录打包所用提交，后续合并带来输入变化时重新核对受影响检查与产物。
-
-| 发布组件 | 当前发布配置验证 | 与日常检查的区别 |
-| --- | --- | --- |
-| Central | `npm run check:central`，源码打包、版本与附件结构验证 | 对照 [Central workflow](../.github/workflows/release-central.yml)；复用候选检查中符合条件的任务证据 |
-| macOS | macOS 上的 `npm run check:desktop`，目标 Profile 的原生构建、打包和打包后 smoke | 对照 [Desktop workflow](../.github/workflows/release-desktop.yml)；匹配架构与签名配置 |
-| Android Beta/正式 | `apps/android/gradlew -p apps/android --no-daemon testReleaseUnitTest`，随后构建及签名产物校验 | PR 的 `testDebugUnitTest` 与发布使用不同 variant；release 单测可先于签名打包执行 |
-| Android Dev 包 | `apps/android/gradlew -p apps/android --no-daemon testDevelopmentUnitTest` | 按 [Android workflow](../.github/workflows/release-android.yml)选择 development variant |
-
-这张表是发布候选的范围，不是每次提交的检查清单。先查看已有候选证据，再补发布配置和产物检查。固定组件检查也使用同一驱动，可显式追加 `-- --reuse /absolute/path/to/original-receipt.json`；输入匹配与每轮实际执行任务遵循[回执规则](development.md#pr-check-scope)，本地回执不转作 GitHub Runner 的执行记录。
-
-Mac 在具备原生依赖与所选签名环境时，本地执行目标 Prod 构建及 smoke：
+例如只修 Android：
 
 ```sh
-MOTE_BUILD_PROFILE=prod MOTE_PRE_RELEASE_CHECKS=true node scripts/release/mac-package.mjs
+npm run release:version -- android patch
+# 按脚本输出的 notes 路径写发布说明
+npm run check:affected
+npm run release:verify -- android
+# 合并后，在已验证提交创建并推送脚本输出的 tag
+git tag android-v0.0.78
+git push origin android-v0.0.78
 ```
 
-真实签名、安装身份、架构和附件完整性仍在发布流程验收；缺少本地平台或签名环境时，记录待验证项与执行环境，由发布负责人完成对应检查。预检不上传 Release，也不创建 Tag；发布权限与现有 Environment 规则按原流程执行。
+[Component checks](../.github/workflows/component-checks.yml) 恢复启用后按代码输入和 npm 依赖选择平台检查；协议或共享契约变更检查所有消费者，普通端侧改动只检查该端。完整手动检查仍保留在 [Checks](../.github/workflows/checks.yml)，本地 PR 检查与 CI 共用影响范围判断，按[开发指南](development.md#pr-check-scope)检查受影响组件；`check:local` 保留为全量 TypeScript 集成检查。检查所有端不会创建其他端的发布。
 
-## Beta / 正式发布
-
-1. 选择组件。运行 `npm run release:version -- desktop 0.1.0-beta.1`；正式发布使用 `npm run release:version -- desktop 0.1.0`。替换组件名即可发布 Central / Android；版本必须高于该组件当前版本。
-2. 编写脚本输出的 `release/notes/<组件>/<版本>.md`，说明用户变化、安装/升级步骤和实际验证范围。
-3. 由集成/发布负责人完成稳定候选的 `npm run check:affected`、受影响用户流程及上面的[发布配置预检](#release-preflight)，再运行 `npm run release:verify -- desktop`（替换为实际组件）。符合条件的任务证据显式复用，后续变更重跑失效范围。普通文档 PR 只检查文档；发布候选仍需验证发布配置与真实产物。
-4. 合并后，在已验证提交创建并推送脚本输出的不可变 Tag，例如 `desktop-v0.1.0-beta.1`。普通分支不能发布 Prod；手动重跑也必须选准确组件 Tag。Tag 构建固定采用 Prod，与 dispatch 默认选项无关。
-5. 工作流执行组件测试、构建、版本与真实产物身份校验，再上传唯一组件附件。Beta 自动标记 Pre-release；正式 Tag 自动清除此标记。已发布版本拒绝覆盖；失败草稿可以重试。
-
-Beta 验收后准备正式版本、同步元数据和说明，再检查并打正式 Tag；不能把 Dev 包改个名称当正式包。各端版本不必同时递增；共享修改检查所有消费者，但只为实际需要升级的产品发版。GitHub 全局 Latest 不表示任何一个组件的最新版本，发布器不修改该指向。
-
-安全校验元数据和 `build-info.json` 保留在 Actions，不作为公开 Release 附件。Mac 验证签名、Bundle ID、版本和架构；Android 验证包名、证书、版本码、非 debuggable 及 16 KiB 对齐；Central 从提交归档构建所需 Monorepo 并校验内容。当前工作流不上传签名更新清单，升级仍按 [更新指南](updating.md) 手动进行。
+已发布 Release 不可覆盖，失败草稿可以重试。各端版本不能相互比较，也不必同时递增。文档修改本身不要求发布安装包；共享库变化需要判断实际受影响产品并分别发版。中央源码包保留 npm lockfile 和跨工作区依赖，以便在目标机器独立构建。升级步骤见 [更新指南](updating.md)。
 
 ## 信任与密钥轮换
 
-[发布公钥](../release/release-public-key.pem) 随已安装程序固定。清单 envelope 包含 `schemaVersion`、`keyId`、base64 payload 和 RSA-SHA256 签名；签名覆盖原始 UTF-8 payload 字节，避免不同平台 JSON 序列化差异。单组件 payload 必须声明 `component=central|desktop|android`，使用对应组件标签且只包含该组件资产。版本、渠道、仓库/标签、资产大小与散列、平台身份及可选镜像 digest 仍在签名覆盖范围内。更新器按所属发布流读取，拒绝旧统一清单及缺失组件。当前 Profile 发布 workflow 不调用签名清单生成器。
+[发布公钥](../release/release-public-key.pem) 随已安装程序固定。清单 envelope 包含 `schemaVersion`、`keyId`、base64 payload 和 RSA-SHA256 签名；签名覆盖原始 UTF-8 payload 字节，避免不同平台 JSON 序列化差异。单组件 payload 必须声明 `component=central|desktop|android`，使用对应组件标签且只包含该组件资产。版本、渠道、仓库/标签、资产大小与散列、平台身份及可选镜像 digest 仍在签名覆盖范围内。更新器按所属发布流读取，拒绝旧统一清单及缺失组件。当前 DEV workflow 不调用签名清单生成器。
 
 修改更新仓库不会改变信任密钥，任意第三方清单仍不能通过验签。自有 fork 需要建立自己的签名身份，并在首次安装时明确使用对应公钥构建。GitHub Secrets 无法反向导出，维护者应保留受保护的恢复副本；不能通过重新生成密钥来“修复”旧客户端的签名错误。
 
