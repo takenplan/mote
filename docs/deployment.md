@@ -28,6 +28,7 @@ CLI 清除继承的普通 `MOTE_*`、`COMPOSE_*` 参数，只用 `MOTE_CONFIG_FI
 npm ci
 npm run build:libs
 npm run build -w @mote/server -w @mote/web
+npm run connectors:prepare
 node scripts/mote.mjs init --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
 ```
 
@@ -105,6 +106,8 @@ node scripts/mote.mjs stop --profile prod --home /srv/mote/profiles
 
 CLI 将 profile 的父目录挂到中央容器 `/config`，主文件是 `/config/mote.yaml`。目录挂载使设置页的原子保存和外部替换持续可见；不会生成另一份运行配置。媒体 sidecar 只读同一个目录。YAML 的 `server.port` 同时决定容器监听与 loopback 发布端口；数据与日志路径是 `/data`、`/data/logs`；模型卷的挂载目标由 YAML 的 `media.modelDirectory` 决定，初始化默认 `/models`，CLI 导入与媒体 worker 使用同一路径。该绝对容器路径不能遮蔽根目录、`/config`、`/data` 或 `/app`；更改模型路径需重启。健康检查读取同目录的私有运行 locator（只记录当前 PID、监听地址、端口和实例身份），因此保存待重启的 `server.port` 不会误判当前容器为不健康；进程退出仅清理自己的 locator。该文件是瞬时进程状态，不是第二份配置来源。每次生成的私有 `generated/secrets.env` 仅传递 YAML 中声明的环境密钥引用，普通参数不通过环境注入。根 `.env` 不参与 Compose 插值。不要公开 `compose config`、`docker inspect` 的完整输出，其中可含声明的环境密钥。Docker stdout 日志另设每份 10 MiB、最多 3 份。
 
+镜像默认 Central 进程将 `HOME` 设为持久数据卷 `/data`，因此以 profile UID/GID 运行时，官方录音 CLI 的私有状态可写且跨容器重建保留。原生部署仍使用原来的 HOME，媒体 sidecar 的命令与环境不受影响。第三方 CLI 继续自行管理凭据；可携带资料备份不会收录 `.config`、`.dws` 等厂商 HOME 文件，完整数据卷副本则可能包含它们，必须按私有授权资料保护。
+
 复用旧 Docker 卷时，先在旧版本停止写入并完成离线备份、保留内容密钥与私有配置。旧镜像的 UID 1000 可能与新 profile 用户不一致。确认本 profile 数据/模型卷的所有使用者均已停止后，显式执行：
 
 ```sh
@@ -174,7 +177,7 @@ Docker 更新只拉取已签名 manifest 中的 `ghcr.io/仓库@sha256:...`，�
 原生示例：
 
 ```sh
-# 在另一个检出目录完成 npm ci 和中央/Web 构建
+# 在另一个检出目录完成 npm ci、中央/Web 构建和 npm run connectors:prepare
 node scripts/mote.mjs upgrade --profile prod --home /srv/mote/profiles --release /srv/mote/releases/next
 ```
 

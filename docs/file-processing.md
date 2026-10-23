@@ -64,7 +64,7 @@ segmentation: 220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079
 
 在设置里选择「本地多人录音」，保留 `http://127.0.0.1:9009/transcribe`，保存后点「检测已保存的本地服务」。健康检查确认模型文件/依赖存在；实际可用性以第一次录音处理结果为准。可通过环境变量 `MOTE_TRANSCRIPTION_TOKEN` 配置音频服务令牌，对应网页中的本地服务密钥。不要把密钥写进命令行、模型路径或仓库。
 
-长期部署建议由 systemd / launchd / 容器进程管理器监督。Linux 可复制并调整 [服务模板](../deploy/mote-audio.service)，将模型置于服务用户可读目录，并在升级前停止任务、备份中央数据及模型配置。模型缺失等待依赖就绪，格式不支持明确停止；资源忙进入持久等待，不耗处理失败预算。实际可安全重放的临时调用故障最多尝试 4 次，结果未知仍受原有确认保护；原件与已完成步骤保留。
+长期部署建议由 systemd / launchd / 容器进程管理器监督。Linux 可复制并调整 [服务模板](../deploy/mote-audio.service)，将模型置于服务用户可读目录，并在升级前停止任务、备份中央数据及模型配置。模型缺失等待依赖就绪，格式不支持明确停止；资源忙进入持久等待，不耗处理失败预算。实际可安全重放的临时调用故障最多尝试 3 次（首次加两次自动重试），结果未知仍受原有确认保护；原件与已完成步骤保留。
 
 实现基于官方 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 时间戳接口和 [sherpa-onnx 离线说话人示例](https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples/offline-speaker-diarization.py)。sherpa-onnx 使用 pyannote 分割与 3D-Speaker 声纹向量，不要求启动云端 pyannote 服务。
 

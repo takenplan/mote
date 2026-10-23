@@ -18,7 +18,7 @@ database, account, queue or wire-format migration is part of this work.
 | --- | --- |
 | #162, multiuser integration and its constituent branches | Remove account hosts, account administration and scoped duplicate implementations. Keep one instance/owner with multiple devices and read-only Agent clients. Restore the independent Dev credential/Profile and release behavior explicitly; owner clients and restricted collector/MCP credentials remain separate capabilities. |
 | #163, failure and recovery messages | Restore safe shared HTTP failure classification and Web, Desktop and Android consumers. Authentication failure, insufficient permission, transport failure and unavailable services retain distinct actions. Provider bodies and arbitrary exception messages are not UI copy. |
-| #167, integration including #166 | Preserve single-owner configuration, evidence and publication responsibilities. Restore queued model authority and honest image/native model usage. Media request outcome recovery is tracked separately below because a conservative unknown-outcome guard alone does not implement it. |
+| #167, integration including #166 | Preserve single-owner configuration, evidence and publication responsibilities. Restore queued model authority and honest image/native model usage. Media request outcome recovery and recording authorization/fixed CLI deployment are independent requirements, tracked below; neither is supplied merely by removing account hosts. |
 | #184, parity integration | Preserve the complete baseline owner journeys, current evidence/source-context checks, real intake and native clients. Port independent missing behavior; do not port account-regression fixes to absent scoped classes. |
 | #183, plugin extension experiment | Restore host capability discovery and worker cancellation/late-result protection. Existing registries already compose contributions by identity. The five-round benchmark was an experiment, not five delivered end-user extensions; do not claim those examples or a new generic worker ABI are restored. |
 | #186, check reuse | Replace the later receipt machinery with the accepted focused-check workflow. Reuse unchanged passing evidence after a fix; rerun invalidated checks. |
@@ -46,17 +46,33 @@ database, account, queue or wire-format migration is part of this work.
 | #217, Dev account bootstrap diagnostics | Account bootstrap is removed. The recovered single-owner server has no first-account creation step or failure path to instrument. |
 | #218, Dev startup/source identity | Restore exact source revision and dirty-state reporting for startup. Do not restore account-configuration consumers. |
 
-## Remaining convergence work
+## Recovered behavior and verification
 
-The inventory is being closed alongside implementation. These rows must be
-updated with actual results before claiming the assembled candidate is verified.
+The modules below have been integrated into the single-owner implementation.
+Focused evidence establishes the named behavior; candidate qualification is
+recorded separately.
 
 | Work | Current boundary |
 | --- | --- |
-| Memory extraction/review phase recovery | Implementation and focused durability validation in progress. Each phase must retain complete private output, independent retry budget, restart reuse and deletion/cancellation fences; publication keeps its existing separate journal. |
-| Media execution facts | Bounded plan/review in progress. A known remote completion after response loss must be reconciled by authenticated request identity; absence of a receipt must remain unknown. |
-| Execution timing and final input/yield deltas | Implementing observation-only mapping to the existing single-owner executor and pump. Diagnostics may not decide authority or create another timer. |
-| Assembled candidate | Final affected checks, actual startup/restart journey and current PR CI follow convergence. Native fixture evidence, physical-device checks and live models are reported separately. |
+| Memory extraction/review phase recovery | Implemented in `a5045e27`; independent budgets, full private checkpoints, before/after-commit process loss, restart, native-origin receipt, encryption/key retirement and deletion fences have focused evidence. Publication keeps its existing journal. |
+| Media execution facts | Implemented in `9a6e40c6`. Seven actual Central/Python-worker journeys cover response loss, host/worker restart, original-attempt recovery, retry exhaustion, cancellation/deletion and terminal-only cleanup. Eight worker HTTP checks cover deployment and ASR/diarization behavior. Missing facts remain unknown; a success status without the result body cannot manufacture an artifact. |
+| Recording authorization and fixed CLIs | Implemented in `2e2d6dfe`. Existing connection details support configuration, authorization/reauthorization, cancellation and current-task polling. Generated CLI-to-HTTP-to-archive journeys, hidden browser interaction, cancellation/write races and pinned-runtime packaging have focused evidence. Official Lark 1.0.98 and DWS 1.0.64 archives and version/help contracts were checked without personal authorization. Third-party credential management is preserved. |
+| Execution timing and final input/yield deltas | Implemented in `4e8df781` and `6a026ce1`. Full task inputs and event-loop yielding have 23 focused passing checks. The observer's nine tests include actual 10-second renewal and 500-ms pump boundaries; diagnostic failure does not change execution. |
+| Assembled candidate | The affected plan selects all TypeScript workspaces and Android JVM checks. The recovery PR records the current candidate results, real startup/restart and container journeys, plus current-revision CI. Unchanged passing checks are reused after focused repairs; native fixtures, physical devices and live models remain separate evidence. |
+
+Final integration repairs preserve the original scale and real boundaries: owned
+execution runtimes close before their stores; only explicit owner retry resets
+a budget; an invalidated Memory sibling retires shared prose without revoking
+independent phase checkpoints. The 80-target/80-context feedback fixture first
+drains the real Material producer and its startup backfill, then verifies a
+later real tick leaves the selected input unchanged. It retains the full grant,
+review, completion and deletion assertions.
+
+The Docker Central command uses the owned persistent `/data` volume as its HOME
+for third-party CLI state. Native HOME and the media sidecar commands stay as
+defined by their deployment. The actual container fixture checks a non-default
+UID when requested, restart/replacement, private generated state and exclusion
+from portable archive backup; no personal authorization is used.
 
 ## Deliberate scope boundaries
 
@@ -69,3 +85,11 @@ updated with actual results before claiming the assembled candidate is verified.
   backup/restore and unknown-effect recovery remain useful current behavior.
 - Tests use generated evidence. No live personal screenshots or model calls
   establish the automated fixture results recorded for this recovery.
+
+Execution timing maps to the current single-owner implementation: `host_tick`
+observes the existing 500-ms delegation pump, and Memory reader measurements wrap
+the shared ContextReader only for Memory extraction/review. There is no new
+100-ms task host or per-Memory scoped reader. The observer adds no timer, caps
+ordinary/critical events at 40/20 per minute plus a suppression summary, and
+accepts only fixed names, opaque identities and numeric measurements. It cannot
+renew, cancel or authorize a task.

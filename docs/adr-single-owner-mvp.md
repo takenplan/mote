@@ -1,6 +1,6 @@
 # ADR: Single-owner MVP and incremental recovery
 
-Accepted by the owner, 2026-10-23. Implementation is in progress; this decision is not a test or release qualification.
+Accepted by the owner, 2026-10-23. Implementation and evidence are recorded in the [recovery inventory](single-owner-recovery-inventory.md); this decision is not itself a test or release qualification.
 
 ## Decision
 

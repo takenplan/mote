@@ -81,7 +81,7 @@ node_modules/.bin/electron scripts/test-ui-iterations.cjs --round round-1
 | Android | `apps/android/gradlew -p apps/android :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest` | Kotlin、单元、实际 App/test APK 构建；不是设备 UI 执行。 |
 | Android | `NavigationInstrumentedTest`、`SourcesEntryInstrumentedTest`、`NativeCentralInstrumentedTest` | 专用合成模拟器的原生导航、文件选择器生命周期、中央页面；生成预览使用 App `View.draw(Canvas)`，保留 `FLAG_SECURE`。 |
 
-按 [开发指南](../development.md#pr-check-scope) 在最终代码上运行 `npm run check:affected`，共享作者文案影响所有消费者。模拟器、实际 App renderer、单元、物理设备和真实模型结果分别记录，不用历史报告充当本轮检查。
+按 [开发指南](../testing.md#early-integration-and-candidate-checks) 在最终代码上运行 `npm run check:affected`，共享作者文案影响所有消费者。模拟器、实际 App renderer、单元、物理设备和真实模型结果分别记录，不用历史报告充当本轮检查。
 
 ## 本轮发现的持久回归
 

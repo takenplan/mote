@@ -22,6 +22,7 @@ Dev 包名为 `dev.mote.collector.dev`，Beta / 正式包名为 `dev.mote.collec
 npm ci
 npm run build:libs
 npm run build -w @mote/server -w @mote/web
+npm run connectors:prepare
 ```
 
 受管理的 profile 用 `upgrade --release /absolute/built-checkout` 切换；Docker 先自行构建镜像，再用 `upgrade --image <image>`。同代切换沿用原 profile、`--home`、主 YAML、数据目录/卷及密钥，CLI 会停止目标环境并创建一致性备份后切换；尚未转换旧配置时必须先离线准备新 YAML。跨越历史存储基线仍须先用旧程序完成旧备份，再为新版本选择新空目录/卷并重设模型和文件 policy；不能直接将新版本 `upgrade` 指向不兼容旧库。非 CLI 托管进程需管理员自行停止与备份，不能假定 CLI 已接管它。直接启动默认 `profile=default`，读取工作目录的 `mote.yaml`，或使用 `MOTE_CONFIG_FILE` 显式选择文件；普通环境变量和根 `.env` 不提供配置覆盖。

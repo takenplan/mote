@@ -8,6 +8,7 @@
 npm ci
 npm run build:libs
 npm run build -w @mote/server -w @mote/web
+npm run connectors:prepare
 node scripts/mote.mjs init --profile dev
 node scripts/mote.mjs init --profile test
 ```

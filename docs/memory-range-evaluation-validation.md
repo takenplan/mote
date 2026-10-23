@@ -112,7 +112,7 @@ PR checks below remain historical evidence for their original definitions.
 ## Commands and executed evidence
 
 Before opening or updating a PR, run `npm run check:affected` for Server and the
-affected Agent/shared/Web consumers under the [development guide](development.md#pr-check-scope).
+affected Agent/shared/Web consumers under the [development guide](testing.md#early-integration-and-candidate-checks).
 Targeted generated checks use `node --import tsx --test` with the fixture files above
 after shared/Agent build prerequisites. Additional native/UI checks depend on the
 changed behavior and are reported separately.
