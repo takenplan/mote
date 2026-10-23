@@ -82,6 +82,8 @@ services:
         target: /config
         read_only: true
     command: ["node", "scripts/media-worker-entry.mjs", "ocr"]
+    healthcheck:
+      test: ["CMD", "node", "apps/server/dist/healthcheck.js", "--shared-network"]
     security_opt:
       - no-new-privileges:true
     cap_drop:

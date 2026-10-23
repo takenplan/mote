@@ -44,9 +44,9 @@ export function cleanupRuntimeListener(configFile: string, pid: number, instance
   } catch { /* A replaced locator belongs to its new process; cleanup never exposes paths. */ }
 }
 /** Probe the actual startup listener, independently of saved settings awaiting restart. */
-export async function probeRuntimeListener(configFile: string): Promise<boolean> {
+export async function probeRuntimeListener(configFile: string, options: {checkLocalPid?: boolean} = {}): Promise<boolean> {
   let listener: RuntimeListener;
-  try { listener = readRuntimeListener(configFile); process.kill(listener.pid, 0); } catch { return false; }
+  try { listener = readRuntimeListener(configFile); if (options.checkLocalPid !== false) process.kill(listener.pid, 0); } catch { return false; }
   const host = healthAddress(listener.address), url = `http://${host.includes(':') ? `[${host}]` : host}:${listener.port}/api/health`;
   return new Promise(resolveHealth => {
     const agent = new Agent({ keepAlive: false, proxyEnv: {} });
