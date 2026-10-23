@@ -33,8 +33,13 @@ test('feedback keeps large exact target/context sets and partitions without a gr
 test('a large reviewed needs-context batch recovers through the real coordinator without clipping targets or grants',{timeout:30000},async t=>{
  const dataDir=await mkdtemp(join(tmpdir(),'mote-large-feedback-'));
  const config:Config={dataDir,token:'generated-feedback-owner',tokenPath:'generated',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false};
- const calls:QueryInput[]=[],requests:MemoryFeedbackRequest[]=[];let targetIds:string[]=[],contextIds:string[]=[],node!:Awaited<ReturnType<typeof buildApp>>;
+ const calls:QueryInput[]=[],requests:MemoryFeedbackRequest[]=[];let targetIds:string[]=[],contextIds:string[]=[],node!:Awaited<ReturnType<typeof buildApp>>,fixtureMaterial:{id:string;ref:string}|undefined,checkedOrganizer=false;
+ const settleOrganizer=async()=>{
+  for(let turn=0;turn<20;turn++){await node.materialOrganizer.tick(200);const status=node.materialOrganizer.status();if(status.pendingChanges===0&&status.pendingSteps===0&&status.backfills.every(backfill=>backfill.complete))return status;await new Promise<void>(resolve=>setImmediate(resolve));}
+  assert.fail('Generated organizer did not finish its source changes and startup backfills: '+JSON.stringify(node.materialOrganizer.status()));
+ };
  const generate=async(input:QueryInput):Promise<QueryResult>=>{
+  if(input.traceContext?.phase==='extract'&&!checkedOrganizer){checkedOrganizer=true;await settleOrganizer();assert.equal(node.materials.get(fixtureMaterial!.id)!.ref,fixtureMaterial!.ref,'a real organizer turn cannot replace the fixture head after source intake and startup backfills are drained');}
   calls.push(input);
   if(input.traceContext?.phase==='feedback-planning'){
    const request=(input.taskContext!.memoryWork as {feedback:MemoryFeedbackRequest}).feedback;requests.push(structuredClone(request));
@@ -60,12 +65,18 @@ test('a large reviewed needs-context batch recovers through the real coordinator
  node.sources.register({id:'generated-feedback-source',name:'Generated originals',kind:'custom',deviceId:'generated',platform:'import'});
  const texts=Array.from({length:160},(_,index)=>'Generated original '+index+' records an exact scoped referent.');
  const original=await node.sources.upsert('generated-feedback-source',{externalId:'original',revision:'1',observedAt:at,kind:'message',layer:'original',text:texts.join('\n')});
- const material=node.materials.publish({id:materialId('generated-feedback-source','original'),kind:'mote.note',schemaVersion:1,title:'Generated large dialogue',origin:{sourceId:'generated-feedback-source',externalId:'original',deviceId:'generated'},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:texts.map((text,index)=>({id:'paragraph-'+index,kind:'text',format:'plain',text,memberIds:[original.id]})),artifacts:[{key:'source-body',state:'ready',blockIds:texts.map((_,index)=>'paragraph-'+index)}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ // backgroundWorker:false leaves the real five-second Material producer enabled.
+ // Consume original intake and startup backfills before installing the generated
+ // 160-block head; otherwise a later producer turn correctly invalidates it.
+ const sourceSequence=Number(node.store.db.prepare('SELECT max(seq) seq FROM changes').get()!.seq),organized=await settleOrganizer();
+ assert.ok(organized.cursor>=sourceSequence);assert.equal(organized.stepCounts.running,0);assert.equal(organized.stepCounts.waiting,0);
+ const material=node.materials.publish({id:materialId('generated-feedback-source','original'),kind:'mote.note',schemaVersion:1,title:'Generated large dialogue',origin:{sourceId:'generated-feedback-source',externalId:'original',deviceId:'generated'},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:texts.map((text,index)=>({id:'paragraph-'+index,kind:'text',format:'plain',text,memberIds:[original.id]})),artifacts:[{key:'source-body',state:'ready',blockIds:texts.map((_,index)=>'paragraph-'+index)}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:node.materials.get(materialId('generated-feedback-source','original'))!.revision});
+ fixtureMaterial={id:material.id,ref:material.ref};
  const ids=node.materials.input(material.ref,['source-body'])!.evidenceIds;targetIds=ids.slice(0,80);contextIds=ids.slice(80);
  const job=node.memoryPipeline.create({evidenceIds:ids,evidenceRanges:targetIds.map((id,index)=>({id,offset:0,length:texts[index].length})),contextEvidenceRanges:contextIds.map((id,index)=>({id,offset:0,length:texts[index+80].length})),recipes:[{id:'mote.personal-memory',version:'5'}]});
  assert.equal(job.totalBatches,1);assert.equal(job.authorizedChunks!.length,160);
  const done=await node.memoryPipeline.run(job.id);
- assert.equal(done.status,'completed');assert.equal(requests.length,1);
+ assert.equal(done.status,'completed',JSON.stringify({jobId:done.id,errorCode:done.errorCode,failureReceipt:done.failureReceipt,batches:done.batches.map(batch=>({id:batch.id,status:batch.status,errorCode:batch.errorCode,failureReceipt:batch.failureReceipt}))}));assert.equal(requests.length,1);
  assert.equal(calls.filter(input=>input.traceContext?.phase==='extract').length,2);assert.equal(calls.filter(input=>input.traceContext?.phase==='review').length,2);
  const restored=done.batches.filter(batch=>batch.replanRound===1);assert.equal(restored.length,1,'the model-selected context handoff does not introduce automatic subdivisions');
  assert.equal(restored[0].coverage!.length,80);assert.equal(restored[0].contextRanges!.length,80);assert.ok(restored[0].reviewReceipt);
