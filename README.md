@@ -23,7 +23,7 @@ For example, ask: “What did I work on this week?”, “Where did I see that d
 
 Mote has two parts: **Central**, your archive and web interface, and optional **macOS / Android apps** that collect and sync context. Central can run on your Mac, a Linux server, or a NAS. You can try it with a note before enabling screen collection.
 
-> **Development preview:** Central, macOS, and Android have separate releases. Current downloads are DEV builds and use manual updates. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
+> **Development preview:** Central, macOS, and Android have separate releases and use manual updates. Dev builds and Prod Beta/stable builds have separate installation identities. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
 
 ### 1. Start your archive
 
@@ -56,7 +56,7 @@ For a daily archive, use a profile outside the checkout. The [deployment guide](
 
 Start with **Record** in the web interface: save a short note, then find it in **Library**. You can also use Library's import tools to add selected material, inspect the preview, and confirm it.
 
-To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases), or a Dev build from the corresponding [Actions artifact](https://github.com/utopiafar/mote/actions):
+To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases). For Android Dev, bookmark [Android Dev downloads](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true), open the newest prerelease, and tap **Download APK** on your phone. Mac Dev builds remain available as [Actions artifacts](https://github.com/utopiafar/mote/actions):
 
 | Device | Install | Connect |
 | --- | --- | --- |
