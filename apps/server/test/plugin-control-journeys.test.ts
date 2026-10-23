@@ -413,7 +413,7 @@ test('actual HTTP plugin controls authorize owner sessions, reject MCP credentia
   const mcp = await node.connections.mintMcp({serverUrl: 'http://127.0.0.1:47832', label: 'Generated read-only context credential', access: 'read'}, config.connectors);
   const readToken = mcp.config.mcpServers.mote.headers.Authorization.slice(7);
   const routes: Array<{method: 'GET' | 'POST' | 'PATCH'; url: string}> = [
-    {method: 'GET', url: '/api/plugins'}, {method: 'GET', url: '/api/memory-spaces/default/binding'},
+    {method: 'GET', url: '/api/plugins'}, {method: 'GET', url: '/api/plugins/host-capabilities'}, {method: 'GET', url: '/api/memory-spaces/default/binding'},
     ...['resolve', 'install', 'generated/uninstall'].map(path => ({method: 'POST' as const, url: '/api/plugins/' + path})),
     {method: 'POST', url: '/api/plugin-instances'}, {method: 'PATCH', url: '/api/plugin-instances/generated'},
     ...['check', 'enable', 'disable'].map(action => ({method: 'POST' as const, url: '/api/plugin-instances/generated/' + action})),
@@ -426,7 +426,23 @@ test('actual HTTP plugin controls authorize owner sessions, reject MCP credentia
   }
   for (const token of [owner, session.token]) {
     assert.equal((await node.app.inject({url: '/api/plugins', headers: headers(token)})).statusCode, 200);
+    const discovery=await node.app.inject({url:'/api/plugins/host-capabilities',headers:headers(token)});
+    assert.equal(discovery.statusCode,200);
+    assert.deepEqual(discovery.json(),{
+      memoryWorker:{runtime:'worker',factoryExports:['createMemoryProvider'],methods:['health','put','read','remove','search','export'],lifecycle:['close'],supportedCapabilities:['repository','retrieval']},
+      trustedHost:{source:{configuration:['connectors.modules','plugins.backendModules'],restartRequired:true},processor:{configuration:['plugins.backendModules','plugins.fileProcessorModules'],restartRequired:true}},
+    });
+    assert.ok(!discovery.body.includes(directory),'discovery never exposes private installation paths');
     assert.equal((await node.app.inject({url: '/api/memory-spaces/default/binding', headers: headers(token)})).statusCode, 200);
+  }
+  assert.equal(node.pluginCenter.view().packages.length,0,'host ABI discovery does not require an installed package');
+  const invitation=await node.app.inject({method:'POST',url:'/api/connections/collector-invitations',headers:headers(owner),payload:{serverUrl:'http://127.0.0.1:47832',label:'Generated restricted collector'}});
+  assert.equal(invitation.statusCode,200);
+  const collector=await node.app.inject({method:'POST',url:'/api/connections/redeem',payload:{code:invitation.json().invitation.code,deviceId:'generated-collector',deviceName:'Generated collector',platform:'android'}});
+  assert.equal(collector.statusCode,200);
+  for(const method of ['GET','HEAD'] as const){
+    assert.equal((await node.app.inject({method,url:'/api/plugins/host-capabilities',headers:headers(collector.json().token)})).statusCode,403);
+    assert.equal((await node.app.inject({method,url:'/api/plugins/host-capabilities',headers:headers(readToken)})).statusCode,403);
   }
   const initial = node.memoryBindings.view(), pause = {operationId: randomUUID(), expectedRevision: initial.revision};
   const request = (action: string, payload: unknown) => node.app.inject({method: 'POST', url: '/api/memory-spaces/default/binding/' + action, headers: headers(session.token), payload});

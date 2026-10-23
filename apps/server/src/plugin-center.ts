@@ -75,6 +75,13 @@ export class PluginCenter {
     const instances=this.store.db.prepare('SELECT id FROM plugin_instances ORDER BY rowid').all().map(row=>this.instanceView(String(row.id))),packages=this.store.db.prepare('SELECT json FROM plugin_packages ORDER BY rowid').all().map(row=>JSON.parse(String(row.json)) as StoredPackage);
     return {revision:this.revision(),installation:{supported:true,runtime:'worker',restartRequired:false},packages:packages.map(pkg=>({...pkg.view,configurationSchema:pkg.manifest.configuration,instanceIds:instances.filter(instance=>instance.packageId===pkg.view.id).map(instance=>instance.id),allowedActions:pkg.view.state==='installed'?['configure',...(!instances.some(instance=>instance.packageId===pkg.view.id&&(instance.desired||this.references(instance.id).length))?['uninstall' as const]:[])]:pkg.view.state==='failed'?['uninstall']:[]})),instances,catalog:[{repository:'mem0ai/mem0',name:'Mem0',description:'Pinned ts-v3.3.1 with the bundled Mote storage/retrieval adapter'},{repository:'vectorize-io/hindsight',name:'Hindsight',description:'Pinned v0.10.2; controlled engine capability verification required'}]};
   }
+  hostCapabilities(){return {
+    memoryWorker:{runtime:'worker',factoryExports:['createMemoryProvider'],methods:['health','put','read','remove','search','export'],lifecycle:['close'],supportedCapabilities:['repository','retrieval']},
+    trustedHost:{
+      source:{configuration:['connectors.modules','plugins.backendModules'],restartRequired:true},
+      processor:{configuration:['plugins.backendModules','plugins.fileProcessorModules'],restartRequired:true},
+    },
+  };}
   instanceView(id:string):PluginInstanceView{const {view,stepId}=this.instance(id),references=this.references(id),pending=stepId&&['waiting','running'].includes(this.executor.get(stepId)?.state??'');
     if(!this.store.db.prepare('SELECT 1 FROM plugin_instances WHERE id=?').get(id))return {...view,desired:false,observed:'disabled',issues:references,allowedActions:[]};
     return {...view,issues:[...view.issues,...references],allowedActions:pending?[]:[...(!view.desired&&!references.length?['configure' as const,'check' as const]:[]),...(view.desired?['disable' as const]:!view.issues.length&&view.capabilities.some(value=>value.state==='verified')?['enable' as const]:[])]};

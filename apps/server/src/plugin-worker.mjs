@@ -10,6 +10,7 @@ const input=createInterface({input:process.stdin,crlfDelay:Infinity});
 input.on('line',async line=>{
  let message;try{message=JSON.parse(line);}catch{return;}
  if(!message||typeof message.id!=='number')return;
+ if(message.method==='cancel'){pending.get(message.id)?.abort();return;}
  try{
   if(message.method==='initialize'){
    if(runtime)throw Error('already_initialized');
@@ -20,7 +21,8 @@ input.on('line',async line=>{
   }
   if(!runtime||!['health','put','read','remove','search','export','close'].includes(message.method)||typeof runtime[message.method]!=='function')throw Error('method_unavailable');
   const controller=new AbortController();pending.set(message.id,controller);
-  const result=await runtime[message.method](message.params,controller.signal);send({id:message.id,result});
+  const result=await runtime[message.method](message.params,controller.signal);
+  controller.signal.throwIfAborted();send({id:message.id,result});
  }catch(error){send({id:message.id,error:{code:typeof error?.code==='string'?error.code:'plugin_operation_failed'}});}
  finally{pending.delete(message.id);}
 });

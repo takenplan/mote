@@ -55,6 +55,12 @@ Manifest `schemaVersion: 1` 声明：
 
 入口模块导出 `createMemoryProvider(configuration)`，返回实现 `health`、`put`、`read`、`remove`、`search`、`export`、`close` 的对象。宿主通过独立子进程 JSON-lines 调用，并验证返回结构、namespace、精确键和写回执摘要。namespace 是宿主发出的 `ownerId / instanceId / bindingRevision`；精确键是 `memoryId / version / fingerprint`。实现必须提供持久不可变正文、作用域隔离、精确版本/允许 keys 检索与幂等恢复；能力探测和后续运行仍由实际合同验证。
 
+所有者可在安装前通过 `GET /api/plugins/host-capabilities` 查询当前宿主合同。`memoryWorker` 列出 `runtime: "worker"`、`factoryExports: ["createMemoryProvider"]`、六个调用方法、`lifecycle: ["close"]` 和 `supportedCapabilities: ["repository", "retrieval"]`。完整引擎仍使用前述固定 Hindsight 宿主适配器；任意 worker 声明 `engine` 不构成可运行的完整引擎。宿主支持、release 声明和实例核验是三个不同状态；当前实例及其核验结果继续通过 `/api/plugins` 查看。MCP 与受限 collector 凭据不能读取宿主控制接口，响应不包含私有安装目录。
+
+同一响应的 `trustedHost` 说明现有 source/processor 部署入口：source 使用 `connectors.modules` 与 `plugins.backendModules`，processor 使用 `plugins.backendModules` 与 `plugins.fileProcessorModules`，这些配置需要重启。它们通过现有 ConnectorRegistry、SourcePipelineRegistry、ProcessingRuntime 与 FileProcessorRuntime 的受信插件 API 注册贡献，具体组合见 [资料插件合同](library-plugin-contracts.md)。这些 API 不属于 Memory worker ABI。通用 source/processor 的下载、安装、配置、核验、启用和 worker 调用流程仍需独立设计。
+
+每个 worker 调用接收独立的 `AbortSignal`。宿主撤销调用时发送同 ID 的取消消息，worker 中对应的 `AbortController` 请求停止；仍在初始化时等待的单个调用也可取消，不会取消其他调用所需的共享初始化。宿主立即结束已撤销的等待，拒绝迟到结果，并在关闭或传输失败时清理等待者。可信插件可能已经发出远端写入，取消与进程关闭都不证明远端回滚；未知写入仍按已有 journal 和精确操作身份先核对，再决定重试。
+
 一期仍在宿主 `memories.json`、reviewed output 和 exact put journal 保留完整正文作控制投影、事务审查与恢复；未进行 metadata-only SQL 清理。外部 binding 的正式正文读取仍从供应方完成，不能使用 SQL 副本隐藏缺失或篡改。
 
 不可变正文完整性与宿主有效性投影分开：供应方按固定键保存正文、证据、版本、createdAt 和 fingerprint；回执/native JSON 的完整性自检仍严格核验全部字段。原件失效可能在不增加正文版本的情况下更新宿主 `status / staleReason / updatedAt`，读取和导出先核验实际原生正文/证据/版本，再覆盖这三个宿主字段；不能把正文缺失或被改写解释为普通 stale。
@@ -92,4 +98,4 @@ repository 更换迁移全部 Mote 保留记忆正文及更正/替代状态、�
 | `POST /api/memory-spaces/default/binding/prepare` | targetPlanId、已授权 scope、费用确认与当前 revision |
 | `POST /api/memory-spaces/default/binding/activate`、`.../retry`、`.../cancel` | 准备 ID、当前 revision 和新命令意图 |
 
-fixture 入口包括 `plugin-control-journeys.test.ts`、`memory-automation.test.ts`、实际 SDK/worker 与读取消费者测试，Web `plugin-center.test.ts` 和 Android `PluginControlClientTest`。生成 ZIP 与 provider 只验证宿主边界，不证明真实上游语义。实际 GitHub/供应方/模型、真实 renderer、原生 UI、物理设备和最终受影响检查分别记录在 [验证方案](design/plugin-center-phase-one-validation-2026-10-12.md)；存在代码或编译成功不代表这些检查全部执行。
+fixture 入口包括 `plugin-control-journeys.test.ts`、`plugin-runtime.test.ts`、`memory-automation.test.ts`、实际 SDK/worker 与读取消费者测试，Web `plugin-center.test.ts` 和 Android `PluginControlClientTest`。worker 生命周期用生成的真实子进程控制初始化等待、两个并发调用、撤销后迟到成功和关闭，检查取消通知、结果隔离及监听器清理；HTTP fixture 检查安装前能力描述和所有者／MCP／collector 边界。生成 ZIP 与 provider 只验证宿主边界，不证明真实上游语义。实际 GitHub/供应方/模型、真实 renderer、原生 UI、物理设备和最终受影响检查分别记录在 [验证方案](design/plugin-center-phase-one-validation-2026-10-12.md)；存在代码或编译成功不代表这些检查全部执行。
