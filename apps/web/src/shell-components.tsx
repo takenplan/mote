@@ -329,11 +329,7 @@ export function LoginDialog({ destination, onConnected, onClose }: {
       const session=await createApi(connection).request<Connection>('/api/login/session',{method:'POST',body:JSON.stringify({serverUrl:location.origin,deviceId:crypto.randomUUID(),deviceName:'Mote Browser',platform:'other',durationMs}),signal:controller.signal});
       if (!controller.signal.aborted) onConnected({...session,serverExpiresAt:session.expiresAt}, lifetime);
     } catch (e) {
-      if (!controller.signal.aborted) setError(e instanceof ApiError && e.status === 401
-        ? moteText("令牌无效或已失效，请检查后重新登录。")
-        : e instanceof ApiError && e.status === 403
-          ? moteText("请升级中央节点后再登录。")
-          : errorMessage(e));
+      if (!controller.signal.aborted) setError(errorMessage(e));
     } finally { if (!controller.signal.aborted) setBusy(false); active.current = null; }
   }
   return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()} onKeyDown={e => e.key === "Escape" && onClose()}>

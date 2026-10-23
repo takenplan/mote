@@ -51,7 +51,7 @@ it('returns fixed network/409 errors without provider body or token leakage and 
   for (const code of [302, 409, 500]) {
     let calls = 0; const value = new ConnectionOnboarding(async (_url, init) => { calls++; expect(init?.redirect).toBe('error'); return response({ secret: token }, code); }, () => now);
     const preview = value.preview(JSON.stringify(invitation)); const failure = value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos');
-    await expect(failure).rejects.not.toThrow(token); if (code === 409) await expect(failure).rejects.toThrow('选择此设备'); expect(calls).toBe(1);
+    await expect(failure).rejects.not.toThrow(token); if (code === 409) await expect(failure).rejects.toThrow('操作状态已变化'); expect(calls).toBe(1);
   }
 });
 it('validates connection scope, device binding and bounded responses', async () => {
@@ -89,4 +89,15 @@ it('accepts registered owner identity and rejects retired collector or MCP crede
  const config={serverUrl:invitation.serverUrl,token,deviceId:'fixture-device'};
  expect((await testConnection(config,async()=>response(identity))).capabilities.archiveRead).toBe(true);
  for(const scope of ['collector','mcp'])await expect(testConnection(config,async()=>response({...identity,credential:{...identity.credential,scope},capabilities:{...identity.capabilities,archiveRead:true}}))).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+});
+
+
+it.each([[403,'origin_denied','公开地址'],[403,'connection_scope_denied','连接权限'],[404,'not_found','资源不存在'],[426,'incompatible_protocol','协议版本'],[410,'login_expired','登录请求']])('keeps safe response-specific guidance without inferring an upgrade: %s %s',async(status,code,expected)=>{
+ await expect(testConnection({serverUrl:invitation.serverUrl,token,deviceId:'fixture-device'},async()=>response({reason:{private:'detail'},error:code,message:'PRIVATE_DETAIL'},Number(status)))).rejects.toThrow(String(expected));
+});
+it('only explicit device-registration conflicts ask the owner to select that device',async()=>{
+ for(const [status,code,expected] of [[409,'device_already_registered','选择此设备'],[410,'invitation_invalid_or_expired','邀请无效'],[400,'invalid_request','输入格式']] as const){
+  const value=new ConnectionOnboarding(async()=>response({error:code,message:'PRIVATE_DETAIL'},status),()=>now),preview=value.preview(JSON.stringify(invitation));
+  await expect(value.redeem(preview.id,preview.serverUrl,{deviceId:'fixture-device',deviceName:'Synthetic'},'macos')).rejects.toThrow(expected);
+ }
 });

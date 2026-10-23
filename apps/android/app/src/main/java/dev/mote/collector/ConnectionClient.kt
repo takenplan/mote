@@ -6,6 +6,24 @@ import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
 
+internal fun connectionFailureCategory(status: Int, body: JSONObject?): String = when (centralResponseFailureCode(body)) {
+    "device_already_registered" -> "device_conflict"
+    "incompatible_protocol" -> "protocol_incompatible"
+    "origin_denied" -> "origin_denied"
+    "connection_scope_denied", "forbidden" -> "permission"
+    "invitation_invalid_or_expired", "login_expired" -> "expired"
+    "invitation_device_mismatch" -> "invite_rejected"
+    else -> when (status) {
+        400, 409, 415, 422 -> "response"
+        410 -> "expired"
+        401, 403 -> "invite_rejected"
+        404 -> "not_found"
+        426 -> "protocol_incompatible"
+        429 -> "rate_limit"
+        else -> "network"
+    }
+}
+
 /** The one-use exchange is journalled encrypted before testing or applying its credential. */
 class ConnectionClient(private val context: Context) {
     private val settings = Settings(context)
@@ -21,7 +39,7 @@ class ConnectionClient(private val context: Context) {
                 if (!invitation.expiresAt.isAfter(Instant.now())) throw ConnectionFailure("expired")
                 val (status, body) = HttpJson.post("${invitation.serverUrl}/api/connections/redeem", JSONObject().put("code", invitation.code)
                     .put("deviceId", settings.deviceId).put("deviceName", deviceName).put("platform", "android"))
-                if (status !in 200..299) throw ConnectionFailure(when (status) { 409 -> "device_conflict"; 410 -> "expired"; 401, 403 -> "invite_rejected"; 429 -> "rate_limit"; else -> "network" })
+                if (status !in 200..299) throw ConnectionFailure(connectionFailureCategory(status, body))
                 validateResponse(body, invitation.serverUrl)
                 body!!.put("invitationHash", hash).put("deviceId", settings.deviceId)
                 val temp = File(pending.parentFile, "connection-pending.tmp")
@@ -78,7 +96,7 @@ class ConnectionClient(private val context: Context) {
     }
     private fun verifySelf(server: String, token: String, credentialId: String? = null): JSONObject {
         val (status, body) = HttpJson.get("$server/api/connections/self", token, ProtocolCompatibility.headers)
-        if (status !in 200..299) throw ConnectionFailure(if (status in setOf(401, 403)) "authentication" else "network")
+        if (status !in 200..299) throw ConnectionFailure(if (status == 401) "authentication" else if (status == 403 && centralResponseFailureCode(body) != "origin_denied") "permission" else connectionFailureCategory(status, body))
         val credential = body?.optJSONObject("credential") ?: throw ConnectionFailure("response")
         val node = body.optJSONObject("node")
         if (body.has("node") && node == null) throw ConnectionFailure("response")

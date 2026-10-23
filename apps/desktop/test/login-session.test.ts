@@ -96,3 +96,13 @@ it.each([false,true])('offline logout clears durable credentials and preserves p
   expect(await readFile(join(pending.item.localOriginal.directory,'0'))).toEqual(bytes);expect(fetcher).not.toHaveBeenCalled();
  }finally{await first?.close();await second?.close();vi.unstubAllGlobals();await rm(root,{recursive:true,force:true});}
 },30000);
+
+
+it.each([[401,'unauthorized','凭据已失效'],[403,'origin_denied','公开地址'],[403,'connection_scope_denied','连接权限'],[426,'incompatible_protocol','协议版本'],[429,undefined,'请求过于频繁']])('explains owner login refusals without exposing response details: %s %s',async(status,code,expected)=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({error:code,message:'PRIVATE_SERVER_DETAIL'},{status:Number(status)})));
+ try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/login/session',{})).rejects.toThrow(String(expected));}finally{vi.unstubAllGlobals();}
+});
+it('does not expose malformed successful login response contents',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response('PRIVATE_INVALID_JSON_BODY')));
+ try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/login/poll',{})).rejects.toThrow('响应格式无效');}finally{vi.unstubAllGlobals();}
+});

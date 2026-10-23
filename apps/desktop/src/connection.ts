@@ -1,5 +1,6 @@
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
+import {httpFailureMessage,responseFailureCode} from '@mote/shared';
 import { parseConnectionInvitation, type ConnectionInvitation } from '@mote/shared/connection';
 import { MOTE_PROTOCOL_HEADERS, ProtocolCompatibilityError, requireCompatibleProtocol, type ProtocolRange } from '@mote/shared/protocol';
 import type { Config, Platform } from './contracts';
@@ -11,7 +12,7 @@ export interface ConnectionIdentity {
   capabilities: { ingest: boolean; ingressVersion?: number; ownSources: boolean; archiveRead: boolean };
 }
 export interface ConnectionStatus { state: 'unchecked' | 'checking' | 'connected' | 'error'; message: string; checkedAt?: string; identity?: ConnectionIdentity }
-export class ConnectionError extends Error { constructor(readonly code: string, message: string) { super(message); } }
+export class ConnectionError extends Error { constructor(readonly code: string, message: string, readonly status?: number, readonly reason?: string) { super(message); } }
 const invalid = () => new ConnectionError('INVALID_RESPONSE', moteText("中央确认格式无效，原连接保持不变"));
 const object = (value: unknown, required: string[], optional: string[] = []): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, ...optional].includes(key))) throw invalid();
@@ -28,13 +29,10 @@ async function request(serverUrl: string, path: string, init: RequestInit, fetch
   try {
     const response = await fetcher(validateServerUrl(serverUrl) + path, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000) });
     if (!response.ok) {
-      await response.body?.cancel();
-      if (response.status === 409) throw new ConnectionError('DEVICE_CONFLICT', moteText("设备已在中央登记，或邀请已使用；请在中央选择此设备重新生成邀请"));
-      if ([400, 410].includes(response.status)) throw new ConnectionError('INVITATION_EXPIRED', moteText("邀请无效、已使用或已过期，请在中央重新生成"));
-      if ([401, 403].includes(response.status)) throw new ConnectionError('AUTH', moteText("中央拒绝此凭据，可能已撤销；原连接未修改"));
-      if (response.status === 404) throw new ConnectionError('UNSUPPORTED', moteText('请升级中央节点后再登录。'));
-      if (response.status === 429) throw new ConnectionError('RATE_LIMIT', moteText("连接请求过于频繁，请稍后再试"));
-      throw new ConnectionError('HTTP', moteText("中央暂时无法连接，请稍后再试"));
+      let reason:string|undefined;try{reason=responseFailureCode(await responseJson(response));}catch{}
+      if(reason==='device_already_registered')throw new ConnectionError('DEVICE_CONFLICT',moteText('设备已在中央登记，或邀请已使用；请在中央选择此设备重新生成邀请'),response.status,reason);
+      const code=[401,403].includes(response.status)?'AUTH':response.status===410?'INVITATION_EXPIRED':response.status===426?'PROTOCOL_INCOMPATIBLE':response.status===429?'RATE_LIMIT':'HTTP';
+      throw new ConnectionError(code,httpFailureMessage(response.status,reason),response.status,reason);
     }
     return await responseJson(response);
   } catch (error) { if (error instanceof ConnectionError) throw error; throw new ConnectionError('NETWORK', moteText("连接失败或超时；请检查中央地址、HTTPS 证书和网络，不接受重定向")); }
@@ -47,7 +45,7 @@ export async function testConnection(config: Pick<Config, 'serverUrl' | 'token' 
   const node = object(result.node, ['version', 'profile', 'protocol']), capabilities = object(result.capabilities, ['ingest', 'ownSources', 'archiveRead'], ['ingressVersion']);
   let protocol: ProtocolRange;
   try { protocol = requireCompatibleProtocol(node.protocol); }
-  catch (error) { if (error instanceof ProtocolCompatibilityError && error.code === 'incompatible_protocol') throw new ConnectionError('PROTOCOL_INCOMPATIBLE', moteText("响应不符合协议")); throw invalid(); }
+  catch (error) { if (error instanceof ProtocolCompatibilityError && error.code === 'incompatible_protocol') throw new ConnectionError('PROTOCOL_INCOMPATIBLE', httpFailureMessage(426,'incompatible_protocol')); throw invalid(); }
   if (['ingest', 'ownSources', 'archiveRead'].some(key => typeof capabilities[key] !== 'boolean') || (capabilities.ingressVersion !== undefined && (!Number.isInteger(capabilities.ingressVersion) || (capabilities.ingressVersion as number) < 1)) || (enforceDevice && credential.deviceId !== undefined && credential.deviceId !== config.deviceId)) throw invalid();
   const cleanCredential: ConnectionIdentity['credential'] = { id: bounded(credential.id, 128), scope: credential.scope as 'owner', label: bounded(credential.label, 200, true) };
   for (const key of ['deviceId', 'deviceName', 'platform', 'serverUrl'] as const) if (credential[key] !== undefined) cleanCredential[key] = bounded(credential[key], key === 'serverUrl' ? 2048 : 200);

@@ -21,7 +21,7 @@ export function ContentStorage({api,onChange}:{api:Api;onChange?:()=>void}) {
   async function change(path:string,method:string,body:object) {
     setBusy(true);setError('');
     try{const next=await api.request<StorageState>(path,{method,body:JSON.stringify(body)});if(activeApi.current===api){setState(next);invalidateConfiguration(api);onChange?.();}}
-    catch(e){if(activeApi.current===api)setError(e instanceof ApiError&&e.status===409?moteText('配置已被其他会话更新。请重新读取生效配置，再编辑并保存。'):errorMessage(e));}finally{if(activeApi.current===api)setBusy(false);}
+    catch(e){if(activeApi.current===api)setError(errorMessage(e));}finally{if(activeApi.current===api)setBusy(false);}
   }
   const running=state?.job.state==='running';
   return <section className="panel" aria-labelledby="content-storage-title">

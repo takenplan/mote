@@ -31,6 +31,7 @@ const dependencies: UpdateDependencies = {
   extract: async (archive, destination) => { await execute('/usr/bin/ditto', ['-x', '-k', archive, destination], { timeout: 180000, maxBuffer: 32768 }); },
 };
 const messages: Record<string, string> = {
+  get release_access_denied() { return moteText('更新服务器拒绝访问，请检查网络入口或发布资源的访问权限。'); },
   get release_not_found() { return moteText("此渠道暂未提供可验证的发布清单。请稍后检查；旧版未签名发布不能用于应用内安装。"); },
   get release_rate_limited() { return moteText("GitHub 暂时限制请求，请稍后重试。"); },
   get invalid_manifest_signature() { return moteText("发布清单签名无效，已停止更新。"); }, get unknown_release_key() { return moteText("发布密钥不受此 App 信任，已停止更新。"); },
