@@ -51,7 +51,9 @@ test('app.close stops publication polling before executor disposal and retains p
  assert.ok(next.executor.list({kind:'memory.provider-reconcile',limit:100}).items.length>0,'fresh process schedules retained reconciliation');
 });
 
-test('app.close preserves 180 model waits, queues, retry deadlines and explicit cancellation; restart resumes eligible files',async t=>{
+// This total budget covers 184 generated intakes, preparation, close and restart.
+// Allow CI contention while completing the journey; this is not an app.close latency requirement.
+test('app.close preserves 180 model waits, queues, retry deadlines and explicit cancellation; restart resumes eligible files',{timeout:240000},async t=>{
  let ready=false,calls=0;
  const f=await fixture(t,[{id:'fixture.audio',name:'Generated model wait',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,managedModel:'dialogue',mediaTypes:['audio/'],async process(){calls++;return transcript;}}]);
  const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>ready;return node;};
