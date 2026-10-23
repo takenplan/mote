@@ -18,6 +18,7 @@ import {contextStepPage} from './task-steps.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
 import type {ServerDiagnostics,EventFields} from '../diagnostics.js';
+import {executionObservability,type ExecutionObservability} from '../execution-observability.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {ProcessorAdmission} from '../processor-admission.js';
 import type {DomainLifecycle,UserDataSubject,UserExport} from './lifecycle.js';
@@ -92,6 +93,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  fairnessGroup?:(step:ExecutionStep)=>string;
  /** Resolve exact issued facts before another physical request is allowed. */
  reconcile?:(run:TaskRun)=>Promise<void>;
+ /** Trusted media metadata observation precedes a new charged processing attempt.
+  * The callback must use its bounded facts-only transport, not model execution. */
+ reconcileBeforeAttempt?:true;
  /** Synchronously consume a complete already-durable local result. The host
   * repeats this validation inside the original success transaction. */
  resumeLocal?:(run:TaskLocalResume)=>{value:unknown}|undefined;
@@ -133,9 +137,14 @@ export class TaskExecution {
  private readonly physical:TaskPhysicalCalls;
  private modelHost:TaskModelHost|undefined;
  private diagnostics:ServerDiagnostics|undefined;
+ private observability:ExecutionObservability|undefined;
  private modelAdmission:((run:TaskRun,work:()=>Promise<unknown>)=>Promise<unknown>)|undefined;
  bindModelAdmission(admit:NonNullable<TaskExecution['modelAdmission']>){if(this.modelAdmission)throw new TaskError('model_host_conflict',409);this.modelAdmission=admit;}
- bindDiagnostics(diagnostics:ServerDiagnostics){this.diagnostics??=diagnostics;}
+ bindDiagnostics(diagnostics:ServerDiagnostics){
+  if(this.diagnostics)return;
+  this.diagnostics=diagnostics;this.observability=executionObservability(diagnostics);
+  this.engine.bindObserver(value=>this.observability?.lease(value),()=>this.observability?.enabled()??false);
+ }
  private logStep(step:ExecutionStep){
   const fields:EventFields={kind:step.kind,name:step.operationId,state:step.state,attempt:step.attempts,...(step.error?{category:step.error,detail:step.error}:{})};
   if(step.state==='succeeded')this.diagnostics?.record('task.completed',fields);
@@ -283,6 +292,7 @@ export class TaskExecution {
  }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
+  if(handler.reconcileBeforeAttempt&&(!handler.reconcile||!handler.modelFeature||handler.modelAdmission==='per-call'||handler.policy!==EXECUTION_POLICIES.localProcessing||!['ocr','asr'].includes(handler.modelFeature)))throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
   const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:Boolean(handler.modelFeature)||handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
@@ -316,8 +326,9 @@ export class TaskExecution {
     }
     if(this.physical.busy(step.id))throw new ExecutionFailure('waiting','physical_cleanup_pending',1000,{executionStarted:false});
     if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
-    if(handler.modelFeature&&handler.modelAdmission!=='per-call')grant.startAttempt();
+    if(handler.modelFeature&&handler.modelAdmission!=='per-call'&&!handler.reconcileBeforeAttempt)grant.startAttempt();
     await handler.reconcile?.(run);grant.assert();
+    if(handler.reconcileBeforeAttempt)grant.startAttempt();
     const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
     const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure(this.readReplayReady(this.row(step.id)!)?'transient':'blocked','external_result_unknown');return {value:result,run};
    }),
@@ -528,8 +539,8 @@ export class TaskExecution {
  }
  private confirmationRequired(row:TaskRow){return ['issued','unknown'].includes(row.external_state)&&!this.readReplayReady(row);}
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id),progress=JSON.parse(row.progress),project=this.progressViews.get(step.kind);return {...step,input:undefined,ownership:undefined,confirmUnknownRequired:this.confirmationRequired(row),cleanupPending:this.physical.busy(step.id),progress:project?project(progress):progress,checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
- tick(){return this.engine.tick();}
- start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));},100);this.timer.unref();void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));}
+ tick(){return this.observability?this.observability.sync('host_tick',{phase:'host'},()=>this.engine.tick()):this.engine.tick();}
+ start(){if(this.timer)return;this.timer=setInterval(()=>{try{this.observability?.hostTick();}catch{/* Observation never changes the existing tick. */}void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));},100);this.timer.unref();void this.tick().catch(error=>this.diagnostics?.record('task.tick_failed',{errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error'));}
  /** Host domain's explicit replacement operation may acknowledge old unknown
   * facts without requeuing an obsolete input or reviving its task grant. No HTTP
   * or model tool exposes this capability. Facts themselves remain unresolved. */
@@ -569,6 +580,7 @@ export class TaskExecution {
  }
  close(){
   this.closing=true;
+  try{this.observability?.close();}catch{/* Observation never delays physical cleanup. */}this.engine.bindObserver(undefined);
   return this.closeTask??=Promise.resolve().then(async()=>{if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();await this.drainLocalWork();this.modelLeases.clear();this.modelRecovery.clear();});
  }
  /** M16 observes only purpose-limited journal facts after deletion admission

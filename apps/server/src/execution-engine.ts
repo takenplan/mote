@@ -8,6 +8,7 @@ import {withExecutionCancellation} from './execution-cancellation.js';
 import {failureContext,retainFailureContext,safeFailureContext,type FailureContext} from './execution-failures.js';
 import {EXECUTION_POLICIES,type ExecutionPolicy} from './execution-policy.js';
 import {ExecutionAttempts} from './execution-attempts.js';
+import {observationClock,observationGap,type ExecutionLeaseObservation} from './execution-observability.js';
 
 export type ExecutionState='waiting'|'running'|'blocked'|'succeeded'|'failed'|'cancelled'|'stale';
 export type ExecutionLane='background'|'interactive';
@@ -105,6 +106,12 @@ export class ExecutionEngine {
  private pumpAgain=false;
  private scheduled=false;
  private failureReceiptWriteFailures=0;
+ private observer:((value:ExecutionLeaseObservation)=>void)|undefined;
+ private observerEnabled:(()=>boolean)|undefined;
+ /** Trusted, non-authoritative observation; never accepted from task input. */
+ bindObserver(observer:((value:ExecutionLeaseObservation)=>void)|undefined,enabled?:()=>boolean){this.observer=observer;this.observerEnabled=enabled;}
+ private observing(){try{return Boolean(this.observer)&&(this.observerEnabled?.()??true);}catch{return false;}}
+ private observe(value:ExecutionLeaseObservation){try{if(this.observing())this.observer?.(value);}catch{/* Observation cannot abort or authorize execution. */}}
  constructor(readonly store:ExecutionStorage,private now=Date.now){
   // The epoch-5 host admits a vault before constructing the engine. Do not
   // silently upgrade an older execution format or backfill private ownership.
@@ -263,7 +270,7 @@ export class ExecutionEngine {
  wake(){this.scheduleTick();}
  private scheduleTick(){
   if(this.stopping||this.scheduled)return;
-  this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
+  this.scheduled=true;setImmediate(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
  }
  async drain(ids:string[]){
   void this.tick().catch(()=>{});
@@ -309,7 +316,7 @@ export class ExecutionEngine {
     if(recovered&&row.attempt_session&&row.attempt_charged)this.store.db.prepare('UPDATE execution_attempt_sessions SET open=0 WHERE id=? AND step_id=? AND open=1').run(row.attempt_session,row.id);
     if(own)db.exec('COMMIT');
    }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
-   if(recovered)this.project(row.id);
+   if(recovered){this.observe({type:'recover',taskId:row.id,attemptId:row.attempt_session??undefined,attempt:row.attempts,leaseOverdueMs:Math.max(0,now-row.lease_until)});this.project(row.id);}
   }
  }
  /** Start available slots. Return only work admitted by this call; slow older work is independent. */
@@ -383,9 +390,9 @@ export class ExecutionEngine {
    db.prepare('INSERT INTO execution_fairness(pool,operation_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,operation_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.operation_id,sequence);
    this.project(row.id);db.exec('COMMIT');
   }catch(error){if(db.isTransaction)db.exec('ROLLBACK');db.prepare("UPDATE execution_steps SET state='blocked',error=?,updated_at=? WHERE id=? AND state='waiting'").run(error instanceof StoreError&&error.statusCode===507?'storage_full':'admission_failed',this.now(),row.id);this.project(row.id);return;}
-  return {launch:controller=>this.execute(row,handler,controller,fence,policy)};
+  return {launch:controller=>this.execute(row,handler,controller,fence,policy,now+(timeout===null?30000:Math.min(timeout+10000,30000)))};
  }
- private async execute(row:Row,handler:ExecutionHandler,controller:AbortController,fence:string,policy:ExecutionPolicy){
+ private async execute(row:Row,handler:ExecutionHandler,controller:AbortController,fence:string,policy:ExecutionPolicy,claimedLeaseUntil:number){
   const db=this.store.db,timeout=policy.timeoutMs;
   // Dispose deadlines when work settles. Composed AbortSignal.timeout sources
   // can remain strongly retained by Node until a long deadline actually fires.
@@ -394,7 +401,18 @@ export class ExecutionEngine {
   let deadline:ReturnType<typeof setTimeout>|undefined,budgetStarted=false,executionSequence=0;
   const startBudget=()=>{if(budgetStarted)return;budgetStarted=true;if(timeout!==null){deadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline.unref();}};
   if(!handler.deferTimeout)startBudget();
-  const renewal=setInterval(()=>{if(this.stopping)return;try{const at=this.now();if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes)controller.abort();}catch{controller.abort();}},10000);renewal.unref();
+  let previousRenewal=this.observing()?observationClock():undefined,knownLeaseUntil=claimedLeaseUntil;
+  const renewal=setInterval(()=>{
+   if(this.stopping)return;
+   const started=this.observing()?observationClock():undefined,priorLeaseUntil=knownLeaseUntil;
+   let outcome:'renewed'|'cas_missed'|'renew_exception'='renew_exception',renewedAt:number|undefined;
+   // Keep observation outside the original CAS/abort exception boundary.
+   try{const at=this.now();renewedAt=at;if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes){outcome='cas_missed';controller.abort();}else{outcome='renewed';knownLeaseUntil=at+30000;}}catch{controller.abort();}
+   try{const ended=started?observationClock():undefined;
+    if(started)this.observe({type:'renew',taskId:row.id,attemptId,attempt:step.attempts,outcome,...observationGap(previousRenewal,started,10000),...(ended&&ended.monotonic>=started.monotonic?{durationMs:ended.monotonic-started.monotonic}:{}),...(renewedAt===undefined?{}:{leaseRemainingMs:Math.max(0,priorLeaseUntil-renewedAt),leaseOverdueMs:Math.max(0,renewedAt-priorLeaseUntil)})});
+    previousRenewal=started;
+   }catch{/* A logger or clock failure must not enter the abort path. */}
+  },10000);renewal.unref();
   try{
    const assertGrant=()=>{
     if(signal.aborted)throw new ExecutionFailure('stale','grant_revoked');
