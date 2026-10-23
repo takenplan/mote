@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdtemp, mkdir, writeFile, readFile, rm, chmod} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {ensureMediaRuntime, probeMediaCommands, mediaEnvironment, startMediaWorkers} from './media-workers.mjs';
 
 const fixture = async t => {
@@ -13,6 +14,10 @@ const fixture = async t => {
   for(const name of ['audio','ocr'])await writeFile(join(root,'scripts',`requirements-${name}.txt`),'generated fixture');
   return root;
 };
+test('media execution facts reject incompatible storage before worker readiness and preserve current receipt lifecycles',async()=>{
+  const {execFileSync}=await import('node:child_process');
+  execFileSync('python3',[fileURLToPath(new URL('./test_mote_execution_facts.py',import.meta.url))],{stdio:'pipe'});
+});
 test('runtime installs once, checks imports, repairs missing dependencies and never passes secrets',async t=>{
   const root=await fixture(t),python=join(root,'media-venv/bin/python'),calls=[];
   let broken=false;

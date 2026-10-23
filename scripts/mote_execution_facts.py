@@ -40,6 +40,24 @@ class ExecutionFacts:
                     request_id TEXT PRIMARY KEY,scope_hash TEXT NOT NULL,incarnation TEXT,
                     stage TEXT,state TEXT NOT NULL,accepted_at INTEGER,started_at INTEGER,
                     finished_at INTEGER,outcome TEXT,failure_code TEXT)''')
+                # Model directories may survive a fresh Central profile. Reject
+                # incompatible receipt storage before recovery or HTTP readiness;
+                # never rewrite physical outcomes or guess an older contract.
+                columns = [(row[1], row[2], row[3], row[4], row[5])
+                           for row in db.execute('PRAGMA table_info(facts)')]
+                if columns != [
+                    ('request_id', 'TEXT', 0, None, 1),
+                    ('scope_hash', 'TEXT', 1, None, 0),
+                    ('incarnation', 'TEXT', 0, None, 0),
+                    ('stage', 'TEXT', 0, None, 0),
+                    ('state', 'TEXT', 1, None, 0),
+                    ('accepted_at', 'INTEGER', 0, None, 0),
+                    ('started_at', 'INTEGER', 0, None, 0),
+                    ('finished_at', 'INTEGER', 0, None, 0),
+                    ('outcome', 'TEXT', 0, None, 0),
+                    ('failure_code', 'TEXT', 0, None, 0),
+                ]:
+                    raise ValueError('Incompatible media execution facts schema')
                 # A new service cannot prove what an old recognizer did.
                 db.execute("UPDATE facts SET state='unknown',outcome='worker_restarted' WHERE state IN ('accepted','running')")
         except BaseException:
