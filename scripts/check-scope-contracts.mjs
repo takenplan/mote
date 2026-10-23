@@ -117,6 +117,9 @@ export function checkProductionImports(directory=root){
     // reader; M07 shares pure literal query preparation with the retired host.
     [sourceRoot+'/scope/ask.ts',new Set([sourceRoot+'/opening-memory.ts'])],
     [sourceRoot+'/scope/memory-data.ts',new Set([sourceRoot+'/memory-search-query.ts'])],
+    // Shared supplied-record privacy predicate: no owner, I/O or authority.
+    [sourceRoot+'/scope/evidence-projection.ts',new Set([sourceRoot+'/material-original-visibility.ts'])],
+    [sourceRoot+'/scope/memory-capture-materials.ts',new Set([sourceRoot+'/material-original-visibility.ts'])],
     // M16 reuses transactional logical payload accounting, not a private legacy Store.
     [sourceRoot+'/scope/storage-capacity.ts',new Set([sourceRoot+'/storage-ledger.ts'])],
     [sourceRoot+'/scope/task-execution.ts',new Set([sourceRoot+'/processor-admission.ts'])],
@@ -138,6 +141,9 @@ export function checkProductionImports(directory=root){
   const portHelperImports=new Map([
     [sourceRoot+'/memory-provider-probe.ts',new Set(['node:crypto','./memory-schema.js','./memory-provider-contract.js'])],
   ]);
+  // This exact pure contract may depend on types only. Re-review any runtime
+  // dependency instead of allowing a reviewed caller to become a store bridge.
+  const statelessHelperImports=new Map([[sourceRoot+'/material-original-visibility.ts',new Set()]]);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
@@ -146,6 +152,10 @@ export function checkProductionImports(directory=root){
     function visit(node){
       if(ts.isImportDeclaration(node)&&node.importClause?.isTypeOnly)return;
       if(ts.isExportDeclaration(node)&&node.isTypeOnly)return;
+      const statelessImports=statelessHelperImports.get(relative(directory,path));
+      if(statelessImports&&ts.isImportEqualsDeclaration(node)){
+        if(!node.isTypeOnly){const ref=node.moduleReference,specifier=ts.isExternalModuleReference(ref)?ref.expression:undefined;failures.push(`unreviewed stateless helper import: ${relative(directory,path)} -> ${specifier&&ts.isStringLiteralLike(specifier)?specifier.text:compact(node.getText(tree))}`);}return;
+      }
       const dynamic=ts.isCallExpression(node)&&(node.expression.kind===ts.SyntaxKind.ImportKeyword||node.expression.getText(tree)==='require');
       const specifier=ts.isImportDeclaration(node)||ts.isExportDeclaration(node)?node.moduleSpecifier:dynamic?node.arguments[0]:undefined;
       // The existing trusted processor loader is reachable as a configuration
@@ -153,6 +163,7 @@ export function checkProductionImports(directory=root){
       // expression is the sole retained exception, pending M06/M09 adaptation.
       const processorLoader=relative(directory,path)==='apps/server/src/file-processors.ts'&&node.getText(tree)==='import(isAbsolute(specifier)?pathToFileURL(specifier).href:specifier)';
       if(dynamic&&(!specifier||!ts.isStringLiteralLike(specifier))&&!processorLoader)failures.push(`computed production import: ${relative(directory,path)}`);
+      if(statelessImports&&specifier&&ts.isStringLiteralLike(specifier)&&!statelessImports.has(specifier.text))failures.push(`unreviewed stateless helper import: ${relative(directory,path)} -> ${specifier.text}`);
       const portImports=portHelperImports.get(relative(directory,path));
       if(portImports&&specifier&&ts.isStringLiteralLike(specifier)&&!portImports.has(specifier.text))failures.push(`unreviewed capability probe import: ${relative(directory,path)} -> ${specifier.text}`);
       if(specifier&&ts.isStringLiteralLike(specifier)&&specifier.text.startsWith('.')){

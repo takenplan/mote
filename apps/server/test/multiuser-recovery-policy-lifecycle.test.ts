@@ -13,6 +13,25 @@ import {scopedFilesFixture} from './fixtures/scoped-files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
 import {backupScopedInstance,restoreScopedInstance} from '../../../scripts/scoped-backup.mjs';
 
+/** Failure-only generated fixture observation; never changes admission or authority. */
+function processingDiagnostic(directory:string,userId:string){
+ const db=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});try{return {
+  state:db.prepare('SELECT * FROM mp_state WHERE user_id=?').all(userId),
+  admissions:db.prepare('SELECT rowid,* FROM mp_admissions WHERE user_id=? ORDER BY rowid').all(userId),
+  tasks:db.prepare("SELECT e.id,e.kind,e.state,e.error,e.fence,u.input,u.grant_id,u.external_state FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id WHERE e.user_id=? AND e.kind LIKE 'processing.%' ORDER BY u.user_position").all(userId),
+  targets:db.prepare('SELECT * FROM mp_configuration_targets WHERE user_id=?').all(userId),
+  handoffs:db.prepare('SELECT * FROM task_processing_config_handoffs WHERE user_id=?').all(userId),
+  retirements:db.prepare('SELECT r.* FROM task_processing_config_retirements r JOIN task_processing_config_handoffs h ON h.task_id=r.handoff_id WHERE h.user_id=?').all(userId),
+  controls:db.prepare('SELECT * FROM mp_file_controls WHERE user_id=?').all(userId),
+  bindings:db.prepare('SELECT * FROM mp_file_policy_bindings WHERE user_id=?').all(userId),
+  plans:db.prepare('SELECT * FROM mp_file_plans WHERE user_id=?').all(userId),
+  activity:db.prepare('SELECT * FROM mp_activity WHERE user_id=?').all(userId),
+  workers:db.prepare('SELECT * FROM mp_worker_cleanup WHERE user_id=?').all(userId),
+  physical:db.prepare('SELECT * FROM task_physical_calls WHERE user_id=?').all(userId),
+  external:db.prepare('SELECT * FROM task_external_calls WHERE user_id=?').all(userId),
+ };}finally{db.close();}
+}
+
 const tables=['mp_file_policies','mp_file_plans','mp_file_policy_bindings'] as const;
 const policy={version:1,services:[],profiles:[{id:'text',name:'Generated text policy',processorId:'text.utf8',parameters:{},diarizationProcessor:'audio.diarize',summarize:false},{id:'archive',name:'Generated original',processorId:'archive',parameters:{},diarizationProcessor:'audio.diarize',summarize:false}],rules:[{type:'text/*',profileId:'text'},{type:'*/*',profileId:'archive'}]};
 function read<T>(directory:string,work:(db:DatabaseSync)=>T):T{
@@ -98,10 +117,10 @@ test('relogin and disable-enable cannot replay a still-held named media call or 
  const fresh=await f.checked(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-joint-files-password',mode:'client'});assert.equal((await f.request(f.a.token,'/api/file-processing')).statusCode,401);
  assert.equal(read(f.directory,db=>db.prepare('SELECT revoked FROM task_authorizations WHERE task_id=?').get(oldTask)!.revoked),0,'session exit alone must preserve the admitted grant');
  let page=await f.checked(fresh.token,'/api/file-processing');await f.checked(fresh.token,'/api/file-processing','PUT',{revision:page.revision,settings:{...page.settings,enabled:false},policy:page.policy});
- let paused:any;await waitForScopedState(async()=>{paused=await f.checked(fresh.token,'/api/files/'+file.id);return paused.job?.state==='blocked'&&paused.job?.error==='processing_disabled';},()=>JSON.stringify(paused),12000);
- assert.notEqual(task(),oldTask);assert.equal(read(f.directory,db=>db.prepare('SELECT attempts FROM execution_steps WHERE id=?').get(task())!.attempts),0);
+ const pending=()=>read(f.directory,db=>db.prepare("SELECT h.*,e.state,e.error,e.attempts,t.receipt_id current_receipt,t.json target_json FROM task_processing_config_handoffs h JOIN execution_steps e ON e.id=h.task_id AND e.user_id=h.user_id JOIN mp_configuration_targets t ON t.user_id=h.user_id AND t.original_id=substr(h.original_ref,10) AND t.receipt_id=h.receipt_id WHERE h.user_id=? AND h.original_ref=? AND h.root_id=?").get(f.a.userId,file.original.ref,oldTask)),issued=()=>read(f.directory,db=>db.prepare('SELECT * FROM task_external_calls WHERE user_id=? ORDER BY issuance_id').all(f.a.userId)),issuedBefore=issued();let paused:any,disabledControl:any;await waitForScopedState(async()=>{paused=await f.checked(fresh.token,'/api/files/'+file.id);disabledControl=pending();return disabledControl?.state==='waiting'&&disabledControl.error==='processor_still_running'&&JSON.parse(String(disabledControl.target_json)).facts.settings.enabled===false;},()=>JSON.stringify({paused,processing:processingDiagnostic(f.directory,f.a.userId)}),12000);
+ assert.equal(disabledControl.replacement_id,null);assert.equal(disabledControl.attempts,0);assert.equal(disabledControl.receipt_id,disabledControl.current_receipt);assert.equal(paused.cancellation.wait,'running');assert.equal(paused.job.state,'cancelled');assert.equal(task(),oldTask);assert.equal(calls,1);assert.deepEqual(issued(),issuedBefore);assert.ok(read(f.directory,db=>db.prepare("SELECT 1 FROM task_physical_calls WHERE user_id=? AND state='active'").get(f.a.userId)));
  page=await f.checked(fresh.token,'/api/file-processing');await f.checked(fresh.token,'/api/file-processing','PUT',{revision:page.revision,settings:{...page.settings,enabled:true},policy:page.policy});
- let current:any;await waitForScopedState(async()=>{current=await f.checked(fresh.token,'/api/files/'+file.id);return current.cancellation.wait==='running'||current.job?.error==='external_result_unknown';},()=>JSON.stringify(current),12000);
+ let current:any,enabledControl:any;await waitForScopedState(async()=>{current=await f.checked(fresh.token,'/api/files/'+file.id);enabledControl=pending();return current.cancellation.wait==='running'&&enabledControl?.state==='waiting'&&enabledControl.error==='processor_still_running'&&JSON.parse(String(enabledControl.target_json)).facts.settings.enabled===true;},()=>JSON.stringify({current,processing:processingDiagnostic(f.directory,f.a.userId)}),12000);assert.notEqual(enabledControl.task_id,disabledControl.task_id);assert.notEqual(enabledControl.receipt_id,disabledControl.receipt_id);assert.equal(enabledControl.replacement_id,null);assert.equal(enabledControl.attempts,0);assert.equal(task(),oldTask);assert.deepEqual(issued(),issuedBefore);
  assert.equal(calls,1);assert.equal(current.processing.indexed,false);
  assert.equal((await f.request(fresh.token,'/api/files/'+file.id+'/retry','POST',{operationId:randomUUID(),stage:'transcribe',confirmUnknown:true})).statusCode,409,'unknown acknowledgement cannot release a still-live worker');
  release();await waitForScopedState(async()=>{current=await f.checked(fresh.token,'/api/files/'+file.id);return current.cancellation.wait!=='running';},()=>JSON.stringify(current),12000);

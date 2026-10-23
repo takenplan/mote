@@ -32,9 +32,9 @@ export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string;
  * ownership remains exclusively in the complete personal/shared M04 reference. */
 export class ProcessingPolicies {
  private readonly previews=new Map<string,{userId:string;epoch:number;revision:string;expires:number;items:{id:string;ref:string;proof:string}[]}>();
- constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly processors:FileProcessorRuntime,private readonly settings:(context:UserContext)=>ProcessingSettings,changed:(context:UserContext)=>void){
-  configuration.registerDomain(domain,subject=>({id:domain,schema:effectiveValueSchema.superRefine((next,issues)=>{
-   if(!next.policy)return;const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');
+ constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly processors:FileProcessorRuntime,private readonly settings:(context:UserContext)=>ProcessingSettings){
+  configuration.registerDomain(domain,subject=>{const assertRead=configuration.domainSubjectGuard(subject,{readOnly:true}),assert=configuration.domainSubjectGuard(subject);return ({id:domain,schema:effectiveValueSchema.superRefine((next,issues)=>{
+   if(!next.policy)return;const sql=new PrivateSql(db,subject.userId,assertRead),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');
    try{validateProcessingProfiles(next.policy,before?effectiveValueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry);}catch{issues.addIssue({code:'custom',message:'Invalid saved processor profile'});}
   }),defaultValue:{policy:null},resolve:(raw,document)=>{
    const next=valueSchema.parse(raw),connections:Record<string,string>={},models=configuration.resources.schema().parse(document?.models??{profiles:[],selections:{}}),defaults=defaultPolicy(models.selections,processingSettingsSchema.parse(document?.processing??defaultProcessingSettings()));
@@ -45,11 +45,11 @@ export class ProcessingPolicies {
    }
    return {...next,defaults,connections};
   },fields:[{path:'policy',effect:'next-request'}],prepare:raw=>{
-   const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=effectiveValueSchema.parse(raw);
+   const sql=new PrivateSql(db,subject.userId,assert),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=effectiveValueSchema.parse(raw);
    if(next.policy)validateProcessingProfiles(next.policy,before?effectiveValueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry,{error:()=>new ConfigServiceError('config_invalid')});
    const json=JSON.stringify(next);let published=false;
-   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&before?.json!==json&&(next.policy||sql.get('SELECT original_id FROM mp_file_policy_bindings WHERE user_id=$user LIMIT 1')))changed(subject);}};
-  }}));
+   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}}};
+  }});});
  }
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
  async prepareOverride(context:UserContext,id:string){processingProfileSchema.shape.id.parse(id);await this.configuration.forUser(context).view();const policy=this.overridePolicy(context,id);if(!policy.profiles.some(profile=>profile.id===id))throw new PrivateDataError('conflict',409);}
@@ -57,20 +57,32 @@ export class ProcessingPolicies {
   await this.configuration.forUser(context).view();if(!id)return (await this.configuration.forUser(context).selection('asr')).reference;
   const saved=this.policy(context),policy=saved??this.overridePolicy(context,'audio'),service=policy.services.find(service=>service.id===(!saved&&['asr-local','asr-api'].includes(id)?'service.asr':id));if(!service||service.kind!=='asr')throw new PrivateDataError('invalid_data');return service.reference;
  }
- private overridePolicy(context:UserContext,id:string){
-  const saved=this.policy(context);if(saved)return saved;const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user'),defaults=row?effectiveValueSchema.parse(JSON.parse(String(row.json))).defaults:undefined;if(!defaults)throw new PrivateDataError('scope_unavailable',503);
+ private overridePolicy(context:UserContext,id:string){return this.overridePolicyFromSql(this.sql(context),id);}
+ private overridePolicyFromSql(sql:PrivateSql,id:string){
+  const saved=this.policyFromSql(sql);if(saved)return saved;const row=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),defaults=row?effectiveValueSchema.parse(JSON.parse(String(row.json))).defaults:undefined;if(!defaults)throw new PrivateDataError('scope_unavailable',503);
   // The old default profile IDs remain valid explicit selections. They resolve
   // to the same complete M04 references, without adding duplicate editor rows.
   const aliases:Record<string,{base:string;processorId:string}>={'central-image':{base:'image',processorId:'image.http'},'profile.audio.local-dialogue':{base:'audio',processorId:'audio.local-dialogue'},'profile.audio.http':{base:'audio',processorId:'audio.http'},'profile.text.utf8':{base:'text',processorId:'text.utf8'},'profile.document.generic':{base:'document',processorId:'document.generic'}};
   const alias=aliases[id];if(alias){const base=defaults.profiles.find(profile=>profile.id===alias.base)!;defaults.profiles.push({...base,id,name:alias.processorId,processorId:alias.processorId,...(alias.processorId==='audio.local-dialogue'?{parameters:{speakerCount:null,semanticTurns:false}}:{})});}return defaults;
  }
- policy(context:UserContext):ScopedFilePolicy|null{const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?effectiveValueSchema.parse(JSON.parse(String(row.json))).policy:null;}
- current(context:UserContext,ref:string):FilePolicyPlan|undefined{const row=this.sql(context).get('SELECT p.id,p.json FROM mp_file_policy_bindings b JOIN mp_file_plans p ON p.user_id=b.user_id AND p.id=b.plan_id WHERE b.user_id=$user AND p.user_id=$user AND b.original_id=?',ref.slice(9));return row?{...JSON.parse(String(row.json)),id:String(row.id)}:undefined;}
+ policy(context:UserContext):ScopedFilePolicy|null{return this.policyFromSql(this.sql(context));}
+ private policyFromSql(sql:PrivateSql):ScopedFilePolicy|null{const row=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?effectiveValueSchema.parse(JSON.parse(String(row.json))).policy:null;}
+ current(context:UserContext,ref:string):FilePolicyPlan|undefined{return this.currentFromSql(this.sql(context),ref);}
+ currentFromSql(sql:PrivateSql,ref:string):FilePolicyPlan|undefined{const row=sql.get('SELECT p.id,p.json FROM mp_file_policy_bindings b JOIN mp_file_plans p ON p.user_id=b.user_id AND p.id=b.plan_id WHERE b.user_id=$user AND p.user_id=$user AND b.original_id=?',ref.slice(9));return row?{...JSON.parse(String(row.json)),id:String(row.id)}:undefined;}
  /** Called by trusted admission, never a presentation GET. A completed file keeps
   * its applied plan until explicit reprocessing chooses a replacement. */
  bindPlan(context:UserContext,ref:string,replace=false,override?:string){
-  const prior=this.current(context,ref);if(prior&&!replace)return prior;const saved=this.policy(context),defaultOverride=override??(!saved&&replace?prior?.profile.id:undefined),policy=saved??(defaultOverride?this.overridePolicy(context,defaultOverride):null);if(!policy)return prior;
-  const sql=this.sql(context);if(!replace&&!prior&&(sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND task_id IS NOT NULL LIMIT 1',ref.slice(9))||sql.get('SELECT artifact_id FROM mp_publications WHERE user_id=$user AND original_id=?',ref.slice(9))))return undefined;
+  const sql=this.sql(context),prior=this.currentFromSql(sql,ref);if(prior&&!replace)return prior;
+  const plan=this.preparePlan(sql,ref,this.settings(context),replace,override);if(!plan)return;
+  const {id,...value}=plan;
+  sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),JSON.stringify(value));
+  sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.currentFromSql(sql,ref)!;
+ }
+ /** The exact bindPlan computation, with no binding or original-byte effects. */
+ previewReconciliation(sql:PrivateSql,ref:string,settings:ProcessingSettings){return this.preparePlan(sql,ref,settings,true);}
+ private preparePlan(sql:PrivateSql,ref:string,settings:ProcessingSettings,replace=false,override?:string):FilePolicyPlan|undefined{
+  const prior=this.currentFromSql(sql,ref);if(prior&&!replace)return prior;const saved=this.policyFromSql(sql),defaultOverride=override??(!saved&&replace?prior?.profile.id:undefined),policy=saved??(defaultOverride?this.overridePolicyFromSql(sql,defaultOverride):null);if(!policy)return prior;
+  if(!replace&&!prior&&(sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND task_id IS NOT NULL LIMIT 1',ref.slice(9))||sql.get('SELECT artifact_id FROM mp_publications WHERE user_id=$user AND original_id=?',ref.slice(9))))return undefined;
   const row=sql.get('SELECT r.source_id,r.mime,f.format FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id WHERE r.user_id=$user AND f.user_id=$user AND r.id=?',ref.slice(9));if(!row)throw missing();
   if(row.format==='source-item'||String(row.format).startsWith('processor:'))return prior;
   const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),saved?override:defaultOverride);
@@ -79,11 +91,11 @@ export class ProcessingPolicies {
   const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),effective=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))):undefined,connections=effective?.connections??{};
   // An omitted profile modelServiceId keeps the owner's declared M04 file selection.
   // Pin only references/fingerprints in the existing plan, never credentials.
-  const fileModelNeeded=!selected.archiveOnly&&(selected.profile.summarize||selected.profile.parameters.semanticTurns===true||String(row.mime).startsWith('image/')&&this.processors.imageRecipes.resolve(selected.profile.imageRecipe??DEFAULT_IMAGE_RECIPE,this.settings(context).understandingEnabled).steps.some(step=>step.kind==='understanding'));
+  const fileModelNeeded=!selected.archiveOnly&&(selected.profile.summarize||selected.profile.parameters.semanticTurns===true||String(row.mime).startsWith('image/')&&this.processors.imageRecipes.resolve(selected.profile.imageRecipe??DEFAULT_IMAGE_RECIPE,settings.understandingEnabled).steps.some(step=>step.kind==='understanding'));
   const fileModelReference=!selected.profile.modelServiceId&&fileModelNeeded?effective?.defaults?.services.find(service=>service.id==='service.file')?.reference:undefined;
   const references=[...selected.services.map(service=>service.reference),...(fileModelReference?[fileModelReference]:[])],selectedConnections=[...new Map(references.map(reference=>[connectionKey(reference),{reference,fingerprint:reference.kind==='shared'?canonicalHash({generation:this.configuration.resources.generation(reference.id)}):connections[connectionKey(reference)]}])).values()].sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
   const id=identityHash({original:ref,fingerprint:selected.fingerprint,connections:selectedConnections,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify({...selected,...(fileModelReference?{fileModelReference}:{}),connections:selectedConnections});
-  sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
+  return {...JSON.parse(json),id};
  }
  effective(base:ProcessingSettings,plan?:FilePolicyPlan){if(!plan)return base;const p=plan.profile,parameters=p.parameters;return processingSettingsSchema.parse({...base,audioProcessor:p.processorId.startsWith('audio.')?p.processorId:base.audioProcessor,diarizationProcessor:p.diarizationProcessor,summarize:p.summarize,speakerCount:parameters.speakerCount??null,speakerMin:parameters.speakerMin??null,speakerMax:parameters.speakerMax??null,semanticTurns:parameters.semanticTurns===true});}
  /** Fixed M06 metadata for legacy admissions without an applied plan. */

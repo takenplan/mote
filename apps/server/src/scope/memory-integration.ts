@@ -4,7 +4,8 @@ import {EXECUTION_POLICIES} from '../execution-policy.js';
 import type {Memory} from '../memory-schema.js';
 import type {UserContext} from './context.js';
 import type {TaskExecution,TaskRun} from './task-execution.js';
-import {memoryHash,memoryUUID,type MemoryRow,type ScopedMemoryData} from './memory-data.js';
+import {memoryHash,memoryUUID} from './memory-identity.js';
+import type {MemoryRow,ScopedMemoryData} from './memory-data.js';
 import {memoryBindingSchema,memorySettingsSchema,type ScopedMemoryTask} from './memory-schema.js';
 import {PrivateDataError} from './private-data-sql.js';
 import {freezeMemoryEvaluationTime,memoryEvaluationTimeSchema} from './memory-evaluation-context.js';
@@ -12,12 +13,49 @@ const request=z.object({id:z.string().uuid()}).strict();
 const memoryPin=z.object({id:z.string().uuid(),version:z.number().int().positive(),fingerprint:z.string()}).strict();
 export const integrationWindowSchema=z.object({evaluationTime:memoryEvaluationTimeSchema.optional(),generation:z.number().int(),settings:memorySettingsSchema,binding:memoryBindingSchema,selection:z.array(memoryPin).optional(),pending:z.array(memoryPin).optional()}).strict().refine(window=>!window.selection||window.evaluationTime!==undefined);
 export type IntegrationWindow=z.infer<typeof integrationWindowSchema>;
+type MemoryPin=z.infer<typeof memoryPin>;
+const samePin=(a:MemoryPin,b:MemoryPin)=>a.id===b.id&&a.version===b.version&&a.fingerprint===b.fingerprint;
+function orderedPinsWithin(pending:readonly MemoryPin[],original:readonly MemoryPin[]){
+ const seen=new Set<string>();let position=0;
+ for(const pin of pending){const key=memoryHash(pin);if(seen.has(key))return false;seen.add(key);while(position<original.length&&!samePin(pin,original[position]))position++;if(position===original.length)return false;position++;}
+ return true;
+}
+/** The existing deterministic continuation identity proves which ancestor may
+ * have reserved a remainder. Matching cards or policy alone grants nothing. */
+function reservationOwners(data:ScopedMemoryData,id:string,window:IntegrationWindow):Set<string>{
+ type JournalWindow={id:string;window:IntegrationWindow;createdAt:string;state:string};const journal=new Map<string,JournalWindow>();
+ for(const row of data.sql.all('SELECT id,json,created_at,state FROM mm_integration_windows WHERE user_id=$user AND revoked=0')){
+  try{const parsed=integrationWindowSchema.parse(JSON.parse(String(row.json)));journal.set(String(row.id),{id:String(row.id),window:parsed,createdAt:String(row.created_at),state:String(row.state)});}catch{/* Malformed journal rows cannot establish ancestry. */}
+ }
+ const owners=new Set([id]),initial=journal.get(id);if(!initial||memoryHash(initial.window)!==memoryHash(window))return owners;let child:JournalWindow=initial;
+ for(;;){
+  const current:JournalWindow=child,parents:JournalWindow[]=[...journal.values()].filter(parent=>{
+   const value=parent.window;if(parent.state!=='complete'||!value.selection?.length||!value.pending||!current.window.pending||!value.evaluationTime)return false;
+   if(new Set(value.pending.map(pin=>memoryHash(pin))).size!==value.pending.length||new Set(value.selection.map(pin=>memoryHash(pin))).size!==value.selection.length||!value.selection.every(pin=>value.pending!.some(pending=>samePin(pin,pending))))return false;
+   const remaining=value.pending.filter(pin=>!value.selection!.some(selected=>samePin(pin,selected)));
+   return remaining.length>0&&memoryUUID([parent.id,'integration-continuation',remaining])===current.id&&orderedPinsWithin(current.window.pending,remaining)&&parent.createdAt===current.createdAt&&memoryHash([value.generation,value.settings,value.binding,value.evaluationTime])===memoryHash([current.window.generation,current.window.settings,current.window.binding,current.window.evaluationTime]);
+  });
+  if(!parents.length)return owners;
+  if(parents.length!==1||owners.has(parents[0].id))return new Set([id]);
+  child=parents[0];owners.add(child.id);
+ }
+}
+function reservationAvailable(data:ScopedMemoryData,pin:MemoryPin,owners:ReadonlySet<string>){const row=data.sql.get('SELECT window_id FROM mm_integrated_versions WHERE user_id=$user AND id=? AND version=? AND fingerprint=?',pin.id,pin.version,pin.fingerprint);return !row||owners.has(String(row.window_id));}
 /** Scheduling and owner observations must describe the same selected set.
  * A continuation can read only its original window's frozen remaining pins;
  * newer arrivals and another account's same-name cards never widen it. */
-export function integrationCandidates(data:ScopedMemoryData,window:IntegrationWindow):MemoryRow[]{
- const candidates=window.pending?window.pending.flatMap(pin=>{try{const row=data.row(pin.id);return row.version===pin.version&&row.fingerprint===pin.fingerprint?[row]:[];}catch{return [];}}):data.sql.all("SELECT r.* FROM mm_records r WHERE r.user_id=$user AND json_extract(r.json,'$.status')='published' AND json_extract(r.json,'$.tier')='episode' AND json_extract(r.json,'$.admission.layer')='memory' AND json_extract(r.json,'$.supersededBy') IS NULL AND NOT EXISTS(SELECT 1 FROM mm_integrated_versions v WHERE v.user_id=$user AND v.id=r.id AND v.version=r.version AND v.fingerprint=r.fingerprint) ORDER BY r.created_at,r.id") as MemoryRow[];
+export function integrationCandidates(data:ScopedMemoryData,window:IntegrationWindow,id:string):MemoryRow[]{
+ const owners=window.pending?reservationOwners(data,id,window):new Set<string>(),candidates=window.pending?window.pending.flatMap(pin=>{try{if(!reservationAvailable(data,pin,owners))return [];const row=data.row(pin.id);return row.version===pin.version&&row.fingerprint===pin.fingerprint?[row]:[];}catch{return [];}}):data.sql.all("SELECT r.* FROM mm_records r WHERE r.user_id=$user AND json_extract(r.json,'$.status')='published' AND json_extract(r.json,'$.tier')='episode' AND json_extract(r.json,'$.admission.layer')='memory' AND json_extract(r.json,'$.supersededBy') IS NULL AND NOT EXISTS(SELECT 1 FROM mm_integrated_versions v WHERE v.user_id=$user AND v.id=r.id AND v.version=r.version AND v.fingerprint=r.fingerprint) ORDER BY r.created_at,r.id") as MemoryRow[];
  return candidates.filter(row=>{try{const memory=data.assertCurrentRecord(row);return memory.tier==='episode'&&memory.admission?.layer==='memory'&&!memory.supersededBy;}catch{return false;}});
+}
+/** A disabled admission policy cannot widen an already admitted window while
+ * it drains. Selected windows and their exact pending remainders stay intact. */
+export function freezeIntegrationAdmissions(data:ScopedMemoryData){
+ for(const row of data.sql.all("SELECT id,json FROM mm_integration_windows WHERE user_id=$user AND revoked=0 AND state='pending' AND task_id IS NOT NULL")){
+  const window=integrationWindowSchema.parse(JSON.parse(String(row.json)));if(window.selection!==undefined||window.pending!==undefined)continue;
+  const pending=integrationCandidates(data,window,String(row.id)).map(row=>({id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint)}));
+  data.sql.run('UPDATE mm_integration_windows SET json=? WHERE user_id=$user AND id=?',JSON.stringify({...window,pending}),row.id);
+ }
 }
 export function integrationDueAt(createdAt:string,window:IntegrationWindow){const policy=window.settings.lifecycle.consolidation;return Date.parse(createdAt)+(policy.maxWaitHours??Math.min(policy.intervalHours,1))*3600000;}
 /** Existing consolidation policy and M05 scheduling, with a durable per-user
@@ -41,13 +79,13 @@ export class MemoryIntegration {
   // Both model-selected domains share this frozen window; the owned Memory job
   // gives each actual domain its own draft, review and publication checkpoint.
   // Searchable observations remain outside long-term consolidation entirely.
-  const policy=window.settings.lifecycle.consolidation,valid=integrationCandidates(data,window),due=integrationDueAt(String(row.created_at),window);
+  const policy=window.settings.lifecycle.consolidation,valid=integrationCandidates(data,window,id),due=integrationDueAt(String(row.created_at),window);
   if(!window.selection&&valid.length<policy.minChanges&&data.sql.get('SELECT 1 FROM mm_binding_locks WHERE user_id=$user')){run.grant.commit(()=>data.sql.run("UPDATE mm_integration_windows SET state='complete' WHERE user_id=$user AND id=?",id));return {deferred:true};}
   if(!window.selection&&valid.length<policy.minChanges&&Date.now()<due&&!data.sql.get('SELECT 1 FROM mm_binding_locks WHERE user_id=$user'))throw new ExecutionFailure('waiting','memory_integration_window_pending',Math.min(due-Date.now(),60000),{executionStarted:false});
   const pins=valid.map(row=>({id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint)})),pending=window.selection?window.pending??pins:pins,selection=window.selection??pins.slice(0,policy.maxItems);
   if(!selection.length){run.grant.commit(()=>data.sql.run("UPDATE mm_integration_windows SET state='complete' WHERE user_id=$user AND id=?",id));return {empty:true};}
   const frozen={...window,evaluationTime:window.evaluationTime??freezeMemoryEvaluationTime(this.clock),pending,selection};
-  run.grant.commit(()=>{for(const pin of pending){if(!window.selection||selection.some(selected=>selected.id===pin.id)){const current=data.row(pin.id);data.assertCurrentRecord(current);if(current.version!==pin.version||current.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);}data.sql.run('INSERT OR IGNORE INTO mm_integrated_versions VALUES($user,?,?,?,?)',pin.id,pin.version,pin.fingerprint,id);}data.sql.run('UPDATE mm_integration_windows SET json=? WHERE user_id=$user AND id=?',JSON.stringify(frozen),id);});
+  run.grant.commit(()=>{const owners=reservationOwners(data,id,window);for(const pin of pending){if(!reservationAvailable(data,pin,owners))throw new PrivateDataError('conflict',409);if(!window.selection||selection.some(selected=>selected.id===pin.id)){const current=data.row(pin.id);data.assertCurrentRecord(current);if(current.version!==pin.version||current.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);}data.sql.run('INSERT OR IGNORE INTO mm_integrated_versions VALUES($user,?,?,?,?)',pin.id,pin.version,pin.fingerprint,id);}data.sql.run('UPDATE mm_integration_windows SET json=? WHERE user_id=$user AND id=?',JSON.stringify(frozen),id);});
   const materialIds=[...new Set(selection.flatMap(pin=>data.sql.all('SELECT DISTINCT e.material_id FROM mm_dependencies d JOIN mm_evidence e ON e.user_id=d.user_id AND e.id=d.evidence_id WHERE d.user_id=$user AND e.user_id=$user AND d.memory_id=?',pin.id).map(row=>String(row.material_id))))],jobId=id;
   const result=await this.admit(run.context,jobId,materialIds,selection.map(pin=>pin.id),frozen);run.grant.assert();this.window(run.context,id);
   const child=z.object({id:z.string().uuid(),tasks:z.record(z.object({id:z.string()}).passthrough())}).passthrough().parse(result);

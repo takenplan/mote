@@ -2,6 +2,7 @@ import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {randomBytes,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {catalogParent} from '../source-catalog-path.js';
+import {installEvidenceProjection} from './evidence-projection.js';
 
 export const ASK_DOMAIN='ask';
 export class AskError extends Error{constructor(readonly code:string,readonly statusCode=400){super(code);}}
@@ -77,6 +78,7 @@ function installConversationHistory(db:DatabaseSync){
 }
 
 export function installAsk(db:DatabaseSync){
+ installEvidenceProjection(db);
  db.exec('SAVEPOINT ma_schema_install');try{
  // Backfill is a one-time schema migration. Normal publication triggers keep
  // the journal current; repeating it would turn personal imports into new work.

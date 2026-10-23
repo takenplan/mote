@@ -18,7 +18,7 @@ test('original Vault imports the real same-owner archive, retries its lost ACK a
  // Ingress admits real asynchronous Material/index jobs before returning.
  // This journey exports after its already-admitted producers commit; concurrent-export rejection has
  // separate domain coverage. Do not retry or bypass an archive_changed reply.
- // A future, unstarted Memory window is retained as scheduled metadata. It is
+ // A future, unstarted Memory wait is retained as prerequisite metadata. It is
  // not an outstanding producer write and must not be forced to execute here.
  const settledIntake=async(account:typeof f.a)=>{
   type Task={kind:string;state:string;attempts:number;availableAt:number;failure?:{code?:string;executionStarted?:boolean}};
@@ -27,8 +27,9 @@ test('original Vault imports the real same-owner archive, retries its lost ACK a
    const rows:Task[]=[];let cursor:number|undefined;
    do{const page=await f.request(account.token,'/api/tasks?'+new URLSearchParams({limit:'100',...(cursor===undefined?{}:{cursor:String(cursor)})}));assert.equal(page.statusCode,200,page.body);const value=page.json();rows.push(...value.items);cursor=value.nextCursor??undefined;}while(cursor!==undefined);
    observed=rows;
-   return rows.some(row=>row.kind==='memory.materials'&&row.state==='succeeded')&&rows.some(row=>row.kind==='ask.index-admit'&&row.state==='succeeded')&&rows.every(row=>['succeeded','failed','blocked','cancelled','stale'].includes(row.state)||(row.kind==='memory.intake'&&row.state==='waiting'&&row.attempts===0&&row.failure?.code==='memory_window_pending'&&row.failure.executionStarted===false&&row.availableAt>Date.now()));
+   return rows.some(row=>row.kind==='memory.materials'&&row.state==='succeeded')&&rows.some(row=>row.kind==='ask.index-admit'&&row.state==='succeeded')&&rows.every(row=>['succeeded','failed','blocked','cancelled','stale'].includes(row.state)||(row.kind==='memory.intake'&&row.state==='waiting'&&row.attempts===0&&(row.failure?.code==='memory_window_pending'||row.failure?.code==='memory_model_required')&&row.failure.executionStarted===false&&row.availableAt>Date.now()));
   },()=> 'Generated intake producers have not committed, or an unclassified writer remains: '+JSON.stringify(observed));
+  const pending=f.read(db=>db.prepare('SELECT i.json,i.state,i.revoked,e.state taskState,e.error,e.attempts,u.external_state,j.id actualJob FROM mm_intakes i JOIN execution_steps e ON e.user_id=i.user_id AND e.id=i.task_id JOIN user_tasks u ON u.user_id=i.user_id AND u.task_id=e.id LEFT JOIN mm_jobs j ON j.user_id=i.user_id AND j.id=i.job_id WHERE i.user_id=?').all(account.userId));assert.equal(pending.length,1);for(const row of pending){assert.equal(row.state,'pending');assert.equal(row.revoked,0);assert.equal(row.taskState,'waiting');assert.equal(row.error,'memory_model_required');assert.equal(row.attempts,0);assert.equal(row.external_state,'none');assert.equal(row.actualJob,null);assert.ok(JSON.parse(String(row.json)).targetIds.length);}assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM mm_jobs WHERE user_id=?').get(account.userId)!.n),0);assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM user_model_usage WHERE user_id=?').get(account.userId)!.n),0);
  };
  await settledIntake(f.a);
  const content=await f.request(f.a.token,'/api/export');assert.equal(content.statusCode,200,content.body);const archive=content.json();

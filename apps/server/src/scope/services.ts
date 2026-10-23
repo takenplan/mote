@@ -13,7 +13,7 @@ export class ScopedServices {
   /** Domains revalidate at each SQL operation and transactional publication.
    * A lifecycle grant can only authorize its named domain and purpose. */
   assertSubject(context:UserDataSubject,domain:string,purpose:LifecyclePurpose){
-    if('credentialId' in context){this.authority.assert(context);return;}
+    if('credentialId' in context){this.authority.assert(context);if(purpose==='delete')this.authority.assertNotOperation(context);else this.authority.assertOperationDomain(context,domain,purpose);return;}
     if(!this.lifecycleAuthority)throw new ScopeError('scope_unavailable',503);
     this.lifecycleAuthority.assert(context);
     if(context.domain!==domain||context.purpose!==purpose)throw new ScopeError('invalid_identity',403);
@@ -35,11 +35,11 @@ export class ScopedServices {
     const domain=(id:string)=>{this.authority.assert(context);const entry=this.users.get(id);if(!entry)throw new ScopeError('scope_unavailable',503);return entry;};
     return Object.freeze({
       require:(id:string)=>{domain(id);},
-      get:<T>(id:string)=>domain(id).create(context) as T,
-      exportUser:async(id:string)=>{const result=await domain(id).lifecycle.exportUser(context);this.authority.assert(context);if(result.domain!==id||result.userId!==context.userId||result.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return result;},
-      deleteUser:(id:string,operationId:string)=>domain(id).lifecycle.deleteUser(context,operationId),
-      restoreUser:(id:string,archive:UserExport,operationId:string)=>{const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return entry.lifecycle.restoreUser(context,archive,operationId);},
-      importUser:(id:string,archive:UserExport,operationId:string)=>{const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);if(typeof entry.lifecycle.importUser!=='function')throw new ScopeError('scope_unavailable',503);const result=entry.lifecycle.importUser(context,archive,operationId);this.authority.assert(context);return result;},
+      get:<T>(id:string)=>{this.authority.assertNotOperation(context);return domain(id).create(context) as T;},
+      exportUser:async(id:string)=>{this.authority.assertOperationDomain(context,id,'export');const result=await domain(id).lifecycle.exportUser(context);this.authority.assert(context);if(result.domain!==id||result.userId!==context.userId||result.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return result;},
+      deleteUser:(id:string,operationId:string)=>{this.authority.assertNotOperation(context);return domain(id).lifecycle.deleteUser(context,operationId);},
+      restoreUser:(id:string,archive:UserExport,operationId:string)=>{this.authority.assertNotOperation(context);const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return entry.lifecycle.restoreUser(context,archive,operationId);},
+      importUser:(id:string,archive:UserExport,operationId:string)=>{this.authority.assertOperationImport(context,id,operationId);const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);if(typeof entry.lifecycle.importUser!=='function')throw new ScopeError('scope_unavailable',503);const result=entry.lifecycle.importUser(context,archive,operationId);this.authority.assert(context);return result;},
     });
   }
   forInstance(context:UserContext){

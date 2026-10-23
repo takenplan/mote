@@ -2,6 +2,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import {captureOcrState} from '@mote/shared';
 import type {VectorTask,VectorScan} from './vector-work.js';
+import {installEvidenceProjection} from './scope/evidence-projection.js';
 
 // A separate process owns the read-only snapshot and all full-corpus CPU work.
 process.once('message',(task:VectorTask)=>{
@@ -9,6 +10,7 @@ process.once('message',(task:VectorTask)=>{
  try{
   db=new DatabaseSync(task.path,{readOnly:true});db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=250;');
   db.function('mote_ocr_status',(json)=>captureOcrState(JSON.parse(String(json))).status);
+  installEvidenceProjection(db);
   const norm=Math.hypot(...task.vector),scans:VectorScan[]=[];
   db.exec('BEGIN');
   for(const query of task.queries){

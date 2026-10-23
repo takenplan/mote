@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
 import {fixture} from './fixtures/scoped-actions.js';
 import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+import {waitForState} from './fixtures/scoped-query-accounts.js';
 
 type Fixture=Awaited<ReturnType<typeof fixture>>;
 const at='2026-10-16T00:00:00Z';
@@ -22,6 +23,26 @@ async function unavailable(f:Fixture,id:string){const created=await f.request(f.
 
 test('manual Todo create/update accepts owned raw screen, file, reference, Material-covered original and archive IDs without processing',async t=>{
  const f=await fixture(t);await setup(f);const screen=await raw(f),file=await raw(f,'file');await source(f,'generated-task-reference','reference');const reference=await item(f,'generated-task-reference','reference','v1',{layer:'reference'}),original=await item(f,'same-source','material-original'),material=await canonical(f,original,'manual-task-material'),archived=await archive(f),references={screen,file,reference,original,material,archived};
+ // Ingress commits its no-model organizers before their asynchronous Material
+ // publications finish. Settle those exact generated originals before measuring
+ // whether the manual Todo requests introduce any execution work.
+ const organizerSources=new Map([[screen,'same-source'],[file,'same-source'],[reference,'generated-task-reference'],[original,'same-source'],[archived,'generated-task-archive']]),originalIds=[...organizerSources.keys()];
+ const organizers=()=>f.read(db=>db.prepare("SELECT e.id,e.kind,e.user_id,e.state,e.error,e.input AS engine_input,u.input AS admitted_input FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id AND u.user_id=e.user_id WHERE e.user_id=? AND e.kind='memory.materials' ORDER BY e.id").all(f.a.userId).map(row=>({...row,input:JSON.parse(String(row.admitted_input))})));
+ const admitted=organizers();assert.equal(admitted.length,5,JSON.stringify(admitted));
+ assert.deepEqual(admitted.map(row=>row.input.captureId).sort(),[...originalIds].sort());
+ for(const row of admitted){assert.equal(row.user_id,f.a.userId);assert.equal(row.input.sourceId,organizerSources.get(row.input.captureId));assert.deepEqual(JSON.parse(String(row.engine_input)),row.input);}
+ const organizerIds=admitted.map(row=>row.id);
+ await waitForState(async()=>organizers(),rows=>{assert.deepEqual(rows.map(row=>row.id),organizerIds,'the exact admitted organizers remain current');return rows.every(row=>row.state==='succeeded');},'five exact owned ingress organizers finish before the manual Todo baseline',8000);
+ const taskIdentities=()=>f.read(db=>db.prepare('SELECT e.id,e.operation_id,e.kind,e.user_id,e.input,e.authorization_epoch,e.grant_id,u.input AS admitted_input FROM execution_steps e LEFT JOIN user_tasks u ON u.task_id=e.id AND u.user_id=e.user_id ORDER BY e.id').all());
+ const assertNoProcessing=()=>{
+  const placeholders=originalIds.map(()=>'?').join(','),facts=f.read(db=>({
+   tasks:db.prepare(`SELECT e.id,e.kind,e.user_id,u.input FROM execution_steps e JOIN user_tasks u ON u.task_id=e.id AND u.user_id=e.user_id JOIN ig_originals o ON o.user_id=e.user_id AND json_extract(u.input,'$.originalRef')='original:'||o.id WHERE e.user_id=? AND e.kind LIKE 'processing.%' AND o.capture_id IN (${placeholders}) ORDER BY e.id`).all(f.a.userId,...originalIds),
+   artifacts:db.prepare(`SELECT a.id,a.original_id,o.capture_id FROM mp_artifacts a JOIN ig_originals o ON o.user_id=a.user_id AND o.id=a.original_id WHERE a.user_id=? AND o.capture_id IN (${placeholders}) ORDER BY a.id`).all(f.a.userId,...originalIds),
+   publications:db.prepare(`SELECT p.original_id,p.material_id,p.revision,o.capture_id FROM mp_publications p JOIN ig_originals o ON o.user_id=p.user_id AND o.id=p.original_id WHERE p.user_id=? AND o.capture_id IN (${placeholders}) ORDER BY p.original_id`).all(f.a.userId,...originalIds),
+  }));
+  assert.deepEqual(facts,{tasks:[],artifacts:[],publications:[]},'manual references do not process their owned originals');
+ };
+ assertNoProcessing();const beforeIdentities=taskIdentities();
  const before=f.read(db=>Number(db.prepare('SELECT count(*) n FROM execution_steps').get()!.n));
  for(const [label,id] of Object.entries(references)){
   const input={id:randomUUID(),title:'Generated task '+label,evidenceIds:[id]},response=await f.request(f.a.token,'/api/todos','POST',input);assert.equal(response.statusCode,201,response.body);const task=response.json();assert.deepEqual(task.evidenceIds,[id]);assert.equal(task.dueAt,null);assert.deepEqual((await f.request(f.a.token,'/api/todos','POST',input)).json(),task);assert.ok(!response.body.includes('GENERATED_PRIVATE_TASK_ORIGINAL'));
@@ -29,7 +50,8 @@ test('manual Todo create/update accepts owned raw screen, file, reference, Mater
   assert.equal((await f.request(f.b.token,'/api/todos','POST',{title:'Generated foreign task',evidenceIds:[id]})).statusCode,404);
  }
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM execution_steps').get()!.n)),before);
- await f.restart();const task=await plain(f),updated=await f.ok(f.a.token,'/api/todos/'+task.id,'PATCH',{version:task.version,evidenceIds:Object.values(references)});assert.deepEqual(updated.evidenceIds,Object.values(references));
+ assert.deepEqual(taskIdentities(),beforeIdentities,'manual Todo requests preserve every execution task identity');assertNoProcessing();
+ await f.restart();const task=await plain(f),updated=await f.ok(f.a.token,'/api/todos/'+task.id,'PATCH',{version:task.version,evidenceIds:Object.values(references)});assert.deepEqual(updated.evidenceIds,Object.values(references));assertNoProcessing();
 });
 
 for(const control of ['disabled-source','deleted-source','deleted-capture','superseded','deleted-revision','redacted'])test(`manual Todo evidence rejects ${control} for create and update`,async t=>{

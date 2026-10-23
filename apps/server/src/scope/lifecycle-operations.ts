@@ -3,7 +3,7 @@ import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {AuthError} from './accounts.js';
 import {ScopeError} from './baseline.js';
-import type {UserContext} from './context.js';
+import type {UserContext,OperationIdentityVerifier,VerifiedOperationIdentity} from './context.js';
 import type {ScopedRuntime} from './http.js';
 import {LifecycleAuthority,type LifecycleContext,type UserExport,type DeletionReceipt} from './lifecycle.js';
 import {PrivateDataError,PrivateCursor} from './private-data-sql.js';
@@ -25,6 +25,10 @@ const deletionOrder=['execution','mcp','connectors','ask-automation','ask','proc
  * are internal locators for one approved operation/domain/purpose only. */
 export class LifecycleOperations {
  readonly authority:LifecycleAuthority;
+ readonly importVerifier:OperationIdentityVerifier={
+  verify:async grantId=>{try{return this.importIdentity(grantId);}catch{return undefined;}},
+  isCurrent:identity=>{try{const current=this.importIdentity(identity.credentialId);return JSON.stringify(current)===JSON.stringify(identity);}catch{return false;}},
+ };
  private readonly cursorKey:string;
  private runtime:ScopedRuntime|undefined;
  private readonly active=new Map<string,Promise<void>>();
@@ -45,6 +49,16 @@ export class LifecycleOperations {
  }
  bind(runtime:ScopedRuntime){if(this.runtime)throw new ScopeError('undeclared_scope',500);this.runtime=runtime;}
  private host():ScopedRuntime{if(!this.runtime||this.closed)throw new ScopeError('scope_unavailable',503);return this.runtime;}
+ private importIdentity(grantId:string):VerifiedOperationIdentity{
+  const runtime=this.host(),row=this.db.prepare("SELECT o.* FROM lifecycle_operations o JOIN lifecycle_domains d ON d.operation_id=o.id WHERE d.grant_id=? AND d.domain='configuration' AND o.kind='import' AND o.state='working'").get(grantId) as Operation|undefined;
+  if(!row||!row.sha256||!runtime.accounts)throw new ScopeError('invalid_identity',401);
+  runtime.accounts.assertAccountEnabled(row.user_id,row.epoch);
+  const admitted=this.db.prepare('SELECT domain,state FROM lifecycle_domains WHERE operation_id=? ORDER BY domain').all(row.id);
+  const names=admitted.map(item=>String(item.domain)),writeDomains=admitted.filter(item=>item.state!=='preserved').map(item=>String(item.domain));
+  const current=runtime.services.personalImportDomains();
+  if(JSON.stringify(names)!==JSON.stringify((JSON.parse(row.domains) as string[]).sort())||JSON.stringify(names)!==JSON.stringify(current.map(item=>item.id))||current.some(item=>item.mode!==(writeDomains.includes(item.id)?'merge':'preserve')))throw new ScopeError('invalid_identity',401);
+  return {deploymentId:this.deploymentId,userId:row.user_id,credentialId:grantId,authorizationEpoch:row.epoch,administrator:false,operation:{id:row.id,purpose:'personal-import',digest:row.sha256,readDomains:[...new Set(['configuration',...writeDomains])].sort(),writeDomains}};
+ }
  private log(event:string,fields:Parameters<NonNullable<ScopedRuntime['diagnostics']>['record']>[1]={},level:'debug'|'info'|'warn'|'error'='info'){this.runtime?.diagnostics?.record(event,fields,level);}
  private current(context:LifecycleContext){return !this.closed&&context.deploymentId===this.deploymentId&&context.purpose==='delete'&&Boolean(this.db.prepare("SELECT 1 FROM lifecycle_operations o JOIN lifecycle_domains d ON d.operation_id=o.id JOIN auth_account_deletions a ON a.user_id=o.user_id AND a.operation_id=o.id WHERE o.id=? AND o.user_id=? AND o.kind='delete' AND o.state IN ('working','pending','result_unknown','failed','blocked') AND d.domain=? AND d.state<>'complete'").get(context.operationId,context.userId,context.domain));}
  private transaction<T>(work:()=>T){this.db.exec('BEGIN IMMEDIATE');try{const value=work();this.db.exec('COMMIT');return value;}catch(error){this.db.exec('ROLLBACK');throw error;}}
@@ -117,13 +131,14 @@ export class LifecycleOperations {
   const prior=this.row(id);if(prior){const own=this.ownImport(context,id);if(own.sha256!==sha256)throw new AuthError('archive_conflict',409);if(own.state!=='failed')return this.receipt(own);this.update(id,'working');}
   else this.transaction(()=>{runtime.authority.assert(context);this.create(id,context.userId,'import',context.authorizationEpoch,domains);this.db.prepare('UPDATE lifecycle_operations SET bytes=?,sha256=? WHERE id=?').run(bytes.length,sha256,id);for(const domain of plan.filter(value=>value.mode==='preserve'))this.db.prepare("UPDATE lifecycle_domains SET state='preserved' WHERE operation_id=? AND domain=?").run(id,domain.id);});
   this.log('lifecycle.import_started',{userId:context.userId,operationId:id,bytes:bytes.length,count:domains.length});
-  this.launch(id,()=>this.writeImport(context,id,archive));return this.importReceipt(context,id);
+  const grant=String(this.db.prepare("SELECT grant_id FROM lifecycle_domains WHERE operation_id=? AND domain='configuration'").get(id)!.grant_id);
+  this.launch(id,async()=>{const operation=await runtime.authority.restoreOperation(grant);await this.writeImport(operation,id,archive);});return this.importReceipt(context,id);
  }
  cancelImport(context:UserContext,id:string){const row=this.ownImport(context,id);if(row.state==='completed')throw new AuthError('archive_already_committed',409);this.update(id,'cancelled');this.log('lifecycle.import_cancelled',{userId:context.userId,operationId:id});return this.importReceipt(context,id);}
  private async writeImport(context:UserContext,id:string,archive:z.infer<typeof personalArchive>){
-  const runtime:ScopedRuntime=this.host(),cleanup:Array<()=>void>=[],assert=()=>{runtime.authority.assert(context);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);};
+  const runtime:ScopedRuntime=this.host(),cleanup:Array<()=>void>=[],assert=()=>{runtime.authority.assert(context);const claim=runtime.authority.operation(context);if(!claim||claim.id!==id)throw new AuthError('archive_conflict',409);if(this.closed||this.row(id)?.state!=='working')throw new AuthError('archive_cancelled',409);},assertArchive=()=>{assert();if(runtime.authority.operation(context)!.digest!==hash(JSON.stringify(archive)))throw new AuthError('archive_conflict',409);};
   try{
-   assert();const policy=runtime.services.personalImportDomains(),merged=policy.filter(value=>value.mode==='merge').map(value=>value.id).sort((a,b)=>{const x=importOrder.indexOf(a),y=importOrder.indexOf(b);return (x<0?importOrder.length:x)-(y<0?importOrder.length:y)||a.localeCompare(b);});
+   assertArchive();const policy=runtime.services.personalImportDomains(),merged=policy.filter(value=>value.mode==='merge').map(value=>value.id).sort((a,b)=>{const x=importOrder.indexOf(a),y=importOrder.indexOf(b);return (x<0?importOrder.length:x)-(y<0?importOrder.length:y)||a.localeCompare(b);});
    await runtime.services.forUser(context).exportUser('configuration');assert();
    // Verify actual current provider bodies outside SQLite. No asynchronous
    // hook, native provider or model runs inside the publication transaction.
@@ -131,7 +146,7 @@ export class LifecycleOperations {
     await runtime.services.forUser(context).exportUser('configuration');assert();
     for(const domain of merged){await runtime.services.forUser(context).exportUser(domain);assert();}
    });
-   this.transaction(()=>{assert();if(!snapshot.current()||JSON.stringify(policy)!==JSON.stringify(runtime.services.personalImportDomains()))throw new AuthError('archive_changed',409);this.importPublication!(context,()=>{for(const domain of merged){assert();const rollback=runtime.services.forUser(context).importUser(domain,{...archive.domains.find(item=>item.domain===domain)!,payload:archive.domains.find(item=>item.domain===domain)!.payload},id);if(rollback!==undefined){if(typeof rollback!=='function')throw new ScopeError('undeclared_scope',500);cleanup.push(rollback);}this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=? AND domain=?").run(id,domain);}assert();});this.update(id,'completed');});
+   this.transaction(()=>{assertArchive();if(!snapshot.current()||JSON.stringify(policy)!==JSON.stringify(runtime.services.personalImportDomains()))throw new AuthError('archive_changed',409);this.importPublication!(context,()=>{for(const domain of merged){assert();const rollback=runtime.services.forUser(context).importUser(domain,{...archive.domains.find(item=>item.domain===domain)!,payload:archive.domains.find(item=>item.domain===domain)!.payload},id);if(rollback!==undefined){if(typeof rollback!=='function')throw new ScopeError('undeclared_scope',500);cleanup.push(rollback);}this.db.prepare("UPDATE lifecycle_domains SET state='complete' WHERE operation_id=? AND domain=?").run(id,domain);}assertArchive();});this.update(id,'completed');});
    this.log('lifecycle.import_completed',{userId:context.userId,operationId:id,count:merged.length});
   }catch(error){let clean=true;for(const rollback of cleanup.reverse())try{rollback();}catch{clean=false;}if(this.closed||this.row(id)?.state==='cancelled')return;const code=!clean?'archive_cleanup_required':error instanceof AuthError?error.code:error instanceof PrivateDataError&&error.code==='conflict'?'archive_conflict':error instanceof ScopeError?'domain_unavailable':'archive_invalid';this.update(id,'failed',code);this.log('lifecycle.import_failed',{userId:context.userId,operationId:id,category:code,errorName:error instanceof Error?error.name:undefined,detail:error instanceof Error?error.message:undefined},'error');}
  }

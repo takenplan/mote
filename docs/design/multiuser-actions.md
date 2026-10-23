@@ -1,5 +1,9 @@
 # M12 Actions、待办与日程提议隔离
 
+当前配置到自动化的行为由[统一用户旅程 ADR](../adr-unified-user-journeys.md)规定。
+以下历史候选与验证记录保留其原始范围，不代表后来版本已通过全部集成检查。
+
+
 M12 在独立 feature branch 实现，未改 `main` 或远端集成分支。已组合 M07 PR136
 `cd7a306cce0f6cd5fec3c9e91e6dee0761352115`、M08 PR137
 `58944f00837c89bc1d302ecd7be7a568db4abe44`；M11 PR138 最终
@@ -33,6 +37,20 @@ EXCEPTION：旧 `actions.test.ts`、`todos.test.ts` 只表征历史算法，不�
 UNKNOWN：真实模型质量、物理设备/日历、真实外部账户写入、部署及后续客户端完整 UI 仍未验证。
 M16 必要归档/恢复接缝已在合成实例验证，不将其扩大为真实部署或全部 17 模块已交付。
 原项目的单用户表保留供迁移与旧测试，不覆盖或删除原数据；不把旧表自动认领给首个登录用户。
+
+## 配置、发现意图与模型等待
+
+通用配置接口和专用 Actions 页面通过同一配置 effect 协调 watcher，不再依赖某个
+路由额外调用 enable。普通时区或启停参数不改变权限 generation；新批次使用新设置，
+已准入批次保留原输入。显式取消、来源撤权、账号停用及删除仍阻止迟到发布。
+
+保存值与实际授权分开展示。默认/文件中的 enabled=true 不创建 watcher；已有授权可由
+文件重载调整或暂停。对未授权或已停止状态的显式开启可携带 `actions:enabled` 意图，
+专页和通用编辑器均显示实际发现状态。设备 review grants 和逐条日历批准保持独立。
+
+模型就绪取决于实际阶段：完整片段理解需要 Memory，直接原文或关系判断需要 Chat。
+缺少必需模型时保留等待原因，不把它翻译为来源变化或撤权；空 action cues 仍无需
+Chat 请求。配置恢复后已有 watcher 按原调度接续，不选择替代模型。
 
 ## 批准与设备投递合同
 
@@ -75,7 +93,7 @@ OwnerQuestions 的选择回复用现有 `{requestId,expectedRevision,action:'ans
 | 原消费点 | 当前合同 |
 | --- | --- |
 | `Actions.tsx` 列表 | `GET /api/actions?cursor=<encoded opaque string>`；省略、空串或 `0` 为首屏，`nextCursor:string|null`；其余列表字段保留。 |
-| Actions 设置 | `PUT /api/actions/settings` 保留 `{revision,authorizationRevision,settings}`；配置失败但撤权已提交时返回 `authorizationRevoked/revokedDeviceIds/authorizationRevision`。 |
+| Actions 设置 | `PUT /api/actions/settings` 使用 `{revision,authorizationRevision,settings,automationIntent?}`；配置失败但撤权已提交时返回 `authorizationRevoked/revokedDeviceIds/authorizationRevision`。 |
 | 审批弹窗 | proposal.version 创建 review；呈现 reviewedAction；使用 question.revision 作为 OwnerQuestions expectedRevision。fingerprint 是服务端绑定内容的标识，不是 credential；epoch 不由客户端选择或提交。 |
 | 撤销/并发 | `/cancel {version}` 撤销已批准确切操作；旧版本或不同并发回复冲突 409；跨用户对象 404；同 requestId/同内容收据幂等。 |
 | 旧 `/api/devices` | M03 `GET /api/ingress/devices`，`x-mote-ingress-version: 3`，`{items:[{id,name,platform}]}` 映射到 UI 的 deviceId/deviceName；不恢复旧全局路由。 |
@@ -84,7 +102,7 @@ OwnerQuestions 的选择回复用现有 `{requestId,expectedRevision,action:'ans
 ## 任务、恢复与公开范围
 
 M05 `actions.watch` 是用户开启发现时签发的 durable authorization，沿原 15 秒发现周期等待；
-关闭发现只停止长期发现任务；既有一次批准继续受内容、来源、目标、设备 review grant、账号状态及确切取消约束。这保留旧 `Actions.claim` 与 `tick` 分开的语义，不把发现开关提升成另一种批准。
+关闭发现暂停新增准入，保留长期 watcher 的授权和游标；已准入的理解与关系任务沿用固定输入和时区继续，既有一次批准继续受内容、来源、目标、设备 review grant、账号状态及确切取消约束。这保留旧 `Actions.claim` 与 `tick` 分开的语义，不把发现开关提升成另一种批准。
 `actions.extract` 固定 generation、时区、sourceIds、原文范围与模型费用快照；
 `actions.delivery` 固定批准操作、设备目标和外部 issuance。父任务停止后其子任务不能发布。
 任务输入只保留有界 locator，不保留原文、凭据或 provider 正文。

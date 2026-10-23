@@ -32,7 +32,7 @@ export class ScopedContentStorage {
  private readonly unregister:()=>Promise<void>;
  private closing?:Promise<void>;
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string,private readonly configuration:Configurations,private readonly execution:TaskExecution){
-  configuration.registerDomain('storage',subject=>({id:'storage',schema:policy,defaultValue:{contentEncryptionEnabled:false},resolve:raw=>raw,prepare:next=>{runtime.authority.assert(subject);const candidate=this.preparePolicy(subject.userId,policy.parse(next).contentEncryptionEnabled);return {...candidate,publish:()=>{runtime.authority.assert(subject);candidate.publish();}};}}));
+  configuration.registerDomain('storage',subject=>{const assertDomain=configuration.domainSubjectGuard(subject);return ({id:'storage',schema:policy,defaultValue:{contentEncryptionEnabled:false},resolve:raw=>raw,prepare:next=>{assertDomain();const candidate=this.preparePolicy(subject.userId,policy.parse(next).contentEncryptionEnabled);return {...candidate,publish:()=>{assertDomain();candidate.publish();}};}});});
   this.unregister=execution.register({kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,
    parseInput:raw=>z.object({operationId:z.string().uuid()}).strict().parse(raw),resources:()=>[{scope:'user',key:kind}],
    authorizeInput:context=>{runtime.authority.assert(context);if(this.enabled(context.userId))throw new ConfigServiceError('config_conflict');},

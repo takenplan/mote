@@ -309,11 +309,12 @@ export class ImportStore {
       for(const input of attempt.inputs)await this.materialize(input);
       const decoded=await formatWork({kind:'plain',inputs:attempt.inputs.map(input=>({path:input.path,file:this.files.get(input.fileId)})),createdAt:job.createdAt,manifest:join(attempt.workspace,'prepared.jsonl')},signal);
       signal?.throwIfAborted();grant.assert();
+      const counts:ImportDispositions['counts']={parsed:0,attachment:0,container:0,excluded:0,unsupported:0},items=decoded.outcomes.map(outcome=>{const file=this.files.get(outcome.fileId),status=outcome.status==='decoded'?'parsed' as const:'unsupported' as const;counts[status]++;return {fileId:file.id,path:file.relativePath,status,reason:outcome.reason};});
+      job.warnings=decoded.warnings;job.dispositions=this.dispositions(job,{counts,items});
       if(!decoded.count&&!job.media?.length&&!job.excludedFiles?.length)return grant.commit(()=>{job.status='unsupported';job.processingStatus='blocked';job.error='Original files are archived; no searchable text or media work was produced.';this.save(job);return this.public(job);});
       const prepared=await this.stagePrepared(job,attempt,join(attempt.workspace,'prepared.jsonl'),signal);
       job.manifestHash=prepared.hash;job.summary='Source document text archived directly; author and original dates remain unspecified.';job.warnings=decoded.warnings;
       job.preview={count:decoded.count+(job.media?.length??0),samples:decoded.samples};job.progress.total=job.preview.count;job.status='awaiting_confirmation';job.processingStatus='preview_ready';
-      job.dispositions=this.dispositions(job,{counts:{parsed:attempt.inputs.length,attachment:0,container:0,excluded:0,unsupported:0},items:attempt.inputs.map(input=>this.files.get(input.fileId)).map(file=>({fileId:file.id,path:file.relativePath,status:'parsed',reason:'Deterministic document decoder; no attribution or original date inferred'}))});
       job.reviewDecision=decoded.partial?
         {confidence:'low',ambiguous:false,reason:'Document decoding reported incomplete coverage; review the available text before publishing.'}:
         {confidence:'high',ambiguous:false,reason:'Deterministic document decoding preserved original text without inferred attribution or dates.'};

@@ -525,7 +525,7 @@ it.each([0,1])('E preserves storage bookkeeping when packed image %i fails verif
   expect(queue.recordForHistory(events[0].id)?.attempts).toBe(broken===0?0:1);
   expect(queue.recordForHistory(events[1].id)?.attempts).toBe(0);
   const starts=journal.record.mock.calls.filter(args=>args[0]==='UPLOAD'&&args[1]==='STARTED');expect(starts).toHaveLength(broken===0?0:1);
-  if(broken===0)expect(journal.record).toHaveBeenCalledWith('QUEUE','STORAGE');
+  if(broken===0)expect(journal.record).toHaveBeenCalledWith('QUEUE','STORAGE',{detail:'Error'});
 });
 
 

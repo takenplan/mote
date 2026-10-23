@@ -31,16 +31,14 @@ export class ProcessingPerception {
  private readonly previews=new Map<string,{user:string;epoch:number;expires:number;query:Query;watermark:number}>();
  private imageReader?: (context:UserContext,id:string,prepared?:{automatic:boolean;understandingEnabled:boolean;enabled:boolean})=>Promise<{jobs:{name:string;state:string;error?:string}[];automatic:boolean}>;
  bindImages(reader:NonNullable<ProcessingPerception['imageReader']>){this.imageReader=reader;}
- private readonly profileChanges=new Set<string>();
- preserveImagePlan(context:UserContext){return this.profileChanges.has(context.userId);}
  private closed=false;
  private readonly stop:()=>Promise<void>;
- constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly host:()=>ProcessingHost,changed:(context:UserContext)=>void){
+ constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly host:()=>ProcessingHost){
   for(const [pool,limit] of [['processing.pipeline',4],['processing.image-stage',4],['processing.ocr',2],['processing.analysis',2]] as const)execution.engine.configurePool(pool,{lane:()=> 'background',concurrency:{background:()=>limit,interactive:()=>limit},partition:step=>this.capacity(step)});
-  configuration.registerDomain('perception',subject=>({id:'perception',schema:perceptionConfigurationSchema,defaultValue:defaultPerceptionConfiguration(),resolve:raw=>raw,fields:[{path:'enabled',effect:'immediate'},{path:'concurrency',effect:'next-admission'},...['understandingEnabled','providerRevision','allowExternalProcessing','allowQueryImages'].map(path=>({path,effect:'next-request' as const}))],prepare:next=>{
-   const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_perception_state WHERE user_id=$user'),value=perceptionConfigurationSchema.parse(next),json=JSON.stringify(value);let published=false;
-   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_perception_state VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_perception_state SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_perception_state WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&this.executionStamp(before?perceptionConfigurationSchema.parse(JSON.parse(String(before.json))):defaultPerceptionConfiguration())!==this.executionStamp(value)){const preserved=this.profileChanges.has(subject.userId);this.profileChanges.add(subject.userId);try{changed(subject);}finally{if(!preserved)this.profileChanges.delete(subject.userId);}}}};
-  }}));
+  configuration.registerDomain('perception',subject=>{const assert=configuration.domainSubjectGuard(subject);return ({id:'perception',schema:perceptionConfigurationSchema,defaultValue:defaultPerceptionConfiguration(),resolve:raw=>raw,fields:[{path:'enabled',effect:'immediate'},{path:'concurrency',effect:'next-admission'},...['understandingEnabled','providerRevision','allowExternalProcessing','allowQueryImages'].map(path=>({path,effect:'next-request' as const}))],prepare:next=>{
+   const sql=new PrivateSql(db,subject.userId,assert),before=sql.get('SELECT json FROM mp_perception_state WHERE user_id=$user'),value=perceptionConfigurationSchema.parse(next),json=JSON.stringify(value);let published=false;
+   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_perception_state VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_perception_state SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_perception_state WHERE user_id=$user');}}};
+  }});});
   this.stop=execution.register({kind:'processing.image-backfill',pool:'processing.image-backfill',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,publicProgress:publicBackfillProgress,parseInput:raw=>z.object({id:z.string().uuid()}).strict().parse(raw),authorizeInput:(context,input)=>this.load(context,String(input.id)),resources:input=>[{scope:'user',key:'image-backfill:'+input.id}],execute:async run=>{
    for(;;){run.grant.assert();const job=this.load(run.context,String(run.task.input.id));if(job.state==='succeeded')return {jobId:job.id,queued:job.queued};
     if(job.cursor<job.watermark){const rows=this.candidates(run.context,job.query,job.watermark,job.cursor,200);
@@ -73,7 +71,7 @@ export class ProcessingPerception {
  private sql(context:UserContext){const sql=new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));if(this.closed||sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new ScopeError('invalid_identity',401);return sql;}
  retire(userId:string){for(const [token,preview]of this.previews)if(preview.user===userId)this.previews.delete(token);}
  value(sql:PrivateSql):PerceptionConfiguration{const row=sql.get('SELECT json FROM mp_perception_state WHERE user_id=$user');return row?perceptionConfigurationSchema.parse(JSON.parse(String(row.json))):defaultPerceptionConfiguration();}
- private executionStamp(value:PerceptionConfiguration){return identityHash([value.enabled,value.understandingEnabled,value.providerRevision,value.allowExternalProcessing]);}
+ executionStamp(value:PerceptionConfiguration){return identityHash([value.enabled,value.understandingEnabled,value.providerRevision,value.allowExternalProcessing]);}
  stamp(sql:PrivateSql,ref:string){return String(sql.get('SELECT mime FROM ig_originals WHERE user_id=$user AND id=?',ref.slice(9))?.mime??'').startsWith('image/')?this.executionStamp(this.value(sql)):undefined;}
  private stageKind(step:Pick<ExecutionStep,'kind'|'input'>){
   if(step.kind==='processing.ocr')return 'ocr';
@@ -122,7 +120,7 @@ export class ProcessingPerception {
   const input=z.object({revision:z.number().int().nonnegative().safe(),settings:imageSettingsSchema}).strict().parse(raw),previous=await this.view(context),{ocrEndpoint,ocrProcessorId,profileId,...settings}=input.settings,patches:Record<string,unknown>={perception:settings};
   if(profileId&&profileId!==previous.settings.profileId){const page=await this.host().policies.view(context),policy=page.policy;if(!policy.profiles.some(profile=>profile.id===profileId))throw new PrivateDataError('invalid_data');const rules=policy.rules.filter(rule=>!(rule.type==='image/*'&&!rule.sourceId));patches['filePolicy']={policy:{...policy,rules:[...rules,{type:'image/*',profileId}]}};}
   else if(ocrEndpoint!==previous.settings.ocrEndpoint||ocrProcessorId!==previous.settings.ocrProcessorId)throw new PrivateDataError('invalid_data');
-  if(patches.filePolicy)this.profileChanges.add(context.userId);try{await this.configuration.forUser(context).replaceViews(patches,input.revision);}finally{this.profileChanges.delete(context.userId);}return this.view(context);
+  await this.configuration.forUser(context).replaceViews(patches,input.revision,patches.filePolicy?{processingPreserveImagePlan:true}:{});return this.view(context);
  }
  async preview(context:UserContext,raw:unknown){
   await this.configuration.forUser(context).view();const query=historicalSchema.parse(raw??{}),sql=this.sql(context),watermark=Number(sql.get('SELECT COALESCE(MAX(rowid),0) position FROM ig_originals WHERE user_id=$user')!.position),now=Date.now();

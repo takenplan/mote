@@ -89,7 +89,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     lifecycle=!options.verifier?new LifecycleOperations(storage.db,storage.deploymentId,config.maxExportBytes):undefined;
     const lifecycleAuthority=options.lifecycleAuthority??lifecycle?.authority;
     const taskAuthorization=!options.verifier?new TaskAuthorization(storage.db,accounts,storage.deploymentId):undefined;
-    const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization,!options.verifier?accounts.mcpVerifier:undefined),services=new ScopedServices(authority,lifecycleAuthority);
+    const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization,!options.verifier?accounts.mcpVerifier:undefined,lifecycle?.importVerifier),services=new ScopedServices(authority,lifecycleAuthority);
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime:ScopedRuntime={app,authority,services,...(!options.verifier?{accounts}:{})};
     lifecycle?.bind(runtime);

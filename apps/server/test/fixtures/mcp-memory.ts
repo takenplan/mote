@@ -13,6 +13,7 @@ import {materialId} from '../../src/materials.js';
 import {writeMessagesResponse} from '../../../../scripts/fixtures/messages-provider.js';
 import {generatedMemoryRelease} from './scoped-memory-release.js';
 import {fixture,item} from './mcp.js';
+import {memoryTargetCoverageKeys} from './memory-target-coverage.js';
 
 export const memoryText=(owner:string)=>'GENERATED_MCP_MEMORY_'+owner+': Nora prefers generated tea.';
 export async function memoryFixture(t:TestContext,external=false){
@@ -20,7 +21,7 @@ export async function memoryFixture(t:TestContext,external=false){
  const provider=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;const owner=String(req.headers['x-api-key']).includes('GENERATED_A_KEY')?'A':'B';requests.push({owner,raw});
   const scripted=modelReplies.get(owner);if(scripted){scripted(raw,res);return;}
-  const ids=[...new Set(raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}/g)??[])],id=ids[0],keys=[...new Set([...raw.matchAll(/\\?"key\\?"\s*:\s*\\?"(member_[0-9]+)/g)].map(match=>match[1]))];
+  const ids=[...new Set(raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}/g)??[])],id=ids[0],keys=memoryTargetCoverageKeys(JSON.parse(raw));
   if(raw.includes('Host Memory deletion review.')){writeMessagesResponse(res,{stage:requests.length,text:JSON.stringify({answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]}),citationIds:[]})});return;}
   const memories=id?[{title:'Generated '+owner,statement:`Nora prefers generated tea. [${id}]`,uncertainty:'Synthetic attributed statement only',admission:{layer:'memory',reason:'Synthetic explicitly expressed preference',scope:'Nora in generated fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:memoryText(owner)}]}]:[];
   writeMessagesResponse(res,{stage:requests.length,model:'generated-memory',text:JSON.stringify({answer:JSON.stringify({memories,...(keys.length?{coverage:keys.map((key,index)=>({key,state:index===0&&memories.length?'checked':'no_candidates',candidateIndexes:index===0&&memories.length?[0]:[]}))}:{})}),citationIds:id?[id]:[]})});

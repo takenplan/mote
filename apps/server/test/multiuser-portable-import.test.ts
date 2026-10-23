@@ -61,7 +61,7 @@ test('actual Memory and a completed conversation deduplicate without changing cu
  const memoryId=saved.domains.find((domain:any)=>domain.domain==='memory').payload.records[0].id,removed=await f.request(f.a.token,'/api/memories/'+memoryId,'DELETE');assert.equal(removed.statusCode,200,removed.body);await f.terminal(removed.json().cleanupTaskId);
  const currentGrants=f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),currentCalls=f.requests.length,restored=await imported(f,saved);assert.equal(restored.state,'completed',JSON.stringify(restored));assert.match((await f.request(f.a.token,'/api/conversations/'+conversationId)).body,/Generated portable saved answer/);assert.equal(f.read(db=>JSON.parse(String(db.prepare('SELECT json FROM mm_records WHERE user_id=? AND id=?').get(f.a.userId,memoryId)!.json)).staleReason),'restored_archive');assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),currentGrants);await delay(50);assert.equal(f.requests.length,currentCalls);
 });
-for(const mode of ['cancel','disable','logout','restart'] as const)test('a real import preflight held after its actual domain read is fenced by '+mode,async t=>{
+for(const mode of ['cancel','disable','logout','restart'] as const)test('a real import preflight held after its actual domain read respects '+mode,async t=>{
  const f=await scopedMemoryFixture(t),captured=await f.upload(f.a,'A'),saved=await archive(f),captureId=captured.captures[0].id,id=randomUUID();assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);
  let entered!:()=>void,release!:()=>void;const ready=new Promise<void>(resolve=>entered=resolve),gate=new Promise<void>(resolve=>release=resolve),entry=(f.node.services as any).users.get('memory'),read=entry.lifecycle.exportUser;
  entry.lifecycle.exportUser=async(subject:any)=>{const result=await read(subject);entered();await gate;return result;};f.beforeClose(()=>release());
@@ -71,7 +71,8 @@ for(const mode of ['cancel','disable','logout','restart'] as const)test('a real 
  if(mode==='logout')assert.equal((await f.request(f.a.token,'/api/auth/logout','POST',{})).statusCode,200);
  if(mode==='restart'){const restarting=f.restart();for(let attempt=0;!(f.node.lifecycle as any).closed&&attempt<100;attempt++)await delay(1);assert.equal((f.node.lifecycle as any).closed,true);release();await restarting;}else release();
  for(let attempt=0;attempt<300;attempt++){if(f.read(db=>db.prepare('SELECT state FROM lifecycle_operations WHERE id=?').get(id)!.state)!=='working')break;await delay(5);}
- assert.notEqual(f.read(db=>db.prepare('SELECT state FROM lifecycle_operations WHERE id=?').get(id)!.state),'completed');assert.equal(f.read(db=>db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=? AND id=?').get(f.a.userId,captureId)!.n),0);
+ const state=f.read(db=>db.prepare('SELECT state FROM lifecycle_operations WHERE id=?').get(id)!.state),restored=f.read(db=>db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=? AND id=?').get(f.a.userId,captureId)!.n);
+ if(mode==='logout'){assert.equal(state,'completed');assert.equal(restored,1);}else{assert.notEqual(state,'completed');assert.equal(restored,0);}
  if(mode==='disable'||mode==='logout')assert.equal((await f.request(f.a.token,'/api/portable/imports/'+id)).statusCode,401);
  if(mode==='restart'){const receipt=await f.request(f.a.token,'/api/portable/imports/'+id);assert.equal(receipt.statusCode,200,receipt.body);assert.equal(receipt.json().error,'interrupted');assert.equal((await imported(f,saved,id)).state,'completed');}
 });

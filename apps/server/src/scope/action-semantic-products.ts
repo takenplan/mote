@@ -36,7 +36,7 @@ export class ActionSemanticProducts{
  }
  private row(context:UserContext,ref:{id:string;revision:string}){const row=this.host.sql(context).get('SELECT * FROM ac_semantic_products WHERE user_id=$user AND id=? AND revision=?',ref.id,ref.revision) as Row|undefined;if(!row)throw missing();return row;}
  private assertSegment(context:UserContext,segment:ActionSegment){const record=this.host.evidence(context).evidence([segment.representativeIds[0]!])[0]!,current=this.segment(context,record);if(!current||current.id!==segment.id||current.revision!==segment.revision)throw missing();}
- private current(context:UserContext,ref:{id:string;revision:string}){const row=this.row(context,ref),stored=parse<Stored>(row.input),state=this.host.state(context);if(!JSON.parse(state.settings).enabled||stored.generation!==state.generation||stored.parentTaskId&&!['waiting','running'].includes(this.host.execution.engine.get(stored.parentTaskId)?.state??''))throw missing();this.host.assertProof(context,parse(row.proof),stored.sourceIds);this.assertSegment(context,stored.segment);return row;}
+ private current(context:UserContext,ref:{id:string;revision:string}){const row=this.row(context,ref),stored=parse<Stored>(row.input),state=this.host.state(context);if(stored.generation!==state.generation||stored.parentTaskId&&!['waiting','running'].includes(this.host.execution.engine.get(stored.parentTaskId)?.state??''))throw missing();this.host.assertProof(context,parse(row.proof),stored.sourceIds);this.assertSegment(context,stored.segment);return row;}
  /** The exact old observation grouping, not a semantic/type classifier. File
   * products and V2 field pages retain their original direct-range branch. */
  segment(context:UserContext,record:CaptureRecord):ActionSegment|undefined{

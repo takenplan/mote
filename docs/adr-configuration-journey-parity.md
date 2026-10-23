@@ -1,5 +1,11 @@
 # ADR: Preserve configuration and usage journeys under account scope
 
+Current contract (2026-10-23): [Unified account host and user journeys](adr-unified-user-journeys.md)
+refines historical parity requirements. Preserve accepted user journeys and
+isolation; historical implementation structure is not an acceptance criterion.
+Automation intent, immutable admitted windows and accepted-operation authority
+follow that ADR. Unrelated credential, recovery and download decisions below remain.
+
 Status: accepted, 2026-10-18. The owner requires the pre-multi-user operations,
 steps and behavior to remain, with only login and necessary resource isolation
 added. This refines the [shared-flow decision](adr-shared-business-flows.md) and

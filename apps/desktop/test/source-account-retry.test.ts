@@ -77,7 +77,7 @@ it.each([429,503,507])('retains only a transient HTTP%s reference while accepted
 it('preserves the current version and prior ACK when a source is paused during a real upload',async()=>{
  const f=await fixture(),{queue}=await f.engine();await stage(queue);let paused=false;
  vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{if(new URL(String(input)).pathname.endsWith('/uploads')&&!paused){const item=(await inspect(init)).revision.item;if(item.externalId==='generated-1'){paused=true;expect((await f.request(f.a,'/api/sources/'+f.source.id,'PATCH',{enabled:false})).statusCode).toBe(200);}}return f.fetcher(input,init);});
- await expect(queue.flush(f.source,f.transport())).rejects.toMatchObject({httpStatus:409});expect(queue.status()).toMatchObject({pending:2,blocked:0});
+ expect(await queue.flush(f.source,f.transport())).toBe('paused');expect(queue.status()).toMatchObject({pending:2,blocked:0});
  vi.stubGlobal('fetch',f.fetcher);expect((await f.request(f.a,'/api/sources/'+f.source.id,'PATCH',{enabled:true})).statusCode).toBe(200);await queue.flush(f.source,f.transport());expect(queue.status()).toMatchObject({pending:0,blocked:0});
 });
 

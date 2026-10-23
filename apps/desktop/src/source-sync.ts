@@ -11,6 +11,7 @@ import { PriorityScheduler } from './priority-scheduler';
 import {UploadSlice,UploadSliceYield,requestBytes} from './upload-slice';
 import {requireIngressReceipt} from './ingress-protocol';
 import {ingressKey,requireAccountReceipt} from './ingress-client';
+import {requireSourceRegistration,SourcePausedFailure,isUploadExpired} from './ingress-outcome';
 
 export const sourceHash = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex');
 export async function atomicSourceJson(path: string, value: unknown): Promise<void> { await sourceWork.run({ kind: 'json-write', path, value }); }
@@ -199,8 +200,7 @@ export class SourceSync {
   async flush(source: SourceDefinition, request: SourceRequest, signal?: AbortSignal, observer?: SourceUploadObserver): Promise<'ready' | 'paused'> {
     signal?.throwIfAborted();
     const registered = await request(request.account?'/api/ingress/sources':'/api/sources', source, 'POST', signal) as { id?: unknown; enabled?: unknown };
-    if (!registered || registered.id !== source.id || typeof registered.enabled !== 'boolean') throw new Error(moteText("中央来源注册确认无效"));
-    if (!registered.enabled) return 'paused';
+    try{requireSourceRegistration(registered,source,Boolean(request.account));}catch(error){if(error instanceof SourcePausedFailure)return 'paused';throw error;}
     const scheduler = this.scheduler;
     const deferred=new Set<string>();let rejectedStatus:number|undefined;
     while (this.status().pending) {
@@ -229,6 +229,7 @@ export class SourceSync {
         if(outcome.result.failure&&(!failure||failure instanceof UploadSliceYield))failure=outcome.result.failure;
       }
       scheduler.committed(queue,bytes);
+      if(failure instanceof SourcePausedFailure)return 'paused';
       if (failure) throw failure;
     }
     if(rejectedStatus!==undefined)throw Object.assign(new Error(moteText("部分记录未确认，已保留等待重试")),{httpStatus:rejectedStatus});
@@ -266,11 +267,11 @@ export class SourceSync {
           try{acks.push(await this.sendAccountFile(source,item,request,signal));}
           catch(error){
             const status=(error as {httpStatus?:number})?.httpStatus;
-            if((error as {uploadExpired?:boolean})?.uploadExpired){failure=error;break;}
+            if(isUploadExpired(error)){failure=error;break;}
             // A source pause shares HTTP409 with an immutable revision conflict.
             // Confirm the current registration before isolating only this version.
             if(status===409){
-              try{const current=await request('/api/ingress/sources',source,'POST',signal) as {id?:unknown;enabled?:unknown};if(current?.id!==source.id||current.enabled!==true){failure=error;break;}}
+              try{requireSourceRegistration(await request('/api/ingress/sources',source,'POST',signal),source,true);}
               catch(confirmationError){failure=confirmationError;break;}
             }
             if(Number.isInteger(status)&&status!>=400&&status!<=599&&![401,403,404,426].includes(status!)){rejected.push({item,status:status!});continue;}
@@ -282,7 +283,9 @@ export class SourceSync {
         return {acks,rejected,failure};
       }
       const wire=batch.map(({localOriginal:_,localOriginalBase64:__,snapshotRecovery:___,...item})=>item),batchId='items-'+ingressKey(wire);
-      const result=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/items`,{batchId,items:wire},'POST',signal);
+      let result:unknown;
+      try{result=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/items`,{batchId,items:wire},'POST',signal);}
+      catch(error){if((error as {httpStatus?:number})?.httpStatus===409&&!isUploadExpired(error))requireSourceRegistration(await request('/api/ingress/sources',source,'POST',signal),source,true);throw error;}
       return {acks:requireAccountReceipt(result,{account:request.account},source.id,batchId,wire)};
     }
     const first = batch[0]!;

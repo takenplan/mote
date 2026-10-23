@@ -1,9 +1,10 @@
 # M06 scoped processing pipeline
 
-Prerequisite: Draft PR #132, exact published head
-`cdc5c34c36fc5743049007ee2c76d705fde3dd7f`, containing M00/M01/M02/M03/M04/M05/M09.
-The protected integration base remains
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. No prerequisite PR is merged.
+Current responsibility follows the [unified journey ADR](../adr-unified-user-journeys.md).
+The original M06 acceptance used Draft PR #132 at
+`cdc5c34c36fc5743049007ee2c76d705fde3dd7f`, with protected base
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. Those identities describe historical
+acceptance evidence, not the current branch or its later validation.
 
 ## Production responsibility
 
@@ -20,7 +21,8 @@ generations. Its `ocr` and `asr` selections use the explicit `mote-media` protoc
 with the existing binary media worker interface. Language-agent dispatch rejects
 that protocol. Shared media references cannot be combined with a user endpoint;
 workers receive request bytes and the fixed connection's key, never a caller key.
-Text and document extraction require no model selection. M04 snapshot hydration,
+Deterministic text and document decoding require no model selection. Generic
+input interpretation uses the admitted import model when its mapping is needed. M04 snapshot hydration,
 usage attribution and M05 typed failure handling remain authoritative.
 
 M06's `installProcessing` schema entry owns `mp_media_calls` and
@@ -123,7 +125,41 @@ Thenable listeners and synchronous model admission are refused. Throwing rolls
 back publication and child admission; nested admission uses a savepoint even when
 the listener catches the exception and lets the outer publication succeed.
 
-M10's parallel supplied-original intake extension must preserve this receipt
-hook and each original's trusted format when the branches are composed. This
-module's accepted prerequisite remains PR #132; a not-yet-created M10/M07 stack
-is not implied by its own acceptance evidence.
+The supplied-original intake path preserves this receipt hook and each original's
+trusted format. Historical M06-only evidence does not establish acceptance of
+the current complete processing-to-Memory journey.
+
+
+## General import and fresh evidence incarnations
+
+The import path first records immutable original bytes, then deterministically
+decodes supported documents or declared text encodings. Unknown extensions are
+not a semantic type classifier: valid UTF-8 is decoded, and an explicit BOM
+permits UTF-16LE/BE. Invalid encoding, NUL-bearing binary data or an unavailable
+decoder yields a per-file unsupported outcome. A supported peer can still be
+interpreted. This does not promise arbitrary binary decoding, OCR, shell access
+or a new fixed-format product restriction. Existing worker/input bounds remain.
+
+The read-only mapping agent sees decoded text and host decoder outcomes. Every
+file must have a final disposition, including an all-unsupported input with no
+successful text. Host validation prevents the model from promoting unsupported
+bytes to parsed text, citing unsupported bytes as textual evidence or inventing
+a textual record solely from them. Explicit retained attachments remain distinct
+from decoded text. Preview and confirmation keep their existing owner boundary;
+model output is never a new permission grant.
+
+Import source identity includes the explicit request ID and the original logical
+paths/hashes. Retrying the same request is idempotent. After deletion, its minimal
+deleted-request journal entry prevents replay from resurrecting that evidence;
+portable archives cannot restore it as a new request. A new explicit request for
+the same bytes gets a fresh authorized source incarnation. It does not clear old
+capture tombstones, revive old task grants or share another account's bytes.
+
+Normalized Materials use the common trusted source/time/member projection for
+Memory and Ask. Processing readiness does not authorize all historical members
+as new Memory targets. A producer's fresh receipt authorizes its exact eligible
+ranges; readable history stays separate context, and independent Memory review
+and publication remain M07 responsibilities. Processing, Memory and Actions can
+reuse complete interpretation only under the same account, procedure, model,
+policy, revision/range and evaluation contract. Matching bytes alone do not
+establish that contract or current authority.

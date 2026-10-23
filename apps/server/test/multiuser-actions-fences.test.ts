@@ -5,6 +5,7 @@ import {modelFixture,event,respond} from './fixtures/scoped-actions.js';
 import {deferred,waitForState} from './fixtures/scoped-query-accounts.js';
 
 const target={deviceId:'same-device',calendarId:'same-calendar'};
+const nativeCalls=(f:Awaited<ReturnType<typeof modelFixture>>,operationId:string)=>f.read(db=>db.prepare("SELECT c.* FROM task_external_calls c JOIN ac_operations o ON o.user_id=c.user_id AND o.task_id=c.task_id JOIN execution_steps e ON e.user_id=c.user_id AND e.id=c.task_id WHERE o.user_id=? AND o.id=? AND e.kind='actions.delivery' ORDER BY c.issuance_id").all(f.a.userId,operationId));
 async function proposed(t:Parameters<typeof modelFixture>[0]){const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated A',calendars:[{id:'same-calendar',title:'Generated A',accountId:'first-account'}]});const a=(await f.proposal(f.a)).items[0];return {...f,get node(){return f.node;},aProposal:a,input:{version:a.version,event:a.event,target}};}
 
 test('review payload edits and target account changes invalidate old OwnerQuestions while an identical confirm is idempotent',async t=>{
@@ -17,7 +18,7 @@ test('review payload edits and target account changes invalidate old OwnerQuesti
  assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{...f.input,event:{...a.event,title:'unreviewed'}})).statusCode,409);
  await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated A',calendars:[{id:'same-calendar',title:'Generated A',accountId:'third-account'}]});
  assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,409);
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);
+ assert.equal(nativeCalls(f,approved.operationId).length,0);const operation=f.read(db=>db.prepare('SELECT task_id,issuance_id,claimed,ack FROM ac_operations WHERE user_id=? AND id=?').get(f.a.userId,approved.operationId)!);assert.deepEqual({...operation},{task_id:null,issuance_id:null,claimed:0,ack:null},'A changed target account cannot acquire native delivery authority');
 });
 
 test('source disable and re-enable never resurrect an already reviewed approval',async t=>{
@@ -72,11 +73,11 @@ test('the immutable review exposes the exact edited content and native account w
 
 test('explicit Actions restoration after domain deletion restores history while the old issued operation stays revoked',async t=>{
  const f=await proposed(t),approved=await f.ok(f.a.token,'/api/actions/'+f.aProposal.id+'/confirm','POST',f.input),context=await f.node.authority.authenticate(f.a.token),services=f.node.services.forUser(context),archive=await services.exportUser('actions');
- await f.ok(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'});const receive=f.node.actions!.delivery.bindReceipt(context,approved.id,'same-device',approved.operationId);
+ await f.ok(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'});const receive=f.node.actions!.delivery.bindReceipt(context,approved.id,'same-device',approved.operationId),nativeBefore=nativeCalls(f,approved.operationId);assert.equal(nativeBefore.length,1);
  await services.deleteUser('actions','generated-delete');await services.restoreUser('actions',archive,'generated-history-restore');await services.restoreUser('actions',archive,'generated-history-restore');
  const restored=(await f.ok(f.a.token,'/api/actions')).items[0];assert.equal(restored.id,approved.id);assert.equal(restored.status,'stale');assert.equal(restored.operationId,undefined);assert.equal(restored.event.title,approved.event.title);
  assert.deepEqual(await receive({operationId:approved.operationId,status:'succeeded',externalId:'generated-after-delete'}),{acknowledged:true,published:false});assert.equal((await f.request(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'})).statusCode,403);
- assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),1);
+ const nativeAfter=nativeCalls(f,approved.operationId);assert.equal(nativeAfter.length,1);assert.deepEqual(nativeAfter.map(({state,settled_at,...facts})=>facts),nativeBefore.map(({state,settled_at,...facts})=>facts),'History restoration preserves the exact old native issuance');assert.equal(nativeAfter[0].state,'succeeded');const operation=f.read(db=>db.prepare('SELECT revoked,published FROM ac_operations WHERE user_id=? AND id=?').get(f.a.userId,approved.operationId)!);assert.equal(operation.revoked,1);assert.equal(operation.published,0);
 });
 
 

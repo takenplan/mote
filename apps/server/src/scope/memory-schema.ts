@@ -1,4 +1,5 @@
 import {memoryEvaluationContextSchema} from './memory-evaluation-context.js';
+import {installEvidenceProjection} from './evidence-projection.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {randomBytes} from 'node:crypto';
@@ -46,6 +47,7 @@ export type ScopedMemoryTask=z.infer<typeof scopedMemoryTaskSchema>;
 /** One shared database. Every private key and relationship starts with the
  * host owner; identical material, evidence and memory IDs remain independent. */
 export function installScopedMemory(db:DatabaseSync){
+ installEvidenceProjection(db);
  db.exec(`CREATE TABLE IF NOT EXISTS mm_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,cursor_key TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS mm_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0,generation INTEGER NOT NULL DEFAULT 0,revision INTEGER NOT NULL DEFAULT 1,desired INTEGER NOT NULL DEFAULT 1,settings TEXT NOT NULL,binding TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS mm_evidence(user_id TEXT NOT NULL,id TEXT NOT NULL,material_id TEXT NOT NULL,material_revision TEXT NOT NULL,block_id TEXT NOT NULL,hash TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id),UNIQUE(user_id,material_id,material_revision,block_id),FOREIGN KEY(user_id,material_id,material_revision) REFERENCES pd_material_versions(user_id,material_id,revision) ON DELETE CASCADE);
