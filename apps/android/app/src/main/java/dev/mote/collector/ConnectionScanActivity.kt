@@ -9,6 +9,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.client.android.Intents
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
@@ -21,7 +22,7 @@ class ConnectionScanActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val body = moteDetailPage(primary = null, title = MoteI18n.text("扫描连接二维码"))
         body.addView(TextView(this).apply { text = MoteI18n.text("扫描中央节点生成的连接二维码\n仅用于本次扫码；画面不保存、不上传。返回可用粘贴或 JSON 文件连接。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceItem)) })
-        scanner = DecoratedBarcodeView(this).apply { setStatusText(MoteI18n.text("将二维码放入取景框")); barcodeView.decoderFactory = DefaultDecoderFactory(listOf(BarcodeFormat.QR_CODE)) }
+        scanner = DecoratedBarcodeView(this).apply { setStatusText(MoteI18n.text("将二维码放入取景框")); barcodeView.decoderFactory = DefaultDecoderFactory(listOf(BarcodeFormat.QR_CODE), null, null, Intents.Scan.MIXED_SCAN) }
         body.addView(scanner, LinearLayout.LayoutParams(-1, 0, 1f))
         scanner.decodeSingle(object : BarcodeCallback {
             override fun barcodeResult(result: BarcodeResult) {
