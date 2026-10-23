@@ -10,8 +10,10 @@ Android Dev stores its token as a private JSON preference value and an AES key i
 
 Central retains its canonical private YAML, database and files. Third-party CLIs keep their credential management. Secrets stay out of source control and support exports.
 
-One main branch and independent component versions remain. Release tags identify immutable snapshots; prerelease maturity does not itself select Dev storage. The historical #164 release packaging/artifact policy is being restored as a separate batch; this credential change does not claim that those packaging changes are complete or that any release has been published.
+One main branch and independent component versions remain. Release tags identify immutable snapshots; prerelease maturity does not itself select Dev storage. Dev branch builds create Actions artifacts with the full commit SHA and build information, without a release tag. Beta and stable component tags use Prod installation identity and mandatory component validation. Prerelease maturity does not select Dev storage. Existing published releases remain immutable. This recovery does not publish or deploy any build.
 
 R2 received independent **APPROVE** against restored source `52110244`, with an explicit Desktop logout amendment and preservation of the pre-logout source binding. Focused generated tests cover backend selection, persistence, logout/reload/reauthorization, pending source identity, private-key reuse and invalid-state rejection. Desktop builds and both Android Kotlin variants compiled. Physical devices, system permission prompts and live models were not exercised.
 
 This replaces universal OS storage for Dev and account-scoped client assumptions. See [single-owner MVP](adr-single-owner-mvp.md), [testing](testing.md) and [releasing](releasing.md).
+
+Central derives debug from the exact Dev profile when omitted, preserving explicit false/silent and the existing Dev trace default. Desktop uses the same Dev predicate for diagnostics defaults, the menu and BrowserWindow DevTools. Android limits developer entrypoints to Dev/Test while retaining diagnostics/support and local image deduplication in Prod. Saved owner choices survive unrelated configuration saves.

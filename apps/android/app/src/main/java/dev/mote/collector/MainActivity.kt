@@ -566,7 +566,8 @@ class MainActivity : MoteActivity() {
             menu(MoteI18n.text("统计中心"), MoteI18n.text("按日期和文件类型查看空间占用"), "chart") { startActivity(Intent(this, StorageStatisticsActivity::class.java)) }
             menu(MoteI18n.text("采集与存储详情"), MoteI18n.text("查看累计结果、队列与使用空间"), "chart") { startActivity(Intent(this, ActivityStatsActivity::class.java)) }
             menu(MoteI18n.text("导入与导出"), MoteI18n.text("迁移配置、备份与恢复本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
-            menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "code") { showPage(Page.DEVELOPER) }
+            if (RuntimeProfile.current.developerTools) menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "code") { showPage(Page.DEVELOPER) }
+            else menu(MoteI18n.text("诊断与支持"), MoteI18n.text("运行状态、数值采样与安全支持包"), "chart") { showPage(Page.DIAGNOSTICS) }
             menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、记忆、洞察等中央功能"), "settings") { openCentral("about") }
         }
         content = owner
@@ -705,6 +706,7 @@ class MainActivity : MoteActivity() {
         maxQueue = presetNumber(MoteI18n.text("本机存储上限 / MiB"), config.maxQueueMiB, "256", 8..4096, listOf(64, 128, 256, 512, 1024, 2048, 4096))
         text(MoteI18n.text("中央确认上传后开始计时，到期自动清理本机副本；中央归档继续保留。未上传和冲突记录不会自动删除。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         menu(MoteI18n.text("导入与导出"), MoteI18n.text("备份配置与本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
+        if (!RuntimeProfile.current.developerTools) menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
     }
     private fun buildProcessing(config: CollectorConfig) {
         page(Page.PROCESSING, MoteI18n.text("调整截图清晰度与图片去重"))
@@ -955,7 +957,7 @@ class MainActivity : MoteActivity() {
             text(MoteI18n.text("版本 {0}", BuildConfig.VERSION_NAME), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         }
         menu(MoteI18n.text("应用更新"), MoteI18n.text("检查新版本与安装更新"), "sync") { startActivity(Intent(this, AppUpdatesActivity::class.java)) }
-        menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
+        if (RuntimeProfile.current.developerTools) menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
         text("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT} · ${Build.MANUFACTURER} ${Build.MODEL}", NativeFontRole.META, NativeColorRole.MUTED)
     }
 
@@ -1533,6 +1535,10 @@ class MainActivity : MoteActivity() {
     }
 
     private fun showPage(page: Page, discardConfirmed: Boolean = false, connectionEntryOrigin: ConnectionOrigin? = null) {
+        if (page == Page.DEVELOPER && !RuntimeProfile.current.developerTools) {
+            showPage(Page.SETTINGS, discardConfirmed, connectionEntryOrigin)
+            return
+        }
         if (!initializing && page != currentPage && !discardConfirmed && pageControlValues().any { (key, value) -> baseline[key] != value && (!applyingSettings || pendingSubmission?.get(key) != value) }) {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("有未保存的更改"))
                 .setMessage(MoteI18n.text("离开并丢弃修改？"))
@@ -1610,6 +1616,7 @@ class MainActivity : MoteActivity() {
 
     private fun pageBackTarget(page: Page): Page? = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.LOCAL_ASK) Page.ASK
         else if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.LOCAL_ACTIVITY) Page.ACTIVITY
+        else if (page == Page.DIAGNOSTICS && !RuntimeProfile.current.developerTools) Page.SETTINGS
         else page.parent?.let(Page::valueOf)
 
     private fun navigatePageBack(page: Page) {

@@ -4,6 +4,8 @@ package dev.mote.collector
 enum class RuntimeProfile(val wire: String) {
     DEV("dev"), PROD("prod"), TEST("test");
 
+    val detailedDiagnostics get() = this == DEV
+    val developerTools get() = this != PROD
     val fileCredentials get() = this == DEV
 
     companion object {

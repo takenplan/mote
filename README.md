@@ -56,12 +56,12 @@ For a daily archive, use a profile outside the checkout. The [deployment guide](
 
 Start with **Record** in the web interface: save a short note, then find it in **Library**. You can also use Library's import tools to add selected material, inspect the preview, and confirm it.
 
-To collect from your devices, download the matching app from [Releases](https://github.com/utopiafar/mote/releases):
+To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases), or a Dev build from the corresponding [Actions artifact](https://github.com/utopiafar/mote/actions):
 
 | Device | Install | Connect |
 | --- | --- | --- |
-| macOS 13.3+ | Download the Mac DEV ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
-| Android 10+ | Install the Android DEV APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
+| macOS 13.3+ | Download the Mac ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
+| Android 10+ | Install the Android APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
 
 In Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, and confirm. Invitations expire after 10 minutes and can be used once. Each app receives its own revocable credential with full owner access; only pair devices you trust.
 

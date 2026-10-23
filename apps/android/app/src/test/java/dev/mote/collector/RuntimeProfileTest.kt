@@ -10,6 +10,16 @@ import java.io.File
 class RuntimeProfileTest {
     @get:Rule val folder = TemporaryFolder()
 
+    @Test fun diagnosticsAndDeveloperToolsFollowExactProfile() {
+        assertTrue(RuntimeProfile.DEV.detailedDiagnostics)
+        assertTrue(RuntimeProfile.DEV.developerTools)
+        assertFalse(RuntimeProfile.TEST.detailedDiagnostics)
+        assertTrue(RuntimeProfile.TEST.developerTools)
+        assertFalse(RuntimeProfile.PROD.detailedDiagnostics)
+        assertFalse(RuntimeProfile.PROD.developerTools)
+        assertThrows(IllegalStateException::class.java) { RuntimeProfile.parse("dev-new") }
+    }
+
     @Test fun onlyDevUsesPrivateFileCredentials() {
         assertTrue(RuntimeProfile.DEV.fileCredentials)
         assertFalse(RuntimeProfile.PROD.fileCredentials)

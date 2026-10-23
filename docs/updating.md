@@ -1,20 +1,18 @@
 # 更新 Mote 与存储代际边界
 
-当前开发阶段按 **Central、macOS、Android** 独立创建 DEV prerelease。请打开 [GitHub Releases](https://github.com/utopiafar/mote/releases)，选择 `central-v…`、`desktop-v…` 或 `android-v…` 对应的发布；各端的版本号不能相互比较。`releases/latest` 不代表某个端的最新 prerelease。当前发布不附 `mote-release.json` 或 GHCR 镜像，保留的签名更新器不能用于获取当前 DEV 版本。
+Central、macOS、Android 独立发布。Dev 构建从对应 [GitHub Actions](https://github.com/utopiafar/mote/actions) 运行下载 Artifact，包含提交 SHA 与构建信息。Beta / 正式版从 [GitHub Releases](https://github.com/utopiafar/mote/releases) 下载对应组件的 Prod 产物。各端版本号不能相互比较；当前不分发签名更新清单或 GHCR 镜像。
 
-## 配置格式与历史存储边界
+## MVP 单用户回归
 
-本次统一配置只改变中央配置来源：主文件为 YAML version 1，旧 env、模型/文件 JSON 与 SQLite 当前运行设置不自动转换，也不再覆盖主文件。中央仍使用 `backend_epoch=4`，Desktop/Android 本机与队列格式仍为 3，HTTP 便携归档仍为完整 version 2。同代资料库可以保留原目录；先备份并离线准备 `mote.yaml`，保留访问令牌和内容密钥，再由所有者明确启动。仅转换配置无需新空资料库或 reset。
-
-此前的 MVP 存储基线曾切换数据库、客户端、内容包装和便携格式。从该历史基线之前升级时，旧格式仍明确拒绝，不自动迁移或清空目录。先用相应旧版本导出需保留内容，停止全部写入，备份完整旧目录、凭据与密钥，再使用新空目录或新 profile；明确放弃资料时才执行 reset。历史跨代的中央手动 reset、新目录和客户端清理步骤见 [MVP 清理实施记录](audits/mvp-baseline-cleanup-2026-10-09.md)。旧二进制与完整旧备份须一起保留，才能跨代回滚。
+本次回归使用单实例、单所有者的当前格式和全新私有 profile。旧多用户数据、旧凭据和旧配置不迁移、不兼容，也不自动转换。Git 历史通过 revert 保留；部署数据与 Git 历史是不同的边界。开发和验证只使用新建的隔离目录，不修改已有日常环境。参见 [单用户 ADR](adr-single-owner-mvp.md)。
 
 ## Mac App
 
-保存输入，退出使用同一个 App bundle 的全部 Mote 实例，解压下载的 Mac DEV ZIP，用其中的 App 覆盖原 DEV App 后启动。设备身份、配置、凭据、草稿、队列和模型在应用包之外；同代更新不要删除资料目录；客户端本机格式仍为 3；本次只清理已退役的处理字段，当前格式队列和凭据保留。更早的非格式 3 目录仍须先备份再显式重置。默认 profile 仍使用原 userData 路径，换 App bundle 不会把旧资料变成新格式。当前使用 ad-hoc 签名时，系统可能再次要求运行、Keychain、屏幕或日历授权。
+Dev 与 Prod App 分开安装。下载对应身份和架构的 ZIP，退出使用该 App 的实例后替换应用包。Dev build 或精确的 `dev` runtime profile 使用私有 JSON 凭据；Prod 使用系统加密存储。任意 `dev-*` 名称不等于 Dev profile。系统可能要求运行、屏幕或日历权限，Prod 还可能要求 Keychain。新 MVP 环境从空目录开始；之后同一当前格式的更新可保留该环境的配置和队列。
 
 ## Android App
 
-下载 Android DEV APK，同包覆盖安装。必须保持包名 `dev.mote.collector.dev`、签名证书一致且 versionCode 不降低；DEV 与日常包不是同一个安装身份。系统可能要求允许安装应用并确认更新。同代更新不要先卸载或清除数据。本次 Android 本机格式仍为 3，可保留当前队列和设置；遇到更早的非格式 3 安装时须先用旧版本导出，再显式清除应用存储或选择全新独立安装；清除/卸载会丢失 Keystore，不能保证以旧目录恢复凭据、私有草稿和操作 ledger，需要重新授权。更新可能中断投屏，会话恢复仍由 Android 权限与后台规则控制。
+Dev 包名为 `dev.mote.collector.dev`，Beta / 正式包名为 `dev.mote.collector`；Test 的 `dev.mote.collector.test` 只用于生成 fixture。Dev 的 Mote 凭据及私有 AES 密钥保存在应用私有文件，Prod / Test 保留 Keystore。覆盖同一身份安装时必须保持签名证书一致且 versionCode 不降低。新 MVP 使用全新环境；不提供旧格式转换。更新可能中断投屏，恢复仍受 Android 权限与后台规则约束。
 
 ## 中央节点
 
@@ -38,7 +36,7 @@ node scripts/mote.mjs rollback --profile prod --home /srv/mote/profiles --restor
 
 ## 签名清单更新通道
 
-代码仍保留客户端签名清单下载与安装、中央 `check-update` / `update`、独立更新助手及失败回退。它们要求受内置公钥信任的 manifest 和对应资产；切换仓库不会更换信任根，不能跳过签名、证书或版本校验。验证器只接受所属端的独立标签与必填组件身份：`central-vX.Y.Z`、`desktop-vX.Y.Z`、`android-vX.Y.Z`。旧统一 `vX.Y.Z` 标签与缺组件的清单拒绝；清单不能夹带其他端资产。当前 DEV 发布不使用该通道。历史验证见 [0.5.1 更新验收](update-validation.md)，当前产物与流程见 [发布说明](releasing.md)。
+代码仍保留客户端签名清单下载与安装、中央 `check-update` / `update`、独立更新助手及失败回退。它们要求受内置公钥信任的 manifest 和对应资产；切换仓库不会更换信任根，不能跳过签名、证书或版本校验。验证器只接受所属端的独立标签与必填组件身份：`central-vX.Y.Z`、`desktop-vX.Y.Z`、`android-vX.Y.Z`。旧统一 `vX.Y.Z` 标签与缺组件的清单拒绝；清单不能夹带其他端资产。当前 Profile 发布不使用该通道。历史验证见 [0.5.1 更新验收](update-validation.md)，当前产物与流程见 [发布说明](releasing.md)。
 
 ## 验证边界
 

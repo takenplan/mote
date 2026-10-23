@@ -758,7 +758,7 @@ function renderUpdate(value: import('./updater').UpdateStatus): void {
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
   byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
   byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
-  byId('update-notes').textContent=value.manualDownload?moteText('下载 DEV 安装包'):moteText('查看版本说明与安装包');
+  byId('update-notes').textContent=value.manualDownload?moteText('查看 Dev 构建产物'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;
   byId('update-message').textContent = value.message; byId('update-install-reason').textContent = value.installReason;

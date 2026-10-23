@@ -8389,5 +8389,8 @@ export const english: Readonly<Record<string, string>> = {
   "浅色": "Light",
   "深色": "Dark",
   "无法保存外观偏好，已跟随系统。": "Could not save appearance preference. Following the system.",
-  "无法保存外观偏好，请重试。": "Could not save appearance preference. Please retry."
+  "无法保存外观偏好，请重试。": "Could not save appearance preference. Please retry.",
+  "DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。": "DEV builds are stored by commit in GitHub Actions. Download the artifact from the corresponding run and install it manually.",
+  "查看 Dev 构建产物": "View Dev build artifacts",
+  "{0}\n\n将使用已有设备 ID 和当前采集设置。将为这台设备保存所有者凭据，可使用全部中央功能；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。": "{0}\n\nUses your existing device ID and collection settings. This device receives an owner credential with access to all Central features. Settings, queue, and models are preserved. Re-pairing the same node resumes pending screenshots, notes, and source records with new credentials. First pairing binds unbound local records to this address and sends them according to your chosen sync mode. Confirm this is your own archive. Pending records bound to another node cannot be redirected here."
 };

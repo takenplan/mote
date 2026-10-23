@@ -80,7 +80,7 @@ function refreshApplicationMenu() {
         { label: moteText("随手记"), accelerator: 'CmdOrCtrl+2', click: () => showClientPage('notes') },
         { label: moteText("来源"), accelerator: 'CmdOrCtrl+3', click: () => showClientPage('sources') },
       ] },
-      { label: moteText("显示"), submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(!app.isPackaged || developmentBuild ? [{role:'toggleDevTools' as const}] : [])] },
+      { label: moteText("显示"), submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(developmentProfile ? [{role:'toggleDevTools' as const}] : [])] },
       { role: 'windowMenu', label: moteText("窗口") },
     ]));
 }
@@ -175,7 +175,7 @@ else {
     const dataDirectory = await realpath(profile.dataDirectory);
     await ensureStorageFormat(dataDirectory,['config.json','queue','notes','local-sources','content-key.json']);
     const secrets = desktopSecretStorage(profile, developmentBuild, () => safeStorage);
-    const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
+    const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}, developmentBuild), () => profileDefaults(profile, process.env, developmentBuild));
     settings = await store.load();
     await store.save(settings); // Persist stable device identity before the first observation.
     void events.record('APP', 'STARTED');
@@ -214,7 +214,7 @@ else {
     const pageUrl = pathToFileURL(join(__dirname, 'index.html')).href;
     window = new BrowserWindow({
       width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: appearanceBackground(),
-      webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: !app.isPackaged || developmentBuild },
+      webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: developmentProfile },
     });
     const broadcastAppearance=()=>{window?.setBackgroundColor(appearanceBackground());window?.webContents.send('mote:appearance',appearanceState());};
     nativeTheme.on('updated',broadcastAppearance);
@@ -410,7 +410,7 @@ else {
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
     handle('mote:installed-applications', () => process.platform === 'darwin' ? readInstalledApplications(helperPath).catch(() => []) : []);
-    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:'https://github.com/utopiafar/mote/releases', message:moteText('开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。'), installReason:''});
+    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml', message:moteText('DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。'), installReason:''});
     handle('mote:update-status', () => developmentBuild ? devUpdateStatus() : updater!.status());
     handle('mote:update-channel', channel => updater!.setChannel(channel));
     handle('mote:update-check', () => developmentBuild ? devUpdateStatus() : updater!.check());
@@ -418,7 +418,7 @@ else {
     handle('mote:update-cancel', () => updater!.cancel());
     handle('mote:update-install', () => serialize(() => updater!.install(async () => { collector.stop(); await collector.settleCapture(); await settleNoteWork(); }, () => app.quit())));
     handle('mote:update-reveal', () => { const archive = updater!.archivePath(); if (archive) shell.showItemInFolder(archive); });
-    handle('mote:update-notes', async () => { const url = developmentBuild ? 'https://github.com/utopiafar/mote/releases' : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
+    handle('mote:update-notes', async () => { const url = developmentBuild ? 'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml' : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
     handle('mote:feedback', () => shell.openExternal(githubFeedbackUrl({
       version: app.getVersion(),
       platform: `${process.platform === 'darwin' ? 'macOS' : currentPlatform} ${process.getSystemVersion()} · ${process.arch}`,

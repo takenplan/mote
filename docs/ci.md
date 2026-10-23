@@ -4,7 +4,7 @@
 
 Develop with focused local checks. After candidate convergence inspect `npm run check:affected -- --dry-run` and complete its plan plus affected journeys. CI checks the pushed revision. Avoid a second blanket local suite duplicating unchanged successful work; never call a local-only result a CI pass.
 
-At recovery start on 2026-10-23 both check workflows were `disabled_manually`; release workflows were active. The owner authorized restoring affected PR checks. Verify enabling and actual runs separately: YAML triggers alone do not prove a workflow is enabled.
+At recovery start on 2026-10-23 both check workflows were `disabled_manually`; release workflows were active. The owner authorized restoring affected PR checks. The GitHub API confirmed `Component checks` active during this recovery. `Checks` remains disabled and available for explicit manual use after enabling. Actual pushed-revision runs are verified separately; workflow state alone is not a passing check.
 
 The PR owner reads failure logs and repairs ordinary failures with the module owner. Store full logs in CI artifacts or ignored local files. Summarize status, duration and log location; preserve nonzero exit status when showing failure excerpts.
 

@@ -19,7 +19,7 @@ android {
         targetSdk = 36
         versionCode = releaseVersion.getProperty("versionCode").toInt()
         versionName = releaseVersion.getProperty("versionName")
-        buildConfigField("String", "MOTE_PROFILE", "\"default\"")
+        buildConfigField("String", "MOTE_PROFILE", "\"prod\"")
         buildConfigField("String", "DEFAULT_SERVER", "\"\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -32,7 +32,12 @@ android {
         }
     }
     buildTypes {
-        debug { manifestPlaceholders["cleartextAllowed"] = "true" }
+        debug {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            buildConfigField("String", "MOTE_PROFILE", "\"test\"")
+            manifestPlaceholders["cleartextAllowed"] = "true"
+        }
         create("development") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".dev"
@@ -46,6 +51,8 @@ android {
             initWith(getByName("development"))
             applicationIdSuffix = ".filefixture"
             versionNameSuffix = "-filefixture"
+            buildConfigField("String", "MOTE_PROFILE", "\"test\"")
+            buildConfigField("String", "DEFAULT_SERVER", "\"\"")
             matchingFallbacks += "development"
         }
         release {

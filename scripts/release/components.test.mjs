@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { loadComponent, bumpComponentVersion, verifyComponent, validVersion, compareVersions } from './components.mjs';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadComponent, bumpComponentVersion, verifyComponent, validVersion, compareVersions, buildProfile } from './components.mjs';
 import { releaseFixture } from './fixtures.mjs';
 
 test('central bump synchronizes server/web and their lock entries without changing clients', t => {
@@ -61,4 +63,24 @@ test('release version CLI performs an isolated group bump', t => {
   const output = execFileSync(process.execPath, [new URL('./version.mjs', import.meta.url).pathname, 'desktop', 'patch'], { cwd: fixture.root, encoding: 'utf8' });
   assert.equal(JSON.parse(output).tag, 'desktop-v2.5.1');
   assert.equal(loadComponent('central', fixture.root).version, '1.4.0');
+});
+
+test('profiles and release tags are independent: Dev branches need no notes, Beta/stable use prod', t => {
+  const fixture = releaseFixture(t);
+  rmSync(join(fixture.root, 'release/notes'), { recursive: true });
+  const options = { root: fixture.root, profile: 'dev', ref: 'refs/heads/main' };
+  assert.equal(verifyComponent('desktop', options).channel, 'dev');
+  assert.throws(() => verifyComponent('desktop', { ...options, ref: 'refs/tags/desktop-v2.5.0' }), /not a release tag/);
+  const beta = bumpComponentVersion('desktop', '2.6.0-beta.1', fixture.root);
+  fixture.write(beta.notes, '# Generated Beta notes');
+  const verified = verifyComponent('desktop', { root: fixture.root, ref: `refs/tags/${beta.tag}` });
+  assert.equal(verified.profile, 'prod'); assert.equal(verified.channel, 'preview');
+  const stable = bumpComponentVersion('desktop', '2.6.0', fixture.root);
+  fixture.write(stable.notes, '# Generated stable notes');
+  assert.equal(verifyComponent('desktop', { root: fixture.root, ref: `refs/tags/${stable.tag}` }).channel, 'stable');
+  const invalid = bumpComponentVersion('desktop', '2.7.0-dev.123', fixture.root);
+  fixture.write(invalid.notes, '# Generated invalid notes');
+  assert.throws(() => verifyComponent('desktop', { root: fixture.root }), /X.Y.Z-beta.N/);
+  assert.equal(buildProfile({}), 'prod');
+  assert.throws(() => buildProfile({ MOTE_BUILD_PROFILE: 'test' }), /fixtures/);
 });

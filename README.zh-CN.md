@@ -56,12 +56,12 @@ node scripts/mote.mjs token --profile dev
 
 先点击中央网页的 **记录**，保存一条简短笔记，再到 **资料库** 找到它。也可以使用资料库中的导入工具添加选定材料，检查预览后确认。
 
-需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 下载对应客户端：
+需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 获取 Prod 安装包，或从对应 [Actions](https://github.com/utopiafar/mote/actions) 下载对应客户端的 Dev Artifact：
 
 | 设备 | 安装 | 连接 |
 | --- | --- | --- |
-| macOS 13.3+ | 下载适合本机架构的 Mac DEV ZIP，解压并将 App 移到应用目录。 | 导入邀请 JSON、文字或二维码图片；首次打开及权限步骤见 [Mac 指南](docs/desktop.md)。 |
-| Android 10+ | 安装 Android DEV APK。 | 扫描邀请二维码或导入 JSON；权限和后台设置见 [Android 指南](docs/android.md)。 |
+| macOS 13.3+ | 下载适合本机架构的 Mac ZIP，解压并将 App 移到应用目录。 | 导入邀请 JSON、文字或二维码图片；首次打开及权限步骤见 [Mac 指南](docs/desktop.md)。 |
+| Android 10+ | 安装 Android APK。 | 扫描邀请二维码或导入 JSON；权限和后台设置见 [Android 指南](docs/android.md)。 |
 
 在中央打开 **采集与设备 → 连接设备**，填写设备可访问的节点地址，生成邀请。在客户端导入邀请，核对地址并确认连接。邀请 10 分钟后失效，仅能使用一次。每个 App 获得独立、可撤销且具有完整所有者权限的凭据，请只配对可信设备。
 
