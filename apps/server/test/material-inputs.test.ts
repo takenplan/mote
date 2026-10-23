@@ -133,6 +133,7 @@ test('body feedback retains its recipe pin when the same originals also belong t
     const done=await pipeline.run(job.id);
     assert.equal(done.status,'failed','the unavailable whole-material recipe remains visible as a failed composition');
     assert.equal(feedbackCalls,1);
+    assert.equal(store.db.prepare("SELECT json_extract(json,'$.privateRetired') retired FROM memory_jobs WHERE id=?").get(job.id)!.retired,1,'invalidating the whole-material sibling retires shared package prose');
     assert.ok(done.batches.filter(batch=>batch.strategy?.recipe.id==='mote.personal-memory').every(batch=>batch.status==='invalidated'));
     const parent=done.batches.find(batch=>batch.strategy?.recipe.id===recipe.id&&batch.supersededBy)!;assert.ok(parent);
     const child=done.batches.find(batch=>batch.replanRound===1)!;assert.ok(child);
@@ -142,6 +143,7 @@ test('body feedback retains its recipe pin when the same originals also belong t
     assert.equal(done.batches.find(batch=>batch.id===bodyBackground.id)?.attempts,1,'the already inspected body sibling is used as context without repeating its target coverage');
     assert.equal(calls.length,6,'the two original body batches and the feedback child each receive extraction and independent review');
     assert.equal(calls.filter(input=>input.traceContext?.batchId===child.id).length,2);
+    assert.deepEqual(store.db.prepare('SELECT phase FROM memory_phase_outputs WHERE batch_id=? ORDER BY phase').all(child.id).map(row=>row.phase),['extract','review'],'independently authorized body work keeps both complete phase checkpoints');
     assert.equal(memories.list().length,0);
   }finally{await pipeline.close();}
 });

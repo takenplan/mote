@@ -15,15 +15,18 @@ export class MemoryPhaseOutputs {
    CREATE TRIGGER IF NOT EXISTS memory_phase_batch_retired AFTER UPDATE OF json ON memory_batches
    WHEN json_extract(new.json,'$.status')='invalidated' OR coalesce(json_extract(new.json,'$.privateRetired'),0)=1 BEGIN
     DELETE FROM memory_phase_outputs WHERE batch_id=new.id; END;
+   -- A job's privateRetired flag retires shared work-package prose after any
+   -- sibling is invalidated. Phase authority belongs to each batch and its
+   -- dependencies; cancellation alone revokes the entire job here.
    CREATE TRIGGER IF NOT EXISTS memory_phase_job_cancelled AFTER UPDATE OF json ON memory_jobs
-   WHEN json_extract(new.json,'$.status')='cancelled' OR coalesce(json_extract(new.json,'$.privateRetired'),0)=1 BEGIN
+   WHEN json_extract(new.json,'$.status')='cancelled' BEGIN
     DELETE FROM memory_phase_outputs WHERE batch_id IN (SELECT id FROM memory_batches WHERE job_id=new.id); END;
    CREATE TRIGGER IF NOT EXISTS memory_phase_dependency_removed AFTER DELETE ON memory_batch_dependencies BEGIN
     DELETE FROM memory_phase_outputs WHERE batch_id=old.batch_id; END;
    CREATE TRIGGER IF NOT EXISTS memory_phase_late_insert BEFORE INSERT ON memory_phase_outputs
    WHEN NOT EXISTS(SELECT 1 FROM memory_batches b JOIN memory_jobs j ON j.id=b.job_id WHERE b.id=new.batch_id
     AND json_extract(b.json,'$.status') NOT IN ('invalidated','completed') AND coalesce(json_extract(b.json,'$.privateRetired'),0)=0
-    AND json_extract(j.json,'$.status') NOT IN ('cancelled','paused') AND coalesce(json_extract(j.json,'$.privateRetired'),0)=0)
+    AND json_extract(j.json,'$.status') NOT IN ('cancelled','paused'))
    BEGIN SELECT RAISE(ABORT,'Memory phase authority retired'); END;`);
  }
  id(batchId:string,phase:'extract'|'review',inputHash:string){return 'memory-phase:'+sha256([batchId,phase,inputHash].join(':'));}

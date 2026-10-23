@@ -78,3 +78,35 @@ for(const boundary of ['before-commit','after-commit'] as const)test(`actual pro
  const result=await outputs.run({batchId:String(batch.id),jobId:String(batch.job_id),phase:'extract',inputHash:'generated-crash',generation:'frozen',signal:new AbortController().signal,validate:()=>true,assertCommit:()=>{},execute:async()=>{recoveryCalls++;return {answer:'Complete committed response',runId:'generated-recovery'};}});
  assert.equal(readFileSync(callsFile,'utf8'),'call\n');assert.equal(recoveryCalls,boundary==='before-commit'?1:0);assert.equal(result.runId,boundary==='before-commit'?'generated-recovery':'generated-original');
 });
+
+
+test('retiring a sibling original preserves an independently authorized successful checkpoint through storage restart',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-phase-siblings-'));let store:Store,pipeline:MemoryPipeline,outputs:MemoryPhaseOutputs,calls=0;
+ const open=()=>{store=new Store(directory);pipeline=new MemoryPipeline({store,memories:new MemoryStore(store),configured:()=>true,model:()=> 'generated',query:async()=>{throw Error('Checkpoint replay must not call a model');},review:async()=>{throw Error('Checkpoint replay must not call independent review');}});outputs=new MemoryPhaseOutputs(store,pipeline.engine);};
+ open();t.after(async()=>{await pipeline.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ const sources=new SourceStore(store);sources.register({id:'generated',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});
+ const originals=[];for(const externalId of ['retained','retired'])originals.push(await sources.upsert('generated',{externalId,revision:'1',text:('Generated independent '+externalId+' original. ').padEnd(240,'x'),observedAt:'2026-10-01T00:00:00Z',kind:'file',layer:'original'}));
+ const job=pipeline.create({evidenceIds:originals.map(record=>record.id),batchCharacters:256,workPackage:{id:'generated-independent',goal:'Inspect the independently selected originals',instruction:'Preserve independent original authority.'}});
+ assert.equal(job.batches.length,2);const kept=job.batches.find(batch=>batch.evidenceRanges[0].id===originals[0].id)!,retired=job.batches.find(batch=>batch.id!==kept.id)!;
+ const payload={answer:'Complete independent generated result',runId:'generated-retained-run',receipts:[{id:originals[0].id,offset:0,length:240}]};
+ const run=()=>outputs.run({batchId:kept.id,jobId:job.id,phase:'extract' as const,inputHash:'generated-independent',generation:'frozen',signal:new AbortController().signal,validate:()=>store.isCurrentEvidence(originals[0].id),assertCommit:()=>assert.ok(store.isCurrentEvidence(originals[0].id)),execute:async()=>{calls++;return payload;}});
+ assert.deepEqual(await run(),payload);const stepId=outputs.id(kept.id,'extract','generated-independent'),before=store.db.prepare('SELECT input_hash,output_hash,json FROM memory_phase_outputs WHERE step_id=?').get(stepId);
+ store.invalidateMemoryEvidence(originals[1].id);
+ assert.equal(JSON.parse(String(store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(retired.id)!.json)).status,'invalidated');
+ assert.equal(store.db.prepare("SELECT json_extract(json,'$.privateRetired') retired FROM memory_jobs WHERE id=?").get(job.id)!.retired,1);
+ assert.deepEqual(outputs.read(stepId,'generated-independent'),payload,'shared package prose retirement does not revoke independent batch output');
+ await pipeline.close();store.close();open();
+ assert.deepEqual(store.db.prepare('SELECT input_hash,output_hash,json FROM memory_phase_outputs WHERE step_id=?').get(stepId),before,'the complete private checkpoint and hashes survive a real storage restart');
+ assert.deepEqual(await run(),payload);assert.equal(calls,1,'restart reuses the successful independent phase');
+});
+
+for(const action of ['cancel','delete'] as const)test(`a held phase cannot restore private output after real ${action}`,async t=>{
+ const f=await fixture(t);let entered!:()=>void,release!:()=>void;const started=new Promise<void>(resolve=>{entered=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+ t.after(()=>release());
+ const pending=f.outputs.run({batchId:f.batchId,jobId:f.jobId,phase:'extract',inputHash:'generated-late-'+action,generation:'frozen',signal:new AbortController().signal,validate:()=>true,assertCommit:()=>{},execute:async()=>{entered();await held;return {answer:'Generated late private result'};}});
+ const rejected=assert.rejects(pending);await started;
+ if(action==='cancel')f.pipeline.cancel(f.jobId);else assert.equal(f.store.delete(f.record.id).deleted,1);
+ release();await rejected;
+ const child=f.outputs.id(f.batchId,'extract','generated-late-'+action);assert.notEqual(f.engine.get(child)!.state,'succeeded');
+ assert.equal(f.outputs.read(child,'generated-late-'+action),undefined);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_phase_outputs WHERE batch_id=?').get(f.batchId)!.n,0,'late private output never revives after authority retirement');
+});
