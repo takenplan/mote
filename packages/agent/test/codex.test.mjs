@@ -30,10 +30,15 @@ import readline from 'node:readline';
 import {writeFileSync,appendFileSync,readFileSync} from 'node:fs';
 writeFileSync(${JSON.stringify(join(root,'runtime-home'))},process.env.CODEX_HOME);
 writeFileSync(${JSON.stringify(join(root,'runtime-config'))},readFileSync(process.env.CODEX_HOME+'/config.toml'));
-const send=value=>process.stdout.write(JSON.stringify(value)+'\\n');
+const send=(value,callback)=>process.stdout.write(JSON.stringify(value)+'\\n',callback);
 const mode=${JSON.stringify(mode)};let turns=0;
-const usage=sample=>send({method:'thread/tokenUsage/updated',params:{threadId:'thread-fixture',turnId:'turn-fixture',tokenUsage:{total:{inputTokens:sample,outputTokens:sample/2,totalTokens:sample*1.5,cachedInputTokens:sample/5,cacheWriteInputTokens:0,reasoningOutputTokens:sample/10}}}});
-if(mode==='usage-late-exit')process.on('SIGTERM',()=>{usage(200);setTimeout(()=>process.exit(0),20);});
+const usage=(sample,callback)=>send({method:'thread/tokenUsage/updated',params:{threadId:'thread-fixture',turnId:'turn-fixture',tokenUsage:{total:{inputTokens:sample,outputTokens:sample/2,totalTokens:sample*1.5,cachedInputTokens:sample/5,cacheWriteInputTokens:0,reasoningOutputTokens:sample/10}}}},callback);
+// stdin EOF may arrive before SIGTERM; hold the generated provider until its
+// late sample has actually flushed rather than racing natural exit or a timer.
+if(mode==='usage-late-exit'){
+ const waiting=setInterval(()=>{},1000);let sent=false;
+ process.on('SIGTERM',()=>{if(sent)return;sent=true;usage(200,()=>{clearInterval(waiting);process.exit(0);});});
+}
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);appendFileSync(${JSON.stringify(join(root,'rpc.ndjson'))},JSON.stringify(m)+'\\n');
  if(m.method==='initialize')send({id:m.id,result:{}});
