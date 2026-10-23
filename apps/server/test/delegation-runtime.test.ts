@@ -41,7 +41,7 @@ test('one failed branch can retry without recreating the successful artifact',as
   if(!work.units.length){await controls.execute('delegation_submit',{units:[proposal('a'),proposal('b')]});await controls.execute('delegation_yield',{});throw new AgentYieldError();}
   const failed=work.units.find(unit=>unit.status==='failed');if(failed){await controls.execute('delegation_retry',{unitId:failed.id});await controls.execute('delegation_yield',{unitIds:[failed.id]});throw new AgentYieldError();}return 'Finished';
  }});
- runtime.start({id:'retry-work',profileId:'coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'retry-work');assert.equal(work.status,'succeeded');assert.deepEqual(calls,{a:1,b:2});assert.equal(runtime.artifactMetadata(work.id).length,2);assert.equal(work.units[1].attempts,1);
+ runtime.start({id:'retry-work',profileId:'coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'retry-work');assert.equal(work.status,'succeeded');assert.deepEqual(calls,{a:1,b:2});assert.equal(runtime.artifactMetadata(work.id).length,2);assert.equal(work.units[1].attempts,2);
 });
 
 test('a terminal coordinator releases running child slots and retains local retry handles',async t=>{
@@ -190,4 +190,17 @@ test('cancellation revokes every coordinator beyond a hundred-step operation pag
 
 test('private durable payload history consumes the vault quota and a refused start rolls back',async t=>{
  const {runtime,store}=fixture(t,1,{maxStorageBytes:80000});runtime.registerCoordinator({id:'quota',execute:async()=>null});const initial=store.logicalBytes();runtime.start({id:'quota-one',profileId:'quota',goal:'Generated task',input:{generated:'x'.repeat(24000)},allowedCapabilities:[]});assert.ok(store.logicalBytes()>=initial+24000);runtime.start({id:'quota-two',profileId:'quota',goal:'Generated task',input:{generated:'x'.repeat(24000)},allowedCapabilities:[]});assert.throws(()=>runtime.start({id:'quota-refused',profileId:'quota',goal:'Generated task',input:{generated:'x'.repeat(40000)},allowedCapabilities:[]}),/storage limit/);assert.throws(()=>runtime.get('quota-refused'),/not found/);assert.equal(store.db.prepare("SELECT count(*) n FROM delegation_payloads WHERE work_id='quota-refused'").get()?.n,0);
+});
+
+
+test('model-facing branch retry cannot renew an exhausted automatic budget',async t=>{
+ const {runtime}=fixture(t);let calls=0,retried=false;
+ runtime.register({id:'fixture',version:'1',description:'Generated bounded failure',execute:async()=>{calls++;throw new ExecutionFailure('transient','provider_network',0);}});
+ runtime.registerCoordinator({id:'bounded-coordinator',execute:async({work,controls})=>{
+  if(!work.units.length){await controls.execute('delegation_submit',{units:[proposal('bounded')]});await controls.execute('delegation_yield',{mode:'all'});throw new AgentYieldError();}
+  if(!retried){retried=true;await controls.execute('delegation_retry',{unitId:work.units[0].id});await controls.execute('delegation_yield',{mode:'all'});throw new AgentYieldError();}
+  return 'The branch remains failed within its original budget';
+ }});
+ runtime.start({id:'bounded-work',profileId:'bounded-coordinator',goal:'Generated task',input:{},allowedCapabilities:['fixture']});const work=await settle(runtime,'bounded-work');
+ assert.equal(retried,true);assert.equal(calls,3);assert.equal(work.units[0].attempts,3);assert.equal(work.units[0].status,'failed');assert.equal(runtime.artifactMetadata(work.id).length,0);
 });

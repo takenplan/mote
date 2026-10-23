@@ -49,9 +49,9 @@ test('a parent yields while a child retries and never reopens a terminal child',
   execute:async(_step,signal)=>f.engine.runStep({id:'generated-child',operationId:'generated:nested',kind:'generated-child',pool:'child',policy:EXECUTION_POLICIES.localProcessing,input:{},signal,validate:()=>true,
    execute:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'provider_unavailable',retryAfterMs:1000,executionStarted:false});},commit:()=>{value='generated';},read:()=>value,project:()=>{}}),commit:()=>{}};
  f.engine.register(parent);const id=f.engine.enqueue('generated:nested','parent',{});
- for(let n=0;n<4;n++){await f.engine.drain([id]);if(n<3){assert.equal(f.engine.get(id)!.state,'waiting');assert.equal(f.engine.get(id)!.attempts,0);assert.equal(f.engine.get(id)!.availableAt,f.engine.get('generated-child')!.availableAt);assert.equal(f.engine.failure(id)!.causeStepId,'generated-child');assert.equal(f.engine.failure(id)!.causeCode,'provider_unavailable');assert.equal(f.engine.failure(id)!.availableAt,f.engine.failure('generated-child')!.availableAt);}f.advance(1000);}
- assert.equal(calls,4);assert.equal(f.engine.get('generated-child')!.state,'failed');assert.equal(f.engine.get('generated-child')!.attempts,4);assert.equal(f.engine.get(id)!.state,'failed');
- f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,4,'a parent retry cannot silently reopen a terminal child');assert.equal(f.engine.get(id)!.state,'failed');
+ for(let n=0;n<3;n++){await f.engine.drain([id]);if(n<2){assert.equal(f.engine.get(id)!.state,'waiting');assert.equal(f.engine.get(id)!.attempts,0);assert.equal(f.engine.get(id)!.availableAt,f.engine.get('generated-child')!.availableAt);assert.equal(f.engine.failure(id)!.causeStepId,'generated-child');assert.equal(f.engine.failure(id)!.causeCode,'provider_unavailable');assert.equal(f.engine.failure(id)!.availableAt,f.engine.failure('generated-child')!.availableAt);}f.advance(1000);}
+ assert.equal(calls,3);assert.equal(f.engine.get('generated-child')!.state,'failed');assert.equal(f.engine.get('generated-child')!.attempts,3);assert.equal(f.engine.get(id)!.state,'failed');
+ f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,3,'a parent retry cannot silently reopen a terminal child');assert.equal(f.engine.get(id)!.state,'failed');
 });
 
 test('an unclassified program error stops after one execution instead of becoming transient',async t=>{
@@ -78,7 +78,7 @@ test('safe temporary call failures retain their count across a long wait without
 
 test('an explicit zero retry delay for a real temporary failure retains its finite execution budget',async t=>{
  const f=fixture(t);let calls=0;f.engine.register({...base,execute:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0});}});
- const id=f.engine.enqueue('generated:zero-delay','generated',{});await f.engine.drain([id]);assert.equal(calls,4);assert.equal(f.engine.get(id)!.state,'failed');assert.equal(f.engine.get(id)!.attempts,4);
+ const id=f.engine.enqueue('generated:zero-delay','generated',{});await f.engine.drain([id]);assert.equal(calls,3);assert.equal(f.engine.get(id)!.state,'failed');assert.equal(f.engine.get(id)!.attempts,3);
 });
 
 test('orchestration null creates no task deadline while cancellation still fences an uncooperative result',async t=>{
@@ -99,4 +99,18 @@ test('an input-specific operation deadline starts after pool admission rather th
  const first=f.engine.enqueue('generated:held-slot','generated',{hold:true}),queued=f.engine.enqueue('generated:queued-budget','generated',{}),run=f.engine.drain([first,queued]);
  await started;await new Promise(resolve=>setTimeout(resolve,60));assert.equal(f.engine.get(queued)!.state,'waiting');assert.equal(f.engine.get(queued)!.attempts,0);
  release();await run;await f.engine.drain([queued]);assert.equal(f.engine.get(queued)!.state,'succeeded');assert.equal(f.engine.get(queued)!.attempts,1);
+});
+
+
+test('three failed executions persist through restart and prerequisite reopen; only owner reset renews them',async t=>{
+ const f=fixture(t);let calls=0,fail=true;
+ const handler={...base,execute:async()=>{calls++;if(fail)throw new ExecutionFailure('transient','provider_network',1000);return null;}};
+ f.engine.register(handler);const id=f.engine.enqueue('generated-bounded-round','generated',{});
+ await f.engine.drain([id]);assert.equal(calls,1);
+ f.engine.retry(id);assert.equal(f.engine.get(id)!.attempts,1,'reopening cannot reset a failed-execution count');
+ f.advance(1000);await f.restart();f.engine.register(handler);await f.engine.drain([id]);assert.equal(calls,2);
+ f.advance(1000);await f.engine.drain([id]);assert.equal(calls,3);assert.equal(f.engine.get(id)!.state,'failed');
+ f.advance(86400000);f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,3);assert.equal(f.engine.get(id)!.state,'failed');
+ await f.restart();f.engine.register(handler);f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,3);
+ fail=false;f.engine.retry(id,true);await f.engine.drain([id]);assert.equal(calls,4);assert.equal(f.engine.get(id)!.state,'succeeded');assert.equal(f.engine.get(id)!.attempts,1);
 });

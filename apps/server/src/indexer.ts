@@ -51,7 +51,7 @@ export class Indexer {
     return stepId;
   }
 
-  retry(){const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=this.store.retryIndex();for(const row of db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state!='running'").all())this.engine.retry(String(row.id));if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}}
+  retry(){const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=this.store.retryIndex();for(const row of db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state!='running'").all())this.engine.retry(String(row.id),true);if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}}
   get configured() {return Boolean(this.config.embeddingModel&&this.config.embeddingBaseUrl);}
   private queryCache=new Map<string,{at:number;vector:number[]}>();
   async embed(text:string,timeoutMs=45000,signal?:AbortSignal,operationId?:string):Promise<number[]> {

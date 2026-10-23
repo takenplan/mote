@@ -153,7 +153,7 @@ export class ExecutionEngine {
   this.active.get(id)?.controller.abort();
  }
  cancelKind(kind:string){for(;;){const rows=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND state NOT IN ('succeeded','cancelled','stale') LIMIT 500").all(kind);if(!rows.length)return;for(const row of rows)this.cancel(String(row.id));}}
- retry(id:string,resetAttempts=true){
+ retry(id:string,resetAttempts=false){
   if(this.get(id)?.state==='running')throw new StoreError('Cancel the active step before retrying',409);
   this.active.get(id)?.controller.abort();this.store.db.prepare("UPDATE execution_steps SET state='waiting',attempts=CASE WHEN ? THEN 0 ELSE attempts END,available_at=0,lease_until=0,fence=NULL,error=NULL,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state!='running'").run(Number(resetAttempts),Number(resetAttempts),this.now(),id);this.project(id);
  }
@@ -211,10 +211,10 @@ export class ExecutionEngine {
     while([...this.active.values()].filter(a=>a.pool===pool&&a.lane===lane).length<limit){
      if(this.running(pool,lane)>=limit)break;
      const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN execution_resources held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>?) ORDER BY coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
-     let row:Row|undefined;for(const candidate of candidates){if(this.lane(view(candidate as Row))===lane){row=candidate as Row;break;}}
+     let row:Row|undefined;for(const candidate of candidates){if(!this.active.has(String(candidate.id))&&this.lane(view(candidate as Row))===lane){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
-     const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{this.active.delete(row.id);if(completed)this.scheduleTick();});
+     const controller=new AbortController();let completed=true;const task=this.execute(row,handler,controller).catch(error=>{completed=false;throw error;}).finally(()=>{if(this.active.get(row.id)?.controller===controller)this.active.delete(row.id);if(completed)this.scheduleTick();});
      this.active.set(row.id,{controller,task,pool,kind:row.kind,lane});started.push(task);
     }
     }
@@ -238,6 +238,10 @@ export class ExecutionEngine {
     // Yield after the durable decision, with no transaction or running lease,
     // so both background completion wakes and explicit drains allow timers.
     if(admission.category==='waiting')await yieldTurn();return;
+   }
+   if(this.get(row.id)!.attempts>=policy.maxAttempts){
+    db.prepare("UPDATE execution_steps SET state='failed',error='retry_budget_exhausted',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);
+    this.retainFailure(this.get(row.id)!,'failed',new ExecutionFailure('permanent','retry_budget_exhausted'));this.project(row.id);db.exec('COMMIT');return;
    }
    const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+1,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}

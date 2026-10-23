@@ -63,7 +63,7 @@ for(const historicalAuthority of ['stale','revoked'] as const)test(`resumed Memo
  const job=f.pipeline.get(String(f.store.db.prepare("SELECT id FROM memory_jobs WHERE json_extract(json,'$.workPackage.id')=?").get(proposals[0].id!)!.id)),unit=f.runtime.unit(proposals[0].id!);
  f.pipeline.pause(job.id);
  for(let n=0;n<30&&f.runtime.unit(unit.id).status!=='blocked';n++){await f.runtime.tick();await new Promise(resolve=>setTimeout(resolve,100));}
- assert.equal(f.runtime.unit(unit.id).status,'blocked');
+ assert.equal(f.runtime.unit(unit.id).status,'blocked');assert.equal(f.engine.get(unit.stepId)!.attempts,0,'paused prerequisite status is not a failed execution');
  if(historicalAuthority==='revoked')f.setAllowed(candidate=>candidate.inputKey!=='raw-0');
  f.pipeline.resume(job.id);
  for(let n=0;n<3;n++)f.adapter.reconcile();

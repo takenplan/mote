@@ -42,8 +42,8 @@ test('admission waits do not spend attempts; retry is bounded and persisted',asy
  const id=engine.enqueue('retry','fixture',{});await engine.drain([id]);assert.equal(engine.get(id)!.state,'blocked');assert.equal(engine.get(id)!.attempts,0);assert.equal(calls,0);
  blocked=false;engine.retry(id);await engine.drain([id]);assert.equal(calls,1);assert.equal(engine.get(id)!.state,'waiting');
  await engine.drain([id]);assert.equal(calls,1);
- for(let i=0;i<3;i++){advance(5001);await engine.drain([id]);}assert.equal(calls,4);assert.equal(engine.get(id)!.state,'failed');
- advance(100000);await engine.drain([id]);assert.equal(calls,4);
+ for(let i=0;i<2;i++){advance(5001);await engine.drain([id]);}assert.equal(calls,3);assert.equal(engine.get(id)!.state,'failed');
+ advance(100000);await engine.drain([id]);assert.equal(calls,3);
 });
 
 test('FTS deletion receipts cannot break failure, retry, cancellation or commit fences',async t=>{
@@ -116,4 +116,17 @@ test('handler disposal interrupts local work and preserves queued, blocked and t
  assert.equal(engine.get(blocked)!.state,'blocked');assert.equal(engine.get(blocked)!.error,'model_missing');
  assert.equal(engine.get(cancelled)!.state,'cancelled');release();await new Promise(resolve=>setImmediate(resolve));assert.equal(commits,0);
  engine.register({...base});await engine.drain([running,queued]);assert.equal(engine.get(running)!.state,'succeeded');assert.equal(engine.get(queued)!.state,'succeeded');
+});
+
+
+test('a locally expired lease waits for its old physical task to settle before readmission',async t=>{
+ const {engine,advance}=await fixture(t);let release!:()=>void,entered!:()=>void,calls=0;const commits:number[]=[];
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ engine.register({...base,concurrency:()=>2,execute:async()=>{const call=++calls;if(call===1){entered();await held;}return call;},commit:(_step,value)=>{commits.push(Number(value));}});
+ const id=engine.enqueue('generated-local-expiry','fixture',{}),running=engine.drain([id]);await started;
+ try{
+  advance(30001);await engine.tick();await engine.tick();
+  assert.equal(engine.get(id)!.state,'waiting');assert.equal(engine.isActiveStep(id),true);assert.equal(calls,1,'expired local cleanup still owns its physical task');
+ }finally{release();}
+ await running;await engine.drain([id]);assert.equal(calls,2);assert.deepEqual(commits,[2]);assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
 });

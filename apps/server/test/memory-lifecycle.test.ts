@@ -73,7 +73,7 @@ test('restart preserves failed window, snapshot settings and backoff; success al
 
 test('consolidation model timeout remains visible across restart without changing its window or retry delay',async t=>{
  for(const sharedEngine of [false,true])await t.test(sharedEngine?'shared executor':'direct extension',async t=>{
-  const store=fixture(t),engine=sharedEngine?new ExecutionEngine(store):undefined;let now=Date.now(),calls=0;
+  const store=fixture(t);let now=Date.now(),calls=0;const engine=sharedEngine?new ExecutionEngine(store,()=>now):undefined;
   let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);
   try{
    lifecycle.register({id:'consolidation',version:'fixture',stream:'memory',async run(_window,checkpoint){calls++;checkpoint('generated-consolidation');throw new AgentTimeoutError();}});
@@ -212,4 +212,23 @@ test('provider Retry-After survives lifecycle restart and exceeds the ordinary b
  for(let i=0;i<25;i++)event(store);await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].retryAt,now+86400000);assert.equal(lifecycle.view().extensions[0].error,'rate_limited');await lifecycle.close();
  lifecycle=new MemoryLifecycle(store,()=>true,()=>now);t.after(()=>lifecycle.close());lifecycle.register({id:'extraction',version:'fixture',stream:'evidence',async run(){calls++;}});
  now+=86399999;await lifecycle.tick();assert.equal(calls,1);now++;await lifecycle.tick();assert.equal(calls,2);assert.equal(lifecycle.view().extensions[0].pendingChanges,0);
+});
+
+
+test('shared lifecycle counts each failed invocation once and retains three-attempt exhaustion across restart',async t=>{
+ const store=fixture(t);let now=Date.now(),calls=0,engine=new ExecutionEngine(store,()=>now),lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);
+ const register=()=>lifecycle.register({id:'consolidation',version:'bounded-fixture',stream:'memory',async run(_window,checkpoint){calls++;checkpoint('retained-window');throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:1000});}});
+ register();lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+ try{
+  for(let attempt=1;attempt<=3;attempt++){
+   await lifecycle.tick();const state=lifecycle.view().extensions[0];assert.equal(calls,attempt);assert.equal(state.failures,attempt);assert.equal(state.cursor,0);assert.equal(state.active?.checkpoint,'retained-window');
+   await lifecycle.tick();assert.equal(calls,attempt);assert.equal(lifecycle.view().extensions[0].failures,attempt,'observing one receipt cannot count it twice');
+   if(attempt<3){
+    const retryAt=state.retryAt!;assert.ok(retryAt>=now+120000);await lifecycle.close();await engine.close();engine=new ExecutionEngine(store,()=>now);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();
+    now=retryAt-1;await lifecycle.tick();assert.equal(calls,attempt);assert.equal(lifecycle.view().extensions[0].failures,attempt);now++;
+   }
+  }
+  const exhausted=lifecycle.view().extensions[0];assert.equal(exhausted.manualRetryRequired,true);now+=86400000;await lifecycle.tick();assert.equal(calls,3);
+  await lifecycle.close();await engine.close();engine=new ExecutionEngine(store,()=>now);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();await lifecycle.tick();assert.equal(calls,3);assert.equal(lifecycle.view().extensions[0].failures,3);
+ }finally{await lifecycle.close();await engine.close();}
 });
