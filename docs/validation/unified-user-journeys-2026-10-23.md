@@ -628,23 +628,82 @@ Status at checkpoint 50: implementation-complete; full local affected qualificat
     complete exact-head E2E and the unchanged affected driver's eligible reuse or
     rerun decisions remain pending. The root fixture input receives no exemption.
 
+52. Current-entry E2E on `10c8f236975422828d2f866efb2ebd43c4c1d661`
+    passed the complete configuration browser, all eight integrated browser
+    groups, and the compiled attachment → processing → Material asset → personal
+    export entry (**1/1**). All generated fixtures ran headlessly and cleaned up.
+    The 5,241 tracked/source/build file hashes were unchanged before and after
+    these journeys and after the subsequent affected run.
+
+    The subsequent affected run completed at **2026-10-23 00:43:13 UTC** with
+    **37/38 tasks passed**, stable guarded inputs and confirmed cleanup. Receipt:
+    `2026-10-23T00-03-57-805Z-50761923-deda-4e04-85d5-767b10d135f0`.
+    Web passed **651/651** and Desktop passed. All sixteen Server groups ran;
+    group 6 alone failed one Actions restart case: the shared provider HTTP
+    request count was 22 rather than 21 after restart and wake. The later
+    disabled-input stage had not run. Android again reported 25 up-to-date tasks.
+    This failed candidate is retained as evidence, not reported as qualified.
+
+53. A prospectively reviewed diagnostic-only change preserved all five original
+    Actions cases, 58 assertions and existing deadlines. The exact-file driver
+    passed **5/5** with stable inputs and cleanup
+    (`2026-10-23T00-43-33-962Z-46b33752-fb79-42f9-83ca-1ae88ecfe0ba`).
+    It reached the relevant unfinished-work state: the 21-call baseline included
+    15 Memory requests, one running Memory batch and another waiting batch.
+    Restart resumed the same Memory task and lease; its next five actual requests
+    happened after the original count assertion. Completed Actions jobs, task
+    attempts and usage stayed unchanged throughout the recorded stages.
+
+    That diagnostic PASS did not close the failure. It demonstrated a shared
+    provider measurement precondition defect. The exact 22nd request in the
+    historical failed run was not captured and remains unknown. No production
+    Actions replay defect or universal absence of replay is claimed from this
+    observation. The next correction controls the independent Memory execution
+    state explicitly while preserving its real admission, authority and later
+    execution; it does not filter the original global request count.
+
+54. The reviewed one-file state control passed all **5/5** original cases at
+    **2026-10-23 01:03:15 UTC**, with stable guarded inputs and confirmed cleanup.
+    Receipt: `2026-10-23T01-02-35-353Z-b6f4bfe5-5252-460b-bac0-113d0fc0ab27`.
+    All original 58 assertions, waits and deadlines remain; the other four cases
+    are byte-identical. Only the existing Memory model-pool admission is held in
+    this test, preserving real material intake, task grants and model snapshots.
+
+    The mandatory witness showed two actual Memory batches waiting at zero
+    attempts across restart, then a third admitted batch for the later input.
+    The original global provider count stayed at six through the negative phases
+    and rose to nine only for the new Actions input. Restoring the original pool
+    then executed those exact three Memory tasks: 45 additional HTTP requests
+    matched their actual usage, with nine settled issuances and nine quiescent
+    physical calls. The unchanged Actions-only responder naturally produced
+    `agent_host_validation` failures after three attempts per batch; this is
+    execution/cleanup evidence, not successful Memory extraction. Completed
+    Actions, B history and the full request privacy assertions stayed intact.
+
+    Hash comparison against the final E2E manifest found only this Server test
+    changed; all application sources, browser fixtures and built outputs were
+    identical. Existing E2E evidence remains attached to its original tested
+    revision. The complete affected driver must now rerun invalidated checks and
+    may reuse eligible original passed-task receipts; no check classification,
+    timeout or acceptance criterion was relaxed.
+
 ## Audit issue coverage ledger
 
-This ledger tracks the original audit scope after checkpoint 51. The application
-passed complete affected qualification at checkpoint 50; subsequent test/fixture
-corrections require renewed candidate qualification. See the timestamped
+This ledger tracks the original audit scope after checkpoint 54. Complete current-entry
+E2E passed at checkpoint 52; the final one-test state correction passed at
+checkpoint 54 and requires renewed affected qualification. See the timestamped
 checkpoints and final PR/delivery record.
 
 | Issues | Shared implementation | Current evidence / gap |
 | --- | --- | --- |
-| R01–R04 | Configuration CAS, intent coordination, connector task snapshots and visible automation controls | Module and complete affected consumers passed; standalone browser controls follow checkpoint 50 |
+| R01–R04 | Configuration CAS, intent coordination, connector task snapshots and visible automation controls | Module and complete affected consumers passed; complete standalone browser controls passed at checkpoint 52 |
 | R05 | Stage-specific Actions prerequisites and explicit waiting status | Module and complete affected Actions consumers passed |
 | R06–R07 | New-target Memory authorization, separate history and immediate ready intake | Module, intake/observation, independent review, disable/drain and complete affected consumers passed |
 | R08–R10 | Shared source, typed time, lineage and eligible evidence projection | Module, current readers, Memory and complete affected consumers passed; shared source presentation preserved |
-| R11–R12 | Import incarnation, tombstones, deterministic decoding and explicit unsupported outcome | Decoder/identity and current Server/Web portable consumers passed; separate compiled attachment/export entry follows checkpoint 50 |
+| R11–R12 | Import incarnation, tombstones, deterministic decoding and explicit unsupported outcome | Decoder/identity and current Server/Web portable consumers passed; compiled attachment/export entry passed at checkpoint 52 |
 | R13–R14 | Shared Desktop outcomes and per-subrequest durable receipt delivery | Focused transport and complete Desktop suite passed, including actual Central source-account retry |
 | R15 | Accepted import operation authority | Module, real configuration seam and actual portable import/logout consumers passed |
-| R16 | Diagnostics links to existing instance settings | Source correction and complete Web suite passed; standalone browser evidence follows checkpoint 50 |
+| R16 | Diagnostics links to existing instance settings | Source correction and complete Web suite passed; standalone browser evidence passed at checkpoint 52 |
 
 The audit's unmeasured capacity/export and cross-domain reuse risks are not
 represented as proven failures or resolved performance work. Matching-contract
@@ -655,8 +714,7 @@ physical-device behavior.
 
 ## Validation / remaining work
 
-At checkpoint 51, finite and affected browser repairs have passed. Renewed
-exact-head affected qualification and complete generated E2E, followed by PR, Dev
-packaging and artifact inspection, are the remaining delivery stages. Their final status belongs to the exact-head PR and retained delivery
-record under `artifacts/unified-user-journeys-2026-10-23/`. Physical-device and
+At checkpoint 54, complete generated E2E and the final finite repair have passed.
+Renewed affected qualification, PR, Dev packaging and artifact inspection remain.
+Their final status belongs to the exact-head PR and retained delivery record under `artifacts/unified-user-journeys-2026-10-23/`. Physical-device and
 live-model checks are not performed and must not be inferred from fixture tests.
