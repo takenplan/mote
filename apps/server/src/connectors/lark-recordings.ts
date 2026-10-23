@@ -28,18 +28,18 @@ export function createFeishuRecordings(directory:string,provided?:LarkRunner):Re
    const minute=z.object({token,title:z.string().max(500),create_time:z.string().regex(/^\d+$/),duration:z.string().regex(/^\d+$/),url:z.string().url().optional()}).parse(value.data?.minute);
    return {id:minute.token,title:minute.title,createdAt:new Date(Number(minute.create_time)).toISOString(),durationMs:Number(minute.duration),...(minute.url?{uri:minute.url}:{})};
   },
-  async transcript(_account,metadata,signal){return recordingStage(root,async(directory,relativeDirectory)=>{
-   const response=await runner({kind:'minutes-transcript',id:metadata.id,outputDir:relativeDirectory},{signal});
+  async transcript(_account,metadata,signal){
+   const response=await runner({kind:'minutes-transcript',id:metadata.id},{signal});
    let envelope:unknown;try{envelope=JSON.parse(response);}catch{throw new ExecutionFailure('permanent','recording_contract_invalid');}
    const failed=z.object({code:z.literal(2091003)}).passthrough().safeParse(envelope);
    const failedError=z.object({error:z.object({code:z.literal(2091003)}).passthrough()}).passthrough().safeParse(envelope);
    if(failed.success||failedError.success)throw new ExecutionFailure('transient','recording_transcript_not_ready');
    const value=larkJson(response);
-   const minutes=z.array(z.object({minute_token:token,artifacts:z.object({transcript_file:z.string()})})).parse(value.data?.minutes);
-   const result=minutes.find(m=>m.minute_token===metadata.id);if(!result)throw new ExecutionFailure('permanent','recording_contract_invalid');
-   const exported=resolve(root,result.artifacts.transcript_file),rawText=(await recordingFile(directory,exported,16*1024*1024)).toString('utf8');
+   const result=z.object({transcript:z.string()}).safeParse(value.data);if(!result.success)throw new ExecutionFailure('permanent','recording_contract_invalid');
+   const rawText=result.data.transcript;
+   if(Buffer.byteLength(rawText)>16*1024*1024)throw new ExecutionFailure('permanent','recording_export_size_invalid');
    try{return {rawText,transcript:feishuTranscript(rawText,metadata.durationMs)};}catch(error){if(error instanceof ExecutionFailure&&(error.code==='recording_transcript_format_unsupported'||error.code==='recording_timeline_invalid'))return {rawText,transcript:null,formatError:error.code};throw error;}
-  });},
+  },
   async media(_account,metadata,signal){return recordingStage(root,async(directory,relativeDirectory)=>{
    const output=relativeDirectory+'/recording.bin';larkJson(await runner({kind:'minutes-media',id:metadata.id,output},{signal}));
    const bytes=await recordingFile(directory,'recording.bin',FILE_MAX_BYTES);return {bytes,mimeType:recordingMime(bytes)};

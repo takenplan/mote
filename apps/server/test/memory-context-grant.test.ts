@@ -9,6 +9,7 @@ import {buildApp} from '../src/app.js';
 import {materialId} from '../src/materials.js';
 import {generatedMemoryOutput} from './fixtures/memory-planning.js';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';
+import {memoryEvidenceFingerprint} from '../src/memory.js';
 import type {Config} from '../src/config.js';
 
 const at='2026-10-13T00:00:00Z';
@@ -18,7 +19,7 @@ async function fixture(t:import('node:test').TestContext){
  const calls:QueryInput[]=[],failures:unknown[]=[];let inspect:(input:QueryInput,reader:ContextReader)=>Promise<ReturnType<typeof response>>=async input=>response(input);
  const node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{calls.push(input);try{return await inspect(input,reader);}catch(error){failures.push(error);throw error;}}})});await node.app.ready();t.after(async()=>{await node.app.close();await rm(dataDir,{recursive:true,force:true});});
  node.sources.register({id:'generated-context-source',name:'Generated scope',kind:'custom',deviceId:'generated',platform:'import'});
- async function material(key:string,texts:string[]){const original=await node.sources.upsert('generated-context-source',{externalId:key,revision:'1',text:texts.join('\n'),kind:'message',layer:'original',observedAt:at});const value=node.materials.publish({id:materialId('generated-context-source',key),kind:'mote.note',schemaVersion:1,title:'Generated '+key,origin:{sourceId:'generated-context-source',externalId:key,deviceId:'generated'},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:texts.map((text,index)=>({id:'line-'+index,kind:'text' as const,format:'plain',text,memberIds:[original.id]})),artifacts:[{key:'source-body',state:'ready',blockIds:texts.map((_,index)=>'line-'+index)}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});return {value,ids:node.materials.input(value.ref,['source-body'])!.evidenceIds,texts};}
+ async function material(key:string,texts:string[]){const original=await node.sources.upsert('generated-context-source',{externalId:key,revision:'1',text:texts.join('\n'),kind:'message',layer:'original',observedAt:at});const value=node.materials.publish({id:materialId('generated-context-source',key),kind:'mote.note',schemaVersion:1,title:'Generated '+key,origin:{sourceId:'generated-context-source',externalId:key,deviceId:'generated'},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:texts.map((text,index)=>({id:'line-'+index,kind:'text' as const,format:'plain',text,memberIds:[original.id]})),artifacts:[{key:'source-body',state:'ready',blockIds:texts.map((_,index)=>'line-'+index)}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});return {value,ids:node.materials.input(value.ref,['source-body'])!.evidenceIds,texts,originalId:original.id};}
  return {node,calls,failures,material,setInspect(callback:typeof inspect){inspect=callback;}};
 }
 function response(input:QueryInput){return {answer:generatedMemoryOutput(input,[]),runId:randomUUID(),trace:[],citations:[]};}
@@ -51,4 +52,31 @@ test('manual context reads reject unselected IDs, out-of-body ranges and split U
  assert.throws(()=>f.node.memoryPipeline.create({...input,contextEvidenceRanges:[{id:selected.ids[1],offset:2,length:1}]}),/UTF-16 pair/);
  assert.throws(()=>f.node.memoryPipeline.create({...input,evidenceRanges:undefined,contextEvidenceRanges:[{id:selected.ids[1],offset:0,length:4}]}),/explicit manual target selection/);
  assert.equal(f.node.memoryPipeline.list().length,0);assert.equal(f.calls.length,0);
+});
+
+for(const change of ['cancel','delete'] as const)test(`an admitted Memory query rechecks ${change} after yielding before model disclosure`,async t=>{
+ const f=await fixture(t),selected=await f.material('yield-boundary',['Generated selected original.']);
+ const abort=new AbortController(),gate=f.node.featureServices.agentGate,run=gate.run.bind(gate) as typeof gate.run;
+ let entered=0,callsAtSuspension=-1;
+ // Keep actual gate admission and the complete app wrapper. Change the
+ // generated grant immediately after the admitted callback first suspends.
+ gate.run=<T>(work:()=>Promise<T>,signal?:AbortSignal,key?:string):Promise<T>=>run<T>(async()=>{
+  const pending=work();entered++;callsAtSuspension=f.calls.length;
+  if(change==='cancel')abort.abort();else f.node.store.delete(selected.originalId);
+  return pending;
+ },signal,key);
+ const records=f.node.featureServices.evidenceReader.memories.readEvidence(selected.ids);
+ const input:QueryInput={question:'Generated Memory scheduling boundary',responseMode:'memory-extraction',signal:abort.signal,evidenceIds:selected.ids,evidenceRanges:selected.ids.map((id,index)=>({id,offset:0,length:selected.texts[index].length})),processingEvidence:Object.fromEntries(records.map(record=>[record.id,memoryEvidenceFingerprint(record)])),processingMaterialInputs:[f.node.materials.input(selected.value.ref,['source-body'])!]};
+ const outcome=await f.node.featureServices.queryAgent(input)
+  .then(result=>({result,error:undefined}),error=>({result:undefined,error}));
+ await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(entered,1);assert.equal(callsAtSuspension,0,'the admitted callback must suspend before disclosure');
+ assert.equal(outcome.result,undefined);assert.equal(f.calls.length,0,'changed authority never reaches the fake model');
+ if(change==='cancel')assert.equal(outcome.error?.name,'AbortError');else assert.equal(outcome.error?.code,'context_evidence_restricted');
+ assert.equal(gate.snapshot().active,0,'a denied admitted query releases its execution slot');
+ if(change==='cancel'){
+  gate.run=run;
+  const later=await f.node.featureServices.queryAgent({...input,signal:new AbortController().signal});
+  assert.deepEqual(JSON.parse(later.answer),{memories:[]});assert.equal(f.calls.length,1,'a cancelled preparation turn cannot block a later query');
+ }
 });

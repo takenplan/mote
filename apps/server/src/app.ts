@@ -352,6 +352,10 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const missing=input.evidenceIds.filter(id=>!input.processingEvidence?.[id]);
     return missing.length?{...input,processingEvidence:{...Object.fromEntries(memories.readEvidence(missing).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}}:input;
   };
+  // Order admitted preparation starts across event-loop turns, without waiting
+  // for a query to finish or changing either lane's in-flight concurrency.
+  let preparationTurn=Promise.resolve();
+  const yieldPreparationTurn=()=>{const turn=preparationTurn.then(()=>yieldEventLoop());preparationTurn=turn.catch(()=>{});return turn;};
   const wrapAgent=(inner:QueryAgent,settings:import('@mote/shared/models').ModelSettings):QueryAgent=>({get configured(){return inner.configured;},close:()=>inner.close(),query:async input=>{
     assertModelPurpose(input);
     await assertModelEvidenceAsync(input);
@@ -360,6 +364,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     input.onProgress?.({stage:'starting',phase:'started',message:moteText('等待 Agent 执行名额')});
     const queuedAt=performance.now(),lane=input.executionLane==='interactive'?'interactive':'background';
     return (lane==='interactive'?interactiveGate:agentGate).run(async()=>{
+      await yieldPreparationTurn();input.signal?.throwIfAborted();
       const operationId=input.traceContext?.operationId??(input.traceContext?.jobId?'job:'+input.traceContext.jobId:'query:'+randomUUID());
       const admittedAt=performance.now(),queueWaitMs=admittedAt-queuedAt;let status:'completed'|'failed'|'yielded'='failed';
       try{observeMemory(input,'catalog_snapshot',()=>evidenceReader.retainMemorySnapshot(input));const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);queryAccounting.getStore()?.agentStarted();return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
