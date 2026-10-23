@@ -17,10 +17,13 @@ async function fixture(t:TestContext,agent:QueryAgent){
 }
 test('review launch acknowledges immediately, survives reconnect, reports real tools, and is idempotent',async t=>{
   let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);let calls=0;
+  let reported!:()=>void;const toolReported=new Promise<void>(resolve=>reported=resolve);
   const result={answer:JSON.stringify({title:'Generated report',markdown:'Generated report',html:'<p>Generated report</p>'}),citations:[],trace:[],runId:randomUUID()};
-  const {app,insightRuns,store}=await fixture(t,{configured:true,query:async(input:QueryInput)=>{calls++;input.onProgress?.({stage:'tool',tool:'timeline',count:4,...{arguments:{secret:'never-store'},reasoning:'never-store'}});await gate;return {...result,runId:randomUUID()};},close:async()=>release()});
+  const {app,insightRuns,store}=await fixture(t,{configured:true,query:async(input:QueryInput)=>{calls++;input.onProgress?.({stage:'tool',tool:'timeline',count:4,...{arguments:{secret:'never-store'},reasoning:'never-store'}});reported();await gate;return {...result,runId:randomUUID()};},close:async()=>release()});
   const payload={requestId:randomUUID(),prompt:'Synthetic report request',timeZone:'Asia/Shanghai'};
   const response=await app.inject({method:'POST',url:'/api/insight-runs',headers,payload});assert.equal(response.statusCode,202,response.body);assert.equal(response.json().status,'running');
+  // The launch ACK is independent of when the held model emits its tool event.
+  await toolReported;
   const detail=await app.inject({url:'/api/insight-runs/'+payload.requestId,headers});assert.equal(detail.json().events.at(-1).tool,'timeline');assert.equal(detail.json().events.at(-1).count,4);assert.ok(!detail.body.includes('never-store'));
   assert.equal((await app.inject({method:'POST',url:'/api/insight-runs',headers,payload})).statusCode,202);assert.equal(calls,1);
   assert.equal((await app.inject({method:'POST',url:'/api/insight-runs',headers,payload:{...payload,prompt:'changed'}})).statusCode,409);
