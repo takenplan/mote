@@ -64,7 +64,7 @@ Dev 默认节点 `http://127.0.0.1:47842`，仅供用户显式配令牌后的本
 
 ## 当前更新与签名兼容
 
-Android Dev 的固定入口为 [Android Dev 下载](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)：选择最新 Pre-release，直接点击说明中的 **Download APK**，在手机上下载并覆盖安装。每次构建有独立 Tag，CI 版本显示为 `<版本>-dev.<构建序号>`，版本码随 workflow run number 递增；沿用 Dev 包名和固定证书。Prod Beta / 正式版仍通过 `android-v*` 标签发布，安装身份与 Dev 分开。具体触发命令见 [发布流程](releasing.md#日常-dev-构建)。
+Android Dev 的固定入口为 [Android Dev 下载](https://github.com/utopiafar/mote/releases?q=android-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)：选择最新 Pre-release，直接点击说明中的 **Download APK**，在手机上下载并覆盖安装。每次构建有独立 Tag，CI 版本显示为 `<版本>-dev.<构建序号>`，版本码随 workflow run number 递增；沿用 Dev 包名和固定证书。Prod Beta / 正式版仍通过 `android-v*` 标签发布，安装身份与 Dev 分开。具体触发命令见 [发布流程](releasing.md#日常-dev-构建)。
 
 下文签名清单下载器属于保留的历史实现；当前发布没有 `mote-release.json`，不使用该自动更新通道。
 

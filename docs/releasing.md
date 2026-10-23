@@ -102,7 +102,7 @@ Android：在 `Release Android` 的 Run workflow 中选择 `main` 和 `profile=d
 gh workflow run release-android.yml --repo utopiafar/mote --ref main -f profile=dev
 ```
 
-通过 Development 单测、签名和 APK 身份校验后，自动发布独立的 `android-dev-<run number>-<短 SHA>` Pre-release。手机收藏 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，打开最上面的发布，点击说明里的 **Download APK**，下载后确认覆盖安装。公开附件只有 APK，无需登录 Actions 或解压 Artifact；构建元数据仍在 Actions 保留 7 天，Release APK 不随 Artifact 过期。
+通过 Development 单测、签名和 APK 身份校验后，自动发布独立的 `android-dev-<run number>-<短 SHA>` Pre-release。手机收藏 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=android-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，打开最上面的发布，点击说明里的 **Download APK**，下载后确认覆盖安装。公开附件只有 APK，无需登录 Actions 或解压 Artifact；构建元数据仍在 Actions 保留 7 天，Release APK 不随 Artifact 过期。
 
 每个 workflow run 对应一个不可变分发版本，`versionName` 为 `<组件版本>-dev.<run number>`，`versionCode` 为 `1000000000 + run number`，独立于 Prod 的版本码。重复运行同一次 workflow 只能修复未发布草稿；已经发布、已有更新构建或 Tag 指向不同提交时拒绝覆盖，应重新 Run workflow。Dev 发布不设置全仓库 Latest。仅可信仓库 `main` 的手动触发可以公开 Dev；其他允许的分支仍只保留 Artifact。
 
