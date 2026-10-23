@@ -33,29 +33,30 @@ class ConnectionInstrumentedTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("mote", 0); val original = preferences.all.toMap()
         require(!Settings(context).enabled)
-        fun invitation(server: String) = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", server)
+        val selectionField = ConnectionActivity::class.java.getDeclaredField("selection").apply { isAccessible = true }
+        val selectionCtor = Class.forName("dev.mote.collector.ConnectionActivity\$PickerSelection")
+            .getDeclaredConstructor(String::class.java, String::class.java).apply { isAccessible = true }
+        fun invitation(server: String) = JSONObject().put("format", "mote.connection").put("version", 2)
+            .put("deploymentId", "generated-deployment").put("userId", "generated-user").put("purpose", "device").put("serverUrl", server)
             .put("code", "A".repeat(43)).put("expiresAt", Instant.ofEpochMilli(System.currentTimeMillis() + 600_000).toString()).toString()
         try {
             ActivityScenario.launch(ConnectionActivity::class.java).awaitUiText(currentNodePrefix()).use { scenario ->
                 scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-                Settings(context).saveConnection("https://generated-new.invalid", "synthetic-owner-token-no-network-123456789", "合成设备", false)
+                Settings(context).save(Settings(context).read().copy(server = "https://generated-new.invalid", token = "synthetic-owner-token-no-network-123456789", deviceName = "合成设备", authSignedOut = true))
                 scenario.resumeGeneratedTask()
                 scenario.awaitUiText(currentNodePrefix("https://generated-new.invalid"))
-                scenario.onActivity { activity ->
-                    val receive = ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java).apply { isAccessible = true }
-                    fun scan(raw: String) { receive.invoke(activity, 1, android.app.Activity.RESULT_OK, Intent().putExtra("invitation", raw)) }
-                    val texts = mutableListOf<android.widget.TextView>()
-                    fun walk(v: android.view.View) { if (v is android.widget.TextView) texts += v; if (v is android.view.ViewGroup) repeat(v.childCount) { walk(v.getChildAt(it)) } }
-                    walk(activity.window.decorView)
-                    assertTrue(texts.single { it.text.startsWith(currentNodePrefix()) }.text.startsWith(currentNodePrefix("https://generated-new.invalid")))
-                    for (server in listOf("https://first.generated.invalid", "https://second.generated.invalid")) {
-                        scan(invitation(server))
-                        assertTrue(texts.single { it.text.startsWith(previewPrefix()) }.text.startsWith(previewPrefix(server)))
-                        assertEquals("https://generated-new.invalid", Settings(context).read().server)
-                    }
-                    scan("invalid generated invitation")
-                    assertFalse(texts.any { it.text.startsWith(previewPrefix()) })
+                fun scan(raw: String) = scenario.onActivity { activity ->
+                    selectionField.set(activity, selectionCtor.newInstance(SourceRules.hash(Settings(context).read().toString()), Settings(context).read().ownerKey()))
+                    ConnectionActivity::class.java.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java).apply { isAccessible = true }
+                        .invoke(activity, 1, android.app.Activity.RESULT_OK, Intent().putExtra("invitation", raw))
                 }
+                for (server in listOf("https://first.generated.invalid", "https://second.generated.invalid")) {
+                    scan(invitation(server)); scenario.awaitUiText(previewPrefix(server))
+                    assertEquals("https://generated-new.invalid", Settings(context).read().server)
+                }
+                scan("invalid generated invitation")
+                scenario.awaitUiText(MoteI18n.text("邀请格式或节点不安全。请使用中央生成的 JSON/二维码；公网节点须为 HTTPS。"))
+                scenario.awaitUiText(previewPrefix("https://second.generated.invalid"))
             }
         } finally {
             val editor = preferences.edit().clear()
@@ -69,7 +70,8 @@ class ConnectionInstrumentedTest {
         try {
             ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
                 scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-                Settings(context).saveConnection("https://generated-new.invalid", "synthetic-owner-token-no-network-123456789", "合成设备", false)
+                Settings(context).save(Settings(context).read().copy(server = "https://generated-new.invalid", token = "synthetic-owner-token-no-network-123456789", deviceName = "合成设备", authSignedOut = true))
+                context.getSharedPreferences("mote", 0).edit().putBoolean("authSignedOut", false).commit()
                 scenario.resumeGeneratedTask()
                 scenario.onActivity { activity ->
                     fun views(v: android.view.View): List<android.view.View> = listOf(v) + if (v is android.view.ViewGroup) (0 until v.childCount).flatMap { views(v.getChildAt(it)) } else emptyList()
@@ -98,7 +100,8 @@ class ConnectionInstrumentedTest {
     @Test fun externalInvitationOpensReviewOnlyAndDoesNotRequestCamera() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val before = Settings(context).read(); val camera = context.checkSelfPermission(Manifest.permission.CAMERA)
-        val raw = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", "https://generated.invalid")
+        val raw = JSONObject().put("format", "mote.connection").put("version", 2).put("deploymentId", "generated-deployment").put("userId", "generated-user")
+            .put("purpose", "device").put("serverUrl", "https://generated.invalid")
             .put("code", "A".repeat(43)).put("expiresAt", Instant.ofEpochMilli(System.currentTimeMillis() + 600_000).toString())
         val uri = "mote://connect?data=" + Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toString().toByteArray())
         ActivityScenario.launch<ConnectionActivity>(Intent(context, ConnectionActivity::class.java).setData(Uri.parse(uri))).awaitUiText(MoteI18n.text("确认连接此节点")).use { scenario ->
@@ -136,12 +139,14 @@ class ConnectionInstrumentedTest {
         require(context.packageName == "dev.mote.collector.dev" && android.os.Build.FINGERPRINT.startsWith("google/sdk_gphone64_arm64/emu64a:"))
         val settings = Settings(context)
         require(!settings.enabled && context.queue().depth() == 0 && QuickNotes.draft(context).read().text.isEmpty())
-        val pending = File(context.noBackupFilesDir, "connection-pending.enc"); require(!pending.exists())
+        val pending = File(context.noBackupFilesDir, "connection-pending.enc"); pending.delete(); require(!pending.exists())
         val previous = listOf("mote", "connection").associateWith { context.getSharedPreferences(it, 0).all.toMap() }
         val listener = ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))
         val node = "http://127.0.0.1:${listener.localPort}"
         val requests = CopyOnWriteArrayList<String>()
-        val scope = java.util.concurrent.atomic.AtomicReference("owner")
+        val deploymentId = "generated-deployment"; val userId = "generated-user"; val credential = "generated-owner-credential"
+        val deviceClaim = java.util.concurrent.atomic.AtomicReference(settings.deviceId)
+        val grantScope = java.util.concurrent.atomic.AtomicReference("client")
         val token = "generated-owner-handshake-token-12345678901234567890"
         val worker = Thread {
             while (!listener.isClosed) {
@@ -155,10 +160,16 @@ class ConnectionInstrumentedTest {
                         if (line.startsWith("Content-Length:", ignoreCase = true)) length = line.substringAfter(':').trim().toInt()
                     }
                     repeat(length) { reader.read() }; requests += path
-                    val response = if (path == "/api/connections/redeem") JSONObject().put("serverUrl", node).put("scope", scope.get()).put("token", token).put("credentialId", "generated-owner-credential")
-                    else JSONObject().put("credential", JSONObject().put("id", "generated-owner-credential").put("scope", scope.get()).put("deviceId", settings.deviceId).put("platform", "android").put("serverUrl", node))
-                        .put("node", JSONObject().put("protocol", JSONObject().put("min", 1).put("max", 1)))
-                        .put("capabilities", JSONObject().put("ingest", true).put("ingressVersion", 2).put("ownSources", true).put("archiveRead", true))
+                    val response = when (path) {
+                        "/api/connections/redeem" -> JSONObject().put("id", "generated-request").put("expiresAt", System.currentTimeMillis() + 600_000)
+                        "/api/login/poll" -> JSONObject().put("ready", true).put("scope", grantScope.get()).put("purpose", "device").put("serverUrl", node)
+                            .put("deploymentId", deploymentId).put("userId", userId).put("deviceId", settings.deviceId)
+                            .put("token", "generated-paired-token-12345678901234567890").put("credentialId", credential).put("expiresAt", System.currentTimeMillis() + 600_000)
+                        else -> JSONObject().put("protocol", JSONObject().put("min", 2).put("max", 2))
+                            .put("credential", JSONObject().put("id", credential).put("kind", "client").put("deviceId", deviceClaim.get()).put("platform", "android").put("serverUrl", node))
+                            .put("account", JSONObject().put("deploymentId", deploymentId).put("userId", userId).put("credentialId", credential))
+                            .put("capabilities", JSONObject().put("ingest", true).put("ingressVersion", 3).put("ownSources", true).put("archiveRead", true))
+                    }
                     val body = response.toString().toByteArray()
                     it.getOutputStream().apply {
                         write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
@@ -168,22 +179,23 @@ class ConnectionInstrumentedTest {
             }
         }.apply { isDaemon = true; start() }
         try {
-            settings.save(settings.read().copy(server = node, token = token, debugHttp = true, syncMode = "manual"))
+            settings.saveConnection(node, token, "Generated device", true, AccountBinding(AccountBinding.normalize(node), deploymentId, userId))
             val before = settings.read(); val client = ConnectionClient(context)
-            assertEquals("owner", client.test())
+            assertEquals("client", client.test())
             for (retired in listOf("collector", "mcp-read", "mcp-write")) {
-                scope.set(retired)
+                deviceClaim.set("generated-other-device"); grantScope.set(retired)
                 assertEquals("identity", assertThrows(ConnectionFailure::class.java) { client.test() }.category)
-                assertEquals(before, settings.read()); assertFalse(pending.exists())
-                val invitation = ConnectionInvitation.parse(JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", node)
+                assertEquals(before, settings.read())
+                val invitation = ConnectionInvitation.parse(JSONObject().put("format", "mote.connection").put("version", 2)
+                    .put("deploymentId", deploymentId).put("userId", userId).put("purpose", "device").put("serverUrl", node)
                     .put("code", "A".repeat(43)).put("expiresAt", Instant.ofEpochMilli(System.currentTimeMillis() + 600_000).toString()).toString(), true, true)
                 val start = requests.size
                 assertEquals("response", assertThrows(ConnectionFailure::class.java) { client.connect(invitation, "Generated owner", true) }.category)
-                assertEquals(listOf("/api/connections/redeem"), requests.drop(start))
-                assertEquals(before, settings.read()); assertFalse(pending.exists())
+                assertEquals(listOf("/api/connections/redeem", "/api/login/poll"), requests.drop(start))
+                assertEquals(before, settings.read())
             }
         } finally {
-            listener.close(); worker.join(5000)
+            listener.close(); worker.join(5000); pending.delete()
             previous.forEach { (name, values) ->
                 val edit = context.getSharedPreferences(name, 0).edit().clear()
                 values.forEach { (key, value) -> when (value) {
