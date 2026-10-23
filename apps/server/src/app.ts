@@ -1,3 +1,4 @@
+import {executionObservability,type ObservationIdentity,type ObservationName} from './execution-observability.js';
 import {memoryIntegrationImageInputs} from './memory-image-grants.js';
 import {assertMemoryImageGrants} from './memory-image-grants.js';
 import {memoryReadRanges} from './memory-read-context.js';
@@ -174,7 +175,13 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   };
   const diagnostics=new ServerDiagnostics({...runtimeSettings.diagnostics(),directory:config.logDirectory??join(config.dataDir,'logs'),maxBytes:config.logMaxBytes??defaultLogMaxBytes(config.profile),maxFiles:config.logMaxFiles,maxEntries:config.logMaxEntries});
   await diagnostics.init();
+  const executionObserver=executionObservability(diagnostics)!;
+  const observationIdentity=(input:QueryInput):ObservationIdentity=>({jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId,attempt:input.traceContext?.attempt,
+    phase:input.traceContext?.phase==='coding-understanding'?'coding_understanding':input.traceContext?.phase==='review'?'review':'extract'});
+  const observeMemory=<T>(input:QueryInput|undefined,name:ObservationName,work:()=>T):T=>input?.responseMode==='memory-extraction'?executionObserver.sync(name,observationIdentity(input),work):work();
+  const observeMemoryAsync=<T>(input:QueryInput|undefined,name:ObservationName,work:()=>Promise<T>):Promise<T>=>input?.responseMode==='memory-extraction'?executionObserver.async(name,observationIdentity(input),work):work();
   const executor=new ExecutionEngine(store);
+  executor.bindObserver(value=>executionObserver.lease(value),()=>executionObserver.enabled());
   backendContext.provide('moteExecution',executor);
   const memoryStrategies=new MemoryStrategies(),memoryRecipeSettings=new MemoryRecipeSettings(store,memoryStrategies);
   const memoryAutomation=new MemoryAutomation(store);
@@ -253,7 +260,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const taskText=Boolean(input?.taskContext?.previousSummary||input?.taskContext?.turns?.length);
     if((conversationText&&input?.conversation?.evidenceDependencies?.complete!==true)||((taskText||input?.openingMemories?.length)&&input?.contextEvidenceDependencies?.complete!==true)||input?.openingMemories?.length&&!input?.contextEvidenceDependencies?.ids.length)throw contextFailure('context_lineage_incomplete');
   };
-  const assertModelEvidence=(input:QueryInput|undefined)=>{
+  const assertModelEvidence=(input:QueryInput|undefined)=>observeMemory(input,'query_assert',()=>{
     input?.assertContextAuthority?.();
     const catalog=(input as (QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt})|undefined)?.memoryCatalogMetadata;
     if(catalog&&!evidenceReader.memoryCatalogMetadataAllowed(catalog,new EvidenceExposurePolicy()))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
@@ -272,8 +279,8 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     if(input?.responseMode==='memory-extraction'&&input.evidenceIds!==undefined&&!evidenceReader.processingEvidenceAllowed(
       [...input.evidenceIds,...((input as QueryInput&{processingDisclosedEvidenceIds?:string[]}).processingDisclosedEvidenceIds??[])],input.processingEvidence,input.processingMaterialInputs,new EvidenceExposurePolicy(),
     ))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
-  };
-  const assertModelEvidenceAsync=async(input:QueryInput)=>{
+  });
+  const assertModelEvidenceAsync=(input:QueryInput)=>observeMemoryAsync(input,'query_assert',async()=>{
     input.assertContextAuthority?.();
     assertModelContext(input);
     const policy=new EvidenceExposurePolicy();
@@ -285,7 +292,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       await yieldEventLoop();
     }
     input.signal?.throwIfAborted();
-  };
+  });
   const agentFeatures=await installAgentFeatures(backendContext,evidenceReader.agent({diagnostics,allowQueryImages:()=>perception.settings().allowQueryImages,
     exposurePolicy:new EvidenceExposurePolicy(),
     currentOperation:()=>modelContext.getStore()?.responseMode==='memory-extraction'?'memory':'query',
@@ -302,7 +309,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const fileRawReader=new FileRawReader(store,files,archivedFiles,{
     mayReadFileVersion:(_sourceId,id)=>directImageAllowed(id),mayReadArchivedFile:()=>false,mayListSourceFiles:()=>false,mayListArchivedFiles:()=>false,
   });
-  const reader:ContextReader={...archiveReader,
+  const baseReader:ContextReader={...archiveReader,
     evidence:async args=>{
       const direct=args.ids.flatMap(id=>{const image=directImage(id);return image?[{id,capturedAt:modelContext.getStore()?.contextTime??new Date().toISOString(),appName:image.name,ocrText:'',sourceType:'user_attachment',summary:'User attached image',metadata:{mimeType:image.mimeType}}]:[];});
       const regular=args.ids.filter(id=>!directImage(id));
@@ -321,6 +328,15 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       }
       return imageOutput(Buffer.concat(parts),direct.mimeType,input,()=>directImageAllowed(id));
     },
+  };
+  // The current Memory host shares the archive reader with Ask. Observe only
+  // Memory calls inside its existing async context; no new reader or grant.
+  const observeRead=<Args extends unknown[],Result>(name:ObservationName,read:(...args:Args)=>Promise<Result>)=>(...args:Args)=>observeMemoryAsync(modelContext.getStore(),name,()=>read(...args));
+  const reader:ContextReader={...baseReader,
+    search:observeRead('reader_search',baseReader.search),timeline:observeRead('reader_timeline',baseReader.timeline),
+    evidence:observeRead('reader_evidence',baseReader.evidence),activity:observeRead('reader_activity',baseReader.activity),devices:observeRead('reader_devices',baseReader.devices),
+    ...(baseReader.readImage?{readImage:observeRead('reader_image',baseReader.readImage)}:{}),
+    ...(baseReader.memories?{memories:observeRead('reader_memories',baseReader.memories)}:{}),
   };
   const queryImages=(ids:string[])=>ids.map(id=>{
     const detail=files.detail(id),version=files.version(id),mimeType=detail.item.mimeType;
@@ -346,7 +362,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     return (lane==='interactive'?interactiveGate:agentGate).run(async()=>{
       const operationId=input.traceContext?.operationId??(input.traceContext?.jobId?'job:'+input.traceContext.jobId:'query:'+randomUUID());
       const admittedAt=performance.now(),queueWaitMs=admittedAt-queuedAt;let status:'completed'|'failed'|'yielded'='failed';
-      try{evidenceReader.retainMemorySnapshot(input);const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);queryAccounting.getStore()?.agentStarted();return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
+      try{observeMemory(input,'catalog_snapshot',()=>evidenceReader.retainMemorySnapshot(input));const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);queryAccounting.getStore()?.agentStarted();return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
       catch(error){if(error instanceof AgentYieldError)status='yielded';throw error;}
       finally{evidenceReader.releaseMemorySnapshot(input);diagnostics.record('agent.fragment_timing',{jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId,lane,unit:'agent_fragment',queueWaitMs,durationMs:performance.now()-admittedAt,status},'info');}
     },input.signal,input.traceContext?.operationId);
@@ -718,7 +734,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   }
   const jobId=(params:unknown)=>z.object({id:z.string().uuid()}).parse(params).id;
 
-  const delegation=new DelegationRuntime(store,executor,{concurrency:()=>runtimeSettings.execution().agentConcurrency,interactiveConcurrency:()=>runtimeSettings.execution().interactiveConcurrency,
+  const delegation=new DelegationRuntime(store,executor,{observePump:()=>executionObserver.hostTick(),concurrency:()=>runtimeSettings.execution().agentConcurrency,interactiveConcurrency:()=>runtimeSettings.execution().interactiveConcurrency,
     validateDependencies:ids=>assertModelEvidence({question:'',contextEvidenceDependencies:{version:1,complete:true,ids:[...ids]}}),
     validateSourceContextDependencies:pins=>assertSourceContextDependencies(sourceContexts,pins),
     revalidateEvidence:async receipts=>{
@@ -866,7 +882,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   });
   app.addHook('preClose',async()=>{
     await configService.close();
-    closing=true;eventLoop.disable();queryRuns.interrupt();
+    closing=true;executionObserver.close();executor.bindObserver(undefined);eventLoop.disable();queryRuns.interrupt();
     featureHost.stop();
     memoryPublication.stop();
     // Interrupt execution while its handlers, checkpoints and storage remain

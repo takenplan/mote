@@ -1,3 +1,4 @@
+import {observationClock,observationGap,type ExecutionLeaseObservation} from './execution-observability.js';
 import {ProviderFailure} from '@mote/shared';
 import {installOperationProjection,linkOperation,type OperationMembership} from './operation-projection.js';
 import {randomUUID,createHash} from 'node:crypto';
@@ -60,6 +61,12 @@ export class ExecutionEngine {
  private pumpAgain=false;
  private scheduled=false;
  private failureReceiptWriteFailures=0;
+ private observer:((value:ExecutionLeaseObservation)=>void)|undefined;
+ private observerEnabled:(()=>boolean)|undefined;
+ /** Trusted observation only; no task input, lease, grant or retry authority. */
+ bindObserver(observer:((value:ExecutionLeaseObservation)=>void)|undefined,enabled?:()=>boolean){this.observer=observer;this.observerEnabled=enabled;}
+ private observing(){try{return Boolean(this.observer)&&(this.observerEnabled?.()??true);}catch{return false;}}
+ private observe(value:ExecutionLeaseObservation){try{if(this.observing())this.observer?.(value);}catch{/* Observation cannot abort or authorize execution. */}}
  constructor(readonly store:Store,private now=Date.now){
   store.db.exec(`CREATE TABLE IF NOT EXISTS execution_steps(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,kind TEXT NOT NULL,pool TEXT NOT NULL,input TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,recovery_deadline INTEGER NOT NULL DEFAULT 0);
    CREATE TABLE IF NOT EXISTS execution_resources(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,PRIMARY KEY(step_id,resource_key));
@@ -192,7 +199,9 @@ export class ExecutionEngine {
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?").all(now) as Row[]){
    // An expired host lease proves interruption, not a completed processing
    // failure. Issued external calls remain protected by their domain ledger.
-   db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-1),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
+   const recovered=db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-1),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now).changes;
+   if(recovered)this.observe({type:'recover',taskId:row.id,attempt:row.attempts,leaseOverdueMs:Math.max(0,now-row.lease_until)});
+   this.project(row.id);
   }
  }
  /** Start available slots. Return only work admitted by this call; slow older work is independent. */
@@ -253,7 +262,18 @@ export class ExecutionEngine {
   // can remain strongly retained by Node until a long deadline actually fires.
   const step=this.get(row.id)!,signal=controller.signal;
   const deadline=timeout===null?undefined:setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline?.unref();
-  const renewal=setInterval(()=>{if(this.stopping)return;try{const at=this.now();if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes)controller.abort();}catch{controller.abort();}},10000);renewal.unref();
+  let previousRenewal=this.observing()?observationClock():undefined,knownLeaseUntil=now+(timeout===null?30000:Math.min(timeout+10000,30000));
+  const renewal=setInterval(()=>{
+   if(this.stopping)return;
+   const started=this.observing()?observationClock():undefined,priorLeaseUntil=knownLeaseUntil;
+   let outcome:'renewed'|'cas_missed'|'renew_exception'='renew_exception',renewedAt:number|undefined;
+   // The original CAS/abort boundary is unchanged. Observation runs afterward.
+   try{const at=this.now();renewedAt=at;if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes){outcome='cas_missed';controller.abort();}else{outcome='renewed';knownLeaseUntil=at+30000;}}catch{controller.abort();}
+   try{const ended=started?observationClock():undefined;
+    if(started)this.observe({type:'renew',taskId:row.id,attempt:step.attempts,outcome,...observationGap(previousRenewal,started,10000),...(ended&&ended.monotonic>=started.monotonic?{durationMs:ended.monotonic-started.monotonic}:{}),...(renewedAt===undefined?{}:{leaseRemainingMs:Math.max(0,priorLeaseUntil-renewedAt),leaseOverdueMs:Math.max(0,renewedAt-priorLeaseUntil)})});
+    previousRenewal=started;
+   }catch{/* Logging failure cannot replace the original CAS outcome. */}
+  },10000);renewal.unref();
   try{
    const assertGrant=()=>{
     if(signal.aborted)throw new ExecutionFailure('stale','grant_revoked');

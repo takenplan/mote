@@ -1,3 +1,4 @@
+import type {ObservationName,ObservationPhase} from './execution-observability.js';
 import {ProviderFailure} from '@mote/shared';
 import {AgentYieldError} from '@mote/agent';
 import {validationFeedback,validationLocation} from './memory-validation.js';
@@ -28,10 +29,10 @@ export interface AgentTraceInput {
 }
 const levels = ['debug','info','warn','error','silent'] as const;
 const operations:Operation[] = ['recording_metadata','recording_discover','recording_transcript','recording_media','recording_decode','recording_publish','capture','note','import','embedding','search','timeline','evidence','activity','devices','query','insight','retention','extract','diarize','align','turns','summary','file_upload','file_part','file_commit','file_revision','file_process','file_settings','file_retry'];
-const events = new Set(['server.started','server.stopping','request.started','request.completed','request.failed','queue.snapshot','support.exported','agent.trace','agent.fragment_timing','agent.harness_timing','agent.tool_rejected','agent.memory_validation_failed','agent.waiting','agent.yielded','agent.heartbeat','file.waiting','file.blocked','file.retry','file.cached','file.cancelled','file.settings','file.step.started','file.step.completed','file.step.failed',...['ingest','index','agent','source','maintenance','file'].flatMap(s=>[`${s}.started`,`${s}.completed`,`${s}.failed`])]);
+const events = new Set(['task.loop_timing','task.lease_timing','task.lease_renewal','task.lease_recovered','memory.reader_timing','server.started','server.stopping','request.started','request.completed','request.failed','queue.snapshot','support.exported','agent.trace','agent.fragment_timing','agent.harness_timing','agent.tool_rejected','agent.memory_validation_failed','agent.waiting','agent.yielded','agent.heartbeat','file.waiting','file.blocked','file.retry','file.cached','file.cancelled','file.settings','file.step.started','file.step.completed','file.step.failed',...['ingest','index','agent','source','maintenance','file'].flatMap(s=>[`${s}.started`,`${s}.completed`,`${s}.failed`])]);
 const routes = new Set(['files','file-sync','file-processing','conversations','configuration','sources','memories','layers','connectors','health','status','captures','notes','image','devices','connections','updates','activity','query','insights','index','export','import','diagnostics','support','web','unknown']);
 const categories = new Set(['validation','unauthorized','forbidden','not_found','conflict','source_context_changed','deleted','too_large','rate_limited','processor_response_unknown','processor_still_running','step_failed','step_pending','provider_timeout','provider_unavailable','provider_network','interrupted','input_changed','grant_revoked','model_not_configured','agent_response','embedding_http','embedding_invalid','embedding_transport','timeout','unavailable','storage_full','internal','not_configured','archive_only','unsupported_format','summary_disabled','cancelled']);
-const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount'] as const;
+const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount','clockForwardMs','clockBackwardMs','leaseRemainingMs','leaseOverdueMs','succeeded','skipped','dropped','intervalMs','delayMs'] as const;
 const responseReasons:Record<string,string>={
   provider_quota:"模型服务额度不足，恢复账户额度后再继续。",
   provider_policy:"模型服务拒绝了本次请求，请调整内容或处理范围。",
@@ -72,7 +73,8 @@ const eventStage=(event:string):DiagnosticStage=>{
   const prefix=event.split('.',1)[0];
   if(prefix==='request')return 'request';
   if(prefix==='ingest'||prefix==='index'||prefix==='agent'||prefix==='source'||prefix==='maintenance'||prefix==='file')return prefix;
-  if(prefix==='server'||prefix==='queue'||prefix==='support')return 'system';
+  if(prefix==='memory')return 'agent';
+  if(prefix==='server'||prefix==='queue'||prefix==='support'||prefix==='task')return 'system';
   return 'unknown';
 };
 const validStage=(value:unknown):value is DiagnosticStage=>typeof value==='string'&&value!=='all'&&diagnosticStageFilters.includes(value as DiagnosticStageFilter);
@@ -107,7 +109,7 @@ async function readLogLine(file:FileHandle,range:LogLineRange):Promise<string> {
   // The scanner's chunk is valid until its next iteration; ordinary short lines need no extra I/O.
   return range.chunk?range.chunk.toString('utf8',range.offset!,range.offset!+range.length):readLogText(file,range.position,range.length);
 }
-export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
+export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';taskId?:string;taskKey?:string;attemptId?:string;name?:ObservationName;phase?:ObservationPhase;state?:'completed'|'failed'|'cas_missed'|'recovered'|'summary';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
 export interface DiagnosticEvent extends EventFields { seq:number;at:string;instanceId:string;event:string;level:Exclude<LogLevel,'silent'>;stage?:DiagnosticStage;truncated?:boolean;trace?:Record<string,unknown> }
 export interface ServerDiagnosticsOptions { enabled?:boolean;debug?:boolean;level?:LogLevel;directory:string;maxBytes?:number;maxFiles?:number;maxEntries?:number;now?:()=>Date;traceEnabled?:boolean }
 
@@ -154,6 +156,11 @@ function fields(raw:unknown):EventFields {
   if(value.unit==='agent_fragment'||value.unit==='harness_session')out.unit=value.unit;
   if(value.status==='completed'||value.status==='failed'||value.status==='yielded')out.status=value.status;
   for(const key of numberKeys){const n=value[key];if(typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=Number.MAX_SAFE_INTEGER)out[key]=Math.round(n*1000)/1000;}
+  if(typeof value.taskKey==='string'&&/^[a-f0-9]{64}$/.test(value.taskKey))out.taskKey=value.taskKey;
+  for(const key of ['taskId','attemptId'] as const)if(typeof value[key]==='string'&&uuid.test(value[key]))out[key]=value[key];
+  if(['host_tick','lease_renew','lease_recover','reader_prepare','catalog_snapshot','query_assert','reader_search','reader_timeline','reader_evidence','reader_activity','reader_devices','reader_image','reader_memories'].includes(value.name as string))out.name=value.name as ObservationName;
+  if(['host','extract','review','coding_understanding'].includes(value.phase as string))out.phase=value.phase as ObservationPhase;
+  if(['completed','failed','cas_missed','recovered','summary'].includes(value.state as string))out.state=value.state as EventFields['state'];
   if(typeof value.requestId==='string'&&uuid.test(value.requestId))out.requestId=value.requestId;
   if(typeof value.jobId==='string'&&uuid.test(value.jobId))out.jobId=value.jobId;
   for(const key of ['batchId','runId','evidenceId'] as const)if(typeof value[key]==='string'&&uuid.test(value[key]))out[key]=value[key];
@@ -166,7 +173,7 @@ function fields(raw:unknown):EventFields {
   if(operations.includes(value.operation as Operation))out.operation=value.operation as Operation;
   if(typeof value.route==='string'&&routes.has(value.route))out.route=value.route;
   if(typeof value.category==='string'&&categories.has(value.category))out.category=value.category;
-  if(typeof value.reason==='string'&&Object.hasOwn(responseReasons,value.reason))out.reason=value.reason;
+  if(typeof value.reason==='string'&&(Object.hasOwn(responseReasons,value.reason)||['renewed','cas_missed','renew_exception','expired_fence','timer_late','window_summary','suppressed_summary'].includes(value.reason)))out.reason=value.reason;
   return out;
 }
 function cleanEvent(value:unknown):DiagnosticEvent|undefined {
@@ -336,6 +343,8 @@ export class ServerDiagnostics {
   }
   run<T>(requestId:string,task:()=>T):T {return this.context.run(uuid.test(requestId)?requestId:randomUUID(),task);}
   requestId():string|undefined {return this.context.getStore();}
+  /** Admission is read-only; an observer never enables diagnostics or trace payloads. */
+  accepts(level:DiagnosticEvent['level']){return !this.closed&&this.enabled&&this.level!=='silent'&&['debug','info','warn','error'].includes(level)&&levels.indexOf(level)>=levels.indexOf(this.level);}
   record(event:string,value:EventFields={},level:DiagnosticEvent['level']='info') {
     if(event==='agent.trace'||this.closed||!this.enabled||this.level==='silent'||!events.has(event)||!['debug','info','warn','error'].includes(level)||levels.indexOf(level)<levels.indexOf(this.level))return;
     const at=this.now().toISOString();

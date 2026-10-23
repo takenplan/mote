@@ -71,7 +71,7 @@ export class DelegationRuntime {
  private unregister:(()=>void|Promise<void>)[]=[];
  private timer?:ReturnType<typeof setInterval>;
  private closed=false;
- constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean}={}){
+ constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean;observePump?:()=>void}={}){
   retireBrokenActivityContinuationTrigger(store);
   this.journal=new DelegationStore(store);
   const sourceDependencyTable=`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
@@ -93,7 +93,7 @@ export class DelegationRuntime {
     return this.coordinators.get(String(profileId))?.lane??'background';}
    catch{return 'background';}
   }});
-  if(options.autoPump!==false){this.timer=setInterval(()=>{void this.tick().catch(()=>{});},500);this.timer.unref();}
+  if(options.autoPump!==false){this.timer=setInterval(()=>{try{this.options.observePump?.();}catch{/* Observation cannot skip the existing pump. */}void this.tick().catch(()=>{});},500);this.timer.unref();}
  }
  register(capability:DelegationCapability){
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(capability.id)||!capability.version||this.capabilities.has(capability.id))throw Error('Invalid or duplicate delegation capability');
