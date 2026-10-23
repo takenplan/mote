@@ -295,3 +295,25 @@ test('ordinary evidence revisions preserve the visible historical answer and cit
  revision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
  assert.match(d.body.textContent!,/相关证据已删除/);assert.doesNotMatch(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL|GENERATED OLD QUOTE/);
 });
+
+test('connection permission selection cannot relabel an already issued invitation',async t=>{
+ const {root,d}=await fixture(t),writes:string[]=[];
+ const api=apiWith((path,init)=>{
+  if(path==='/api/configuration')return {groups:[]};
+  if(path==='/api/connections')return {items:[],mcp:{enabled:false,writeEnabled:false,writeSourceIds:[]}};
+  if(init?.method==='POST'){writes.push(path);if(path.endsWith('/revoke'))return {revoked:true};return {scope:path.includes('collector-')?'collector':'owner',uri:'mote://connect?data=generated',invitation:{format:'mote.connection',version:1,serverUrl:'http://localhost',code:'g'.repeat(43),expiresAt:new Date(Date.now()+600000).toISOString()}};}
+  throw Error('Unexpected '+path);
+ });
+ await act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'http://localhost',devices:[]})));
+ const selector=d.querySelector<HTMLSelectElement>('[aria-label="设备权限"]')!;
+ await act(async()=>{selector.value='collector';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ await act(async()=>button(d,'生成设备二维码').click());
+ assert.equal(writes.at(-1),'/api/connections/collector-invitations');
+ const invitation=()=>d.querySelector('[aria-label="连接邀请"]')!;
+ assert.match(invitation().textContent!,/将邀请交给独立采集程序/);assert.match(invitation().textContent!,/采集器 · 仅同步本设备/);
+ await act(async()=>{selector.value='owner';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ assert.match(invitation().textContent!,/将邀请交给独立采集程序/,'form selection does not change the issued authority');
+ await act(async()=>button(d,'重新生成二维码').click());
+ assert.deepEqual(writes.slice(-2),['/api/connections/invitations/revoke','/api/connections/invitations']);
+ assert.match(invitation().textContent!,/在客户端打开「设置 → 连接」/);assert.match(invitation().textContent!,/完整客户端权限/);
+});

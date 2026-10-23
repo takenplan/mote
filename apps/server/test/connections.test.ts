@@ -7,7 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import {parseConnectionInvitation,MOTE_PROTOCOL_RANGE} from '@mote/shared';
+import {parseConnectionInvitation,MOTE_PROTOCOL_RANGE,noteCapture} from '@mote/shared';
 import {buildApp,type QueryAgent} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Connections,ConnectionError,type ConnectionFile} from '../src/connections.js';
@@ -317,4 +317,85 @@ test('500 revoked credentials do not block HTTP re-pairing and current credentia
  assert.equal((await node.app.inject({url:'/api/connections/self',headers:headers(current.token)})).statusCode,200);
  assert.equal((await node.app.inject({url:'/api/connections/self',headers:headers('generated-revoked-token-0')})).statusCode,401);
  assert.equal(node.connections.inventory().items.length,502);
+});
+
+async function collector(app:Awaited<ReturnType<typeof buildApp>>['app'],deviceId='synthetic-phone',bound=false){
+  const invitation=await app.inject({method:'POST',url:'/api/connections/collector-invitations',headers:headers(),payload:{serverUrl:'https://synthetic.invalid',label:'Standalone collector',...(bound?{deviceId}:{})}});
+  assert.equal(invitation.statusCode,200,invitation.body);assert.equal(invitation.json().scope,'collector');
+  const result=await redeem(app,invitation.json().invitation.code,deviceId);assert.equal(result.statusCode,200,result.body);assert.equal(result.json().scope,'collector');return result.json() as {token:string;credentialId:string};
+}
+
+test('collector uses actual HTTP for resumable intake without receiving archive or owner capabilities',async t=>{
+  const {app,sources}=await fixture(t),client=await collector(app),auth=headers(client.token);
+  const address=await app.listen({host:'127.0.0.1',port:0});
+  async function request(path:string,method='GET',body?:unknown,status=200){
+    const response=await fetch(address+path,{method,headers:{...auth,...(body?{'content-type':Buffer.isBuffer(body)?'application/octet-stream':'application/json'}:{})},...(body?{body:Buffer.isBuffer(body)?body:JSON.stringify(body)}:{})});
+    const text=await response.text();assert.equal(response.status,status,method+' '+path+' '+text);return text?JSON.parse(text):undefined;
+  }
+  const self=await request('/api/connections/self');assert.equal(self.credential.scope,'collector');assert.deepEqual(self.capabilities,{ingest:true,ingressVersion:2,ownSources:true,archiveRead:false});
+  await request('/api/devices/heartbeat','POST',{deviceId:'synthetic-phone',deviceName:'Generated',platform:'android',status:'paused',queueDepth:0});
+  const saved=note();await request('/api/notes','POST',saved,201);
+  await request('/api/captures','POST',noteCapture(note()),201);
+  const batch=await request('/api/captures/batch','POST',{captures:[noteCapture(note()),noteCapture(note())]});assert.equal(batch.results.length,2);assert.ok(batch.results.every((r:any)=>r.status===201));
+
+  assert.deepEqual((await request('/api/capture-browser/reconcile','POST',{deviceId:saved.deviceId,ids:[saved.id,randomUUID()]})).items.map((i:any)=>i.state),['present','unavailable']);
+  await request('/api/sources','POST',{...source('collected'),platform:'android',retention:'archive'});
+  await request('/api/sources/collected/items','PUT',item());
+  const bytes=Buffer.from('Generated file bytes, never personal content.'),manifest={sourceId:'collected',previousRevision:null,item:{externalId:'generated-file',revision:'v1',observedAt:new Date().toISOString(),title:'fixture.bin',kind:'file',layer:'original',text:'',mimeType:'application/octet-stream',deleted:false},relativePath:'fixture.bin',sizeBytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+  await request('/api/file-sync/v1/capabilities');
+  const upload=await request('/api/file-sync/v1/uploads','POST',manifest);
+  await request(`/api/file-sync/v1/uploads/${upload.uploadId}/parts/0`,'PUT',bytes);
+  assert.equal((await request(`/api/file-sync/v1/uploads/${upload.uploadId}`)).parts.length,1);
+  const ack=await request(`/api/file-sync/v1/uploads/${upload.uploadId}/commit`,'POST',{});
+  assert.deepEqual(await request('/api/file-sync/v1/head?sourceId=collected&externalId=generated-file'),{revision:'v1',forgotten:false});
+  await request('/api/file-sync/v1/recovery?sourceId=collected');
+  assert.equal(sources.getItem('collected','generated-file')?.revision,'v1');
+  for(const path of ['/api/captures','/api/notes','/api/status','/api/configuration','/api/export','/api/connections','/api/capture-browser','/api/capture-browser/updates?deviceId=synthetic-phone','/api/source-items','/api/sources/collected/items','/api/sources/collected/item?externalId=one','/api/sources/collected/history?externalId=one','/api/sources/collected/catalog','/api/sources/collected/context','/api/files',`/api/files/${ack.id}/content`,'/api/not-a-collector-route']){
+    await request(path,'GET',undefined,403);await request(path,'HEAD',undefined,403);
+  }
+  for(const path of ['/api/login/ticket','/api/login/session','/api/login/requests/generated/approve','/api/connections/invitations','/api/connections/collector-invitations','/api/connections/mcp','/api/query','/api/import'])await request(path,'POST',{},403);
+  await request(`/api/connections/${client.credentialId}`,'DELETE',undefined,403);
+  await request(`/api/captures/${saved.id}`,'DELETE',undefined,403);
+});
+
+test('collector binds source, platform and capture identity and omits owner declarations from every source response',async t=>{
+  const {app,sources,store}=await fixture(t),client=await collector(app),auth=headers(client.token);
+  sources.register({...source('own'),platform:'android',ownerRelation:'owner'});sources.updateContext('own',{expectedVersion:0,description:'Generated owner-only context'});
+  sources.register(source('foreign','foreign-device'));sources.register({...source('wrong-platform'),platform:'linux'});
+  const calls=[{url:'/api/sources'},{method:'POST' as const,url:'/api/sources',payload:{...source('own'),platform:'android'}},{method:'PATCH' as const,url:'/api/sources/own',payload:{name:'Renamed'}}];
+  for(const call of calls){const response=await app.inject({...call,headers:auth});assert.equal(response.statusCode,200,response.body);for(const s of response.json().items??[response.json()]){assert.equal(s.deviceId,'synthetic-phone');for(const key of ['ownerRelation','ownerRelationVersion','sourceContext'])assert.equal(key in s,false,key);}}
+  assert.ok((await app.inject({url:'/api/sources',headers:headers()})).json().items.find((s:any)=>s.id==='own').sourceContext);
+  for(const body of [{...source('new'),platform:'linux'},{...source('new','foreign-device'),platform:'android'},{...source('own'),platform:'android',ownerRelation:'owner'},{...source('wrong-platform'),platform:'android'}])assert.equal((await app.inject({method:'POST',url:'/api/sources',headers:auth,payload:body})).statusCode,403);
+  for(const id of ['foreign','wrong-platform'])for(const method of ['PATCH','PUT'] as const){const response=await app.inject({method,url:`/api/sources/${id}${method==='PUT'?'/items':''}`,headers:auth,payload:method==='PUT'?item():{name:'Denied'}});assert.equal(response.statusCode,403,response.body);}
+  for(const body of [note('foreign-device'),{...note(),platform:'linux'}])assert.equal((await app.inject({method:'POST',url:'/api/notes',headers:auth,payload:body})).statusCode,403);
+  const foreign=note('foreign-device');await app.inject({method:'POST',url:'/api/notes',headers:headers(),payload:foreign});
+  assert.equal((await app.inject({method:'POST',url:'/api/notes',headers:auth,payload:{...note(),id:foreign.id}})).statusCode,403);assert.equal(store.evidence([foreign.id])[0].deviceId,'foreign-device');
+  assert.equal((await app.inject({method:'POST',url:'/api/notes',headers:{authorization:`Bearer ${client.token}`},payload:note()})).statusCode,426);
+  assert.equal((await app.inject({method:'PATCH',url:'/api/sources/own',headers:auth,payload:{ownerRelation:'third_party'}})).statusCode,403);
+  assert.equal((await app.inject({url:'/api/file-sync/v1/head?sourceId=foreign&externalId=one',headers:auth})).statusCode,403);
+  const own=noteCapture(note()),foreignCapture=noteCapture(note('foreign-device'));
+  assert.equal((await app.inject({method:'POST',url:'/api/captures/batch',headers:auth,payload:{captures:[own,foreignCapture]}})).statusCode,403);
+  assert.equal(store.evidence([own.id]).length,0,'scope validation precedes every batch write');
+  const c=noteCapture(note());const bundle=await app.inject({method:'POST',url:'/api/captures/bundle',headers:{...auth,'content-type':'application/gzip'},payload:gzipSync(JSON.stringify(c)+'\n')});
+  assert.equal(bundle.statusCode,200,bundle.body);assert.equal(bundle.json().results[0].status,201);
+
+});
+
+test('owner and collector credentials rotate independently for one device and collector revocation survives restart',async t=>{
+  const {app,connections,restart}=await fixture(t),ownerClient=await paired(app),first=await collector(app,'synthetic-phone',true),second=await collector(app,'synthetic-phone',true);
+  assert.ok(connections.authenticate(`Bearer ${ownerClient.token}`));assert.equal(connections.authenticate(`Bearer ${first.token}`),undefined);assert.ok(connections.authenticate(`Bearer ${second.token}`));
+  const ownerInvite=await invite(app,'synthetic-phone');const replacement=(await redeem(app,ownerInvite.json().invitation.code)).json();
+  assert.equal(connections.authenticate(`Bearer ${ownerClient.token}`),undefined);assert.ok(connections.authenticate(`Bearer ${replacement.token}`));assert.ok(connections.authenticate(`Bearer ${second.token}`));
+  const next=await restart();assert.equal((await next.app.inject({url:'/api/connections/self',headers:headers(second.token)})).json().credential.scope,'collector');
+  await next.app.inject({method:'DELETE',url:`/api/connections/${second.credentialId}`,headers:headers()});
+  const final=await restart();assert.equal((await final.app.inject({url:'/api/connections/self',headers:headers(second.token)})).statusCode,401);
+});
+
+test('collector revoked during source preparation cannot publish evidence or a revision',async t=>{
+  const {app,store,sources}=await fixture(t),client=await collector(app);sources.register({...source('owned'),platform:'android'});
+  let entered!:()=>void,resume!:()=>void;const inside=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>resume=r),prepare=store.prepare.bind(store);
+  store.prepare=async raw=>{const value=await prepare(raw);entered();await gate;return value;};
+  const pending=app.inject({method:'PUT',url:'/api/sources/owned/items',headers:headers(client.token),payload:item()});
+  await inside;await app.inject({method:'DELETE',url:`/api/connections/${client.credentialId}`,headers:headers()});resume();
+  assert.equal((await pending).statusCode,401);assert.equal(sources.history('owned','one').length,0);assert.equal(store.list().items.length,0);
 });

@@ -39,3 +39,5 @@ Develop small modules, check them locally and connect real boundaries early. The
 R1 received independent pre-implementation **APPROVE** from GPT-6.1 Sol High against the exact starting/target revisions above. It covers rollback, initial architecture/rules and a minimal focused-test entry. Later capability or lifecycle changes receive bounded review of their actual delta; R1 does not approve unknown redesigns.
 
 See [testing](testing.md), [CI](ci.md) and [development](development.md).
+
+R2 restores client Dev private credentials and signed-out queue continuity; see [Profile policy](adr-profile-release-policy.md). R3 adds explicit collector invitations with a closed intake route set, device/platform binding and source metadata projection. Both received independent approval before implementation. Full native clients remain owner clients; collector and MCP credentials do not create accounts.

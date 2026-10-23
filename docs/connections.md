@@ -4,7 +4,7 @@
 
 ## 在 App 中连接
 
-中央与客户端应使用本次同代实现。Central epoch 4 的破坏升级需先按 [MVP 基线说明](adr-mvp-baseline.md) 备份并处理旧库；客户端本机格式保持 3。当前手工 owner 令牌入口保留，旧 collector 身份不会转换为 owner。
+中央与客户端使用当前同代实现。MVP 允许新建空数据目录，不提供旧数据库、队列或凭据迁移。当前手工 owner 令牌入口保留。独立采集器和完整客户端有明确不同的权限，见 [单所有者决策](adr-single-owner-mvp.md)。
 
 1. 用所有者令牌打开中央界面的「设备」页，在「添加设备与 Chatbot」填写手机或电脑可访问的 HTTPS 地址。配置了 `MOTE_PUBLIC_URL` 时优先填入该地址；Cloudflare Tunnel 可以提供入口。手机的 `localhost` 指手机自身，二维码不会自动建立隧道。
 2. 填写连接名称。首次连接使用「新设备」；凭据撤销后重连或重试一次未保存成功的兑换，选择原设备身份。
@@ -29,7 +29,7 @@ Content-Type: application/json
 {"serverUrl":"https://mote.example.com","label":"我的手机","deviceId":"existing-device-id"}
 ```
 
-`deviceId` 可省略。普通邀请只允许尚未在中央出现的新设备 ID；旧客户端保持原 ID 时，所有者须明确选择该设备并创建绑定邀请。绑定信息只保存在服务端，不扩展可携带的 v1 邀请格式。成功兑换绑定邀请后，该设备此前的采集凭据一并撤销；其它设备不受影响。
+`deviceId` 可省略。普通邀请只允许尚未在中央出现的新设备 ID；旧客户端保持原 ID 时，所有者须明确选择该设备并创建绑定邀请。绑定信息只保存在服务端，不扩展可携带的 v1 邀请格式。成功兑换绑定邀请后，该设备同权限类型的旧凭据一并撤销；另一权限类型及其它设备不受影响。
 
 响应包含 `invitation` 和 `uri`：
 
@@ -68,6 +68,16 @@ Content-Type: application/json
 - `POST /api/connections/invitations/revoke`，body `{code}`：仅所有者；幂等取消尚未兑换的邀请。code 不放入 URL。已兑换的邀请应通过连接 ID 撤销其凭据。
 
 配对中的设备 ID 必须与绑定邀请一致，重新授权已有设备必须由所有者明确选择该身份。owner 的归档权限不会按设备隐式收窄；浏览时可显式选择设备筛选。来源版本通过 `/api/sources/:id/items` 写入，仍需符合当前 schema、版本和幂等确认。查询 Agent 继续只有读取工具，没有新增写入能力。
+
+## 独立采集器
+
+完整 Mac / Android 客户端选择「本人客户端 · 完整权限」，一次登录即可使用采集和归档功能。专用采集程序选择「独立采集器 · 仅同步」。所有者通过 `POST /api/connections/collector-invitations` 创建受限邀请，请求字段与普通邀请相同；响应的 `scope` 明确为 `collector`。权限保存在服务端邀请记录中，兑换方不能指定或提升权限。可携带的 v1 邀请格式不变。
+
+采集器兑换后通过 `/api/connections/self` 核验 `scope:collector` 与协议。能力为 `ingest:true`、`ownSources:true`、`archiveRead:false`。它可以上报绑定设备的心跳、采集和笔记、登记或更新该设备来源、写入来源版本，并通过 file-sync 完成分片上传、确认丢失后的重试和原件恢复。来源登记及重用必须匹配设备和平台；通用 `other` 采集器对应 `import` 平台。
+
+允许的读取仅为自身连接元数据、过滤后的来源配置，以及上传所需的版本、哈希和分片状态。来源响应不包含所有者归属、归属版本或来源说明身份。采集存在性核对只返回本设备的 present/unavailable，不提供内容。
+
+采集器不能浏览原件、来源正文或历史、查询/导出/删除归档、声明归属/来源说明、管理中央、签发登录凭据或调用 MCP。权限由精确的方法和注册路由白名单控制，新增 API 默认不开放。采集写入要求 `X-Mote-Ingress-Version: 2`；现有事务内的撤销检查继续有效。所有者和采集器同设备凭据分别轮换、分别撤销。
 
 ## MCP 配置
 

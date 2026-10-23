@@ -1,4 +1,4 @@
-import {ownerRelationSchema,sourceContextUpdateSchema} from '@mote/shared';
+import {ownerRelationSchema,sourceContextUpdateSchema,type SourceConnection} from '@mote/shared';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {z} from 'zod';
 import {moteText} from './i18n.js';
@@ -9,9 +9,14 @@ import type {EvidenceReader} from './evidence-reader.js';
 import type {IngressService} from './ingress.js';
 /** Collector authorization is checked again inside transactional source writes. */
 export function registerSourceRoutes(app:FastifyInstance,{store,sources,evidenceReader,ingress,connections,credential,sourceOwner}:{store:Store;sources:SourceStore;evidenceReader:EvidenceReader;ingress:IngressService;connections:Connections;credential:(request:FastifyRequest)=>ConnectionCredential|undefined;sourceOwner:(request:FastifyRequest,id:string)=>void}){
-  app.get('/api/sources',async req=>{const c=credential(req);if(c)connections.assertActive(c);return {items:sources.listSources().filter(s=>!c||s.deviceId===c.deviceId)};});
-  app.post('/api/sources',async req=>{const c=credential(req);if(c&&req.body&&typeof req.body==='object'&&('ownerRelation' in req.body||'ownerRelationVersion' in req.body))throw new ConnectionError('connection_scope_denied',403,'Only the owner may declare material attribution.');if(c){connections.assertOwnDevice(c,req.body);const id=(req.body as {id?:unknown}).id;if(typeof id==='string'&&sources.listSources().some(s=>s.id===id))connections.assertOwnSource(c,id);}return sources.register(req.body);});
-  app.patch('/api/sources/:id',async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);if(credential(req)&&req.body&&typeof req.body==='object'&&'ownerRelation' in req.body)throw new ConnectionError('connection_scope_denied',403,'Only the owner may declare material attribution.');return sources.update(id,z.object({ownerRelation:ownerRelationSchema.nullable().optional(),name:z.string().min(1).max(200).optional(),enabled:z.boolean().optional(),initialSync:z.enum(['all','new_only']).optional(),retention:z.enum(['snapshot','reference','archive']).optional()}).strict().parse(req.body));});
+  const present=(req:FastifyRequest,source:SourceConnection)=>{
+    if(!credential(req))return source;
+    const {ownerRelation,ownerRelationVersion,sourceContext,...intake}=source;
+    return intake;
+  };
+  app.get('/api/sources',async req=>{const c=credential(req);if(c)connections.assertActive(c);return {items:sources.listSources().filter(s=>!c||s.deviceId===c.deviceId).map(s=>present(req,s))};});
+  app.post('/api/sources',async req=>{const c=credential(req);if(c&&req.body&&typeof req.body==='object'&&('ownerRelation' in req.body||'ownerRelationVersion' in req.body))throw new ConnectionError('connection_scope_denied',403,'Only the owner may declare material attribution.');if(c){connections.assertOwnDevice(c,req.body);connections.assertPlatform(c,(req.body as {platform?:unknown}).platform);const id=(req.body as {id?:unknown}).id;if(typeof id==='string'&&sources.listSources().some(s=>s.id===id))connections.assertOwnSource(c,id);}return present(req,sources.register(req.body));});
+  app.patch('/api/sources/:id',async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);if(credential(req)&&req.body&&typeof req.body==='object'&&'ownerRelation' in req.body)throw new ConnectionError('connection_scope_denied',403,'Only the owner may declare material attribution.');return present(req,sources.update(id,z.object({ownerRelation:ownerRelationSchema.nullable().optional(),name:z.string().min(1).max(200).optional(),enabled:z.boolean().optional(),initialSync:z.enum(['all','new_only']).optional(),retention:z.enum(['snapshot','reference','archive']).optional()}).strict().parse(req.body)));});
   const contextOwner=(req:FastifyRequest,id:string)=>{sourceOwner(req,id);if(credential(req))throw new ConnectionError('connection_scope_denied',403,'Only the owner may read or declare source context.');};
   app.get('/api/sources/:id/context',async req=>{const id=(req.params as {id:string}).id;contextOwner(req,id);return sources.contexts.current(id);});
   app.patch('/api/sources/:id/context',async req=>{const id=(req.params as {id:string}).id;contextOwner(req,id);return sources.updateContext(id,sourceContextUpdateSchema.parse(req.body));});
