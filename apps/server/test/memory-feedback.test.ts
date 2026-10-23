@@ -23,6 +23,7 @@ import {registerMemoryDelegation} from '../src/memory-delegation.js';
 import {reviewMemory} from '../src/memory-review.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 import type {MemoryFeedbackRequest} from '../src/memory-feedback.js';
+import {MemoryPhaseOutputs} from '../src/memory-phase-outputs.js';
 
 type ModelWork={members:MemoryWorkMember[];contextMembers?:MemoryWorkMember[]};
 const modelWork=(input:Pick<QueryInput,'taskContext'>)=>input.taskContext!.memoryWork as ModelWork;
@@ -95,6 +96,7 @@ async function fixture(t:TestContext,mode:FixtureMode='resolved',targets=1){
   async start(){assert.equal(await sourcePipelines.drainMemory(pipeline,true),1);const job=pipeline.list()[0];assert.ok(job);return pipeline.run(job.id);},
   interruptNextApply(){failNextApply=true;},
   async restart(){await detach();await attach();},
+  phaseCheckpoints(batchId:string){const outputs=new MemoryPhaseOutputs(store,engine);return store.db.prepare('SELECT step_id,phase,input_hash,output_hash FROM memory_phase_outputs WHERE batch_id=? ORDER BY phase').all(batchId).map(row=>({...row,state:engine.get(String(row.step_id))!.state,output:outputs.read<any>(String(row.step_id),String(row.input_hash))}));},
   checkpoints(){return store.db.prepare('SELECT key,evidence_id FROM memory_checkpoints ORDER BY key').all();},
   async settle(){for(let count=0;count<40;count++){await runtime.tick();if(runtime.list().every(owner=>['succeeded','failed','blocked','stale','cancelled'].includes(owner.status)))return;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Generated delegated feedback did not settle');},
  };
@@ -124,7 +126,7 @@ test('two unresolved feedback rounds wait for input and cannot repeat completed 
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_feedback_plans WHERE job_id=?').get(done.id)!.n,2);
 });
 
-for(const [mode,calls,code] of [['planner-transient',4,'provider_network'],['planner-unknown',1,'provider_failed'],['planner-crash',1,'memory_feedback_planner_failed']] as const)test(`${mode} preserves completed siblings and reports internal failure through progress and restart`,{timeout:20000},async t=>{
+for(const [mode,calls,code] of [['planner-transient',3,'provider_network'],['planner-unknown',1,'provider_failed'],['planner-crash',1,'memory_feedback_planner_failed']] as const)test(`${mode} preserves completed siblings and reports internal failure through progress and restart`,{timeout:20000},async t=>{
  const f=await fixture(t,mode),done=await f.start();await f.settle();
  assert.equal(done.status,'failed');assert.equal(done.errorCode,'memory_feedback_planning_failed');assert.equal(f.feedback.length,calls);assert.equal(done.completedBatches,1);assert.equal(done.failedBatches,1);assert.equal(done.pendingBatches,0);assert.equal(f.checkpoints().length,1);
  const planner=f.runtime.list().find(work=>work.profileId==='memory.feedback')!;assert.equal(planner.status,'failed');assert.equal(planner.units.length,0);assert.equal(planner.planningComplete,undefined);assert.equal(planner.failureReceipt?.code,code);assert.equal(planner.failureReceipt?.attempt,calls);assert.equal(planner.failureReceipt?.jobId,done.id);assert.equal(planner.failureReceipt?.phase,'feedback-planning');assert.equal(planner.failureReceipt?.runId,'generated-feedback-failed-'+calls);
@@ -137,7 +139,7 @@ for(const [mode,calls,code] of [['planner-transient',4,'provider_network'],['pla
 test('startup terminalizes only a proven legacy planner failure without replaying its pinned work',{timeout:20000},async t=>{
  const f=await fixture(t,'planner-transient'),done=await f.start();await f.settle();const leaf=done.batches.find(batch=>batch.status==='failed')!,pins=done.configuration,checkpoints=f.checkpoints(),counts=f.counts();
  // Recreate exactly the old projection after the native coordinator exhausted
- // four attempts, with zero proposals and no actual owner question.
+ // three attempts, with zero proposals and no actual owner question.
  f.store.db.prepare("UPDATE execution_steps SET state='blocked',error='memory_context_required' WHERE id=?").run(leaf.id);
  f.store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','failed','$.errorCode','memory_context_required') WHERE id=?").run(leaf.id);
  f.store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status','waiting_for_input','$.errorCode','memory_context_required') WHERE id=?").run(done.id);
@@ -180,10 +182,14 @@ test('a restart reuses the durable feedback proposal after an atomic product han
  // change its generation fingerprint before the saved feedback handoff resumes.
  const failedParent=interrupted.batches.find(batch=>batch.status==='failed')!;assert.equal(failedParent.reviewReceipt,undefined);assert.equal(failedParent.evaluation?.workContract,'range-evaluation@1');
  const owner=f.runtime.list().find(owner=>owner.profileId==='memory.feedback');assert.ok(owner?.planningComplete);const unitId=owner.units[0].id;
- const checkpoints=f.checkpoints();await f.restart();const done=await f.pipeline.retry(interrupted.id);await f.settle();
+ const phases=f.phaseCheckpoints(failedParent.id);assert.deepEqual(phases.map(row=>[row.phase,row.state]),[['extract','succeeded'],['review','succeeded']]);
+ assert.equal(phases[0].output.draftOrigin,'mote');assert.equal(phases[0].output.nativeDraft,undefined);assert.equal(phases[0].output.engineDrafts,undefined);
+ assert.equal(phases[1].output.reviewReceipt.decision,'independent');assert.equal(phases[1].output.reviewReceipt.reviewRunId,phases[1].output.result.runId);
+ const checkpoints=f.checkpoints();await f.restart();assert.deepEqual(f.phaseCheckpoints(failedParent.id),phases,'restart retains exact extraction, independent verdict and private checkpoint hashes');const done=await f.pipeline.retry(interrupted.id);await f.settle();
  assert.equal(done.status,'completed');assert.equal(f.feedback.length,1,'the saved feedback plan is reused without another planning model');assert.equal(f.counts().planning,0);
  assert.equal(f.checkpoints().length,2);assert.deepEqual(f.checkpoints().filter(row=>row.evidence_id===f.backgroundId),checkpoints);assert.equal(f.runtime.get(owner.id).units[0].id,unitId);
  assert.equal(done.batches.filter(batch=>batch.replanRound===1).length,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_feedback_plans WHERE job_id=?').get(done.id)!.n,1);
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_input_authorizations WHERE job_id=?').get(done.id)!.n,2);
- assert.deepEqual(f.counts(),{planning:0,feedback:1,extraction:3,reviews:4,maxActiveModels:1},'the private draft is reused but its retry receives a fresh independent review');
+ assert.deepEqual(f.phaseCheckpoints(failedParent.id),phases,'feedback handoff does not replace successful phase checkpoints');
+ assert.deepEqual(f.counts(),{planning:0,feedback:1,extraction:3,reviews:3,maxActiveModels:1},'the committed extraction and independent review are reused; only the new feedback child calls models');
 });
