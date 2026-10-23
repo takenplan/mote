@@ -88,9 +88,9 @@ try {
   // Exercise the old image's private UID 1000 storage before this host user's explicit migration.
   await run(dev, 'stop');
   const legacyUid = process.getuid?.() === 1000 ? 1001 : 1000, legacyUser = `${legacyUid}:${legacyUid}`;
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'chown', '-R', legacyUser, '/data', dev.modelDirectory]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', '-R', legacyUser, '/data', dev.modelDirectory]);
   await run(dev, 'start', [], { fail: true });
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.statSync('/data/mote.sqlite').uid,${legacyUid});`]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'DAC_OVERRIDE', 'mote', 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.statSync('/data/mote.sqlite').uid,${legacyUid});`]);
   await run(dev, 'migrate-storage-owner');
   await run(dev, 'start');
   assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
