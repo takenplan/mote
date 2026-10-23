@@ -62,13 +62,15 @@ class ConnectionActivity : MoteActivity() {
     private data class InitialConnection(val config: CollectorConfig, val deviceId: String, val status: String, val statusAt: Long)
     /** Picker fencing must survive camera-session recreation; the hashed stamp keeps credentials out of saved state. */
     private data class PickerSelection(val stamp: String, val owner: String)
+    /** Unconfirmed capabilities stay in memory, never in the system saved-state bundle. */
+    private class RetainedPicker(val result: Pair<Int, String>)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); pageOwner = applicationContext.accountOwnerKey(); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         savedInstanceState?.let {
             val stamp = it.getString(SELECTION_STAMP); val owner = it.getString(SELECTION_OWNER)
             if (stamp != null && owner != null) selection = PickerSelection(stamp, owner)
-            it.getString(PENDING_PAYLOAD)?.let { payload -> pendingPicker = it.getInt(PENDING_REQUEST) to payload }
         }
+        pendingPicker = (lastNonConfigurationInstance as? RetainedPicker)?.result
         val loading = moteDetailPage(title = MoteI18n.text("连接中央节点")); val label = TextView(this); loading.addView(label)
         task.start(MoteI18n.text("正在读取已保存连接…"), { label.text = it }, {
             val settings = Settings(applicationContext); val client = ConnectionClient(applicationContext)
@@ -256,15 +258,14 @@ class ConnectionActivity : MoteActivity() {
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(SELECTION_STAMP, selection?.stamp); outState.putString(SELECTION_OWNER, selection?.owner)
-        pendingPicker?.let { outState.putInt(PENDING_REQUEST, it.first); outState.putString(PENDING_PAYLOAD, it.second) }
         super.onSaveInstanceState(outState)
     }
+    @Deprecated("Native in-memory configuration retention")
+    override fun onRetainNonConfigurationInstance(): Any? = pendingPicker?.let(::RetainedPicker)
     override fun onDestroy() { connectionFinished = null; handler.removeCallbacks(refresh); executor.shutdown(); super.onDestroy() }
     companion object {
         private const val SELECTION_STAMP = "pickerSelectionStamp"
         private const val SELECTION_OWNER = "pickerSelectionOwner"
-        private const val PENDING_REQUEST = "pendingPickerRequest"
-        private const val PENDING_PAYLOAD = "pendingPickerPayload"
         fun message(code: String) = when (code) {
             "storage" -> MoteI18n.text("凭据持久保存失败，恢复记录仍保留。请释放空间后恢复连接，不要卸载应用。")
             "no_pending" -> MoteI18n.text("没有可恢复的兑换结果，请重新生成邀请。")
