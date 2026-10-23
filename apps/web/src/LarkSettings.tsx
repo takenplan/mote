@@ -9,6 +9,8 @@ import {moteText} from '@mote/shared/i18n';
 import {SourceContextEditor} from './SourceContextEditor';
 
 const errors:Record<string,string>={
+ lark_cli_deployment_required:'缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。',
+ lark_cli_version_unsupported:'缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。',
  lark_cli_missing:'服务端尚未安装 Lark CLI。请点击安装，然后重新检测。',
  lark_not_configured:'尚未配置飞书应用。请创建应用或填写已有应用凭据。',
  lark_not_connected:'尚未连接飞书账号，请完成只读授权。',

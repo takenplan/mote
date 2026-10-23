@@ -1,5 +1,16 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "CLI 由当前中央部署准备，账号凭据由厂商 CLI 管理。": "This central deployment prepares the CLI. The vendor CLI manages account credentials.",
+  "授权并连接账号": "Authorize and connect account",
+  "缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。": "If the CLI is missing or has the wrong version, ask the administrator to run connectors-prepare for this deployment, then check again.",
+  "应用凭据仅发往当前中央节点，并通过标准输入交给厂商 CLI。": "Application credentials are sent only to this central node and passed to the vendor CLI through standard input.",
+  "钉钉所在组织需开启 CLI 接入；请在授权页面核对账号、组织和读取权限。": "Your DingTalk organization must enable CLI access. Check the account, organization and read permissions on the authorization page.",
+  "授权链接无效，请重新发起授权。": "The authorization link is invalid. Start authorization again.",
+  "授权链接已过期，请重新发起授权。": "The authorization link has expired. Start authorization again.",
+  "打开钉钉授权页面": "Open the DingTalk authorization page",
+  "账号授权二维码": "Account authorization QR code",
+  "授权完成后，确认历史范围并启用同步。": "After authorization, confirm the historical range and enable synchronization.",
+
   "当前网页地址未获中央节点允许，请检查公开地址与反向代理配置。": "The central node rejected this page origin. Check the public URL and reverse proxy configuration.",
   "当前连接没有执行此操作的权限，请检查连接权限。": "This connection cannot perform this action. Check its connection permissions.",
   "登录请求已失效或过期，请重新发起登录。": "The sign-in request is no longer valid or has expired. Start sign-in again.",

@@ -1,4 +1,5 @@
 import {resolve} from 'node:path';
+import {larkRecordingAuthorization} from './recording-authorization.js';
 import {z} from 'zod';
 import {FILE_MAX_BYTES} from '@mote/shared';
 import {ExecutionFailure} from '../execution-engine.js';
@@ -10,7 +11,7 @@ import {recordingStage,recordingFile} from './recording-staging.js';
 const token=z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 export function createFeishuRecordings(directory:string,provided?:LarkRunner):RecordingProvider {
  const root=resolve(directory,'lark-runtime'),runner=provided??createLarkRunner(directory,{localProfile:true});
- return {id:'feishu',version:`lark-cli@${LARK_VERSION}/export@2`,
+ return {id:'feishu',authorization:larkRecordingAuthorization(runner),version:`lark-cli@${LARK_VERSION}/export@2`,
   async account(signal){const value=larkJson(await runner({kind:'status'},{signal})),user=value.identities?.user;
    if(!user?.available||typeof user.openId!=='string'||typeof value.appId!=='string')throw new ConnectorError('lark_not_connected');
    return {id:`${value.appId}:${user.openId}`,...(typeof user.userName==='string'?{name:user.userName}:{})};

@@ -23,6 +23,9 @@ RUN npm ci --omit=dev --workspace=@mote/server --workspace=@mote/shared --worksp
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/agent/dist ./packages/agent/dist
 COPY --from=build /app/packages/agent/skills ./packages/agent/skills
+COPY apps/server/src/connectors/cli-runtime.mjs ./apps/server/src/connectors/cli-runtime.mjs
+COPY scripts/connector-runtime.mjs ./scripts/connector-runtime.mjs
+RUN node scripts/connector-runtime.mjs && chmod a+rx .mote && chmod -R a+rX .mote/connectors
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 RUN test -x /bin/bash && node --input-type=module -e "import {accessSync} from 'node:fs'; import {createRequire} from 'node:module'; import {bundledSkills} from './packages/agent/dist/skills.js'; const require=createRequire(import.meta.url); accessSync('./apps/server/dist/import-parser.mjs'); accessSync('./apps/server/dist/plugin-worker.mjs'); accessSync('./apps/server/dist/hindsight-worker.py'); if(!['personal-insight','memory-extraction','memory-consolidation','working-memory','document-import','calendar-extraction','coding-memory'].every(id=>bundledSkills.some(s=>s.id===id && s.content.length>0)) || typeof require('node-pty').spawn!=='function') throw Error('Import runtime is incomplete'); const db=new (require('better-sqlite3'))(':memory:'); if(db.prepare('SELECT 1 AS value').get().value!==1) throw Error('Mem0 SQLite runtime is incomplete'); db.close();"

@@ -10,7 +10,7 @@ import { configureTunnel, runNativeTunnel, nativeTunnelArgs, nativeTunnelIdentit
 import { startProfile as start, stopProfile as stop, changeProfileDeployment } from './update-deploy.mjs';
 const help = `Mote central profiles (Node 24+, default: dev; prod requires --profile prod)
   init [--profile dev|test|prod] [--home PATH] [--runtime native|docker] [--port N] [--image TAG] [--data-dir NATIVE_PATH | --volume DOCKER_VOLUME]
-  start|run|stop|status|config|token [--profile NAME] [--home PATH]
+  start|run|stop|status|config|token|connectors-prepare [--profile NAME] [--home PATH]
   log-retention --defaults [--profile dev] [--home PATH] (adopt DEV per-file default; restart separately)
   run-all [--profile NAME] [--home PATH] (native central + configured tunnel; Ctrl+C stops both)
   exec [--profile NAME] [--home PATH] -- COMMAND ARG...
@@ -163,6 +163,11 @@ async function main() {
   }
   let result;
   await withProfileLock(p, async () => {
+    if (command === 'connectors-prepare') {
+      if (p.meta.runtime !== 'native') throw Error('Docker prepares connector CLIs when building the image');
+      await execute(process.execPath, [join(resolve(p.meta.release), 'scripts/connector-runtime.mjs')], { cwd: resolve(p.meta.release), env: Object.fromEntries(['PATH','HOME','TMPDIR','LANG','HTTP_PROXY','HTTPS_PROXY','NO_PROXY','http_proxy','https_proxy','no_proxy'].filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]])), capture: false, timeoutMs: 15 * 60 * 1000 });
+      return;
+    }
     if (command === 'start') result = await start(p);
     else if (command === 'run') { if (p.meta.runtime !== 'native') throw Error('Use start for a Docker profile'); result = await startNative(p, true); }
     else if (command === 'stop') result = await stop(p);

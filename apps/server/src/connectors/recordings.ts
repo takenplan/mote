@@ -8,13 +8,14 @@ import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionGrant}
 import {ArchivedFileStore} from '../archived-files.js';
 import {PrivateFile} from './private-file.js';
 import {ConnectorError,type ConnectorContext} from './types.js';
+import {RecordingAuthorization,type RecordingAuthorizationPort} from './recording-authorization.js';
 import type {ConnectorManifest} from './registry.js';
 
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export interface RecordingAccount {id:string;name?:string;profile?:string}
 export interface RecordingMetadata {id:string;title:string;createdAt?:string;recordedAt?:string;durationMs:number;uri?:string}
 export interface RecordingProvider {
- id:string;version:string;
+ id:string;version:string;authorization?:RecordingAuthorizationPort;
  account(signal?:AbortSignal):Promise<RecordingAccount>;
  discover(account:RecordingAccount,range:{start:string;end:string;cursor?:string},signal:AbortSignal):Promise<{ids:string[];next?:string}>;
  metadata(account:RecordingAccount,id:string,signal:AbortSignal):Promise<RecordingMetadata>;
@@ -22,6 +23,7 @@ export interface RecordingProvider {
  media(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{mimeType:string;bytes:Buffer}>;
  close?():Promise<void>;
 }
+export type RecordingBindingGrant={signal:AbortSignal;assertCurrent:()=>void};
 type Saved={version:1;account?:RecordingAccount;selection:RecordingSelection;epoch:string};
 const savedSchema=z.object({version:z.literal(1),account:z.object({id:z.string().min(1).max(1000),name:z.string().max(500).optional(),profile:z.string().max(300).optional()}).strict().optional(),selection:recordingSelectionSchema,epoch:z.string().uuid()}).strict();
 const defaults=():RecordingSelection=>({enabled:false,start:new Date(Date.now()-30*86400000).toISOString(),autoSync:true,backupAudio:true});
@@ -39,7 +41,7 @@ export class RecordingConnector {
  private timer?:ReturnType<typeof setInterval>;
  private initialized=false;private syncIntervalMs?:number;
  private closed=false;
- private error?:string;
+ private error?:string;private bindingRevision=0;private bindingController=new AbortController();private bindingMutations:Promise<unknown>=Promise.resolve();
  constructor(private ctx:ConnectorContext,readonly provider:RecordingProvider){
   new ArchivedFileStore(ctx.store);
   ctx.store.db.exec(`CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_exports(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,metadata TEXT NOT NULL,observed_at TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('empty','unsupported')),PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_cursors(source_id TEXT PRIMARY KEY,epoch TEXT NOT NULL,scanned_until TEXT NOT NULL,full_at INTEGER NOT NULL);`);
@@ -81,13 +83,26 @@ export class RecordingConnector {
   this.ctx.diagnostics?.record(`source.${state}`,{operation:`recording_${phase}`,attempt:step.attempts,...extra},state==='failed'?'warn':'info');
  }
  private registerSource(enable?:boolean){const id=this.sourceId()!;this.ctx.sources.register({id,name:`${this.provider.id} recordings`,kind:`${this.provider.id}.recordings`,deviceId:id,platform:'import',retention:'archive',enabled:enable??this.saved.selection.enabled});if(enable!==undefined)this.ctx.sources.update(id,{enabled:enable});if(this.ctx.sourcePipelines&&!this.ctx.store.db.prepare('SELECT 1 FROM source_pipeline_config WHERE source_id=?').get(id))this.ctx.sourcePipelines?.configure(id,{settleSeconds:0});if(enable===true&&this.ctx.memoryRecipeSettings&&!this.ctx.store.db.prepare('SELECT 1 FROM memory_recipe_settings WHERE source_id=?').get(id))this.ctx.memoryRecipeSettings?.configure({sourceId:id,recipes:[recordingMemoryRecipe]});}
-  async connect(){if(this.closed)throw new ConnectorError('connector_closed');const account=await this.provider.account();
-  this.cancel();if(this.sourceId())this.ctx.sources.update(this.sourceId()!,{enabled:false});const changed=this.saved.account?.id!==account.id;this.saved={...this.saved,account,selection:{...this.saved.selection,...(changed?{enabled:false}:{})},epoch:randomUUID()};await this.file.write(this.saved);this.registerSource(this.saved.selection.enabled);this.error=undefined;return this.status();}
-  async select(raw:unknown){const selection=recordingSelectionSchema.parse(raw);if(!this.saved.account)throw new ConnectorError('recording_not_connected');
+ private serialBinding<T>(work:()=>Promise<T>):Promise<T>{const pending=this.bindingMutations.catch(()=>{}).then(work);this.bindingMutations=pending;return pending;}
+ private bindingGrant(external?:RecordingBindingGrant){const revision=this.bindingRevision;return ()=>{if(this.closed||revision!==this.bindingRevision)throw new ConnectorError('recording_binding_changed',409);external?.signal.throwIfAborted();external?.assertCurrent();};}
+ private async saveBinding(next:Saved,assertCurrent:()=>void){
+  const prior=this.saved,revision=this.bindingRevision;assertCurrent();
+  try{await this.file.write(next);assertCurrent();const priorSource=this.sourceId();if(priorSource)this.ctx.sources.update(priorSource,{enabled:false});this.saved=next;if(next.account)this.registerSource(next.selection.enabled);}
+  catch(error){const failedSource=this.sourceId();this.saved=prior;if(failedSource)try{this.ctx.sources.update(failedSource,{enabled:false});}catch{}const priorSource=this.sourceId();if(priorSource)this.ctx.sources.update(priorSource,{enabled:false});
+   try{await this.file.write(prior);}catch{this.closed=true;this.bindingController.abort();this.cancel();await this.file.clear();throw new ConnectorError('recording_binding_write_failed',503);}
+   if(!this.closed&&revision===this.bindingRevision&&priorSource)this.ctx.sources.update(priorSource,{enabled:prior.selection.enabled});throw error;
+  }
+ }
+
+ connect(grant?:RecordingBindingGrant){const assertCurrent=this.bindingGrant(grant),signal=grant?AbortSignal.any([grant.signal,this.bindingController.signal]):this.bindingController.signal;return this.serialBinding(async()=>{assertCurrent();const account=await this.provider.account(signal);assertCurrent();
+  this.cancel();const changed=this.saved.account?.id!==account.id;
+  await this.saveBinding({...this.saved,account,selection:{...this.saved.selection,...(changed?{enabled:false}:{})},epoch:randomUUID()},assertCurrent);assertCurrent();this.error=undefined;return this.status();});}
+ select(raw:unknown){const selection=recordingSelectionSchema.parse(raw),assertCurrent=this.bindingGrant();return this.serialBinding(async()=>{assertCurrent();if(!this.saved.account)throw new ConnectorError('recording_not_connected');
   if(Math.ceil((Date.parse(selection.end??new Date().toISOString())-Date.parse(selection.start))/(27*86400000))>240)throw new ConnectorError('recording_range_limit');
-  this.cancel();this.saved={...this.saved,selection,epoch:randomUUID()};await this.file.write(this.saved);this.registerSource(selection.enabled);if(selection.enabled)this.sync();return this.status();}
+  this.cancel();await this.saveBinding({...this.saved,selection,epoch:randomUUID()},assertCurrent);if(selection.enabled)this.sync();return this.status();});}
  private cancel(){for(const phase of phases)this.engine.cancelKind(this.kind(phase));}
- async disconnect(){this.cancel();if(this.sourceId())this.ctx.sources.update(this.sourceId()!,{enabled:false});this.saved={...this.saved,account:undefined,selection:{...this.saved.selection,enabled:false},epoch:randomUUID()};await this.file.write(this.saved);return this.status();}
+ retireAuthorization(grant:RecordingBindingGrant){this.bindingRevision++;this.bindingController.abort();this.bindingController=new AbortController();this.cancel();const assertCurrent=this.bindingGrant(grant);return this.serialBinding(async()=>{assertCurrent();await this.saveBinding({...this.saved,selection:{...this.saved.selection,enabled:false},epoch:randomUUID()},assertCurrent);});}
+ disconnect(){this.bindingRevision++;this.bindingController.abort();this.bindingController=new AbortController();this.cancel();const assertCurrent=this.bindingGrant();return this.serialBinding(async()=>{assertCurrent();await this.saveBinding({...this.saved,account:undefined,selection:{...this.saved.selection,enabled:false},epoch:randomUUID()},assertCurrent);return this.status();});}
  private enqueue(phase:Phase,operationId:string,input:Record<string,unknown>){const bound={...input,epoch:this.saved.epoch,account:hash(this.saved.account!.id),providerVersion:this.provider.version};
   // A failed media backup is one durable work item across discovery rounds.
   // Do not multiply blocked downloads or reset their retry budget every poll.
@@ -202,7 +217,7 @@ export class RecordingConnector {
  }
  private count(states:string[]){return Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN (SELECT value FROM json_each(?)) AND json_extract(input,'$.epoch')=?").get(JSON.stringify(phases.map(p=>this.kind(p))),JSON.stringify(states),this.saved.epoch)!.n);}
  retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id,true);void this.engine.tick();return this.status();}
- async close(){this.closed=true;clearInterval(this.timer);this.timer=undefined;for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
+ async close(){this.closed=true;this.bindingRevision++;this.bindingController.abort();await this.bindingMutations.catch(()=>{});clearInterval(this.timer);this.timer=undefined;for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
 }
 
 /** New providers use this same manifest; no new owner transport or task engine. */
@@ -210,16 +225,21 @@ export function recordingManifest(id:string,create:(ctx:ConnectorContext)=>Recor
  apiVersion:1,id:`${id}-recordings`,statusKey:`${id}-recordings`,sourceKinds:[{kind:`${id}.recordings`,capabilities:{lifecycle:'continuous',discovery:'provider-list',listening:'polling',readOriginal:'explicit-provider-read',synchronization:'revisions',externalWrite:false}}],
  create:ctx=>{
   ctx.store.db.exec('CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id))');
-  const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),status=()=>({...connector.status(),category:'recordings' as const,...options});return {status,init:()=>connector.init(),configureSyncInterval:interval=>connector.configureSyncInterval(interval),close:()=>connector.close(),configure:host=>{
+  const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),authorization=provider.authorization?new RecordingAuthorization(connector,provider.authorization):undefined,status=()=>({...connector.status(),...(authorization?{authorization:authorization.status()}:{}),category:'recordings' as const,...options});return {status,init:()=>connector.init(),configureSyncInterval:interval=>connector.configureSyncInterval(interval),close:async()=>{await authorization?.close();await connector.close();},configure:host=>{
    const path=`/api/connectors/${id}-recordings` as const;
    host.ownerRoute({method:'GET',path,handler:status});
    host.ownerRoute({method:'GET',path:`${path}/items`,handler:req=>connector.items(z.object({includeExports:z.enum(['true','false']).optional()}).strict().parse(req.query).includeExports==='true')});
    host.ownerRoute({method:'GET',path:`${path}/steps`,handler:req=>connector.steps(z.object({cursor:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(100).optional()}).strict().parse(req.query))});
+   if(authorization){
+    host.ownerRoute({method:'POST',path:`${path}/check`,handler:async()=>{await authorization.check();return status();}});
+    for(const kind of ['setup','configure','login'] as const)host.ownerRoute({method:'POST',path:`${path}/${kind}`,handler:req=>{authorization.start(kind,req.body);return status();}});
+    host.ownerRoute({method:'POST',path:`${path}/authorization/cancel`,handler:async req=>{await authorization.cancel(z.object({taskId:z.string().uuid(),expectedRevision:z.string().uuid()}).strict().parse(req.body));return status();}});
+   }
    host.ownerRoute({method:'POST',path:`${path}/connect`,handler:()=>connector.connect()});
    host.ownerRoute({method:'PUT',path:`${path}/selection`,handler:req=>connector.select(req.body)});
    host.ownerRoute({method:'POST',path:`${path}/sync`,handler:()=>connector.sync()});
    host.ownerRoute({method:'POST',path:`${path}/retry`,handler:()=>connector.retry()});
-   host.ownerRoute({method:'DELETE',path,handler:()=>connector.disconnect()});
+   host.ownerRoute({method:'DELETE',path,handler:async()=>{await authorization?.cancel();return connector.disconnect();}});
   }};
  },
 };}
