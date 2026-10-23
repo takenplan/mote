@@ -78,7 +78,10 @@ retry budgets or the scale of the regression scenarios.
 
 The Docker Central command uses the owned persistent `/data` volume as its HOME
 for third-party CLI state. Native HOME and the media sidecar commands stay as
-defined by their deployment. The actual container fixture checks a non-default
+defined by their deployment. Named volumes disable Docker copy-up so container
+creation cannot replace initialized directory ownership. Offline model imports
+use the same verified profile UID/GID and empty-volume initializer as Central.
+The actual container fixture checks a non-default
 UID when requested, restart/replacement, private generated state and exclusion
 from portable archive backup; no personal authorization is used.
 

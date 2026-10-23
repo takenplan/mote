@@ -1,12 +1,18 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/agent/package.json ./packages/agent/package.json
+COPY packages/diagnostics/package.json ./packages/diagnostics/package.json
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/desktop/package.json ./apps/desktop/package.json
+RUN npm ci --no-audit --no-fund
+COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/server ./apps/server
 COPY apps/web ./apps/web
-COPY apps/desktop/package.json ./apps/desktop/package.json
-RUN npm ci --no-audit --no-fund
 RUN npm run build:libs && npm run build -w @mote/server && npm run build -w @mote/web
 
 FROM node:24-bookworm-slim AS runtime
