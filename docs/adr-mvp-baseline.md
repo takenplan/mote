@@ -1,5 +1,6 @@
 # ADR: Single MVP baseline without upgrade adapters
 
+Current direction (2026-10-23): [single-owner MVP](adr-single-owner-mvp.md). Earlier dated validation does not qualify this recovery.
 Status: Accepted, 2026-10-09. Owner approved the cleanup, validation, PR and merge.
 
 Mote uses one current implementation and persisted format. There is no installed-version transition period, old reader, dual write or startup migration. Central storage is epoch **4** (`backend_epoch` and SQLite `user_version`); Desktop and Android local storage remain format **3**. Wire protocol **1**, collector Ingress **2** and portable archive **2** are independent contracts, not product versions.

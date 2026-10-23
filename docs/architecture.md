@@ -1,5 +1,6 @@
 # Mote 架构
 
+Current direction (2026-10-23): [single-owner MVP](adr-single-owner-mvp.md). Earlier dated validation does not qualify this recovery.
 任务期限与失败恢复的目标原则见 [2026-10-15 ADR](adr-task-recovery-and-execution-budgets.md)：每种任务在开发和注册时声明自身的宽松默认超时策略，不统一套用 600 秒；资源等待、模型反馈修正、实际失败和结果未知分别处理。中央注册策略与具体默认值见[任务执行策略](task-execution-policies.md)；部署与验证范围单独记录。
 
 问答覆盖、无字符近似配额的正常分页、录音语料时间与规范正文，以及质量对照和实际恢复边界，以[2026-10-14简化决定](adr-ask-evidence-quality-and-simple-context.md)为准。Memory不再自动二分恢复，历史验证与已固定记录仍保留各自日期和身份。

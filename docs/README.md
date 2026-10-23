@@ -1,5 +1,6 @@
 # 项目文档索引
 
+Current direction (2026-10-23): [single-owner MVP](adr-single-owner-mvp.md). Earlier dated validation does not qualify this recovery.
 Central（server + web）、macOS、Android 使用各自产品版本；当前版本分别记录在 app package.json 与 Android version.properties。拆分架构与发版操作见 [独立发布架构](release-architecture.md) 和 [发布流程](releasing.md)。早期版本曾从 0.8.0 重置到 0.0.1，历史验收应结合日期阅读。
 
 使用指南描述当前代码，历史验收只证明当次执行的范围，方案记录保留当时的取舍。文档中的“本轮”“已通过”和构建产物路径均应结合该篇日期阅读，不代表本次重新验收。当前基线与本轮证据见 [MVP 决策](adr-mvp-baseline.md) 和 [清理审计](audits/mvp-baseline-cleanup-2026-10-09.md)。

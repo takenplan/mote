@@ -30,6 +30,7 @@ export function affectedComponents(paths, graph = workspaceGraph()) {
   }
   for (const path of paths) {
     if (path.startsWith('docs/') || path.startsWith('release/notes/') || /^(?:README(?:\.[\w-]+)?|AGENTS|THIRD_PARTY_NOTICES)\.md$/.test(path)
+      || /(?:^|\/)AGENTS\.md$/.test(path) || /^\.agents\/skills\/.*\.(?:md|yaml)$/.test(path)
       || ['protocol/README.md', 'adapters/ui/README.md', 'plugins/source-packs/memex-markdown/README.md'].includes(path)) continue;
     if (path.startsWith('protocol/')) { mark(groups); result.protocol = true; continue; }
     const workflow = /^\.github\/workflows\/release-(central|desktop|android)\.yml$/.exec(path);
