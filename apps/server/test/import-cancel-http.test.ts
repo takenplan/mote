@@ -23,7 +23,7 @@ test('owner cancellation aborts import parsing, fences late results, survives re
  t.after(async()=>{release();await node.app.close();rmSync(directory,{recursive:true,force:true});});
  const headers={authorization:'Bearer '+config.token};
  const get=async(id:string)=>(await node.app.inject({method:'GET',url:'/api/imports/'+id,headers})).json();
- const wait=async(id:string,status:string)=>{for(let i=0;i<100;i++){const job=await get(id);if(job.status===status)return job;await setTimeout(10);}assert.fail('Import did not reach '+status);};
+ const wait=async(id:string,status:string)=>{await node.featureServices.importTasks.get(id);const job=await get(id);assert.equal(job.status,status,'Import task settled before its HTTP state is inspected');return job;};
  const created=await node.app.inject({method:'POST',url:'/api/imports',headers,payload:{processing:'automatic',files:[{name:'generated.custom',dataBase64:Buffer.from('Generated original').toString('base64')}]}});assert.equal(created.statusCode,202);
  const id=created.json().id;await started;
  const {invitation}=node.connections.invite({serverUrl:'http://127.0.0.1:3456',label:'Generated collector'});const collector=await readAgentCredential(node.connections);
@@ -71,6 +71,7 @@ for(const changed of [false,true])test(`confirm during settled preview cleanup $
  const responses=await Promise.all([confirming,concurrent]);
  for(const response of responses)assert.equal(response.statusCode,changed?409:202,response.body);
  if(changed){assert.equal(node.imports.get(id).status,'awaiting_confirmation');assert.equal(node.store.list().items.length,0);return;}
- for(let i=0;i<100&&node.imports.get(id).status!=='completed';i++)await setTimeout(10);
+ // HTTP 202 acknowledges admission; await the launched task within the existing test budget.
+ await node.featureServices.importTasks.get(id);
  assert.equal(node.imports.get(id).status,'completed');assert.equal(node.store.list().items.length,1);
 });
