@@ -44,6 +44,8 @@ node scripts/dev-server.mjs
 
 该脚本自动创建缺失的本地 dev profile，安装变化的依赖，构建共享库、中央与网页，再以前台进程启动。空账号库首次创建管理员 `admin`，密码为 `admin`；可直接在网页或客户端登录。已有账号与修改后的密码不会被重置。按 Ctrl+C 停止本次服务及其子进程。可用 `--home /absolute/dev-profiles --profile NAME` 选择另一套本地开发环境；初始化仅允许 native、loopback、非 prod 且端口不是 47832 的配置。已有旧格式或不完整的 profile 会被拒绝，不自动迁移。
 
+账号初始化失败时，终端输出 `development.initialize_failed` 诊断：配置错误提供 `category: configuration` 和字段位置（例如 `field: models.defaults`）；运行中的数据目录、开发环境限制、存储格式、权限、文件系统及 SQLite 错误提供对应类别，已知系统错误附带错误码。配置值、原始异常、SQL、私有路径和堆栈不会输出；未知异常保留通用初始化失败类别。修正私有 YAML 后重试原启动命令，脚本不会自动删除不受支持的配置或迁移存储。
+
 已构建中央服务并配置命名 Tunnel 的本机 DEV，可用一个命令前台运行两者：
 
 ```sh
