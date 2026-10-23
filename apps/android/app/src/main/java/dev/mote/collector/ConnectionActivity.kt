@@ -155,7 +155,6 @@ class ConnectionActivity : MoteActivity() {
             }
         }
         status = text(MoteI18n.text("{0}\n状态记录时间：{1}", message(initial.status), initial.statusAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it) } ?: MoteI18n.text("未测试")))
-        text(MoteI18n.text("确认后会先加密保存同一配对请求。兑换或确认回执丢失时可恢复，无需另开浏览器；身份核验通过后才保存设备凭据。若最后确认回执丢失，已保存的连接和恢复记录会一同保留。恢复沿用原设备名称，之后可单独改名。连接错误不包含令牌或邀请码。"))
         MoteUi.styleTree(root)
         intent.dataString?.let { raw -> if (raw.length <= ConnectionInvitation.MAX_BYTES * 2) input.setText(raw) else status.text = message("invitation") }
     }

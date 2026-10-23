@@ -2,7 +2,7 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Copy,Download,QrCode,X} from 'lucide-react';
 import {connectionServerUrl} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
-import designTokens from '../../../packages/shared/design-tokens.json';
+import {connectionQrOptions} from './connection-qr';
 import {errorMessage,type Api} from './api';
 import {useResource} from './useResource';
 
@@ -23,7 +23,7 @@ function DevicePairingView({api}:{api:Api}){
  const devices=useResource<{items:{id:string;name:string}[]}>(fixedApi,'/api/ingress/devices'),credentials=useResource<{items:{deviceId?:string;deviceName?:string;label?:string}[]}>(fixedApi,'/api/connections'),sources=useResource<{items:{deviceId?:string;name:string}[]}>(fixedApi,'/api/sources');
  const [endpoint,setEndpoint]=useState(location.origin),[label,setLabel]=useState(moteText('我的新设备')),[deviceId,setDeviceId]=useState(''),[invite,setInvite]=useState<Reply>(),[qr,setQr]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[now,setNow]=useState(Date.now());
  useLayoutEffect(()=>{live.current=true;return()=>{live.current=false;active.current?.abort();};},[]);
- useEffect(()=>{setQr('');if(!invite)return;let current=true;void import('qrcode').then(({default:QRCode})=>QRCode.toDataURL(invite.uri,{width:360,margin:4,errorCorrectionLevel:'M',color:{dark:designTokens.ink,light:designTokens.surface}})).then(value=>{if(current&&live.current)setQr(value);}).catch(()=>{if(current&&live.current)setError(moteText('二维码生成失败，可以复制或下载连接邀请 JSON。'));});return()=>{current=false;};},[invite]);
+ useEffect(()=>{setQr('');if(!invite)return;let current=true;void import('qrcode').then(({default:QRCode})=>QRCode.toDataURL(invite.uri,connectionQrOptions)).then(value=>{if(current&&live.current)setQr(value);}).catch(()=>{if(current&&live.current)setError(moteText('二维码生成失败，可以复制或下载连接邀请 JSON。'));});return()=>{current=false;};},[invite]);
  useEffect(()=>{if(!invite)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[invite]);
  const expired=!!invite&&Date.parse(invite.invitation.expiresAt)<=now;
  useEffect(()=>{if(expired){setInvite(undefined);setMessage(moteText('连接邀请已到期，请重新生成；已经连接的设备不受影响。'));}},[expired]);

@@ -8547,7 +8547,6 @@ export const english: Readonly<Record<string, string>> = {
   "恢复已确认连接": "Resume confirmed pairing",
   "{0}\n\n将恢复本机加密保存的同一配对请求并核验设备身份；尚未绑定的资料仅按这次明确确认归属。": "{0}\n\nResume the same encrypted pairing request and verify this device. Unbound local data is assigned only with this explicit confirmation.",
   "设备或当前账号凭据": "Device or current account credential",
-  "确认后会先加密保存同一配对请求。兑换或确认回执丢失时可恢复，无需另开浏览器；身份核验通过后才保存设备凭据。若最后确认回执丢失，已保存的连接和恢复记录会一同保留。恢复沿用原设备名称，之后可单独改名。连接错误不包含令牌或邀请码。": "Confirmation first saves the same encrypted pairing request. Resume a lost claim or acknowledgement without another browser step. Device credentials are saved only after identity verification. A lost final acknowledgement preserves the saved connection and recovery record. Recovery uses the original device name; rename it separately afterward. Connection errors contain no tokens or invitation codes.",
   "{0}\n实例：{1}\n账号：{2}\n用途：设备采集\n设备：{3}": "{0}\nDeployment: {1}\nAccount: {2}\nPurpose: device collection\nDevice: {3}",
   "节点响应或设备身份校验失败；请检查当前连接和保留的恢复记录。": "Node response or device identity verification failed. Check the current connection and retained recovery record.",
   "为此设备重新生成邀请": "Create another invitation for this device",
