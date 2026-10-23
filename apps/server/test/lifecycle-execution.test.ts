@@ -22,7 +22,7 @@ import Fastify from 'fastify';
 import {registerMemoryRoutes} from '../src/memory-routes.js';
 import {MemoryIntegrationSettings} from '../src/memory-integration-settings.js';
 import {MemoryRecipeSettings} from '../src/memory-recipe-settings.js';
-function fixture(t:TestContext){const directory=mkdtempSync(join(tmpdir(),'mote-lifecycle-execution-')),store=new Store(directory),engine=new ExecutionEngine(store);const closers:(()=>Promise<unknown>)[]=[];t.after(async()=>{for(const close of closers.reverse())await close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});return {store,engine,closers};}
+function fixture(t:TestContext,clock=Date.now){const directory=mkdtempSync(join(tmpdir(),'mote-lifecycle-execution-')),store=new Store(directory),engine=new ExecutionEngine(store,clock);const closers:(()=>Promise<unknown>)[]=[];t.after(async()=>{for(const close of closers.reverse())await close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});return {store,engine,closers};}
 function deferred(){let resolve!:()=>void;const promise=new Promise<void>(r=>resolve=r);return {promise,resolve};}
 function event(store:Store){store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(randomUUID(),new Date().toISOString());}
 function configure(lifecycle:MemoryLifecycle){const settings=lifecycle.settings();lifecycle.configure({...settings,extraction:{...settings.extraction,minChanges:1},insights:{...settings.insights,minChanges:1}});}
@@ -117,9 +117,9 @@ test('automatic insight recovery replaces only its typed transient checkpoint wi
    const children=store.db.prepare('SELECT child_id FROM operation_parents WHERE parent_id=?').all('workflow:lifecycle:'+first.active!.id);assert.equal(children.length,2,'both observations belong to the same authorized window');
    assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,1);await add(2);now+=3600000;await lifecycle.tick();assert.equal(calls,3,'a recovered window no longer blocks later insights');assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,2);
   }else{
-   for(let attempt=3;attempt<=4;attempt++){now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;await lifecycle.tick();}
-   const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,4);assert.equal(stopped.status,'failed');assert.equal(stopped.failures,4);assert.equal(stopped.manualRetryRequired,true);assert.equal(stopped.retryAt,undefined);assert.equal(stopped.active!.id,first.active!.id);assert.equal(insights.list().length,4);
-   now+=86400000;await lifecycle.tick();assert.equal(calls,4,'a parent tick cannot reset the finite recovery budget');
+   now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;await lifecycle.tick();
+   const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,3);assert.equal(stopped.status,'failed');assert.equal(stopped.failures,3);assert.equal(stopped.manualRetryRequired,true);assert.equal(stopped.retryAt,undefined);assert.equal(stopped.active!.id,first.active!.id);assert.equal(insights.list().length,3);
+   now+=86400000;await lifecycle.tick();assert.equal(calls,3,'a parent tick cannot reset the finite recovery budget');
   }
  });
 });
@@ -138,7 +138,7 @@ test('automatic insight recovery does not reopen unknown, cancelled or unschedul
 });
 
 test('manual lifecycle work has bounded attempts, explicit retry and cancellation without advancing automatic history',async t=>{
- const {store,engine,closers}=fixture(t);let now=0,calls=0,fail=true;const lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());
+ let now=0,calls=0,fail=true;const {store,engine,closers}=fixture(t,()=>now);const lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());
  lifecycle.register({id:'consolidation',version:'fixture',maxAttempts:3,stream:'memory',async run(window,checkpoint){calls++;assert.equal(window.manual,true);if(fail)throw new ProviderFailure({category:'transient',code:'provider_unavailable'});checkpoint('done');}});
  const s=lifecycle.settings();lifecycle.configure({...s,consolidation:{...s.consolidation,enabled:false}});
  const id=lifecycle.request('consolidation',[randomUUID()],'initial');
