@@ -1,4 +1,5 @@
-require('./fixture-background.cjs');require('./fixture-language.cjs');
+require('./fixture-background.cjs');
+require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');const {spawn}=require('node:child_process');const {mkdtempSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');const {join,resolve}=require('node:path');const assert=require('node:assert/strict');
 const directory=mkdtempSync(join(tmpdir(),'mote-authorization-browser-'));app.setPath('userData',join(directory,'browser'));app.on('window-all-closed',()=>{});let child,window;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
