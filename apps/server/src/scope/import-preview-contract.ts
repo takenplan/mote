@@ -19,6 +19,6 @@ export function importPreviewDispositions(files:readonly ImportPreviewFile[],rec
   throw new ExecutionFailure('permanent','import_file_not_accounted');
  });
  if(dispositions.length!==files.length||new Set(dispositions.map(item=>item.fileId)).size!==files.length||files.some(file=>!dispositions.some(item=>item.fileId===file.id)))throw new ExecutionFailure('permanent','import_file_not_accounted');
- for(const item of dispositions){const file=files.find(file=>file.id===item.fileId);if(!file||file.decoding.status==='unsupported'&&item.status==='parsed')throw new ExecutionFailure('permanent','unsupported_import_evidence');}
+ for(const item of dispositions){const file=files.find(file=>file.id===item.fileId);if(!file||file.decoding.status==='unsupported'&&item.status==='parsed'||file.decoding.status!=='unsupported'&&item.status==='unsupported')throw new ExecutionFailure('permanent','unsupported_import_evidence');}
  return dispositions;
 }

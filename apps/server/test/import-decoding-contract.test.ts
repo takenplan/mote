@@ -28,3 +28,10 @@ test('host unsupported outcomes cannot be promoted to parsed text or silently us
 test('an explicit import request owns a stable lifetime separate from the same logical bytes',()=>{
  const files=[{relativePath:'generated.txt',hash:'a'.repeat(64)}],a=randomUUID(),b=randomUUID();assert.equal(importSourceIdentity(files,a),importSourceIdentity(files,a));assert.notEqual(importSourceIdentity(files,a),importSourceIdentity(files,b));assert.equal(importSourceIdentity([...files,{relativePath:'second.txt',hash:'b'.repeat(64)}],a),importSourceIdentity([{relativePath:'second.txt',hash:'b'.repeat(64)},...files],a));
 });
+
+test('a mapper cannot label decoded originals unsupported to admit an empty preview',()=>{
+ const id=randomUUID(),files=[{id,relativePath:'decoded.txt',decoding:{fileId:id,status:'decoded' as const,reason:'utf8'}}];
+ assert.throws(()=>importPreviewDispositions(files,[],[{fileId:id,status:'unsupported',reason:'Untrusted capability override'}]),/unsupported_import_evidence/);
+ const excluded=[{fileId:id,status:'excluded' as const,reason:'Explicitly outside the requested mapping scope'}];
+ assert.deepEqual(importPreviewDispositions(files,[],excluded),excluded);
+});
