@@ -21,9 +21,9 @@ const takeBackup=(source:string,snapshot:string)=>execFileSync(process.execPath,
 test('restored import rebases all paths and replays a partial import without losing new evidence IDs',async t=>{
  const root=realpathSync(mkdtempSync(join(tmpdir(),'mote-import-backup-'))),originalDirectory=join(root,'original'),snapshot=join(root,'snapshot'),target=join(root,'restored');
  const original=new Store(originalDirectory,{dataKey:'ab'.repeat(32)}),files=new ArchivedFileStore(original),sources=new SourceStore(original);
- let restored:Store|undefined;t.after(()=>{original.close();restored?.close();rmSync(root,{recursive:true,force:true});});
+ const cleanup:Array<()=>Promise<void>>=[];let restored:Store|undefined;t.after(async()=>{for(const close of cleanup.reverse())await close();original.close();restored?.close();rmSync(root,{recursive:true,force:true});});
  const parser=async({workspace,inputPaths}:ImportPreparation)=>{const rows=['first','second'].map(id=>({item:{externalId:id,revision:'v1',observedAt:'2026-09-15T12:00:00Z',title:id,text:'Synthetic preserved text '+id,kind:'file',layer:'original'},evidencePaths:inputPaths}));writeFileSync(join(workspace,'records.jsonl'),rows.map(row=>JSON.stringify(row)).join('\n'));return {summary:'Two synthetic records'};};
- const imports=new ImportStore(original,files,sources,{prepare:parser}),job=await imports.create({files:[{name:'original.txt',dataBase64:Buffer.from('synthetic source').toString('base64')}]});await imports.prepare(job.id);
+ const imports=new ImportStore(original,files,sources,{prepare:parser});cleanup.push(()=>imports.stop());const job=await imports.create({files:[{name:'original.txt',dataBase64:Buffer.from('synthetic source').toString('base64')}]});await imports.prepare(job.id);
  const attach=files.attach.bind(files);let fail=true;files.attach=(id,ids)=>{if(fail&&original.evidence([id])[0].provenance?.externalId==='second'){fail=false;throw Error('Synthetic interruption');}attach(id,ids);};
  const partial=await imports.confirm(job.id);assert.equal(partial.progress.processed,1);const oldWorkspace=join(originalDirectory,'imports',job.id);writeFileSync(join(oldWorkspace,'generated-secret-script.mjs'),'synthetic original marker');
  const completed=await imports.create({files:[{name:'completed.txt',dataBase64:Buffer.from('another synthetic source').toString('base64')}]});await imports.prepare(completed.id);await imports.confirm(completed.id);
@@ -31,7 +31,7 @@ test('restored import rebases all paths and replays a partial import without los
  await restoreProfile({meta:{runtime:'native'},dataDir:target,processFile:join(root,'missing-process.json')},snapshot);
  restored=new Store(target,{dataKey:'ab'.repeat(32)});const resumedIds:string[][]=[];
  const resumed=new ImportStore(restored,new ArchivedFileStore(restored),new SourceStore(restored),{prepare:async input=>{assert.ok(input.workspace.startsWith(target+'/imports/'));assert.ok(input.inputPaths.every(path=>path.startsWith(target+'/imports/')));assert.equal(readFileSync(input.inputPaths[0],'utf8'),'synthetic source');return parser(input);},onImported:async ids=>{resumedIds.push(ids);return {memoryJobId:'resumed-memory'};}});
- const restoredJob=resumed.get(job.id);assert.equal(restoredJob.status,'queued');assert.equal(restoredJob.processingStatus,'archived');assert.equal(restoredJob.progress.processed,0);assert.deepEqual(restoredJob.captureIds,partial.captureIds);await assert.rejects(resumed.confirm(job.id),{statusCode:409});
+ cleanup.push(()=>resumed.stop());const restoredJob=resumed.get(job.id);assert.equal(restoredJob.status,'queued');assert.equal(restoredJob.processingStatus,'archived');assert.equal(restoredJob.progress.processed,0);assert.deepEqual(restoredJob.captureIds,partial.captureIds);await assert.rejects(resumed.confirm(job.id),{statusCode:409});
  assert.equal(resumed.get(completed.id).status,'completed');assert.equal((await resumed.confirm(completed.id)).status,'completed');assert.deepEqual(resumedIds,[]);
  assert.equal((await resumed.retry(job.id)).status,'awaiting_confirmation');const finished=await resumed.confirm(job.id);assert.equal(finished.status,'completed');assert.equal(finished.progress.duplicates,1);assert.equal(finished.progress.imported,1);assert.equal(finished.captureIds.length,2);assert.deepEqual(resumedIds,[finished.captureIds]);assert.equal(restored.list().items.length,4);
  resumed.delete(job.id);assert.equal(readFileSync(join(oldWorkspace,'generated-secret-script.mjs'),'utf8'),'synthetic original marker');
@@ -39,9 +39,9 @@ test('restored import rebases all paths and replays a partial import without los
 
 for(const mode of ['plain','encrypted','mixed'] as const)test(`${mode} backup restores imported originals and multipart client files through their original readers`,async t=>{
  const root=realpathSync(mkdtempSync(join(tmpdir(),'mote-mixed-backup-'))),source=join(root,'source'),snapshot=join(root,'snapshot'),target=join(root,'target'),key='cd'.repeat(32);
- const original=new Store(source,{dataKey:key,contentEncryptionEnabled:mode!=='plain'}),sources=new SourceStore(original),archived=new ArchivedFileStore(original),files=new FileStore(original,sources);let restored:Store|undefined;
- t.after(()=>{original.close();restored?.close();rmSync(root,{recursive:true,force:true});});
- const imported=await new ImportStore(original,archived,sources).create({files:[{name:'generated.txt',dataBase64:Buffer.from('Synthetic imported original').toString('base64')}]});
+ const original=new Store(source,{dataKey:key,contentEncryptionEnabled:mode!=='plain'}),sources=new SourceStore(original),archived=new ArchivedFileStore(original),files=new FileStore(original,sources);let restored:Store|undefined;const cleanup:Array<()=>Promise<void>>=[];
+ t.after(async()=>{for(const close of cleanup.reverse())await close();original.close();restored?.close();rmSync(root,{recursive:true,force:true});});
+ const imports=new ImportStore(original,archived,sources);cleanup.push(()=>imports.stop());const imported=await imports.create({files:[{name:'generated.txt',dataBase64:Buffer.from('Synthetic imported original').toString('base64')}]});
  sources.register({id:'backup-phone',name:'Synthetic backup phone',kind:'local-files',deviceId:'phone',platform:'android',retention:'archive'});
  const bytes=Buffer.alloc(FILE_PART_BYTES+37,9),revision={sourceId:'backup-phone',previousRevision:null,item:{externalId:'generated://backup/file',revision:'v1',observedAt:'2026-09-16T00:00:00Z',title:'Synthetic multipart file',kind:'file',layer:'original',text:'',mimeType:'application/octet-stream',deleted:false},relativePath:'generated/file.bin',sizeBytes:bytes.length,sha256:sha256(bytes)};
  const session=files.begin(revision,()=>{});for(let part=0;part<2;part++)files.part(session.uploadId,part,bytes.subarray(part*FILE_PART_BYTES,(part+1)*FILE_PART_BYTES),()=>{});const ack=await files.commit(session.uploadId,()=>{});
@@ -72,7 +72,7 @@ for(const mode of ['plain','encrypted','mixed'] as const)test(`${mode} backup re
  for(const path of Object.keys(manifest.checksums).filter(path=>path.startsWith('files/')))assert.deepEqual(readFileSync(join(snapshot,path)),readFileSync(join(source,path)));
  await restoreProfile({meta:{runtime:'native'},dataDir:target,processFile:join(root,'none')},snapshot);
  restored=new Store(target,{dataKey:key});const restoredSources=new SourceStore(restored),restoredArchived=new ArchivedFileStore(restored),restoredFiles=new FileStore(restored,restoredSources),restoredImports=new ImportStore(restored,restoredArchived,restoredSources);
- assert.equal(restoredArchived.read(imported.files[0].id).toString('utf8'),'Synthetic imported original');assert.equal(restoredImports.get(imported.id).status,'queued');
+ cleanup.push(()=>restoredImports.stop());assert.equal(restoredArchived.read(imported.files[0].id).toString('utf8'),'Synthetic imported original');assert.equal(restoredImports.get(imported.id).status,'queued');
  if(plainOriginal)assert.equal(restoredArchived.read(plainOriginal.id).toString(),'Generated plaintext after opt-out');
  assert.deepEqual(Buffer.concat([...restoredFiles.bytes(ack.id)]),bytes);assert.deepEqual(Buffer.concat([...restoredFiles.bytes(ack.id,FILE_PART_BYTES-3,FILE_PART_BYTES+3)]),bytes.subarray(FILE_PART_BYTES-3,FILE_PART_BYTES+4));
  const job=restoredFiles.detail(ack.id).job;assert.equal(job.state,'waiting');assert.equal(job.summary_state,'waiting');assert.equal(job.attempts,2);

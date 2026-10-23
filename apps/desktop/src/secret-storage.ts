@@ -8,15 +8,15 @@ interface SystemSecretStorage {
   decryptString(value: Buffer): string;
 }
 
-/** Select before touching the OS store. Development must never open Keychain. */
-export function desktopSecretStorage(profile: DesktopProfile, developmentBuild: boolean, system: SystemSecretStorage, platform = process.platform): SecretStorage {
+/** Resolve Dev before constructing or inspecting the platform credential adapter. */
+export function desktopSecretStorage(profile: DesktopProfile, developmentBuild: boolean, system: () => SystemSecretStorage, platform = process.platform): SecretStorage {
   if (isDevelopmentProfile(profile, developmentBuild)) return {
     mode: 'json', available: () => true,
     encrypt: value => Buffer.from(value, 'utf8'), decrypt: value => value.toString('utf8'),
   };
   return {
     mode: 'system',
-    available: () => system.isEncryptionAvailable() && (platform !== 'linux' || system.getSelectedStorageBackend() !== 'basic_text'),
-    encrypt: value => system.encryptString(value), decrypt: value => system.decryptString(value),
+    available: () => system().isEncryptionAvailable() && (platform !== 'linux' || system().getSelectedStorageBackend() !== 'basic_text'),
+    encrypt: value => system().encryptString(value), decrypt: value => system().decryptString(value),
   };
 }

@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import {DeepSeekHarness} from '@deepseek-ai/dsh-sdk-client';
 import {captureSchema} from '@mote/shared';
 import {loadProfile,profilePaths} from './profile-lib.mjs';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
+import {buildApp} from '../apps/server/dist/app.js';
 import {applyModelSettings} from '../apps/server/dist/model-agent.js';
 import {readConfigDocument,resolveConfigDocument} from '../apps/server/dist/config.js';
 

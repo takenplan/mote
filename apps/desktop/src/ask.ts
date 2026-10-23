@@ -1,12 +1,10 @@
-import {DESKTOP_PROTOCOL_HEADERS} from './account';
 import { connectionToken, requireConnectionToken } from './login-session';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import type { Config } from './contracts';
 import { validateServerUrl } from './config';
 import { readResponseText } from './response-body';
-import {assertAccountConnection} from './ingress-client';
 export interface AskRun { id: string; status: 'running' | 'completed' | 'failed' | 'cancelled'; conversationId?: string; events: { stage: string; message?: string; tool?: string }[]; error?: {message: string}; execution?: import('@mote/shared').ExecutionEnvelope }
-export interface AskConversation { id: string; title: string; turns: { question: string; status: string; evidenceStale?: boolean; evidenceDeleted?: boolean; error?: {message: string}; result?: { answer: string; citations: {id: string; appName: string; capturedAt: string; excerpt: string}[] } }[] }
+export interface AskConversation { id: string; title: string; turns: { question: string; status: string; error?: {message: string}; result?: { answer: string; citations: {id: string; appName: string; capturedAt: string; excerpt: string}[] } }[] }
 export type AskCommand = 'history' | 'runs' | 'conversation' | 'run' | 'start' | 'cancel' | 'login' | 'logout' | 'login-browser';
 /** Fixed endpoints only. Owner credentials remain in the main process and are scoped to one origin. */
 export class AskClient {
@@ -28,8 +26,7 @@ export class AskClient {
         path = '/api/query-runs'; body = JSON.stringify({id: id(), input: { question: input.question.trim(), ...(input.conversationId ? {conversationId: input.conversationId} : {}), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }}); break;
       default: throw Error('Unsupported ask command');
     }
-    if(config.account){await assertAccountConnection(config);this.check(config);}
-    const response = await fetch(origin + path, {method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(30000), headers: {...DESKTOP_PROTOCOL_HEADERS,Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept-Language': getLocale()}, ...(body ? {body} : {})});
+    const response = await fetch(origin + path, {method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(30000), headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept-Language': getLocale()}, ...(body ? {body} : {})});
     if(!this.isCurrent(config)||!connectionToken(config)){await response.body?.cancel();this.check(config);}
     if (!response.ok) {
       await response.body?.cancel();

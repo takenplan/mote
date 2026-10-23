@@ -1,8 +1,9 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import {catalogParent} from './source-catalog-path.js';
+/** Literal URI structure only. Never opens a remote URI or interprets its contents. */
+function parent(json:unknown){const record=JSON.parse(String(json)),uri=record.provenance?.uri;if(!uri)return '';try{const url=new URL(uri);url.search='';url.hash='';url.pathname=url.pathname.slice(0,url.pathname.lastIndexOf('/')+1);return url.href;}catch{return '';}}
 export function initializeSourceCatalog(db:DatabaseSync){
- db.function('mote_catalog_parent',{deterministic:true},catalogParent);
+ db.function('mote_catalog_parent',{deterministic:true},parent);
  db.exec(`CREATE TABLE IF NOT EXISTS source_catalog(source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,parent_uri TEXT NOT NULL,title TEXT NOT NULL,coverage TEXT NOT NULL,PRIMARY KEY(source_id,external_id));
  CREATE INDEX IF NOT EXISTS source_catalog_directory ON source_catalog(source_id,parent_uri,title,external_id);
  CREATE TRIGGER IF NOT EXISTS source_catalog_insert AFTER INSERT ON source_heads BEGIN

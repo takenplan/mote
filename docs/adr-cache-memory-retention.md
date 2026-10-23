@@ -1,14 +1,6 @@
 # ADR: Retain Memory when derived context caches change
 
-Date: 2026-10-17. Status: implementation recorded; validation below is scoped to
-its original EvidenceArchive journeys.
-
-Host boundary: current scoped M07 retains stale Memory and strict original
-authority under the [integration decision](adr-multiuser-main-integration.md).
-The EvidenceArchive trigger refresh and migration descriptions below belong to
-that original host and do not authorize old-version migration on epoch 5.
-Source delivery, qualification and unverified deployment are separated in the
-[progress ledger](project-progress.md).
+Date: 2026-10-17
 
 ## Decision and scope
 

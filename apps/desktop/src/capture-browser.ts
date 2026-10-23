@@ -7,8 +7,6 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
-import {accountResponse,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
-import {DESKTOP_PROTOCOL_HEADERS} from './account';
 
 export type CaptureLocation = 'local' | 'central';
 export interface BrowseRequest { source?: 'screen'|'ui_page'; location: CaptureLocation; day: string; cursor?: string; grouping?: 'sessions' | 'records'; sessionId?: string }
@@ -43,8 +41,7 @@ function preview(event: Partial<CaptureEvent> & { hasImage?: boolean; textPrevie
 }
 async function request(config: Config, path: string): Promise<Response> {
   if (!connectionToken(config) || !config.serverUrl) throw new Error(moteText("请先连接中央节点；本机记录仍可查看"));
-  if (config.account) return accountResponse(config,path);
-  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { ...DESKTOP_PROTOCOL_HEADERS,'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { 'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
     if (response.status === 404) throw new Error(moteText("记录不存在，或中央节点需要升级才能浏览采集记录"));
@@ -54,7 +51,7 @@ async function request(config: Config, path: string): Promise<Response> {
   return response;
 }
 async function remoteDetail(config: Config, id: string): Promise<Partial<CaptureEvent>> {
-  const value = config.account?await accountJson(config,`/api/captures/${id}`):JSON.parse(await readResponseText(await request(config, `/api/capture-browser/${id}`), 1024 * 1024)) as Partial<CaptureEvent>;
+  const value = JSON.parse(await readResponseText(await request(config, `/api/capture-browser/${id}`), 1024 * 1024)) as Partial<CaptureEvent>;
   if (value.id !== id || value.deviceId !== config.deviceId || !['screen','ui_page'].includes(value.source??'')) throw new Error(moteText("记录不属于当前设备的截图"));
   return value;
 }
@@ -67,7 +64,7 @@ async function imageBytes(response: Response, maximum: number): Promise<Buffer> 
     return Buffer.concat(chunks);
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
-export async function browseCaptures(queue: Pick<DurableQueue,'sessionSamples'|'recordForBrowser'|'pageForBrowser'>, config: Config, input: BrowseRequest): Promise<BrowserPage> {
+export async function browseCaptures(queue: DurableQueue, config: Config, input: BrowseRequest): Promise<BrowserPage> {
   if(input.source!==undefined&&!['screen','ui_page'].includes(input.source))throw Error('Invalid capture source');
   const source=input.source??'screen';
   location(input?.location); const range = captureDayRange(input.day);
@@ -115,22 +112,13 @@ export async function captureDetail(queue: DurableQueue, config: Config, source:
     return { ...preview(record.event, record), ocrText: record.event.ocrText ?? '', deviceName: record.event.deviceName };
   }
   const value = await remoteDetail(config, id);
-  if(config.account&&(!value.ocrText||value.ocr?.status==='pending')){
-    const material=await accountCaptureMaterial(config,value);
-    if(material){let body='',offset=0;
-      do{const page=await accountJson(config,`/api/materials/${material.id}/read?revision=${material.revision}&offset=${offset}&length=${Math.min(12000,100000-body.length)}`);if(typeof page.text!=='string')throw Error('Invalid material text page');body+=page.text;
-        const next=page.textRange?.nextOffset;if(next===null||next===undefined)break;if(!Number.isSafeInteger(next)||next<=offset)throw Error('Invalid material text cursor');offset=next;
-      }while(body.length<100000);
-      value.ocrText=body;value.ocr={status:'completed'};
-    }else{const state=await accountCaptureProcessing(config,value);if(state)value.ocr={status:state};}
-  }
   return { ...preview({ ...value, hasImage: Boolean(value.imageMime) }), ocrText: String(value.ocrText ?? '').slice(0, 100000), deviceName: String(value.deviceName ?? '').slice(0, 128) };
 }
 export async function captureImage(queue: DurableQueue, config: Config, source: CaptureLocation, id: string, thumbnail: boolean): Promise<string> {
   location(source); validId(id); if (typeof thumbnail !== 'boolean') throw new Error(moteText("图片参数无效"));
   let bytes: Buffer | undefined;
   if (source === 'local') bytes = await queue.imageForBrowser(id);
-  else { const record=await remoteDetail(config, id);if(config.account){const original=await accountOriginal(config,record);if(original)bytes=await imageBytes(original.response,MAX_IMAGE_BYTES);}else bytes = await imageBytes(await request(config, `/api/capture-browser/${id}/image${thumbnail ? '?thumbnail=1' : ''}`), thumbnail ? 1024 * 1024 : MAX_IMAGE_BYTES); }
+  else { await remoteDetail(config, id); bytes = await imageBytes(await request(config, `/api/capture-browser/${id}/image${thumbnail ? '?thumbnail=1' : ''}`), thumbnail ? 1024 * 1024 : MAX_IMAGE_BYTES); }
   if (!bytes) throw new Error(moteText("图片已同步，请切换到中央已归档查看"));
   return previewWork.run<string>({ kind: 'preview', bytes, thumbnail });
 }

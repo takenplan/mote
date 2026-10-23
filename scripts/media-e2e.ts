@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {AddressInfo} from 'node:net';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 
 // Deterministic generated provider replies exercise real Harness tools, not model quality.

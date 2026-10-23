@@ -5,15 +5,12 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.InvertedLuminanceSource
 import com.google.zxing.LuminanceSource
 import com.google.zxing.RGBLuminanceSource
-import com.google.zxing.client.android.Intents
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.Decoder
 import com.journeyapps.barcodescanner.DefaultDecoderFactory
-import com.journeyapps.barcodescanner.MixedDecoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -39,15 +36,11 @@ class ConnectionScanDecodeTest {
         return RGBLuminanceSource(size, size, pixels)
     }
 
-    private fun scanDecoder(): Decoder = DefaultDecoderFactory(listOf(BarcodeFormat.QR_CODE), null, null, Intents.Scan.MIXED_SCAN)
+    private fun scanDecoder(): Decoder = connectionScanDecoderFactory()
         .createDecoder(mutableMapOf<DecodeHintType, Any>())
 
     private fun attempt(decoder: Decoder, frame: LuminanceSource, tries: Int = 2): String? =
         (0 until tries).firstNotNullOfOrNull { decoder.decode(frame)?.text }
-
-    @Test fun connectionScanFactoryProducesAMixedDecoder() {
-        assertTrue(scanDecoder() is MixedDecoder)
-    }
 
     @Test fun mixedDecoderReadsNormalAndInvertedQr() {
         val decoder = scanDecoder()

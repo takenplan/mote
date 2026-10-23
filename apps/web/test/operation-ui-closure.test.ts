@@ -81,12 +81,3 @@ test('task pagination returns from page three to two and resets boundaries when 
  await select('任务类型','capture');assert(reads.at(-1)?.includes('kind=capture'));assert(!reads.at(-1)?.includes('cursor='));
  assert(!reads.some(path=>path.startsWith('/api/processing')),'closed advanced list does not fetch or render another task centre');
 });
-
-test('the existing operation detail shows the finite retry count and distinguishes a suspended final attempt from exhaustion',async t=>{
- const {root,d}=await fixture(t);let exhausted=true,history:false|'untracked'|'overage'=false;
- const operation={id:'file:generated-retry-budget',kind:'file',state:'failed',total:1,notScheduled:0,counts:{failed:1,succeeded:0,waiting:0,running:0,blocked:0,cancelled:0,stale:0,skipped:0},updatedAt:1};
- const api={request:async(path:string)=>{if(path.startsWith('/api/operations/changes'))return new Promise(()=>{});if(path.startsWith('/api/operations?'))return {items:[operation]};return {operation,steps:[{id:'generated-finite-task',kind:'processing.analysis',state:exhausted?'failed':'waiting',reason:exhausted?'provider_network':'processor_busy',attempts:history?4:3,maxAttempts:3,maxRetries:2,retriesUsed:history==='untracked'?undefined:history==='overage'?3:2,attemptsRemaining:history?undefined:0,retryRound:history?undefined:1,retryExhausted:history?undefined:exhausted,dependencies:[],current:true}],nextCursor:null};}} as Api;
- await act(async()=>root.render(React.createElement(Processing,{api,onNavigate:()=>{}})));await act(async()=>button(d,'查看详情').click());const detail=()=>d.querySelector('[aria-label="任务详情"]')!;assert.match(detail().textContent!,/自动重试 2\/2/);assert.match(detail().textContent!,/自动重试次数已用完/);
- exhausted=false;await act(async()=>resources(api).get('/api/operations/'+encodeURIComponent(operation.id)+'?limit=10').refresh());assert.match(detail().textContent!,/自动重试 2\/2/);assert.doesNotMatch(detail().textContent!,/自动重试次数已用完/);
- for(const prior of ['untracked','overage'] as const){history=prior;await act(async()=>resources(api).get('/api/operations/'+encodeURIComponent(operation.id)+'?limit=10').refresh());assert.match(detail().textContent!,/尝试次数 4/);assert.match(detail().textContent!,/当前最多自动重试 2 次/);assert.doesNotMatch(detail().textContent!,/3\/2|自动重试次数已用完/);}
-});

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {uiPageText,type UiContentObject,type UiPageV2} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {EvidenceArchive} from '../src/evidence-archive.js';
 import type {Config} from '../src/config.js';
 

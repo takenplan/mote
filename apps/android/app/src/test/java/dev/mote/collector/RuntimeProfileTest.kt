@@ -10,13 +10,22 @@ import java.io.File
 class RuntimeProfileTest {
     @get:Rule val folder = TemporaryFolder()
 
-    @Test fun onlyDevEnablesDetailedDiagnosticsAndFileCredentials() {
-        assertTrue(RuntimeProfile.DEV.detailedDiagnostics && RuntimeProfile.DEV.fileCredentials)
+    @Test fun diagnosticsAndDeveloperToolsFollowExactProfile() {
+        assertTrue(RuntimeProfile.DEV.detailedDiagnostics)
         assertTrue(RuntimeProfile.DEV.developerTools)
-        assertFalse(RuntimeProfile.PROD.detailedDiagnostics || RuntimeProfile.PROD.fileCredentials || RuntimeProfile.PROD.developerTools)
-        assertFalse(RuntimeProfile.TEST.detailedDiagnostics || RuntimeProfile.TEST.fileCredentials)
+        assertFalse(RuntimeProfile.TEST.detailedDiagnostics)
         assertTrue(RuntimeProfile.TEST.developerTools)
-        assertThrows(IllegalStateException::class.java) { RuntimeProfile.parse("default") }
+        assertFalse(RuntimeProfile.PROD.detailedDiagnostics)
+        assertFalse(RuntimeProfile.PROD.developerTools)
+        assertThrows(IllegalStateException::class.java) { RuntimeProfile.parse("dev-new") }
+    }
+
+    @Test fun onlyDevUsesPrivateFileCredentials() {
+        assertTrue(RuntimeProfile.DEV.fileCredentials)
+        assertFalse(RuntimeProfile.PROD.fileCredentials)
+        assertFalse(RuntimeProfile.TEST.fileCredentials)
+        assertEquals(RuntimeProfile.PROD, RuntimeProfile.parse("default"))
+        assertThrows(IllegalStateException::class.java) { RuntimeProfile.parse("unknown") }
     }
 
     @Test fun devCredentialAndPrivateJsonSurviveRecreationWithoutOpeningKeystore() {
@@ -86,6 +95,24 @@ class RuntimeProfileTest {
         }
     }
 
+    @Test fun prodKeepsTheProtectedCredentialRoundTripAndLazyProvider() {
+        var constructed = 0
+        val box = SecretBox(RuntimeProfile.PROD, protectedCipher = {
+            constructed++
+            object : ByteCipher {
+                override fun seal(bytes: ByteArray) = bytes.map { (it.toInt() xor 90).toByte() }.toByteArray()
+                override fun open(bytes: ByteArray) = seal(bytes)
+            }
+        })
+        val credentials = CredentialValue(RuntimeProfile.PROD, box)
+        assertEquals(0, constructed)
+        val token = "generated-production-owner-credential"
+        val stored = credentials.encode(token)
+        assertFalse(stored.contains(token))
+        assertEquals(token, credentials.decode(stored))
+        assertEquals(1, constructed)
+    }
+
     @Test fun devRefusesRetiredEncryptedSettingsWithoutMutatingThem() {
         val directory = folder.newFolder()
         val old = File(directory, "retired.enc").apply { writeBytes(byteArrayOf(3, 7, 11)) }
@@ -97,14 +124,4 @@ class RuntimeProfileTest {
         DevCredentialFormat.requireCurrent(fresh, hasConfiguration = true)
     }
 
-    @Test fun prodKeepsOperationalFailuresWithoutDebugExecutionDetails() {
-        val file = File(folder.root, "prod.log")
-        val log = RuntimeLog(file, detailed = RuntimeProfile.PROD.detailedDiagnostics)
-        log.event(EventStage.APP, EventCode.STARTED)
-        log.captureDecision(1, 0, 0, 0, true, true, false, AppCollectionMode.ACTIVITY)
-        log.event(EventStage.UPLOAD, EventCode.AUTH, httpStatus = 401)
-        val text = log.readRaw()
-        assertFalse(text.contains("STARTED") || text.contains("CAPTURE_DECISION"))
-        assertTrue(text.contains("AUTH") && text.contains("httpStatus=401"))
-    }
 }

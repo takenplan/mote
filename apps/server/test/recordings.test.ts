@@ -4,7 +4,7 @@ import {mkdtemp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {ArchivedFileStore} from '../src/archived-files.js';
 import type {Config} from '../src/config.js';
 import type {RecordingProvider} from '../src/connectors/recordings.js';
@@ -14,6 +14,7 @@ import {createFeishuRecordings} from '../src/connectors/lark-recordings.js';
 import {dingtalkTranscript,dwsArguments,createDingtalkRecordings} from '../src/connectors/dingtalk-recordings.js';
 import {recordingFile} from '../src/connectors/recording-staging.js';
 import type {QueryInput} from '@mote/agent';
+import {ProviderFailure} from '@mote/shared';
 import {planGeneratedMemory,generatedMemoryOutput} from './fixtures/memory-planning.js';
 import {recordingMemoryRecipe} from '../src/connectors/recording-memory.js';
 const raw='Generated diary export\n\nOwner 00:00:00.000\nI felt proud of finishing a generated prototype.\n\nOwner 00:00:02.500\nI prefer quiet mornings for focused work.\n';
@@ -21,7 +22,7 @@ const selection={enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00
 const wav=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
 async function fixture(t:import('node:test').TestContext,createProvider?:(directory:string)=>RecordingProvider){
  const directory=await mkdtemp(join(tmpdir(),'mote-recording-fixture-'));
- const state={account:'generated-owner',text:raw,ids:['r1','r1'],mediaFails:false,transcriptFails:false,pages:false,cycle:false,held:undefined as undefined|Promise<void>,switchAfterRead:false};
+ const state={account:'generated-owner',text:raw,ids:['r1','r1'],mediaFails:false,transcriptFails:false,pages:false,cycle:false,held:undefined as undefined|Promise<void>,switchAfterRead:false,modelFailurePhase:'extract' as 'extract'|'review',modelFailures:0,modelEntered:undefined as undefined|(()=>void),modelHeld:undefined as undefined|Promise<void>};
  const calls:{phase:string;id?:string;start?:string;end?:string}[]=[],models:QueryInput[]=[];
  const provider:RecordingProvider={id:'feishu',version:'generated@1',account:async()=>({id:state.account,name:'Generated owner'}),
   discover:async(_account,range)=>{calls.push({phase:'discover',...range});return {ids:range.cursor?['r2']:state.ids,...(state.cycle?{next:range.cursor==='a'?'b':'a'}:state.pages&&!range.cursor?{next:'second'}:{})};},
@@ -34,7 +35,7 @@ async function fixture(t:import('node:test').TestContext,createProvider?:(direct
  let node:Awaited<ReturnType<typeof buildApp>>;
  const deps={backgroundWorker:false,connectorTesting:{recordings:[activeProvider]},agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
   if(await planGeneratedMemory(input))return {answer:'Generated packages submitted.',citations:[],trace:[],runId:randomUUID()};
-  models.push(input);const evidence=node.memories.readEvidence(input.evidenceIds!)[0],id=evidence.id;
+  models.push(input);if(input.traceContext?.phase===state.modelFailurePhase){state.modelEntered?.();if(state.modelHeld)await state.modelHeld;if(state.modelFailures>0){state.modelFailures--;throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0});}}const evidence=node.memories.readEvidence(input.evidenceIds!)[0],id=evidence.id;
   return {answer:generatedMemoryOutput(input,[{domain:'personal',title:'Generated pride',statement:`Felt proud of a generated prototype [${id}]`,uncertainty:'Generated evidence only; speaker label unverified.',admission:{layer:'memory',reason:'Generated personal experience',scope:'Generated diary',attribution:'user'},evidenceIds:[id],evidence:[{id,quote:evidence.ocrText.trim()}]}]),citations:[{id,capturedAt:evidence.capturedAt,appName:evidence.appName,excerpt:''}],trace:[],runId:randomUUID()};
  }}};
  node=await buildApp(config,deps);await node.app.ready();
@@ -59,13 +60,6 @@ test('a running transcript does not hold the media resource',async t=>{
   const status=await f.request('GET');assert.equal(status.counts.transcripts,0);assert.equal(status.counts.audio,1);assert.ok(status.steps.some((step:any)=>step.phase==='transcript'&&step.state==='running'));
  }finally{release();}
  await f.flush();
-});
-
-test('legacy host consumes the shared recording transitions and preserves both failed phase receipts through independent recovery',async t=>{
- const f=await fixture(t);f.state.transcriptFails=true;f.state.mediaFails=true;await f.connect();await f.flush();
- let status=await f.request('GET');assert.equal(status.counts.failed,2);assert.ok(status.steps.some((step:any)=>step.phase==='transcript'&&step.error==='generated_transcript_unavailable'));assert.ok(status.steps.some((step:any)=>step.phase==='media'&&step.error==='generated_media_permission'));
- await f.restart();f.state.transcriptFails=false;await f.request('POST','/retry');await f.flush();status=await f.request('GET');assert.equal(status.counts.transcripts,1);assert.equal(status.counts.failed,1);assert.ok(status.steps.some((step:any)=>step.phase==='media'&&step.error==='generated_media_permission'));
- const calls=f.calls.filter(call=>call.phase==='transcript').length;await f.restart();f.state.mediaFails=false;await f.request('POST','/retry');await f.flush();status=await f.request('GET');assert.equal(status.counts.audio,1);assert.equal(status.counts.failed,0);assert.equal(f.calls.filter(call=>call.phase==='transcript').length,calls);
 });
 
 test('recording intake produces complete material and Memory, bypasses ASR, preserves vendor deletion and deduplicates repeated history',async t=>{
@@ -245,4 +239,30 @@ test('Feishu adapter retains unsupported exports and only explicit upstream not-
  content='2026-09-20 08:00:00 CST|5s\n\nKeywords:\n';assert.equal((await provider.transcript(account,metadata,signal)).transcript,null);
  for(const body of [{code:2091003},{error:{code:2091003}}]){response=body;await assert.rejects(provider.transcript(account,metadata,signal),(error:any)=>error.code==='recording_transcript_not_ready'&&error.category==='transient');}
  response={data:{minutes:[]}};await assert.rejects(provider.transcript(account,metadata,signal),(error:any)=>error.code==='recording_contract_invalid'&&error.category==='permanent');
+});
+
+
+test('recording Material and downstream Memory recover a transient phase without replaying acquisition or completed extraction',async t=>{
+ for(const phase of ['extract','review'] as const)await t.test(phase,async t=>{
+  const f=await fixture(t);await f.connect();await f.flush();const status=await f.request('GET'),material=f.node.materials.list({sourceId:status.sourceId}).items[0];
+  f.state.modelFailurePhase=phase;f.state.modelFailures=phase==='extract'?2:1;await f.memory();
+  assert.equal(f.node.memoryPipeline.list().every(job=>job.status==='completed'),true);
+  assert.equal(f.calls.filter(call=>call.phase==='transcript').length,1);assert.equal(f.calls.filter(call=>call.phase==='media').length,1);
+  assert.equal(f.node.materials.list({sourceId:status.sourceId}).items[0].ref,material.ref);
+  assert.equal(f.models.filter(input=>input.traceContext?.phase==='extract').length,phase==='extract'?3:1);
+  assert.equal(f.models.filter(input=>input.traceContext?.phase==='review').length,phase==='review'?2:1);
+  await f.memory();assert.equal(f.models.length,phase==='extract'?4:3,'completed downstream work is reused');
+ });
+});
+
+test('held downstream Memory does not hold subsequent recording acquisition and Material publication',async t=>{
+ const f=await fixture(t);await f.connect();await f.flush();let entered!:()=>void,release!:()=>void;
+ const started=new Promise<void>(resolve=>entered=resolve);f.state.modelEntered=entered;f.state.modelHeld=new Promise<void>(resolve=>release=resolve);
+ const memory=f.memory();await started;
+ try{
+  f.state.ids=['r1','r2'];await f.request('POST','/sync');await f.flush();const status=await f.request('GET');
+  assert.equal(status.counts.transcripts,2);assert.equal(status.counts.audio,2);assert.equal(f.node.materials.list({sourceId:status.sourceId}).items.length,2);
+  assert.ok(f.node.memoryPipeline.list().some(job=>job.status==='running'),'source publication completes while downstream model work is held');
+ }finally{release();}
+ await memory;await f.memory();assert.equal(f.node.memoryPipeline.list().every(job=>job.status==='completed'),true);
 });

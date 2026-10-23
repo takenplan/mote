@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
 import type {SourceContextDeclaration} from '@mote/shared';
-import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
+import {buildApp,type QueryAgent} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Conversations} from '../src/conversations.js';
 import {SourceContextStore} from '../src/source-context.js';

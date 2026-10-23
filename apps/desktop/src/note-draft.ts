@@ -6,9 +6,8 @@ import { join } from 'node:path';
 import type { CaptureEvent, Config, Platform } from './contracts';
 import type { DurableQueue } from './queue';
 import { encodeLocalContent, readLocalContent } from './local-content';
-import {accountKey} from './account';
 export interface NoteDraft { id: string; text: string; mood: string; revision: number; prepared?: boolean }
-interface StoredDraft { owner?:string;draft: NoteDraft; submission?: CaptureEvent; targetOrigin?: string; completed?: { draftId: string; eventId: string } }
+interface StoredDraft { draft: NoteDraft; submission?: CaptureEvent; targetOrigin?: string; completed?: { draftId: string; eventId: string } }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function emptyDraft(): NoteDraft { return { id: randomUUID(), text: '', mood: '', revision: 0 }; }
 function validateDraft(value: NoteDraft): void {
@@ -20,7 +19,7 @@ function validateDraft(value: NoteDraft): void {
 export class NoteDraftStore {
   private value: StoredDraft = { draft: emptyDraft() };
   private chain: Promise<unknown> = Promise.resolve();
-  constructor(private directory: string,private readonly owner?:string) {}
+  constructor(private directory: string) {}
   private exclusive<T>(fn: () => Promise<T>): Promise<T> { const task = this.chain.then(fn); this.chain = task.catch(() => undefined); return task; }
   async initialize(): Promise<void> {
     await ensureStorageFormat(this.directory,['draft.json','note-ingress-v2.json']);
@@ -32,7 +31,6 @@ export class NoteDraftStore {
       const data = (await readLocalContent(path)).toString('utf8');
       if (Buffer.byteLength(data) > maxBytes) throw new Error('oversized');
       const value = JSON.parse(data) as StoredDraft; validateDraft(value.draft);
-      if(value.owner!==this.owner)throw Error('Note draft belongs to another account');
       if (value.completed && (!uuid.test(value.completed.draftId) || !uuid.test(value.completed.eventId))) throw new Error('invalid completion');
       if (value.submission && (value.submission.id !== value.draft.id || value.submission.source !== 'note' || value.submission.ocrText !== value.draft.text || typeof value.targetOrigin !== 'string')) throw new Error('invalid prepared note');
       this.value = value;
@@ -46,7 +44,6 @@ export class NoteDraftStore {
   }
   hasPrepared(): boolean { return Boolean(this.value.submission); }
   private async persist(value: StoredDraft): Promise<void> {
-    value={...value,owner:this.owner};
     const temporary = join(this.directory, randomUUID() + '.tmp');
     try {
       const file = await open(temporary, 'wx', 0o600);
@@ -68,7 +65,6 @@ export class NoteDraftStore {
   }
   submit(input: NoteDraft, config: Config, platform: Platform, queue: Pick<DurableQueue, 'enqueue'>, metadataProvider?: () => Promise<import('@mote/shared').RecordMetadata | undefined>): Promise<{ id: string; draft: NoteDraft }> {
     return this.exclusive(async () => {
-      if(this.owner&&this.owner!==accountKey(config))throw Error('Note submission belongs to another account');
       validateDraft(input);
       if (this.value.completed?.draftId === input.id) return { id: this.value.completed.eventId, draft: this.get() };
       if (input.id !== this.value.draft.id) throw new Error(moteText("草稿已更新，此提交不会重复创建记录"));

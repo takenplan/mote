@@ -1,76 +1,19 @@
-# Profile first, immutable release tags second
+# ADR: Profile credential storage and immutable releases
 
-Date: 2026-10-18. Status: accepted by the owner for implementation.
+Accepted by the owner, restored for the single-owner MVP on 2026-10-23.
 
-## Decision and responsibility
+Profiles select runtime defaults and Mote-owned credential storage. A Dev build or the exact Desktop runtime profile `dev` uses private local files, without constructing or querying the OS credential adapter. Other profiles use production protection; Android's existing `default` build label means Prod. An arbitrary `dev-*` name does not select Dev semantics.
 
-One main branch and independent Central / Desktop / Android versions remain.
-Profiles select environment defaults and local credential storage. Git tags
-identify immutable production release snapshots; GitHub prerelease status
-expresses maturity and never enables debugging by itself.
+Desktop stores its Dev token in atomic 0600 JSON within a 0700 profile directory. Prod retains Electron safeStorage and rejects unavailable protection without plaintext fallback. Session-only and signed-out tokens are never persisted. Logout preserves the pending source/queue binding, clears local authorization first, and attempts remote revocation with the captured prior credential even if Central is offline.
 
-Dev branch builds use an Actions artifact named by component and full commit
-SHA, with `build-info.json`; they do not create tags or Releases. Beta tags use
-`<component>-vX.Y.Z-beta.N`, stable tags use `<component>-vX.Y.Z`. Both build the
-Prod installation identity and run required component checks before publishing
-one installer/source archive. Published releases cannot be overwritten. Failed
-drafts may be retried. Test remains an isolated fixture environment.
+Android Dev stores its token as a private JSON preference value and an AES key in an app-private JSON file. Existing drafts, grants and action ledgers remain authenticated and encrypted. Prod keeps Keystore. Android's existing process-bound session and signed-out authorization gates, including token-retention behavior, remain unchanged. Missing/corrupt keys and incompatible Dev formats fail without replacement, conversion or OS fallback. Fresh MVP profiles need no migration.
 
-Dev enables structured debug diagnostics and client developer tools by default.
-Explicit diagnostic choices, size rotation and support-package filtering remain.
-Production multiuser instance logs never gain content traces: each person's
-detailed Agent trace still requires that person's opt-in and authority.
+Central retains its canonical private YAML, database and files. Third-party CLIs keep their credential management. Secrets stay out of source control and support exports.
 
-Dev builds and the Desktop dev runtime Profile do not call Mote's OS credential
-storage. Desktop uses private 0600 JSON configuration and pairing checkpoints;
-Android uses app-private atomic JSON preference values for tokens and a private
-JSON AES key for its existing authenticated content encryption.
-Prod keeps Electron safeStorage / Android Keystore. Desktop session-only tokens
-are not persisted and logout clears its durable token. Android retains its
-existing process-bound session and signed-out authorization gates; this decision
-does not change that platform's token-retention semantics. Files are
-profile/account scoped, excluded from support exports and never bundled or
-committed.
+One main branch and independent component versions remain. Release tags identify immutable snapshots; prerelease maturity does not itself select Dev storage. Dev branch builds create Actions artifacts with the full commit SHA and build information, without a release tag. Beta and stable component tags use Prod installation identity and mandatory component validation. Existing published releases remain immutable. This recovery does not publish or deploy any build.
 
-Central already owns secrets in private YAML, SQLite and files and gains no
-second JSON configuration source. Lark CLI, DingTalk CLI and other third-party
-components retain their own credential management. Build-time signing secrets
-are separate from runtime user credentials and retain their existing identity.
+R2 received independent **APPROVE** against restored source `52110244`, with an explicit Desktop logout amendment and preservation of the pre-logout source binding. Focused generated tests cover backend selection, persistence, logout/reload/reauthorization, pending source identity, private-key reuse and invalid-state rejection. Desktop builds and both Android Kotlin variants compiled. Physical devices, system permission prompts and live models were not exercised.
 
-There is no automatic encrypted-to-plain conversion or Keychain read for Dev.
-Conflicting Desktop fields/checkpoints are rejected without modifying the old
-files; preserve the old directory before creating a fresh Dev profile. In a Prod
-Desktop build, keep the explicit name dev: move the retired dev directory out
-of the way after backing it up, then initialize a new empty dev directory.
-A custom dev-* name does not select Dev semantics. Android uses a
-new Dev file-credential marker and rejects retired encrypted Dev state; preserve
-the old installation/data before an explicit Dev-only storage reset. Current
-Prod formats and application data are not migrated or reset by this decision.
+This replaces universal OS storage for Dev and account-scoped client assumptions. See [single-owner MVP](adr-single-owner-mvp.md), [testing](testing.md) and [releasing](releasing.md).
 
-## Supersession check
-
-| Disposition | Responsibility and reviewed assumptions |
-| --- | --- |
-| KEEP | npm Monorepo, component versions/tags, Central server/web lockstep, Android signing identity and monotonic versionCode, profile/account isolation, permissions, data formats, manual installs, rotation, support redaction, model/tool authorization. |
-| CHANGE | Tag builds now use Prod; suffix selects Beta/stable Release status. Dev artifacts use commit identity. Dev debug defaults and client file credentials replace universal system-encrypted credentials. Dev download links point to Actions. |
-| REMOVE | All-tag DEV prereleases, forced DEV app identities for production tags, Dev Keychain/Keystore calls, treating every Profile as debug-off, Dev links that point at the Prod Release page. |
-| EXCEPTION | Third-party CLI credential stores, Central canonical private files, explicit diagnostic opt-outs, personal trace opt-in, Test Keystore fixtures, CI signing keys and ad-hoc Mac distribution remain distinct. No signed online-update manifest or registry image is enabled. |
-| UNKNOWN | GitHub runner execution and signing/notarization availability; branch access to the protected release Environment; real Prod Keychain prompts, physical devices, long-running usage and live-model behavior require separate evidence. |
-
-Reviewed surfaces include release/version/package/publish tooling and fixtures,
-all three release workflows, Desktop configuration/pairing/account lifecycle,
-Android build variants/settings/private files/update entry, Central configuration
-defaults/projections and scoped traces, local startup fixtures, translations,
-development/deployment/update and client documentation. Read-only query tools,
-prompts and captured-content interpretation do not change.
-
-The repository's protected `release` Environment currently allows component
-tags. A trusted development branch must be explicitly allowed before branch
-Dev jobs that need its signing secrets can run. This PR does not change that
-external access policy or publish/deploy any product.
-
-Operational rules are in [releasing](releasing.md); durable regression journeys
-are in [profile release validation](testing-profile-release.md). This supersedes
-the all-DEV publication policy in the former release documentation and the
-universal client system-credential-storage assumption, while retaining the
-[unified configuration decision](adr-unified-configuration.md).
+Central derives debug from the exact Dev profile when omitted, preserving explicit false/silent and the existing Dev trace default. Desktop uses the same Dev predicate for diagnostics defaults, the menu and BrowserWindow DevTools. Android limits developer entrypoints to Dev/Test while retaining diagnostics/support and local image deduplication in Prod. Saved owner choices survive unrelated configuration saves.

@@ -100,3 +100,17 @@ test('an input-specific operation deadline starts after pool admission rather th
  await started;await new Promise(resolve=>setTimeout(resolve,60));assert.equal(f.engine.get(queued)!.state,'waiting');assert.equal(f.engine.get(queued)!.attempts,0);
  release();await run;await f.engine.drain([queued]);assert.equal(f.engine.get(queued)!.state,'succeeded');assert.equal(f.engine.get(queued)!.attempts,1);
 });
+
+
+test('three failed executions persist through restart and prerequisite reopen; only owner reset renews them',async t=>{
+ const f=fixture(t);let calls=0,fail=true;
+ const handler={...base,execute:async()=>{calls++;if(fail)throw new ExecutionFailure('transient','provider_network',1000);return null;}};
+ f.engine.register(handler);const id=f.engine.enqueue('generated-bounded-round','generated',{});
+ await f.engine.drain([id]);assert.equal(calls,1);
+ f.engine.retry(id);assert.equal(f.engine.get(id)!.attempts,1,'reopening cannot reset a failed-execution count');
+ f.advance(1000);await f.restart();f.engine.register(handler);await f.engine.drain([id]);assert.equal(calls,2);
+ f.advance(1000);await f.engine.drain([id]);assert.equal(calls,3);assert.equal(f.engine.get(id)!.state,'failed');
+ f.advance(86400000);f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,3);assert.equal(f.engine.get(id)!.state,'failed');
+ await f.restart();f.engine.register(handler);f.engine.retry(id);await f.engine.drain([id]);assert.equal(calls,3);
+ fail=false;f.engine.retry(id,true);await f.engine.drain([id]);assert.equal(calls,4);assert.equal(f.engine.get(id)!.state,'succeeded');assert.equal(f.engine.get(id)!.attempts,1);
+});

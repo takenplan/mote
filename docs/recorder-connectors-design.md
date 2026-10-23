@@ -14,12 +14,16 @@
 
 | 阶段 | 用户动作 | 自动处理与结果 |
 | --- | --- | --- |
-| 首次授权 | 中央节点安装官方 CLI 并登录；已有授权时直接连接 | 飞书复用本机原生授权；钉钉固定组织与用户 profile。界面说明缺失 CLI、授权和管理员前置条件 |
-| 首次导入 | 采集与设备 → 新增数据源 → 录音来源 → 连接已授权账号 → 选择时间、选填资料说明 → 启用并保存 | 先确认来源说明，再按 27 天拆窗、完整分页，把每个阶段保存为可恢复工作 |
+| 首次授权 | 在录音来源详情检测环境，飞书创建应用或填写已有应用，再授权并连接；钉钉打开设备授权链接 | 当前部署预先准备 Lark 1.0.98 / DWS 1.0.64；凭据仍由厂商 CLI 原有机制管理。页面提供完整链接、复制、二维码与取消，不要求先到外部命令行登录 |
+| 首次导入 | 采集与设备 → 新增数据源 → 录音来源 → 授权并连接账号 → 选择时间、选填资料说明 → 启用并保存 | 先确认来源说明，再按 27 天拆窗、完整分页，把每个阶段保存为可恢复工作 |
 | 日常录音 | 照常使用录音笔及厂商 App | 中央节点每 5 分钟内轮询；厂商上传和转写完成后接入。关闭中央节点期间不能采集，重启恢复待处理工作 |
 | 查看与洞察 | 查看录音材料、Memory 或提问 | 转写成为完整 Material；模型使用只读证据工具，引用回具体切片 |
 | 追溯音频 | 最近归档 → 回听原始录音或下载 | 仅点击后读取中央归档的音频，不把临时厂商链接作为永久备份 |
 | 失败处理 | 需要时重新授权、重试或暂停 | 转写和媒体状态独立；媒体失败不挡 Memory，补齐音频不重跑已有提取 |
+
+授权操作通过当前 owner HTTP 连接发起，轮询只读取当前 receipt。刷新网页恢复同一次授权，不重新生成设备码；旧操作与取消请求使用当前 revision 和任务标识校验，不能覆盖新授权。服务进程停止时终止已启动的子进程；重启不会自动重发个人授权，需重新发起。配置变更、断开和关闭跨账号读取与绑定写入窗口撤销旧 grant，晚到结果不能重新连接或发布。
+
+部署执行 `npm run connectors:prepare`，原生已选择部署可用 `node scripts/mote.mjs connectors-prepare --profile <name>`。源码升级在切换前准备，Docker 在构建镜像时准备；缺失、损坏或版本不符明确失败，不尝试另一可执行文件或凭据。App Secret 只通过 stdin 交给厂商 CLI，不进入 argv、状态、日志或浏览器存储。当前固定 binary 的 version/help 契约与生成授权 fixtures 分开记录；本次未执行个人授权或真实录音同步。
 
 当前搜索范围是“我创建的云端记录”，没有可靠硬件字段可保证只包含 D3200/A1；可能包含同账号其他妙记/听记。飞书导入时间筛选使用库内创建时间，不能把它等同于原始录制时间。原始录制时间缺失时保持未知。
 
@@ -71,7 +75,7 @@ flowchart LR
 
 来源身份为平台 + 账号哈希，条目身份为厂商稳定 ID。工作输入包含平台适配契约版本、账号哈希和授权 epoch。每个远端操作前复核账号；转写/媒体读取后、发布前再次核对。账号改变必须重新连接并启用范围；暂停或换范围撤销运行工作。
 
-首次历史按 27 天拆窗，最多 240 窗；严格检查页大小、继续游标和游标环，完整发现结束后才提交发现检查点。条目后续失败保留在持久任务中，媒体失败不阻塞下一轮发现。恢复工作由现有引擎处理；每步骤最多 5 次自动尝试，超限后可手动重试。
+首次历史按 27 天拆窗，最多 240 窗；严格检查页大小、继续游标和游标环，完整发现结束后才提交发现检查点。条目后续失败保留在持久任务中，媒体失败不阻塞下一轮发现。恢复工作由现有引擎处理；每步骤最多执行 3 次（首次加两次可安全重放的自动重试），超限后可显式手动重试；等待资源不消耗失败次数。
 
 日常搜索从发现水位回退 7 天以覆盖迟到，每天有界重查整个选中历史，手动同步也全量重查该范围。平台没有已验证的更新时间/删除事件，因此更早的修订依赖日常全范围重查，不能承诺实时修订通知。
 
@@ -81,11 +85,11 @@ flowchart LR
 
 ## 厂商契约与证据保真
 
-飞书已验证 Lark CLI 1.0.85 的妙记搜索、基础信息、`+detail --transcript` 产物导出与 `+download` 音频下载。直接 transcript OpenAPI 需要另一组权限，本机现有 `minutes.artifacts:read` 可通过 CLI 产物路径读取；实现使用已经跑通的路径，不自行要求再次授权。当前固定版本已更新为 Lark CLI 1.0.98；历史真实账号结果不能替代新版验收。文档/日历与录音连接均使用各自实例的隔离配置，页面提供配置、授权与重新授权。换中央节点或新建实例需要重新授权，不迁移宿主登录态。
+飞书已验证 Lark CLI 1.0.85 的妙记搜索、基础信息、`+detail --transcript` 产物导出与 `+download` 音频下载。直接 transcript OpenAPI 需要另一组权限，本机现有 `minutes.artifacts:read` 可通过 CLI 产物路径读取；实现使用已经跑通的路径，不自行要求再次授权。已有文档/日历连接仍使用隔离运行配置；录音连接明确复用中央节点原生 CLI 账号。换中央节点仍需在那里授权。
 
 飞书文本导出有说话人标签和起点，段落终点以后一段起点或厂商总时长推导，并标为不确定。所有者选择 `create_time` 作为语料时间，经 `recordedAt` 交付；它仍不把正文回忆的事件一律定为当天发生。说话人标签保留原值，身份未确认。
 
-钉钉适配使用固定 DWS 1.0.64 release 契约，组织需管理员启用 CLI。固定 `corp_id:user_id`，校验 `taskUuid`、完整分页和下载收据。完整原始导出保存在原件中，规范转写只交付段落主正文一份，保留段落位置和厂商说话人标签。结构中重复的句子列表不成为重复发言；真实重复段落仍保留。来源毫秒开始/创建时间作为语料时间，媒体相对位置无可靠依据时继续标为 untimed；该锚点不独立证明物理录音设备的时间精度。见[时间与正文决定](adr-ask-evidence-quality-and-simple-context.md)。运行时仅接受固定版本和当前响应形状；版本变更需重新核验，解码失败不会静默视为空数据。
+钉钉适配参考 DWS 1.0.62 release 契约，组织需管理员启用 CLI。固定 `corp_id:user_id`，校验 `taskUuid`、完整分页和下载收据。完整原始导出保存在原件中，规范转写只交付段落主正文一份，保留段落位置和厂商说话人标签。结构中重复的句子列表不成为重复发言；真实重复段落仍保留。来源毫秒开始/创建时间作为语料时间，媒体相对位置无可靠依据时继续标为 untimed；该锚点不独立证明物理录音设备的时间精度。见[时间与正文决定](adr-ask-evidence-quality-and-simple-context.md)。兼容性依赖上述已研究的版本和响应形状；其他版本需重新验证，解码失败不会静默视为空数据。
 
 凭据留在原生 CLI 凭据设施与受保护的连接设置；仅所有者接口可以连接、改范围、重试和播放。查询 Agent 不获得厂商 CLI、授权或配置写工具。数据进入既有原始证据和 Memory 管线，正文中的指令不被执行。
 
@@ -102,6 +106,6 @@ Omi Integration Apps 区分完整对话、实时转写、原始音频和每日�
 ## 研究依据与后续验收
 
 - [飞书 × 安克产品说明](https://www.feishu.cn/content/article/7597268954498763996)、[官方 Lark CLI](https://github.com/larksuite/cli)、[妙记文字接口](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/minutes-v1/minute-transcript/get)、[媒体接口](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/minutes-v1/minute-media/get)。
-- [DWS 1.0.64 源码与文档](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.64)、[DWS 授权说明](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/v1.0.64/README_zh.md)、[A1 JSAPI](https://open.dingtalk.com/tools/explorer/jsapi?id=11937)、[闪记事件](https://open.dingtalk.com/document/development/flash-memory-status-change-open-event)。事件是否覆盖硬件按键录音仍未验证。
+- [DWS 1.0.62 源码与文档](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/v1.0.62)、[DWS 授权说明](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/v1.0.62/README_zh.md)、[A1 JSAPI](https://open.dingtalk.com/tools/explorer/jsapi?id=11937)、[闪记事件](https://open.dingtalk.com/document/development/flash-memory-status-change-open-event)。事件是否覆盖硬件按键录音仍未验证。
 
 验证结果见 [0.0.76 验证记录](validation/0.0.76.md)。仍需真实钉钉账号、两款物理录音笔新录音、长期令牌刷新及更大历史库验收。首次授权的终端命令步骤也仍可改进为现有设置流程；本版已授权本机的日常同步无需重复操作。

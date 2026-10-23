@@ -48,7 +48,7 @@ export function importMemoryProgress(store:Store,captureIds:readonly string[]):I
     LEFT JOIN memory_input_authorizations a ON a.capture_id=c.id
     LEFT JOIN memory_jobs j ON j.id=a.job_id
     LEFT JOIN material_memory_requests r ON r.input_key=a.input_key AND r.scope=a.scope
-      AND r.material_id IN (SELECT id FROM material_heads WHERE source_id=a.source_id)`)
+      AND EXISTS(SELECT 1 FROM material_heads m WHERE m.id=r.material_id AND m.source_id=a.source_id)`)
     .all(JSON.stringify([...new Set(captureIds)]));
   for(const row of rows)if(row.job_id&&row.json&&!jobValues.has(String(row.job_id)))jobValues.set(String(row.job_id),JSON.parse(String(row.json)) as Job);
   const packageIds=[...jobValues].filter(([,job])=>job.workPackage).map(([id])=>id),batches=new Map<string,Batch[]>(),checkpointKeys=new Set<string>();

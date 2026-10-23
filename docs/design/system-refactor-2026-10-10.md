@@ -2,7 +2,7 @@
 
 日期：2026-10-10。状态：**方案已确认，进入实现与验证**。所有者已授权按模块启动 `gpt-6.1-sol / high` subagent，使用本地 Codex server 做真实链路回归并发布。D1-A、D2-C、D3-A、D4-B、D5-B是本轮实施范围。
 
-依据：聊天 Review Mote architecture and latency (internal discussion reference redacted) 的完整审查建议，以及本工作树 `8de27162` 的架构、ADR、代码和测试。当前 Central/server/web 与 macOS 为 0.0.84，Android 为 0.0.82；Central epoch 4、客户端格式 3、wire 1、Ingress 2、便携归档 2 各自独立。
+依据：聊天 [Review Mote architecture and latency](codex://threads/01a12118-b81c-7e80-9399-b2893ec7bc8b) 的完整审查建议，以及本工作树 `8de27162` 的架构、ADR、代码和测试。当前 Central/server/web 与 macOS 为 0.0.84，Android 为 0.0.82；Central epoch 4、客户端格式 3、wire 1、Ingress 2、便携归档 2 各自独立。
 
 本文件保存批准时的设计，不把拟议收益当作实测。实现与验证使用独立生成资料库，不读取或升级本机私人资料库，不采集个人截图。决定见 [ADR](../adr-system-refactor.md)，实际验证另行记录。
 
@@ -370,7 +370,7 @@ macOS 中央窗口加载 Central Web，后端/Web 变更不当然要求重新发
 
 回退必须包含升级前完整备份、配置、原件对象和匹配二进制/源码。旧程序不能安全读取新产物时，采用停机后恢复匹配备份；不能只 git checkout 后覆盖运行，也不能承诺回退期间新增输入自动合并。
 
-PR 前按[开发指南](../development.md#pr-check-scope)执行`npm run check:affected`；本轮跨模块重构最终验收执行`npm run check:local`，发布前补充受影响平台检查和`release:verify`，生成准确release notes。当前DEV产物没有签名mote-release.json，验证其源码包/DEV asset metadata、身份与散列，不把历史签名清单流程套用成本轮产物要求。workflow可能通过MOTE_PRE_RELEASE_CHECKS跳过检查，CI绿不能替代完整本地门槛。确认目标合并提交、tag、产物散列与运行版本一致，安装后验证从接收、查询、Memory恢复到删除的闭环。实际发布状态以验收记录和对应 Release 为准。
+PR 前按[开发指南](../testing.md#early-integration-and-candidate-checks)执行`npm run check:affected`；本轮跨模块重构最终验收执行`npm run check:local`，发布前补充受影响平台检查和`release:verify`，生成准确release notes。当前DEV产物没有签名mote-release.json，验证其源码包/DEV asset metadata、身份与散列，不把历史签名清单流程套用成本轮产物要求。workflow可能通过MOTE_PRE_RELEASE_CHECKS跳过检查，CI绿不能替代完整本地门槛。确认目标合并提交、tag、产物散列与运行版本一致，安装后验证从接收、查询、Memory恢复到删除的闭环。实际发布状态以验收记录和对应 Release 为准。
 
 ## 10. 确认结果与完成边界
 

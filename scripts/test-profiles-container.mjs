@@ -9,7 +9,7 @@ import { repository, loadProfile, profilePaths } from './profile-lib.mjs';
 import { cli, command, initializeFixture, updateEnvironment, request, note, capture, image } from './profile-fixtures.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'mote-compose-fixture-')), home = join(directory, 'profiles'), restoredHome = join(directory, 'restored');
-const imageTag = `mote-compose-fixture:${randomUUID()}`, profiles = [], volumes = new Set(), imageIds = new Set();
+const imageTag = `mote-compose-fixture:${randomUUID()}`, rollbackArtifactTag = `${imageTag}-rollback-artifact`, profiles = [], volumes = new Set(), imageIds = new Set();
 async function docker(args, timeoutMs = 120000) {
   const result = await command('docker', args, { timeoutMs });
   assert.equal(result.code, 0, `docker ${args[0]} failed: ${result.stderr.slice(-1600)}`); return result.stdout.trim();
@@ -36,6 +36,16 @@ try {
   assert.notEqual(dev.project, test.project); assert.notEqual(dev.meta.volume, test.meta.volume);
   await run(dev, 'start'); await run(test, 'start');
   const literalContainer = (await run(dev,'compose',['--','ps','--quiet','mote'])).stdout.trim();
+  // An invalid generated bundle must reach asset validation as the profile's
+  // owner, rather than fail while creating the model cache as image UID 1000.
+  const emptyModelBundle=join(directory,'empty-model-bundle');await mkdir(emptyModelBundle,{mode:0o700});
+  const modelImport=await run(dev,'media-import',['--role','ocr','--from',emptyModelBundle],{fail:true});
+  assert.match(modelImport.stderr,/ENOENT.*lstat.*\/import\//);
+  assert.doesNotMatch(modelImport.stderr,/EACCES|EPERM/);
+  const modelCacheOwner=JSON.parse(await docker(['exec',literalContainer,'node','--input-type=module','-e',`import {statSync} from 'node:fs';const info=statSync(${JSON.stringify(dev.modelDirectory+'/ocr.downloads')});console.log(JSON.stringify({uid:info.uid,gid:info.gid}));`]));
+  const [modelUid,modelGid]=config.services.mote.user.split(':').map(Number);
+  assert.deepEqual(modelCacheOwner,{uid:modelUid,gid:modelGid});
+  console.info('[compose-profiles] Offline model import uses the profile owner and reaches catalog validation');
   const actualEnvironment = JSON.parse(await docker(['inspect','--format','{{json .Config.Env}}',literalContainer]));
   assert.equal(actualEnvironment.find(value=>value.startsWith('MOTE_TOKEN=')),undefined);
   await docker(['exec',literalContainer,'node','--input-type=module','-e',`import assert from 'node:assert/strict';import {readConfigDocument} from '@mote/shared/config-file';assert.equal(readConfigDocument(process.env.MOTE_CONFIG_FILE).document.server.token,${JSON.stringify(dev.env.MOTE_TOKEN)});`]);
@@ -78,9 +88,9 @@ try {
   // Exercise the old image's private UID 1000 storage before this host user's explicit migration.
   await run(dev, 'stop');
   const legacyUid = process.getuid?.() === 1000 ? 1001 : 1000, legacyUser = `${legacyUid}:${legacyUid}`;
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'chown', '-R', legacyUser, '/data', dev.modelDirectory]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', '-R', legacyUser, '/data', dev.modelDirectory]);
   await run(dev, 'start', [], { fail: true });
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.statSync('/data/mote.sqlite').uid,${legacyUid});`]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'DAC_OVERRIDE', 'mote', 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.statSync('/data/mote.sqlite').uid,${legacyUid});`]);
   await run(dev, 'migrate-storage-owner');
   await run(dev, 'start');
   assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
@@ -105,6 +115,10 @@ try {
 
   await run(dev, 'start');
   const oldImage = await docker(['image','inspect','--format','{{.Id}}',imageTag]); imageIds.add(oldImage);
+  // Supply an available rollback artifact even when this Docker backend drops
+  // untagged image IDs. This does not test automatic product image retention;
+  // releases use immutable tags. Rollback below must still select the old ID.
+  await docker(['image','tag',oldImage,rollbackArtifactTag]);
   // Rebuild the same mutable tag while its original container is still running.
   // Rollback must restore the original image ID, not follow the overwritten tag.
   const derive = join(directory,'image-derive'); await mkdir(derive);
@@ -124,7 +138,7 @@ try {
   const envBeforeRollback = await readFile(dev.envFile);
   await run(dev, 'stop');
   // Write only inert fixture credentials. Google configuration is absent, so startup cannot contact Google.
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', 'mote', 'node', '-e', `const fs=require('node:fs');fs.mkdirSync('/data/connectors',{recursive:true,mode:0o700});fs.writeFileSync('/data/connectors/google-calendar.json',${JSON.stringify(JSON.stringify(credentials))},{mode:0o600});fs.writeFileSync('/data/connectors/opaque.json',JSON.stringify({credential:'synthetic-opaque-credential'}),{mode:0o600});`]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', 'mote', 'node', '-e', `const fs=require('node:fs');fs.writeFileSync('/data/content-key',${JSON.stringify(dev.env.MOTE_DATA_KEY)},{mode:0o600});fs.mkdirSync('/data/connectors',{recursive:true,mode:0o700});fs.writeFileSync('/data/connectors/google-calendar.json',${JSON.stringify(JSON.stringify(credentials))},{mode:0o600});fs.writeFileSync('/data/connectors/opaque.json',JSON.stringify({credential:'synthetic-opaque-credential'}),{mode:0o600});`]);
   await run(dev, 'start');
   await run(dev, 'rollback', ['--restore-data']);
   const current = await loadProfile(profilePaths('dev', home)); volumes.add(current.meta.volume);
@@ -142,6 +156,7 @@ try {
   // Assert inside the container; never print credential bodies, even synthetic ones.
   const restoredCredentials = { ...credentials, checkpoints: {} };
   await docker(['exec', restoredContainer, 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.deepEqual(JSON.parse(fs.readFileSync('/data/connectors/google-calendar.json','utf8')),${JSON.stringify(restoredCredentials)});assert.equal(fs.statSync('/data/connectors/google-calendar.json').mode&0o777,0o600);assert.equal(fs.statSync('/data/connectors/google-calendar.json').uid,process.getuid());assert.equal(fs.statSync('/data/connectors').mode&0o777,0o700);assert.equal(JSON.parse(fs.readFileSync('/data/connectors/opaque.json','utf8')).credential,'synthetic-opaque-credential');assert.equal(fs.existsSync('/data/connectors/.mote-rollback-connections.json'),false);`]);
+  await docker(['exec', restoredContainer, 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.readFileSync('/data/content-key','utf8'),${JSON.stringify(dev.env.MOTE_DATA_KEY)});const key=fs.statSync('/data/content-key');assert.equal(key.uid,process.getuid());assert.equal(key.gid,process.getgid());assert.equal(key.mode&0o777,0o600);assert.equal(fs.statSync('/data/connectors').gid,process.getgid());`]);
   const backupFolders = await readdir(join(dev.directory, 'backups'));
   assert.equal(backupFolders.some(name => name.startsWith('.connectors-')), false, 'Private handoff must be removed after rollback');
   for (const path of [current.meta.previous.backup, upgraded.meta.previous.backup]) {
@@ -158,6 +173,22 @@ try {
   assert.equal(tls.services.caddy.image, 'caddy:2.11.4-alpine');
   await docker(['run', '--rm', '--env', 'MOTE_TLS_DOMAIN=synthetic-mote.invalid', '--env', 'MOTE_PORT='+test.port, '--mount', `type=bind,source=${join(repository, 'deploy/Caddyfile')},target=/etc/caddy/Caddyfile,readonly`, 'caddy:2.11.4-alpine', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']);
   console.info('[compose-profiles] Caddy configuration validation passed; public DNS/TLS deployment was not attempted');
+} catch (error) {
+  // Preserve only this journey's container state before the normal cleanup.
+  // Health output, environment, configuration and response bodies stay private.
+  for (const project of new Set(profiles.map(profile => profile.project))) {
+    try {
+      const listed = await command('docker', ['ps', '--all', '--quiet', '--filter', `label=com.docker.compose.project=${project}`], {timeoutMs: 10000});
+      if (listed.code !== 0) throw Error('Container diagnostics unavailable');
+      for (const id of listed.stdout.trim().split(/\s+/).filter(id => /^[a-f0-9]+$/.test(id))) {
+        const inspected = await command('docker', ['inspect', '--format', '{"name":{{json .Name}},"state":{{json .State}}}', id], {timeoutMs: 10000});
+        if (inspected.code !== 0) throw Error('Container diagnostics unavailable');
+        const {name, state} = JSON.parse(inspected.stdout);
+        console.error('[compose-profiles] Failure container state', JSON.stringify({name, status: state.Status, running: state.Running, exitCode: state.ExitCode, health: state.Health ? {status: state.Health.Status, log: (state.Health.Log ?? []).slice(-5).map(entry => ({start: entry.Start, end: entry.End, exitCode: entry.ExitCode}))} : null}));
+      }
+    } catch { console.error('[compose-profiles] Failure container state', JSON.stringify({available: false})); }
+  }
+  throw error;
 } finally {
   if (available) {
     for (const p of profiles.reverse()) {
@@ -166,6 +197,7 @@ try {
     }
     for (const volume of volumes) await command('docker', ['volume', 'rm', volume]).catch(() => undefined);
     await command('docker', ['image', 'rm', imageTag]).catch(() => undefined);
+    await command('docker', ['image', 'rm', rollbackArtifactTag]).catch(() => undefined);
     for (const id of Array.from(imageIds).reverse()) await command('docker',['image','rm',id]).catch(()=>undefined);
   }
   await rm(directory, { recursive: true, force: true });

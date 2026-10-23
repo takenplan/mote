@@ -1,8 +1,6 @@
 import {spawn} from 'node:child_process';
-import {randomBytes} from 'node:crypto';
-import {constants} from 'node:fs';
 import {cliReleases,managedCliBinary} from './cli-runtime.mjs';
-import {mkdir,chmod,open} from 'node:fs/promises';
+import {mkdir,chmod} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {ConnectorError} from './types.js';
 
@@ -23,7 +21,7 @@ export type LarkCommand =
   | {kind:'minutes-metadata';id:string}
   | {kind:'minutes-transcript';id:string;outputDir:string}
   | {kind:'minutes-media';id:string;output:string};
-export type LarkRunner=(command:LarkCommand,options?:{signal?:AbortSignal;onOutput?:(chunk:string)=>void;assertCurrent?:()=>void})=>Promise<string>;
+export type LarkRunner=(command:LarkCommand,options?:{signal?:AbortSignal;onOutput?:(chunk:string)=>void})=>Promise<string>;
 
 /** Only fixed operations are executable. Neither the browser nor an agent supplies argv. */
 export function larkArguments(command:LarkCommand):string[]{
@@ -36,7 +34,7 @@ export function larkArguments(command:LarkCommand):string[]{
     case 'complete':return ['auth','login','--device-code',command.deviceCode,'--json'];
     case 'calendars':return ['calendar','calendars','list','--as','user','--format','json','--params',JSON.stringify({page_size:100,...(command.pageToken?{page_token:command.pageToken}:{})})];
     case 'events':return ['calendar','events','instance_view','--as','user','--format','json','--params',JSON.stringify({calendar_id:command.calendarId,start_time:String(command.start),end_time:String(command.end)})];
-    case 'document':return ['docs','+fetch','--as','user','--doc',command.document,'--doc-format','markdown','--format','json'];
+    case 'document':return ['docs','+fetch','--api-version','v2','--as','user','--doc',command.document,'--doc-format','markdown','--format','json'];
     case 'documents-search':return ['drive','+search','--query','','--doc-types','docx,wiki','--page-size','20',...(command.action==='created'?['--created-by-me']:[]),`--${command.action}-since`,command.start,`--${command.action}-until`,command.end,...(command.pageToken?['--page-token',command.pageToken]:[]),'--as','user','--format','json'];
     case 'folder-list':return ['drive','files','list','--params',JSON.stringify({folder_token:command.folder,page_size:200,...(command.pageToken?{page_token:command.pageToken}:{})}),'--as','user','--format','json'];
     case 'wiki-node':return ['wiki','spaces','get_node','--params',JSON.stringify({token:command.node}),'--as','user','--format','json'];
@@ -54,25 +52,21 @@ export function authorizationUrl(value:string):string|undefined{
 export function larkJson(raw:string):any{
   try{const value=JSON.parse(raw);if(value?.ok===false||(typeof value?.code==='number'&&value.code!==0))throw Error();return value;}catch{throw new ConnectorError('lark_response_invalid',502);}
 }
-export function createLarkRunner(directory:string,optionsConfig:{localProfile?:boolean;isolatedHome?:boolean;binary?:string}={}):LarkRunner{
+export function createLarkRunner(directory:string,optionsConfig:{localProfile?:boolean;binary?:string}={}):LarkRunner{
   const root=resolve(directory,'lark-runtime'),configDir=join(root,'config');
   const execute:LarkRunner=async(command,options={})=>{
-    if(optionsConfig.isolatedHome&&process.platform==='win32')throw new ConnectorError('lark_scoped_keychain_unsupported',503);
     await mkdir(configDir,{recursive:true,mode:0o700});await chmod(root,0o700);await chmod(configDir,0o700);
     // Do not inherit another agent's identity, credential, profile or policy overrides.
     const env:NodeJS.ProcessEnv={};
     for(const key of ['PATH','HOME','USERPROFILE','SystemRoot','WINDIR','TMPDIR','TMP','TEMP','LANG','LC_ALL','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy'])if(process.env[key])env[key]=process.env[key];
-    if(optionsConfig.isolatedHome){const home=join(root,'home');await mkdir(home,{recursive:true,mode:0o700});Object.assign(env,{HOME:home,USERPROFILE:home,XDG_CONFIG_HOME:join(home,'.config'),XDG_DATA_HOME:join(home,'.local','share'),XDG_CACHE_HOME:join(home,'.cache'),APPDATA:join(home,'AppData','Roaming'),LOCALAPPDATA:join(home,'AppData','Local'),TMPDIR:join(root,'tmp'),TMP:join(root,'tmp'),TEMP:join(root,'tmp')});await mkdir(join(root,'tmp'),{recursive:true,mode:0o700});if(process.platform==='darwin'){const storage=join(home,'Library','Application Support','lark-cli');await mkdir(storage,{recursive:true,mode:0o700});let fd;try{fd=await open(join(storage,'master.key.file'),constants.O_WRONLY|constants.O_NOFOLLOW|constants.O_CREAT|constants.O_EXCL,0o600);await fd.writeFile(randomBytes(32));await fd.sync();}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}finally{await fd?.close();}const existing=await open(join(storage,'master.key.file'),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{const stat=await existing.stat();if(!stat.isFile()||stat.nlink!==1||stat.size!==32||(stat.mode&0o077)!==0)throw new ConnectorError('lark_scoped_key_unavailable',503);}finally{await existing.close();}}}
     Object.assign(env,{CI:'1',NO_COLOR:'1',LARKSUITE_CLI_NO_UPDATE_NOTIFIER:'1',LARKSUITE_CLI_NO_SKILLS_NOTIFIER:'1'});
     if(!optionsConfig.localProfile)Object.assign(env,{LARKSUITE_CLI_CONFIG_DIR:configDir,LARKSUITE_CLI_DATA_DIR:join(root,'credentials'),LARKSUITE_CLI_LOG_DIR:join(root,'logs')});
-    const installing=command.kind==='install';
-    if(installing)throw new ConnectorError('lark_cli_deployment_required',503);
-    let executable:string;try{executable=optionsConfig.binary??managedCliBinary('lark');}catch{throw new ConnectorError('lark_scoped_keychain_unsupported',503);}
+    if(command.kind==='install')throw new ConnectorError('lark_cli_deployment_required',503);
+    let executable:string;try{executable=optionsConfig.binary??managedCliBinary('lark');}catch{throw new ConnectorError('lark_cli_platform_unsupported',503);}
     const args=larkArguments(command);
-    const timeout=['setup','complete'].includes(command.kind)?610000:installing||command.kind==='minutes-media'?300000:60000;
+    const timeout=['setup','complete'].includes(command.kind)?610000:command.kind==='minutes-media'?300000:60000;
     return new Promise<string>((ok,fail)=>{
       let stdout='',stderr='',size=0,settled=false,terminal:ConnectorError|undefined;
-      options.assertCurrent?.();options.signal?.throwIfAborted();
       const child=spawn(executable,args,{cwd:root,env,shell:false,stdio:['pipe','pipe','pipe'],detached:process.platform!=='win32',windowsHide:true});
       const stop=()=>{try{if(process.platform!=='win32'&&child.pid)process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{}};
       const finish=(error?:ConnectorError)=>{if(settled)return;settled=true;clearTimeout(timer);options.signal?.removeEventListener('abort',abort);error?fail(error):ok(stdout);};
@@ -95,5 +89,9 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
       child.stdin.on('error',()=>{});child.stdin.end(command.kind==='configure'?command.secret:undefined);
     });
   };
-  let verified:Promise<void>|undefined;return async(command,options)=>{if(optionsConfig.isolatedHome&&command.kind!=='version'&&command.kind!=='install')await(verified??=execute({kind:'version'},options).then(value=>{if(value.match(/\b(\d+\.\d+\.\d+)\b/)?.[1]!==LARK_VERSION)throw new ConnectorError('lark_cli_version_unsupported',503);}));return execute(command,options);};
+  let verified:Promise<void>|undefined;
+  return async(command,options)=>{
+    if(!['version','install'].includes(command.kind))await(verified??=execute({kind:'version'},options).then(value=>{if(value.match(/\b(\d+\.\d+\.\d+)\b/)?.[1]!==LARK_VERSION)throw new ConnectorError('lark_cli_version_unsupported',503);}).catch(error=>{verified=undefined;throw error;}));
+    return execute(command,options);
+  };
 }

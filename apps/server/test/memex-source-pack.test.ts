@@ -20,7 +20,7 @@ function setup(t:import('node:test').TestContext){
     pythonExecutable:'/usr/bin/python3',maxInputFiles:256,config:{timeZoneOffset:'+08:00'},outputSchema:pythonImportOutputSchema},fixtureLauncher);
   const store=new Store(join(directory,'vault')),files=new ArchivedFileStore(store),sources=new SourceStore(store);
   const imports=new ImportStore(store,files,sources,{sourcePacks:new Map([['memex.markdown',{revision:'generated',prepare:pythonImportPreparation(executor)}]])});
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{await imports.stop();store.close();rmSync(directory,{recursive:true,force:true});});
   return {store,files,imports};
 }
 

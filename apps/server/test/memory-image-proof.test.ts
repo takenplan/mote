@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import type {ImageView,QueryResult} from '@mote/shared';
 import {memoryImageReadReceipts,hasMemoryImageProof,imageViewCovers,MEMORY_VISUAL_REVIEW_COVERAGE_CONTRACT} from '../src/memory-image-proof.js';
-import {MemoryOutputValidationError} from '../src/memory-errors.js';
+import {MemoryOutputValidationError} from '../src/memory.js';
 import {assertMemoryTargetSupport,retainedMemoryReadReceipt} from '../src/memory-read-context.js';
 import {readMemoryWorkCoverage} from '../src/memory-work-contract.js';
 import {reviewMemory} from '../src/memory-review.js';

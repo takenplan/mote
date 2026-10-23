@@ -163,7 +163,7 @@ export class MemoryLifecycle {
     const id='lifecycle:'+state.active.id,step=this.executor.get(id),receipt=this.executor.failure(id);
     if(!step||!receipt||receipt.stepId!==id||receipt.category!=='transient'||receipt.code==='interrupted'||receipt.admissionWaiting||step.error!==receipt.code||step.attempts!==receipt.attempt)return;
     if(step.state!==receipt.state||!['waiting','failed'].includes(step.state)||step.state==='waiting'&&step.availableAt!==receipt.availableAt)return;
-    return {receipt,key:sha256(JSON.stringify([id,step.retryRound,receipt]))};
+    return {receipt,key:sha256(JSON.stringify([id,receipt]))};
   }
   private async execute(extension:LifecycleExtension){
       if(this.closed||!this.configured())return;
@@ -181,13 +181,12 @@ export class MemoryLifecycle {
         const events=this.events(extension,state.cursor,p.maxItems).filter(e=>!state.drainThrough||e.seq<=state.drainThrough);if(!events.length)return;
         state.active={id:randomUUID(),version:extension.version,from:state.cursor,through:events.at(-1)!.seq,ids:[...new Set(events.map(e=>e.entity))],startedAt:now,contextTime:freezeSemanticContextTime(this.semanticContextTime),settings};this.saveState(extension.id,state);
       }
-      let recoveredFailure=false;
       try{
         // Engine failure and window state use separate commits. Consume an
         // exact outstanding failure before starting another invocation, even
         // after a crash between those commits.
         const pendingFailure=this.invocationFailure(state);
-        if(pendingFailure&&pendingFailure.key!==state.countedFailure){recoveredFailure=true;throw new ExecutionFailure('waiting',pendingFailure.receipt.code);}
+        if(pendingFailure&&pendingFailure.key!==state.countedFailure)throw new ExecutionFailure('waiting',pendingFailure.receipt.code);
         if(state.active.version!==extension.version)throw new StoreError('Active window requires its original extension version',409);
         const window=structuredClone(state.active),checkpoint=(id:string)=>{state.active!.checkpoint=id;this.saveState(extension.id,state);};
         if(this.executor){
@@ -198,7 +197,7 @@ export class MemoryLifecycle {
           // interruption. A child still has to establish its own replay safety.
           const recovery=state.retryAt!==undefined&&state.failures>0?'transient' as const:undefined;
           if(recovery&&['failed','waiting'].includes(executor.get(id)?.state??'')&&executor.get(id)?.error===executor.failure(id)?.code&&executor.failure(id)?.category==='transient')executor.retry(id,false);
-          await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,policy:EXECUTION_POLICIES.orchestration,
+          await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,policy:EXECUTION_POLICIES.orchestration,maxAttempts:extension.maxAttempts??EXECUTION_POLICIES.modelCall.maxAttempts,
             classify:error=>error instanceof AgentTimeoutError?new ExecutionFailure('transient','provider_timeout'):new ExecutionFailure('permanent',error instanceof MemoryProviderError&&error.code==='unsupported_input'?'memory_provider_unsupported_input':error instanceof StoreError?'workflow_'+error.statusCode:'step_failed'),
             validate:()=>!this.closed&&this.state(extension.id).active?.id===window.id,
             execute:async signal=>{
@@ -231,17 +230,12 @@ export class MemoryLifecycle {
         const unsupportedInput=error instanceof MemoryProviderError&&error.code==='unsupported_input';
         const semanticTerminal=unsupportedInput||error instanceof ExecutionFailure&&error.category==='blocked'&&(extension.id==='extraction'&&['semantic_processing_failed','semantic_processing_blocked'].includes(error.code)||extension.id==='consolidation'&&['memory_integration_unreadable','memory_integration_no_delivery'].includes(error.code));
         if(!waiting&&(!semanticTerminal||error.code==='semantic_processing_failed'))state.failures++;
-        if(semanticTerminal||!waiting&&(!retryable||state.failures>=maxAttempts||invocation?.retryExhausted))state.manualRetryRequired=true;
+        if(semanticTerminal||!waiting&&(!retryable||state.failures>=maxAttempts||Boolean(invocation&&invocation.state==='failed'&&invocation.attempts>=maxAttempts)))state.manualRetryRequired=true;
         state.error=unsupportedInput?'memory_provider_unsupported_input':error instanceof ExecutionFailure?error.code:error instanceof ProviderFailure?error.details.code:error instanceof AgentTimeoutError?'provider_timeout':error instanceof StoreError?'workflow_'+error.statusCode:'workflow_failed';
         if(!state.cancelled&&!state.manualRetryRequired&&(waiting||state.failures<maxAttempts)){
           const requestedDelay=error instanceof ExecutionFailure?error.retryAfterMs:error instanceof ProviderFailure?error.details.retryAfterMs:undefined;
-          // Execution and domain clocks may be independently injected. Carry
-          // measured delays/elapsed age, never an absolute execution deadline
-          // into the domain schedule. Fresh failures keep its original clock.
-          const failureAge=completedFailure&&recoveredFailure?Math.max(0,this.executor!.clockNow()-Date.parse(actualFailure.receipt.at)):0;
-          const recordedDelay=completedFailure?Math.max(0,(actualFailure.receipt.availableAt??Date.parse(actualFailure.receipt.at))-Date.parse(actualFailure.receipt.at)):0;
-          const failedAt=this.now()-failureAge;
-          state.retryAt=failedAt+(waiting?Math.max(1,requestedDelay??60000):Math.max(requestedDelay??0,recordedDelay,Math.min(6*3600000,60000*2**Math.min(state.failures,8))));
+          const failedAt=completedFailure?Math.min(this.now(),Date.parse(actualFailure.receipt.at)):this.now();
+          state.retryAt=Math.max(completedFailure?actualFailure.receipt.availableAt??0:0,failedAt+(waiting?Math.max(1,requestedDelay??60000):Math.max(requestedDelay??0,Math.min(6*3600000,60000*2**Math.min(state.failures,8)))));
         }else delete state.retryAt;
       }
       this.saveState(extension.id,state);

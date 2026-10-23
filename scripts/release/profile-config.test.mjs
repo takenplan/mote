@@ -31,8 +31,16 @@ test('Docker uses the same parent-mounted YAML, declared paths and private file 
  const home=await fixture(t),paths=profilePaths('test',home);await initialize(paths,{runtime:'docker',port:47954});const p=await loadProfile(paths);
  assert.equal(p.document.server.port,47954);assert.equal(p.document.server.host,'0.0.0.0');assert.equal(p.document.storage.dataDir,'/data');assert.equal(p.document.diagnostics.directory,'/data/logs');
  const config=JSON.parse(await compose(p,['config','--format','json'],{capture:true}));assert.deepEqual(config.services.mote.environment,{MOTE_CONFIG_FILE:'/config/mote.yaml'});
+ assert.equal(config.services.mote.healthcheck,undefined,'Central retains the image healthcheck with its local PID check');
+ for(const name of ['ocr-worker','asr-worker'])assert.deepEqual(config.services[name].healthcheck.test,['CMD','node','apps/server/dist/healthcheck.js','--shared-network'],'only shared-network workers bypass the local PID check');
  assert.equal(config.services.mote.ports[0].target,47954);assert.equal(config.services.mote.volumes.find(value=>value.target==='/config').source,p.directory);assert.equal(config.services.mote.volumes.find(value=>value.target==='/config').read_only,undefined);
  assert.deepEqual(config.services['asr-worker'].command,['node','scripts/media-worker-entry.mjs','asr']);assert.equal(config.services['storage-init'].network_mode,'none');
+ for(const name of ['mote','ocr-worker','asr-worker','storage-init']) {
+  for(const volume of config.services[name].volumes) {
+   if(volume.type==='volume')assert.equal(volume.volume.nocopy,true,`${name} must preserve initialized volume ownership`);
+   else assert.equal(volume.volume,undefined,'Configuration bind mounts retain their existing options');
+  }
+ }
  assert.equal(await readFile(join(p.directory,'generated/secrets.env'),'utf8'),'\n');
  const clean={...process.env};delete process.env.DOCKER_CONTEXT;delete process.env.DOCKER_HOST;t.after(()=>{if(clean.DOCKER_CONTEXT!==undefined)process.env.DOCKER_CONTEXT=clean.DOCKER_CONTEXT;if(clean.DOCKER_HOST!==undefined)process.env.DOCKER_HOST=clean.DOCKER_HOST;});
  const engine=security=>async(_name,args)=>JSON.stringify(args[0]==='context'?'unix:///generated/docker.sock':security);
@@ -59,7 +67,7 @@ test('Docker model paths share the YAML mount target and reject collisions with 
  raw.media.modelDirectory='/generated-model-resources'; await writeFile(paths.configFile,serializeConfigDocument(raw));
  const p=await loadProfile(paths),config=JSON.parse(await compose(p,['config','--format','json'],{capture:true}));
  assert.equal(p.modelDirectory,raw.media.modelDirectory);
- for (const service of ['mote','ocr-worker','asr-worker','storage-init']) assert.equal(config.services[service].volumes.find(volume=>volume.source==='mote-models').target,raw.media.modelDirectory);
- assert.equal(config.services['storage-init'].command.at(-2),raw.media.modelDirectory);assert.equal(config.services['storage-init'].command.at(-1),'/worker-facts');
- for (const path of ['/','/config','/config/models','/data','/data/models','/app','/app/models','/worker-facts','/worker-facts/models','relative-models']) {raw.media.modelDirectory=path;await writeFile(paths.configFile,serializeConfigDocument(raw));await assert.rejects(loadProfile(paths),/media.modelDirectory/);}
+ for (const service of ['mote','ocr-worker','asr-worker','storage-init']) {const volume=config.services[service].volumes.find(volume=>volume.source==='mote-models');assert.equal(volume.target,raw.media.modelDirectory);assert.equal(volume.volume.nocopy,true);}
+ assert.equal(config.services['storage-init'].command.at(-1),raw.media.modelDirectory);
+ for (const path of ['/','/config','/config/models','/data','/data/models','/app','/app/models','relative-models']) {raw.media.modelDirectory=path;await writeFile(paths.configFile,serializeConfigDocument(raw));await assert.rejects(loadProfile(paths),/media.modelDirectory/);}
 });

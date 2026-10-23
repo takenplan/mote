@@ -55,14 +55,6 @@ android {
             buildConfigField("String", "DEFAULT_SERVER", "\"\"")
             matchingFallbacks += "development"
         }
-        create("multiuserFixture") {
-            initWith(getByName("development"))
-            applicationIdSuffix = ".m15fixture"
-            versionNameSuffix = "-m15fixture"
-            buildConfigField("String", "MOTE_PROFILE", "\"test\"")
-            buildConfigField("String", "DEFAULT_SERVER", "\"\"")
-            matchingFallbacks += "development"
-        }
         release {
             manifestPlaceholders["cleartextAllowed"] = "false"
             isMinifyEnabled = false
@@ -84,11 +76,6 @@ android {
         manifest.srcFile("src/debug/AndroidManifest.xml")
     }
     sourceSets.getByName("fileFixture").apply {
-        java.srcDir("src/debug/java")
-        res.srcDir("src/debug/res")
-        manifest.srcFile("src/debug/AndroidManifest.xml")
-    }
-    sourceSets.getByName("multiuserFixture").apply {
         java.srcDir("src/debug/java")
         res.srcDir("src/debug/res")
         manifest.srcFile("src/debug/AndroidManifest.xml")

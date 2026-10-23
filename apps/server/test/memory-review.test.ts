@@ -108,7 +108,7 @@ test('transaction rollback reuses the validated draft and original independent v
  const job=await pipeline.run(pipeline.create({evidenceIds:[original.id]}).id);assert.equal(job.status,'failed');assert.equal(memories.list().length,0);assert.equal(reviews,1);
  store.db.exec('DROP TRIGGER fixture_commit_failure');
  const recovered=await pipeline.retry(job.id);assert.equal(recovered.status,'completed');assert.equal(extractions,1);assert.equal(reviews,1);
- const m=memories.get(recovered.memoryIds[0]);assert.equal(m.reviewReceipt?.decision,'reused');assert.equal(m.reviewReceipt?.draftRunId,'draft-1');assert.equal(m.reviewRunId,'original-independent-review');assert.equal(m.status,'published');
+ const m=memories.get(recovered.memoryIds[0]);assert.equal(m.reviewReceipt?.decision,'independent');assert.equal(m.reviewReceipt?.draftRunId,'draft-1');assert.equal(m.reviewRunId,'original-independent-review');assert.equal(m.status,'published');
 });
 
 test('changed host integration instructions invalidate a bounded review cache entry',async()=>{

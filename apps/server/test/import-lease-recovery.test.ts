@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {SourceStore} from '../src/sources.js';
 
@@ -33,7 +33,7 @@ for(const expireAfter of [1,3])test(`an authorized import resumes an expired com
  const identity=node.imports.confirmationIdentity(importId),confirmed=await node.app.inject({method:'POST',url:`/api/imports/${importId}/confirm`,headers});assert.equal(confirmed.statusCode,202,confirmed.body);await node.featureServices.importTasks.get(importId);await node.executor.drain([identity]);
  const completed=node.imports.get(importId),step=node.executor.get(identity)!;assert.equal(expired,true);
  assert.equal(completed.status,'completed',JSON.stringify({status:completed.status,error:completed.error,progress:completed.progress,step,failure:node.executor.failure(identity)}));
- assert.equal(step.state,'succeeded');assert.equal(step.attempts,2,'the interrupted charged attempt remains accounted beside its checkpointed recovery');assert.equal(node.imports.confirmationIdentity(importId),identity);assert.deepEqual(completed.progress,{total:3,processed:3,imported:3,duplicates:0});assert.deepEqual(written,['generated-1','generated-2','generated-3']);assert.equal(parses,1);
+ assert.equal(step.state,'succeeded');assert.equal(step.attempts,1,'lease interruption is not an extra processing failure');assert.equal(node.imports.confirmationIdentity(importId),identity);assert.deepEqual(completed.progress,{total:3,processed:3,imported:3,duplicates:0});assert.deepEqual(written,['generated-1','generated-2','generated-3']);assert.equal(parses,1);
  const originals=node.sources.listItems({sourceId:completed.sourceId}).items;assert.equal(originals.length,3);for(const item of originals)assert.equal(node.sources.history(completed.sourceId,item.externalId).length,1);
  const saved=JSON.stringify({completed,step});const again=await node.app.inject({method:'POST',url:`/api/imports/${importId}/confirm`,headers});assert.equal(again.statusCode,202);await node.executor.tick();assert.equal(JSON.stringify({completed:node.imports.get(importId),step:node.executor.get(identity)}),saved,'a completed import is only observed, not replayed');assert.deepEqual(written,['generated-1','generated-2','generated-3']);assert.equal(parses,1);
 });

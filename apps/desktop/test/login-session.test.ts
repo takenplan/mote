@@ -37,14 +37,6 @@ it('preserves app-only checkpoint binding when editing the same normalized endpo
  expect(updateConfig(config,{...config,serverUrl:config.serverUrl+'/'}).authSourceBinding).toBe(config.authSourceBinding);
  expect(updateConfig(config,{...config,serverUrl:'https://elsewhere.invalid',token:''}).authSourceBinding).toBeUndefined();
 });
-it.each([[401,'invalid_login','用户名或密码'],[403,'origin_denied','公开地址'],[426,'incompatible_protocol','协议版本'],[429,'login_throttled','登录尝试']])('explains central login refusals without exposing response detail: %s %s',async(status,code,expected)=>{
- vi.stubGlobal('fetch',vi.fn(async()=>Response.json({error:code,message:'PRIVATE_SERVER_DETAIL'},{status:Number(status)})));
- try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/auth/login',{})).rejects.toThrow(String(expected));}finally{vi.unstubAllGlobals();}
-});
-it('does not expose a malformed successful login response',async()=>{
- vi.stubGlobal('fetch',vi.fn(async()=>new Response('PRIVATE_INVALID_JSON_BODY')));
- try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/auth/login',{})).rejects.toThrow('响应格式无效');}finally{vi.unstubAllGlobals();}
-});
 it('keeps exact pending source revisions after an app-only login restart and same-node reauthorization',async()=>{
  const {writeFile}=await import('node:fs/promises'),{LocalSourceManager}=await import('../src/source-manager'),{DEFAULT_SOURCE_OPTIONS}=await import('../src/source-types');
  const root=await mkdtemp(join(tmpdir(),'mote-login-source-')),config={...defaultConfig(),token:'generated-session-token'.repeat(3),authSessionOnly:true,syncMode:'manual' as const};
@@ -68,3 +60,49 @@ it('keeps exact pending source revisions after an app-only login restart and sam
   expect(await readFile(join(pending.item.localOriginal!.directory,'0'))).toEqual(bytes);expect(fetcher).not.toHaveBeenCalled();
  }finally{await first?.close();await second?.close();vi.unstubAllGlobals();await rm(root,{recursive:true,force:true});}
 },30000);
+
+it.each([false,true])('offline logout clears durable credentials and preserves pending source/capture ownership through reload and reauthorization (session-only %s)',async sessionOnly=>{
+ const {writeFile}=await import('node:fs/promises'),{LocalSourceManager}=await import('../src/source-manager'),{DEFAULT_SOURCE_OPTIONS}=await import('../src/source-types');
+ const {signedOutConfig}=await import('../src/config'),{desktopSecretStorage}=await import('../src/secret-storage'),{resolveProfile}=await import('../src/profile');
+ const {DurableQueue}=await import('../src/queue'),{event,image}=await import('./fixtures');
+ const root=await mkdtemp(join(tmpdir(),'mote-logout-pending-'));
+ const config={...defaultConfig(),token:'generated-owner-session'.repeat(3),credentialScope:'owner' as const,authExpiresAt:Date.now()+86400000,authSessionOnly:sessionOnly,syncMode:'manual' as const};
+ const store=new ConfigStore(root,desktopSecretStorage(resolveProfile(['--profile=dev'],{},root),false,()=>{throw Error('Dev must not construct OS storage');}));
+ let first:InstanceType<typeof LocalSourceManager>|undefined,second:InstanceType<typeof LocalSourceManager>|undefined;
+ const fetcher=vi.fn(async()=>{throw Error('Generated offline node');});vi.stubGlobal('fetch',fetcher);
+ try{
+  const path=join(root,'generated.md'),bytes=Buffer.from('Generated exact pending source content.');await writeFile(path,bytes);
+  first=new LocalSourceManager(join(root,'sources'),config,'/unused',true);await first.initialize();await first.addFiles(path,DEFAULT_SOURCE_OPTIONS);await first.sync();
+  const queue=new DurableQueue(join(root,'queue'),config);await queue.initialize();await queue.enqueue({...event(),deviceId:config.deviceId},image);
+  expect(first.connectionActivity().pending).toBe(1);const pending=JSON.parse(JSON.stringify(first.pendingContent()[0]));
+  const oldNode=first.nodeBinding.snapshot(),oldQueue=queue.binding.snapshot(),signedOut=signedOutConfig(config);
+  const release=await first.holdConnection();
+  await expect(first.changeConnection({...signedOut,serverUrl:'https://another.invalid'})).rejects.toThrow('原节点');
+  await expect(first.changeConnection({...signedOut,authSourceBinding:'f'.repeat(64)})).rejects.toThrow('原节点');
+  await first.changeConnection(signedOut);await store.save(signedOut);release();
+  expect(first.nodeBinding.snapshot()).toEqual(oldNode);expect(queue.binding.snapshot()).toEqual(oldQueue);
+  expect(JSON.parse(JSON.stringify(first.pendingContent()[0]))).toEqual(pending);
+  const raw=await readFile(join(root,'config.json'),'utf8');expect(raw).not.toContain(config.token);
+  const saved=JSON.parse(raw);for(const key of ['token','credentialScope','authExpiresAt','authSessionOnly'])expect(saved.config[key]).toBeUndefined();
+  expect(saved.encryptedToken).toBeUndefined();expect(saved.developmentToken).toBeUndefined();
+  await first.close();first=undefined;
+  const restarted=await store.load();expect(restarted.authSignedOut).toBe(true);expect(connectionToken(restarted)).toBeUndefined();expect(sourceConnectionBinding(restarted)).toBe(sourceConnectionBinding(config));
+  second=new LocalSourceManager(join(root,'sources'),restarted,'/unused',true);await second.initialize();
+  const reloadedQueue=new DurableQueue(join(root,'queue'),restarted);await reloadedQueue.initialize();expect(reloadedQueue.stats().depth).toBe(1);expect(reloadedQueue.binding.snapshot()).toEqual(oldQueue);
+  expect(second.nodeBinding.snapshot()).toEqual(oldNode);expect(JSON.parse(JSON.stringify(second.pendingContent()[0]))).toEqual(pending);
+  const next={...restarted,token:'generated-new-owner-session'.repeat(3),credentialScope:'owner' as const,authSignedOut:false};
+  const finish=await second.holdConnection();await second.prepareReauthorization(next);await reloadedQueue.binding.commit(next,true,false,true);await store.save(next);await second.changeConnection(next);finish();await second.sync();
+  expect(second.connectionActivity().pending).toBe(1);expect(JSON.parse(JSON.stringify(second.pendingContent()[0]))).toEqual(pending);expect(reloadedQueue.stats().depth).toBe(1);expect(reloadedQueue.binding.matches(next)).toBe(true);
+  expect(await readFile(join(pending.item.localOriginal.directory,'0'))).toEqual(bytes);expect(fetcher).not.toHaveBeenCalled();
+ }finally{await first?.close();await second?.close();vi.unstubAllGlobals();await rm(root,{recursive:true,force:true});}
+},30000);
+
+
+it.each([[401,'unauthorized','凭据已失效'],[403,'origin_denied','公开地址'],[403,'connection_scope_denied','连接权限'],[426,'incompatible_protocol','协议版本'],[429,undefined,'请求过于频繁']])('explains owner login refusals without exposing response details: %s %s',async(status,code,expected)=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({error:code,message:'PRIVATE_SERVER_DETAIL'},{status:Number(status)})));
+ try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/login/session',{})).rejects.toThrow(String(expected));}finally{vi.unstubAllGlobals();}
+});
+it('does not expose malformed successful login response contents',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response('PRIVATE_INVALID_JSON_BODY')));
+ try{await expect(loginRequest({serverUrl:'https://fixture.invalid'},'/api/login/poll',{})).rejects.toThrow('响应格式无效');}finally{vi.unstubAllGlobals();}
+});

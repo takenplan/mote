@@ -7,7 +7,7 @@ export const memoryDeletionDependencyBytes=(deletionId:string,evidenceId:string,
  * intentionally reported separately. Newly installed plugin tables join on next read. */
 export class StorageLedger {
   private schemaVersion=-1;
-  constructor(private db:DatabaseSync,private readonly additional:Readonly<Record<string,string>>={}){db.exec('CREATE TABLE IF NOT EXISTS storage_ledger(name TEXT PRIMARY KEY,bytes INTEGER NOT NULL)');
+  constructor(private db:DatabaseSync){db.exec('CREATE TABLE IF NOT EXISTS storage_ledger(name TEXT PRIMARY KEY,bytes INTEGER NOT NULL)');
 
   }
   bytes(){
@@ -18,6 +18,9 @@ export class StorageLedger {
   private refresh(){
     const jsonTables=['import_uploads','todos','perception_results','captures','memories','memory_deletions','memory_input_plans','source_connections','conversations','conversation_turns','memory_jobs','memory_batches','memory_extraction_drafts','archived_files','import_jobs','file_artifacts','file_reviews','insight_runs','query_runs','model_usage','model_prices','memory_lifecycle_settings','memory_lifecycle_effective','memory_recipe_settings','memory_lifecycle_state','working_memories','action_meta','action_proposals','action_targets','context_contents','context_artifacts','processing_jobs','coding_conversation_contexts','delegation_works','delegation_units','delegation_payloads','delegation_results'];
     const expressions:Record<string,string>=Object.fromEntries(jsonTables.map(t=>[t,'length(CAST(json AS BLOB))']));
+    expressions.memory_phase_outputs='length(CAST(json AS BLOB))+256';
+    expressions.media_execution_calls='length(CAST(input AS BLOB))+coalesce(length(CAST(fact AS BLOB)),0)+1024';
+    expressions.media_execution_instance='length(CAST(nonce AS BLOB))+128';
     expressions.owner_questions='length(CAST(json AS BLOB))+length(CAST(id AS BLOB))+length(CAST(identity AS BLOB))+256';
     expressions.owner_question_dependencies='length(CAST(question_id AS BLOB))+length(CAST(evidence_id AS BLOB))+64';
     expressions.owner_question_replies='length(CAST(question_id AS BLOB))+length(CAST(request_id AS BLOB))+length(CAST(request_hash AS BLOB))+128';
@@ -71,7 +74,6 @@ export class StorageLedger {
     expressions.plugin_center='144';
     expressions.activity_memory_batches='length(CAST(id AS BLOB))+length(CAST(job_id AS BLOB))+64';
     Object.assign(expressions,{memory_input_authorizations:'length(CAST(source_id AS BLOB))+length(CAST(input_key AS BLOB))+length(CAST(scope AS BLOB))+COALESCE(length(CAST(binding_json AS BLOB)),0)+256',material_memory_requests:'length(CAST(required_json AS BLOB))+COALESCE(length(CAST(binding_json AS BLOB)),0)+512',material_block_payloads:'length(CAST(text AS BLOB))',material_revisions:'length(CAST(manifest AS BLOB))+256',material_blocks:'256',material_block_versions:'256',material_coding_snapshots:'256',material_members:'256',material_evidence:'128',material_evidence_context:'length(CAST(json AS BLOB))+128',material_evidence_dependencies:'128',source_archive_sizes:'bytes',source_archive_indexed_sources:'128',source_archive_groups:'length(CAST(group_key AS BLOB))+256',source_archive_versions:'512',source_archive_heads:'384',source_archive_batches:'128',source_archive_recovery_groups:'128',run_execution_owners:'128',operation_parents:'length(CAST(parent_id AS BLOB))+length(CAST(child_id AS BLOB))+256',file_configuration_snapshots:'length(CAST(receipt AS BLOB))+128',provider_cooldowns:'length(CAST(code AS BLOB))+128',operation_progress:'length(CAST(id AS BLOB))+256',operation_changes:'length(CAST(operation_id AS BLOB))+32',execution_steps:'length(CAST(input AS BLOB))+512',execution_resources:'length(CAST(resource_key AS BLOB))+64',import_upload_parts:'bytes',assets:'bytes',blobs:'bytes',file_blobs:'bytes',file_objects:'bytes',file_chunks:'length(CAST(text AS BLOB))+COALESCE(length(embedding),0)',file_versions:'length(CAST(manifest AS BLOB))',file_uploads:'length(CAST(manifest AS BLOB))',file_parts:'bytes'});
-    Object.assign(expressions,this.additional);
     const tables=new Set(this.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>String(r.name)));
     const ownTransaction=!this.db.isTransaction;if(ownTransaction)this.db.exec('BEGIN IMMEDIATE');
     try{for(const [name,expression] of Object.entries(expressions)){

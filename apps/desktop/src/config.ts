@@ -9,7 +9,6 @@ import { readFile, mkdir, open, rename, chmod } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { normalizeAppCollectionRules, normalizeCollectionMode } from './app-collection';
 import type { Config, ConfigUpdate, PublicConfig, Rectangle } from './contracts';
-import {validateAccount} from './account';
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export function defaultConfig(): Config {
@@ -58,7 +57,7 @@ export function validateServerUrl(value: unknown): string {
 const retiredModelKeys = ['privacyModelUrl','nsfwEnabled','reviewPolicy','reviewMaxTokens','reviewMaxSide','nsfwThreads','nsfwTimeoutMs','nsfwSource','nsfwCustomUrl'];
 export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents = 0, confirmedUnboundBacklog = false): Config {
   if(['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>input&&Object.hasOwn(input,key)))throw Error(RESET_REQUIRED);
-  if ((current.credentialScope!==undefined&&!['owner','client'].includes(current.credentialScope))||(input?.credentialScope!==undefined&&!['owner','client'].includes(input.credentialScope)))throw Error(RESET_REQUIRED);
+  if ((current.credentialScope!==undefined&&current.credentialScope!=='owner')||(input?.credentialScope!==undefined&&input.credentialScope!=='owner'))throw Error(RESET_REQUIRED);
   if (retiredModelKeys.some(key => input && Object.hasOwn(input,key))) throw new Error(moteText("配置包含已停用的本机模型设置，请移除后导入"));
   if (!input || typeof input !== 'object') throw new Error(moteText("配置格式不正确"));
   if (typeof input.deviceName !== 'string' || !input.deviceName.trim() || input.deviceName.length > 128) throw new Error(moteText("设备名需为 1–128 字符"));
@@ -76,7 +75,6 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
   if (!['realtime', 'interval', 'batch', 'manual'].includes(syncMode)) throw new Error(moteText("同步方式无效"));
   const serverUrl = input.serverUrl === '' ? '' : validateServerUrl(input.serverUrl);
   const config: Config = {
-    account:current.account&&serverUrl===current.serverUrl?validateAccount(current.account,serverUrl):undefined,
     authSourceBinding: serverUrl === current.serverUrl && current.authSourceBinding ? validSourceBinding(current.authSourceBinding) : undefined,
     authSignedOut: current.authSignedOut, authExpiresAt: current.authExpiresAt, authSessionOnly: current.authSessionOnly,
     uiPageMode:uiModeSchema.parse(input.uiPageMode??current.uiPageMode),
@@ -99,7 +97,7 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
     pauseOnBattery: input.pauseOnBattery, batteryPauseBelowPct: integer(input.batteryPauseBelowPct, 0, 95, moteText("低电量暂停百分比")),
     token: input.token === undefined ? current.token : input.token.trim() || undefined,
   };
-  if (config.serverUrl === current.serverUrl && config.token === current.token) config.credentialScope = current.credentialScope;
+  if (config.serverUrl === current.serverUrl && config.token === current.token && current.credentialScope === 'owner') config.credentialScope = current.credentialScope;
   if ((config.serverUrl !== current.serverUrl || config.token !== current.token) && queuedEvents > 0 && !confirmedUnboundBacklog) throw new Error(moteText("还有待上传记录，不能切换节点或令牌；请先完成上传或备份处理旧队列"));
   if (config.serverUrl !== current.serverUrl) {
     if (queuedEvents > 0 && !confirmedUnboundBacklog) throw new Error(moteText("还有待上传记录，不能切换中央节点；请先完成上传，或导出并移走旧队列后重启"));
@@ -116,7 +114,6 @@ export function publicConfig(config: Config): PublicConfig {
 }
 
 export interface SecretStorage {
-  /** Omitted by existing system-store adapters. JSON is an explicit dev policy. */
   readonly mode?: 'system' | 'json';
   available(): boolean;
   encrypt(value: string): Buffer;
@@ -130,15 +127,14 @@ export class ConfigStore {
       const stored = JSON.parse(await readFile(join(this.directory, 'config.json'), 'utf8')) as { version:number; config: Config; encryptedToken?: string; developmentToken?: string };
       if(stored.version!==DESKTOP_STORAGE_VERSION)throw Error(RESET_REQUIRED);
       if (!stored.config || typeof stored.config.deviceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(stored.config.deviceId)) throw new Error(moteText("设备标识无效"));
-      // Storage policy changes require a new profile; never consult Keychain to
-      // adopt old credentials or accept development plaintext in production.
+      // A profile never converts another credential format or consults the OS store to adopt it.
       if ((this.secrets.mode === 'json' && stored.encryptedToken !== undefined) || (this.secrets.mode !== 'json' && stored.developmentToken !== undefined)) throw new CredentialStorageMismatch();
       if (stored.developmentToken !== undefined && (typeof stored.developmentToken !== 'string' || !stored.developmentToken)) throw new CredentialStorageMismatch();
       const required=Object.keys(defaultConfig()).filter(key=>key!=='syncPaused');
       if(required.some(key=>!Object.hasOwn(stored.config,key))||['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>Object.hasOwn(stored.config,key)))throw Error(RESET_REQUIRED);
       const current: Config = { ...Object.fromEntries(Object.entries(stored.config).filter(([key]) => !retiredModelKeys.includes(key))), token: undefined } as Config;
-      if (this.secrets.mode === 'json') current.token = stored.developmentToken;
-      if (stored.encryptedToken) {
+      if (this.secrets.mode === 'json' && !current.authSignedOut) current.token = stored.developmentToken;
+      if (stored.encryptedToken && !current.authSignedOut) {
         if (!this.secrets.available()) throw new Error(moteText("系统密钥存储不可用，无法解密令牌"));
         current.token = this.secrets.decrypt(Buffer.from(stored.encryptedToken, 'base64'));
       }
@@ -152,11 +148,11 @@ export class ConfigStore {
     }
   }
   async save(config: Config): Promise<void> {
-    if(config.credentialScope!==undefined&&!['owner','client'].includes(config.credentialScope))throw Error(RESET_REQUIRED);
+    if(config.credentialScope!==undefined&&config.credentialScope!=='owner')throw Error(RESET_REQUIRED);
     const { token, ...rest } = config;
-    if (token && !this.secrets.available()) throw new Error(moteText("系统加密存储不可用，拒绝保存明文令牌"));
-    const persistentToken = token && !config.authSessionOnly ? token : undefined;
-    const contents = JSON.stringify({ version: DESKTOP_STORAGE_VERSION, config: {...rest,authSourceBinding:config.authSessionOnly?sourceConnectionBinding(config):config.authSourceBinding},
+    const persistentToken = !config.authSignedOut && !config.authSessionOnly ? token : undefined;
+    if (persistentToken && !this.secrets.available()) throw new Error(moteText("系统加密存储不可用，拒绝保存明文令牌"));
+    const contents = JSON.stringify({ version: DESKTOP_STORAGE_VERSION, config: {...rest,authSourceBinding:config.authSessionOnly||config.authSignedOut?sourceConnectionBinding(config):config.authSourceBinding},
       ...(this.secrets.mode === 'json' ? { developmentToken: persistentToken } : { encryptedToken: persistentToken ? this.secrets.encrypt(persistentToken).toString('base64') : undefined }),
     }, null, 2);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -170,6 +166,11 @@ export class ConfigStore {
       try { await directory.sync(); } finally { await directory.close(); }
     }
   }
+}
+
+/** Retain the previous source checkpoint identity before removing its bearer credential. */
+export function signedOutConfig(config: Config): Config {
+  return {...config,authSourceBinding:sourceConnectionBinding(config),token:undefined,credentialScope:undefined,authExpiresAt:undefined,authSessionOnly:undefined,authSignedOut:true};
 }
 
 export class CredentialStorageMismatch extends Error {

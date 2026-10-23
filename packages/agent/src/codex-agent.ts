@@ -27,8 +27,7 @@ export function createCodexAgent(options:AgentOptions){
     const runTools=toolsFor(input).filter(t=>taskTools(input).includes(t.name)||t.name==='skill');
     input.signal?.throwIfAborted();
     if(closed)throw new AgentProviderError();if(!options.model?.trim())throw new AgentNotConfiguredError();
-    // External schemas own user input limits; native capacity failures remain
-    // permanent processing_limit errors for the complete internal request.
+    // Native capacity failures classify the complete request as processing_limit.
     if(typeof input.question!=='string'||!input.question.trim())throw new AgentInputError();
     displayTime(new Date().toISOString(),input.timeZone);reportProgress(input,{stage:'starting'});
     const runId=randomUUID();

@@ -14,7 +14,7 @@ async function until(fn,label){const end=Date.now()+20000;while(Date.now()<end){
 async function run(){
   await app.whenReady();const token=randomBytes(32).toString('hex'),runner=join(root,'server.mjs'),ready=join(root,'ready');
   const config={dataDir:join(root,'data'),token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent'};
-  writeFileSync(runner,`import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo,'apps/server/test/fixtures/legacy-app.mjs')).href)};import {writeFileSync} from 'node:fs';
+  writeFileSync(runner,`import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo,'apps/server/dist/app.js')).href)};import {writeFileSync} from 'node:fs';
 const node=await buildApp(${JSON.stringify(config)},{backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('Fixture must not invoke a model');},close:async()=>{}}});
 for(const id of ['diary','coding'])node.sources.register({id,name:'Generated '+id,kind:'custom',deviceId:'fixture',platform:'import'});
 await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(ready)},node.app.server.address().port.toString());process.once('SIGTERM',async()=>{await node.app.close();process.exit(0);});`,{mode:0o600});

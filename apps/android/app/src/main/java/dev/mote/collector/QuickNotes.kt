@@ -10,10 +10,10 @@ object QuickNotes {
     internal val io = java.util.concurrent.Executors.newSingleThreadExecutor()
     fun draft(context: Context): NoteDraftStore {
         LocalDataFormat.requireCurrent(context)
-        return NoteDraftStore(File(context.accountDirectory(), "note-draft"), context.localContentCipher())
+        return NoteDraftStore(File(context.noBackupFilesDir, "note-draft"), context.localContentCipher())
     }
     fun save(context: Context, text: String, mood: String): String = save(context, text, mood) { config -> UploadWorker.schedule(context, config) }
-    internal fun save(context: Context, text: String, mood: String, expectedOwner: String? = null, scheduleUpload: (CollectorConfig) -> Unit): String = ConnectionGuard.sync { check(expectedOwner == null || Settings(context).read().ownerKey() == expectedOwner) { "Account changed" }; saveCurrent(context, text, mood, scheduleUpload) } ?: throw ConnectionFailure("busy")
+    internal fun save(context: Context, text: String, mood: String, scheduleUpload: (CollectorConfig) -> Unit): String = ConnectionGuard.sync { saveCurrent(context, text, mood, scheduleUpload) } ?: throw ConnectionFailure("busy")
     private fun saveCurrent(context: Context, text: String, mood: String, scheduleUpload: (CollectorConfig) -> Unit): String {
         require(text.isNotBlank() && text.length <= 100_000) { MoteI18n.text("随手记须为 1..100000 字符") }
         require(mood.length <= 80) { MoteI18n.text("心情最多 80 字符") }

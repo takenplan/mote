@@ -9,6 +9,7 @@ import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryPublication} from '../src/memory-publication.js';
+import {MemoryPhaseOutputs} from '../src/memory-phase-outputs.js';
 import {reviewMemory} from '../src/memory-review.js';
 import type {MemoryBindings} from '../src/memory-bindings.js';
 import {type MemoryEngineDraftPin} from '../src/memory-pipeline.js';
@@ -92,6 +93,7 @@ async function fixture(t: TestContext) {
     get pipeline() {return pipeline;}, get publication() {return publication;}, get store() {return store;}, get memories() {return memories;},
     calls: () => ({nativeCalls, reviewCalls, modelCalls}),
     create: () => pipeline.create({evidenceIds: [originalId]}),
+    phaseCheckpoints(batchId:string) {const outputs=new MemoryPhaseOutputs(store,pipeline.engine);return store.db.prepare('SELECT step_id,phase,input_hash,output_hash FROM memory_phase_outputs WHERE batch_id=? ORDER BY phase').all(batchId).map(row=>({...row,state:pipeline.engine.get(String(row.step_id))!.state,output:outputs.read<any>(String(row.step_id),String(row.input_hash))}));},
     async restart() {await pipeline.close(); await publication.close(); store.close(); open();},
     async finishCleanup() {
       const deadline = Date.now() + 7000;
@@ -111,12 +113,17 @@ test('reviewed native checkpoint survives publication failure and restart; clean
   const f = await fixture(t); f.control.failPublication = true;
   const job = f.create(), failed = await f.pipeline.run(job.id);
   assert.equal(failed.status, 'failed'); assert.deepEqual(f.calls(), {nativeCalls: 1, reviewCalls: 1, modelCalls: 0});
-  assert.ok(f.publication.retainedOutput(job.batches[0].id), 'approved output is retained before remote canonical publication');
+  const retained=f.phaseCheckpoints(job.batches[0].id);
+  assert.deepEqual(retained.map(row=>[row.phase,row.state]),[['extract','succeeded'],['review','succeeded']],'both complete private phase outputs precede canonical publication');
+  assert.equal(retained[0].output.draftOrigin,'native-engine');assert.deepEqual(retained[0].output.nativeDraft.context.provider,f.providerPin);
+  assert.deepEqual(retained[0].output.engineDrafts[0].provider,f.providerPin);
+  assert.match(retained[1].output.result.answer,/Generated reviewed memory/);assert.ok(retained[1].output.result.runId);
+  assert.equal(retained[1].output.reviewReceipt.decision,'independent');assert.equal(retained[1].output.reviewReceipt.reviewRunId,retained[1].output.result.runId);
   assert.equal(f.memories.list().length, 0, 'failed canonical transport cannot publish a control record');
   assert.ok(f.store.db.prepare("SELECT 1 FROM memory_engine_stage_cleanups WHERE state='pending'").get());
   const persisted = f.store.db.prepare('SELECT json FROM memory_engine_stage_cleanups').all().map(row => JSON.parse(String(row.json)));
   assert.ok(persisted.length); for (const pin of persisted) {assert.deepEqual(pin.provider, f.providerPin); assert.equal('assertAuthority' in pin, false);}
-  await f.restart(); f.control.failCleanup = false; f.control.failPublication = false;
+  await f.restart();assert.deepEqual(f.phaseCheckpoints(job.batches[0].id),retained,'restart preserves exact private results, receipts and hashes'); f.control.failCleanup = false; f.control.failPublication = false;
   await f.finishCleanup();
   const completed = await f.pipeline.retry(job.id); assert.equal(completed.status, 'completed');
   assert.equal(f.memories.list().length, 1); assert.deepEqual(f.calls(), {nativeCalls: 1, reviewCalls: 1, modelCalls: 0});

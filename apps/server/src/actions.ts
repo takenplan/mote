@@ -18,8 +18,11 @@ import { actionsRuntimeSettingsSchema, type ActionsRuntimeSettings } from './act
 const settingsSchema=z.object({enabled:z.boolean(),timeZone:actionZone,reviewDeviceIds:z.array(z.string().min(1).max(200)).max(100)}).strict();
 const authorizationSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),reviewDeviceIds:settingsSchema.shape.reviewDeviceIds}).strict();
 const settingsUpdateSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),authorizationRevision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:settingsSchema}).strict();
-import {ActionSettingsSaveError,proposedSchema} from './action-contract.js';
-export {ActionSettingsSaveError,proposedSchema} from './action-contract.js';
+/** Runtime file failures must report an already committed permission withdrawal. */
+export class ActionSettingsSaveError extends Error {
+  constructor(readonly code:string,readonly statusCode:number,readonly revokedDeviceIds:string[],readonly authorizationRevision:number,readonly revision:number|undefined){super('Action authorization was revoked; refresh the settings before retrying');this.name='ActionSettingsSaveError';}
+}
+const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
 const fingerprint=(r:CaptureRecord)=>sha256(JSON.stringify([r.id,r.ocrText,r.metadata,r.provenance,(r as CaptureRecord & {fileEvidence?:{captureId:string}}).fileEvidence]));
 type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 /** Host-owned durable proposals and execution receipts. The query agent has only a read-only comparison catalog, never mutation tools. */
@@ -49,7 +52,7 @@ export class Actions {
     const projectSql="UPDATE action_jobs SET status=CASE new.state WHEN 'waiting' THEN 'pending' WHEN 'succeeded' THEN 'completed' ELSE new.state END,attempts=new.attempts WHERE key=json_extract(new.input,'$.jobKey');";
     store.db.exec(`CREATE TRIGGER IF NOT EXISTS action_execution_created AFTER INSERT ON execution_steps WHEN new.kind='actions.extract' BEGIN ${projectSql} END; CREATE TRIGGER IF NOT EXISTS action_execution_changed AFTER UPDATE OF state,attempts ON execution_steps WHEN new.kind='actions.extract' BEGIN ${projectSql} END;`);
 
-    this.unregister=this.engine.register({kind:'actions.extract',pool:'actions.extract',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:2,
+    this.unregister=this.engine.register({kind:'actions.extract',pool:'actions.extract',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,
       validate:step=>this.validJob(String(step.input.jobKey)),
       admit:()=>this.closed?new ExecutionFailure('blocked','actions_closed'):!this.settings().enabled?new ExecutionFailure('blocked','actions_disabled'):!this.configured()?new ExecutionFailure('blocked','model_not_configured'):undefined,
       execute:(step,signal)=>withExecutionCancellation(AbortSignal.any([signal,this.abort.signal]),()=>this.analyze(this.job(String(step.input.jobKey))!,step,AbortSignal.any([signal,this.abort.signal]))),

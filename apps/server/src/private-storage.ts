@@ -2,21 +2,17 @@ import {constants,closeSync,chmodSync,fchmodSync,fstatSync,lstatSync,mkdirSync,o
 
 const owned=(uid:number)=>!process.getuid||uid===process.getuid();
 
-/** mkdir's mode does not protect a pre-existing bind mount or restored vault.
- * Cleanup uses create=false so a late finally cannot restore removed storage. */
-export function privateDirectory(directory:string,create=true):boolean {
+/** mkdir's mode does not protect a pre-existing bind mount or restored vault. */
+export function privateDirectory(directory:string) {
+  mkdirSync(directory,{recursive:true,mode:0o700});
+  const info=lstatSync(directory);
+  if(!info.isDirectory()||info.isSymbolicLink()||!owned(info.uid))throw new Error('Private storage requires an owned directory, not a symbolic link');
+  const fd=openSync(directory,constants.O_RDONLY|constants.O_NOFOLLOW);
   try {
-    if(create)mkdirSync(directory,{recursive:true,mode:0o700});
-    const info=lstatSync(directory);
-    if(!info.isDirectory()||info.isSymbolicLink()||!owned(info.uid))throw new Error('Private storage requires an owned directory, not a symbolic link');
-    const fd=openSync(directory,constants.O_RDONLY|constants.O_NOFOLLOW);
-    try {
-      const opened=fstatSync(fd);
-      if(!opened.isDirectory()||!owned(opened.uid)||opened.dev!==info.dev||opened.ino!==info.ino)throw new Error('Private storage directory changed');
-      fchmodSync(fd,0o700);
-    }finally{closeSync(fd);}
-    return true;
-  }catch(error){if(!create&&(error as NodeJS.ErrnoException).code==='ENOENT')return false;throw error;}
+    const opened=fstatSync(fd);
+    if(!opened.isDirectory()||!owned(opened.uid)||opened.dev!==info.dev||opened.ino!==info.ino)throw new Error('Private storage directory changed');
+    fchmodSync(fd,0o700);
+  }finally{closeSync(fd);}
 }
 
 /** Validate before SQLite can follow an existing database or journal link. */

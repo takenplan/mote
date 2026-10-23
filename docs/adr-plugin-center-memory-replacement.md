@@ -213,29 +213,7 @@ packages, read-only capability discovery and single execution authority remain.
 and fallback guarantees. Historical ADRs remain historical; current behavior
 documents must only be updated when the corresponding implementation is verified.
 
-The [continuous-batch decision](adr-memory-continuous-batch.md) specifies the
-scoped orchestration that contains these replaceable stages. Native engine drafts
-still receive independent review and Mote's staged, fenced publication; Mem0's
-CRUD/retrieval role does not become full engine orchestration.
-
 ## Delivery evidence
-
-Current delivery and submission scope are recorded in the
-[phase-one implementation plan](design/plugin-center-phase-one-2026-10-12.md)
-and [validation ledger](design/plugin-center-phase-one-validation-2026-10-12.md).
-The owner subsequently authorized implementation, isolated acceptance and PR/merge.
-Implementation and public generated regression tests may be included in that
-authorized delivery; tokens, private run material, model inputs and native runtime
-data remain local. Actual provider, model, UI and device coverage retain their
-separate limits. Current scoped delivery and remaining qualification are linked
-from the [progress ledger](project-progress.md).
-
-### Historical prototype-stage constraints
-
-The following paragraphs preserve the original plan/prototype scope. Their
-all-local submission restriction was refined by the explicit implementation
-authorization above; they do not describe the current implementation status or
-grant new permission to write to an existing node or transmit personal screenshots.
 
 Phase one must demonstrate actual Mem0 OSS CRUD/retrieval and Hindsight engine
 behavior through real product entry points; mocks alone cannot prove replacement.

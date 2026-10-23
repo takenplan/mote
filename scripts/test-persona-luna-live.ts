@@ -5,7 +5,7 @@ import {DatabaseSync,backup} from 'node:sqlite';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {personaFixture} from './fixtures/persona.js';
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {changeEvidenceRoute,contextReaderReference,evidenceRoute,readEvidenceRoute} from '../src/evidence-route.js';
+import {changeEvidenceRoute,evidenceRoute,readEvidenceRoute} from '../src/evidence-route.js';
 import {containDialogFocus} from '../src/dialog-focus.js';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 test('detail history preserves the exact origin filters, replaces nested evidence and closes with one back',async()=>{
@@ -23,13 +23,4 @@ test('detail focus contains outside keyboard focus, skips hidden controls and re
  const origin=d.querySelector<HTMLElement>('#origin')!,panel=d.querySelector<HTMLElement>('#dialog')!;origin.focus();const close=containDialogFocus(panel,origin);assert.equal(d.activeElement?.id,'first');
  origin.focus();d.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,cancelable:true}));assert.equal(d.activeElement?.id,'last');
  d.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Tab',cancelable:true}));assert.equal(d.activeElement?.id,'first');close();assert.equal(d.activeElement,origin);dom.window.close();
-});
-
-test('query-visible capture references keep their reader boundary through reload and nested evidence history',()=>{
- const reference='context:capture:'+id,hash=evidenceRoute('#/ask?conversation=generated',reference);
- assert.equal(readEvidenceRoute(hash),reference);assert.match(hash,/conversation=generated/);
- assert.equal(readEvidenceRoute('#/ask?evidence=context%3A'+id),null);
- assert.equal(readEvidenceRoute('#/ask?evidence=context%3Acontext%3Acapture%3A'+id),null);
- assert.equal(contextReaderReference(reference),'capture:'+id);
- for(const value of ['capture:'+id,'context:memory:'+id,'context:'+id,'context:context:capture:'+id])assert.equal(contextReaderReference(value),undefined);
 });

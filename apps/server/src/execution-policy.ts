@@ -12,14 +12,15 @@ export const EXECUTION_POLICIES=Object.freeze({
  // and processing-configuration budgets. It is not a workflow lifetime: large
  // multi-item work belongs in checkpointed orchestration, and known complexity
  // can override this budget at the actual operation boundary.
- deterministic:policy(3600000,3),
- // Initial execution plus two automatic retries of eligible failures. Unknown
- // read calls additionally require exact physical cleanup; effects reconcile.
+ deterministic:policy(3600000,1),
+ // Initial execution plus two retries for typed, safely replayable failures.
+ // Capacity waits do not count, and an ambiguous issued call still needs its
+ // domain's unknown-outcome guard before another physical request is permitted.
  localProcessing:policy(3600000,3),
  modelCall:policy(3600000,3),
- // Acquisition uses the same finite failed-execution count.
+ // Recording acquisition uses the same finite failed-execution count.
  // Network request deadlines remain local to the relevant transport operation.
  networkAcquisition:policy(3600000,3),
  // Configuration/bookkeeping needs diagnosis after a real failure, not replay.
- control:policy(3600000,3),
+ control:policy(3600000,1),
 });

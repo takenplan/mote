@@ -9,7 +9,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import type {QueryInput} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {sha256} from '../src/store.js';
 import {materialId} from '../src/materials.js';

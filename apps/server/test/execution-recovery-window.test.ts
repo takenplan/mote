@@ -6,7 +6,7 @@ test('provider recovery window persists across retry/restart and does not consum
  t.after(async()=>{await engine.close();store.close();rmSync(dir,{recursive:true,force:true});});
  const id=engine.enqueue('fixture:one','fixture',{});await engine.drain([id]);assert.equal(engine.get(id)!.state,'waiting');now+=2000;await engine.drain([id]);assert.equal(calls,2);assert.equal(store.db.prepare('SELECT recovery_deadline deadline FROM execution_steps WHERE id=?').get(id)!.deadline,15000);
  await engine.close();now=15001;engine=new ExecutionEngine(store,()=>now);engine.register(handler);await engine.drain([id]);assert.equal(engine.get(id)!.error,'recovery_window_exhausted');assert.equal(calls,2);
- engine.retry(id);await engine.drain([id]);assert.equal(calls,2,'internal replay cannot renew an expired owner recovery window');assert.equal(engine.get(id)!.error,'recovery_window_exhausted');
+ engine.retry(id,false);await engine.drain([id]);assert.equal(calls,2);assert.equal(engine.get(id)!.error,'recovery_window_exhausted');assert.equal(store.db.prepare('SELECT recovery_deadline deadline FROM execution_steps WHERE id=?').get(id)!.deadline,15000);
  engine.retry(id,true);await engine.drain([id]);assert.equal(calls,3);assert.equal(engine.get(id)!.state,'waiting');
 });
 test('a real failure Retry-After beyond an explicit recovery budget stops without resending',async t=>{

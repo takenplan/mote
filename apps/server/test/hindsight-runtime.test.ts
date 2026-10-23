@@ -76,8 +76,8 @@ test('queued native inference rechecks revoked evidence authority before reachin
  let release!:()=>void,queued!:()=>void,revoked=false,upstreamCalls=0;
  const waiting=new Promise<void>(resolve=>queued=resolve),admitted=new Promise<void>(resolve=>release=resolve);
  const upstream=createServer((_req,res)=>{upstreamCalls++;res.end('{}');});await new Promise<void>(resolve=>upstream.listen(0,'127.0.0.1',resolve));
- const relay=new HindsightModelRelay({...profile,baseUrl:`http://127.0.0.1:${(upstream.address() as {port:number}).port}/v1`},{runModel:async task=>{queued();await admitted;return task();},assertModelAuthority:()=>{if(revoked)throw Error('Generated evidence authorization revoked');}});
- try{const endpoint=await relay.start(),pending=fetch(endpoint.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+endpoint.token,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'Generated evidence'}]})});await waiting;revoked=true;release();assert.equal((await pending).status,502);assert.equal(upstreamCalls,0);}finally{release();await relay.close();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+ const events:string[]=[];const relay=new HindsightModelRelay({...profile,baseUrl:`http://127.0.0.1:${(upstream.address() as {port:number}).port}/v1`},{onRequestStarted:()=>events.push('started'),onRequestFinished:()=>events.push('finished'),runModel:async task=>{queued();await admitted;return task();},assertModelAuthority:()=>{if(revoked)throw Error('Generated evidence authorization revoked');}});
+ try{const endpoint=await relay.start(),pending=fetch(endpoint.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+endpoint.token,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'Generated evidence'}]})});await waiting;revoked=true;release();assert.equal((await pending).status,502);assert.equal(upstreamCalls,0);assert.deepEqual(events,[]);}finally{release();await relay.close();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
 test('host model admission remains occupied until the complete inference body arrives',async()=>{
@@ -86,4 +86,33 @@ test('host model admission remains occupied until the complete inference body ar
  const upstream=createServer(async(req,res)=>{for await(const _ of req){}res.writeHead(200,{'Content-Type':'application/json'});res.flushHeaders();headers();await bodyReady;res.end(JSON.stringify({choices:[{message:{role:'assistant',content:'Generated response'}}]}));});await new Promise<void>(resolve=>upstream.listen(0,'127.0.0.1',resolve));
  const relay=new HindsightModelRelay({...profile,baseUrl:`http://127.0.0.1:${(upstream.address() as {port:number}).port}/v1`},{runModel:async task=>{slotActive=true;try{return await task();}finally{slotActive=false;}}});
  try{const endpoint=await relay.start(),pending=fetch(endpoint.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+endpoint.token,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'Generated evidence'}]})});await headersSent;await new Promise(resolve=>setImmediate(resolve));assert.equal(slotActive,true);finish();assert.equal((await pending).status,200);assert.equal(slotActive,false);}finally{finish();await relay.close();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('relay queued cancellation releases frozen snapshots without charging and leaves its sibling independent',async()=>{
+ let release!:()=>void,accepted!:()=>void,settled!:()=>void,abortObserved!:()=>void,upstreamCalls=0,currentOperation='first';
+ const cancelled=new Promise<void>(resolve=>abortObserved=resolve),gate=new Promise<void>(resolve=>release=resolve),done=new Promise<void>(resolve=>settled=resolve),snapshots=new Map<string,string>(),events:{type:string;id:string;operation?:string;status?:string}[]=[];
+ const upstream=createServer(async(req,res)=>{for await(const _ of req){}upstreamCalls++;res.end(JSON.stringify({choices:[{message:{role:'assistant',content:'Generated independent result'}}],usage:{prompt_tokens:2,completion_tokens:3,total_tokens:5}}));});await new Promise<void>(resolve=>upstream.listen(0,'127.0.0.1',resolve));
+ const relay=new HindsightModelRelay({...profile,baseUrl:`http://127.0.0.1:${(upstream.address() as {port:number}).port}/v1`},{
+  onRequestAccepted:r=>{snapshots.set(r.requestId,currentOperation);events.push({type:'accepted',id:r.requestId});accepted();},
+  assertModelAuthority:r=>{assert.ok(snapshots.has(r.requestId));},runModel:async(task,signal)=>{signal?.addEventListener('abort',abortObserved,{once:true});try{await gate;return await task();}finally{signal?.removeEventListener('abort',abortObserved);}},
+  onRequestStarted:r=>events.push({type:'started',id:r.requestId,operation:snapshots.get(r.requestId)}),
+  onRequestFinished:r=>events.push({type:'finished',id:r.requestId,status:r.status}),
+  onRequestSettled:r=>{snapshots.delete(r.requestId);events.push({type:'settled',id:r.requestId});if(events.filter(e=>e.type==='settled').length===2)settled();},
+ });
+ try{
+  const endpoint=await relay.start(),controller=new AbortController();
+  const send=(signal?:AbortSignal)=>fetch(endpoint.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+endpoint.token,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'Generated queue fixture'}]}),signal});
+  const firstAccepted=new Promise<void>(resolve=>accepted=resolve),first=send(controller.signal).catch(()=>null);await firstAccepted;
+  currentOperation='second';const secondAccepted=new Promise<void>(resolve=>accepted=resolve),second=send();await secondAccepted;currentOperation='later-operation';
+  assert.equal(snapshots.size,2);assert.equal(events.filter(e=>e.type==='started').length,0);assert.equal(upstreamCalls,0);
+  controller.abort();await first;await cancelled;release();assert.equal((await second).status,200);await done;
+  assert.equal(upstreamCalls,1);assert.deepEqual(events.filter(e=>e.type==='started').map(e=>e.operation),['second']);assert.deepEqual(events.filter(e=>e.type==='finished').map(e=>e.status),['completed']);assert.equal(snapshots.size,0);
+ }finally{release();await relay.close();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+for(const failure of ['authority','started','usage'] as const)test(`relay ${failure} callback failure releases its captured operation`,async()=>{
+ let issued=0,started=0,finished=0,released!:()=>void;const snapshots=new Set<string>(),done=new Promise<void>(resolve=>released=resolve);
+ const upstream=createServer(async(req,res)=>{for await(const _ of req){}issued++;res.end(JSON.stringify({choices:[{message:{role:'assistant',content:'Generated response'}}],usage:{prompt_tokens:2,completion_tokens:3,total_tokens:5}}));});await new Promise<void>(resolve=>upstream.listen(0,'127.0.0.1',resolve));
+ const relay=new HindsightModelRelay({...profile,baseUrl:`http://127.0.0.1:${(upstream.address() as {port:number}).port}/v1`},{onRequestAccepted:r=>snapshots.add(r.requestId),assertModelAuthority:r=>{assert.ok(snapshots.has(r.requestId));if(failure==='authority')throw Error('Generated authority failure');},onRequestStarted:()=>{started++;if(failure==='started')throw Error('Generated started failure');},onUsage:()=>{if(failure==='usage')throw Error('Generated usage failure');},onRequestFinished:r=>{finished++;assert.equal(r.status,'failed');},onRequestSettled:r=>{snapshots.delete(r.requestId);released();}});
+ try{const endpoint=await relay.start(),response=await fetch(endpoint.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+endpoint.token,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'Generated callback fixture'}]})});assert.equal(response.status,502);await done;assert.equal(snapshots.size,0);assert.equal(started,failure==='authority'?0:1);assert.equal(finished,started);assert.equal(issued,failure==='usage'?1:0);}finally{await relay.close();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });

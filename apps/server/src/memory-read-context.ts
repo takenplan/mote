@@ -1,6 +1,6 @@
 import type {AgentAnswer} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
-import {MemoryOutputValidationError} from './memory-errors.js';
+import {MemoryOutputValidationError} from './memory.js';
 import {hasMemoryImageProof,memoryImageReadReceipts} from './memory-image-proof.js';
 
 export type MemoryReadRange={id:string;offset:number;length:number};

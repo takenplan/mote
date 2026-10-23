@@ -67,4 +67,41 @@ class EventJournalTest {
         val sample = NumericSupport.sanitize(raw).getJSONObject(0)
         assertEquals(setOf("atMs", "batteryPct", "charging"), sample.keys().asSequence().toSet())
     }
+    @Test fun `safe failure metadata survives reopen but arbitrary names paths and forged fields do not`() {
+        val path = File(folder.root, "safe-events.json")
+        val source = "android-c919bc95-272d-4094-92a1-7f9c0ae944ca"
+        val failure = java.io.IOException("PRIVATE_TOKEN_AND_PATH")
+        val journal = EventJournal(path)
+        journal.record(EventStage.FILE_UPLOAD, EventJournal.failure(failure, EventStage.FILE_UPLOAD), errorName = EventJournal.errorName(failure), sourceId = source)
+        journal.record(EventStage.SOURCE, EventCode.OTHER, errorName = "PRIVATE_CLASS", sourceId = "PRIVATE_PATH")
+        val rows = EventJournal(path).read()
+        assertEquals("IOException", rows.getJSONObject(0).getString("errorName"))
+        assertEquals("network", rows.getJSONObject(0).getString("code"))
+        assertEquals(source, rows.getJSONObject(0).getString("sourceId"))
+        assertFalse(rows.getJSONObject(1).has("errorName")); assertFalse(rows.getJSONObject(1).has("sourceId"))
+        assertFalse(path.readText().contains("PRIVATE"))
+        val permissions = java.nio.file.Files.getPosixFilePermissions(path.toPath())
+        assertEquals(setOf(java.nio.file.attribute.PosixFilePermission.OWNER_READ, java.nio.file.attribute.PosixFilePermission.OWNER_WRITE), permissions)
+        rows.getJSONObject(0).put("errorName", "PRIVATE_NAME").put("sourceId", "PRIVATE_FILENAME")
+        path.writeText(rows.toString())
+        assertFalse(journal.read().toString().contains("PRIVATE"))
+    }
+    @Test fun `runtime failure log retains operational level and bounded private rotation without arbitrary detail`() {
+        val path = File(folder.root, "safe-runtime.log")
+        val log = RuntimeLog(path, 2, detailed = false)
+        log.event(EventStage.SOURCE, EventCode.STARTED, errorName = "Error")
+        assertFalse(path.exists())
+        repeat(20) { index ->
+            log.event(EventStage.UPLOAD, EventCode.NETWORK, elapsedMs = index.toLong(), errorName = EventJournal.errorName(java.io.IOException("PRIVATE_BODY")), sourceId = "PRIVATE_FILENAME")
+        }
+        assertEquals(7, folder.root.listFiles()!!.count { it.name.startsWith("safe-runtime.log") })
+        val raw = log.exportRange(0, System.currentTimeMillis() + 1).getString("text")
+        assertEquals(14, raw.lines().size)
+        assertTrue(raw.contains("errorName=IOException")); assertFalse(raw.contains("PRIVATE")); assertFalse(raw.contains("STARTED"))
+        for (file in folder.root.listFiles()!!.filter { it.name.startsWith("safe-runtime.log") }) {
+            assertEquals(2, file.readLines().size)
+            assertEquals(setOf(java.nio.file.attribute.PosixFilePermission.OWNER_READ, java.nio.file.attribute.PosixFilePermission.OWNER_WRITE), java.nio.file.Files.getPosixFilePermissions(file.toPath()))
+        }
+    }
+
 }

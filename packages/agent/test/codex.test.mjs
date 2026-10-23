@@ -30,10 +30,15 @@ import readline from 'node:readline';
 import {writeFileSync,appendFileSync,readFileSync} from 'node:fs';
 writeFileSync(${JSON.stringify(join(root,'runtime-home'))},process.env.CODEX_HOME);
 writeFileSync(${JSON.stringify(join(root,'runtime-config'))},readFileSync(process.env.CODEX_HOME+'/config.toml'));
-const send=value=>process.stdout.write(JSON.stringify(value)+'\\n');
+const send=(value,callback)=>process.stdout.write(JSON.stringify(value)+'\\n',callback);
 const mode=${JSON.stringify(mode)};let turns=0;
-const usage=sample=>send({method:'thread/tokenUsage/updated',params:{threadId:'thread-fixture',turnId:'turn-fixture',tokenUsage:{total:{inputTokens:sample,outputTokens:sample/2,totalTokens:sample*1.5,cachedInputTokens:sample/5,cacheWriteInputTokens:0,reasoningOutputTokens:sample/10}}}});
-if(mode==='usage-late-exit')process.on('SIGTERM',()=>{usage(200);setTimeout(()=>process.exit(0),20);});
+const usage=(sample,callback)=>send({method:'thread/tokenUsage/updated',params:{threadId:'thread-fixture',turnId:'turn-fixture',tokenUsage:{total:{inputTokens:sample,outputTokens:sample/2,totalTokens:sample*1.5,cachedInputTokens:sample/5,cacheWriteInputTokens:0,reasoningOutputTokens:sample/10}}}},callback);
+// stdin EOF may arrive before SIGTERM; hold the generated provider until its
+// late sample has actually flushed rather than racing natural exit or a timer.
+if(mode==='usage-late-exit'){
+ const waiting=setInterval(()=>{},1000);let sent=false;
+ process.on('SIGTERM',()=>{if(sent)return;sent=true;usage(200,()=>{clearInterval(waiting);process.exit(0);});});
+}
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);appendFileSync(${JSON.stringify(join(root,'rpc.ndjson'))},JSON.stringify(m)+'\\n');
  if(m.method==='initialize')send({id:m.id,result:{}});
@@ -331,22 +336,34 @@ test('host output validation repairs within the same Codex thread and remains bo
 });
 
 test('Codex host cancellation removes a waiting model admission before a turn starts',async t=>{
- const root=await fake(t);let enter,aborted=false,authorizations=0;const entered=new Promise(resolve=>enter=resolve);
- const session=new CodexSession({model:'fixture',agentTimeoutMs:2000,authorizeModelRequest:()=>{authorizations++;},runModel:(_task,signal)=>new Promise((_resolve,reject)=>{enter();const stop=()=>{aborted=true;reject(signal.reason);};if(signal.aborted)stop();else signal.addEventListener('abort',stop,{once:true});})},async()=>({}));
+ const root=await fake(t);let enter,aborted=false;const entered=new Promise(resolve=>enter=resolve);
+ const session=new CodexSession({model:'fixture',agentTimeoutMs:2000,runModel:(_task,signal)=>new Promise((_resolve,reject)=>{enter();const stop=()=>{aborted=true;reject(signal.reason);};if(signal.aborted)stop();else signal.addEventListener('abort',stop,{once:true});})},async()=>({}));
  try{
   await session.start('Generated queue fixture',[]);const pending=session.run('Generated');await entered;
-  session.cancel(new DOMException('Generated host cancellation','TimeoutError'));await assert.rejects(pending,AgentTimeoutError);assert.equal(aborted,true);assert.equal(authorizations,0,'queue cancellation never reaches model issuance');
+  session.cancel(new DOMException('Generated host cancellation','TimeoutError'));await assert.rejects(pending,AgentTimeoutError);assert.equal(aborted,true);
   const rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(rpc.filter(message=>message.method==='turn/start').length,0);
  }finally{await session.close();}
 });
 
+test('Codex rechecks authority after queueing and before each repair turn',async t=>{
+ const root=await fake(t);let revoked=false,release,entered;const waiting=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+ const session=new CodexSession({model:'fixture',agentTimeoutMs:2000,authorizeModelRequest:()=>{if(revoked)throw Error('Generated authority revoked');},runModel:async task=>{entered();await gate;return task();}},async()=>({}));
+ try{await session.start('Generated queued authority fixture',[]);const pending=session.run('Generated');await waiting;revoked=true;release();await assert.rejects(pending,/Generated authority revoked/);}finally{await session.close();}
+ let rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(rpc.filter(m=>m.method==='turn/start').length,0);
+ let authorizations=0,validated=0;
+ const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:5000,authorizeModelRequest:()=>{authorizations++;if(authorizations>1)throw Error('Generated repair authority revoked');}});t.after(()=>agent.close());
+ await assert.rejects(agent.query({question:'Generated repair authority fixture',validateOutput:()=>{validated++;return {code:'quote_not_found',feedback:'Use exact supplied evidence.'};}}));
+ assert.equal(authorizations,2);assert.equal(validated,1);
+ rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(rpc.filter(m=>m.method==='turn/start').length,1);
+});
+
 test('Codex host admission wait can exceed the explicit active execution budget and still complete one generated query',async t=>{
- const root=await fake(t);let enter,release;const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve);let admissions=0,authorizations=0;
- const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:1000,authorizeModelRequest:()=>{authorizations++;},runModel:async(task,signal)=>{admissions++;enter();await gate;signal.throwIfAborted();return task();}});t.after(()=>agent.close());
+ const root=await fake(t);let enter,release;const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve);let admissions=0;
+ const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:1000,runModel:async(task,signal)=>{admissions++;enter();await gate;signal.throwIfAborted();return task();}});t.after(()=>agent.close());
  const pending=agent.query({question:'Read generated evidence after a capacity wait'});await entered;
  await new Promise(resolve=>setTimeout(resolve,1200));
- const queued=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(queued.filter(message=>message.method==='turn/start').length,0,'queued work has not started a billed/model turn');assert.equal(authorizations,0);
- release();const answer=await pending;assert.equal(answer.citations[0].id,record.id);assert.equal(admissions,1);assert.equal(authorizations,1);
+ const queued=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(queued.filter(message=>message.method==='turn/start').length,0,'queued work has not started a billed/model turn');
+ release();const answer=await pending;assert.equal(answer.citations[0].id,record.id);assert.equal(admissions,1);
  const completed=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(completed.filter(message=>message.method==='turn/start').length,1);
 });
 

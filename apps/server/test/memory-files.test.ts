@@ -12,7 +12,7 @@ import {FileStore} from '../src/files.js';
 import {MemoryStore,memoryEvidenceFingerprint} from '../src/memory.js';
 import {memorySchema} from '../src/memory-schema.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import type {ContextReader} from '@mote/agent';
 import {EvidenceReader} from '../src/evidence-reader.js';

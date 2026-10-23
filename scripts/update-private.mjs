@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { compose, dockerContainer, execute } from './profile-lib.mjs';
+import { compose, dockerContainer, dockerConfigurationUser, execute } from './profile-lib.mjs';
 
 async function privateCopy(source, destination, budget = { entries: 0, files: 0, bytes: 0 }) {
   if (++budget.entries > 1000) throw Error('Connector state entry count exceeds the rollback limit');
@@ -87,14 +87,14 @@ export async function preserveConnectorState(p) {
 export async function restoreConnectorState(p, directory) {
   const source = join(directory, 'connectors');
   if (p.meta.runtime === 'docker') {
-    const container = await dockerContainer(p);
+    const owner = await dockerConfigurationUser(p), container = await dockerContainer(p);
     const key = join(directory, 'content-key'), checkedKey = join(directory, 'restored-content-key');
     if (await privateKeyCopy(key, checkedKey)) {
       await execute('docker', ['cp', checkedKey, `${container}:/data/content-key`], { capture: true });
-      await compose(p, ['run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', 'node:node', '/data/content-key'], { capture: true });
+      await compose(p, ['run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', owner, '/data/content-key'], { capture: true });
     }
     await execute('docker', ['cp', source, `${container}:/data/connectors`], { capture: true });
-    await compose(p, ['run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', '-R', 'node:node', '/data/connectors'], { capture: true });
+    await compose(p, ['run', '--rm', '--no-deps', '--user', '0:0', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', 'mote', 'chown', '-R', owner, '/data/connectors'], { capture: true });
     await compose(p, ['run', '--rm', '--no-deps', 'mote', 'node', '-e', applyConnections], { capture: true });
   } else {
     await privateKeyCopy(join(directory, 'content-key'), join(p.dataDir, 'content-key'));

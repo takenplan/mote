@@ -10,7 +10,7 @@ Mote 保留 npm Monorepo，按独立安装/部署单元发布。根 `package.jso
 | `prod` | Beta 内测与正式使用 | 常规诊断，关闭开发入口和额外采样；客户端保留系统密钥存储 |
 | `test` | 自动化 fixture | 独立身份、生成素材；不作为分发 Profile |
 
-Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配置。Mac / Android 的构建 Profile 用于选择安装身份和默认能力；Mac 正式构建显式选择 `--profile=dev` 时同样使用 Dev 文件凭据。第三方 Lark / DingTalk CLI 等组件继续管理自己的密钥。Central 现有私有 YAML、SQLite 和 secret 文件保持归属，不重写为另一份 JSON。多用户个人正文 trace 仍由本人显式开启，Dev 的结构化 debug 不扩大任何资料授权。
+Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配置。Mac / Android 的构建 Profile 用于选择安装身份和默认能力；Mac 正式构建显式选择 `--profile=dev` 时同样使用 Dev 文件凭据。第三方 Lark / DingTalk CLI 等组件继续管理自己的密钥。Central 现有私有 YAML、SQLite 和 secret 文件保持归属，不重写为另一份 JSON。单所有者 Central 的 Dev trace 沿用默认开启；可在私有 YAML 显式关闭。结构化 debug 与 trace 是独立开关，显式 false / silent 会保留。
 
 | 场景 | 标识 | 产物位置 |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配�
 
 ## MVP 阶段的 GitHub 检查开关
 
-2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Dev 构建跳过可选测试。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。此 PR 不修改线上工作流启停状态或仓库权限。
+2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Dev 构建跳过可选测试。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。单用户回归恢复 Component checks 的受影响 PR 检查；完整 Checks 保留手动用途。2026-10-23 已通过 GitHub API 确认 Component checks 为 active；完整 Checks 暂未启用。
 
 需要恢复时运行：
 
@@ -62,7 +62,7 @@ gh variable set MOTE_PRE_RELEASE_CHECKS --repo utopiafar/mote --body true
 | `SHA256SUMS` | 供人工核对下载；自动更新仍须验证签名清单 |
 | `ghcr.io/utopiafar/mote:X.Y.Z` | Linux amd64/arm64 中央镜像；更新实际按签名中的不可变 digest 拉取 |
 
-模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包从已提交快照归档；Prod 对应精确 Tag，Dev 对应提交。忽略目录、个人配置和签名材料不在其中。
+模型权重由模型管理器另行下载或离线导入；更新安装包不会重复分发或清理已下载模型。源码包仅从 Git 标签归档，忽略目录、个人配置和签名材料不在其中。
 
 ## 签名配置与历史清单密钥
 
@@ -107,36 +107,11 @@ MOTE_BUILD_PROFILE=prod node scripts/release/mac-package.mjs
 
 签名 Secret 仍从 `release` Environment 读取。该 Environment 目前仅允许组件 Tag；Mac / Android 首次从分支构建 Dev 签名包前，维护者须在 Deployment branches and tags 中额外允许受信任的开发分支（通常 `main`），或采用单独受控环境并相应配置 workflow。不要开放不受信任分支。此设置不在 Git 中，本 PR 不自动扩大线上 Secret 的访问范围；未配置前 Mac / Android 的分支 Dev 签名打包会被 GitHub 拒绝；Central 的 Dev 源码打包不使用该 Environment，可直接运行。
 
-<a id="release-preflight"></a>
-
-## 发布前预检
-
-发布负责人在稳定候选上验证目标组件的实际 Profile/variant，再创建发布 Tag。日常 `debug` 测试、模块定向测试和发布配置各自记录；发布配置中的确定性错误应在推送 Tag 前暴露。
-
-先把版本、lockfile 和发布说明提交到发布候选，再验证打包。Central 源码包从 `HEAD` 归档，工作树中的未提交修改不会进入产物；记录打包所用提交，后续合并带来输入变化时重新核对受影响检查与产物。
-
-| 发布组件 | 当前发布配置验证 | 与日常检查的区别 |
-| --- | --- | --- |
-| Central | `npm run check:central`，源码打包、版本与附件结构验证 | 对照 [Central workflow](../.github/workflows/release-central.yml)；复用候选检查中符合条件的任务证据 |
-| macOS | macOS 上的 `npm run check:desktop`，目标 Profile 的原生构建、打包和打包后 smoke | 对照 [Desktop workflow](../.github/workflows/release-desktop.yml)；匹配架构与签名配置 |
-| Android Beta/正式 | `apps/android/gradlew -p apps/android --no-daemon testReleaseUnitTest`，随后构建及签名产物校验 | PR 的 `testDebugUnitTest` 与发布使用不同 variant；release 单测可先于签名打包执行 |
-| Android Dev 包 | `apps/android/gradlew -p apps/android --no-daemon testDevelopmentUnitTest` | 按 [Android workflow](../.github/workflows/release-android.yml)选择 development variant |
-
-这张表是发布候选的范围，不是每次提交的检查清单。先查看已有候选证据，再补发布配置和产物检查。固定组件检查也使用同一驱动，可显式追加 `-- --reuse /absolute/path/to/original-receipt.json`；输入匹配与每轮实际执行任务遵循[回执规则](development.md#pr-check-scope)，本地回执不转作 GitHub Runner 的执行记录。
-
-Mac 在具备原生依赖与所选签名环境时，本地执行目标 Prod 构建及 smoke：
-
-```sh
-MOTE_BUILD_PROFILE=prod MOTE_PRE_RELEASE_CHECKS=true node scripts/release/mac-package.mjs
-```
-
-真实签名、安装身份、架构和附件完整性仍在发布流程验收；缺少本地平台或签名环境时，记录待验证项与执行环境，由发布负责人完成对应检查。预检不上传 Release，也不创建 Tag；发布权限与现有 Environment 规则按原流程执行。
-
 ## Beta / 正式发布
 
 1. 选择组件。运行 `npm run release:version -- desktop 0.1.0-beta.1`；正式发布使用 `npm run release:version -- desktop 0.1.0`。替换组件名即可发布 Central / Android；版本必须高于该组件当前版本。
 2. 编写脚本输出的 `release/notes/<组件>/<版本>.md`，说明用户变化、安装/升级步骤和实际验证范围。
-3. 由集成/发布负责人完成稳定候选的 `npm run check:affected`、受影响用户流程及上面的[发布配置预检](#release-preflight)，再运行 `npm run release:verify -- desktop`（替换为实际组件）。符合条件的任务证据显式复用，后续变更重跑失效范围。普通文档 PR 只检查文档；发布候选仍需验证发布配置与真实产物。
+3. 运行 `npm run check:affected` 及受影响用户流程验证，再运行 `npm run release:verify -- desktop`。只改文档时检查格式、语法、链接和渲染，无需应用构建。
 4. 合并后，在已验证提交创建并推送脚本输出的不可变 Tag，例如 `desktop-v0.1.0-beta.1`。普通分支不能发布 Prod；手动重跑也必须选准确组件 Tag。Tag 构建固定采用 Prod，与 dispatch 默认选项无关。
 5. 工作流执行组件测试、构建、版本与真实产物身份校验，再上传唯一组件附件。Beta 自动标记 Pre-release；正式 Tag 自动清除此标记。已发布版本拒绝覆盖；失败草稿可以重试。
 

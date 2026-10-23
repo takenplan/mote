@@ -17,7 +17,7 @@ import {ExecutionEngine} from '../apps/server/src/execution-engine.js';
 import {DelegationRuntime} from '../apps/server/src/delegation-runtime.js';
 import {SourcePipelineRuntime} from '../apps/server/src/source-pipelines.js';
 import {registerMemoryDelegation} from '../apps/server/src/memory-delegation.js';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 
 assert.equal(process.env.MOTE_PLANNING_CODEX_LIVE,'1','Opt in with MOTE_PLANNING_CODEX_LIVE=1');

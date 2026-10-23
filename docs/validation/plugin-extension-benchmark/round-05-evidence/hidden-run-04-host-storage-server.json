@@ -1,9 +1,0 @@
-[
-  {
-    "pid": 28271,
-    "stdout": "{\"event\":\"server.listening\",\"port\":36949,\"mode\":\"multiuser-auth\"}\n",
-    "stderr": "/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:231\n  for(const row of db.prepare(\"SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?\").all(now) as Row[]){\n                                                                                                        ^\n\nError: database disk image is malformed\n    at ExecutionEngine.recover (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:231:105)\n    at ExecutionEngine.tick (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:243:9)\n    at <anonymous> (/workspace/scratch/8d97506698dc/mote-round5/apps/server/src/execution-engine.ts:214:74)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:502:9) {\n  code: 'ERR_SQLITE_ERROR',\n  errcode: 11,\n  errstr: 'database disk image is malformed'\n}\n\nNode.js v24.19.0\n",
-    "code": 1,
-    "signal": null
-  }
-]

@@ -7,8 +7,8 @@ data class ProtocolRange(val min: Int, val max: Int)
 /** Product version names do not determine wire compatibility or authorization. */
 object ProtocolCompatibility {
     const val HEADER = "X-Mote-Protocol-Version"
-    const val MIN = 2
-    const val MAX = 2
+    const val MIN = 1
+    const val MAX = 1
     val headers = mapOf(HEADER to MAX.toString())
 
     fun requireCompatible(value: Any?): ProtocolRange {

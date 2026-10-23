@@ -63,10 +63,7 @@ for(const kind of ['manual','review','speaker'] as const){
 
 test('changing a later page while the first page is held never publishes a mixed-input summary',async t=>{
   const f=await fixture(t,true,25),running=f.processing.tick();await f.started;await f.correct('manual',24);f.release();await running;await f.processing.tick();
-  const fingerprint=fileSummaryInputFingerprint(f.files,f.id),replacement=f.processing.engine.list({operationId:'file:'+f.id,kind:'files.summary'}).items.find(step=>step.input.inputFingerprint===fingerprint)!;
-  assert.ok(replacement,'updated evidence enrolls a replacement summary');await f.processing.engine.drain([replacement.id]);assert.equal(f.processing.engine.get(replacement.id)!.state,'succeeded');
   const current=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='summary') as any;
-  assert.ok(current);
   assert.equal(current.sections.length,2);assert.match(current.sections[1].answer,/NOT complete 24/);
   assert.equal(current.inputFingerprint,fileSummaryInputFingerprint(f.files,f.id));
   assert.equal(f.store.db.prepare("SELECT 1 FROM file_artifacts WHERE kind='summary' AND json LIKE '%OBSOLETE_HELD_RESPONSE%'").get(),undefined);

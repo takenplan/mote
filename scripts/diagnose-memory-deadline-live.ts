@@ -7,7 +7,7 @@ import {z} from 'zod';
 import type {QueryInput} from '@mote/agent';
 import type {CaptureRecord} from '@mote/shared';
 import {startBridge} from '../packages/agent/src/bridge.js';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {memoryEvidenceFingerprint,MemoryOutputValidationError} from '../apps/server/src/memory.js';

@@ -11,21 +11,13 @@ Direct file/image processors cancel error bodies before parsing and pass this st
 
 Query and import Harness sessions report only status and Retry-After over a private loopback channel to the host. The channel is authenticated, bounded and not registered as a model tool; it accepts no endpoint, body or credential fields. The runtime cancels the provider error body and returns a fixed non-retryable SDK response after reporting it, so the host decides subsequent retry. Explicitly aborted requests retain the existing cancellation/deadline path. Codex App Server v2 errors use only `codexErrorInfo` discriminants and their structured HTTP status. Quota exhaustion waits for account repair; rate limiting and network/server failures receive bounded recovery; authentication is actionable. Unknown variants remain generic failures; free-form SDK messages are not inspected. The installed CLI schema is generated with `codex app-server generate-ts`; the official protocol reference is https://learn.chatgpt.com/docs/app-server.
 
-Current M05 tasks default to two eligible automatic retries after the initial
-execution, with resource waiting separate from the count. Issued read-query
-unknowns can replay only after exact full local cleanup, under current authority
-and the same finite budget. Policy permission never settles the old result or
-fees, nor fabricates owner consent. Unsupported effects keep their original
-reconciliation contract.
-
 Memory preserves the provider failure through its extraction/review boundary. Authentication waits finish the caller's observation cleanly and can resume after configuration repair. Failed Memory batches retain a provider retry deadline; a premature manual retry cannot bypass it. Scheduled extraction propagates that deadline to lifecycle backoff, including after restart. Actual usage and cost are recorded in the usage ledger; there is no shared token or money reservation service.
 
 Owner API responses use fixed localized explanations and recovery metadata. Provider authentication failures return 502 rather than invalidating the owner's Mote login; explicit retry delays also appear in Retry-After. Diagnostic exports never include provider response text.
 
 Feedback planning retries only typed transient rate-limit, network, unavailable
-or timeout failures within the current three-attempt default. Unclassified
-provider or program exceptions stop immediately; classified issued-read unknowns
-use the exact-cleanup policy above. Its terminal failure is preserved
+or timeout failures, within its existing four-attempt bound. An unknown provider
+or program exception stops after one attempt. Its terminal failure is preserved
 through the coordinator, batch and Activity views; it does not become a request
 for owner context. Recovery corrects the exact historical failed/no-unit/no-real-
 question wait without issuing another model call. True context stops, owner

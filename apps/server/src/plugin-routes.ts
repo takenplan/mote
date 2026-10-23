@@ -8,6 +8,7 @@ import type {MemoryAutomation} from './memory-automation.js';
 export function registerPluginRoutes(app:FastifyInstance,{plugins,bindings,automation,owner}:{plugins:PluginCenter;bindings:MemoryBindings;automation:MemoryAutomation;owner:(request:FastifyRequest)=>void}){
   const id=(request:FastifyRequest)=>z.object({id:z.string().min(1)}).parse(request.params).id;
   app.get('/api/plugins',async request=>{owner(request);return plugins.view();});
+  app.get('/api/plugins/host-capabilities',async request=>{owner(request);return plugins.hostCapabilities();});
   app.post('/api/plugins/resolve',async request=>{owner(request);return plugins.resolve(request.body);});
   app.post('/api/plugins/install',async request=>{owner(request);return plugins.install(request.body);});
   app.post('/api/plugins/:id/uninstall',async request=>{owner(request);return plugins.uninstall(id(request),request.body);});

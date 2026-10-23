@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serializeConfigDocument } from '@mote/shared/config-file';
-import { buildApp } from './fixtures/legacy-app.js';
+import { buildApp } from '../src/app.js';
 import { ConfigService } from '../src/config-service.js';
 import { configFromFile, configFromDocument, readConfigDocument, registerBuiltinDomains } from '../src/config.js';
 

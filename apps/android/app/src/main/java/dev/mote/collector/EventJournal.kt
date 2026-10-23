@@ -12,20 +12,20 @@ import javax.net.ssl.SSLException
 enum class EventStage { APP, CONFIG, CAPTURE, MODEL, MODEL_DOWNLOAD, OCR, PRIVACY, QUEUE, UPLOAD, HEARTBEAT, NOTE, SOURCE, SUPPORT, UPDATE, UI, FILE_SCAN, FILE_PREPARE, FILE_UPLOAD, FILE_PART, FILE_COMMIT, DEDUPE }
 enum class EventCode { STARTED, STOPPED, OK, FILTERED, WAIT_NETWORK, PERMISSION, CONFIG_INVALID, NETWORK, TIMEOUT, TLS, AUTH, CONFLICT, SERVER, RESPONSE, STORAGE, MODEL_UNAVAILABLE, SCHEDULER, CANCELLED, OTHER }
 
-/** Fixed schema only: no exception messages, endpoints, IDs, content or arbitrary string attributes. */
+/** Fixed schema only: safe class names and generated source IDs; never messages, paths or content. */
 class EventJournal(private val file: File, private val limit: Int = 500) {
     init { require(limit in 1..500) }
-    fun record(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, detail: String? = null, name: String? = null) = synchronized(lock) {
+    fun record(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, errorName: String? = null, sourceId: String? = null) = synchronized(lock) {
         val next = JSONArray(); val old = read()
         for (index in maxOf(0, old.length() - limit + 1) until old.length()) next.put(old.getJSONObject(index))
         val event = JSONObject().put("atMs", System.currentTimeMillis()).put("stage", stage.name.lowercase()).put("code", code.name.lowercase()).put("level", level(code))
         if (elapsedMs != null && elapsedMs >= 0) event.put("elapsedMs", elapsedMs)
         if (httpStatus != null && httpStatus in 100..599) event.put("httpStatus", httpStatus)
-        cleanText(detail, 400)?.let { event.put("detail", it) }
-        cleanText(name, 160)?.let { event.put("name", it) }
+        safeErrorName(errorName)?.let { event.put("errorName", it) }
+        safeSourceId(sourceId)?.let { event.put("sourceId", it) }
         next.put(event); file.parentFile!!.mkdirs()
         val temporary = File(file.parentFile, "${file.name}.tmp")
-        FileOutputStream(temporary).use { out -> out.write(("[" + (0 until next.length()).joinToString(",\n") { next.getJSONObject(it).toString() } + "]\n").toByteArray()); out.fd.sync() }
+        FileOutputStream(temporary).use { out -> privateDiagnosticFile(temporary); out.write(("[" + (0 until next.length()).joinToString(",\n") { next.getJSONObject(it).toString() } + "]\n").toByteArray()); out.fd.sync() }
         check(temporary.renameTo(file))
     }
     fun readRaw(): String = synchronized(lock) {
@@ -58,15 +58,18 @@ class EventJournal(private val file: File, private val limit: Int = 500) {
             (item.opt("elapsedMs") as? Number)?.takeIf { it.toDouble().isFinite() && it.toLong() >= 0 }?.let { event.put("elapsedMs", it.toLong()) }
             (item.opt("httpStatus") as? Number)?.takeIf { it.toInt() in 100..599 }?.let { event.put("httpStatus", it.toInt()) }
             item.optString("level").takeIf { it in listOf("debug", "info", "warn", "error") }?.let { event.put("level", it) }
-            cleanText(item.optString("detail", null), 400)?.let { event.put("detail", it) }
-            cleanText(item.optString("name", null), 160)?.let { event.put("name", it) }
+            safeErrorName(item.opt("errorName") as? String)?.let { event.put("errorName", it) }
+            safeSourceId(item.opt("sourceId") as? String)?.let { event.put("sourceId", it) }
             safe.put(event)
         }
         safe
     }
     companion object {
         private val lock = Any()
-        private fun cleanText(value: String?, max: Int) = value?.replace(Regex("[\\r\\n]+"), " ")?.trim()?.takeIf { it.isNotEmpty() }?.take(max)
+        private val errorNames = setOf("Error", "Exception", "RuntimeException", "IOException", "SocketTimeoutException", "TimeoutException", "SSLException", "SecurityException", "IllegalArgumentException", "IllegalStateException", "JSONException", "InterruptedException", "CancellationException", "QueueFull", "SettingsWriteFailure", "SettingsChangedFailure", "OtherError")
+        internal fun safeErrorName(value: String?) = value?.takeIf { it in errorNames }
+        internal fun errorName(error: Throwable) = safeErrorName(error.javaClass.simpleName) ?: "OtherError"
+        internal fun safeSourceId(value: String?) = value?.takeIf { it.matches(Regex("(?:android-|local-)?[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}")) }
         internal fun level(code: EventCode) = when (code) {
             EventCode.STARTED -> "debug"
             EventCode.STOPPED, EventCode.OK, EventCode.FILTERED, EventCode.CANCELLED -> "info"
@@ -95,4 +98,10 @@ class EventJournal(private val file: File, private val limit: Int = 500) {
         }
         fun httpFailure(status: Int) = when (status) { 401, 403 -> EventCode.AUTH; 409, 410 -> EventCode.CONFLICT; in 500..599 -> EventCode.SERVER; else -> EventCode.RESPONSE }
     }
+}
+
+/** Android's private directory is retained; make log files explicitly owner-readable/writable. */
+internal fun privateDiagnosticFile(file: File) {
+    check(file.setReadable(false, false) && file.setWritable(false, false) && file.setExecutable(false, false))
+    check(file.setReadable(true, true) && file.setWritable(true, true))
 }

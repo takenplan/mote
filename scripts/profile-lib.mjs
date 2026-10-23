@@ -9,8 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import {safePluginBackupPath} from './plugin-memory-backup.mjs';
-import {restoreHindsight,discardRestoredHindsight} from './hindsight-backup.mjs';
-import {verifiedScopedBackup,stageScopedRestore} from './scoped-backup.mjs';
+import {restoreHindsight} from './hindsight-backup.mjs';
 import { validateTunnel, tunnelTokenPath, dockerTunnelUser, removeTunnelSidecars, assertTunnelToken } from './tunnel-lib.mjs';
 import { logRetentionFromDocument, MiB } from '../apps/server/src/log-retention-config.mjs';
 
@@ -65,7 +64,7 @@ export async function initialize(paths, options = {}) {
       allowedOrigins: (paths.profile === 'test' ? ['http://localhost:5174', 'http://127.0.0.1:5174'] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
       tls: { enabled: false, domain: '', httpPort: 80, httpsPort: 443 } },
     storage: { dataDir: docker ? '/data' : options['data-dir'] ? dataDir : './data', kind: docker ? 'docker-volume' : 'local-directory', source: docker ? volume : dataDir, mount: docker ? '/data' : '' },
-    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', debug: paths.profile === 'dev', traceEnabled: false },
+    execution: {}, diagnostics: { directory: docker ? '/data/logs' : './logs', debug: paths.profile === 'dev', traceEnabled: paths.profile === 'dev' },
     models: { deployment: { provider: 'codex', protocol: 'codex-app-server', model: 'gpt-6.1-sol', reasoningEffort: 'high', serviceTier: 'fast' } },
     connectors: {}, plugins: {}, updates: {},
     media: { modelDirectory: docker ? '/models' : './models', python: docker ? '/opt/mote-media-venv/bin/python' : './media-venv/bin/python', asrPort, ocrPort,
@@ -95,7 +94,7 @@ function dockerModelDirectory(document) {
   const value = document.media?.modelDirectory || '/models';
   if (typeof value !== 'string' || !isAbsolute(value) || /[\r\n\0,:]/.test(value)) throw Error('Docker media.modelDirectory must be an absolute container path without comma or colon');
   const target = resolve(value);
-  if (target === '/' || ['/config', '/data', '/app', '/worker-facts'].some(path => target === path || target.startsWith(path + '/') || path.startsWith(target + '/'))) throw Error('Docker media.modelDirectory would hide the configuration, archive or application mount');
+  if (target === '/' || ['/config', '/data', '/app'].some(path => target === path || target.startsWith(path + '/') || path.startsWith(target + '/'))) throw Error('Docker media.modelDirectory would hide the configuration, archive or application mount');
   return target;
 }
 export async function loadProfile(paths) {
@@ -119,9 +118,6 @@ export async function loadProfile(paths) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid profile server.port');
   if (paths.profile !== 'prod' && port === ports.prod) throw Error('Port 47832 is reserved for the explicit prod profile');
   if (!env.MOTE_TOKEN || env.MOTE_TOKEN.length < 32 || /[\r\n]/.test(env.MOTE_TOKEN)) throw Error('Profile requires server.token of at least 32 characters');
-  // YAML is the storage selection authority. profile.json retains the initial
-  // deployment metadata, so an offline restore needs only one atomic pointer.
-  if (meta.runtime === 'docker') { meta.modelsVolume ??= meta.volume+'-models'; meta.volume = document.storage?.source; }
   if (!/^[a-z0-9][a-z0-9_.-]+$/i.test(meta.volume)) throw Error('Invalid profile volume');
   if (paths.profile !== 'prod' && !meta.volume.startsWith(paths.project + '-')) throw Error('Development/test volumes must belong to their own profile project');
   if (meta.modelsVolume && (!/^[a-z0-9][a-z0-9_.-]+$/i.test(meta.modelsVolume) || paths.profile !== 'prod' && !meta.modelsVolume.startsWith(paths.project + '-'))) throw Error('Invalid profile models volume');
@@ -261,15 +257,7 @@ export async function nativeIdentity(p) {
   return { ...supervisor, record };
 }
 export async function health(p) {
-  try {
-    const response = await fetch(p.url + '/api/health', { redirect: 'error', signal: AbortSignal.timeout(1500) });
-    if (!response.ok) return false;
-    const body = await response.json();
-    // Deployment readiness must work before the first account is initialized.
-    // Keep this public contract aligned with the scoped storage/wire baseline.
-    return body.ok === true && body.mode === 'multiuser-auth' && body.authentication === 'username-password'
-      && body.storageEpoch === 5 && body.protocol?.min === 2 && body.protocol?.max === 2;
-  }
+  try { const response = await fetch(p.url + '/api/status', { headers: { Authorization: `Bearer ${p.env.MOTE_TOKEN}` }, redirect: 'error', signal: AbortSignal.timeout(1500) }); return response.ok; }
   catch { return false; }
 }
 async function ensurePortFree(p) {
@@ -388,7 +376,7 @@ export async function migrateStorageOwner(p, dependencies = {}) {
     const running = await run('docker', ['ps', '--filter', `volume=${volume}`, '--format', '{{.ID}}'], { capture: true });
     if (running.trim()) throw Error('Stop every container using this profile data or model volume before migrating storage ownership');
   }
-  await composeRun(p, ['run', '--rm', '--no-deps', 'storage-init', 'node', 'scripts/storage-owner-entry.mjs', '--migrate', p.configUser, '/data', p.modelDirectory, '/worker-facts'], { capture: true });
+  await composeRun(p, ['run', '--rm', '--no-deps', 'storage-init', 'node', 'scripts/storage-owner-entry.mjs', '--migrate', p.configUser, '/data', p.modelDirectory], { capture: true });
   return { migrated: true, profile: p.profile, owner: p.configUser, started: false };
 }
 export async function dockerContainer(p) {
@@ -410,28 +398,18 @@ export async function assertVaultStopped(directory) {
     catch (error) { if (error.code !== 'ESRCH') throw error; }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
-export async function backupProfile(p, out, dependencies = {}) {
+export async function backupProfile(p, out) {
   const destination = resolve(out ?? join(p.directory, 'backups', new Date().toISOString().replace(/[:.]/g, '-')));
   let source = p.dataDir, stage;
   try {
     if (p.meta.runtime === 'docker') {
-      const run=dependencies.execute??execute,user=await (dependencies.configurationUser??dockerConfigurationUser)(p,run);
-      const assertStopped=async()=>{if((await run('docker',['ps','--filter',`volume=${p.meta.volume}`,'--format','{{.ID}}'],{capture:true})).trim())throw Error('Stop every container using this profile volume before backup');};
-      await assertStopped();await run('docker',['volume','inspect',p.meta.volume],{capture:true});
-      const image=(await run('docker',['image','inspect','--format','{{.Id}}',p.meta.image],{capture:true})).trim();
-      if(!/^sha256:[a-f0-9]{64}$/.test(image))throw Error('Backup requires the already installed profile image');
-      stage = join(await realpath(p.directory), 'backups', `.copy-${randomUUID()}`); await mkdir(stage, { mode: 0o700 });
-      if(/[\r\n,]/.test(stage))throw Error('Docker backup bind path must not contain commas or line breaks');
-      const copy=`const fs=require('node:fs'),path=require('node:path'),buffer=Buffer.alloc(1024*1024);function copied(source,target,root=false){const s=fs.lstatSync(source);if(s.isSymbolicLink()||!s.isDirectory()&&(!s.isFile()||s.nlink!==1))throw Error('Backup links and special files are not allowed');if(s.isDirectory()){if(!root)fs.mkdirSync(target,{mode:0o700});for(const name of fs.readdirSync(source))copied(path.join(source,name),path.join(target,name));return;}const input=fs.openSync(source,'r'),output=fs.openSync(target,'wx',0o600);try{for(;;){const count=fs.readSync(input,buffer,0,buffer.length,null);if(!count)break;let offset=0;while(offset<count)offset+=fs.writeSync(output,buffer,offset,count-offset);}fs.fsyncSync(output);}finally{fs.closeSync(input);fs.closeSync(output);}}copied('/source','/backup',true);`;
-      // Explicit ordinary-file copying avoids cpSync's native directory-copy
-      // path, which fails on Docker Desktop bind mounts. The verified profile
-      // user writes only its new private stage; the source remains read-only.
-      await run('docker',['run','--rm','--pull','never','--network','none','--read-only','--security-opt','no-new-privileges:true','--user',user,'--mount',`type=volume,source=${p.meta.volume},target=/source,readonly`,'--mount',`type=bind,source=${stage},target=/backup`,'--entrypoint','node',image,'-e',copy],{capture:true});
-      await assertStopped();
+      const id = await assertDockerStopped(p);
+      stage = join(p.directory, 'backups', `.copy-${randomUUID()}`); await mkdir(stage, { mode: 0o700 });
+      await execute('docker', ['cp', `${id}:/data/.`, stage], { capture: true });
       // A stopped container's PID namespace is unrelated to host PIDs. Remove only the copied lock.
       await rm(join(stage, 'server.pid'), { force: true }); source = stage;
     }
-    await execute(process.execPath, [join(repository, 'scripts/backup.ts'), '--data', source, '--out', destination, ...(p.configFile?['--config',p.configFile]:[])], { env: isolatedEnvironment(p) });
+    await execute(process.execPath, [join(repository, 'scripts/backup.ts'), '--data', source, '--out', destination], { env: isolatedEnvironment(p) });
     return destination;
   } finally { if (stage) await rm(stage, { recursive: true, force: true }); }
 }
@@ -441,7 +419,6 @@ export async function verifiedBackup(backup) {
   const manifestPath = join(directory, 'backup-manifest.json');
   if ((await stat(manifestPath)).size > 16 * 1024 * 1024) throw Error('Backup manifest exceeds 16 MiB');
   const manifest = await readJson(manifestPath);
-  if(manifest.storageEpoch===5)return verifiedScopedBackup(directory);
   if (manifest.version !== 1 || !manifest.checksums || !Object.hasOwn(manifest.checksums, 'mote.sqlite')) throw Error('Invalid backup manifest');
   if (manifest.storageEpoch !== 4) throw Error('Unsupported backup storage epoch; restore older backups with their matching older binary');
   for (const [name, hash] of Object.entries(manifest.checksums)) {
@@ -459,14 +436,11 @@ export async function verifiedBackup(backup) {
   } finally { db.close(); }
   return { directory, names: Object.keys(manifest.checksums), checksums: manifest.checksums };
 }
-export async function restoreProfile(p, backup, dependencies = {}) {
+export async function restoreProfile(p, backup) {
   const checked = await verifiedBackup(backup);
-  if(checked.manifest?.storageEpoch===5&&p.meta.runtime==='docker')return restoreScopedDockerProfile(p,checked,dependencies);
   const stage = join(p.meta.runtime === 'native' ? dirname(p.dataDir) : p.directory, `.mote-restore-${randomUUID()}`); await mkdir(join(stage, 'blobs'), { recursive: true, mode: 0o700 });
   const createdNativeVolumes=[];let restored=false;
   try {
-    if(checked.manifest?.storageEpoch===5)createdNativeVolumes.push(...await stageScopedRestore(checked,stage,p.meta.runtime==='docker'?'/data':p.dataDir));
-    else {
     for (const name of checked.names) {
       await mkdir(dirname(join(stage,name)),{recursive:true,mode:0o700});
       await copyFile(join(checked.directory, name), join(stage, name));
@@ -481,7 +455,6 @@ export async function restoreProfile(p, backup, dependencies = {}) {
       // A later explicit Central start retains the host's restored desired state
       // and prior task authorizations, subject to normal credential validation.
       await rm(archiveDirectory,{recursive:true});
-    }
     }
     if (p.meta.runtime === 'docker') {
       const existing = (await compose(p, ['ps', '--all', '--quiet', 'mote'], { capture: true })).trim();
@@ -498,76 +471,10 @@ export async function restoreProfile(p, backup, dependencies = {}) {
       if ((await readdir(p.dataDir)).length) throw Error('Restore requires an empty data directory; existing data is never overwritten');
       await rmdir(p.dataDir); await rename(stage, p.dataDir);
     }
-    restored=true;return { restored: true, source: checked.directory,...(checked.manifest?.storageEpoch===5?{deploymentId:checked.manifest.deploymentId,configurationFile:join(p.dataDir,'instance.yaml'),profileConfigurationPreserved:true}: {}) };
+    restored=true;return { restored: true, source: checked.directory };
   } finally {
-    if(!restored)for(const volume of createdNativeVolumes)await discardRestoredHindsight(volume).catch(()=>{});
+    if(!restored)for(const volume of createdNativeVolumes)await execute('docker',['volume','rm',volume],{capture:true}).catch(()=>{});
     await rm(stage, { recursive: true, force: true });
-  }
-}
-
-// No rename exists for a Docker volume root. Populate a fresh volume and verify
-// every byte before replacing the single authoritative YAML storage pointer.
-// Old data/model volumes and existing containers are never deleted or started.
-async function restoreScopedDockerProfile(p, checked, dependencies) {
-  const run = dependencies.execute ?? execute;
-  const before = await readFile(p.configFile, 'utf8'), selected = p.meta.volume;
-  const selectedDocument=parseConfigDocument(before).savedDocument;
-  if(selectedDocument.storage?.source!==selected)throw Error('Configuration changed before restore; reload the profile');
-  const user = await (dependencies.configurationUser ?? dockerConfigurationUser)(p, run);
-  const assertStopped = async () => {
-    if ((await run('docker', ['ps', '--filter', `volume=${selected}`, '--format', '{{.ID}}'], {capture:true})).trim()) throw Error('Stop every container using this profile volume before restore');
-  };
-  await assertStopped();
-  const image = (await run('docker', ['image','inspect','--format','{{.Id}}',p.meta.image], {capture:true})).trim();
-  if (!/^sha256:[a-f0-9]{64}$/.test(image)) throw Error('Restore requires the already installed profile image');
-  const common = ['run','--rm','--pull','never','--network','none','--read-only','--security-opt','no-new-privileges:true'];
-  const assertEmpty=async()=>{const existing=(await run('docker',['volume','ls','--filter',`name=^${selected.replaceAll('.', '\\.')}$`,'--format','{{.Name}}'],{capture:true})).trim().split(/\s+/).filter(Boolean);if(existing.includes(selected)) await run('docker',[...common,'--mount',`type=volume,source=${selected},target=/source,readonly`,'--entrypoint','node',image,'-e',"if(require('node:fs').readdirSync('/source').length)throw Error('Restore requires an empty data volume; existing data is never overwritten')"],{capture:true});};
-  await assertEmpty();
-  const stage = join(await realpath(p.directory), `.mote-restore-${randomUUID()}`), volume = `${p.project}-restore-${randomUUID()}`;
-  if (/[\r\n,]/.test(stage)) throw Error('Docker restore bind path must not contain commas or line breaks');
-  await mkdir(stage,{mode:0o700});
-  const labels = {'dev.mote.restore':volume,'dev.mote.profile':p.project};
-  let nativeVolumes=[],created=false,published=false;
-  try {
-    nativeVolumes=await stageScopedRestore(checked,stage,'/data');
-    const configuration=join(stage,'instance.yaml'),restored=parseConfigDocument(await readFile(configuration,'utf8'),{}).savedDocument;
-    restored.storage={...restored.storage,kind:'docker-volume',dataDir:'/data',source:volume,mount:'/data'};
-    await writeFile(configuration,serializeConfigDocument(restored),{mode:0o600});
-    const files={},directories=[];
-    const inventory=async(path,name='')=>{for(const entry of (await readdir(path)).sort()){const part=name?name+'/'+entry:entry,target=join(path,entry),info=await lstat(target);if(info.isDirectory()&&!info.isSymbolicLink()){directories.push(part);await inventory(target,part);}else{if(!info.isFile()||info.nlink!==1||await realpath(target)!==resolve(target))throw Error('Invalid restored file');files[part]=await sha(target);}}};
-    await inventory(stage);await writeFile(join(stage,'.mote-publication.json'),JSON.stringify({files,directories,user}),{mode:0o600,flag:'wx'});
-    await run('docker',['volume','create',...Object.entries(labels).flatMap(([key,value])=>['--label',`${key}=${value}`]),volume],{capture:true});created=true;
-    const ownership=JSON.parse(await run('docker',['volume','inspect',volume],{capture:true}))[0];
-    if(ownership.Name!==volume||!Object.entries(labels).every(([key,value])=>ownership.Labels?.[key]===value))throw Error('Fresh restore volume ownership does not match');
-    // The same verifier is executed by the protocol regression with only mount
-    // transport substituted. No source/target credentials are passed as args.
-    const transfer=`const fs=require('node:fs'),crypto=require('node:crypto'),path=require('node:path');
-const plan=JSON.parse(fs.readFileSync('/backup/.mote-publication.json','utf8'));
-const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-if(fs.readdirSync('/target').length)throw Error('New restore volume is not empty');
-for(const [name,digest] of Object.entries(plan.files)){const p=path.join('/backup',name),s=fs.lstatSync(p);if(!s.isFile()||s.nlink!==1||hash(p)!==digest)throw Error('Staged restore changed before copy');}
-const [uid,gid]=plan.user.split(':').map(Number);
-for(const name of plan.directories){const p=path.join('/target',name);fs.mkdirSync(p,{mode:0o700});fs.chownSync(p,uid,gid);}
-for(const [name,digest] of Object.entries(plan.files)){const p=path.join('/target',name);fs.copyFileSync(path.join('/backup',name),p,fs.constants.COPYFILE_EXCL);fs.chmodSync(p,0o600);fs.chownSync(p,uid,gid);if(hash(p)!==digest)throw Error('Restored file checksum mismatch');const fd=fs.openSync(p,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}
-fs.chmodSync('/target',0o700);fs.chownSync('/target',uid,gid);
-for(const name of [...plan.directories].reverse().concat('')){const fd=fs.openSync(path.join('/target',name),'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}`;
-    await run('docker',[...common,'--user','0:0','--cap-drop','ALL','--cap-add','CHOWN','--cap-add','DAC_OVERRIDE','--mount',`type=volume,source=${volume},target=/target`,'--mount',`type=bind,source=${stage},target=/backup,readonly`,'--entrypoint','node',image,'-e',transfer],{capture:true});
-    await assertStopped();await assertEmpty();
-    const next=structuredClone(selectedDocument);next.storage={...next.storage,source:volume};next.revision++;
-    const contents=serializeConfigDocument(next),loaded=parseConfigDocument(contents),temp=`${p.configFile}.${randomUUID()}.tmp`;
-    try {
-      const fd=await open(temp,'wx',0o600);try{await fd.writeFile(contents);await fd.sync();}finally{await fd.close();}
-      if(await readFile(p.configFile,'utf8')!==before)throw Error('Configuration changed during restore; selected storage was preserved');
-      await rename(temp,p.configFile);published=true;
-      p.meta.volume=volume;p.document=loaded.document;p.savedDocument=loaded.savedDocument;p.env=connectionValues(p.document,p.directory);
-    }finally{await rm(temp,{force:true});}
-    return {restored:true,source:checked.directory,deploymentId:checked.manifest.deploymentId,volume,previousVolume:selected,configurationFile:'/data/instance.yaml',profileConfigurationPreserved:true,started:false};
-  } finally {
-    if(!published){
-      if(created)try{const entry=JSON.parse(await run('docker',['volume','inspect',volume],{capture:true}))[0];if(entry.Name===volume&&Object.entries(labels).every(([key,value])=>entry.Labels?.[key]===value))await run('docker',['volume','rm',volume],{capture:true});}catch{}
-      for(const native of nativeVolumes)await discardRestoredHindsight(native).catch(()=>{});
-    }
-    await rm(stage,{recursive:true,force:true});
   }
 }
 export function launchdXml(p, nodePath = process.execPath) {

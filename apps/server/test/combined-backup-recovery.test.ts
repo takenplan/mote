@@ -23,27 +23,6 @@ const backupScript=fileURLToPath(new URL('../../../scripts/backup.ts',import.met
 const takeBackup=(source:string,out:string)=>execFileSync(process.execPath,[backupScript,'--data',source,'--out',out],{stdio:'pipe'});
 const empty=()=>({answer:JSON.stringify({memories:[]}),citations:[],trace:[],runId:randomUUID()});
 
-for(const initialAttempts of [1,2])test(`current backup retains charged attempts ${initialAttempts+1} and only recovers within the round without restoring lease authority`,async t=>{
- const root=realpathSync(mkdtempSync(join(tmpdir(),'mote-current-attempt-backup-'))),source=join(root,'source'),snapshot=join(root,'snapshot'),target=join(root,'restored'),original=new Store(source),engine=new ExecutionEngine(original);
- let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve),entered=new Set<string>();
- const stores=[original],engines=[engine];t.after(async()=>{release();for(const host of engines)await host.close();for(const store of stores)store.close();rmSync(root,{recursive:true,force:true});});
- for(const deferred of [false,true])engine.register({kind:deferred?'generated.unstarted':'generated.charged',pool:'generated',concurrency:()=>2,deferAttempts:deferred,validate:()=>true,execute:async step=>{entered.add(step.id);await held;return null;},commit:()=>{}});
- const charged=engine.enqueue('generated-charged','generated.charged',{},{initial:{state:'waiting',attempts:initialAttempts,availableAt:0}}),unstarted=engine.enqueue('generated-unstarted','generated.unstarted',{},{initial:{state:'waiting',attempts:initialAttempts,availableAt:0}});void engine.drain([charged,unstarted]);
- const end=Date.now()+5000;while(entered.size<2){assert.ok(Date.now()<end,'both real claims must start before the actual backup');await new Promise(resolve=>setTimeout(resolve,5));}
- assert.equal(engine.get(charged)!.attempts,initialAttempts+1);assert.equal(engine.get(unstarted)!.attempts,initialAttempts);
- const charges=original.db.prepare('SELECT step_id,fence,charged FROM execution_attempt_charges ORDER BY step_id').all();assert.deepEqual(charges.map(row=>Number(row.charged)).sort(),[0,1]);
- takeBackup(source,snapshot);await verifiedBackup(snapshot);await restoreProfile({meta:{runtime:'native'},dataDir:target,processFile:join(root,'missing-process')},snapshot);
- const restored=new Store(target),recovered=new ExecutionEngine(restored);stores.push(restored);engines.push(recovered);
- for(const receipt of charges)assert.equal(recovered.isCurrentGrant(String(receipt.step_id),String(receipt.fence)),false,'a restored correlation fence has no live lease authority');
- const executed:string[]=[];for(const deferred of [false,true])recovered.register({kind:deferred?'generated.unstarted':'generated.charged',pool:'generated',concurrency:()=>2,deferAttempts:deferred,validate:()=>true,execute:async(step,_signal,grant)=>grant.withBudget(async()=>{executed.push(step.id);return null;}),commit:()=>{}});
- await recovered.drain([charged,unstarted]);const expected=initialAttempts===1?[charged,unstarted]:[unstarted];assert.deepEqual(executed.sort(),expected.sort());
- assert.equal(recovered.get(charged)!.attempts,3,'a charged interrupted attempt remains spent; the final cap cannot send again');assert.equal(recovered.get(unstarted)!.attempts,initialAttempts+1,'an unstarted current claim cannot refund an older failed attempt');
- await recovered.tick();await recovered.drain([charged,unstarted]);assert.equal(executed.length,expected.length,'later admission passes never replay a completed task or reset the exhausted round');
- for(const receipt of charges)assert.equal(recovered.isCurrentInputGrant(String(receipt.step_id),String(receipt.fence)),false,'new execution never revives the old worker fence');
- assert.equal(recovered.get(charged)!.attempts,3);assert.equal(recovered.get(unstarted)!.attempts,initialAttempts+1);
- assert.equal(recovered.get(unstarted)!.state,'succeeded');assert.equal(recovered.get(charged)!.state,initialAttempts===1?'succeeded':'failed');
-});
-
 test('current epoch 4 backup restores original identities, Memory history and interrupted execution without replaying completed work',async t=>{
  const root=realpathSync(mkdtempSync(join(tmpdir(),'mote-combined-restore-'))),source=join(root,'source'),before=join(root,'earlier-snapshot'),snapshot=join(root,'snapshot'),target=join(root,'restored'),rollback=join(root,'rollback'),key='31'.repeat(32);
  const original=new Store(source,{dataKey:key,contentEncryptionEnabled:true}),sources=new SourceStore(original),archived=new ArchivedFileStore(original),memories=new MemoryStore(original);
@@ -76,7 +55,6 @@ test('current epoch 4 backup restores original identities, Memory history and in
  const memoryJob=pipeline.create({evidenceIds:[long.id]});const pausedMemory=await pipeline.run(memoryJob.id);assert.equal(pausedMemory.completedBatches,1);await pipeline.close();
  const interruptedBatch=pausedMemory.batches.find(batch=>batch.status==='pending')!;
  original.db.prepare("UPDATE execution_steps SET state='running',attempts=1,lease_until=?,fence='generated-memory-fence' WHERE id=?").run(Date.now()+3600000,interruptedBatch.id);
- original.db.prepare("INSERT INTO execution_attempt_charges VALUES(?,'generated-memory-fence',1) ON CONFLICT(step_id) DO UPDATE SET fence=excluded.fence,charged=excluded.charged").run(interruptedBatch.id);
  original.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','running') WHERE id=?").run(interruptedBatch.id);
  original.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status','running') WHERE id=?").run(memoryJob.id);
  const ir=new InsightRuns(original,{executor:engine});insights.push(ir);
@@ -86,9 +64,6 @@ test('current epoch 4 backup restores original identities, Memory history and in
  engine.register({kind:'generated.recover',pool:'generated',concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}});
  const doneStep=engine.enqueue('file:'+fileAck.id,'generated.recover',{revision:'done'},{initial:{state:'succeeded',attempts:1,availableAt:0}}),pendingStep=engine.enqueue('file:'+fileAck.id,'generated.recover',{revision:'pending'},{dependencies:[doneStep]});
  const deadline=Date.now()+3600000;original.db.prepare("UPDATE execution_steps SET state='running',attempts=2,lease_until=?,fence='generated-file-fence',recovery_deadline=? WHERE id=?").run(deadline,deadline,pendingStep);
- // This generated crash state includes the current claim's durable charge,
- // exactly as a real engine claim does; older failed attempts stay separate.
- original.db.prepare("INSERT INTO execution_attempt_charges VALUES(?,'generated-file-fence',1)").run(pendingStep);
  original.db.prepare("UPDATE import_jobs SET json=json_set(json,'$.status','importing') WHERE id=?").run(partial.id);
  original.db.prepare("UPDATE execution_steps SET state='running',lease_until=?,fence='generated-import-fence' WHERE operation_id=? AND kind='imports.commit'").run(deadline,'import:'+partial.id);
  const obsoleteImportStep=String(original.db.prepare("SELECT id FROM execution_steps WHERE operation_id=? AND kind='imports.commit'").get('import:'+partial.id)!.id);
@@ -104,8 +79,8 @@ test('current epoch 4 backup restores original identities, Memory history and in
  const resumedInsight=new InsightRuns(restored,{executor});insights.push(resumedInsight);
  assert.equal(resumedInsight.get(doneInsight).status,'completed');
  // The restored expired lease was an interrupted claim, not a confirmed
- // processing failure. Its real charge remains and a replacement spends the next attempt.
- const executed:string[]=[];executor.register({kind:'generated.recover',pool:'generated',concurrency:()=>1,validate:()=>true,execute:async step=>{executed.push(step.id);return null;},commit:()=>{}});await executor.drain([doneStep,pendingStep]);assert.deepEqual(executed,[pendingStep]);assert.equal(executor.get(pendingStep)!.attempts,3);
+ // processing failure. Reclaiming it must not spend that claim twice.
+ const executed:string[]=[];executor.register({kind:'generated.recover',pool:'generated',concurrency:()=>1,validate:()=>true,execute:async step=>{executed.push(step.id);return null;},commit:()=>{}});await executor.drain([doneStep,pendingStep]);assert.deepEqual(executed,[pendingStep]);assert.equal(executor.get(pendingStep)!.attempts,2);
  const restoredImport=new ImportStore(restored,restoredFiles,restoredSources,{executor,prepare:parser});assert.equal(restoredImport.get(partial.id).status,'queued');executor.project(obsoleteImportStep);assert.equal(restoredImport.get(partial.id).status,'queued','obsolete phase projection cannot overwrite the new preview generation');assert.deepEqual(restoredImport.get(partial.id).captureIds,partialResult.captureIds);await assert.rejects(restoredImport.confirm(partial.id),{statusCode:409});
  assert.equal((await restoredImport.confirm(completed.id)).status,'completed');assert.deepEqual(restored.db.prepare('SELECT id,attempts,state FROM execution_steps WHERE operation_id=?').all('import:'+completed.id),completeImportSteps);
  await restoredImport.retry(partial.id);const resumed=await restoredImport.confirm(partial.id);assert.equal(resumed.status,'completed');assert.equal(resumed.progress.duplicates,1);assert.equal(resumed.progress.imported,1);

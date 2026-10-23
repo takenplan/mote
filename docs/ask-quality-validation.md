@@ -77,6 +77,6 @@
 | 生成语料的模型质量试验 | 根据固定事实、实际工具披露和答案人工核对覆盖及表达 | 一次成功不证明一般召回率、稳定性或性能因果 |
 | 受影响组件检查 | 构建、类型、工具与生命周期回归 | 自动检查不等于部署、物理设备或真实模型质量验证 |
 
-具体自动回归入口见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)、[Memory 范围评估](memory-range-evaluation-validation.md)及[新近度与进展表达](testing-archive-recency.md)。检查命令与受影响消费者范围遵循[开发协议](development.md#pr-check-scope)。
+具体自动回归入口见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)、[Memory 范围评估](memory-range-evaluation-validation.md)及[新近度与进展表达](testing-archive-recency.md)。检查命令与受影响消费者范围遵循[开发协议](testing.md#early-integration-and-candidate-checks)。
 
 各次语义试验保留代码、数据和模型边界，不把不同版本混为同版本横向对照。累计线程用量可能含重复输入和缓存；未知费用、请求次数和失败用量保持未知，不按零消耗补算。未知写请求先保留收据，再按精确输入与唯一任务核对，不能因超时自动重复付费工作。

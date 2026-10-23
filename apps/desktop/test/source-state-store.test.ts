@@ -14,7 +14,7 @@ test('current row outbox capacity rolls back with its checkpoint and ACK deletes
  const next={...before,checkpoint:{cursor:2},pendingRealtime:[{externalId:'one',revision:'2',body:'x'.repeat(1000)}]};
  assert.throws(()=>sourceState(path,sourceStatePatch(before,next),100),/队列已满/);assert.deepEqual(sourceState(path),before);
  const ack={...before,pendingRealtime:[],checkpoint:{cursor:2}};sourceState(path,sourceStatePatch(before,ack),100);assert.deepEqual(sourceState(path),ack);
- const inspect=new DatabaseSync(path+'.sqlite');assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version,4);inspect.close();
+ const inspect=new DatabaseSync(path+'.sqlite');assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version,3);inspect.close();
 });
 test('current initialization waits for a concurrent transaction',async()=>{
  const {Worker}=await import('node:worker_threads'),path=await fixture();sourceState(path);

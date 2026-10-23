@@ -6,16 +6,11 @@ import java.time.Instant
 import java.util.Base64
 
 class ConnectionFailure(val category: String) : Exception(if (category == "pending") MoteI18n.text("仍有截图/笔记/来源待同步或已准备提交的草稿，不能切换节点。请先同步原节点。") else category)
-data class ConnectionInvitation(val serverUrl: String, val code: String, val expiresAt: Instant, val deploymentId: String, val userId: String, val deviceId: String? = null) {
+data class ConnectionInvitation(val serverUrl: String, val code: String, val expiresAt: Instant) {
     override fun toString() = "ConnectionInvitation(redacted)"
-    fun subject() = JSONObject().put("deploymentId", deploymentId).put("userId", userId).put("serverUrl", serverUrl).put("purpose", "device")
-    fun json() = subject().put("format", "mote.connection").put("version", 2).put("code", code).put("expiresAt", expiresAt.toString()).apply { deviceId?.let { put("deviceId", it) } }
     companion object {
         const val MAX_BYTES = 8192
-        fun parse(input: String, debugHttp: Boolean, isDebug: Boolean, now: Instant = Instant.now()) = decode(input, debugHttp, isDebug, now, true)
-        /** Only an already encrypted, locally confirmed recovery intent may outlive the QR. */
-        internal fun restore(input: String, debugHttp: Boolean, isDebug: Boolean) = decode(input, debugHttp, isDebug, Instant.now(), false)
-        private fun decode(input: String, debugHttp: Boolean, isDebug: Boolean, now: Instant, requireLive: Boolean): ConnectionInvitation {
+        fun parse(input: String, debugHttp: Boolean, isDebug: Boolean, now: Instant = Instant.now()): ConnectionInvitation {
             try {
                 require(input.toByteArray(Charsets.UTF_8).size <= MAX_BYTES)
                 val text = input.trim().let { value ->
@@ -31,9 +26,8 @@ data class ConnectionInvitation(val serverUrl: String, val code: String, val exp
                 }
                 require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES); StrictJson.validate(text)
                 val json = JSONObject(text)
-                val keys = json.keys().asSequence().toSet(); val required = setOf("format", "version", "serverUrl", "code", "expiresAt", "deploymentId", "userId", "purpose")
-                require(keys == required || keys == required + "deviceId")
-                require(json.get("format") == "mote.connection" && json.get("version") is Number && (json.get("version") as Number).toDouble() == 2.0 && json.get("purpose") == "device")
+                require(json.keys().asSequence().toSet() == setOf("format", "version", "serverUrl", "code", "expiresAt"))
+                require(json.get("format") == "mote.connection" && json.get("version") is Number && (json.get("version") as Number).toDouble() == 1.0)
                 val server = json.get("serverUrl") as? String ?: error("server")
                 require(server.length <= 2048 && server == server.trim() && server.none { it.isWhitespace() || it.code < 32 || it.code == 127 })
                 val normalized = PrivacyRules.validateEndpoint(server, debugHttp, isDebug)
@@ -44,13 +38,9 @@ data class ConnectionInvitation(val serverUrl: String, val code: String, val exp
                 val expiry = json.get("expiresAt") as? String ?: error("expiry")
                 require(expiry.matches(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z")))
                 val expires = Instant.parse(expiry)
-                if (requireLive) {
-                    if (!expires.isAfter(now)) throw ConnectionFailure("expired")
-                    require(!expires.isAfter(now.plusSeconds(24 * 3600)))
-                }
-                val binding = AccountBinding(normalized, json.getString("deploymentId"), json.getString("userId"))
-                val deviceId = if (json.has("deviceId")) (json.get("deviceId") as? String)?.also { require(it.matches(Regex("[A-Za-z0-9_.:-]{1,128}"))) } ?: error("device") else null
-                return ConnectionInvitation(normalized, code, expires, binding.deploymentId, binding.userId, deviceId)
+                if (!expires.isAfter(now)) throw ConnectionFailure("expired")
+                require(!expires.isAfter(now.plusSeconds(24 * 3600)))
+                return ConnectionInvitation(normalized, code, expires)
             } catch (e: ConnectionFailure) { throw e } catch (_: Exception) { throw ConnectionFailure("invitation") }
         }
     }

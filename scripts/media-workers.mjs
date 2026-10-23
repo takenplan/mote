@@ -91,7 +91,7 @@ export function startMediaWorkers({ root = process.cwd(), env = process.env, con
         }
       }
     }
-    const workerEnv = { ...mediaEnvironment({ ...env, MOTE_RUNTIME: runtime }), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: configuration.workerToken, MOTE_MEDIA_RECEIPT_DIRECTORY: join(dirname(configuration.modelDirectory), 'media-executions') };
+    const workerEnv = { ...mediaEnvironment({ ...env, MOTE_RUNTIME: runtime }), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: configuration.workerToken };
     const specs = [
       ['ocr-server.py', ['--model-root', join(configuration.modelDirectory, 'ocr'), '--port', String(configuration.ocrPort ?? 9010)]],
       ['transcription-server.py', ['--model', join(configuration.modelDirectory, 'dialogue'), '--segmentation-model', join(configuration.modelDirectory, 'dialogue/segmentation.onnx'), '--speaker-model', join(configuration.modelDirectory, 'dialogue/speaker.onnx'), '--wespeaker-model', join(configuration.modelDirectory, 'speaker-wespeaker/speaker.onnx'), '--timeout', '3600', '--port', String(configuration.asrPort ?? 9009)]],

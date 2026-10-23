@@ -5,13 +5,12 @@ import {ArrowDownToLine, RefreshCw} from 'lucide-react';
 import {type Api, bytes, duration, errorMessage} from './api';
 
 interface Snapshot {
-  scope?:'instance-safe-diagnostics';coverage?:{instanceMetadata:boolean;privateContents:boolean;privateTraces:boolean};
   enabled:boolean;level:string;instanceId:string;lastSeq:number;retainedEvents:number;
   droppedEvents:number;writeFailures:number;readFailures:number;
   limits:{maxFileBytes:number;maxFiles:number;maxEvents:number};
   runtime:{uptimeMs:number;rssBytes:number;cpuUserMicros:number;cpuSystemMicros:number};
-  services?:{agentConfigured:boolean;embeddingConfigured:boolean;activeQueries:number};
-  queue?:{index:{pending:number;failed:number;indexed:number;textReady:number};devices:number;reportedPending:number};
+  services:{agentConfigured:boolean;embeddingConfigured:boolean;activeQueries:number};
+  queue:{index:{pending:number;failed:number;indexed:number;textReady:number};devices:number;reportedPending:number};
 }
 interface LogPage {
   items:string[];page:number;pageSize:number;totalLines:number;totalPages:number;
@@ -19,8 +18,7 @@ interface LogPage {
 }
 type LogStage='all'|'system'|'request'|'ingest'|'index'|'agent'|'source'|'maintenance'|'file'|'unknown';
 const logStages:readonly [LogStage,string][]= [['all',moteText("全部阶段")],['system',moteText("系统")],['request',moteText("请求")],['ingest',moteText("入库")],['index',moteText("索引")],['agent','Agent'],['source',moteText("资料")],['maintenance',moteText("维护")],['file',moteText("文件")],['unknown',moteText("未知")]];
-export function Diagnostics(props:{api:Api;profile?:string}){return <OwnedDiagnostics key={JSON.stringify(props.api.connection)} {...props}/>;}
-function OwnedDiagnostics({api,profile}:{api:Api;profile?:string}) {
+export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
   const [wrap,setWrap]=useState(true);
   const [logFile,setLogFile]=useState(0);
   const [logPage,setLogPage]=useState(1);
@@ -34,26 +32,22 @@ function OwnedDiagnostics({api,profile}:{api:Api;profile?:string}) {
   const [error,setError]=useState('');
   const statusResource=useResource<Snapshot>(api,'/api/diagnostics',autoRefresh?5000:undefined);
   const logs=useResource<LogPage>(api,`/api/diagnostics/log-pages?file=${logFile}&page=${logPage}&pageSize=${pageSize}&stage=${logStage}`,autoRefresh?5000:undefined);
-  const web=api.connection?.mode==='web',candidate=statusResource.data,validScope=!web||candidate?.scope==='instance-safe-diagnostics'&&candidate.coverage?.instanceMetadata===true&&candidate.coverage.privateContents===false&&candidate.coverage.privateTraces===false;
-  const snapshot=validScope?candidate:undefined,logPageData=logs.data,rawLog=validScope&&logs.data?.items.length?logs.data.items.join('\n')+'\n':'',busy=statusResource.loading||logs.loading;
-  const active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
+  const snapshot=statusResource.data,logPageData=logs.data,rawLog=logs.data?.items.length?logs.data.items.join('\n')+'\n':'',busy=statusResource.loading||logs.loading;
   const logSelectionLoading=logs.loading&&logPageData===undefined;
   const refresh=()=>{statusResource.refresh();logs.refresh();};
   useEffect(()=>{if(logs.data)setLogPage(logs.data.page);setCopyStatus('');},[logs.data]);
   async function download() {
-    if(!active.current)return;
     setExporting(true);setError('');
     try{
       const response=await api.raw('/api/support-bundle?after='+encodeURIComponent(new Date(Date.now()-hours*3600000).toISOString())+'&before='+encodeURIComponent(new Date().toISOString()));
-      const blob=await response.blob();if(!active.current)return;const url=URL.createObjectURL(blob);
+      const url=URL.createObjectURL(await response.blob());
       const anchor=document.createElement('a');anchor.href=url;anchor.download=`mote-support-${new Date().toISOString().slice(0,10)}.json`;anchor.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){if(active.current)setError(errorMessage(e));}finally{if(active.current)setExporting(false);}
+    }catch(e){setError(errorMessage(e));}finally{setExporting(false);}
   }
   async function copyLogs() {
-    if(!active.current)return;
-    try {await navigator.clipboard.writeText(rawLog);if(active.current)setCopyStatus(moteText("已复制当前页日志。"));}
-    catch {if(active.current){logRef.current?.focus();logRef.current?.select();setCopyStatus(moteText("剪贴板不可用，已全选，请按 ⌘/Ctrl+C 复制。"));}}
+    try {await navigator.clipboard.writeText(rawLog);setCopyStatus(moteText("已复制当前页日志。"));}
+    catch {logRef.current?.focus();logRef.current?.select();setCopyStatus(moteText("剪贴板不可用，已全选，请按 ⌘/Ctrl+C 复制。"));}
   }
   return <section className="panel diagnostics-panel" aria-labelledby="diagnostics-title">
     <div className="section-heading"><div><h2 id="diagnostics-title">{moteText("运行诊断")}</h2><p>{moteText("环境 ·")}{' '}{profile||'default'}{' '}{moteText("· 中央节点")}</p></div>
@@ -64,15 +58,13 @@ function OwnedDiagnostics({api,profile}:{api:Api;profile?:string}) {
     </div>
     <p className="fine-print">{moteText("导出所选时段内全部已保留日志；日志轮转前已清理的部分无法恢复，导出包会注明覆盖范围。")}</p><p className="fine-print">{moteText("诊断包包含运行状态、数量、耗时和最近事件，不包含笔记、截图、模型对话或访问令牌。客户端的采集、电量和本地队列诊断从各自 App 导出。")}</p>
     {Boolean(error||statusResource.error||logs.error)&&<div className="notice error" role="alert">{error||errorMessage(statusResource.error||logs.error)}</div>}
-    {candidate&&!validScope&&<p role="alert">{moteText('实例诊断响应未声明安全元数据范围，未显示内容。')}</p>}
-    {web&&<p role="status">{moteText('此页仅展示实例运行元数据；私人正文、历史 Trace、端点队列和索引统计不在覆盖范围内。')}</p>}
     {snapshot&&<>
       <div className="diagnostics-metrics">
         <div><strong>{duration(snapshot.runtime.uptimeMs)}</strong><span>{moteText("本次运行")}</span></div>
         <div><strong>{bytes(snapshot.runtime.rssBytes)}</strong><span>{moteText("进程内存")}</span></div>
-        {!web&&snapshot.queue&&snapshot.services&&<><div><strong>{snapshot.queue.reportedPending}</strong><span>{moteText("端点上次上报待同步")}</span></div>
+        <div><strong>{snapshot.queue.reportedPending}</strong><span>{moteText("端点上次上报待同步")}</span></div>
         <div><strong>{snapshot.queue.index.pending} / {snapshot.queue.index.failed}</strong><span>{moteText("索引待处理 / 失败")}</span></div>
-        <div><strong>{snapshot.services.activeQueries}</strong><span>{moteText("进行中的 AI 查询")}</span></div></>}
+        <div><strong>{snapshot.services.activeQueries}</strong><span>{moteText("进行中的 AI 查询")}</span></div>
       </div>
       <p className="fine-print">{moteText("日志")}{' '}{snapshot.enabled?snapshot.level:moteText("已关闭")}{' '}{moteText("· 最多")}{' '}{snapshot.limits.maxFiles}{' '}{moteText("个文件，每个")}{' '}{bytes(snapshot.limits.maxFileBytes)}{' '}{moteText("· 内存保留")}{' '}{snapshot.retainedEvents}{' '}{moteText("条事件。端点队列来自最近心跳，可能不是当前值。")}</p>
       {(snapshot.writeFailures>0||snapshot.readFailures>0||snapshot.droppedEvents>0)&&<div className="notice" role="status">{moteText("日志读取失败")}{' '}{snapshot.readFailures}{' '}{moteText("次，写入失败")}{' '}{snapshot.writeFailures}{' '}{moteText("次，未写入")}{' '}{snapshot.droppedEvents}{' '}{moteText("条。请检查日志目录权限与磁盘空间。")}</div>}

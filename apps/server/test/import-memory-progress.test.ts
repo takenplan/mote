@@ -7,8 +7,9 @@ import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
 import type {Config} from '../src/config.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {importMemoryProgress} from '../src/import-memory-progress.js';
+import {materialId} from '../src/materials.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 
 const config=(dataDir:string):Config=>({dataDir,token:'generated-progress-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false});
@@ -88,4 +89,25 @@ test('legacy jobs keep whole-job import progress without package coverage metada
   node.store.db.prepare("UPDATE memory_batches SET json=json_remove(json,'$.coverage') WHERE job_id=?").run(job.id);
   assert.equal(importMemoryProgress(node.store,[id])!.completed,1);
   assert.equal(importMemoryProgress(node.store,[id,id])!.total,1);assert.equal(importMemoryProgress(node.store,[id,id])!.receipts,1);
+});
+
+
+test('equal receipt keys and scopes never project another source queue failure',async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-source-boundary-'));let queries=0;
+  const node=await buildApp(config(directory),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async()=>{queries++;throw Error('This read-only progress fixture cannot execute a model');}}});
+  await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+  for(const sourceId of ['generated-left','generated-right'])node.sources.register({id:sourceId,name:'Generated independent source',kind:'custom',deviceId:'generated',platform:'import'});
+  const original={externalId:'same-external-id',revision:'1',text:'Generated original with source-scoped receipt identity',observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'};
+  const left=await node.sources.upsert('generated-left',original);await node.sources.upsert('generated-right',original);await node.materialOrganizer.tick();
+  const leftMaterial=materialId('generated-left',original.externalId),rightMaterial=materialId('generated-right',original.externalId);
+  const receipt=node.store.db.prepare('SELECT input_key,scope FROM material_memory_requests WHERE material_id=?').get(leftMaterial)!;assert.ok(receipt);
+  // Receipt keys are scoped to a source. A different source may retain the same
+  // key and recipe scope, but its queue error cannot become this original's state.
+  node.store.db.prepare("UPDATE material_memory_requests SET input_key=?,scope=?,error='generated_other_source_failure' WHERE material_id=?").run(receipt.input_key,receipt.scope,rightMaterial);
+  const pending=importMemoryProgress(node.store,[left.id,left.id])!;assert.equal(pending.total,1);assert.equal(pending.receipts,1);assert.equal(pending.pending,1);assert.equal(pending.failed,0);
+  node.store.db.prepare("UPDATE material_memory_requests SET error='generated_same_source_failure' WHERE material_id=?").run(leftMaterial);
+  const failed=importMemoryProgress(node.store,[left.id])!;assert.equal(failed.failed,1);assert.equal(failed.pending,0,'a matching source failure remains visible');
+  node.store.db.prepare('DELETE FROM material_memory_requests WHERE material_id=?').run(leftMaterial);
+  const absent=importMemoryProgress(node.store,[left.id])!;assert.equal(absent.pending,1);assert.equal(absent.failed,0,'an absent matching queue preserves the left-joined receipt');
+  assert.equal(queries,0);assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_jobs').get()!.n,0,'progress never creates work');
 });

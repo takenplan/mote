@@ -9,22 +9,31 @@ call protection, resource waiting, safe failure retries and model correction.
 
 ## Registered defaults and their reasons
 
-| Current Central policy family | Execution protection | Default charged attempts | Scope |
+| Task family | Execution budget | Actual failure attempts | Reason and narrower protection |
 | --- | --- | --- | --- |
-| `orchestration` | No workflow total | 3 (initial + 2 retries) | Coordinators retain successful children; internal continuation never resets a child's cap. |
-| `deterministic` | One hour per admitted operation | 3 for eligible transient failures | Deterministic invalid input remains terminal; the cap does not make it repairable. |
-| `localProcessing` | One hour; explicit worker/file call overrides retained | 3 | Media first reconciles the original exact worker request and cleanup. No duplicate live execution. |
-| `modelCall` | One hour of admitted work; continuous Memory protects each physical query rather than a multi-stage total | 3 | Memory, Ask/Insight, file analysis and action extraction use the current M05 policy. Existing Agent correction and two-pass independent review remain separate finite budgets. |
-| `networkAcquisition` | One hour per declared operation; protocol readiness/transport deadlines remain separate | 3 | Typed temporary acquisition failures; missing credentials/readiness are prerequisites. |
-| `control` | One hour per operation | 3 for eligible transient failures | Unclassified bookkeeping errors require diagnosis; native/plugin/provider effects retain exact operation reconciliation. |
+| Ask/Insight coordinators and delegated work | No workflow total; an explicit internal caller deadline can cap an admitted fragment | Query/Insight observation 1; replayable delegation up to 3 | Can yield to children or wait for model capacity. Each admitted Agent owns its configured model/tool/correction budget. Non-replayable observations are not resubmitted on restart. |
+| File pipeline and summary coordinator | No workflow total | Child steps own finite retries | Extraction, diarization, alignment and model stages cannot inherit time already spent by earlier stages. Successful artifacts and summary pages are checkpoints. |
+| Local ASR, diarization and OCR calls | One hour by default; existing explicit file `timeoutMs` is a per-call override | Up to 3 typed safe failures | Managed audio workers already have a one-hour subprocess limit. Call time starts after admission; unknown file outcomes retain their issued-call guard. |
+| Model sessions | One hour of admitted work by default; explicit profile values or `null` preserved | Outer task policy; finite output correction remains separate | Counts actual model/tool/repair work, excluding host gate waits. HTTP requests retain their five-minute default and ten-minute maximum; Codex owns internal model requests. |
+| Actions extraction | No outer total | Up to 3 typed safe failures | Agent sessions own their admitted-work budget; an outer timer must not charge model-queue waiting. |
+| Memory batches, lifecycle windows and provider preparation | No multi-stage workflow total | Extraction and independent review each up to 3; lifecycle default 3 with an explicit extension bound; provider preparation 1 | Individual model calls retain protection. Prerequisite and child waits are not execution failures; failed children are not reopened by an outer loop. |
+| Material organization, deterministic DAG and derived-image work | 15 minutes per admitted operation | 1 for deterministic work | Bounded current-input processing. Larger workflows keep separate checkpoints; semantic/model work has no outer model-queue timer. |
+| Material FTS, consumer planning, image exclusion and Memory input binding | 5 minutes per admitted operation | 1 | Bounded local/metadata projection without external model waits; input/version fences remain. |
+| Background embeddings | 5-minute operation protection; each HTTP call 45 seconds | Up to 3 typed temporary failures | Single-vector transport and bounded responses. Query vectors retain their explicit single-attempt deadline after pool admission and existing lexical recovery. |
+| Recording discovery, metadata, transcript and media acquisition | No combined phase deadline | Up to 3 typed temporary failures | Phases contain multiple CLI/HTTP/archive operations with concrete transport limits; readiness and invalid export structure remain separate. |
+| Import prepare/commit and source archive | No workflow total | 1; concrete children/calls own recovery | Can decode containers, organize inputs and invoke an Agent. Unknown exceptions need diagnosis, not another identical full import. |
+| Plugin installation/check and bookkeeping/reconciliation | One hour per operation, or no total for an explicit orchestrator | 1 actual failure | Generous control-work protection; pending reconciliation is a declared wait. |
+| Format decoding and asset hashing/encryption/staging | 15 minutes after a local worker slot is acquired | Caller owns recovery | Supports large originals and retains subprocess cleanup; queueing consumes no processing budget. |
+| Memory deletion comparison | No default total over all candidate/rule comparisons | Existing per-call correction/recovery | Comparison count varies; each model call has its own policy. Explicit internal caller/test limits remain supported. |
 
-Explicit current operation overrides remain: `ask.embedding-query` has one
-attempt and 1200 ms for foreground retrieval with its existing lexical
-continuation. Per-request/profile timeout values and `null` retain their existing
-meaning. Quarantined legacy Memory batches and delegated workers/coordinators
-also inherit three attempts; their former four-attempt defaults are removed.
-Genuinely narrower registrations remain explicit exceptions. No old-version
-migration or alternate scheduler is added.
+The current replayable defaults are three attempts: the initial execution and
+at most two automatic retries of eligible failures. This applies to
+`orchestration`, `localProcessing`, `modelCall` and `networkAcquisition`.
+`deterministic` and `control` remain single-attempt policies. Explicit
+single-attempt registrations, including non-replayable Ask/Insight runs, query
+embeddings, import prepare/commit and provider preparation, remain exceptions.
+The cap does not make permanent or unknown-outcome failures replayable, and it
+does not increase the existing model-output correction rounds.
 
 The policy families provide a one-hour baseline for an actual isolated operation.
 Registrations deliberately select narrower local work or no workflow total by
@@ -40,67 +49,60 @@ Health probes, OAuth expiration and preview lifetimes are separate protocols.
 
 Known capacity waits persist their reason and next eligible time without using a
 processing-failure attempt. They release execution leases and preserve the parent
-workflow and completed children. Normal shutdown and expired ownership leases represent interruption and retain
-an already charged attempt. They do not prove that physical work ended. A
-suspended resource wait resumes its same logical attempt and count. The default
-permits two automatic retries, never an unbounded outer loop.
+workflow and completed children. Normal shutdown and expired ownership leases
+represent interruption, not a confirmed processing failure. Unknown issued file
+calls still prevent automatic duplicate requests under the existing guard.
 
-Scoped media resolves a physical listener identity from its frozen M04 snapshot
-before task admission. Different users and originals share that listener's
-capacity; independent listeners remain independent. A durable queued task has no
-issued-call receipt. Model-task protection starts after its physical model gate
-opens. OCR/ASR transport issuance is recorded immediately before sending, rather
-than before preparation or capacity waiting. Restarting queued work therefore
-does not manufacture an unknown external outcome. Structured known-not-started
-busy responses retain a `not_executed` call fact and return the task to waiting.
+Reopening an existing execution preserves its attempt count by default. Only an
+existing explicit owner recovery command resets the applicable failed work.
+Automatic continuation, prerequisite rechecks, model-facing delegation retry and
+observing a terminal child cannot renew its budget. A new admission checks the
+retained count before executing, including after restart or repeated reopening.
+Explicit reopen retains its existing immediate wake timing; lifecycle windows
+still enforce their own persisted retry time before resuming an invocation.
+Each actual failed lifecycle invocation is counted once from its durable receipt,
+so observing the same failure after restart does not consume another attempt.
+Paused, unconfigured and context prerequisites are checked before charging a
+Memory status-bookkeeping execution.
 
-An actual issued request remains a separate fact from the renewable execution
-lease. The authenticated local workers accept a trusted request identity and
-keep content-free metadata in a private SQLite journal: worker incarnation,
-stage, execution state, times and fixed outcome codes. An identical request ID
-cannot start a second execution. Authenticated scoped status reads can establish
-that the first call is still running, failed or completed. A missing fact, an
-unsupported provider or a former incarnation's unfinished fact remains unknown.
-There is no worker scheduling queue, provider-message classifier or result-body
-cache.
+Successful child outputs and artifacts remain reusable during failed-phase
+recovery. Existing explicit recompute and reindex commands keep their declared
+behavior; an ordinary failed-phase retry does not discard successful siblings.
+A locally expired lease cannot re-admit the same task while this host's physical
+task is still settling. Late cleanup may remove only its own active entry;
+separate hosts retain the existing lease and publication fences.
 
-Trusted scoped OCR/ASR handlers reconcile fixed worker metadata before starting a
-new charged processing attempt. An authenticated facts GET is observation, not
-OCR/ASR execution: it does not charge an attempt, mark one executed, derive a
-model-attempt snapshot or create usage. The read retains the genuine frozen M04
-lease, current grant/input checks, bounded cancellation and awaited local cleanup.
-It does not replace proof that the original physical callback has quiesced. Other
-handlers retain their existing reconciliation order and accounting.
+Memory extraction and independent review own separate durable phase tasks, each
+with three attempts for eligible failures. The coordinator yields without
+charging an attempt while a child waits; observing a terminal child does not
+reopen it. An explicit owner retry resets only failed or blocked children with
+the current frozen input generation. Successful extraction and review remain
+committed, so failed review recovery does not repeat extraction and publication
+recovery does not repeat review. Automatic continuation and model-facing retry
+preserve exhausted child budgets.
 
-External settlement `succeeded` records terminal transport settlement; it does
-not establish successful OCR/ASR processing. Only a strictly validated, stored
-terminal `failed` fact from the supported authenticated worker, bound to the same
-owner, task, issuance, request, stage and frozen model snapshot, with the required worker incarnation
-and valid acceptance/completion times, establishes known processing failure. It
-retains the failed fact and permits an otherwise eligible new processing attempt
-within the existing three-attempt round; it does
-not fabricate an accepted result or owner replay confirmation. Missing, malformed,
-unsupported, mismatched or unknown facts retain their existing protection. A
-`succeeded` worker fact without a durably accepted artifact still requires an
-explicit ordinary retry (`processor_result_unavailable`); it cannot publish a
-missing or late body. Status observation never adds a fourth attempt, resets a
-round or revives historical terminal work.
+A phase stores its complete result, native draft pins and explicit review/read
+receipts in the private `memory_phase_outputs` table, atomically with execution
+success. This owned checkpoint is not an evictable extraction/review cache and
+has no 512 KiB truncation or discard threshold. Missing or corrupt output for a
+successful phase fails closed rather than issuing a replacement model call.
+Cancellation, retired dependencies and deletion remove its private checkpoint;
+a current authority check rejects late commits. Content-storage bulk decryption
+includes these envelopes before retiring the encryption key.
 
-For eligible read-model calls, exact completed local cleanup and fresh authority
-permit bounded policy replay without a separate confirmation dialog. A distinct
-policy replay journal retains the old unknown call; it is not an owner
-confirmation or remote settlement. Native/media/plugin/provider operations keep
-their original exact reconciliation contracts. An abrupt crash without cleanup
-proof remains a prerequisite, even if the execution lease expired.
+A response is complete for recovery only after that transaction commits. Process
+loss before local commit may require another authorized execution; this does
+not establish exactly-once external model execution. Existing output correction
+rounds, current-input checks, provider publication journals and native cleanup
+remain separate from phase attempt accounting.
 
-Worker metadata cleanup follows the existing account/processing deletion
-operation. Exact request/scope/snapshot cleanup intents survive execution-task
-deletion. A purpose-limited configuration capability can erase those receipts
-using their frozen transport without restoring a model lease or business
-execution authority. A running receipt or unavailable erasure remains pending.
-Native receipt files also follow the profile directory lifecycle; Docker uses
-the profile's private worker-facts volume. No new time-based retention rule is
-introduced.
+That guard is conservative across process loss: a file stage may have entered
+its call-protection region while still waiting in an in-memory model gate. A
+crash loses that queue state, so the saved guard can become `unknown` even if no
+model request was sent. Without durable proof of non-execution it follows the
+existing explicit unknown-outcome recovery path. Live gate waiting and a saved
+explicit not-started busy response retain automatic resource recovery; this does
+not promise transparent restart recovery for every in-memory queue position.
 
 Resource waiting does not expire under a generic six-hour window. Actual typed
 failures have the registered finite attempt bound; explicitly task-specific
@@ -120,15 +122,26 @@ Model gates recheck cooldown after admission. Web requests do not translate a
 model execution budget into a second wall-clock deadline that includes waiting;
 explicit cancellation remains available.
 
-Memory model work first rotates between users, then between ready host-declared
-stages, then between operations. Continued extraction arrivals therefore cannot
-indefinitely precede an already ready review. Stage service history survives
-restart; cancelling a waiting stage does not consume a turn. Concurrency limits
-and running work are unchanged. Local ASR alignment releases its settled physical
-worker resource before continuing; resource release is bound to the current
-execution fence, so a later claim must acquire capacity again.
-
 ## Existing work and validation
+
+Managed loopback OCR, ASR and diarization requests carry one UUID per actual
+POST and an instance/step/generation-bound scope. The authenticated worker
+retains only fixed execution metadata. Status GETs do not acquire a model or
+physical processing slot, create model usage or consume another attempt.
+Accepted/running facts retain waiting. A terminal failed fact may settle the
+original failed attempt and resume the same current phase with its remaining
+budget; shutdown-refunded attempts are restored once by identity, never reset.
+Three actual eligible failures remain terminal across polling and restart.
+Unsupported input remains permanent. The normal owner retry remains explicit.
+
+A successful worker fact cannot replace a lost result body. Missing facts,
+changed credentials/configuration and an old worker interrupted by process
+restart remain unknown. Existing unknown-outcome confirmation still applies;
+no status read manufactures an artifact or authorizes another POST. Successful
+artifact commit releases its exact issued wait in the same transaction.
+Cancellation, deletion and changed input authority permit only exact terminal
+receipt cleanup. Active/unknown worker records cannot be erased; terminal
+erasure retains consumed identity so an old POST cannot execute again.
 
 No historical terminal task is reopened and no historical attempt counter is
 reset on deployment. New file defaults do not revive old failed work. Manual
@@ -150,5 +163,4 @@ interruption and resumes after its saved record position. Only that internal
 execution grant can continue an `importing` job; the owner confirmation API still
 requires its reviewed preview, and completed imports are not rerun.
 
-See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md)
-and the [scoped media failed-fact recovery record](validation/scoped-media-failed-fact-recovery.md).
+See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md).

@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {setTimeout} from 'node:timers/promises';
 import {parseAnswer,type QueryInput} from '@mote/agent';
 import {ProviderFailure,type QueryResult} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {materialId} from '../src/materials.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';

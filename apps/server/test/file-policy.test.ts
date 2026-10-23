@@ -14,7 +14,7 @@ import {FileProcessing} from '../src/file-processing.js';
 import {type ProcessorInput} from '../src/file-processors.js';
 import {TURN_GROUP_PROMPT} from '../src/file-dialogue.js';
 import {installFileRecipes} from '../src/file-recipes.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {configFromDocument} from '../src/config.js';
 
 function fixtureConfig(directory:string){return configFromDocument({version:1,revision:0,storage:{dataDir:directory}},join(directory,'mote.yaml'));}

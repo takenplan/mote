@@ -5,8 +5,11 @@ import type {SourceStore} from './sources.js';
 import {StoreError} from './store.js';
 import {browseSourceContexts} from './source-context-catalog.js';
 
-import {CONTEXT_DIRECTORIES} from './context-query-core.js';
-export {CONTEXT_DIRECTORIES} from './context-query-core.js';
+export const CONTEXT_DIRECTORIES=[
+ {path:'/context/memory',layer:'L3/L4',description:'Selected candidate and long-term memories',expand:'memories'},
+ {path:'/context/episodes',layer:'L2',description:'Bounded segments and semantic interpretations',expand:'segments'},
+ {path:'/context/sources',layer:'L0/L1',description:'Original source catalog; exact or fresh evidence remains directly searchable',expand:'sources'},
+] as const;
 
 /** Virtual read-only directories. Names express storage layers, never inferred user intent. */
 export function contextIndex(store:Store,memories:Pick<MemoryStore,'page'>,sources:SourceStore,args:Range&{path?:string;query?:string}={},segments:Store['archive']['page']=args=>store.archive.page(args)){

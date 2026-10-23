@@ -8,7 +8,7 @@ import {Connections, type ConnectionFile} from '../src/connections.js';
 import {LoginHandoffs} from '../src/login-handoffs.js';
 import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
-import {buildApp, type QueryAgent} from './fixtures/legacy-app.js';
+import {buildApp, type QueryAgent} from '../src/app.js';
 import type {Config} from '../src/config.js';
 const owner='generated-owner-login-fixture-token-123456789';
 const headers=(token=owner)=>({authorization:'Bearer '+token});
@@ -58,9 +58,14 @@ test('failed or revoked approvals cannot publish a usable grant; pending request
  f.advance(10*60000);assert.throws(()=>f.handoffs.detail(pending.id));
  assert.throws(()=>new LoginHandoffs(f.connections).poll({id,verifier}));
 });
-test('retired collector credentials are refused without rewriting their saved hashes',async t=>{
- const f=await fixture(t);await f.connections.session(serverUrl,'Generated',{deviceId:'generated-phone',deviceName:'Generated phone',platform:'android'});
- const state=f.saved();state.credentials[0].scope='collector';const original=JSON.stringify(state);let writes=0;
- const retired=new Connections(f.store,f.sources,{file:{read:async()=>state,write:async()=>{writes++;}}});
- await assert.rejects(retired.init(),{code:'connection_storage_invalid'});assert.equal(JSON.stringify(state),original);assert.equal(writes,0);
+test('invalid credential scopes or unbound collectors are refused without rewriting saved hashes',async t=>{
+ for(const invalid of ['unknown-scope','missing-device','missing-platform'] as const)await t.test(invalid,async sub=>{
+  const f=await fixture(sub);await f.connections.session(serverUrl,'Generated',{deviceId:'generated-phone',deviceName:'Generated phone',platform:'android'});
+  const state=f.saved();state.credentials[0].scope=invalid==='unknown-scope'?'unknown':'collector';
+  if(invalid==='missing-device')delete state.credentials[0].deviceId;
+  if(invalid==='missing-platform')delete state.credentials[0].platform;
+  const original=JSON.stringify(state);let writes=0;
+  const rejected=new Connections(f.store,f.sources,{file:{read:async()=>state,write:async()=>{writes++;}}});
+  await assert.rejects(rejected.init(),{code:'connection_storage_invalid'});assert.equal(JSON.stringify(state),original);assert.equal(writes,0);
+ });
 });

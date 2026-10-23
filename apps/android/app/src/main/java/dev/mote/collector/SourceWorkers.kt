@@ -13,7 +13,6 @@ class SourceScanWorker(context: Context, params: WorkerParameters) : Worker(cont
     override fun onStopped() { cancellation.cancel(); super.onStopped() }
     override fun doWork(): Result = ConnectionGuard.sync { work() } ?: Result.retry()
     private fun work(): Result {
-        if (inputData.getString("owner") != Settings(applicationContext).read().ownerKey()) return Result.success()
         val store = applicationContext.localSources(); val settings = Settings(applicationContext)
         return try {
             for (source in store.sources().filter { it.enabled && (inputData.getString("sourceId") == null || it.id == inputData.getString("sourceId")) }) {
@@ -37,14 +36,14 @@ class SourceScanWorker(context: Context, params: WorkerParameters) : Worker(cont
                         }
                         is SourceEmission.Indexed -> store.scan(source, emission.scan, minOf(64L, settings.read().maxQueueMiB.toLong()) * 1024 * 1024)
                     }
-                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, name = source.id)
-                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, name = source.id) }
+                    SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, sourceId = source.id)
+                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, sourceId = source.id) }
                 catch (_: android.os.OperationCanceledException) { return Result.retry() }
-                catch (e: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, detail = e.javaClass.simpleName, name = source.id) }
+                catch (e: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e), sourceId = source.id) }
             }
             SourceWork.upload(applicationContext, inputData.getBoolean("syncExplicit", false))
             Result.success()
-        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, detail = e.javaClass.simpleName); Result.retry() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e)); Result.retry() }
     }
 }
 
@@ -62,10 +61,10 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
             val config = settings.read(); val explicit = inputData.getBoolean("manual", false)
             if (!config.hasSyncConnection() || config.syncPaused || (config.syncMode == "manual" && !explicit)) return Result.success()
             if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) return Result.success()
-            config.validate(); config.validateConnection(); val target = config.ownerKey()
+            config.validate(); config.validateConnection(); val target = SourceRules.target(config.server, config.token)
             SyncSchedule.waitingReason(applicationContext, config)?.let { settings.syncStatus("waiting", it); return Result.retry() }
             settings.syncStatus("uploading", MoteI18n.text("正在同步来源记录"))
-            val rotation = applicationContext.accountPreferences("source-upload-turns")
+            val rotation = applicationContext.getSharedPreferences("source-upload-turns", Context.MODE_PRIVATE)
             val after = if (rotation.getString("target", null) == target) rotation.getString("after", null) else null
             val dispatch = UploadSlice(maxBytes = 8L * 1024 * 1024, maxRequests = 128)
             for (selectedSource in rotateUploadSources(store.sources().filter { it.enabled }, after) { it.id }) {
@@ -76,44 +75,41 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                 if (isStopped) return Result.retry()
                 SyncSchedule.waitingReason(applicationContext, config)?.let { settings.syncStatus("waiting", it); return Result.retry() }
                 if (source.kind == "local-files" && source.retention == "snapshot" && !source.centralProcessingConsent) { store.status(source.id, "consent"); blocked = true; continue }
-                if (!explicit && source.binaryFiles() && applicationContext.fileArchives().next(source.id)?.optJSONObject("syncFailure")?.optBoolean("blocked") == true) {
-                    // A permanent refusal is durable. Future timer/continuation
-                    // jobs must wait for the existing explicit retry control.
-                    blocked = true; continue
-                }
                 if (!(source.binaryFiles() && !source.syncContinuously && applicationContext.fileArchives().configure(source).optBoolean("importCaptured")) && !SourceAccess.available(applicationContext, source)) { store.status(source.id, "permission"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.CONFIGURATION); continue }
                 try {
-                    fun stillSelected(): Boolean = !isStopped && !ConnectionGuard.reconfiguring() && store.sources().any { it == source && it.enabled } && settings.read().let { it.ownerKey() == target }
+                    fun stillSelected(): Boolean = !isStopped && !ConnectionGuard.reconfiguring() && store.sources().any { it == source && it.enabled } && settings.read().let { SourceRules.target(it.server, it.token) == target }
                     if (!stillSelected()) return Result.retry()
                     store.selectTarget(source.id, target)
                     if (!store.state(source.id).optBoolean("registered")) {
                         val registrationBody = source.registration(settings.deviceId)
                         slice.record(registrationBody.toString().toByteArray(Charsets.UTF_8).size.toLong())
-                        applicationContext.ingress3(config, ::stillSelected).register(registrationBody)
+                        SyncSchedule.requireConditions(applicationContext, config)
+                        val (code, registration) = CollectorHttp(applicationContext).post("${config.server}/api/sources", registrationBody, config.connectionToken())
+                        if (code !in 200..299 || registration?.optString("id") != source.id) { Operations.record(applicationContext, OperationKind.SOURCE_FAILED, Operations.httpReason(code), httpStatus = code); store.status(source.id, "http"); failed = true; continue }
+                        if (!registration.optBoolean("enabled", true)) { store.status(source.id, "paused"); continue }
+                        if (!stillSelected()) return Result.retry()
+                        val patch = org.json.JSONObject().put("name", source.name).put("initialSync", source.initialSync).put("retention", source.retention)
+                        slice.record(patch.toString().toByteArray(Charsets.UTF_8).size.toLong())
+                        SyncSchedule.requireConditions(applicationContext, config)
+                        val (patchCode, updated) = CollectorHttp(applicationContext).request("PATCH", "${config.server}/api/sources/${source.id}", patch, config.connectionToken())
+                        if (patchCode !in 200..299 || updated?.optString("id") != source.id) { Operations.record(applicationContext, OperationKind.SOURCE_FAILED, Operations.httpReason(patchCode), httpStatus = patchCode); store.status(source.id, "http"); failed = true; continue }
                         store.registered(source.id, target)
                     }
                     val confirmed = SourceContextSync.sync(applicationContext, store, source, config, target, slice, ::stillSelected)
                     if (confirmed == null) {
-                        // Context CAS also uses 409. Resolve an actual source
-                        // pause through the credential's narrow registration port.
-                        if (applicationContext.ingress3(config, ::stillSelected).sourcePaused(source)) store.status(source.id, "paused")
-                        else if (store.state(source.id).optString("status") == "context-conflict") blocked = true else failed = true
+                        if (store.state(source.id).optString("status") == "context-conflict") blocked = true else failed = true
                         continue
                     }
                     source = confirmed
                     if (SourceAdapters.default.forKind(source.kind).queueKind == SourceQueueKind.FILE_ARCHIVE) {
-                        if (source.retention == "snapshot") {
-                            val queue = applicationContext.fileArchives()
-                            val afterRecovery = queue.state(source.id).optString("recoveryAfter")
+                        if (explicit && source.retention == "snapshot" && source.syncContinuously) {
+                            SyncSchedule.requireConditions(applicationContext, config)
+                            val (recoveryCode, recovery) = CollectorHttp(applicationContext).get("${config.server}/api/file-sync/v1/recovery?sourceId=${android.net.Uri.encode(source.id)}", config.connectionToken())
                             slice.record(0)
-                            val page = applicationContext.ingress3(config, ::stillSelected).recoveryPage(source.id, afterRecovery)
-                            check(stillSelected())
-                            queue.requestSnapshotRecovery(source, page.getJSONArray("items"))
-                            val state = queue.state(source.id)
-                            if (page.isNull("nextCursor")) state.remove("recoveryAfter") else {
-                                state.put("recoveryAfter", page.getString("nextCursor")); more = true; readyMore = true
+                            if (recoveryCode == 200 && recovery?.optJSONArray("items") != null) {
+                                if (!stillSelected()) return Result.retry()
+                                applicationContext.fileArchives().requestSnapshotRecovery(source, recovery.getJSONArray("items"))
                             }
-                            queue.saveState(source.id, state)
                         }
                         var finished = false
                         while (submitted < 20 && !slice.exhausted) {
@@ -129,18 +125,27 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                         if (isStopped || !stillSelected()) return Result.retry()
                         SyncSchedule.waitingReason(applicationContext, config)?.let { settings.syncStatus("waiting", it); return Result.retry() }
                         val body = store.next(source.id, target) ?: break
-                        val rejection = store.state(source.id).optJSONObject("uploadRejection")
-                        if (!explicit && rejection != null && rejection.optString("externalId") == body.getString("externalId") && rejection.optString("revision") == body.getString("revision")) {
-                            blocked = true; break
-                        }
                         if (!slice.admit(body.toString().toByteArray(Charsets.UTF_8).size)) break
                         SyncSchedule.requireConditions(applicationContext, config)
-                        applicationContext.ingress3(config, ::stillSelected).item(source, body)
-                        val code = 200
+                        val (code, ack) = CollectorHttp(applicationContext).request("PUT", "${config.server}/api/sources/${source.id}/items", body, config.connectionToken())
+                        if (code == 409 || code == 410) {
+                            Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.HTTP, httpStatus = code)
+                            val paused = code == 409 && runCatching {
+                                SyncSchedule.requireConditions(applicationContext, config)
+                                val (lookupCode, listing) = CollectorHttp(applicationContext).get("${config.server}/api/sources", config.connectionToken())
+                                lookupCode == 200 && IngressV2Protocol.sourcePaused(source.id, listing)
+                            }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false }
+                            store.status(source.id, if (paused) "paused" else "ack")
+                            if (!paused) blocked = true
+                            break
+                        }
+                        if (code !in 200..299 || !SourceRules.validAck(source.id, body, ack)) {
+                            store.status(source.id, "ack"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, Operations.httpReason(code), httpStatus = code); SupportEvents.record(applicationContext, EventStage.SOURCE, EventJournal.httpFailure(code), httpStatus = code); failed = true; break
+                        }
                         store.acknowledge(source.id, target, body.getString("externalId"), body.getString("revision")); submitted++
                         settings.syncStatus("uploading", MoteI18n.text("正在同步来源记录"), uploaded = true)
                         Operations.record(applicationContext, OperationKind.SOURCE_ACK, httpStatus = code)
-                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code, name = source.id)
+                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, httpStatus = code, sourceId = source.id)
                     }
                     if (store.next(source.id, target) == null) store.status(source.id, "synced")
                     else if (submitted >= 20 || slice.exhausted) { more = true; readyMore = true }
@@ -148,24 +153,14 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     throw error
                 } catch (error: FileIngressRejection) {
                     Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.HTTP, httpStatus = error.httpStatus)
-                    val rejection = try { confirmSourceRejection(error) {
-                            SyncSchedule.requireConditions(applicationContext, config)
-                            applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }.sourcePaused(source)
-                        }
-                    } catch (_: SourcePauseLookupFailure) {
-                        store.status(source.id, "offline")
-                        Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK)
-                        SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, name = source.id)
-                        failed = true
-                        continue
-                    }
-                    val paused = rejection.paused
+                    val paused = error.httpStatus == 409 && runCatching {
+                        SyncSchedule.requireConditions(applicationContext, config)
+                        val (lookupCode, listing) = CollectorHttp(applicationContext).get("${config.server}/api/sources", config.connectionToken())
+                        lookupCode == 200 && IngressV2Protocol.sourcePaused(source.id, listing)
+                    }.getOrElse { if (it is SyncConditionsUnavailable) throw it else false }
                     store.status(source.id, if (paused) "paused" else "ack")
-                    if (!paused) {
-                        blocked = true
-                        if (!source.binaryFiles()) store.next(source.id, target)?.let { store.rejectUpload(source.id, target, it) }
-                    }
-                } catch (e: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, detail = e.javaClass.simpleName, name = source.id); failed = true }
+                    if (!paused) blocked = true
+                } catch (e: Exception) { store.status(source.id, "offline"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.NETWORK); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.NETWORK, errorName = EventJournal.errorName(e), sourceId = source.id); failed = true }
                 finally { dispatch.record(slice.bytes, slice.requests) }
             }
             if (blocked) {
@@ -182,7 +177,7 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
         } catch (error: SyncConditionsUnavailable) {
             settings.syncStatus("waiting", error.waitingReason)
             Result.retry()
-        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID, detail = e.javaClass.simpleName); failure() }
+        } catch (e: Exception) { SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.CONFIG_INVALID, errorName = EventJournal.errorName(e)); failure() }
     }
 }
 
@@ -207,16 +202,16 @@ object SourceWork {
         }
         val manager = WorkManager.getInstance(context)
         if (context.localSources().sources().none { it.enabled }) { manager.cancelUniqueWork("mote-source-scan"); manager.cancelUniqueWork("mote-source-periodic"); manager.cancelUniqueWork("mote-source-upload"); return }
-        val request = OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf("owner" to Settings(context).read().ownerKey(), "manual" to manual, "syncExplicit" to syncExplicit)).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
+        val request = OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf("manual" to manual, "syncExplicit" to syncExplicit)).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
         // Appends a manual follow-up so a save near the end of an active scan cannot be lost.
         manager.enqueueUniqueWork("mote-source-scan", if (manual) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP, request)
-        val periodic = PeriodicWorkRequestBuilder<SourceScanWorker>(15, TimeUnit.MINUTES).setInputData(workDataOf("owner" to Settings(context).read().ownerKey())).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
+        val periodic = PeriodicWorkRequestBuilder<SourceScanWorker>(15, TimeUnit.MINUTES).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
         manager.enqueueUniquePeriodicWork("mote-source-periodic", ExistingPeriodicWorkPolicy.UPDATE, periodic)
         if (!syncExplicit) upload(context)
     }
     internal fun continueScan(context: Context, id: String, explicit: Boolean) {
         val request = OneTimeWorkRequestBuilder<SourceScanWorker>().setInitialDelay(1, TimeUnit.SECONDS)
-            .setInputData(workDataOf("owner" to Settings(context).read().ownerKey(), "manual" to true, "syncExplicit" to explicit, "sourceId" to id)).build()
+            .setInputData(workDataOf("manual" to true, "syncExplicit" to explicit, "sourceId" to id)).build()
         WorkManager.getInstance(context).enqueueUniqueWork("mote-source-scan", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
     fun upload(context: Context, explicit: Boolean = false) = UploadWorker.schedule(context, Settings(context).read(), explicit)

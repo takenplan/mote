@@ -9,7 +9,7 @@ import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {configureLocale,getLocale} from '@mote/shared/i18n';
 import type {FeatureInventory,RecordingStatus} from '@mote/shared';
-import {buildApp} from '../../server/test/fixtures/legacy-app.js';
+import {buildApp} from '../../server/src/app.js';
 import type {Config} from '../../server/src/config.js';
 import type {RecordingProvider} from '../../server/src/connectors/recordings.js';
 import type {Api} from '../src/api.js';

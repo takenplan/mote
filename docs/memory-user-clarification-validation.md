@@ -80,12 +80,8 @@ completion does not imply that a claim was saved. Server fixtures additionally
 cover supported selected results and per-material dependency scope. The browser
 does not contact an external model provider.
 
-Follow the [validation stages](development.md#validation-stages): use focused
-checks during implementation, intermediate commits and draft PR updates, and
-state pending final validation. The integration owner completes the final merge
-candidate's `npm run check:affected` plan and required journeys. Report focused,
-reused and newly executed results separately; broad `check:local` validation is
-selected according to the development guide. Browser screenshots must be
+Before a runtime PR, the full `npm run check:local` remains required. Report its
+actual result separately from these focused checks. Browser screenshots must be
 visually inspected as well as checked for layout overflow.
 
 ## Remaining observation

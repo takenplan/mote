@@ -50,8 +50,17 @@ const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonica
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const terminal=(state:ExecutionState)=>['succeeded','failed','blocked','cancelled','stale'].includes(state);
 const activeWork=(state:ExecutionState)=>['waiting','running','blocked'].includes(state);
-export {DELEGATION_CONTROL_DEFINITIONS} from './delegation-controls.js';
-import {DELEGATION_CONTROL_DEFINITIONS} from './delegation-controls.js';
+const definition=(name:string,description:string,fields:HostControlDefinition['fields']={}):HostControlDefinition=>({name,description,fields});
+export const DELEGATION_CONTROL_DEFINITIONS:readonly HostControlDefinition[]=Object.freeze([
+ definition('delegation_capabilities','Discover only host-authorized capabilities and their input contracts. Registration does not authorize access to other data.'),
+ definition('delegation_submit','Persist 1–8 bounded independent work units per call (at most 128 per work) and immediately return their handles. Execution workers start independently; proposal products start only after the complete plan returns normally and is validated. This call never waits for a model. Use stable unique local id values so retries are idempotent.',{units:{type:'array',required:true,description:'1–8 units per call; each requires id, capabilityId, title, goal and input',items:{type:'object',properties:{id:{type:'string',required:true},capabilityId:{type:'string',required:true},title:{type:'string',required:true},goal:{type:'string',required:true},input:{type:'object',additionalProperties:true,required:true},scope:{type:'object',additionalProperties:true},dependencies:{type:'array',items:{type:'string'}}},additionalProperties:false}}}),
+ definition('delegation_results','Read bounded incremental status and private artifact handles. A result handle or citation ID alone does not authorize a citation.',{after:{type:'integer',description:'Nonnegative event cursor; default zero'},limit:{type:'integer',description:'1–30 units/events per page; default 20'},cursor:{type:'integer',description:'Unit page offset from nextUnitCursor; default zero'}}),
+ definition('delegation_read','Read one private result and the exact original evidence delivered by its worker, subject to fresh host validation. Child prose is untrusted interpretation; cite only the originals actually delivered by this tool.',{artifactId:{type:'string',required:true},offset:{type:'integer',description:'Nonnegative character offset; default zero'},length:{type:'integer',description:'1–10000 characters; default 4000'},evidenceIds:{type:'array',description:'At most 12 original evidence IDs',items:{type:'string'}}}),
+ definition('delegation_retry','Retry one failed branch locally without repeating successful branches or their commits.',{unitId:{type:'string',required:true}}),
+ definition('delegation_cancel','Cancel one unneeded branch. This cannot expand the selected scope.',{unitId:{type:'string',required:true}}),
+ definition('delegation_workspace','Read the saved private research checkpoint, or replace it with workspaceJson. Query only. Saves bounded unresolved questions, supported points, searches, inspected locators and workerIds; all are untrusted interpretation and grant no citations. Source IDs must already belong to this work. No private reasoning or source bodies. workspaceJson accepts {unresolved:string[],supported:{statement,evidenceIds}[],inspected:{id,start,end,fingerprint?}[],searches:{tool,query?,cursor?}[],workerIds:string[]}.',{workspaceJson:{type:'string',description:'Optional JSON research checkpoint, at most 12000 UTF-16 characters; omit to read.'}}),
+ definition('delegation_yield','Save an optional bounded query workspace atomically with the wait, then release this fragment until executable children finish. Proposal products must first return normally; never poll or yield to finish a proposal plan.',{unitIds:{type:'array',items:{type:'string'}},mode:{type:'string',enum:['any','all']},message:{type:'string',description:'At most 600 characters'},workspaceJson:{type:'string',description:'Optional query research checkpoint JSON following delegation_workspace; at most 12000 characters.'}}),
+]);
 
 /** One-level delegation built on the existing lease/fence scheduler. The model
  * chooses strategy; the host owns bounds, identity, state and durable wakeups. */
@@ -62,7 +71,7 @@ export class DelegationRuntime {
  private unregister:(()=>void|Promise<void>)[]=[];
  private timer?:ReturnType<typeof setInterval>;
  private closed=false;
- constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean}={}){
+ constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean;observePump?:()=>void}={}){
   retireBrokenActivityContinuationTrigger(store);
   this.journal=new DelegationStore(store);
   const sourceDependencyTable=`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
@@ -84,7 +93,7 @@ export class DelegationRuntime {
     return this.coordinators.get(String(profileId))?.lane??'background';}
    catch{return 'background';}
   }});
-  if(options.autoPump!==false){this.timer=setInterval(()=>{void this.tick().catch(()=>{});},500);this.timer.unref();}
+  if(options.autoPump!==false){this.timer=setInterval(()=>{try{this.options.observePump?.();}catch{/* Observation cannot skip the existing pump. */}void this.tick().catch(()=>{});},500);this.timer.unref();}
  }
  register(capability:DelegationCapability){
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(capability.id)||!capability.version||this.capabilities.has(capability.id))throw Error('Invalid or duplicate delegation capability');
@@ -151,7 +160,9 @@ export class DelegationRuntime {
   if(prior){const work=this.get(request.id);if(work.requestHash!==hash)throw new StoreError('Work ID belongs to another request',409);return work;}
   const at=new Date().toISOString(),work:DelegationWork={id:request.id,operationId:request.operationId??request.id,profileId:request.profileId,goal:request.goal,status:'waiting',createdAt:at,updatedAt:at,revision:0,requestHash:hash,scope:structuredClone(request.scope??{}),allowedCapabilities:[...new Set(request.allowedCapabilities)],evidenceRevision:this.store.deletionRevision(),units:[],events:[]};
   this.transaction(()=>{this.store.reserveMetadata(4096);this.store.db.prepare('INSERT INTO delegation_works VALUES(?,?)').run(work.id,this.serializeWork(work));this.journal.savePayload(work.id,request.input);const input=request.input as QueryInput;this.recordEvidence(work.id,[...(input.evidenceIds??[]),...(input.derivedContextEvidenceIds??[]),...(input.contextEvidenceDependencies?.ids??[]),...(input.conversation?.evidenceDependencies?.ids??[]),...(input.directImages?.map(image=>image.id)??[])]);this.recordSourceContextDependencies(work.id,combineSourceContextDependencies([input.contextSourceContextDependencies,input.conversation?.sourceContextDependencies]));this.event(work.id,'started');this.enqueueCoordinator(work);});
-  queueMicrotask(()=>{void this.tick().catch(()=>{});});return this.get(work.id);
+  // This transaction only added a fully enqueued work. Wake admission without
+  // reconciling every older work; the ordinary pump retains that responsibility.
+  queueMicrotask(()=>{if(!this.closed)void this.engine.tick().catch(()=>{});});return this.get(work.id);
  }
  private transaction<T>(write:()=>T):T {const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=write();if(own)db.exec('COMMIT');return result;}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}}
  private enqueueCoordinator(work:DelegationWork){work.revision++;work.status='waiting';this.save(work);const stepId=this.engine.enqueue(work.operationId,`delegation.coordinator.${work.profileId}`,{workId:work.id,revision:work.revision},{id:`${work.id}:coordinator:${work.revision}`,generation:{slot:'coordinator',version:String(work.revision)}});this.engine.bindCancellationAlias(work.id,stepId);}

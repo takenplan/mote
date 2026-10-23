@@ -1,5 +1,4 @@
-import {authChangeEvent,authChangeKey,discoverWebSession,logoutWeb} from './web-auth';
-import * as logger from './logger';
+import {installGlobalErrorLogging,log} from './logger';
 import { ClientLoginApproval } from './ClientLoginApproval';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
@@ -35,8 +34,6 @@ createApi,
 errorMessage,
 queryString,
 type Activity,
-type Api,
-isWebConnection,
 type Answer,
 type Capture,
 type Connection,
@@ -59,9 +56,6 @@ import "./styles.css";
 import './workspace.css';
 import './library.css';
 import './settings-ui.css';
-
-globalThis.addEventListener?.('error',event=>logger.error('ui.unhandled_error',{detail:event.error instanceof Error?event.error.name:event.message?.slice(0,200)}));
-globalThis.addEventListener?.('unhandledrejection',event=>logger.error('ui.unhandled_rejection',{detail:event.reason instanceof Error?event.reason.name:String(event.reason).slice(0,200)}));
 import './plugin-center.css';
 import './discovery-ui.css';
 import './feature-guide.css';
@@ -70,6 +64,8 @@ import './memory-presentation.css';
 import './presentation.css';
 import { confirmNavigation } from './unsaved';
 
+
+installGlobalErrorLogging(window);
 
 declare global {
   interface Window { moteCentralSession?: {close: () => void} }
@@ -80,18 +76,23 @@ const periodNames: Record<string, string> = {
   month: moteText("过去 30 天"),
   all: moteText("全部时间"),
 };
-function App({initialConnection}:{initialConnection:Connection|null}) {
+const readConnection = () => {
+  try {
+    return readStoredSession(window.location.origin);
+  } catch {
+    return null;
+  }
+};
+function App() {
   useSyncExternalStore(webFeatures.registry.subscribe,webFeatures.registry.getRevision,webFeatures.registry.getRevision);
   const [connection, setConnection] = useState<Connection | null>(
-    initialConnection,
+    readConnection,
   );
+  useEffect(()=>{if(connection)log('auth.session_started','info');},[connection]);
   const [sessionLifetime, setSessionLifetime] = useState<SessionLifetime>(readSessionLifetime);
   const connectionGeneration = useRef(0);
-  // Navigation retirement is separate from the ticket exchange's own auth announcements.
-  const navigationIntent = useRef(0);
-  const activeApi=useRef<Api|null>(null);
   const [clientLogin,setClientLogin]=useState(loginRequestId);
-  const [verified, setVerified] = useState(Boolean(initialConnection));
+  const [verified, setVerified] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
   const collectionIds = () => webFeatures.collections().map(entry=>entry.id);
   const initialRoute = useRef(readWorkspaceRoute(location.hash,readPage,collectionIds()));
@@ -107,13 +108,12 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
       if (location.hash !== currentHash.current && !confirmNavigation()) {
         history.replaceState(null, '', currentHash.current); return;
       }
-      navigationIntent.current++;
       currentHash.current=location.hash;
       setClientLogin(loginRequestId());
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    const remember=()=>{navigationIntent.current++;currentHash.current=location.hash;};
+    const remember=()=>{currentHash.current=location.hash;};
     window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
     return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
   }, []);
@@ -133,7 +133,6 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   const [revision, setRevision] = useState(0);
   const [evidenceId, updateEvidenceId] = useState<string | null>(()=>readEvidenceRoute(location.hash));
   const setEvidenceId = useCallback((id:string|null) => {
-    navigationIntent.current++;
     updateEvidenceId(changeEvidenceRoute(window,id));
     currentHash.current=location.hash;
   }, []);
@@ -141,19 +140,12 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   const [timelineRevision, setTimelineRevision] = useState(0);
   const clearConnection = useCallback(() => {
     connectionGeneration.current++;
-    const retired=activeApi.current;
-    activeApi.current=null;
-    retired?.close?.();
-    if(retired?.connection){
-      setClientLogin(undefined);
-      removeLoginParameter('loginRequest');
-      currentHash.current=location.hash;
-    }
     clearSession();
-    updateEvidenceId(null);
+    log('auth.session_cleared','info');
     setPeriod("week");
     setConnection(null);
     setVerified(false);
+    setShowConnect(false);
     setActivity({apps:[],devices:[],totalDurationMs:0,captures:0});
     setError("");
     setLoading(false);
@@ -165,44 +157,26 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   useEffect(()=>{
     const handoff=()=>{
       if(!new URLSearchParams(location.hash.split('?')[1]??'').has('loginTicket'))return;
-      clearConnection();
-      const intent=++navigationIntent.current;
-      let target=location.hash;
-      const current=()=>intent===navigationIntent.current&&location.hash===target;
-      // Ticket removal uses replaceState, so it does not emit another hashchange.
-      const pending=consumeLoginTicket(current);
-      target=location.hash;
-      currentHash.current=target;
-      void pending.then(value=>{
-        if(!value||!current())return;
-        setConnection(value);
-        setShowConnect(false);
-        updateEvidenceId(readEvidenceRoute(target));
-      }).catch(()=>{if(current())setShowConnect(true);});
+      clearConnection();const generation=connectionGeneration.current;
+      void consumeLoginTicket(()=>generation===connectionGeneration.current).then(()=>{
+        if(generation===connectionGeneration.current)setConnection(readConnection());
+      }).catch(()=>{if(generation===connectionGeneration.current)setShowConnect(true);});
     };
     window.addEventListener('hashchange',handoff);
-    return()=>{navigationIntent.current++;window.removeEventListener('hashchange',handoff);};
-  },[clearConnection]);
-  useEffect(()=>{
-    const changed=()=>clearConnection();
-    const storage=(event:StorageEvent)=>{if(event.key===authChangeKey){navigationIntent.current++;changed();}};
-    window.addEventListener(authChangeEvent,changed);
-    window.addEventListener('storage',storage);
-    return()=>{window.removeEventListener(authChangeEvent,changed);window.removeEventListener('storage',storage);};
+    return()=>window.removeEventListener('hashchange',handoff);
   },[clearConnection]);
   const disconnect = useCallback(() => {
-    navigationIntent.current++;
-    if(connection&&isWebConnection(connection))void logoutWeb(connection).catch(()=>{});
+    if(connection)void createApi(connection).request('/api/login/logout',{method:'POST',body:'{}'}).catch(()=>{});
     clearConnection();
     setEvidenceId(null);
     window.moteCentralSession?.close();
   }, [clearConnection, setEvidenceId,connection]);
-  const openLogin=()=>{if(connection)disconnect();setShowConnect(true);};
   const unauthorized = useCallback(() => {
+    log('auth.session_rejected','warn');
     // A same-node re-login may continue a direct evidence link. Clear the
     // credential and private UI, but keep the URL until the owner logs in.
     clearConnection();
-    setNotice(moteText("登录已失效，请重新登录。"));
+    setNotice(moteText("登录已失效，请重新输入管理令牌。"));
     setShowConnect(true);
   }, [clearConnection]);
   useEffect(() => {
@@ -222,8 +196,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   const api = useMemo(
     () => {
       const generation = connectionGeneration.current;
-      const next=connection ? createApi(connection, unauthorized, () => generation === connectionGeneration.current) : null;
-      activeApi.current=next;return next;
+      return connection ? createApi(connection, unauthorized, () => generation === connectionGeneration.current) : null;
     },
     [connection, unauthorized],
   );
@@ -231,9 +204,9 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     if (!api || verified) return;
     const controller = new AbortController();
     setError("");
-    void readResource(api,"/api/auth/self",AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]))
+    void readResource(api,"/api/configuration",AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]))
       .then(() => { if (!controller.signal.aborted) setVerified(true); })
-      .catch(e => { if (!controller.signal.aborted) setError(errorMessage(e)); });
+      .catch(e => { if (!controller.signal.aborted) setError(e instanceof ApiError && e.status === 403 ? moteText("此令牌没有管理权限，请退出后使用管理令牌登录。") : errorMessage(e)); });
     return () => controller.abort();
   }, [api, verified, revision]);
   const range: Range = useMemo(() => {
@@ -261,7 +234,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     return ()=>{unsubscribe();queue.close();};
   }, [api,refresh]);
   useEffect(() => {
-    if (!api || !verified || connection?.mode==='web') return;
+    if (!api || !verified) return;
     let active = true;
     const controller = new AbortController();
     setLoading(true); setError("");
@@ -298,7 +271,6 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     const target=canonicalDestination(next,archiveTabRef.current,collectionIds());
     if(!webFeatures.page(target.page)){setNotice(moteText('当前服务未提供此入口'));return;}
     if ((target.page !== page || (target.page==='archive'&&target.collection!==archiveTabRef.current)) && !confirmNavigation()) return;
-    navigationIntent.current++;
     history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
     currentHash.current=location.hash;
     archiveTabRef.current=target.collection; updateArchiveTab(target.collection);
@@ -308,7 +280,6 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   }
   function setArchiveTab(next:ArchiveTab) {
     if(next!==archiveTabRef.current&&!confirmNavigation())return;
-    navigationIntent.current++;
     archiveTabRef.current=next; updateArchiveTab(next);
     if(pageRef.current==='archive') {
       history.pushState(null,'',workspaceHash(routes.archive,next,location.hash));
@@ -316,8 +287,6 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     }
   }
   function connected(value: Connection, lifetime: SessionLifetime = sessionLifetime) {
-    navigationIntent.current++;
-    activeApi.current?.close?.();
     connectionGeneration.current++;
     saveSessionLifetime(lifetime);
     setSessionLifetime(lifetime);
@@ -327,7 +296,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
     setVerified(false);
     setStatus(null);
     setDevices([]); setRecent([]); setInsights([]);
-    setEvidenceId(null);
+    updateEvidenceId(readEvidenceRoute(window.location.hash));
     setActivity({apps:[],devices:[],totalDurationMs:0,captures:0});
     setShowConnect(false);
     setNotice("");
@@ -335,12 +304,12 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   function changeSessionLifetime(lifetime: SessionLifetime) {
     saveSessionLifetime(lifetime);
     setSessionLifetime(lifetime);
-
+    if (connection) setConnection(persistSession(connection, lifetime));
   }
   return (
     <>
     <PresentationSurface
-      navigation={layout => <WorkspaceSidebar layout={layout} page={page} onPage={onPage} connection={connection} verified={verified} profile={status?.profile} onConnect={openLogin}/>}
+      navigation={layout => <WorkspaceSidebar layout={layout} page={page} onPage={onPage} connection={connection} verified={verified} profile={status?.profile} onConnect={()=>setShowConnect(true)}/>}
       toolbar={
         <header className="topbar">
           <div>
@@ -349,7 +318,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
               <strong>{pageLabels[page]??moteText("当前服务未提供此入口")}</strong>
             </span>
           </div>
-          <div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('今天')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;openLogin();}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
+          <div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('今天')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
             <CentralStatusPill
               connection={connection}
               verified={verified}
@@ -373,16 +342,15 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
             )}
             <button
               className="avatar"
-              aria-label={connection ? moteText("登录会话")+(isWebConnection(connection)?" · "+connection.username:"") : moteText("登录 Mote")}
-              title={connection&&isWebConnection(connection)?connection.username:undefined}
+              aria-label={connection ? moteText("登录会话") : moteText("登录 Mote")}
               onClick={() => connection ? onPage("about") : setShowConnect(true)}
             >
-              {connection&&isWebConnection(connection)?connection.username:moteText("我")}</button>
+              {moteText("我")}</button>
           </div>
         </header>}
       footer={<footer className="footer"><span>{moteText("Mote · 让上下文，有迹可循。")}</span><span>{connection && status ? moteText("{0} 条记录 · {1}", status.storage.captures.toLocaleString(getLocale()), status.agent.configured ? moteText("Agent 就绪") : moteText("等待模型配置")) : moteText("采集 · 汇聚 · 理解")}</span></footer>}
     >
-        <React.Suspense key={(connection?.viewScope??'signed-out')+':'+page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
+        <React.Suspense key={page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
           <div className="workspace-tools">
           {connection&&verified&&<WorkspaceNavigation page={page} onPage={onPage}/> }
           <div className="workspace-range">
@@ -416,7 +384,7 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
               </button>
             </div>
           )}
-          {!webFeatures.page(page)?<section className="panel panel-pad"><h1>{moteText('当前服务未提供此入口')}</h1><button className="button" onClick={()=>onPage('archive')}>{moteText('资料库')}</button></section>:!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={openLogin}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
+          {!webFeatures.page(page)?<section className="panel panel-pad"><h1>{moteText('当前服务未提供此入口')}</h1><button className="button" onClick={()=>onPage('archive')}>{moteText('资料库')}</button></section>:!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
             <>
               <div className="greeting welcome simple-welcome archive-welcome">
                 <div>
@@ -471,8 +439,8 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
                   )
                 : api && (
                     <>
-                      {connection?.mode!=='web'&&!["notes","devices","connections","settings","sources","archive","memories","imports","insights","about"].includes(page) && !status && !error && <Spinner label={moteText("正在读取节点状态…")}/>}
-                      <FeaturePage page={page} props={{api,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,openLogin,sessionLifetime,changeSessionLifetime}}/>
+                      {!["notes","devices","connections","settings","sources","archive","memories","imports","insights","about"].includes(page) && !status && !error && <Spinner label={moteText("正在读取节点状态…")}/>}
+                      <FeaturePage page={page} props={{api,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,sessionLifetime,changeSessionLifetime}}/>
                     </>
                   )}
             </>
@@ -484,12 +452,11 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
         <LoginDialog
           destination={pageLabels[page]??moteText("当前服务未提供此入口")}
           onConnected={connected}
-          onClose={() => {navigationIntent.current++;setShowConnect(false);}}
+          onClose={() => setShowConnect(false)}
         />
       )}
       {evidenceId && api && verified && (
         <EvidenceDialog
-          key={connection?.viewScope}
           id={evidenceId}
           api={api}
           onOpen={setEvidenceId}
@@ -503,10 +470,8 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
 
 document.documentElement.lang = getLocale();
 document.documentElement.dir = 'ltr';
-void Promise.all([featuresReady,(async()=>{
-  try{return await consumeLoginTicket() ?? await discoverWebSession();}catch{return null;}
-})()]).then(([,initialConnection])=>createRoot(document.getElementById("root")!).render(
+void Promise.all([featuresReady,consumeLoginTicket().catch(()=>{})]).then(()=>createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App initialConnection={initialConnection}/>
+    <App />
   </React.StrictMode>,
 ));

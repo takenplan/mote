@@ -20,44 +20,43 @@
 
 ## 配置
 
-实例固定诊断使用操作员选定的 YAML；个人详细 Agent 过程使用本账号 YAML 的 `agentTrace.traceEnabled`，两者不共用开启权限。`MOTE_CONFIG_FILE` 选择实例文件；旧 `MOTE_ENV_FILE` 启动方式会拒绝。实例诊断开关/级别与个人 trace 开关分别校验并生效，日志目录和容量保持现有重启边界。不要把开发、验证和日常资料库放在同一个数据目录。环境和部署方式见 [deployment.md](deployment.md)。
+将配置写入实际使用的主 `mote.yaml`，也可在设置页保存同一文件。使用 `MOTE_CONFIG_FILE` 显式选择文件；旧 `MOTE_ENV_FILE` 启动方式会拒绝，需要离线准备 YAML 后改用新选择器。诊断开关、级别与 trace 校验成功后立即生效，日志目录和容量参数需重启。不要把开发、验证和日常资料库放在同一个数据目录。环境和部署方式见 [deployment.md](deployment.md)。
 
 | 配置项 | 默认值 | 含义 |
 |---|---|---|
-| `diagnostics.enabled` | `true` | `false` 时停止实例诊断事件的读取、积累和写入；个人 trace 使用自己的开关 |
-| `diagnostics.debug` | Dev 默认 `true`，其它为 `false` | 将非 silent 级别提升为 debug，仅控制实例固定运维事件，不开启私人 payload |
-| 个人 `agentTrace.traceEnabled` | 所有 Profile 均为 `false` | 本人显式开启后记录账号内详细 Agent payload；当前实例 `diagnostics.traceEnabled` 不为其授权，也不让实例日志接收私人 trace |
+| `diagnostics.enabled` | `true` | `false` 时不读取、积累或写入诊断事件；即时数值状态仍可查看 |
+| `diagnostics.debug` | `false` | `true` 时将非 silent 级别提升为 debug，额外记录阶段开始事件，便于发现尚未完成的阶段 |
+| `diagnostics.traceEnabled` | dev 为 `true`，其它环境为 `false` | 把详细 Agent 请求上下文、prompt、模型输出、工具调用、校验和状态写入普通 central 日志，可能包含个人内容 |
 | `diagnostics.level` | `info` | `debug`、`info`、`warn`、`error`、`silent`；`silent` 优先于 debug 开关 |
 | `diagnostics.directory` | 数据目录下的 `logs` | 每个节点使用独立目录；不会出现在支持包内 |
 | `diagnostics.maxBytes` | DEV `104857600`，其它 `2097152` | 省略使用 profile 默认值；显式字节值 DEV 允许 `0.1`–`100` MiB，其它 `0.1`–`8` MiB；跨 UTC 日期或达到上限时轮转 |
 | `diagnostics.maxFiles` | `3` | 保留文件数，允许 `1`–`10` |
 | `diagnostics.maxEntries` | `2000` | 内存事件上限，允许 `100`–`5000` |
 
-debug 只增加固定运维事件，不记录请求正文、模型输入输出、令牌、原图、来源文本、文件路径、设备名称或原始 URL/query。本人可通过当前账号的配置 API 保存 `agentTrace:{traceEnabled:true}`；设置页和 Agent 视角使用同一账号事务。详细 payload 保存在账号运行记录，可能包含 prompt、上下文、模型输出和工具结果，不写入普通实例 central 日志。关闭立即停止新增详细 payload，不删除原有历史；固定过程元数据仍可保留。模型与 SDK 异常继续映射为固定类别，不返回异常原文或堆栈。
+debug 开关只增加固定事件，不记录请求正文、模型输入输出、令牌、原图、来源文本、文件路径、设备名称或原始 URL/query。另行开启 `diagnostics.traceEnabled: true` 后，开发诊断会在普通 central 日志中记录这些详细内容；模型与 SDK 异常按类型或 HTTP 状态映射为固定类别，不会返回异常原文或堆栈。
 
-文件名仍为 `central.0.ndjson`、`central.1.ndjson` 等，`0` 是当前文件；服务端在 UTC 日期变化时切换文件，达到 `diagnostics.maxBytes` 时也会继续按大小轮转。DEV 默认结构化日志的磁盘上限为 300 MiB，其它环境为 6 MiB，另有一个很小的进程锁文件。原生监督日志 `central.log` 独立轮转，使用同样的容量配置，所以 DEV 两组默认合计最多 600 MiB；Docker stdout 仍使用部署层上限。不保证固定保留时长。显式 `diagnostics.maxBytes: 2097152` 不会被静默覆盖；已有 YAML DEV 可用 [默认值迁移命令](deployment.md#dev-log-retention) 后在下次正常重启生效。日志文件权限为 `600`，新建目录权限为 `700`。只有取得该日志目录写锁的节点才会读取和轮转它；第二个活跃写入者会报告写入失败，不会覆盖另一个节点的日志。崩溃留下的失效锁和未写完的尾行会在重启时处理。旧的 `central.N.ndjson` 文件仍按原编号选择；当前网页分页、日志文本接口和支持包只返回白名单运维元数据，旧文件中的私人 trace 也不会绕过投影。
+文件名仍为 `central.0.ndjson`、`central.1.ndjson` 等，`0` 是当前文件；服务端在 UTC 日期变化时切换文件，达到 `diagnostics.maxBytes` 时也会继续按大小轮转。DEV 默认结构化日志的磁盘上限为 300 MiB，其它环境为 6 MiB，另有一个很小的进程锁文件。原生监督日志 `central.log` 独立轮转，使用同样的容量配置，所以 DEV 两组默认合计最多 600 MiB；Docker stdout 仍使用部署层上限。不保证固定保留时长。显式 `diagnostics.maxBytes: 2097152` 不会被静默覆盖；已有 YAML DEV 可用 [默认值迁移命令](deployment.md#dev-log-retention) 后在下次正常重启生效。日志文件权限为 `600`，新建目录权限为 `700`。只有取得该日志目录写锁的节点才会读取和轮转它；第二个活跃写入者会报告写入失败，不会覆盖另一个节点的日志。崩溃留下的失效锁和未写完的尾行会在重启时处理。旧的 `central.N.ndjson` 文件仍按原编号读取，网页分页、原始日志接口和支持包导出不需要迁移。
 
 内存写入队列最多保留 1024 条待写事件，另有最多 64 条正在写入；单条结构化日志最多 20 KiB，超出时截断可选字段并标记 `truncated`，不会丢弃整条事件。突发流量或磁盘故障时允许丢弃诊断事件，`droppedEvents` 和 `writeFailures` 会增加，业务隐私检查与入库不因此被绕过。关闭服务会等待当前日志写入结束。禁用诊断不会主动删除已经存在的历史日志文件。
 
-个人详细 trace 沿用实例容量参数：单事件最多 8 MiB 且不超过 maxBytes，详细 payload 总量受 maxEntries 与 maxBytes × maxFiles 约束；超限保留截断标记/摘要。`GET /api/agent-view/runs` 返回本人最近最多 20 个可见运行；`GET /api/agent-view/events` 按账号游标分页，每页最多 100 项、约 60000 字符，单 payload 预览最多 12000 字符，并返回 partial/truncated。它不承诺完整保留历史，也不从当前资料重建缺失的旧输入。实例分页与支持包只返回安全元数据，日志文本接口可能仍返回整个选中文件的安全投影。实现边界见[个人 trace](../apps/server/src/scope/ask-traces.ts)与[管理日志](../apps/server/src/scope/management.ts)。
+详细 trace 使用独立的 8 MiB 单条硬上限，并且不能超过所配置的文件容量；超大 trace 写入截断摘要。其它 trace 字符串、集合和深度边界见 [服务器配置](server-configuration.md#日志与调试)。启动、分页与范围导出按行遍历日志，安全范围导出不会累积 trace 正文；原始文件下载仍可能返回整份 100 MiB 文件。
 
 ## 认证 API
 
-以下接口使用当前账号会话并返回 `Cache-Control: no-store`；实例诊断及支持包另需管理员权限。个人 trace 只能通过本人的私人接口读取，管理员不能据管理身份选择别人的运行。不要把凭据写到 URL 参数中。
+以下接口都需要中央节点 Bearer 令牌，并返回 `Cache-Control: no-store`。不要把令牌写到 URL 参数中。
 
 | 接口 | 内容 |
 |---|---|
 | `GET /api/status` | 当前 profile、服务配置状态、存储状态及诊断摘要 |
-| `GET /api/configuration` | 本账号已注册配置域及 revision，包括个人 agentTrace 开关；不返回其他账号配置或主机目录，不属于公开支持包 |
+| `GET /api/configuration` | 所有者专用：生效配置、私有目录、存储来源、变量名和密钥配置状态；此响应不属于可公开分享的诊断包 |
 | `GET /api/diagnostics` | 数值快照：进程 CPU/RSS/运行时间、索引队列、设备报告的排队总量、存储统计、日志容量及丢弃/失败计数 |
 | `GET /api/diagnostics/events?afterSeq=0&limit=200` | 从指定序号之后向前读取事件，单页最多 500 条 |
-| `GET /api/diagnostics/logs?file=0` | 管理员读取所选实例日志的安全运维投影，不含个人 trace |
-| `GET /api/agent-view/runs`、`GET /api/agent-view/events` | 本账号当前仍获准的运行与 trace，使用私人游标、截断与 partial 标记 |
+| `GET /api/diagnostics/logs?file=0` | 读取普通 central 日志原文；详细 Agent trace（若开启）也在这里 |
 | `GET /api/support-bundle` | 下载 `mote-support.json`：快照和最近最多 500 条事件 |
 
 事件分页返回 `{items,nextSeq,oldestSeq}`。下一次请求使用 `nextSeq`；`afterSeq=0` 从最早保留的事件开始。若只想显示最近 200 条，先读取快照，再以 `max(0,lastSeq-200)` 为游标。若游标早于 `oldestSeq`，更早事件已超过保留范围；若换成另一资料库或日志已被清空，应重置游标。
 
-支持包中的 `scope` 为 `central-safe-support`。它只包含固定事件和数值；个人开启详细 Agent trace 后也不将其正文导入实例支持包，不包含主 YAML、访问令牌、模型凭据、数据库、截图、问题、答案、笔记、Agent 工具参数或任意异常文本。旧日志被读取时也按同一字段白名单过滤。支持包用于排错，不能用于恢复资料库。
+支持包中的 `scope` 为 `central-safe-support`。它只包含固定事件和数值；即使开发环境开启详细 Agent trace，也会排除 trace 正文，不包含主 YAML、访问令牌、模型凭据、数据库、截图、问题、答案、笔记、Agent 工具参数或任意异常文本。旧日志被读取时也按同一字段白名单过滤。支持包用于排错，不能用于恢复资料库。
 
 ## 如何判断卡在哪个阶段
 

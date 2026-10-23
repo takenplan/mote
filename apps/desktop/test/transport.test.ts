@@ -1,3 +1,7 @@
+import {mkdtemp,rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {EventJournal} from '../src/support';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { heartbeat, uploadCapture,uploadCaptureBatch } from '../src/transport';
 import { defaultConfig } from '../src/config';
@@ -100,4 +104,16 @@ describe('acknowledgment-gated uploads', () => {
     await heartbeat({ ...defaultConfig(), token: 'synthetic-token' }, {});
     expect(cancel).toHaveBeenCalledOnce();
   });
+});
+
+it('heartbeat failures record a fixed location and safe type without leaking transport content, and honor opt-out',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-heartbeat-log-'));let enabled=true;
+ try {
+  const journal=new EventJournal(directory,()=>enabled);
+  vi.stubGlobal('fetch',vi.fn().mockRejectedValue(Object.assign(new Error('PRIVATE_URL_TOKEN'),{name:'PRIVATE_NAME',code:'ECONNREFUSED'})));
+  await heartbeat({...defaultConfig(),token:'PRIVATE_TOKEN'}, {},journal);
+  expect(await journal.read()).toMatchObject([{stage:'HEARTBEAT',code:'NETWORK',errorName:'OtherError'}]);
+  expect(await journal.readRaw()).not.toContain('PRIVATE');
+  enabled=false;await heartbeat({...defaultConfig(),token:'PRIVATE_TOKEN'}, {},journal);expect((await journal.read()).length).toBe(1);
+ }finally{await rm(directory,{recursive:true,force:true});}
 });

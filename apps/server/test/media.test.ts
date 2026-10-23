@@ -8,7 +8,7 @@ import type {ContextReader} from '@mote/agent';
 import type {Config} from '../src/config.js';
 import {Store} from '../src/store.js';
 import {Indexer} from '../src/indexer.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 
 const at=(second:number)=>new Date(Date.UTC(2026,8,12,1,0,second)).toISOString();
 const session=(overrides:Record<string,unknown>={})=>({sessionId:'generated-session',appId:'fixture.player',appName:'Generated player',playbackState:'playing',appVisibility:'background',playbackType:'local',title:'虚构海边故事',artist:'Generated narrator',album:'Generated album',...overrides});

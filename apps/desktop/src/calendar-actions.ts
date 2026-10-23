@@ -1,4 +1,4 @@
-import { requireConnectionToken } from './login-session';
+import { connectionToken, requireConnectionToken } from './login-session';
 import { moteText } from '@mote/shared/i18n';
 import {readFile,mkdir,writeFile,rename} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -7,8 +7,6 @@ import {moteActionMarker,calendarEventSchema,calendarDescription,type ActionProp
 import {calendarHelper} from './source-calendar';
 import {validateServerUrl} from './config';
 import type {Config} from './contracts';
-import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
-import {assertAccountConnection} from './ingress-client';
 export interface CalendarActionIO {request:(path:string,body?:unknown)=>Promise<any>;native:(command:'calendar-permission'|'calendar-create'|'calendar-change',input?:unknown)=>Promise<any>;read:(key:string)=>Promise<string|undefined>;write:(key:string,value:string)=>Promise<void>}
 /** Native ledger is written before creation; a crash can only reconcile, never blindly insert again. */
 const executionQueues=new Map<unknown,Promise<unknown>>();
@@ -32,17 +30,11 @@ export class CalendarActions {
   }catch{await this.io.request(`/api/actions/${id}/receipt`,{deviceId:this.config.deviceId,operationId:action.operationId,status:'uncertain'}).catch(()=>{});throw Error(moteText("保存结果待核实。请检查日历权限与网络后再次核实；不会重复插入。"));}
  });}
 }
-export function nativeCalendarActions(config:Config,helper:string,directory:string,assertCurrent:()=>void=()=>{}){
- config={...config,account:config.account&&{...config.account}};
- const owner=accountKey(config);if(!owner)throw Error('Account confirmation required');
- const origin=validateServerUrl(config.serverUrl),root=join(directory,'calendar-actions',createHash('sha256').update(JSON.stringify([owner,config.deviceId])).digest('hex'));
- const confirm=async()=>{assertCurrent();await assertAccountConnection(config);assertCurrent();};
+export function nativeCalendarActions(config:Config,helper:string,directory:string){
+ const origin=validateServerUrl(config.serverUrl),root=join(directory,'calendar-actions',createHash('sha256').update(origin+config.deviceId).digest('hex'));
  return new CalendarActions(config,{
-  async request(path,body){await confirm();const r=await fetch(origin+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(30000),headers:{...DESKTOP_PROTOCOL_HEADERS,'X-Mote-Ingress-Version':'3',Authorization:`Bearer ${requireConnectionToken(config)}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(moteText("中央日程操作失败，请刷新或重新授权"));const result=await r.json();assertCurrent();return result;},
-  // After a native mutation the original ledger must retain its external fact,
-  // even if the account retired while EventKit was running. The next request
-  // rechecks authority; no new account can adopt or publish this fact.
-  native:async(command,input)=>{await confirm();return calendarHelper(helper,command,input);},
+  async request(path,body){const r=await fetch(origin+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${requireConnectionToken(config)}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(moteText("中央日程操作失败，请刷新或重新授权"));return r.json();},
+  native:(command,input)=>calendarHelper(helper,command,input),
   async read(key){try{return await readFile(join(root,key),'utf8');}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return;throw e;}},
   async write(key,value){await mkdir(root,{recursive:true,mode:0o700});const path=join(root,key);await writeFile(path+'.tmp',value,{mode:0o600,flush:true});await rename(path+'.tmp',path);},
  },root);

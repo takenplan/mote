@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {uiPageText,type CaptureInput,type UiPageV2} from '@mote/shared';
 import type {ContextRecord,QueryInput} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store} from '../src/store.js';
 import {uiPageCaptureSource} from '../src/capture-memory-intake.js';

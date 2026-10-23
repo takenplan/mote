@@ -1,7 +1,5 @@
 # UI presentation rollout ledger
 
-> 2026-10-20 delivery note: the original U5/prepared-for-PR checkpoint below is historical. PR 122 entered main at `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`; the preceding rollout PR 120 entered at `18a25c0f3a7b97aa1e7947f070b4e6edc1f11071`. These merge facts do not extend the executed visual, native or device scope. Current delivery and the separate UI follow-up are in [Project progress](../project-progress.md).
-
 Date: 2026-10-15. Base: `9798e01cdce3b9ca26b9a86e6071186d8859c402`. Branch: `codex/ui-presentation-linear`.
 
 The owner approved implementation, verification, fixes and a PR after regression. Merge and release are outside this request. [The accepted ADR](../adr-ui-presentation-packs.md) records the selected structure/visuals and supersession. [The readiness audit](ui-extension-readiness-2026-10-15.md) records the starting state.

@@ -8,7 +8,7 @@ import {FileProcessing} from './file-processing.js';
 import {processorSettingsFingerprint,processorContract} from './file-configuration.js';
 import type {AppliedFilePolicy} from './file-policy.js';
 import {ImageInputRegistry,ImageAttachmentIntake,installImageInputs,installImageSchema,type ImageInputRow,type ImageOriginal} from './image-inputs.js';
-import {DEFAULT_IMAGE_RECIPE,imageDependencyPermits,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
+import {DEFAULT_IMAGE_RECIPE,imageInterpretationSchema,type ImageInterpretation} from './image-recipes.js';
 import {linkOperationParent} from './operation-projection.js';
 import {imageOutput} from './evidence-image.js';
 import {writeFileTranscriptChunks} from './file-transcript-chunks.js';
@@ -18,6 +18,7 @@ import type {ConfigService} from './config-service.js';
 import {effectiveProcessorParameters} from './processor-parameters.js';
 import {MEDIA_CATALOG,type MediaAssets} from './media-assets.js';
 import {requestLocalJson,isLoopback} from './local-http.js';
+import type {MediaExecutionCall} from './media-execution-facts.js';
 import {ProcessorAdmission} from './processor-admission.js';
 import type {MaterialStore} from './materials.js';
 import {APPLEDOUBLE_REASON,isAppleDouble} from './appledouble.js';
@@ -26,7 +27,7 @@ const settingsSchema=imageSettingsSchema;
 export type ImageSettings=z.infer<typeof settingsSchema>;
 export type ImageUnderstanding={
  selection(service?:ProcessingService):{fingerprint:string;configured:boolean;receipt:Record<string,unknown>};
- run(input:{record:CaptureRecord;original:ImageOriginal;ocr?:Transcript;signal:AbortSignal;readImage(input:import('@mote/shared').ImageReadInput):Promise<import('@mote/shared').ImageReadResult>;operationId:string;service?:ProcessingService}):Promise<ImageInterpretation>;
+ run(input:{record:CaptureRecord;original:ImageOriginal;ocr?:Transcript;signal:AbortSignal;readImage(input:import('@mote/shared').ImageReadInput):Promise<import('@mote/shared').ImageReadResult>;operationId:string;service?:ProcessingService;assertContextAuthority?:()=>void}):Promise<ImageInterpretation>;
 };
 type PlanStep={name:string;kind:string;stage:{id:string;version:string};dependsOn:string[]};
 type JobRow={capture_id:string;kind:string;state:string;error:string|null;attempts:number;available_at:number;auto_eligible:number};
@@ -72,6 +73,7 @@ export class ImageProcessing {
   }));
  }
  owns(id:string){return Boolean(this.store.db.prepare('SELECT 1 FROM image_inputs WHERE capture_id=?').get(id));}
+ mediaCallCurrent(call:MediaExecutionCall){const step=this.engine.get(call.stepId);return Boolean(step&&String(step.input.fingerprint)===call.generation&&this.valid(step));}
  private row(id:string){return this.store.db.prepare('SELECT * FROM image_inputs WHERE capture_id=?').get(id) as ImageInputRow|undefined;}
  private exclusion(id:string){return this.store.db.prepare('SELECT x.reason FROM image_exclusions x JOIN image_inputs i ON i.capture_id=x.capture_id AND i.hash=x.hash WHERE x.capture_id=?').get(id)?.reason as string|undefined;}
  /** Old imports and new synchronized files share this byte-format admission gate. */
@@ -280,7 +282,7 @@ export class ImageProcessing {
      const job=db.prepare('SELECT * FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,stage.name) as JobRow;
      if(['succeeded','cancelled'].includes(job.state)||job.attempts>=4||job.available_at>Date.now())continue;
      if(!settingsSchema.parse(this.settings()).enabled){db.prepare("UPDATE perception_jobs SET state='blocked',error='processing_disabled' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
-     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return imageDependencyPermits(String(dependency?.state??''),stage.optionalDependencies?.includes(name)??false);})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
+     if(!stage.dependsOn.every(name=>{const dependency=db.prepare('SELECT state FROM perception_jobs WHERE capture_id=? AND kind=?').get(row.capture_id,name);return dependency?.state==='succeeded'||stage.optionalDependencies?.includes(name)&&['blocked','failed','cancelled'].includes(String(dependency?.state));})){db.prepare("UPDATE perception_jobs SET state='blocked',error='dependency_failed' WHERE capture_id=? AND kind=?").run(row.capture_id,stage.name);continue;}
      const fingerprint=this.fingerprint(row,stage),input={captureId:row.capture_id,hash:row.hash,name:stage.name,generation:row.generation,fingerprint,adapterVersion:this.inputs.get(row.adapter)?.version??'',stage:stage.stage};
      linkOperationParent(this.store,(row.adapter==='mote.file-image'?'file:':'capture:')+row.capture_id,'image:'+row.capture_id);
      const stepId=this.engine.enqueue('image:'+row.capture_id,'images.'+stage.kind,input,{generation:{slot:stage.name,version:sha256(JSON.stringify([row.generation,fingerprint]))}}),step=this.engine.get(stepId)!;
@@ -294,6 +296,7 @@ export class ImageProcessing {
  }
  async tick(){await this.attachments.prepare();await this.refreshWorker();for(let i=0;i<32;i++){const ids=this.prepare();if(!ids.length)break;const before=ids.map(id=>this.engine.get(id)?.state);await this.engine.drain(ids);if(ids.every((id,index)=>this.engine.get(id)?.state===before[index]))break;}}
  private async execute(step:ExecutionStep,signal:AbortSignal){
+  const fence=String(this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence??'');
   const row=this.row(String(step.input.captureId))!,original=this.original(row)!;
   const cached=row.reuse_allowed?this.store.db.prepare('SELECT json,id,capture_id FROM image_products WHERE fingerprint=? AND current=1 LIMIT 1').get(String(step.input.fingerprint)):undefined;
   if(cached)return {...JSON.parse(String(cached.json)),reuse:{productId:cached.id,captureId:cached.capture_id}};
@@ -302,8 +305,8 @@ export class ImageProcessing {
   const dependencies=Object.fromEntries(plan.steps.find(s=>s.name===step.input.name)!.dependsOn.map(name=>[name,this.product(row.capture_id,name)?JSON.parse(String(this.product(row.capture_id,name)!.json)).payload:undefined]));
   const readImage=async(input:Omit<import('@mote/shared').ImageReadInput,'id'>)=>{signal.throwIfAborted();const bytes:Buffer[]=[];for await(const part of original.read())bytes.push(part);return imageOutput(Buffer.concat(bytes),original.mimeType,{...input,id:row.capture_id},()=>this.valid(step));};
   const payload=await stage.run({record,hash:original.hash,mimeType:original.mimeType,dependencies,signal,readImage,
-   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId),endpoint=this.processorEndpoint(step),run=()=>this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));const raw=await(endpoint?this.processorAdmission.run(endpoint,run):run());return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
-   understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),operationId:step.operationId,service:plan.binding.settings.analysisModel});},
+   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId),endpoint=this.processorEndpoint(step),run=()=>this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,request=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,request,readOriginal:()=>original.read()}),processor.id==='image.http'?{step,generation:String(step.input.fingerprint),endpoint:plan.binding.settings.imageEndpoint,apiKey:plan.binding.settings.apiKey??'',assert:()=>{signal.throwIfAborted();if(!this.valid(step)||!this.engine.isCurrentGrant(step.id,fence))throw new ExecutionFailure('stale','input_changed');}}:undefined);const raw=await(endpoint?this.processorAdmission.run(endpoint,run):run());return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
+   understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),assertContextAuthority:()=>{signal.throwIfAborted();if(!this.valid(step))throw new ProviderFailure({category:'permanent',code:'context_evidence_restricted'});},operationId:step.operationId,service:plan.binding.settings.analysisModel});},
   });
   if(stage.kind==='ocr'){const transcript=transcriptSchema.parse(payload);if(transcript.durationMs!==0||transcript.segments.map(s=>s.text).join('\n').length>100000)throw new StoreError('Invalid image OCR output',422);return {payload:transcript,kind:'ocr'};}
   const interpretation=imageInterpretationSchema.parse(payload),metadata=await readImage({view:'metadata'}),imageView=metadata.imageView!;
@@ -318,6 +321,7 @@ export class ImageProcessing {
   this.store.reserveMetadata(Buffer.byteLength(json)+4096);
   db.prepare('UPDATE image_products SET current=0 WHERE capture_id=? AND name=?').run(row.capture_id,String(step.input.name));
   db.prepare('INSERT INTO image_products(id,capture_id,name,kind,fingerprint,json) VALUES(?,?,?,?,?,?)').run(id,row.capture_id,String(step.input.name),result.kind,String(step.input.fingerprint),json);
+  this.processing.completeMediaStep(step.id);
   if(result.kind==='ocr'){
    const transcript=transcriptSchema.parse(result.payload),text=transcript.segments.map(s=>s.text).join('\n');
    if(row.adapter==='mote.capture-image')this.store.savePerception(row.capture_id,'ocr',{id:randomUUID(),fingerprint:String(step.input.fingerprint),text,transcript,inputHash:row.hash,engine:this.binding(row).applied.profile.processorId,engineVersion:this.processing.runtime.registry.get(this.binding(row).applied.profile.processorId).version,configRevision:this.settings().providerRevision,generatedAt:new Date().toISOString()},false);

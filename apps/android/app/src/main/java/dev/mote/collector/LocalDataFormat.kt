@@ -6,7 +6,7 @@ import java.io.FileOutputStream
 
 /** Breaking local boundary: preserve retired files and require an explicit app-storage reset. */
 object LocalDataFormat {
-    const val VERSION = 4
+    const val VERSION = 3
     const val RESET_MESSAGE = "本机数据格式已退役，请清除应用存储后重新设置。"
     private const val MARKER = ".mote-local-format"
     // WorkManager opens these framework files before Application.onCreate on a fresh install.

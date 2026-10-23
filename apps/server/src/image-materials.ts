@@ -2,7 +2,7 @@ import type {Store} from './store.js';
 export type ImageMaterialProjection={
  original?:{captureId:string;sha256:string};
  archiveOnly:boolean;products:{name:string;kind:string;revision:string;text?:string;evidence?:Record<string,unknown>;regions?:unknown[]}[];
- jobs:{name:string;kind?:string;revision?:string;state:'ready'|'pending'|'failed'|'unavailable';reason?:string}[];
+ jobs:{name:string;state:'ready'|'pending'|'failed'|'unavailable';reason?:string}[];
 };
 /** The image product state is independent of overall file progress. A successful
  * empty OCR is ready; failed VLM never revokes retained OCR evidence. */

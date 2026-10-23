@@ -13,7 +13,7 @@ import {MemoryStore} from '../src/memory.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
 import {reviewMemory,memoryReviewReceipt} from '../src/memory-review.js';
 import {EvidenceReader} from '../src/evidence-reader.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 const sourceId='generated-memory-source',externalId='generated-item';

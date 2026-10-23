@@ -1,9 +1,5 @@
 # 资料库与插件扩展契约
 
-> 当前多用户 Central 的可执行接入路径见 [插件开发指南](plugin-authoring.md)。
-> 本文的领域职责和展示合同仍可参考；下文 `MOTE_BACKEND_PLUGINS`、旧 source recipe
-> 与 material consumer 装配示例需要旧入口，未由当前 `buildScopedApp` 加载。
-
 应用外壳和主题的可信扩展现由 [UI presentation ADR](adr-ui-presentation-packs.md)补充：功能贡献保持以下精确类型／版本合同，主题和布局单独绑定。默认主导航与来源配置／活动归属按新 ADR 执行，不改变 MaterialStore、执行器或权限权威。
 
 本次保留 DeepSeek fork Cordis、领域 registries、ExecutionEngine、MaterialStore 和 Harness bridge。资料库是 MaterialStore 的所有者目录投影；新插件不能另建一套资料、任务或授权权威。

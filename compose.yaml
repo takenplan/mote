@@ -4,11 +4,18 @@ services:
     image: ${MOTE_IMAGE:?Profile image is required}
     user: "0:0"
     restart: "no"
-    command: ["node", "scripts/storage-owner-entry.mjs", "${MOTE_CONTAINER_USER:?Profile owner is required}", "/data", "${MOTE_MODELS_DIRECTORY:?Configured model directory is required}", "/worker-facts"]
+    command: ["node", "scripts/storage-owner-entry.mjs", "${MOTE_CONTAINER_USER:?Profile owner is required}", "/data", "${MOTE_MODELS_DIRECTORY:?Configured model directory is required}"]
     volumes:
-      - mote-data:/data
-      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
-      - mote-worker-facts:/worker-facts
+      - type: volume
+        source: mote-data
+        target: /data
+        volume:
+          nocopy: true
+      - type: volume
+        source: mote-models
+        target: ${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+        volume:
+          nocopy: true
     network_mode: none
   mote:
     image: ${MOTE_IMAGE:?Profile image is required}
@@ -23,8 +30,16 @@ services:
     environment:
       MOTE_CONFIG_FILE: /config/mote.yaml
     volumes:
-      - mote-data:/data
-      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+      - type: volume
+        source: mote-data
+        target: /data
+        volume:
+          nocopy: true
+      - type: volume
+        source: mote-models
+        target: ${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+        volume:
+          nocopy: true
       # Mount the parent directory so an atomic YAML replacement remains visible.
       - type: bind
         source: ${MOTE_CONFIG_DIRECTORY:?Profile configuration directory is required}
@@ -56,13 +71,19 @@ services:
     environment:
       MOTE_CONFIG_FILE: /config/mote.yaml
     volumes:
-      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}:ro
-      - mote-worker-facts:/worker-facts
+      - type: volume
+        source: mote-models
+        target: ${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+        read_only: true
+        volume:
+          nocopy: true
       - type: bind
         source: ${MOTE_CONFIG_DIRECTORY:?Profile configuration directory is required}
         target: /config
         read_only: true
     command: ["node", "scripts/media-worker-entry.mjs", "ocr"]
+    healthcheck:
+      test: ["CMD", "node", "apps/server/dist/healthcheck.js", "--shared-network"]
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -72,8 +93,6 @@ services:
     extends: ocr-worker
     command: ["node", "scripts/media-worker-entry.mjs", "asr"]
 volumes:
-  mote-worker-facts:
-    name: ${MOTE_VOLUME:?Profile-specific volume is required}-worker-facts
   mote-data:
     name: ${MOTE_VOLUME:?Profile-specific volume is required}
   mote-models:

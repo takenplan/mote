@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {AgentTimeoutError,type QueryInput} from '@mote/agent';
 import type {QueryResult,UsageReceipt} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {agentDeadline} from '../src/agent-deadline.js';
 import type {Config} from '../src/config.js';
 

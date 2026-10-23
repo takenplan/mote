@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import sharp from 'sharp';
 import {formatEvidenceRef} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store} from '../src/store.js';
 import {parse} from 'yaml';

@@ -5,7 +5,7 @@ import {readFileSync,readdirSync,lstatSync} from 'node:fs';
 import {unzipSync} from 'fflate';
 import {z} from 'zod';
 import type {PluginConfigurationField,PluginReleasePreview} from '@mote/shared';
-import {StoreError} from './execution-storage.js';
+import {StoreError} from './store.js';
 
 const relativePath=z.string().min(1).refine(value=>!value.startsWith('/')&&!value.includes('\\')&&!value.split('/').some(part=>part==='..'||part==='.'||part===''),'Invalid package path');
 const fieldSchema=z.object({id:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),label:z.string().min(1),type:z.enum(['text','number','boolean','select','model-profile','secret-reference']),required:z.boolean().optional(),options:z.array(z.object({value:z.string(),label:z.string()}).strict()).optional(),description:z.string().optional()}).strict();
@@ -14,11 +14,10 @@ const fieldSchema=z.object({id:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),label
 export const pluginManifestSchema=z.object({
   schemaVersion:z.literal(1),id:z.string().regex(/^[a-z][a-z0-9.-]{2,127}$/),name:z.string().min(1),version:z.string().min(1),
   runtime:z.literal('worker'),entry:relativePath,archive:z.object({asset:z.string().regex(/^[^/\\]+\.zip$/),sha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
-  capabilities:z.array(z.enum(['repository','retrieval','engine','source','processor','model','ui'])).nonempty(),configuration:z.array(fieldSchema),dependencies:z.array(z.string()),access:z.array(z.string()),
-  components:z.array(z.object({id:z.string().min(1).max(160),version:z.string().min(1).max(80),surface:z.enum(['ingress','processing','data','agent','card','panel','settings']),capability:z.enum(['source','processor','repository','retrieval','engine','model','ui'])}).strict()).optional(),
+  capabilities:z.array(z.enum(['repository','retrieval','engine'])).nonempty(),configuration:z.array(fieldSchema),dependencies:z.array(z.string()),access:z.array(z.string()),
 }).strict();
 export type PluginManifest=z.infer<typeof pluginManifestSchema>;
-export type ResolvedPluginRelease={preview:PluginReleasePreview;manifest:PluginManifest;archiveUrl:string;hostAdapter?:string};
+export type ResolvedPluginRelease={preview:PluginReleasePreview;manifest:PluginManifest;archiveUrl:string;hostAdapter?:'mote.mem0@1'|'mote.hindsight@1'};
 export type PluginReleaseTransport=(url:string)=>Promise<{bytes:Uint8Array}>;
 const hash=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 const repositorySchema=z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
@@ -68,7 +67,7 @@ export class GitHubPluginReleases {
         {id:'embeddingDimension',label:'Embedding dimension',type:'number',required:true},
         {id:'embeddingSecretReference',label:'Embedding secret reference',type:'secret-reference'},
       ]:[{id:'modelProfileId',label:'Model profile',type:'model-profile',required:true}];
-      const manifest:PluginManifest={schemaVersion:1,id:mem0?'mote.mem0':'mote.hindsight',name:mem0?'Mem0 (Mote adapter)':'Hindsight (Mote adapter)',version:mem0?'3.3.1':'0.10.2',runtime:'worker',entry:'host-adapter.mjs',archive:{asset:mem0?'upstream-source.zip':'upstream-api-source.zip',sha256:digest},capabilities:mem0?['repository','retrieval']:['engine'],components:(mem0?['repository','retrieval'] as const:['engine'] as const).map(capability=>({id:(mem0?'mote.mem0.':'mote.hindsight.')+capability,version:mem0?'3.3.1':'0.10.2',surface:capability==='engine'?'agent' as const:'data' as const,capability})),configuration,dependencies:mem0?['Bundled Mote adapter@1','mem0ai@3.3.1','better-sqlite3@12.10.0']:['Bundled Mote adapter@1','Docker with the pinned Hindsight service@0.10.2 image and an owned scoped worker'],access:['Central private plugin storage','Configured provider endpoints']};
+      const manifest:PluginManifest={schemaVersion:1,id:mem0?'mote.mem0':'mote.hindsight',name:mem0?'Mem0 (Mote adapter)':'Hindsight (Mote adapter)',version:mem0?'3.3.1':'0.10.2',runtime:'worker',entry:'host-adapter.mjs',archive:{asset:mem0?'upstream-source.zip':'upstream-api-source.zip',sha256:digest},capabilities:mem0?['repository','retrieval']:['engine'],configuration,dependencies:mem0?['Bundled Mote adapter@1','mem0ai@3.3.1','better-sqlite3@12.10.0']:['Bundled Mote adapter@1','Docker with the pinned Hindsight service@0.10.2 image and an owned scoped worker'],access:['Central private plugin storage','Configured provider endpoints']};
       this.validateArchive(bytes,manifest,true);
       return {manifest,archiveUrl,hostAdapter:mem0?'mote.mem0@1':'mote.hindsight@1',preview:{id:randomUUID(),name:manifest.name,version:manifest.version,source:{repository:repo,tag:release.tag_name,commit,digest},runtime:'service',restartRequired:false,capabilities:manifest.capabilities.map(id=>({id,state:'unknown',reason:'Requires an actual instance capability check'})),dependencies:manifest.dependencies,access:manifest.access,issues:[mem0?'The upstream source is pinned. This Mote build supplies the executable compatibility adapter.':'The pinned upstream API source is hindsight_api_slim-0.10.2-py3-none-any.whl. This Mote build supplies the executable compatibility adapter and pinned Docker runtime.'],installable:true}};
     }

@@ -18,7 +18,7 @@ test('explicit migration checks only the selected known volumes and refuses runn
  const p={profile:'test',meta:{runtime:'docker',volume:'generated-data',modelsVolume:'generated-models'},modelDirectory:'/generated-model-resources'},calls=[];
  const dependencies={configurationUser:async()=> '501:20',execute:async(_command,args)=>{calls.push(args);return '';},compose:async(_p,args)=>{calls.push(args);}};
  assert.deepEqual(await migrateStorageOwner(p,dependencies),{migrated:true,profile:'test',owner:'501:20',started:false});
- assert.deepEqual(calls.at(-1),['run','--rm','--no-deps','storage-init','node','scripts/storage-owner-entry.mjs','--migrate','501:20','/data','/generated-model-resources','/worker-facts']);
+ assert.deepEqual(calls.at(-1),['run','--rm','--no-deps','storage-init','node','scripts/storage-owner-entry.mjs','--migrate','501:20','/data','/generated-model-resources']);
  assert.deepEqual(calls.filter(args=>args[0]==='ps').map(args=>args[2]),['volume=generated-data','volume=generated-models']);
  let mutated=false;await assert.rejects(migrateStorageOwner(p,{...dependencies,execute:async(_command,args)=>args[0]==='ps'?'generated-running-container':'',compose:async()=>{mutated=true;}}),/Stop every container/);assert.equal(mutated,false);
 });

@@ -25,7 +25,7 @@ export async function main(args = process.argv.slice(2)) {
   const migrate = args[0] === '--migrate';
   if (migrate) args = args.slice(1);
   const [user, ...directories] = args; const owner = parseStorageOwner(user);
-  if (!directories.length || directories.some(value => !isAbsolute(value))) throw Error('Owned volume directories are required');
+  if (directories.length !== 2 || directories.some(value => !isAbsolute(value))) throw Error('Two owned volume directories are required');
   if (migrate) {
     await new Promise((resolveMigration, reject) => {
       const child = spawn('chown', ['-R', user, ...directories], { stdio: 'ignore' });

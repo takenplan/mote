@@ -16,9 +16,18 @@ export function eventLevel(code: EventCode): EventLevel {
   if (['WAIT_NETWORK','SCHEDULER','PERMISSION','MODEL_UNAVAILABLE'].includes(code)) return 'warn';
   return 'error';
 }
-export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number; detail?: string; name?: string; kind?: string }
+const errorNames = ['Error','TypeError','RangeError','SyntaxError','DOMException','AbortError','TimeoutError','TransportFailure','ConnectionError','CalendarPermissionError','QueueFullError','StorageCommitUncertainError','OtherError'] as const;
+const operationNames = ['mote:source-sync','mote:source-files','mote:source-calendar','mote:source-update','mote:connection-confirm','mote:connection-test','mote:update-check','mote:update-download','mote:update-install','mote:retry','mote:configure','mote:start','mote:stop','mote:note','mote:note-draft-update','mote:support-export','mote:export-queue','mote:import-queue'] as const;
+const sourceKinds = ['local-files','local-calendar','coding-agent'] as const;
+const sourceId = (value: unknown): value is string => typeof value === 'string' && /^local-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
+/** Names are untrusted too: a caller can replace Error.name with content. */
+export function safeErrorName(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return;
+  try { const name=(error as {name?:unknown}).name; return typeof name==='string' && (errorNames as readonly string[]).includes(name) ? name : 'OtherError'; }
+  catch { return 'OtherError'; }
+}
+export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number; errorName?: string; operation?: string; sourceId?: string; sourceKind?: string }
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= Number.MAX_SAFE_INTEGER;
-const text = (v: unknown, max: number): string | undefined => typeof v === 'string' && v.trim() ? v.replaceAll(/[\r\n]+/g, ' ').slice(0, max) : undefined;
 function cleanEvent(value: unknown): SupportEvent | undefined {
   if (!value || typeof value !== 'object') return;
   const v = value as SupportEvent;
@@ -27,9 +36,10 @@ function cleanEvent(value: unknown): SupportEvent | undefined {
     ...(['debug','info','warn','error'].includes(v.level ?? '') ? { level: v.level } : {}),
     ...(number(v.elapsedMs) && v.elapsedMs >= 0 ? { elapsedMs: v.elapsedMs } : {}),
     ...(Number.isInteger(v.httpStatus) && v.httpStatus! >= 100 && v.httpStatus! <= 599 ? { httpStatus: v.httpStatus } : {}),
-    ...(text(v.detail, 400) ? { detail: text(v.detail, 400) } : {}),
-    ...(text(v.name, 160) ? { name: text(v.name, 160) } : {}),
-    ...(text(v.kind, 80) ? { kind: text(v.kind, 80) } : {}) };
+    ...(errorNames.includes(v.errorName as typeof errorNames[number]) ? {errorName:v.errorName} : {}),
+    ...(operationNames.includes(v.operation as typeof operationNames[number]) ? {operation:v.operation} : {}),
+    ...(sourceId(v.sourceId) ? {sourceId:v.sourceId} : {}),
+    ...(sourceKinds.includes(v.sourceKind as typeof sourceKinds[number]) ? {sourceKind:v.sourceKind} : {}) };
 }
 export function httpFailure(status: number): EventCode { return status === 401 || status === 403 ? 'AUTH' : status === 409 || status === 410 ? 'CONFLICT' : status >= 500 ? 'SERVER' : 'RESPONSE'; }
 export class TransportFailure extends Error {
@@ -61,7 +71,7 @@ export class EventJournal {
   constructor(private readonly directory: string, private readonly enabled: () => boolean, private readonly limit = 500) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error(moteText("事件日志上限无效"));
   }
-  record(stage: EventStage, code: EventCode, metrics: { elapsedMs?: number; httpStatus?: number; detail?: string; name?: string; kind?: string } = {}): Promise<void> {
+  record(stage: EventStage, code: EventCode, metrics: Pick<SupportEvent,'elapsedMs'|'httpStatus'|'errorName'|'operation'|'sourceId'|'sourceKind'> = {}): Promise<void> {
     if (!this.enabled()) return Promise.resolve();
     const event = cleanEvent({ atMs: Date.now(), stage, code, level: eventLevel(code), ...metrics });
     if (!event) return Promise.resolve();

@@ -760,10 +760,8 @@ class MainActivity : MoteActivity() {
         var readable = false
         var editRevision = 0
         val persisted = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
-        val noteOwner = Settings(app).read().ownerKey()
-        val noteStore = QuickNotes.draft(app)
         val writer = LatestWriter<Pair<Int, Pair<String, String>>>(io) { (revision, value) ->
-            val result = runCatching { noteStore.update(value.first, value.second) }
+            val result = runCatching { QuickNotes.draft(app).update(value.first, value.second) }
             persisted.set(revision to result.isSuccess)
         }
         fun replace(value: NoteDraft) {
@@ -793,7 +791,7 @@ class MainActivity : MoteActivity() {
         }
         notePoll = draftPoll; if (resumed) handler.post(draftPoll)
         editable(false)
-        task.start(MoteI18n.text("正在读取草稿…"), { progress.text = it }, { noteStore.read() }) { result ->
+        task.start(MoteI18n.text("正在读取草稿…"), { progress.text = it }, { QuickNotes.draft(app).read() }) { result ->
             result.onSuccess { replace(it); readable = true; editable(true); progress.text = MoteI18n.text("草稿已载入") }
                 .onFailure { progress.text = MoteI18n.text("草稿读取失败，原文件保留。明确点击新建才清除旧草稿。") }
         }
@@ -801,7 +799,7 @@ class MainActivity : MoteActivity() {
             if (!task.busy && readable) {
                 val value = note.text.toString() to ""
                 editable(false)
-                task.start(MoteI18n.text("正在保存随手记…"), { progress.text = it }, { QuickNotes.save(app, value.first, value.second, noteOwner) { UploadWorker.schedule(app, it) } }) { result ->
+                task.start(MoteI18n.text("正在保存随手记…"), { progress.text = it }, { QuickNotes.save(app, value.first, value.second) }) { result ->
                     editable(true); persisted.set(null)
                     result.onSuccess { replace(NoteDraft()); persisted.set(null); progress.text = MoteI18n.text("随手记已保存；同步按你的设置运行"); refreshStatus() }
                         .onFailure { progress.text = it.message ?: MoteI18n.text("随手记保存失败，草稿已保留") }
@@ -813,7 +811,7 @@ class MainActivity : MoteActivity() {
                 .setNegativeButton(MoteI18n.text("继续编辑"), null).setPositiveButton(MoteI18n.text("清除并新建")) { _, _ ->
                     if (!task.busy) {
                         editable(false)
-                        task.start(MoteI18n.text("正在清除草稿…"), { progress.text = it }, { noteStore.clear() }) { result ->
+                        task.start(MoteI18n.text("正在清除草稿…"), { progress.text = it }, { QuickNotes.draft(app).clear() }) { result ->
                             result.onSuccess { replace(NoteDraft()); persisted.set(null); readable = true; progress.text = MoteI18n.text("可以开始新随手记") }
                                 .onFailure { progress.text = MoteI18n.text("草稿清除失败") }
                             editable(readable)
@@ -1933,7 +1931,7 @@ class MainActivity : MoteActivity() {
             .setNegativeButton(if (firstStart) MoteI18n.text("暂不开始") else MoteI18n.text("关闭预览"), null)
         if (firstStart) builder.setPositiveButton(MoteI18n.text("按此范围开始")) { _, _ ->
             if (config != loadedConfig) { toast(MoteI18n.text("配置已变化，请重新预览后开始")); return@setPositiveButton }
-            runCatching { settings.capturePreviewAccepted(config) }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
+            runCatching { settings.capturePreviewAccepted() }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
         }
         builder.show()
     }

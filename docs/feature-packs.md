@@ -2,17 +2,17 @@
 
 Global presentation has a separate [theme/layout contract](adr-ui-presentation-packs.md): Web and Mac use `UiPresentationHost` to select exact trusted providers through the shared registry. Android maps the generated theme/layout contract through `NativeUiPackRegistry` and its native renderer. Functional page/card/panel registrations below remain in force. Presentation activation does not change domain work or Agent access; the Memory plugin installer is not a UI-code loader.
 
-The current production entry is `apps/server/src/app.ts → buildScopedApp`. Server account domains and browser presentation have separate lifecycles. Shared browser-safe descriptors describe the surfaces actually registered by their host; a descriptor or installed package does not grant data access or prove a processor has run. The execution engine, Ingress 3 receipts, material publisher and privacy rules retain authority.
+The central Web console and server now have independent Cordis hosts. Shared, browser-safe descriptors join transport, read APIs, commands, processing registrations, UI pages/collections/detail panels and read-only Agent capabilities by feature ID. The execution engine, receipt protocol, material publisher, privacy rules and existing feature behavior remain authoritative.
 
 资料库默认正式资料、命名产物消费者、安装实例代际与展示锚点的完整契约见 [资料库与插件扩展契约](library-plugin-contracts.md)。
 
 ## Ownership
 
-- `apps/server/src/scope/`: production account-domain routes and services. `registerUserRoute` / `registerAuthenticatedRoute` resolve server identity and preserve each domain's authorization, input and lifecycle checks. Upload and playback use current account originals and durable receipts.
-- `apps/server/src/scope/web-routes.ts`: `/api/features` observes actual Fastify `/api/` registrations. It filters administrator routes for ordinary accounts. This inventory is an HTTP surface, not the old combined HTTP/Agent/connector/processor catalog. Use `/api/plugins/host-capabilities` for current worker adapters and the relevant domain catalogs for other capabilities.
-- Current connectors retain source-specific account authorization and lifecycle. Agent read methods are constructed by account-domain services with bounded scope; there are no raw filesystem or archive writer tools in a query.
-- `apps/web/src/features/`: `WebFeatureHost` registers page entries, navigation, Library collections, exact kind/schema/representation renderers and additive detail panels. Cordis owns disposable browser registrations; caches remain bound to authenticated identity and request scope.
-- `apps/server/src/features/`, `ServerFeatureHost`, `agent-feature-host.ts` and `feature-inventory.ts` describe the old single-owner composition retained by explicit legacy fixtures. Their aggregate registration behavior is not the production capability contract.
+- `apps/server/src/features/`: per-feature HTTP entries. Capture, notes, devices, media, files, sources, Coding, materials, context, imports, memory, Ask, insights, actions, processing, models, storage, usage, diagnostics and system routes mount through `ServerFeatureHost`. Its child Fastify scopes inherit authentication, protocol gates, request budgets and diagnostics. Binary begin/chunk/commit and playback continue to use the existing file store and durable receipts.
+- Connector adapters retain their existing scoped `ConnectorRegistry` (MCP, Google, Gmail, Lark and trusted local extensions). Its installed entries also contribute to the feature inventory. OAuth/MCP retain their separate authorization boundaries.
+- `apps/server/src/agent-feature-host.ts`: all archive reader methods are registered by owning feature. The model and Agent inspector consume the same dispatch facade. No writer or raw filesystem operation is exposed. Direct conversation attachments retain their separate request-scoped authorization.
+- `apps/server/src/feature-inventory.ts`: `/api/features` joins actual HTTP, Agent, connector, source-pipeline, file-processor and context-processor registrations. Capability revisions change with the registered surface. This is registration state, not proof that any material ran every processor.
+- `apps/web/src/features/`: page entries declare route, navigation label, section and renderer. Library collections, exact kind/schema/representation renderers and additive detail panels are separate registrations. React subscribes to a disposable registry; Cordis owns the browser registrations. Existing API-instance caches remain scoped to authenticated identity and exact request scope.
 
 The shared registry pins descriptor copies, rejects duplicate component IDs and contract-version conflicts, detects missing/cyclic dependencies and revokes dependent lookup when a provider disappears. Disposal is idempotent and cannot unregister a replacement instance. A missing/failed/ambiguous specialized material renderer falls back to safe Markdown; panel failures stay local. New pages that need new server contracts check the returned capability ID/version before rendering.
 
@@ -27,11 +27,11 @@ The shared registry pins descriptor copies, rejects duplicate component IDs and 
 | Extensions | Runtime capabilities joined across the server and browser hosts |
 | Memory / task details | Read-only saved-record panels; existing review, correction, retry and cancellation commands remain in control |
 
-The Agent inspector is account-scoped and cannot mint disclosure grants for a real query. It previews the current Ask archive scope, not arbitrary administrator impersonation or every possible custom agent task. Historical trace availability still follows the explicit diagnostics setting and log retention. New trace pages have a bounded response and clearly mark truncated payloads.
+The Agent inspector is owner-only and cannot mint disclosure grants for a real query. It previews the current Ask archive scope, not arbitrary administrator impersonation or every possible custom agent task. Historical trace availability still follows the explicit diagnostics setting and log retention. New trace pages have a bounded response and clearly mark truncated payloads.
 
 ## Adding a feature
 
-1. For a built-in server feature, register the real route and service in the relevant `scope/` account domain. Keep identity resolution, ingestion, file upload and publication in trusted host services. For an external extension, start from the current release/worker and domain adapter contracts in [the plugin authoring guide](plugin-authoring.md); old `ServerFeatureHost` composition is not an install path.
+1. Add a server entry under `features/` and compose it in `features/index.ts`. Receive only a typed `Pick<FeatureServices,...>`; keep ingestion, file upload and publication in the existing trusted services. Register processing recipes/executors using the existing Source Pack and processing extension contracts.
 2. Add a browser page/collection/view contribution under `features/`, then include it in the deployment composition. Navigation derives from page entries. Match renderers by exact declared kind, schema version and representation; never infer feature type from captured text. Add panels without changing the owning page's business logic.
 3. Reuse generic read-only Agent methods for new data shapes. Add a new Agent capability only when it has genuinely new read semantics, with the same server authorization and bounded output.
 4. Test on a tiny generated fixture from receipt through publication and UI/model reading. Test duplicate delivery, scope rejection, stale reference rejection, missing dependencies and disposal. Update English and Android catalogs for authored UI strings.
@@ -40,10 +40,8 @@ This MVP bundles trusted plugins with the deployment. Changing HTTP topology or 
 
 ## Validation
 
-The commands below describe fixture entry points, not checks performed during this documentation cleanup. Current production extension evidence is recorded in [the extension parity receipt](validation/parity-extensions-20261018.md). Older renderer runners may retain legacy bootstrap assumptions; read their entry point before using them as acceptance evidence.
-
 - `npm run check:local`: all workspace type checks, i18n synchronization and unit/integration fixture suites.
-- `node --import tsx --test apps/server/test/feature-packs.test.ts apps/web/test/feature-host.test.ts`: legacy server composition and current browser registry regression fixtures. The old host tests do not establish production multiuser authorization.
+- `node --import tsx --test apps/server/test/feature-packs.test.ts apps/web/test/feature-host.test.ts`: scoped lifecycle, duplicate upload, publication, inventory, Agent scope and stale-revision fixtures (three initial Coding events and one append).
 - `node_modules/.bin/electron scripts/test-web-feature-packs.cjs`: isolated server and actual renderer, three generated Coding events, upload/aggregate/Agent views, 29 route smoke probes, mobile overflow and screenshots under ignored `.mote/feature-packs`.
 - `node_modules/.bin/electron scripts/test-web-navigation.cjs`: existing navigation, settings, identity, diagnostics and responsive regression flow. Use `--library-only` for the focused library/keyboard/history/responsive acceptance slice.
 - `MOTE_TEST_CODEX_MODEL=gpt-6-luna node --import tsx scripts/test-codex-provider-live.ts`: opt-in real local Codex App Server model catalog, probe, retrieval/evidence tool call and citation against a generated note. No personal captures are collected or sent.

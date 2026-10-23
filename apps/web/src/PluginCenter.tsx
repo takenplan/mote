@@ -1,13 +1,11 @@
-import {useEffect,useRef,useState} from 'react';
-import {Check,ChevronRight,Download,Package,RefreshCw,Settings2,ShieldCheck} from 'lucide-react';
+import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {Check,ChevronRight,Download,Package,RefreshCw,Settings2,ShieldCheck,X} from 'lucide-react';
 import {moteText} from '@mote/shared/i18n';
-import type {MemoryBindingView,MemoryPlanView,PluginCenterView,PluginConfigurationField,PluginInstanceView,PluginPackageView,PluginReleasePreview,ScopedPluginCenterView,ScopedPluginInstance} from '@mote/shared';
+import type {MemoryBindingView,MemoryPlanView,PluginCenterView,PluginConfigurationField,PluginInstanceView,PluginPackageView,PluginReleasePreview} from '@mote/shared';
 import type {ModelSettingsView} from '@mote/shared/models';
-import {ApiError,errorMessage,isWebConnection,type Api} from './api';
-import {scopedPluginCenter,scopedPluginConfiguration} from './scoped-plugin-center';
-import {ScopedMemoryControl} from './ScopedMemoryControl';
+import {ApiError,errorMessage,type Api} from './api';
 import {FeatureInventory} from './FeatureInventory';
-import {PluginModal as Modal} from './PluginModal';
+import {containDialogFocus} from './dialog-focus';
 import {resources} from './resource-cache';
 import {confirmNavigation,useUnsavedChanges} from './unsaved';
 import {useResource} from './useResource';
@@ -20,51 +18,51 @@ const pluginsPath='/api/plugins',bindingPath='/api/memory-spaces/default/binding
 type Intent={path:string;method:string;body:Record<string,unknown>;after?:(value:unknown)=>void};
 type Dialog={kind:'install';preview:PluginReleasePreview}|{kind:'configure';package:PluginPackageView;instance?:PluginInstanceView}|{kind:'prepare';plan:MemoryPlanView}|{kind:'stop'}|{kind:'uninstall';package:PluginPackageView};
 
+function Modal({title,close,opener,children,busy}:{title:string;close:()=>void;opener:HTMLElement|null;children:ReactNode;busy:boolean}){
+ const ref=useRef<HTMLElement>(null);
+ useEffect(()=>ref.current?containDialogFocus(ref.current,opener):undefined,[opener]);
+ return <div className="modal-backdrop plugin-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)close();}} onKeyDown={event=>{if(event.key==='Escape'&&!busy){event.stopPropagation();close();}}}>
+  <section className="modal plugin-modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
+   <div className="section-heading"><h2>{title}</h2><button className="icon-button" aria-label={moteText('关闭详情')} disabled={busy} onClick={close}><X size={20}/></button></div>
+   {children}
+  </section>
+ </div>;
+}
 
 function Capabilities({items}:{items:PluginReleasePreview['capabilities']}){
  return <ul className="plugin-capabilities">{items.map(item=><li key={item.id}><span>{item.id}</span><span className={'badge '+(item.state==='verified'?'green':'muted')}>{capabilityLabel(item.state)}</span>{item.reason&&<small>{item.reason}</small>}</li>)}</ul>;
 }
-function Configuration({api,item,instance,busy,onSave,scopedInstance,declaredCapabilities}:{api:Api;item:PluginPackageView;instance?:PluginInstanceView;busy:boolean;onSave:(body:Record<string,unknown>)=>void;scopedInstance?:ScopedPluginInstance;declaredCapabilities?:string[]}){
- const web=Boolean(api.connection&&isWebConnection(api.connection));
+function Configuration({api,item,instance,busy,onSave}:{api:Api;item:PluginPackageView;instance?:PluginInstanceView;busy:boolean;onSave:(body:Record<string,unknown>)=>void}){
  const fields=instance?.configurationSchema??item.configurationSchema??[];
  const [name,setName]=useState(instance?.name??item.name),[scope,setScope]=useState(instance?.scope??'default'),[values,setValues]=useState<Record<string,string|number|boolean>>({...instance?.configuration});
  const baseline=JSON.stringify({name:instance?.name??item.name,scope:instance?.scope??'default',values:instance?.configuration??{}});
- const [grants,setGrants]=useState(scopedInstance?.grants??{capabilities:[],sourceIds:[],history:false});
- const dirty=JSON.stringify({name,scope,values})!==baseline||web&&JSON.stringify(grants)!==JSON.stringify(scopedInstance?.grants??{capabilities:[],sourceIds:[],history:false});
+ const dirty=JSON.stringify({name,scope,values})!==baseline;
  useUnsavedChanges(dirty);
- const models=useResource<ModelSettingsView>(api,!web&&fields.some(field=>field.type==='model-profile')?'/api/model-settings':null);
- const scopedModels=useResource<{personal:{id:string;name:string}[];shared:{id:string;name:string}[]}>(api,web&&fields.some(field=>['model-profile','secret-reference'].includes(field.type))?'/api/models':null);
- const sources=useResource<{items:{id:string;name:string}[]}>(api,web?'/api/sources':null);
+ const models=useResource<ModelSettingsView>(api,fields.some(field=>field.type==='model-profile')?'/api/model-settings':null);
  function fieldControl(field:PluginConfigurationField){
   const value=values[field.id];
   const update=(next:string|number|boolean)=>setValues(current=>({...current,[field.id]:next}));
   if(field.type==='boolean')return <input type="checkbox" checked={value===true} onChange={event=>update(event.target.checked)} disabled={busy}/>;
-  if(field.type==='select'||field.type==='model-profile'||web&&field.type==='secret-reference'){
-   const options=web&&field.type!=='select'?['personal','shared'].flatMap(kind=>(scopedModels.data?.[kind as 'personal'|'shared']??[]).map(profile=>({value:kind+':'+profile.id,label:profile.name}))):field.type==='model-profile'?(models.data?.profiles.map(profile=>({value:profile.id,label:profile.name}))??[]):field.options??[];
-   return <select value={typeof value==='string'?value:''} required={field.required&&!(web&&field.type==='secret-reference'&&instance?.secretStatus[field.id]&&!Object.hasOwn(values,field.id))} disabled={busy||Boolean(field.type==='model-profile'&&(web?scopedModels.loading:models.loading))} onChange={event=>update(event.target.value)}><option value="">{moteText('请选择')}</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>;
+  if(field.type==='select'||field.type==='model-profile'){
+   const options=field.type==='model-profile'?(models.data?.profiles.map(profile=>({value:profile.id,label:profile.name}))??[]):field.options??[];
+   return <select value={typeof value==='string'?value:''} required={field.required} disabled={busy||Boolean(field.type==='model-profile'&&models.loading)} onChange={event=>update(event.target.value)}><option value="">{moteText('请选择')}</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>;
   }
   return <input type={field.type==='number'?'number':'text'} value={typeof value==='boolean'?'':value??''} required={field.required} disabled={busy} autoComplete="off" onChange={event=>update(field.type==='number'&&event.target.value!==''?Number(event.target.value):event.target.value)}/>;
  }
- const valid=configurationValid(fields.filter(field=>!(web&&field.type==='secret-reference'&&instance?.secretStatus[field.id]&&!Object.hasOwn(values,field.id))),values);
- return <form onSubmit={event=>{event.preventDefault();if(name.trim()&&(web||scope.trim())&&valid)onSave({name:name.trim(),scope:scope.trim(),configuration:values,...(web?{grants}:{})});}}>
+ return <form onSubmit={event=>{event.preventDefault();if(name.trim()&&scope.trim()&&configurationValid(fields,values))onSave({name:name.trim(),scope:scope.trim(),configuration:values});}}>
   <p>{moteText('配置实例与资料范围，再单独启用。启用不会自动替换当前记忆方案。')}</p>
-  <div className="plugin-fields"><label className="preference-field">{moteText('实例名称')}<input value={name} required maxLength={100} disabled={busy} onChange={event=>setName(event.target.value)}/></label>{web?<><fieldset disabled={busy}><legend>{moteText('能力授权')}</legend>{declaredCapabilities?.map(capability=><label key={capability}><input type="checkbox" checked={grants.capabilities.includes(capability)} onChange={event=>setGrants(current=>({...current,capabilities:event.target.checked?[...current.capabilities,capability]:current.capabilities.filter(id=>id!==capability)}))}/>{capability}</label>)}</fieldset><fieldset disabled={busy}><legend>{moteText('资料范围')}</legend>{[...new Map([...(sources.data?.items??[]),...grants.sourceIds.filter(id=>!sources.data?.items.some(source=>source.id===id)).map(id=>({id,name:id}))].map(source=>[source.id,source])).values()].map(source=><label key={source.id}><input type="checkbox" checked={grants.sourceIds.includes(source.id)} onChange={event=>setGrants(current=>({...current,sourceIds:event.target.checked?[...current.sourceIds,source.id]:current.sourceIds.filter(id=>id!==source.id)}))}/>{source.name}</label>)}<label><input type="checkbox" checked={grants.history} onChange={event=>setGrants(current=>({...current,history:event.target.checked}))}/>{moteText('允许历史读取')}</label></fieldset></>:<label className="preference-field">{moteText('资料范围')}<input value={scope} required disabled={busy} onChange={event=>setScope(event.target.value)}/><small>{moteText('由中央节点核验授权范围；填写范围不会授予新的数据权限。')}</small></label>}
+  <div className="plugin-fields"><label className="preference-field">{moteText('实例名称')}<input value={name} required maxLength={100} disabled={busy} onChange={event=>setName(event.target.value)}/></label><label className="preference-field">{moteText('资料范围')}<input value={scope} required disabled={busy} onChange={event=>setScope(event.target.value)}/><small>{moteText('由中央节点核验授权范围；填写范围不会授予新的数据权限。')}</small></label>
    {fields.map(field=><label className="preference-field" key={field.id}>{field.label}{fieldControl(field)}{field.description&&<small>{field.description}</small>}{field.type==='secret-reference'&&<small>{moteText('仅填写服务器保存的凭据引用，不填写凭据本身。')}{instance?.secretStatus[field.id]?' '+moteText('服务器已配置凭据。'):''}</small>}</label>)}
   </div>
   {!instance&&!item.configurationSchema&&<p className="notice">{moteText('先创建实例，中央节点返回此插件的配置字段。')}</p>}
-  {[models.error,scopedModels.error,sources.error].filter(cause=>cause!==undefined).map((cause,index)=><p className="notice error" role="alert" key={index}>{errorMessage(cause)}</p>)}
-  <div className="plugin-footer"><button className="button primary" disabled={busy||!name.trim()||!web&&!scope.trim()||!valid}>{busy?moteText('正在保存…'):instance?moteText('保存配置'):moteText('创建实例')}</button></div>
+  {models.error!==undefined&&<p className="notice error" role="alert">{errorMessage(models.error)}</p>}
+  <div className="plugin-footer"><button className="button primary" disabled={busy||!name.trim()||!scope.trim()||!configurationValid(fields,values)}>{busy?moteText('正在保存…'):instance?moteText('保存配置'):moteText('创建实例')}</button></div>
  </form>;
 }
 
 export function PluginCenter({api,onPage}:{api:Api;onPage:(page:Page)=>void}){
- const connection=api.connection,web=Boolean(connection&&isWebConnection(connection)),administrator=connection&&isWebConnection(connection)&&connection.administrator;
- return <PluginCenterSession key={web?JSON.stringify(connection):'legacy'} api={api} onPage={onPage} web={web} administrator={Boolean(administrator)}/>;
-}
-function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(page:Page)=>void;web:boolean;administrator:boolean}){
- const pluginResource=useResource<PluginCenterView|ScopedPluginCenterView>(api,pluginsPath,3000),adminResource=useResource<PluginCenterView>(api,web&&administrator?'/api/admin/plugins':null,3000),bindingResource=useResource<MemoryBindingView>(api,web?null:bindingPath,3000);
- const raw=web?pluginResource.data as ScopedPluginCenterView|undefined:undefined;
- const view=raw?scopedPluginCenter(raw,adminResource.data):pluginResource.data as PluginCenterView|undefined,binding=bindingResource.data;
+ const pluginResource=useResource<PluginCenterView>(api,pluginsPath,3000),bindingResource=useResource<MemoryBindingView>(api,bindingPath,3000);
+ const view=pluginResource.data,binding=bindingResource.data;
  const [tab,setTab]=useHashChoice('tab',pluginTabFromHash),[selected,setSelected]=useState<string>(),[dialog,setDialog]=useState<Dialog>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[retry,setRetry]=useState<Intent>();
  const [repository,setRepository]=useState(''),[tag,setTag]=useState(''),[scope,setScope]=useState('default'),[fee,setFee]=useState(false),[showInventory,setShowInventory]=useState(false);
  const opener=useRef<HTMLElement|null>(null),identity=useRef(api),controller=useRef<AbortController|undefined>(undefined),busyRef=useRef(false);identity.current=api;
@@ -78,7 +76,7 @@ function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(pag
  const latestInstance=dialog?.kind==='configure'&&dialog.instance?view?.instances.find(instance=>instance.id===dialog.instance!.id):undefined;
  function open(next:Dialog,event?:HTMLElement){if(!confirmNavigation())return;opener.current=event??document.activeElement as HTMLElement;setDialog(next);setScope('default');setFee(false);setError('');setNotice('');setRetry(undefined);}
  function close(){if(!busy&&confirmNavigation())setDialog(undefined);}
- function refresh(){resources(api).invalidate(key=>key===pluginsPath||key==='/api/admin/plugins'||key.startsWith('/api/plugin-instances')||key.startsWith('/api/memory-spaces')||key.startsWith('/api/operations'));}
+ function refresh(){resources(api).invalidate(key=>key===pluginsPath||key.startsWith('/api/plugin-instances')||key.startsWith('/api/memory-spaces')||key.startsWith('/api/operations'));}
  async function execute(intent:Intent){
   if(busyRef.current)return;const owner=api,signal=new AbortController();controller.current?.abort();controller.current=signal;busyRef.current=true;setBusy(true);setError('');setNotice('');setRetry(undefined);
   try{const value=await owner.request(intent.path,{method:intent.method,body:JSON.stringify(intent.body),signal:signal.signal});if(identity.current!==owner||signal.signal.aborted)return;refresh();setNotice(moteText('请求已登记，运行状态以中央节点返回为准。'));intent.after?.(value);}
@@ -86,8 +84,7 @@ function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(pag
   finally{if(identity.current===owner&&!signal.signal.aborted){busyRef.current=false;setBusy(false);}}
  }
  function command(path:string,expectedRevision:number,body:Record<string,unknown>={},after?:(value:unknown)=>void,method='POST'){
-  const instanceCommand=web&&path.startsWith('/api/plugin-instances/');
-  void execute({path,method,body:instanceCommand?(path.endsWith('/check')?{}:{...body,expectedRevision}):{...body,expectedRevision,operationId:crypto.randomUUID()},after});
+  void execute({path,method,body:{...body,expectedRevision,operationId:crypto.randomUUID()},after});
  }
  async function resolve(){
   if(!repository.trim()||busyRef.current)return;const owner=api,signal=new AbortController();controller.current?.abort();controller.current=signal;busyRef.current=true;setBusy(true);setError('');setNotice('');setRetry(undefined);opener.current=document.activeElement as HTMLElement;
@@ -129,12 +126,11 @@ function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(pag
    </section>}</div></div>}
   </>}
   {tab==='discover'&&<section className="panel plugin-discovery"><div className="section-heading"><h2>{moteText('从 GitHub 添加')}</h2><Download size={20}/></div><p>{moteText('读取兼容发布包，预览版本、能力与访问范围后安装。GitHub 数据连接器仍在资料来源中管理。')}</p>
-   {view&&!view.installation.supported&&<p className="notice">{web&&!administrator?moteText('仅管理员可安装或卸载插件。'):view.installation.reason??moteText('当前节点不支持在线安装。')}</p>}
+   {view&&!view.installation.supported&&<p className="notice">{view.installation.reason??moteText('当前节点不支持在线安装。')}</p>}
    <form className="plugin-fields" onSubmit={event=>{event.preventDefault();void resolve();}}><label className="preference-field">{moteText('GitHub 仓库')}<input value={repository} onChange={event=>setRepository(event.target.value)} placeholder="https://github.com/owner/repository" required disabled={busy}/></label><label className="preference-field">{moteText('发布标签（可选）')}<input value={tag} onChange={event=>setTag(event.target.value)} disabled={busy}/></label><div className="plugin-footer"><button className="button primary" disabled={busy||!repository.trim()||!view?.installation.supported}>{busy?moteText('正在解析…'):moteText('预览发布包')}</button></div></form>
    {Boolean(view?.catalog.length)&&<div className="plugin-catalog">{view?.catalog.map(item=><article key={item.repository}><h3>{item.name}</h3><p>{item.description}</p><small>{item.repository}</small><button className="text-button" onClick={()=>{setRepository(item.repository);setTag('');}}>{moteText('选择仓库')}</button></article>)}</div>}
   </section>}
   {tab==='memory'&&<>
-   {web&&<ScopedMemoryControl api={api} plugins={raw}/>}
    <div className="discovery-inline-guidance"><p>{moteText('这里管理自动记忆的暂停 / 恢复及当前方案。模型分配、自动配方和历史资料处理节奏，请到「模型与服务 → 模块与模型」。独立洞察按自己的设置运行。')}</p><a className="text-button" href="#/system/models?category=model">{moteText('设置模型、配方与处理节奏 →')}</a></div>
    {bindingResource.error!==undefined&&<p className="notice error" role="alert">{errorMessage(bindingResource.error)}<button className="text-button" onClick={bindingResource.refresh}>{moteText('重试')}</button></p>}
    {bindingResource.loading&&!binding&&<p role="status">{moteText('正在读取…')}</p>}
@@ -161,13 +157,10 @@ function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(pag
   {dialog&&<Modal title={dialog.kind==='install'?moteText('安装预览'):dialog.kind==='configure'?moteText('配置实例'):dialog.kind==='prepare'?moteText('更换方案预览'):dialog.kind==='uninstall'?moteText('卸载安装包'):moteText('立即停止自动记忆')} close={close} busy={busy} opener={opener.current}>
    {error&&<p className="notice error" role="alert">{error}{retry&&<button className="text-button" disabled={busy} onClick={()=>void execute(retry)}>{moteText('重试同一请求')}</button>}</p>}
    {dialog.kind==='configure'&&latestInstance&&dialog.instance&&latestInstance.revision!==dialog.instance.revision&&<p className="notice">{moteText('配置已被其他会话更新；当前草稿尚未覆盖服务器。')}<button className="text-button" disabled={busy} onClick={()=>{if(confirmNavigation())setDialog({...dialog,instance:latestInstance});}}>{moteText('重新读取配置并丢弃草稿')}</button></p>}
-   {dialog.kind==='configure'&&<Configuration key={dialog.instance?dialog.instance.id+':'+dialog.instance.revision:'create:'+dialog.package.id} api={api} item={dialog.package} instance={dialog.instance} busy={busy} scopedInstance={raw?.instances.find(instance=>instance.id===dialog.instance?.id)} declaredCapabilities={raw?.packages.find(pkg=>pkg.id===dialog.package.id)?.declaredCapabilities} onSave={body=>{
-    if(web){const previous=raw?.instances.find(instance=>instance.id===dialog.instance?.id),instance=scopedPluginConfiguration(previous,dialog.package.id,body as Parameters<typeof scopedPluginConfiguration>[2]);void execute({path:'/api/plugin-instances',method:'POST',body:{instance,expectedRevision:dialog.instance?.revision??view!.revision,preserveRedactedSecrets:true},after:()=>setDialog(undefined)});}
-    else command(dialog.instance?'/api/plugin-instances/'+encodeURIComponent(dialog.instance.id):'/api/plugin-instances',dialog.instance?.revision??view!.revision,{...body,...(!dialog.instance?{packageId:dialog.package.id}:{})},value=>{if(dialog.instance||dialog.package.configurationSchema)setDialog(undefined);else setDialog({kind:'configure',package:dialog.package,instance:value as PluginInstanceView});},dialog.instance?'PATCH':'POST');
-   }}/>}
-   {dialog.kind==='install'&&<><h3>{dialog.preview.name} · {dialog.preview.version}</h3><dl className="plugin-facts"><div><dt>{moteText('来源')}</dt><dd>{dialog.preview.source.repository}</dd></div><div><dt>{moteText('固定版本')}</dt><dd>{dialog.preview.source.tag} · {dialog.preview.source.commit}</dd></div><div><dt>{moteText('完整性摘要')}</dt><dd>{dialog.preview.source.digest}</dd></div><div><dt>{moteText('运行位置')}</dt><dd>{dialog.preview.runtime==='worker'?moteText('中央 Worker'):moteText('独立服务')}{dialog.preview.restartRequired?' · '+moteText('安装后需重启'):''}</dd></div><div><dt>{moteText('访问声明')}</dt><dd>{dialog.preview.access.length?dialog.preview.access.join(' · '):moteText('没有访问声明')}</dd></div><div><dt>{moteText('依赖')}</dt><dd>{dialog.preview.dependencies.join(' · ')||moteText('无声明依赖')}</dd></div></dl><Capabilities items={dialog.preview.capabilities}/><p className="notice">{moteText('可信插件代码拥有中央宿主权限；访问声明不是沙箱隔离。安装完成后仍需配置、启用与绑定。')}</p>{dialog.preview.issues.map((issue,index)=><p className="notice" key={index}>{issue}</p>)}<div className="plugin-footer"><button className="button primary" disabled={busy||!dialog.preview.installable||!view?.installation.supported} onClick={()=>command('/api/plugins/install',web?adminResource.data!.revision:view!.revision,{previewId:dialog.preview.id},value=>{const installed=(value as PluginCenterView).packages.find(item=>item.source.commit===dialog.preview.source.commit&&item.source.repository===dialog.preview.source.repository);setSelected(installed?.id);setTab('installed');setDialog(undefined);})}>{busy?moteText('正在安装…'):moteText('安装此版本')}</button><button className="button subtle" disabled={busy} onClick={close}>{moteText('取消')}</button></div></>}
+   {dialog.kind==='configure'&&<Configuration key={dialog.instance?dialog.instance.id+':'+dialog.instance.revision:'create:'+dialog.package.id} api={api} item={dialog.package} instance={dialog.instance} busy={busy} onSave={body=>command(dialog.instance?'/api/plugin-instances/'+encodeURIComponent(dialog.instance.id):'/api/plugin-instances',dialog.instance?.revision??view!.revision,{...body,...(!dialog.instance?{packageId:dialog.package.id}:{})},value=>{if(dialog.instance||dialog.package.configurationSchema)setDialog(undefined);else setDialog({kind:'configure',package:dialog.package,instance:value as PluginInstanceView});},dialog.instance?'PATCH':'POST')}/>}
+   {dialog.kind==='install'&&<><h3>{dialog.preview.name} · {dialog.preview.version}</h3><dl className="plugin-facts"><div><dt>{moteText('来源')}</dt><dd>{dialog.preview.source.repository}</dd></div><div><dt>{moteText('固定版本')}</dt><dd>{dialog.preview.source.tag} · {dialog.preview.source.commit}</dd></div><div><dt>{moteText('完整性摘要')}</dt><dd>{dialog.preview.source.digest}</dd></div><div><dt>{moteText('运行位置')}</dt><dd>{dialog.preview.runtime==='worker'?moteText('中央 Worker'):moteText('独立服务')}{dialog.preview.restartRequired?' · '+moteText('安装后需重启'):''}</dd></div><div><dt>{moteText('访问声明')}</dt><dd>{dialog.preview.access.length?dialog.preview.access.join(' · '):moteText('没有访问声明')}</dd></div><div><dt>{moteText('依赖')}</dt><dd>{dialog.preview.dependencies.join(' · ')||moteText('无声明依赖')}</dd></div></dl><Capabilities items={dialog.preview.capabilities}/><p className="notice">{moteText('可信插件代码拥有中央宿主权限；访问声明不是沙箱隔离。安装完成后仍需配置、启用与绑定。')}</p>{dialog.preview.issues.map((issue,index)=><p className="notice" key={index}>{issue}</p>)}<div className="plugin-footer"><button className="button primary" disabled={busy||!dialog.preview.installable||!view?.installation.supported} onClick={()=>command('/api/plugins/install',view!.revision,{previewId:dialog.preview.id},value=>{const installed=(value as PluginCenterView).packages.find(item=>item.source.commit===dialog.preview.source.commit&&item.source.repository===dialog.preview.source.repository);setSelected(installed?.id);setTab('installed');setDialog(undefined);})}>{busy?moteText('正在安装…'):moteText('安装此版本')}</button><button className="button subtle" disabled={busy} onClick={close}>{moteText('取消')}</button></div></>}
    {dialog.kind==='prepare'&&<form onSubmit={event=>{event.preventDefault();if(fee&&scope.trim())memoryCommand('prepare',{targetPlanId:dialog.plan.id,scope:scope.trim(),feeAcknowledged:true},()=>setDialog(undefined));}}><h3>{binding?.activePlan.name} → {dialog.plan.name}</h3><p>{moteText('更换正文权威时须迁移记忆正文、修正与删除标记，再准备索引。同一正文权威只更换检索时可重建索引。准备完成不会自动生效。')}</p><p>{moteText('迁移全部 Mote 保留记忆正文及更正/替代状态。外部原生审计历史和引擎图保留在旧实例及运行备份中，不承诺跨引擎迁移。')}</p><Capabilities items={dialog.plan.capabilities}/><label className="preference-field">{moteText('历史授权范围')}<input value={scope} onChange={event=>setScope(event.target.value)} required disabled={busy}/><small>{moteText('范围必须已获授权；准备不包含未授权历史或暂停期间的新提取。')}</small></label><label className="plugin-confirm"><input type="checkbox" checked={fee} onChange={event=>setFee(event.target.checked)} disabled={busy}/><span>{moteText('已确认范围。真实接入可能产生模型与 Embedding 费用，费用以实际服务用量为准。')}</span></label><p>{moteText('生效前会冻结旧方案新增写入，排空并核对尾部任务，验证新绑定；既有查询仍读取固定旧版本。')}</p><div className="plugin-footer"><button className="button primary" disabled={busy||!fee||!scope.trim()}>{busy?moteText('正在登记…'):moteText('开始准备')}</button><button className="button subtle" type="button" disabled={busy} onClick={close}>{moteText('取消')}</button></div></form>}
-   {dialog.kind==='uninstall'&&<><h3>{dialog.package.name} · {dialog.package.version}</h3><p>{moteText('移除此安装包。已绑定、仍有历史读者或正在排空的包不能卸载，中央节点会再次核验。')}</p><div className="plugin-footer"><button className="button primary" disabled={busy||!view?.packages.find(item=>item.id===dialog.package.id)?.allowedActions.includes('uninstall')} onClick={()=>command('/api/plugins/'+encodeURIComponent(dialog.package.id)+'/uninstall',web?adminResource.data!.revision:view!.revision,{},()=>{setSelected(undefined);setDialog(undefined);})}>{moteText('确认卸载')}</button><button className="button subtle" disabled={busy} onClick={close}>{moteText('取消')}</button></div></>}
+   {dialog.kind==='uninstall'&&<><h3>{dialog.package.name} · {dialog.package.version}</h3><p>{moteText('移除此安装包。已绑定、仍有历史读者或正在排空的包不能卸载，中央节点会再次核验。')}</p><div className="plugin-footer"><button className="button primary" disabled={busy||!view?.packages.find(item=>item.id===dialog.package.id)?.allowedActions.includes('uninstall')} onClick={()=>command('/api/plugins/'+encodeURIComponent(dialog.package.id)+'/uninstall',view!.revision,{},()=>{setSelected(undefined);setDialog(undefined);})}>{moteText('确认卸载')}</button><button className="button subtle" disabled={busy} onClick={close}>{moteText('取消')}</button></div></>}
    {dialog.kind==='stop'&&<><p>{moteText('撤销旧任务继续写入的权限，并请求取消运行中的自动记忆任务。外部工作可能无法立刻停止，未确认结果会单独保留。')}</p><p>{moteText('原件、已有记忆和只读查询继续保留；恢复后只处理新资料。')}</p><div className="plugin-footer"><button className="button primary" disabled={busy||!memoryActions.includes('stop')} onClick={()=>memoryCommand('stop',{},()=>setDialog(undefined))}>{moteText('确认立即停止')}</button><button className="button subtle" disabled={busy} onClick={close}>{moteText('取消')}</button></div></>}
   </Modal>}
  </div>;

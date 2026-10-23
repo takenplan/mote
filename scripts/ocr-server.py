@@ -23,7 +23,7 @@ def main():
     secret = os.environ.get('MOTE_MEDIA_WORKER_TOKEN', '')
     os.environ.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1', DO_NOT_TRACK='1', PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK='True')
     busy = BoundedSemaphore(1)
-    facts = ExecutionFacts(os.environ.get('MOTE_MEDIA_RECEIPT_DIRECTORY', str(root.parent / 'execution-facts')), 'ocr')
+    facts = ExecutionFacts(root.parent / 'execution-facts', 'ocr')
     pipeline = None
     pipeline_marker = None
 
@@ -114,12 +114,12 @@ def main():
             if not self.authorized():
                 self.send_error(401)
                 return
-            if not ready():
-                self.reject_before_execution(503, 'Model not installed')
-                return
             request_id, scope = self.headers.get('X-Mote-Request-Id', ''), self.headers.get('X-Mote-Request-Scope', '')
             if request_id and not facts.identity(request_id, scope):
                 self.reject_before_execution(400, 'Invalid execution identity')
+                return
+            if not ready():
+                self.reject_before_execution(503, 'Model not installed')
                 return
             if not busy.acquire(blocking=False):
                 # Recheck cadence; actual worker completion remains independent.
@@ -127,13 +127,6 @@ def main():
                 return
             receipt_owned = False
             try:
-                if request_id and not facts.begin(request_id, scope, 'ocr'):
-                    self.send_response(409)
-                    self.send_header('Content-Length', '0')
-                    self.end_headers()
-                    return
-                receipt_owned = bool(request_id)
-                self.receipt_id = request_id
                 size = int(self.headers.get('Content-Length', '-1'))
                 if not 0 < size <= 8 * 1024 * 1024:
                     self.send_error(413)
@@ -142,17 +135,28 @@ def main():
                 if len(image) != size:
                     self.send_error(400)
                     return
+                if request_id:
+                    if not facts.begin(request_id, scope, 'ocr'):
+                        self.send_error(409)
+                        return
+                    receipt_owned = True
+                    self.receipt_id = request_id
                 try:
                     if request_id:
                         facts.started(request_id)
                     result = recognize(image)
+                except UnsupportedImage:
+                    if request_id:
+                        facts.finish(request_id, False, 'unsupported_input')
+                    self.send_error(422, 'Unsupported image')
+                except Exception:
+                    if request_id:
+                        facts.finish(request_id, False)
+                    self.send_error(503, 'OCR execution unavailable')
+                else:
                     if request_id:
                         facts.finish(request_id, True)
                     self.send_json(result)
-                except UnsupportedImage:
-                    self.send_error(422, 'Unsupported image')
-                except Exception:
-                    self.send_error(503, 'OCR execution unavailable')
             finally:
                 busy.release()
                 if receipt_owned:

@@ -77,11 +77,10 @@ class FileArchiveQueueTest {
         assertEquals(FileArchiveQueue.PART_BYTES, restarted.part(source.id, 0).size)
         assertArrayEquals(bytes.copyOfRange(4 * FileArchiveQueue.PART_BYTES, bytes.size), restarted.part(source.id, 4))
         restarted.acknowledge(source.id, pending, ack(pending)); assertNull(restarted.next(source.id))
-        val recoveredCapture = UUID.randomUUID().toString(); val accepted = manifest.getJSONObject("item"); val recoveryId = "a".repeat(64)
-        restarted.requestSnapshotRecovery(source, org.json.JSONArray().put(JSONObject().put("externalId", accepted.getString("externalId")).put("revision", accepted.getString("revision")).put("captureId", recoveredCapture).put("recoveryId", recoveryId).put("sha256", manifest.getString("sha256")).put("sizeBytes", bytes.size.toLong()).put("observedAt", accepted.getString("observedAt"))))
+        val recoveredCapture = UUID.randomUUID().toString(); val accepted = manifest.getJSONObject("item")
+        restarted.requestSnapshotRecovery(source, org.json.JSONArray().put(JSONObject().put("externalId", accepted.getString("externalId")).put("revision", accepted.getString("revision")).put("captureId", recoveredCapture).put("sha256", manifest.getString("sha256")).put("sizeBytes", bytes.size.toLong()).put("observedAt", accepted.getString("observedAt"))))
         val recovery = restarted.prepare(source, { ByteArrayInputStream(bytes) }, { true }, 61000)!!
         assertEquals(recoveredCapture, recovery.getJSONObject("pending").getString("recoveryCaptureId"))
-        assertEquals(recoveryId, FileArchiveQueue(dir, plain).next(source.id)!!.getJSONObject("pending").getString("recoveryId"))
         assertEquals(accepted.getString("revision"), recovery.getJSONObject("pending").getJSONObject("manifest").getJSONObject("item").getString("revision"))
         restarted.acknowledge(source.id, recovery, ack(recovery)); assertNull(restarted.next(source.id))
         val limited = FileArchiveQueue(folder.newFolder(), plain); val narrow = source.copy(maxFileMiB = 16)

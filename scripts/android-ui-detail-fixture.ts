@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {strToU8,zipSync} from 'fflate';
-import type {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import type {buildApp} from '../apps/server/src/app.js';
 import {materialId} from '../apps/server/src/materials.js';
 import {sha256} from '../apps/server/src/store.js';
 import type {PluginReleaseTransport,PluginManifest} from '../apps/server/src/plugin-release.js';

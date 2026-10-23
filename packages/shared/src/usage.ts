@@ -29,9 +29,6 @@ export interface UsageReceipt {
   estimatedCost: number | null;
   currency: string;
   price?: ModelPrice;
-  /** Host accounting fragment, independent of the immutable model lease.
-   * A prepared fragment has not sent a request and is excluded from run totals. */
-  issuance?: {leaseId:string;state:'prepared'|'issued'|'settled';issuedAt?:string;executionStarted?:false};
 }
 export interface ModelPrice {
   provider: string;

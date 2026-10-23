@@ -4,7 +4,7 @@ import {readFile,mkdir,writeFile,chmod,lstat,realpath} from 'node:fs/promises';
 import {join,resolve,relative,sep} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
-import {buildApp,type QueryAgent} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp,type QueryAgent} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {validateInlineCitations} from '@mote/agent';
 

@@ -6,7 +6,7 @@ import {chmod,cp,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {basename,join,relative,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import type {UsageReceipt} from '@mote/shared';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {sha256} from '../apps/server/src/store.js';
 import {usageTotals} from '../apps/server/src/usage.js';

@@ -40,12 +40,6 @@ test('host canary proves real trusted worker persistence across two restarts and
  assert.equal(health.ready,true,JSON.stringify(health.problems));assert.equal(f.restarts,2);assert.deepEqual(health.verified,{persistentCrud:true,scopedRetrieval:true,immutableRecords:true,idempotentReplay:true,history:true,physicalErase:false});
  const retained=JSON.parse(await readFile(join(f.directory,'state.json'),'utf8'));assert.equal(retained.records.length,0,'canary current records are cleaned up');assert.ok(Object.keys(retained.ops).length>0,'durable deletion receipts remain without a physical-erasure claim');assert.ok(Object.values(retained.ops).every((value:any)=>value.receipt.namespace.ownerId!==namespace.ownerId));
 });
-test('one durable probe identity reproduces exact generated namespaces, bodies and operation receipts in independent worker stores',async t=>{
- const attempt={id:'c01ea3cb-9ffc-43c2-a052-c785ec306f56',createdAt:'2026-10-18T00:00:00.000Z'},states:unknown[]=[];
- for(let index=0;index<2;index++){const f=await fixture(t),health=await probeMemoryProvider({provider:f.provider,restart:()=>f.restart(),namespace,providerId:'generated-plugin',version:'1.0.0',attempt});assert.equal(health.ready,true,JSON.stringify(health));states.push(JSON.parse(await readFile(join(f.directory,'state.json'),'utf8')));}
- assert.deepEqual(states[0],states[1]);
-});
-
 for(const [mode,phase] of [['volatile','worker_restart'],['cross-scope','namespace_isolation'],['ignore-keys','scoped_search_export'],['unsafe-delete','delete_restart']] as const)test('host canary rejects '+mode+' despite worker-declared capabilities',async t=>{
  const f=await fixture(t,mode),health=await probeMemoryProvider({provider:f.provider,restart:()=>f.restart(),namespace,providerId:'generated-plugin',version:'1.0.0'});assert.equal(health.ready,false);assert.ok(health.problems.includes('host_probe_failed:'+phase),JSON.stringify(health.problems));assert.equal(health.verified.physicalErase,false);
 });

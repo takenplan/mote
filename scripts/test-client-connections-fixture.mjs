@@ -3,7 +3,7 @@ import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
+import {buildApp} from '../apps/server/dist/app.js';
 const index=process.argv.indexOf('--connection-file');
 if(index<0||!process.argv[index+1])throw Error('Pass --connection-file /absolute/private-fixture.json');
 const output=resolve(process.argv[index+1]),directory=await mkdtemp(join(tmpdir(),'mote-native-connect-fixture-'));

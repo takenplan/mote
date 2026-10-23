@@ -56,7 +56,7 @@ export class CodexSession {
   private usage?:TokenUsage;
   private turnError?:unknown;
   private usageInterrupted=false;
-  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'|'authorizeModelRequest'|'temporaryRoot'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){this.budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);}
+  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'|'authorizeModelRequest'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){this.budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);}
 
   async start(instructions:string,tools:CodexTool[],workspace?:string):Promise<void>{
     if(this.initializing)throw new AgentProviderError();
@@ -66,7 +66,7 @@ export class CodexSession {
   private async initialize(instructions:string,tools:CodexTool[],workspace?:string):Promise<void>{
     this.allowNative=Boolean(workspace);
     if(this.ending)throw new AgentProviderError();
-    this.root=await mkdtemp(join(this.options.temporaryRoot??tmpdir(),'mote-codex-'));
+    this.root=await mkdtemp(join(tmpdir(),'mote-codex-'));
     try{
       const home=join(this.root,'home'),cwd=workspace??join(this.root,'workspace');
       await mkdir(home,{mode:0o700});if(!workspace)await mkdir(cwd,{mode:0o700});
@@ -88,7 +88,7 @@ export class CodexSession {
       ].join('\n');
       await writeFile(join(home,'config.toml'),config,{mode:0o600});
       if(this.ending)throw new AgentProviderError();
-      const env:NodeJS.ProcessEnv={PATH:process.env.PATH,HOME:home,CODEX_HOME:home,TMPDIR:this.root};
+      const env:NodeJS.ProcessEnv={PATH:process.env.PATH,HOME:home,CODEX_HOME:home,TMPDIR:tmpdir()};
       // Transport proxy configuration belongs to the server operator, not to the model.
       for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','NO_PROXY','https_proxy','http_proxy','all_proxy','no_proxy','SystemRoot'])if(process.env[key])env[key]=process.env[key];
       this.child=spawn(this.options.codex?.executable||process.env.MOTE_CODEX_BIN||'codex',['app-server','--listen','stdio://'],{cwd,env,stdio:'pipe'});

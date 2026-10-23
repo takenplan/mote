@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { ConfigurationField, ServerConfiguration } from '@mote/shared';
-import { buildApp, type QueryAgent } from './fixtures/legacy-app.js';
+import { buildApp, type QueryAgent } from '../src/app.js';
 import { serverConfiguration, configurationUrl } from '../src/configuration.js';
 import type { Config } from '../src/config.js';
 import {parse,stringify} from 'yaml';

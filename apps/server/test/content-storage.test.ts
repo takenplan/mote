@@ -14,7 +14,7 @@ import {SourceStore} from '../src/sources.js';
 import {FileStore} from '../src/files.js';
 import {ArchivedFileStore} from '../src/archived-files.js';
 import {ContentStorageService} from '../src/content-storage.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 const generatedImage=()=>sharp({create:{width:24,height:24,channels:3,background:'#445566'}}).png().toBuffer();

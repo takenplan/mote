@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {ContextReader,QueryInput} from '@mote/agent';
 import type {QueryResult,SourceItem,TokenUsage,UsageReceipt} from '@mote/shared';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import type {MemoryWorkPackage} from '../src/memory-work-contract.js';
 import {StoreError} from '../src/store.js';

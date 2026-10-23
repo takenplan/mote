@@ -4,9 +4,10 @@ import {z} from 'zod';
 import type {FastifyInstance} from 'fastify';
 import {Store,StoreError,sha256} from './store.js';
 
-import {todoInput,todoFields,type Todo} from './todo-contract.js';
-export {todoInput,todoFields,archivedTodoSchema,type Todo} from './todo-contract.js';
-const fields=todoFields;
+const fields={title:z.string().trim().min(1).max(200),description:z.string().max(4000).default(''),dueAt:z.string().datetime({offset:true}).nullable().default(null),evidenceIds:z.array(z.string().uuid()).max(30).default([])};
+export const todoInput=z.object({id:z.string().uuid().optional(),...fields}).strict();
+export const archivedTodoSchema=z.object({...fields,id:z.string().uuid(),version:z.number().int().positive(),status:z.enum(['open','completed','cancelled']),createdAt:z.string().datetime({offset:true}),updatedAt:z.string().datetime({offset:true}),requestHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export type Todo={id:string;version:number;title:string;description:string;dueAt:string|null;status:'open'|'completed'|'cancelled';evidenceIds:string[];createdAt:string;updatedAt:string};
 /** User-confirmed local tasks have no calendar side effect and never infer a deadline. */
 export class TodoStore {
  constructor(private store:Store){ensureTodoSchema(store.db);}

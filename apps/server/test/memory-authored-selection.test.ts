@@ -17,8 +17,8 @@ import {reviewMemory} from '../src/memory-review.js';
 async function fixture(t:{after(fn:()=>Promise<void>|void):void},organize=true){
   const directory=mkdtempSync(join(tmpdir(),'mote-authored-memory-'));
   const store=new Store(directory),sources=new SourceStore(store),materials=new MaterialStore(store);
-  const organizers=new MaterialOrganizerRuntime(store,materials);
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  const organizers=new MaterialOrganizerRuntime(store,materials),pipelines:MemoryPipeline[]=[];
+  t.after(async()=>{for(const pipeline of pipelines.reverse())await pipeline.close();await organizers.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const originalId=randomUUID(),deviceId='generated-owner';
   await store.ingest({id:originalId,deviceId,deviceName:'Generated owner',platform:'import',
     appId:'dev.mote.web.notes',appName:'Notes',source:'note',capturedAt:'2026-09-20T00:00:00.000Z',
@@ -27,7 +27,7 @@ async function fixture(t:{after(fn:()=>Promise<void>|void):void},organize=true){
   if(organize)await organizers.tick();
   const reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials,undefined,organizers.sourceItemRecipes);
   const strategy=new MemoryStrategies().resolve({id:'mote.personal-memory',version:'2'}).binding;
-  return {store,sources,materials,organizers,reader,originalId,deviceId,strategy};
+  return {store,sources,materials,organizers,reader,originalId,deviceId,strategy,pipelines};
 }
 
 test('current built-in authored Material is admitted once, without a second raw original batch',async t=>{
@@ -65,7 +65,7 @@ test('current built-in authored Material is admitted once, without a second raw 
     materialAllowedForMemory:(ref,_profileId,required)=>f.reader.materialAllowedForMemory(ref,undefined,required),
     model:()=>'',configured:()=>false,query:async()=>{throw Error('Fake model must not run');},
     review:async()=>{throw Error('Fake review must not run');}});
-  t.after(()=>pipeline.close());
+  f.pipelines.push(pipeline);
   const job=pipeline.create({manualPlans:selected.manualPlans,recipes:[{id:'mote.personal-memory',version:'2'}],evidenceIds:[]});
   assert.equal(job.inputPlans?.total,1);
   assert.equal(job.inputPlans?.blocked,0);
@@ -124,7 +124,7 @@ async function historicalDuplicate(t:TestContext){
       citations:[{id:proofId,capturedAt:'2026-09-20T00:00:00.000Z',appName:'Notes',excerpt:quote}],
       trace:[],runId:'generated-extract-'+control.extracts};},
     review:(input,result,strategy)=>reviewMemory(input,result,async()=>({...result,runId:'generated-review-'+ ++control.reviews}),{strategy})});
-  t.after(()=>pipeline.close());
+  f.pipelines.push(pipeline);
   // Separate raw intake and pinned Material inputs require their own model reads.
   const job=pipeline.create({manualPlans:selected.manualPlans,recipes:[{id:'mote.personal-memory',version:'2'}],
     evidenceIds:[f.originalId],modelProfileId:'generated-profile'});

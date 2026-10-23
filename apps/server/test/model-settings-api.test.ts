@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ModelSettingsView, ModelSettingsInput } from '@mote/shared/models';
-import { buildApp } from './fixtures/legacy-app.js';
+import { buildApp } from '../src/app.js';
 import type { Config } from '../src/config.js';
 import type { ModelAgentFactory } from '../src/model-agent.js';
 import { testModelConnection } from '../src/model-agent.js';

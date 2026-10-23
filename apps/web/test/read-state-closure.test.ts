@@ -186,23 +186,9 @@ test('execution overview shares initial settings read; dirty runtime draft survi
  revoked=true;await act(async()=>resources(api).invalidate(path=>path==='/api/execution-settings'));assert.equal(d.querySelector('form'),null);assert.match(d.body.textContent!,/generated revoked/);
 });
 test('perception refresh retains owner draft and revoked settings never remain editable',async t=>{
- const {root,d}=await fixture(t);let revoked=false;const reads={perception:0,media:0};
- const api=apiWith(path=>{
-  if(path==='/api/perception')reads.perception++;if(path==='/api/media-models')reads.media++;
-  if(revoked)throw new ApiError('generated permission revoked',403);
-  if(path==='/api/file-processing')return {policy:{profiles:[{id:'image',name:'Generated archive',processorId:'archive'}]},processors:[]};
-  if(path==='/api/memory-settings')return {settings:{extraction:{enabled:false}}};if(path==='/api/sources')return {items:[]};
-  if(path==='/api/media-models')return {ocr:{state:'not_installed',bytes:0,totalBytes:0,source:'auto',version:'generated',runtimeReady:false}};
-  return {revision:1,settings:{concurrency:1,providerRevision:'1',enabled:true,profileId:'image',ocrProcessorId:'archive',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true},model:null,recent:[],jobs:[],backfills:[]};
- });
- const refreshSettings=()=>{const control=d.querySelector<HTMLButtonElement>('.perception-settings > button.button');assert.ok(control,'image processing state has its own refresh control');assert.equal(control.textContent,'刷新');return control;};
- await act(async()=>root.render(React.createElement(PerceptionSettings,{api})));assert.doesNotMatch(d.body.textContent!,/语义理解 Worker 地址|语义理解时机/);assert.deepEqual(reads,{perception:1,media:1});
- await act(async()=>d.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
- // The model card refreshes instance health; the page control revalidates the
- // owned settings. Equal button captions must not select the other resource.
- await act(async()=>d.querySelector<HTMLButtonElement>('[data-media-role="ocr"] button.text-button')!.click());assert.deepEqual(reads,{perception:1,media:2});
- await act(async()=>refreshSettings().click());assert.deepEqual(reads,{perception:2,media:2});assert.equal(d.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,false);
- revoked=true;await act(async()=>refreshSettings().click());assert.deepEqual(reads,{perception:3,media:2});assert.equal(d.querySelector('form')===null,true,'revoked image settings must not remain editable');assert.match(d.body.textContent!,/generated permission revoked/);
+ const {root,d}=await fixture(t);let revoked=false;const api=apiWith(path=>{if(revoked)throw new ApiError('generated permission revoked',403);if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/memory-settings')return {settings:{extraction:{enabled:false}}};if(path==='/api/sources')return {items:[]};if(path==='/api/media-models')return {ocr:{state:'missing',bytes:0,totalBytes:0}};return {settings:{providerRevision:'1',enabled:true,ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true},model:null,recent:[],jobs:[],backfills:[]};});
+ await act(async()=>root.render(React.createElement(PerceptionSettings,{api})));assert.doesNotMatch(d.body.textContent!,/语义理解 Worker 地址|语义理解时机/);await act(async()=>d.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());await act(async()=>button(d,'刷新').click());assert.equal(d.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,false);
+ revoked=true;await act(async()=>button(d,'刷新').click());assert.equal(d.querySelector('form'),null);assert.match(d.body.textContent!,/generated permission revoked/);
 });
 
 test('Memory settings preserve edited policy on refresh, save current draft, and isolate a new session',async t=>{
@@ -287,13 +273,13 @@ test('Insight cancellation on a new node is not blocked or overwritten by an old
 
 
 test('image progress keeps ready OCR visible after vision failure and reports a successful empty Memory result',async t=>{
- const {root,d}=await fixture(t),writes:any[]=[],proof='a'.repeat(64);
- const value={proof,wait:null,original:{state:'ready'},automatic:true,understandingEnabled:true,policy:{profile:{name:'Generated images',processorId:'image.http'}},jobs:[{name:'ocr',state:'succeeded'},{name:'understanding',state:'failed',error:'unsupported_image'}],products:[{id:'generated-ocr',name:'ocr',kind:'ocr',text:'Generated searchable text'}],materials:[{id:'generated-material',state:'indexed'}],memory:[{state:'completed',count:0}]};
- const api=apiWith((path,init)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {queued:true,taskId:'generated-admitted-image-task'};}return value;});
+ const {root,d}=await fixture(t),writes:unknown[]=[];
+ const value={wait:null,original:{state:'ready'},automatic:true,understandingEnabled:true,policy:{profile:{name:'Generated images',processorId:'image.http'}},jobs:[{name:'ocr',state:'succeeded'},{name:'understanding',state:'failed',error:'unsupported_image'}],products:[{id:'generated-ocr',name:'ocr',kind:'ocr',text:'Generated searchable text'}],materials:[{id:'generated-material',state:'indexed'}],memory:[{state:'completed',count:0}]};
+ const api=apiWith((path,init)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {queued:true};}return value;});
  await act(async()=>root.render(React.createElement(ImageProgress,{api,id:'generated-image'})));
  const state=(name:string)=>[...d.querySelectorAll('dt')].find(n=>n.textContent===name)?.nextElementSibling?.textContent;
  assert.equal(state('文字识别'),'已就绪');assert.equal(state('内容理解'),'处理失败');assert.equal(state('记忆（Memory）'),'已完成，未生成新记忆');assert.equal(writes.length,0);
- await act(async()=>button(d,'补齐未完成步骤').click());assert.equal(writes.length,1);assert.match(writes[0].operationId,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false,proof,operationId:writes[0].operationId}]);
+ await act(async()=>button(d,'补齐未完成步骤').click());assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false}]);
 });
 
 test('ordinary evidence revisions preserve the visible historical answer and citation; later deletion clears both',async t=>{
@@ -310,14 +296,24 @@ test('ordinary evidence revisions preserve the visible historical answer and cit
  assert.match(d.body.textContent!,/相关证据已删除/);assert.doesNotMatch(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL|GENERATED OLD QUOTE/);
 });
 
-test('a scoped deleted conversation turn without a result shows its deletion notice instead of a failed-answer retry',async t=>{
- const {root,d}=await fixture(t);let answers=0;
- const api=apiWith(path=>{
-  if(path==='/api/conversations?limit=30')return {items:[summary('generated-deleted')]};if(path==='/api/query-runs')return {items:[]};
-  if(path==='/api/conversations/generated-deleted')return {...summary('generated-deleted'),nextCursor:null,turns:[{id:'generated-erased-turn',question:'Generated question whose evidence was deleted',status:'completed',createdAt:when,evidenceDeleted:true,contextStale:true}]};
-  return {items:[]};
+test('connection permission selection cannot relabel an already issued invitation',async t=>{
+ const {root,d}=await fixture(t),writes:string[]=[];
+ const api=apiWith((path,init)=>{
+  if(path==='/api/configuration')return {groups:[]};
+  if(path==='/api/connections')return {items:[],mcp:{enabled:false,writeEnabled:false,writeSourceIds:[]}};
+  if(init?.method==='POST'){writes.push(path);if(path.endsWith('/revoke'))return {revoked:true};return {scope:path.includes('collector-')?'collector':'owner',uri:'mote://connect?data=generated',invitation:{format:'mote.connection',version:1,serverUrl:'http://localhost',code:'g'.repeat(43),expiresAt:new Date(Date.now()+600000).toISOString()}};}
+  throw Error('Unexpected '+path);
  });
- await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:()=>{answers++;return 'Unexpected answer';}})));
- await act(async()=>d.querySelector<HTMLButtonElement>('.conversation-item')!.click());
- assert.match(d.body.textContent!,/相关证据已删除，这条历史回答已清除/);assert.doesNotMatch(d.body.textContent!,/这次回答没有完成|再次提问|Unexpected answer/);assert.equal(answers,0);
+ await act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'http://localhost',devices:[]})));
+ const selector=d.querySelector<HTMLSelectElement>('[aria-label="设备权限"]')!;
+ await act(async()=>{selector.value='collector';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ await act(async()=>button(d,'生成设备二维码').click());
+ assert.equal(writes.at(-1),'/api/connections/collector-invitations');
+ const invitation=()=>d.querySelector('[aria-label="连接邀请"]')!;
+ assert.match(invitation().textContent!,/将邀请交给独立采集程序/);assert.match(invitation().textContent!,/采集器 · 仅同步本设备/);
+ await act(async()=>{selector.value='owner';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ assert.match(invitation().textContent!,/将邀请交给独立采集程序/,'form selection does not change the issued authority');
+ await act(async()=>button(d,'重新生成二维码').click());
+ assert.deepEqual(writes.slice(-2),['/api/connections/invitations/revoke','/api/connections/invitations']);
+ assert.match(invitation().textContent!,/在客户端打开「设置 → 连接」/);assert.match(invitation().textContent!,/完整客户端权限/);
 });

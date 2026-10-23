@@ -25,7 +25,7 @@
 .app-shell[data-navigation] .topbar-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .app-shell[data-navigation] .breadcrumb { color:var(--mote-muted); font-size:var(--mote-font-meta); }
 .app-shell[data-navigation] .breadcrumb strong { color:var(--mote-ink); font-weight:500; }
-.app-shell[data-navigation] .topbar .avatar { width:26px; height:26px; color:var(--mote-muted); border:1px solid var(--mote-border); background:var(--mote-surface); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.app-shell[data-navigation] .topbar .avatar { width:26px; height:26px; color:var(--mote-muted); border:1px solid var(--mote-border); background:var(--mote-surface); }
 .app-shell[data-navigation] .content { max-width:var(--mote-page-width); padding:var(--mote-space-page); margin:0 auto; }
 .app-shell[data-navigation] .footer { display:flex; justify-content:space-between; gap:16px; padding:18px var(--mote-space-page); margin:0; border-top:1px solid var(--mote-divider); color:var(--mote-muted); font-size:var(--mote-font-meta); }
 .presentation-content-outlet,.presentation-content-outlet>div { min-width:0; }

@@ -14,10 +14,10 @@ import {MemoryPipeline,type MemoryPipelineQuery} from '../src/memory-pipeline.js
 import {AgentTimeoutError} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
 
-function fixture(t:TestContext){
+function fixture(t:TestContext,beforeStoreClose?:()=>Promise<void>){
   const directory=mkdtempSync(join(tmpdir(),'mote-memory-generated-')),store=new Store(directory),sources=new SourceStore(store),memories=new MemoryStore(store);
   sources.register({id:'generated',name:'Generated archive',kind:'custom',deviceId:'generated-device',platform:'import'});
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{try{await beforeStoreClose?.();}finally{store.close();rmSync(directory,{recursive:true,force:true});}});
   return {directory,store,sources,memories};
 }
 const item=(externalId='a',text='合成原文：我计划学习 TypeScript，尚未开始。',revision='1',observedAt='2026-09-15T01:00:00Z')=>({externalId,text,revision,observedAt,title:'Generated record',kind:'file',layer:'original'});
@@ -306,20 +306,30 @@ test('closing a memory pipeline releases an uncooperative model and restart can 
 });
 
 
-test('400 generated days imported individually and in batches share one durable memory executor',async t=>{
- const {store,sources,memories}=fixture(t),ids:string[]=[];
- const inputs=Array.from({length:400},(_,i)=>item('engine-day-'+i,'Synthetic bounded source '+i+' '+'.'.repeat(256),'1',new Date(Date.UTC(2024,0,1+i)).toISOString()));
- for(const input of inputs.slice(0,200))ids.push((await sources.upsert('generated',input)).id);
- for(let offset=200;offset<400;offset+=100){await sources.upsertBatch('generated',inputs.slice(offset,offset+100));for(const input of inputs.slice(offset,offset+100))ids.push(sources.getItem('generated',input.externalId)!.captureId);}
- const engine=new ExecutionEngine(store),calls:string[]=[];let peak=0,active=0;
- const pipeline=fixtureMemoryPipeline({executor:engine,store,memories,batchCharacters:256,concurrency:()=>3,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input.traceContext!.jobId!);active++;peak=Math.max(peak,active);await new Promise(r=>setImmediate(r));active--;return empty();}});
- const a=pipeline.create({evidenceIds:ids.slice(0,200)}),b=pipeline.create({evidenceIds:ids.slice(200)});
- const completed=await Promise.all([pipeline.run(a.id),pipeline.run(b.id)]);assert.ok(completed.every(job=>job.status==='completed'));
- assert.equal(calls.length,800);assert.equal(peak,3);assert.ok(calls.slice(0,6).includes(a.id)&&calls.slice(0,6).includes(b.id));
- assert.equal(store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind='memory.batch' AND state='succeeded'").get()!.n,800);
- assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,800);
- assert.equal(pipeline.create({evidenceIds:ids}).totalBatches,0);
- await engine.close();await pipeline.close();
+// Functional allowance includes 400-source preparation and 800 durable batches;
+// it is not a product execution deadline.
+test('400 generated days imported individually and in batches share one durable memory executor',{timeout:240000},async t=>{
+ let engine:ExecutionEngine|undefined,pipeline:MemoryPipeline|undefined,work:Promise<void>|undefined;
+ const {store,sources,memories}=fixture(t,async()=>{
+  // The runner can cancel while the body is still awaiting work. Owners must
+  // settle before the fixture's one Store teardown, including timeout paths.
+  await engine?.close();await pipeline?.close();
+  await work?.catch(error=>{if(!t.signal.aborted)throw error;});
+ });
+ work=(async()=>{
+  const ids:string[]=[],inputs=Array.from({length:400},(_,i)=>item('engine-day-'+i,'Synthetic bounded source '+i+' '+'.'.repeat(256),'1',new Date(Date.UTC(2024,0,1+i)).toISOString()));
+  for(const input of inputs.slice(0,200)){const record=await sources.upsert('generated',input);t.signal.throwIfAborted();ids.push(record.id);}
+  for(let offset=200;offset<400;offset+=100){await sources.upsertBatch('generated',inputs.slice(offset,offset+100));t.signal.throwIfAborted();for(const input of inputs.slice(offset,offset+100))ids.push(sources.getItem('generated',input.externalId)!.captureId);}
+  engine=new ExecutionEngine(store);const calls:string[]=[];let peak=0,active=0;
+  pipeline=fixtureMemoryPipeline({executor:engine,store,memories,batchCharacters:256,concurrency:()=>3,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input.traceContext!.jobId!);active++;peak=Math.max(peak,active);await new Promise(r=>setImmediate(r));active--;return empty();}});
+  const a=pipeline.create({evidenceIds:ids.slice(0,200)}),b=pipeline.create({evidenceIds:ids.slice(200)});
+  const completed=await Promise.all([pipeline.run(a.id),pipeline.run(b.id)]);t.signal.throwIfAborted();assert.ok(completed.every(job=>job.status==='completed'));
+  assert.equal(calls.length,800);assert.equal(peak,3);assert.ok(calls.slice(0,6).includes(a.id)&&calls.slice(0,6).includes(b.id));
+  assert.equal(store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind='memory.batch' AND state='succeeded'").get()!.n,800);
+  assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,800);
+  assert.equal(pipeline.create({evidenceIds:ids}).totalBatches,0);
+ })();
+ await work;
 });
 
 test('memory, checkpoint and engine success commit roll back together when the host commit fails',async t=>{

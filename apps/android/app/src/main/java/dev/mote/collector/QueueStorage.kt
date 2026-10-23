@@ -20,16 +20,15 @@ class QueueStorage(private val context: Context) {
         }
     }
     fun choices(): List<QueueStorageChoice> = buildList {
-        add(QueueStorageChoice("internal", MoteI18n.text("内部应用空间"), context.accountDirectory(), context.accountDirectory().usableSpace))
-        context.getExternalFilesDirs(null).filterNotNull().forEachIndexed { index, storage ->
-            val base = File(storage, "accounts/${context.accountOwnerKey()}").apply { mkdirs() }
+        add(QueueStorageChoice("internal", MoteI18n.text("内部应用空间"), context.noBackupFilesDir, context.noBackupFilesDir.usableSpace))
+        context.getExternalFilesDirs(null).filterNotNull().forEachIndexed { index, base ->
             if (Environment.getExternalStorageState(base) == Environment.MEDIA_MOUNTED) {
                 val id = "external:${SourceRules.hash(base.absolutePath)}"
                 add(QueueStorageChoice(id, if (Environment.isExternalStorageRemovable(base)) MoteI18n.text("存储卡应用空间 {0}", index + 1) else MoteI18n.text("本机存储应用空间"), base, base.usableSpace))
             }
         }
     }
-    private fun store() = QueueLocationStore(context.accountDirectory(), File(context.accountDirectory(), "queue"), context.localContentCipher(), validate = { location ->
+    private fun store() = QueueLocationStore(context.noBackupFilesDir, File(context.noBackupFilesDir, "queue"), context.localContentCipher(), validate = { location ->
         val choice = choices().singleOrNull { it.id == location.baseId } ?: error(MoteI18n.text("所选存储介质不可用，请重新连接；不会切换为空目录"))
         val path = File(location.path)
         check(path.parentFile?.canonicalFile == choice.base.canonicalFile &&

@@ -8,11 +8,11 @@ import java.time.Instant
 class RuntimeLog(private val file: File, private val limit: Int = 1000,
                  private val detailed: Boolean = RuntimeProfile.current.detailedDiagnostics) {
     init { require(limit in 1..1000) }
-    fun event(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, detail: String? = null, name: String? = null) =
+    fun event(stage: EventStage, code: EventCode, elapsedMs: Long? = null, httpStatus: Int? = null, errorName: String? = null, sourceId: String? = null) =
         append(EventJournal.level(code), stage.name, buildString {
             append(code.name)
-            name?.let { append(" name=").append(cleanText(it, 160)) }
-            detail?.let { append(" detail=").append(cleanText(it, 400)) }
+            EventJournal.safeErrorName(errorName)?.let { append(" errorName=").append(it) }
+            EventJournal.safeSourceId(sourceId)?.let { append(" sourceId=").append(it) }
         }, elapsedMs, httpStatus)
     fun operation(kind: OperationKind, reason: OperationReason) =
         append(when (kind) {
@@ -30,7 +30,7 @@ class RuntimeLog(private val file: File, private val limit: Int = 1000,
     fun screenshotFailure(code: Int) { require(code >= 0); append("ERROR", "CAPTURE_API", "errorCode=$code") }
     private fun append(level: String, logger: String, message: String, elapsedMs: Long? = null, httpStatus: Int? = null) = synchronized(lock) {
         if (level.equals("debug", ignoreCase = true) && !detailed) return@synchronized
-        // Callers can supply enums and numbers only. Never persist captured content, tokens or exception text.
+        // Callers supply fixed enums, safe error names, opaque IDs and numbers only. Never persist captured content, tokens or exception text.
         val line = buildString {
             append(Instant.now()).append(' ').append(level.uppercase().padEnd(5))
             append(" [thread-").append(Thread.currentThread().id).append("] ").append(logger).append(" - ").append(message)
@@ -40,12 +40,12 @@ class RuntimeLog(private val file: File, private val limit: Int = 1000,
         file.parentFile!!.mkdirs()
         val key = file.absolutePath
         val count = if (file.exists()) counts.getOrPut(key) { file.useLines { it.count() } } else 0
-        if (count < limit) { FileOutputStream(file, true).use { it.write((line + "\n").toByteArray()) }; counts[key] = count + 1 }
+        if (count < limit) { FileOutputStream(file, true).use { privateDiagnosticFile(file); it.write((line + "\n").toByteArray()) }; counts[key] = count + 1 }
         else {
             File(file.parentFile, "${file.name}.6").delete()
             for (i in 5 downTo 1) { val prior = File(file.parentFile, "${file.name}.$i"); if (prior.exists()) check(prior.renameTo(File(file.parentFile, "${file.name}.${i + 1}"))) }
             check(file.renameTo(File(file.parentFile, "${file.name}.1")))
-            FileOutputStream(file).use { it.write((line + "\n").toByteArray()); it.fd.sync() }; counts[key] = 1
+            FileOutputStream(file).use { privateDiagnosticFile(file); it.write((line + "\n").toByteArray()); it.fd.sync() }; counts[key] = 1
         }
     }
     fun exportRange(after: Long, before: Long = System.currentTimeMillis()): org.json.JSONObject = synchronized(lock) {
@@ -56,7 +56,6 @@ class RuntimeLog(private val file: File, private val limit: Int = 1000,
     fun readRaw(): String = synchronized(lock) { if (!file.exists()) "" else { check(file.length() <= 512 * 1024); file.readText() } }
     companion object {
         private val lock = Any()
-        private fun cleanText(value: String, max: Int) = value.replace(Regex("[\\r\\n]+"), " ").take(max)
         private val counts = object : LinkedHashMap<String, Int>(8, .75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 8
         }

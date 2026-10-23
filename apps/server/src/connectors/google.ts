@@ -3,9 +3,8 @@ import {createHash,randomBytes} from 'node:crypto';
 import {OAuth2Client,type Credentials} from 'google-auth-library';
 import type {SourceItem,SourceItemRecord} from '@mote/shared';
 import {z} from 'zod';
-import type {AdapterContext,ConnectorState} from './ports.js';
 import {PrivateFile} from './private-file.js';
-import {ConnectorError} from './types.js';
+import {ConnectorError,type ConnectorContext} from './types.js';
 
 const scopes=['https://www.googleapis.com/auth/calendar.calendarlist.readonly','https://www.googleapis.com/auth/calendar.events.readonly'];
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -54,7 +53,7 @@ export function googleItem(event:Event,calendar:Calendar,prior?:SourceItemRecord
 
 export class GoogleCalendarConnector {
   private saved:Saved={version:1,tokens:{},calendars:[],checkpoints:{}};
-  private file:ConnectorState<Saved>;
+  private file:PrivateFile<Saved>;
   private pending=new Map<string,{verifier:string;expires:number}>();
   private running?:Promise<{imported:number;duplicates:number;calendars:number}>;
   private sequence:Promise<unknown>=Promise.resolve();
@@ -62,12 +61,12 @@ export class GoogleCalendarConnector {
   private initialized=false;private syncIntervalMs?:number;
   private state:'idle'|'syncing'|'error'|'permission_required'='idle';private code?:string;private lastSyncAt?:string;
   private readonly fetcher:typeof fetch;private readonly clock:()=>number;
-  constructor(private ctx:AdapterContext,private dependencies:GoogleDependencies={}) {
-    this.file=ctx.state?.<Saved>('google-calendar.json')??new PrivateFile(ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`,'google-calendar.json');
+  constructor(private ctx:ConnectorContext,private dependencies:GoogleDependencies={}) {
+    this.file=new PrivateFile(ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`,'google-calendar.json');
     this.fetcher=dependencies.fetch??fetch;this.clock=dependencies.clock??Date.now;
   }
   private serialize<T>(operation:()=>Promise<T>):Promise<T>{
-    const result=this.sequence.catch(()=>{}).then(()=>{this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);return operation();});
+    const result=this.sequence.catch(()=>{}).then(()=>{if(this.closed)throw new ConnectorError('connector_closed',503);return operation();});
     this.sequence=result.catch(()=>{});return result;
   }
   get configured(){const c=this.ctx.config.connectors;return Boolean(c?.googleClientId&&c.googleClientSecret&&c.googleRedirectUri);}
@@ -81,7 +80,7 @@ export class GoogleCalendarConnector {
     const interval=Math.max(60000,intervalMs);
     if(this.timer&&this.syncIntervalMs===interval)return;
     if(this.timer)clearInterval(this.timer);this.timer=undefined;this.syncIntervalMs=interval;
-    if(!this.initialized||this.closed||!this.configured||this.ctx.automaticTimers===false)return;
+    if(!this.initialized||this.closed||!this.configured)return;
     this.timer=setInterval(()=>{if(this.saved.calendars.length&&!this.closed)void this.sync().catch(()=>{});},interval);this.timer.unref();
   }
   private oauth():OAuth {
@@ -90,20 +89,20 @@ export class GoogleCalendarConnector {
     return this.dependencies.oauthFactory?.()??new OAuth2Client({clientId:config.googleClientId,clientSecret:config.googleClientSecret,redirectUri:config.googleRedirectUri,transporterOptions:{timeout:20000}});
   }
   async start(){
-    this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
+    if(this.closed)throw new ConnectorError('connector_closed',503);
     for(const [key,value] of this.pending)if(value.expires<this.clock())this.pending.delete(key);
     const oauth=this.oauth(),codes=await oauth.generateCodeVerifierAsync(),state=randomBytes(32).toString('base64url');
-    this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
-    (this.ctx.pending??this.pending).set(state,{verifier:codes.codeVerifier,expires:this.clock()+600000});
+    if(this.closed)throw new ConnectorError('connector_closed',503);
+    this.pending.set(state,{verifier:codes.codeVerifier,expires:this.clock()+600000});
     return {authorizationUrl:oauth.generateAuthUrl({access_type:'offline',scope:scopes,prompt:'consent',state,code_challenge:codes.codeChallenge,code_challenge_method:'S256' as never}),expiresIn:600};
   }
   async callback(state:string,code:string){
-    const request=this.ctx.pending?this.ctx.pending.take(state):this.pending.get(state);this.pending.delete(state);
+    const request=this.pending.get(state);this.pending.delete(state);
     if(this.closed||!request||request.expires<this.clock())throw new ConnectorError('google_state_invalid',400);
     return this.serialize(async()=>{
       let tokens:Credentials;
       try{({tokens}=await this.oauth().getToken({code,codeVerifier:request.verifier}));}catch{throw new ConnectorError('google_authorization_failed',400);}
-      this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
+      if(this.closed)throw new ConnectorError('connector_closed',503);
       // Connecting another account must not inherit the previous account's token or selected calendars.
       if(!tokens.refresh_token)throw new ConnectorError('google_offline_access_required',400);
       const granted=new Set((tokens.scope??'').split(' '));
@@ -113,12 +112,12 @@ export class GoogleCalendarConnector {
     });
   }
   private async api<T>(path:string,query:Record<string,string>={}):Promise<T> {
-    this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
+    if(this.closed)throw new ConnectorError('connector_closed',503);
     if(!this.saved.tokens.refresh_token&&!this.saved.tokens.access_token)throw new ConnectorError('google_not_connected',401);
     const oauth=this.oauth();oauth.setCredentials(this.saved.tokens);
     let token:string|null|undefined;
     try{token=(await oauth.getAccessToken()).token;}catch{this.state='permission_required';this.code='google_reauthorization_required';throw new ConnectorError(this.code,401);}
-    this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
+    if(this.closed)throw new ConnectorError('connector_closed',503);
     if(!token)throw new ConnectorError('google_reauthorization_required',401);
     this.saved.tokens={...this.saved.tokens,...oauth.credentials,refresh_token:oauth.credentials.refresh_token??this.saved.tokens.refresh_token};
     await this.file.write(this.saved);
@@ -178,7 +177,7 @@ export class GoogleCalendarConnector {
         if(!next)throw new ConnectorError('google_checkpoint_missing',502);
         const seen=new Set<string>();
         for(const event of fetched){
-          this.ctx.assertCurrent?.();if(this.closed)throw new ConnectorError('connector_closed',503);
+          if(this.closed)throw new ConnectorError('connector_closed',503);
           if(!event.id)throw new ConnectorError('google_event_invalid',502);seen.add(event.id);
           const prior=this.ctx.sources.getItem(sourceId,event.id),item=googleItem(event,calendar,prior,source.retention==='reference');
           // Incremental feeds can include changes outside the selected rolling window. Keep revisions
@@ -197,6 +196,6 @@ export class GoogleCalendarConnector {
       this.state='idle';this.lastSyncAt=now();return {imported,duplicates,calendars};
     }catch(error){this.code=error instanceof ConnectorError?error.code:'google_sync_failed';this.state=error instanceof ConnectorError&&[401,403].includes(error.statusCode)?'permission_required':'error';for(const c of this.saved.calendars)if(this.ctx.sources.getSource(this.sourceId(c.id)).enabled)this.ctx.sources.reportStatus(this.sourceId(c.id),{state:this.state,code:this.code});throw error instanceof ConnectorError?error:new ConnectorError('google_sync_failed',502);}
   }
-  disconnect(){return this.serialize(async()=>{for(const c of this.saved.calendars)this.ctx.sources.update(this.sourceId(c.id),{enabled:false});this.pending.clear();this.ctx.pending?.clear();await this.file.clear();this.saved={version:1,tokens:{},calendars:[],checkpoints:{}};this.state='idle';this.code=undefined;return this.status();});}
+  disconnect(){return this.serialize(async()=>{for(const c of this.saved.calendars)this.ctx.sources.update(this.sourceId(c.id),{enabled:false});this.pending.clear();await this.file.clear();this.saved={version:1,tokens:{},calendars:[],checkpoints:{}};this.state='idle';this.code=undefined;return this.status();});}
   async close(){this.closed=true;if(this.timer)clearInterval(this.timer);this.timer=undefined;this.pending.clear();this.abort.abort();await this.sequence;await this.file.flush();}
 }

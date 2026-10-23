@@ -57,16 +57,6 @@ test('an external file revision does not silently rebase the owner draft or over
   await act(async()=>button(d,'重新读取并还原草稿').click());assert.equal(retention.value,'180');
 });
 
-test('configuration editors preserve an authorization refusal instead of claiming another editor changed the draft',async t=>{
-  const {root,d}=await fixture(t);
-  const api={request:async()=>{throw new ApiError('generated session replaced',409,undefined,'session_changed');}} as Api;
-  await act(async()=>root.render(React.createElement(ConfigurationBuilder,{api,config:configuration(7),category:'storage'})));
-  const retention=d.querySelector<HTMLSelectElement>('select[aria-label="历史记录保留"]')!;
-  await act(async()=>{retention.value='90';retention.dispatchEvent(new window.Event('change',{bubbles:true}));});
-  await act(async()=>button(d,'保存并应用').click());
-  assert.match(d.body.textContent!,/登录会话已改变/);assert.doesNotMatch(d.body.textContent!,/其他会话更新|配置或相关操作状态已变化/);assert.equal(retention.value,'90');
-});
-
 test('a delayed configuration save from the previous node cannot replace the new node editor',async t=>{
   const {root,d}=await fixture(t);let resolve!:(value:ServerConfiguration)=>void,applied=0;
   const pending=new Promise<ServerConfiguration>(done=>{resolve=done;}),oldApi={request:async()=>pending} as Api,newApi={request:async()=>configuration(1,180)} as Api;
@@ -132,9 +122,9 @@ test('saving one clean configuration editor reloads the shared revision in anoth
 
 test('image settings submit the shared revision and retain their original draft revision after an external update',async t=>{
   const {root,d}=await fixture(t),writes:any[]=[];let revision=7;
-  const settings={concurrency:1,providerRevision:'1',enabled:true,ocrProcessorId:'image.http',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true};
+  const settings={providerRevision:'1',enabled:true,ocrProcessorId:'image.http',ocrEndpoint:'',allowExternalProcessing:false,allowQueryImages:false,understandingEnabled:true};
   const api={request:async(path:string,init?:RequestInit)=>{
-    if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/media-models')return {ocr:{state:'not_installed',bytes:0,totalBytes:0,source:'auto',version:'generated',runtimeReady:false}};if(path==='/api/sources')return {items:[]};
+    if(path==='/api/file-processing')return {policy:{profiles:[]},processors:[]};if(path==='/api/media-models')return {ocr:{state:'missing'}};if(path==='/api/sources')return {items:[]};
     if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('generated conflict',409,undefined,'config_conflict');}
     return {revision,settings,model:null,recent:[],jobs:[],backfills:[]};
   }} as Api;
@@ -160,7 +150,7 @@ test('Actions settings read and submit both configuration and device-authorizati
   await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
   revision=4;authorizationRevision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/actions?')));
   await act(async()=>d.querySelector<HTMLInputElement>('.action-settings input[type="checkbox"]')!.click());
-  assert.deepEqual(writes,[{revision:4,authorizationRevision:3,settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:['generated-phone']},automationIntent:['actions:enabled']}]);
+  assert.deepEqual(writes,[{revision:4,authorizationRevision:3,settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:['generated-phone']}}]);
 });
 test('Actions displays actual permission withdrawal after a failed runtime save and reloads both revisions',async t=>{
   const {root,d}=await fixture(t),writes:any[]=[];let authorizationRevision=2,reviewDeviceIds=['generated-phone'];
@@ -190,8 +180,12 @@ test('Actions timezone edits keep their original dual revisions across refresh a
 });
 
 
-test('Actions dedicated switch shows actual authority and explicit enable intent for saved true defaults',async t=>{
- const {root,d}=await fixture(t),writes:any[]=[];let enabled=false;
- const api=actionApi((_path,init)=>{if(init?.method==='PUT'){const body=JSON.parse(String(init.body));writes.push(body);enabled=true;}return {...actionView(3,2,true),automation:{authorized:enabled,enabled,state:enabled?'active':'waiting_authorization'}};});
- await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));const input=d.querySelector<HTMLInputElement>('.action-settings input[type="checkbox"]')!;assert.equal(input.checked,false);assert.match(d.body.textContent!,/自动发现未开启/);await act(async()=>input.click());assert.deepEqual(writes[0].automationIntent,['actions:enabled']);assert.equal(writes[0].settings.enabled,true);assert.equal(input.checked,true);assert.match(d.body.textContent!,/自动发现已开启/);
+test('a non-conflict 409 preserves its provider recovery reason and the edited configuration',async t=>{
+ const {root,d}=await fixture(t);
+ const api={request:async()=>{throw new ApiError('PRIVATE_PROVIDER_DETAIL',409,undefined,'provider_quota');}} as Api;
+ await act(async()=>root.render(React.createElement(ConfigurationBuilder,{api,config:configuration(7),category:'storage'})));
+ const retention=d.querySelector<HTMLSelectElement>('select[aria-label="历史记录保留"]')!;
+ await act(async()=>{retention.value='90';retention.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ await act(async()=>button(d,'保存并应用').click());
+ assert.match(d.body.textContent!,/额度不足/);assert.doesNotMatch(d.body.textContent!,/PRIVATE|其他会话更新|配置或相关操作状态已变化/);assert.equal(retention.value,'90');
 });

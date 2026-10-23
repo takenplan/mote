@@ -2,7 +2,7 @@
 
 The shared executor records memberships in `execution_operation_steps`. A step may belong to multiple operations without repeating execution. `operation_progress` stores incremental counters maintained in the same SQLite transaction as step transitions. List/detail reads never enumerate evidence or original files. The owner-only `/api/operations` API provides type/state filters and bounded keyset pages; `/api/operations/:id` provides bounded step/dependency metadata without processor inputs, outputs or credentials.
 
-File configuration revisions and independent OCR/semantic revisions identify current memberships. Switching configurations preserves historical links while removing obsolete steps from current progress. Explicitly unscheduled optional summaries are counted separately from required blocked work. The current scoped storage baseline does not reconstruct historical memberships or migrate old operations. Trusted business parents and their existing or future child steps share an account-bound projection; nested membership propagation is enabled on every projection connection.
+File configuration revisions and independent OCR/semantic revisions identify current memberships. Switching configurations preserves historical links while removing obsolete steps from current progress. Explicitly unscheduled optional summaries are counted separately from required blocked work. The initial migration reconstructs host configuration metadata from legacy steps and preserves their identifiers; child association follows its first preceding file parent, and a later cache replay records the current association explicitly. It does not invent historic associations that were never stored.
 
 Material organizers also use a generation slot per saved group. A changed input
 fences the old step, while discovery creates a replacement for the current input.
@@ -36,18 +36,3 @@ existing execution lease can renew; the final external-request and publication
 fences still revalidate all dependencies. Counters and status must not report
 success merely because a model returned or a task was admitted. See the
 [query lease and activation regressions](validation/query-lease-and-memory-activation-2026-10-14.md).
-
-
-Scoped production Operations retain business prefixes with opaque, user-bound
-identifiers. Canonical Import, File, Query and Insight parents receive their child
-progress and change events atomically. Parent links do not create execution or
-cancellation authority. See the [execution parity contract and generated journeys](validation/execution-parity-2026-10-18.md).
-
-Recording selection and explicit sync attach the existing Connector task to a
-`recording-sync` business parent through M05's account-bound parent API. Actual
-discovery, metadata, transcript and media descendants contribute their real states
-to that parent. Connector command identities, task identities and existing
-`connector` detail links remain stable. Reading the same saved command receipt
-restores its parent membership without replaying acquisition. This does not scan
-or reclassify historical commands that are never revisited; ordinary non-recording
-connectors retain their existing operation family.

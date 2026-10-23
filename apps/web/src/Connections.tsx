@@ -1,7 +1,7 @@
 import { useResource } from './useResource';
 import { readResource, resources } from './resource-cache';
 import { moteText } from '@mote/shared/i18n';
-import { connectionQrOptions } from './connection-qr';
+import { connectionQrDataUrl } from './connection-qr';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Download, Link2, QrCode, RefreshCw, ShieldCheck, Unplug, X } from 'lucide-react';
 import { connectionServerUrl, type ConnectionInvitation, type ServerConfiguration } from '@mote/shared';
@@ -28,6 +28,7 @@ type Inventory = {
     };
 };
 type InvitationResponse = {
+    scope: 'owner' | 'collector';
     invitation: ConnectionInvitation;
     uri: string;
 };
@@ -43,7 +44,7 @@ type McpResponse = {
         }>;
     };
 };
-const scopes = { 'owner': "完整客户端权限", 'collector': "完整客户端权限", 'mcp-read': "MCP · 只读资料", 'mcp-write': "MCP · 指定来源写入" };
+const scopes = { 'owner': "完整客户端权限", 'collector': "采集器 · 仅同步本设备", 'mcp-read': "MCP · 只读资料", 'mcp-write': "MCP · 指定来源写入" };
 function downloadFile(name: string, content: Blob) {
     const url = URL.createObjectURL(content), anchor = document.createElement('a');
     anchor.href = url;
@@ -60,6 +61,7 @@ export function Connections({ api, serverUrl, devices }: {
     const [endpoint, setEndpoint] = useState(serverUrl);
     const [label, setLabel] = useState(moteText("我的新设备"));
     const [deviceId, setDeviceId] = useState('');
+    const [deviceScope, setDeviceScope] = useState<'owner' | 'collector'>('owner');
     const inventoryResource = useResource<Inventory>(api, '/api/connections'), configuration = useResource<ServerConfiguration>(api, '/api/configuration');
     const inventory = inventoryResource.data;
     const [invite, setInvite] = useState<InvitationResponse>();
@@ -101,7 +103,7 @@ export function Connections({ api, serverUrl, devices }: {
         if (!invite)
             return;
         let alive = true;
-        void import('qrcode').then(({ default: QRCode }) => QRCode.toDataURL(invite.uri, connectionQrOptions)).then(value => { if (alive)
+        void connectionQrDataUrl(invite.uri).then(value => { if (alive)
             setQr(value); }).catch(() => { if (alive)
             setError(moteText("二维码生成失败，可以复制或下载连接邀请 JSON。")); });
         return () => { alive = false; };
@@ -159,7 +161,7 @@ export function Connections({ api, serverUrl, devices }: {
                 await api.request('/api/connections/invitations/revoke', { method: 'POST', signal, body: JSON.stringify({ code: invite.invitation.code }) });
             setInvite(undefined);
             setQr('');
-            const result = await api.request<InvitationResponse>('/api/connections/invitations', { method: 'POST', signal, body: JSON.stringify({ serverUrl: url, label: label.trim(), ...(deviceId ? { deviceId } : {}) }) });
+            const result = await api.request<InvitationResponse>(deviceScope === 'collector' ? '/api/connections/collector-invitations' : '/api/connections/invitations', { method: 'POST', signal, body: JSON.stringify({ serverUrl: url, label: label.trim(), ...(deviceId ? { deviceId } : {}) }) });
             if (!mounted.current || signal.aborted)
                 return;
             setNow(Date.now());
@@ -221,9 +223,10 @@ export function Connections({ api, serverUrl, devices }: {
     {loopback && <p className="connection-warning">{moteText("当前是本机地址，手机扫码后会指向手机自己。跨设备连接请先填入可访问的 HTTPS 域名；本机地址可用于同一台电脑或明确配置了端口转发的开发环境。")}</p>}
     <nav className="segmented-nav connection-mode" aria-label={moteText("连接类型")}><button className={method === 'device' ? 'active' : ''} onClick={() => setMethod('device')}>{moteText("连接设备")}</button><button className={method === 'chatbot' ? 'active' : ''} onClick={() => setMethod('chatbot')}>{moteText("连接 Chatbot")}</button></nav><div className="connection-methods">
       <div className="connection-method" hidden={method !== 'device'}><h3><QrCode size={18}/>{moteText("手机、Mac 与其他采集端")}</h3>
-        <p>{moteText("每份邀请仅能使用一次，10 分钟后失效。连接后得到独立客户端凭据，拥有与节点令牌相同的完整权限。")}</p>
+        <label>{moteText("设备权限")}<select aria-label={moteText("设备权限")} value={deviceScope} disabled={!!busy} onChange={event => setDeviceScope(event.target.value as 'owner' | 'collector')}><option value="owner">{moteText("本人客户端 · 完整权限")}</option><option value="collector">{moteText("独立采集器 · 仅同步")}</option></select></label>
+        <p>{deviceScope === 'owner' ? moteText("每份邀请仅能使用一次，10 分钟后失效。连接后得到独立客户端凭据，拥有与节点令牌相同的完整权限。") : moteText("仅供独立采集程序使用：同步绑定设备的资料和来源，不能浏览归档或管理中央。Mac 和 Android 完整客户端请选择本人客户端。")}</p>
         <label>{moteText("设备身份")}<select aria-label={moteText("邀请设备身份")} value={deviceId} disabled={!!busy} onChange={event => setDeviceId(event.target.value)}><option value="">{moteText("首次连接的新设备")}</option>{knownDevices.map(device => <option key={device.deviceId} value={device.deviceId}>{device.deviceName} · {device.deviceId}</option>)}</select></label>
-        <small>{moteText("重新配对时，请选择原设备以保留身份。成功配对后会替换该设备之前的客户端凭据。")}</small>
+        <small>{moteText("重新配对时，请选择原设备以保留身份。成功配对后会替换该设备同权限类型的旧凭据。")}</small>
         <button className="button primary" disabled={!!busy || !label.trim()} onClick={createInvitation}><QrCode size={16}/>{busy === 'invite' ? moteText("正在生成…") : invite ? moteText("重新生成二维码") : moteText("生成设备二维码")}</button>
       </div>
       <div className="connection-method" hidden={method !== 'chatbot'}><h3><ShieldCheck size={18}/>{moteText("连接其他 Chatbot · MCP")}</h3>
@@ -235,7 +238,7 @@ export function Connections({ api, serverUrl, devices }: {
     </div>
     {invite && !expired && <div className="connection-invitation" aria-label={moteText("连接邀请")}>
       <div className="connection-qr">{qr ? <img src={qr} width={288} height={288} alt={moteText("使用 Mote 客户端扫描此一次性连接二维码")}/> : <p>{moteText("正在生成二维码…")}</p>}</div>
-      <div className="connection-invitation-details"><span className="badge green">{moteText("有效期剩余")}{' '}{Math.max(0, Math.ceil((Date.parse(invite.invitation.expiresAt) - now) / 1000))}{' '}{moteText("秒")}</span><h3>{moteText("在客户端打开「设置 → 连接」")}</h3><p>{moteText("Android 可以直接扫码；Mac 可以导入二维码图片。两端均支持粘贴邀请或导入 JSON 文件，确认节点地址后连接。")}</p><code>{invite.invitation.serverUrl}</code><p className="fine-print">{moteText("有效期内，持有邀请的人可以领取该连接。请勿公开分享；关闭此页面不会取消邀请，需使用下面的取消按钮。")}</p>
+      <div className="connection-invitation-details"><span className="badge green">{moteText("有效期剩余")}{' '}{Math.max(0, Math.ceil((Date.parse(invite.invitation.expiresAt) - now) / 1000))}{' '}{moteText("秒")}</span><span className="badge muted">{moteText(scopes[invite.scope])}</span><h3>{invite.scope === 'collector' ? moteText("将邀请交给独立采集程序") : moteText("在客户端打开「设置 → 连接」")}</h3><p>{invite.scope === 'collector' ? moteText("采集程序兑换后应检查 collector 身份和采集协议。此邀请不用于 Mac 或 Android 完整客户端登录。") : moteText("Android 可以直接扫码；Mac 可以导入二维码图片。两端均支持粘贴邀请或导入 JSON 文件，确认节点地址后连接。")}</p><code>{invite.invitation.serverUrl}</code><p className="fine-print">{moteText("有效期内，持有邀请的人可以领取该连接。请勿公开分享；关闭此页面不会取消邀请，需使用下面的取消按钮。")}</p>
         <div className="connection-actions"><button className="button" onClick={() => void copy(JSON.stringify(invite.invitation, null, 2))}><Copy size={15}/>{moteText("复制邀请 JSON")}</button><button className="button" onClick={() => downloadFile('mote-connection.json', new Blob([JSON.stringify(invite.invitation, null, 2)], { type: 'application/json' }))}><Download size={15}/>{moteText("下载 JSON")}</button>{qr && <a className="button" href={qr} download="mote-connection.png"><Download size={15}/>{moteText("保存二维码")}</a>}<button className="button subtle" disabled={!!busy} onClick={cancelInvitation}><X size={15}/>{moteText("取消邀请")}</button></div>
         <details><summary>{moteText("手动复制邀请内容")}</summary><textarea readOnly aria-label={moteText("连接邀请 JSON")} value={JSON.stringify(invite.invitation, null, 2)} spellCheck={false}/></details>
       </div>

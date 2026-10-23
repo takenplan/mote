@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,relative,resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {z} from 'zod';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {sha256} from '../apps/server/src/store.js';

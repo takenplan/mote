@@ -117,7 +117,7 @@ test("runtime composition disables shell and requires verified Mote tools before
 });
 
 test("bridge authentication, bounded scope, evidence discovery and field projection", async () => {
-  let received;
+  let received;const readiness=[];
   const bridge = await startBridge(
     {
       ...reader,
@@ -128,6 +128,7 @@ test("bridge authentication, bounded scope, evidence discovery and field project
     },
     {
       question: "fixture",
+      onTrace:event=>{if(event.type==='bridge.ready')readiness.push(event);},
       after: "2026-09-12T00:00:00Z",
       before: "2026-09-13T00:00:00Z",
     },
@@ -150,7 +151,10 @@ test("bridge authentication, bounded scope, evidence discovery and field project
       (await request("_ready", { tools: [...TOOL_NAMES, "bash"] })).status,
       400,
     );
+    assert.equal(readiness.length,0);
     assert.equal((await request("_ready", { tools: [...taskTools({question:'Generated'}),"skill"] })).status, 200);
+    assert.equal(readiness.length,1);
+    assert.deepEqual({...readiness[0],at:undefined},{at:undefined,type:'bridge.ready',stage:'starting',status:'succeeded',payload:{tools:taskTools({question:'Generated'}).length+1}});
     const response = await request("search_context", {
       query: "orbital observatory",
       after: "2020-01-01T00:00:00Z",

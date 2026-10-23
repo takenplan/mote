@@ -1,4 +1,4 @@
-import {MEMORY_EXTRACTION_PROMPT} from '../memory-contract.js';
+import {MEMORY_EXTRACTION_PROMPT} from '../memory.js';
 import {defaultMemoryReviewStrategy} from '../memory-review-policy.js';
 import type {MemoryStrategies} from '../memory-strategies.js';
 import {boundedPersonalExtractionStrategy,boundedPersonalReviewStrategy} from '../bounded-personal-memory-policy.js';

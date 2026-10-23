@@ -1,6 +1,6 @@
 package dev.mote.collector
 
-/** A build profile controls runtime defaults; a release tag never selects debug behavior. */
+/** Select Mote credential storage before constructing a platform secret provider. */
 enum class RuntimeProfile(val wire: String) {
     DEV("dev"), PROD("prod"), TEST("test");
 
@@ -10,7 +10,7 @@ enum class RuntimeProfile(val wire: String) {
 
     companion object {
         val current get() = parse(BuildConfig.MOTE_PROFILE)
-        fun parse(value: String): RuntimeProfile = entries.singleOrNull { it.wire == value }
+        fun parse(value: String): RuntimeProfile = if (value == "default") PROD else entries.singleOrNull { it.wire == value }
             ?: error("Unsupported Mote profile")
     }
 }

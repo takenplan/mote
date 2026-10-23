@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 test('owner Agent inspector reads long segments page by page through the scoped Agent guard',async t=>{

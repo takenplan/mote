@@ -16,7 +16,7 @@ Checks distinguish SQL ablation, app initialization, and query-owned changes. Em
 
 The independent generated suite has 15 tests covering two complete pairs, both failure positions, timeout, unsupported caches/schema, pre-admission source/capability changes, missing/running/conflicting receipts, immutable first-plan recovery, fixed input/pin/cursor guards, actual freeze CLI, live CLI/supervisor rejection, oracle-field exclusion, and two Coding archive revisions. It begins with six generated Memory rows, a nonempty extraction draft, checkpoints and Memory FTS. Synthetic zero-provider phase closures establish the Ask unit boundary; they do not revalidate whole-wave ingestion/integration or answer quality.
 
-Final report: `<redacted-personal-path>`. Command: `MOTE_HELDOUT_ASK_TEST_OUTPUT=<new-external-directory> node --import tsx --test scripts/test-heldout-memory-replay-ask.test.ts`. Script typecheck: `tsc -p tsconfig.scripts.json --noEmit`.
+Final report: `/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27/heldout-ask-offline-012/ROOT_SAFE_ask.json`. Command: `MOTE_HELDOUT_ASK_TEST_OUTPUT=<new-external-directory> node --import tsx --test scripts/test-heldout-memory-replay-ask.test.ts`. Script typecheck: `tsc -p tsconfig.scripts.json --noEmit`.
 
 No heldout source text, questions, rubric, answers or live-vault semantic content were opened by the implementer. No production code, agent build output or frozen execution worktree was modified. The current real replay's persistent stop remains authoritative. These fixtures establish technical behavior, not Memory quality, net benefit, or readiness to resume that stopped experiment.
 

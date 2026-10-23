@@ -1,4 +1,3 @@
-import {transcriptProbe} from './fixtures/read-path-probes.js';
 import {fixtureMemoryResult} from './fixtures/memory-result.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Store} from '../src/store.js';
 import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import {MemoryStore,memoryEvidenceFingerprint} from '../src/memory.js';
 import type {Config} from '../src/config.js';
 
@@ -50,6 +49,35 @@ test('formal material revisions are immutable, independently readable, deduplica
   assert.deepEqual(materials.list().items,[]);
   assert.equal(materials.forget(first.id),true);
   assert.equal(store.db.prepare('SELECT COUNT(*) n FROM material_block_payloads').get()!.n,0);
+});
+
+test('compiled Material metadata reads remain fresh across revisions, transactions, schema changes and reopen',async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-material-statements-'));let store=new Store(directory);
+  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  const materials=new MaterialStore(store),prepares=new Map<string,number>(),prepare=store.db.prepare.bind(store.db);
+  store.db.prepare=sql=>{
+    if(sql==='SELECT * FROM material_heads WHERE id=?'||sql.startsWith('SELECT revision,sequence,manifest,created_at AS version_created_at')||sql.startsWith('SELECT 1 FROM material_evidence e WHERE e.invalidated=1 AND e.material_id=?')||sql==='SELECT revision,state,error FROM material_index_requests WHERE material_id=?')prepares.set(sql,(prepares.get(sql)??0)+1);
+    return prepare(sql);
+  };
+  const captureId=randomUUID();await store.ingest({id:captureId,deviceId:'generated',deviceName:'Generated fixture',platform:'import',source:'note',capturedAt:'2026-10-13T00:00:00Z',durationMs:0,ocrText:'Generated source statement'});
+  const base={...draft('statement-source','statement-material'),members:[{id:'source-1',kind:'capture',ref:'capture:'+captureId}]},first=materials.publish(base);
+  assert.equal(materials.get(first.ref)?.revision,first.revision);
+  const second=materials.publish({...base,blocks:[{...base.blocks[0],text:'Generated current revision'}]},{expectedRevision:first.revision});
+  assert.equal(materials.get(base.id)?.revision,second.revision);
+  assert.equal(materials.get(first.ref)?.revision,first.revision,'the same handle binds the requested immutable revision');
+  materials.setSearchable(base.id,true);assert.equal(materials.get(base.id)?.indexing.state,'pending');
+  store.db.exec('BEGIN IMMEDIATE');materials.setSearchable(base.id,false);
+  assert.equal(materials.get(base.id)?.indexing.state,'disabled','reads observe the current transaction');
+  store.db.exec('ROLLBACK');assert.equal(materials.get(base.id)?.indexing.state,'pending','rollback is visible without invalidating a row cache');
+  store.db.exec('CREATE INDEX material_statement_fixture ON material_heads(external_id)');
+  assert.equal(materials.get(base.id)?.revision,second.revision,'SQLite recompiles handles after schema changes');
+  store.invalidateMemoryEvidence(materials.evidenceIds(second.ref)[0]);
+  assert.equal(materials.get(base.id)?.coverage.reason,'source_evidence_changed','revocation is read immediately');
+  assert.equal(prepares.size,4);assert.deepEqual([...prepares.values()],[1,1,1,1],'each private query compiles once while every read still executes');
+  store.close();assert.throws(()=>materials.get(base.id),'closed handles cannot return saved metadata');
+  store=new Store(directory);const reopened=new MaterialStore(store);
+  assert.equal(reopened.get(base.id)?.coverage.reason,'source_evidence_changed');
+  reopened.retire(base.id,{expectedRevision:second.revision});assert.equal(reopened.get(second.ref),undefined);
 });
 
 test('host processing readiness can revisit an old state with a new immutable revision, without content rollback',t=>{
@@ -220,4 +248,28 @@ test('source invalidation permits an identical rebuild once, preserves other anc
   assert.equal(reopened.get(value.id)?.ref,renamed.ref,'invalid provenance rolls back publication');
 });
 
-test('revalidating a rebuilt long transcript remains bounded with invalidated historical anchors',async t=>{await transcriptProbe(t);});
+test('revalidating a rebuilt long transcript remains bounded with invalidated historical anchors',async t=>{
+  const {store,materials}=fixture(t),captureId=randomUUID();
+  await store.ingest({id:captureId,deviceId:'fixture',deviceName:'Generated',platform:'import',source:'note',
+    capturedAt:'2026-09-24T01:00:00Z',durationMs:0,ocrText:'Generated transcript original'});
+  const value:MaterialDraft={...draft('fixture-source','long-transcript'),
+    members:[{id:'original',kind:'capture',ref:'capture:'+captureId}],
+    blocks:Array.from({length:2000},(_,index)=>({id:'turn-'+index,kind:'text' as const,format:'plain',
+      text:'Generated anonymous turn '+index,memberIds:['original']}))};
+  const first=materials.publish(value),historical=materials.evidenceIds(first.ref);
+  store.invalidateMemoryEvidence(captureId);
+  assert.equal(materials.get(value.id)?.coverage.reason,'source_evidence_changed');
+  const rebuilt=new MaterialStore(store),current=rebuilt.publish(value,{expectedRevision:first.revision});
+  const anchors=rebuilt.evidenceIds(current.ref);
+  assert.equal(anchors.length,2000);
+  assert.equal(rebuilt.isCurrentEvidence(historical[0]),false);
+  assert.equal(rebuilt.isCurrentEvidence(anchors[0]),true);
+  const started=performance.now();
+  // Model handoffs revalidate many anchors of this same current Material. Old
+  // invalidations must not trigger a nested scan of every active transcript block.
+  for(let index=0;index<100;index++)assert.equal(rebuilt.get(current.ref)?.coverage.state,'complete');
+  assert.ok(performance.now()-started<2000,'100 current transcript fences must finish within two seconds');
+  store.invalidateMemoryEvidence(anchors[0]);
+  assert.equal(rebuilt.get(current.ref)?.coverage.reason,'source_evidence_changed','indexing must preserve live revocation');
+  assert.equal(rebuilt.get(first.ref)?.revision,first.revision,'the immutable historical revision remains addressable');
+});

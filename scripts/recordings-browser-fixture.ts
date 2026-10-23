@@ -1,7 +1,7 @@
 /** Generated-only production UI fixture; never reads a native vendor account. */
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import type {RecordingProvider} from '../apps/server/src/connectors/recordings.js';
 import {feishuTranscript} from '../apps/server/src/connectors/recording-formats.js';
 import {dingtalkTranscript} from '../apps/server/src/connectors/dingtalk-recordings.js';

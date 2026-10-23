@@ -64,8 +64,6 @@ class PairingNavigationInstrumentedTest {
         val verifying = CountDownLatch(1); val continueVerification = CountDownLatch(1)
         val listener = ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))
         val node = "http://127.0.0.1:${listener.localPort}"; val deviceId = settings.deviceId
-        val deploymentId = java.util.UUID.randomUUID().toString(); val userId = java.util.UUID.randomUUID().toString()
-        val requestId = "generated-pairing-request"
         val credential = "generated-paired-credential"; val newToken = "generated-paired-token-12345678901234567890"
         val server = Thread {
             while (!listener.isClosed) {
@@ -85,15 +83,9 @@ class PairingNavigationInstrumentedTest {
                     requests += path
                     if (path == "/api/connections/self") { verifying.countDown(); check(continueVerification.await(20, TimeUnit.SECONDS)) }
                     val body = when (path) {
-                        "/api/connections/redeem" -> JSONObject().put("id", requestId).put("expiresAt", System.currentTimeMillis() + 600_000)
-                        "/api/login/poll" -> JSONObject().put("ready", true).put("scope", "client").put("purpose", "device").put("serverUrl", node)
-                            .put("deploymentId", deploymentId).put("userId", userId).put("deviceId", deviceId)
-                            .put("token", newToken).put("credentialId", credential).put("expiresAt", System.currentTimeMillis() + 600_000)
-                        "/api/connections/self" -> JSONObject().put("protocol", JSONObject().put("min", 2).put("max", 2))
-                            .put("credential", JSONObject().put("id", credential).put("kind", "client").put("deviceId", deviceId).put("platform", "android").put("serverUrl", node))
-                            .put("account", JSONObject().put("deploymentId", deploymentId).put("userId", userId).put("credentialId", credential))
-                            .put("capabilities", JSONObject().put("ingest", true).put("ingressVersion", 3).put("ownSources", true).put("archiveRead", true))
-                        "/api/login/ack" -> JSONObject().put("acknowledged", true)
+                        "/api/connections/redeem" -> JSONObject().put("serverUrl", node).put("scope", "owner").put("token", newToken).put("credentialId", credential)
+                        "/api/connections/self" -> JSONObject().put("credential", JSONObject().put("id", credential).put("scope", "owner")
+                            .put("deviceId", deviceId).put("platform", "android").put("serverUrl", node)).put("node", JSONObject().put("protocol", JSONObject().put("min", 1).put("max", 1))).put("capabilities", JSONObject().put("ingest", true).put("ingressVersion", 2).put("ownSources", true).put("archiveRead", true))
                         else -> JSONObject()
                     }.toString().toByteArray()
                     it.getOutputStream().apply {
@@ -109,7 +101,7 @@ class PairingNavigationInstrumentedTest {
             instrumentation.waitForIdleSync()
         }
         try {
-            settings.save(settings.read().copy(server = "https://old.generated.invalid", token = "generated-old-token-1234567890123456", deviceName = "Generated device", debugHttp = true, syncMode = "manual", intervalSeconds = 30, authSignedOut = true))
+            settings.save(settings.read().copy(server = "https://old.generated.invalid", token = "generated-old-token-1234567890123456", deviceName = "Generated device", debugHttp = true, syncMode = "manual", intervalSeconds = 30))
             ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
                 val monitor = instrumentation.addMonitor(ConnectionActivity::class.java.name, null, false)
                 scenario.onActivity { activity ->
@@ -124,10 +116,9 @@ class PairingNavigationInstrumentedTest {
                     instrumentation.runOnMainSync { ready = views(connection.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "确认连接此节点" } }
                     ready
                 }
-                val invitation = JSONObject().put("format", "mote.connection").put("version", 2)
-                    .put("deploymentId", deploymentId).put("userId", userId).put("purpose", "device").put("serverUrl", node)
+                val invitation = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", node)
                     .put("code", "A".repeat(43)).put("expiresAt", Instant.ofEpochMilli(System.currentTimeMillis() + 600_000).toString()).toString()
-                // Deliver through the real picker path while the connection page is rebuilt behind the scanner.
+                // Use the real scanner child, recreate its parent, then let Android deliver the result.
                 instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.CAMERA)
                 val scanMonitor = instrumentation.addMonitor(ConnectionScanActivity::class.java.name, null, false)
                 instrumentation.runOnMainSync { click(connection, "扫描连接二维码") }
@@ -163,7 +154,7 @@ class PairingNavigationInstrumentedTest {
                 continueVerification.countDown()
                 waitUntil { settings.read().server == node && !ConnectionGuard.changing() }
                 assertEquals(newToken, settings.read().token); assertEquals(deviceId, settings.deviceId)
-                assertEquals(listOf("/api/connections/redeem", "/api/login/poll", "/api/connections/self", "/api/connections/self", "/api/login/ack"), requests.toList())
+                assertEquals(listOf("/api/connections/redeem", "/api/connections/self"), requests.toList())
                 scenario.awaitUiText(node)
                 scenario.onActivity { activity ->
                     assertEquals(node, editor(activity, "https://mote.example.com").text.toString())

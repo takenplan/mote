@@ -2,13 +2,6 @@
 
 Date: 2026-10-17. Owner requested an independent theme change on remote main, with autonomous implementation and a PR; no merge or deployment.
 
-Status: owner-requested appearance decision; the preceding sentence records the
-initial task's authorization. Source was later integrated via PR 143 and the
-scoped integration. Executed UI coverage and platform gaps remain in the
-[validation matrix](validation/cross-platform-appearance.md); the
-[progress ledger](project-progress.md) separates delivery from unverified
-deployment. This documentation update grants no new merge or deployment authority.
-
 Base: `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` (fetched origin/main). Branch: `codex/mote-cross-platform-theme`. No multi-user branch or dependency is included.
 
 The existing UI surfaces are Central Web, the macOS Electron collector and Android Activities. There is no iOS application or browser-extension UI in this repository. Swift files implement macOS capture/update helpers; CLI and backend workers have no appearance controls.

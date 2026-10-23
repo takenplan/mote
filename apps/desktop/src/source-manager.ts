@@ -4,7 +4,7 @@ import { connectionToken, requireConnectionToken, sourceConnectionBinding, type 
 import {nativeStatusView} from './native-status';
 import { meteredBody } from './upload-meter';
 import { moteText, statusMessage } from '@mote/shared/i18n';
-import { type EventJournal, failureCode, httpFailure, TransportFailure } from './support';
+import { type EventJournal, failureCode, safeErrorName, httpFailure, TransportFailure } from './support';
 import { randomUUID } from 'node:crypto';
 import { join, basename, isAbsolute, dirname } from 'node:path';
 import { stat,readdir,rm } from 'node:fs/promises';
@@ -17,7 +17,6 @@ import { builtInSourceAdapters, type SourceAdapterRegistry } from './source-adap
 import type { Config } from './contracts';
 import { readResponseText } from './response-body';
 import { ConnectionBindingStore } from './connection-binding';
-import {ingressRequest} from './ingress-client';
 import { decideSync } from './sync-policy';
 import { FileWatcher, type FileWatchEvent } from './file-watcher';
 import {INGRESS_VERSION_HEADERS} from './ingress-protocol';
@@ -163,7 +162,9 @@ export class LocalSourceManager {
     await this.interrupt();
     const binding = sourceConnectionBinding(connection);
     const switchingBucket = binding !== this.binding;
-    if (!switchingBucket) this.nodeBinding.assertChange(connection, (this.connectionActivity().pending > 0));
+    // Logout suspends authorization, while the durable queue retains its original owner.
+    const retainingBinding = connection.authSignedOut === true && !connection.token && !switchingBucket && connection.serverUrl === this.connection.serverUrl;
+    if ((!switchingBucket || (connection.authSignedOut && !connection.token)) && !retainingBinding) this.nodeBinding.assertChange(connection, (this.connectionActivity().pending > 0));
     if (switchingBucket) {
       const dirty = new Set(this.sources.map(s => s.id));
       // Persist before mutating the connection so an I/O failure can retain the old in-memory node.
@@ -172,7 +173,7 @@ export class LocalSourceManager {
       for (const source of this.sources) { const engine = new SourceSync(join(this.directory, 'nodes', binding, source.id + '.json')); await engine.initialize(); engines.set(source.id, engine); }
       this.binding = binding; this.engines = engines; this.states.clear(); this.readable.clear(); this.metadataDirty = dirty; this.metadataDirtyAt ??= new Date().toISOString();
     }
-    await this.nodeBinding.commit(connection, !switchingBucket && (this.connectionActivity().pending > 0));
+    if (!retainingBinding) await this.nodeBinding.commit(connection, !switchingBucket && (this.connectionActivity().pending > 0));
     this.connection = connection; void this.sync(true);
   }
   async sync(force = true): Promise<void> {
@@ -212,7 +213,7 @@ export class LocalSourceManager {
       // Failed attempts use a bounded retry interval as well; a timer never floods an unavailable node.
       if (!force && !this.dirtySources.has(source.id) && last?.state === 'error' && (last as SourceStatus & { attemptAt?: number }).attemptAt && Date.now() - (last as SourceStatus & { attemptAt: number }).attemptAt < Math.max(30000, source.intervalSeconds * 1000)) continue;
       const status: SourceStatus & { attemptAt: number } = { source, state: 'syncing', message: moteText("读取所选来源并同步"), pending: 0, items: 0, skipped: 0, ...last, attemptAt: Date.now() }; status.state = 'syncing'; this.states.set(source.id, status);
-      const started = Date.now(); void this.events?.record('SOURCE', 'STARTED', { name: source.id, kind: source.kind });
+      const started = Date.now(); void this.events?.record('SOURCE', 'STARTED', {sourceId:source.id,sourceKind:source.kind});
       const wakeVersion = this.sourceWakeVersions.get(source.id) ?? 0;
       let unqueuedScan: import('./source-types').SourceScan | undefined;
       let accessValidated = false;
@@ -257,42 +258,38 @@ export class LocalSourceManager {
         if ((this.sourceWakeVersions.get(source.id) ?? 0) === wakeVersion) this.dirtySources.delete(source.id);
         const paths = this.dirtyPathVersions.get(source.id);
         if (paths) { for (const [path, version] of priorityVersions) if (paths.get(path) === version) paths.delete(path); if (!paths.size) this.dirtyPathVersions.delete(source.id); }
-        void this.events?.record('SOURCE', scan.complete ? 'OK' : 'SCHEDULER', { elapsedMs: Date.now() - started, name: source.id, kind: source.kind });
+        void this.events?.record('SOURCE', scan.complete ? 'OK' : 'SCHEDULER', { elapsedMs: Date.now() - started,sourceId:source.id,sourceKind:source.kind });
       } catch (e) {
         if (!accessValidated) this.readable.delete(source.id);
-        void this.events?.record('SOURCE', signal.aborted ? 'CANCELLED' : e instanceof CalendarPermissionError ? 'PERMISSION' : failureCode(e, 'SOURCE'), { elapsedMs: Date.now() - started, name: source.id, kind: source.kind, detail: e instanceof Error ? e.name : undefined });
+        void this.events?.record('SOURCE', signal.aborted ? 'CANCELLED' : e instanceof CalendarPermissionError ? 'PERMISSION' : failureCode(e, 'SOURCE'), { elapsedMs: Date.now() - started,sourceId:source.id,sourceKind:source.kind,errorName:safeErrorName(e) });
         Object.assign(status, this.engines.get(source.id)?.status(), { state: e instanceof CalendarPermissionError ? 'permission_required' : 'error', message: signal.aborted ? moteText("同步已取消，待传版本已保留") : e instanceof CalendarPermissionError ? e.message : moteText("同步未完成：检查权限、网络或来源路径后重试；待传版本已保留") });
       } finally { if (unqueuedScan) await this.engines.get(source.id)?.discardUnqueuedOriginals(unqueuedScan.items); }
     }
   }
   private request(signal: AbortSignal, onBytes?: (bytes: number) => void): SourceRequest {
-    const connection=this.connection;
-    const request:SourceRequest=async (path, body, method, requestSignal) => {
+    return async (path, body, method, requestSignal) => {
       if (!this.connection.serverUrl || !connectionToken(this.connection) || !this.nodeBinding.matches(this.connection)) throw new Error(moteText("本地来源没有匹配的中央连接"));
-      if(connection.account){if(this.connection!==connection||this.stopped)throw Error('Source account changed');(requestSignal??signal).throwIfAborted();return ingressRequest(connection as Config,path,body,method,requestSignal??signal,onBytes);}
       const response = await fetch(this.connection.serverUrl + path, { method, headers: { ...INGRESS_VERSION_HEADERS,Authorization: 'Bearer ' + requireConnectionToken(this.connection), 'Content-Type': body instanceof Uint8Array?'application/octet-stream':'application/json' }, body: method==='GET'?undefined:meteredBody(body instanceof Uint8Array?body:JSON.stringify(body),onBytes), ...({duplex:'half'} as object), signal: AbortSignal.any([requestSignal || signal, AbortSignal.timeout(20000)]), redirect: 'error' });
       if (!response.ok) { await response.body?.cancel().catch(() => undefined); throw new TransportFailure(response.status === 401 ? moteText("中央认证失败，请检查令牌") : response.status === 409 ? moteText("中央来源已暂停，请在中央来源页恢复") : moteText("中央同步失败，已保留本地版本，稍后重试"), httpFailure(response.status), response.status); }
       return JSON.parse(await readResponseText(response, 1024 * 1024));
-    };request.account=connection.account;return request;
+    };
   }
   /** Recovery is transport work: local-only scans never contact the central node. */
   private async recoverSnapshot(source:LocalSource,engine:SourceSync,request:SourceRequest,signal:AbortSignal):Promise<void>{
     if(source.kind!=='local-files'||source.retention!=='snapshot'||source.syncContinuously===false&&source.importCompletedAt)return;
     let count=0;
-    try{let after:string|undefined;const seen=new Set<string>();do{const response=await request(request.account?`/api/ingress/sources/${encodeURIComponent(source.id)}/recovery`+(after?'?after='+encodeURIComponent(after):''):'/api/file-sync/v1/recovery?sourceId='+encodeURIComponent(source.id),undefined,'GET',signal) as {items?:import('./source-sync').SnapshotRecovery[];nextCursor?:string|null};
-      if(!Array.isArray(response.items)||response.items.length>200||response.items.some(item=>typeof item.externalId!=='string'||typeof item.revision!=='string'||request.account&&!/^[a-f0-9]{64}$/.test(item.recoveryId??'')))throw Error('Invalid snapshot recovery page');count+=await engine.requestSnapshotRecovery(response.items);
-      after=request.account?response.nextCursor??undefined:undefined;if(after){if(!/^[a-f0-9]{64}$/.test(after)||seen.has(after))throw Error('Invalid snapshot recovery cursor');seen.add(after);}
-    }while(after);
-    }catch(error){if(signal.aborted||request.account)throw error;return;/* Older legacy nodes can still receive ordinary revisions. */}
+    try{const response=await request('/api/file-sync/v1/recovery?sourceId='+encodeURIComponent(source.id),undefined,'GET',signal) as {items?:import('./source-sync').SnapshotRecovery[]};
+      if(Array.isArray(response.items)&&response.items.length<=200&&response.items.every(item=>typeof item.externalId==='string'&&typeof item.revision==='string'))count=await engine.requestSnapshotRecovery(response.items);
+    }catch(error){if(signal.aborted)throw error;return;/* Older nodes can still receive ordinary revisions. */}
     if(!count)return;
     const now=Date.now(),adapter=this.adapters.get(source.kind),scan=await this.adapters.scan({source,signal,checkpoint:adapter.checkpointMode==='file'?undefined:engine.checkpoint(),fileCheckpoint:engine.fileCheckpoint(),priorityPaths:[],stateDirectory:this.directory,helperPath:this.helperPath,scope:{start:new Date(now-30*86400000).toISOString(),end:new Date(now+90*86400000).toISOString()}});
     try{signal.throwIfAborted();await engine.stage(scan,adapter.tracksDeletions&&source.trackDeletions,undefined,source.initialSync);}finally{await engine.discardUnqueuedOriginals(scan.items);}
   }
   private async prepareSource(source: LocalSource, request: SourceRequest, signal: AbortSignal): Promise<void> {
     if (!this.metadataDirty.has(source.id)) return;
-    const registered = await request(request.account?'/api/ingress/sources':'/api/sources', sourceDefinition(source), 'POST', signal) as { id?: string };
+    const registered = await request('/api/sources', sourceDefinition(source), 'POST', signal) as { id?: string };
     if (registered?.id !== source.id) throw new Error(moteText("中央来源注册确认无效"));
-    const patched = await request((request.account?'/api/ingress/sources/':'/api/sources/') + source.id, { retention: source.retention, initialSync: source.initialSync, name: sourceDefinition(source).name }, 'PATCH', signal) as { id?: string };
+    const patched = await request('/api/sources/' + source.id, { retention: source.retention, initialSync: source.initialSync, name: sourceDefinition(source).name }, 'PATCH', signal) as { id?: string };
     if (patched?.id !== source.id) throw new Error(moteText("中央来源配置确认无效"));
     this.metadataDirty.delete(source.id); if (!this.metadataDirty.size) this.metadataDirtyAt = undefined; await this.persist();
   }

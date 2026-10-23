@@ -28,7 +28,8 @@ export function observationGap(previous:ObservationClock|undefined,current:Obser
  return {elapsedMs,delayMs:Math.max(0,elapsedMs-intervalMs),clockForwardMs:Math.max(0,difference),clockBackwardMs:Math.max(0,-difference)};
 }
 
-/** One bounded observer per existing logger; no timer, writer or task history. */
+/** One bounded observer per existing logger; no timer, writer or task history.
+ * hostTick observes the existing 500ms delegation pump, never scheduling it. */
 export class ExecutionObservability {
  private closed=false;
  private window:ObservationClock|undefined;
@@ -74,14 +75,14 @@ export class ExecutionObservability {
    if(!this.window||now.monotonic-this.window.monotonic<60000)return;
    for(let i=0;i<names.length;i++){const value=this.reads[i]!;if(value.count)this.emit(names[i]==='host_tick'?'task.loop_timing':'memory.reader_timing',names[i]!,'summary','info',{phase:'host'},{...value,succeeded:value.count-value.failed},'window_summary');}
    if(this.renewals.count)this.emit('task.lease_timing','lease_renew','summary','info',{phase:'host'},{...this.renewals,succeeded:this.renewals.count-this.renewals.failed},'window_summary');
-   this.emit('task.loop_timing','host_tick','summary','info',{phase:'host'},{count:this.ticks,delayMs:this.delayMs,elapsedMs:this.elapsedMs,clockForwardMs:this.clockForwardMs,clockBackwardMs:this.clockBackwardMs,failed:this.renewals.failed,skipped:this.dropped,dropped:this.dropped,intervalMs:100},this.dropped?'suppressed_summary':'window_summary',true);
+   this.emit('task.loop_timing','host_tick','summary','info',{phase:'host'},{count:this.ticks,delayMs:this.delayMs,elapsedMs:this.elapsedMs,clockForwardMs:this.clockForwardMs,clockBackwardMs:this.clockBackwardMs,failed:this.renewals.failed,skipped:this.dropped,dropped:this.dropped,intervalMs:500},this.dropped?'suppressed_summary':'window_summary',true);
    const tick=this.previousTick;this.reset();this.window=now;this.previousTick=tick;
   }catch{/* Observation only. */}
  }
  hostTick(){
-  try{const now=this.sample();if(!now)return;this.advance(now);const timing=observationGap(this.previousTick,now,100);this.previousTick=now;this.ticks++;
+  try{const now=this.sample();if(!now)return;this.advance(now);const timing=observationGap(this.previousTick,now,500);this.previousTick=now;this.ticks++;
    this.delayMs=Math.max(this.delayMs,timing.delayMs??0);this.elapsedMs=Math.max(this.elapsedMs,timing.elapsedMs??0);this.clockForwardMs=Math.max(this.clockForwardMs,timing.clockForwardMs??0);this.clockBackwardMs=Math.max(this.clockBackwardMs,timing.clockBackwardMs??0);
-   if((timing.delayMs??0)>=100)this.emit('task.loop_timing','host_tick','completed','info',{phase:'host'},{...timing,intervalMs:100},'timer_late');
+   if((timing.delayMs??0)>=500)this.emit('task.loop_timing','host_tick','completed','info',{phase:'host'},{...timing,intervalMs:500},'timer_late');
   }catch{/* Observation only. */}
  }
  private complete(name:ObservationName,identity:ObservationIdentity,start:ObservationClock,failed:boolean){

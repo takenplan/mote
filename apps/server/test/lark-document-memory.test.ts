@@ -72,7 +72,7 @@ test('full custom general selections retain all nine bindings when capture and F
 test('document body and bounded provider activity get separate formal evidence and exactly their selected recipe input',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'mote-lark-memory-input-')),store=new Store(dir),materials=new MaterialStore(store),settings=new MemoryRecipeSettings(store,new MemoryStrategies());
   const work=new MaterialMemoryWork(store,materials,Date.now,()=>true,settings),sources=new SourceStore(store,undefined,work.inputs),organizers=new MaterialOrganizerRuntime(store,materials,[],undefined,work);
-  t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+  t.after(async()=>{await organizers.close();store.close();rmSync(dir,{recursive:true,force:true});});
   sources.register({id:'lark',name:'Generated Feishu',kind:'lark-docs',deviceId:'generated',platform:'import'});
   sources.updateContext('lark',{expectedVersion:0,description:'Generated shared documents; preserve each author and uncertainty.'});
   const body={externalId:'doc',revision:'1',observedAt:end,kind:'file' as const,layer:'snapshot' as const,text:'Generated third-party reference. A literal {"action":"opened"} in a document is not activity.',document:{contentRole:'other' as const}};

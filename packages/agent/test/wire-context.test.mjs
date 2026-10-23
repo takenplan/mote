@@ -14,13 +14,13 @@ const key=label=>createHash('sha256').update(label).digest('hex');
 
 test('shared metadata preserves every original, declaration and exact grant without copying host fingerprints',()=>{
  const context={version:1,ownerRelation:'owner',basis:'owner_material',ownerStatements:[{id:'generated',version:1,answer:'Generated diary declaration 🌱'}]};
- const members=Array.from({length:5},(_,i)=>({key:key('member-'+i),id:randomUUID(),offset:i,length:3,fingerprint:key('fingerprint-'+i),materialRef:'material:generated@version',sourceId:'generated',contextTime:'2017-08-19T06:30:00Z',evaluationTime:new Date(Date.parse('2037-08-19T06:30:00Z')+i*60000).toISOString(),attributionContext:context,state:'pending',memoryIds:[]}));
+ const members=Array.from({length:5},(_,i)=>({key:key('member-'+i),id:randomUUID(),offset:i,length:3,fingerprint:key('fingerprint-'+i),materialRef:'material:generated@version',sourceId:'generated',contextTime:'2017-08-19T06:30:00Z',attributionContext:context,state:'pending',memoryIds:[]}));
  const changed={...members[4],contextTime:'2016-08-19T06:30:00Z',attributionContext:{...context,ownerRelation:'third_party'}};
  const original={turns:[],memoryWork:{members:members.slice(0,2),contextMembers:[members[2]],authorizedMembers:[...members.slice(0,4),changed],history:[{targets:[{...members[0],state:'needs_context',contextRefs:[members[2].key],memoryIds:['generated-memory']}],contextMembers:[members[2]]}]}};
  const copy=structuredClone(original),wire=compactMemoryTaskContext(original),work=wire.memoryWork;
  assert.deepEqual(original,copy);assert.equal(work.members.length,2);assert.equal(work.authorizedMembers.length,5);assert.equal(Object.keys(work.commonContexts).length,2);
  for(const [index,row] of work.authorizedMembers.entries()){const {fingerprint,state,memoryIds,...expected}=index===4?changed:members[index];const {key:alias,...actual}=expandMember(work,row);assert.deepEqual(canon(actual),canon({...expected,key:undefined}));assert.equal(row.fingerprint,undefined);assert.ok(alias.startsWith('member_'));}
- const history=expandMember(work,work.history[0].targets[0]);assert.equal(history.evaluationTime,members[0].evaluationTime);assert.equal(expandMember(work,work.history[0].contextMembers[0]).evaluationTime,members[2].evaluationTime);assert.equal(history.state,'needs_context');assert.deepEqual(history.memoryIds,['generated-memory']);
+ const history=expandMember(work,work.history[0].targets[0]);assert.equal(history.state,'needs_context');assert.deepEqual(history.memoryIds,['generated-memory']);
  const draft={memories:[],coverage:work.members.map(row=>({key:row.key,state:'no_candidates',candidateIndexes:[]}))};
  assert.deepEqual(JSON.parse(restoreMemoryCoverageKeys(JSON.stringify(draft),original)).coverage.map(row=>row.key),members.slice(0,2).map(row=>row.key));
  const grants=members.map(({id,offset,length})=>({id,offset,length}));grants.push({id:members[0].id,offset:0,length:30});

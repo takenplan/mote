@@ -14,7 +14,7 @@ test('model-facing material pages omit internal paths and metadata while retaini
   const store=new Store(directory),sources=new SourceStore(store),materials=new MaterialStore(store);
   const organizers=new MaterialOrganizerRuntime(store,materials);
   const reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials);
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{await organizers.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const at='2026-09-24T00:00:00.000Z';
 
   sources.register({id:'fixture-files',name:'Generated files',kind:'local-files',deviceId:'fixture-device',platform:'macos',retention:'snapshot'});

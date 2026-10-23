@@ -11,7 +11,6 @@ import {ImportStore,type ImportRuntime} from '../src/imports.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import {ProviderAdmission} from '../src/provider-admission.js';
 
-const turn=()=>new Promise<void>(resolve=>setTimeout(resolve,5));
 const settings={protocol:'openai-completions' as const,provider:'custom',baseUrl:'http://127.0.0.1:1/v1',apiKey:'generated-unused',headers:{}};
 
 test('archived import resumes confirmed capacity waits across prepare/commit restart without redoing published records',async t=>{
@@ -23,17 +22,18 @@ test('archived import resumes confirmed capacity waits across prepare/commit res
  const close=async(instance:ReturnType<typeof open>)=>{await instance.engine.close();await instance.imports.stop();};
  t.after(async()=>{for(const instance of instances)await close(instance);store.close();rmSync(directory,{recursive:true,force:true});});
  const cool=async()=>{await assert.rejects(admission.run(settings,async()=>{throw new ProviderFailure({category:'transient',code:'rate_limited',executionStarted:false,retryAfterMs:5000});}));};
- const waiting=async(engine:ExecutionEngine,kind:string)=>{for(let n=0;n<100;n++){const step=engine.list({kind}).items[0];if(step?.state==='waiting'&&step.error==='rate_limited')return step;await turn();}assert.fail('Import did not persist its confirmed resource wait: '+JSON.stringify(engine.list({kind}).items.map(({state,error,attempts})=>({state,error,attempts}))));};
+ const settled=async(engine:ExecutionEngine,kind:string)=>{const ids=engine.list({kind}).items.map(step=>step.id);assert.equal(ids.length,1);await engine.drain(ids);return engine.get(ids[0])!;};
+ const waiting=async(engine:ExecutionEngine,kind:string)=>{const step=await settled(engine,kind);assert.equal(step.state,'waiting','Import persists its confirmed resource wait after the admitted execution settles');assert.equal(step.error,'rate_limited');return step;};
  let current=open();const job=await current.imports.create({instruction:'Generated parser fixture',files:[{name:'generated.custom',dataBase64:Buffer.from('Generated archived bytes').toString('base64')}]});
  await cool();const preparing=current.imports.prepare(job.id);const prepareWait=await waiting(current.engine,'imports.prepare');
  assert.equal(prepareWait.attempts,0);assert.equal(parses,0);assert.equal(current.imports.get(job.id).status,'queued');assert.equal(current.imports.get(job.id).execution?.status,'retry_wait');
  assert.equal(current.imports.get(job.id).execution?.failure?.retryAfterMs,5000);assert.equal(files.read(job.files[0].id).toString(),'Generated archived bytes');
  await close(current);await preparing;current=open();assert.equal((await current.imports.prepare(job.id)).status,'queued','startup observes the already scheduled wait');await current.engine.tick();assert.equal(parses,0,'restart retains the resource wait');
- t.mock.timers.tick(5001);await current.engine.tick();assert.equal(current.imports.get(job.id).status,'awaiting_confirmation');assert.equal(parses,1);
+ t.mock.timers.tick(5001);await current.engine.tick();await settled(current.engine,'imports.prepare');assert.equal(current.imports.get(job.id).status,'awaiting_confirmation');assert.equal(parses,1);
  await cool();const committing=current.imports.confirm(job.id);const commitWait=await waiting(current.engine,'imports.commit');
  assert.equal(commitWait.attempts,0);assert.equal(current.imports.get(job.id).status,'importing');assert.equal(store.list().items.length,1);assert.equal(notifications,0);
  await close(current);await committing;current=open();await current.engine.tick();assert.equal(notifications,0);assert.equal(parses,1);
- t.mock.timers.tick(5001);await current.engine.tick();const completed=current.imports.get(job.id);
+ t.mock.timers.tick(5001);await current.engine.tick();await settled(current.engine,'imports.commit');const completed=current.imports.get(job.id);
  assert.equal(completed.status,'completed');assert.equal(completed.progress.imported,1);assert.equal(completed.progress.duplicates,0);assert.equal(store.list().items.length,1);assert.equal(parses,1);assert.equal(notifications,1);
 });
 

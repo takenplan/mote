@@ -16,7 +16,7 @@ class ProtocolCompatibilityTest {
         assertEquals(contract.getJSONObject("range").getInt("min"), ProtocolCompatibility.MIN)
         assertEquals(contract.getJSONObject("range").getInt("max"), ProtocolCompatibility.MAX)
         assertThrows(ConnectionFailure::class.java) { ProtocolCompatibility.requireCompatible(null) }
-        assertEquals(mapOf(ProtocolCompatibility.HEADER to "2"), ProtocolCompatibility.headers)
+        assertEquals(mapOf(ProtocolCompatibility.HEADER to "1"), ProtocolCompatibility.headers)
     }
 
     @Test fun generatedCompatibilityCasesMatchTypeScriptAndDesktop() {

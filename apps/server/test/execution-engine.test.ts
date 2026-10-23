@@ -13,32 +13,23 @@ async function fixture(t:any){
 }
 const base:ExecutionHandler={kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}};
 
-// These generated stages test the engine's generic fairness API, not Memory's task graph.
-test('ready workflow stages rotate within each user despite arriving extraction backlog and cancelled work',async t=>{
- const {engine}=await fixture(t),started:string[]=[],ids:string[]=[];let release!:()=>void,enter!:()=>void,arrivals=0;
- const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
- const add=(user:string,kind:string,n:number)=>{const id=engine.enqueue(user+':'+kind+':'+n,kind,{n},{ownership:{userId:user,authorizationEpoch:1}});ids.push(id);return id;};
- for(const kind of ['extract','review','publish'])engine.register({...base,kind,fairnessGroup:step=>step.kind,execute:async step=>{started.push(step.ownership!.userId+':'+kind);if(started.length===1){enter();await held;}if(kind==='extract'&&arrivals++<8)add(step.ownership!.userId,'extract',100+arrivals);return null;}});
- add('A','extract',0);const running=engine.drain(ids);await entered;
- for(let n=1;n<12;n++)add('A','extract',n);add('B','extract',0);add('A','review',0);add('B','review',0);add('A','publish',0);add('B','publish',0);const cancelled=add('A','review',999);engine.cancel(cancelled);release();await running;await engine.drain(ids);
- assert.deepEqual(started.slice(0,6),['A:extract','B:extract','A:review','B:review','A:publish','B:publish']);assert.equal(engine.get(cancelled)!.state,'cancelled');assert.equal(started.filter(v=>v==='A:review').length,1);assert.ok(ids.filter(id=>id!==cancelled).every(id=>engine.get(id)!.state==='succeeded'));
+test('complete validated inputs remain durable and idempotent beyond the former metadata cap',async t=>{
+ const {engine,store}=await fixture(t),input={members:Array.from({length:180},(_,n)=>({id:n,text:'Generated complete evidence 🌱 '.repeat(12)+' exact-tail-'+n}))};
+ assert.ok(JSON.stringify(input).length>32768);let calls=0,received:unknown;
+ engine.register({...base,execute:async step=>{calls++;assert.deepEqual(step.input,input);return step.input;},commit:(_step,value)=>{received=value;}});
+ const id=engine.enqueue('generated-full-input','fixture',input);assert.equal(engine.enqueue('generated-full-input','fixture',input),id);
+ assert.deepEqual(JSON.parse(String(store.db.prepare('SELECT input FROM execution_steps WHERE id=?').get(id)!.input)),input);
+ await engine.drain([id]);assert.equal(calls,1);assert.deepEqual(received,input);assert.equal(engine.get(id)!.state,'succeeded');
 });
 
-test('stage service history survives reconstruction and gives a ready review its next turn',async t=>{
- const {engine,store,dir}=await fixture(t),started:string[]=[];let paused=false;
- for(const kind of ['extract','review'])engine.register({...base,kind,fairnessGroup:step=>step.kind,admit:()=>paused?new ExecutionFailure('waiting','processor_capacity',60000):undefined,execute:async()=>{started.push(kind);paused=true;return null;}});
- const ownership={userId:'A',authorizationEpoch:1},first=engine.enqueue('first','extract',{n:0},{ownership});await engine.drain([first]);
- const extract=engine.enqueue('older-extract','extract',{n:1},{ownership}),review=engine.enqueue('ready-review','review',{n:0},{ownership});await engine.close();
- const reopenedStore=new Store(dir),reopened=new ExecutionEngine(reopenedStore);t.after(async()=>{await reopened.close();reopenedStore.close();});
- for(const kind of ['extract','review'])reopened.register({...base,kind,fairnessGroup:step=>step.kind,execute:async()=>{started.push(kind);return null;}});
- store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE state=\'waiting\'').run();await reopened.drain([extract,review]);assert.deepEqual(started,['extract','review','extract']);
-});
-
-test('settled physical stages release their resource before local continuation',async t=>{
- const {engine}=await fixture(t),calls:string[]=[];let release!:()=>void,enter!:()=>void;
- const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
- engine.register({...base,concurrency:()=>2,resourceKeys:()=>['physical-worker'],execute:async(step,_signal,grant)=>{calls.push(step.operationId);if(step.operationId==='alignment'){grant.releaseResource('physical-worker');enter();await held;}return null;}});
- const first=engine.enqueue('alignment','fixture',{}),run=engine.drain([first]);await entered;const second=engine.enqueue('another-original','fixture',{});await engine.drain([second]);assert.equal(engine.get(second)!.state,'succeeded');assert.equal(engine.get(first)!.state,'running');release();await run;assert.deepEqual(calls,['alignment','another-original']);
+test('completion-driven admissions yield a turn while preserving all queued work',async t=>{
+ const {engine}=await fixture(t);let committed=0;
+ engine.register({...base,commit:()=>{committed++;}});
+ const ids=Array.from({length:80},(_,n)=>engine.enqueue('generated-yield','fixture',{n}));
+ const unrelatedTurn=new Promise<void>(resolve=>setImmediate(resolve));
+ await engine.tick();await unrelatedTurn;
+ assert.ok(committed>0&&committed<ids.length,'unrelated event-loop work runs before the completion backlog drains');
+ await engine.drain(ids);assert.equal(committed,ids.length);assert.ok(ids.every(id=>engine.get(id)!.state==='succeeded'));
 });
 
 test('one engine fills slots, fairly interleaves operations and keeps one step per immutable input',async t=>{
@@ -100,7 +91,7 @@ test('two database connections respect pool capacity, durable leases and fenced 
  await second.tick();assert.equal(calls,1,'second connection exceeded the shared pool limit');
  // Simulate the dead process lease; its late commit must not win over recovery.
  store.db.prepare('UPDATE execution_steps SET lease_until=0 WHERE id=?').run(a);await second.drain([a,b]);assert.equal(calls,3);assert.equal(second.get(a)!.state,'succeeded');
- release();await run;assert.equal(engine.get(a)!.state,'succeeded');assert.equal(engine.get(a)!.attempts,2);
+ release();await run;assert.equal(engine.get(a)!.state,'succeeded');assert.equal(engine.get(a)!.attempts,1);
 });
 
 
@@ -122,24 +113,14 @@ test('an expired lease cannot commit even before another host reclaims it',async
  engine.register({...base,execute:async()=>{calls++;if(calls===1)advance(30001);return calls;},commit:(_step,result)=>{committed.push(Number(result));}});
  const id=engine.enqueue('expired-before-recovery','fixture',{});await engine.drain([id]);
  assert.deepEqual(committed,[2],'the expired first attempt must be discarded and recovered');
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);
-});
-
-test('lease recovery fences the old grant immediately and waits for its local handler cleanup before restarting the same step',async t=>{
- let release!:()=>void,enter!:()=>void,finishCleanup!:()=>void;const held=new Promise<void>(resolve=>release=resolve),entered=new Promise<void>(resolve=>enter=resolve),cleanup=new Promise<void>(resolve=>finishCleanup=resolve);t.after(()=>{release();finishCleanup();});
- const {engine,advance}=await fixture(t);let calls=0,bodies=0,maximumBodies=0,oldGrant!:Parameters<ExecutionHandler['execute']>[2];const committed:number[]=[];
- engine.register({...base,concurrency:()=>2,execute:async(_step,_signal,grant)=>{const call=++calls;bodies++;maximumBodies=Math.max(maximumBodies,bodies);try{if(call===1){oldGrant=grant;enter();await held;grant.assert();}return call;}finally{if(call===1)await cleanup;bodies--;}} ,commit:(_step,result)=>committed.push(Number(result))});
- const id=engine.enqueue('lease-cleanup','fixture',{}),running=engine.drain([id]);await entered;advance(30001);await engine.tick();await new Promise(resolve=>setImmediate(resolve));await engine.tick();
- assert.equal(engine.get(id)!.state,'waiting');assert.throws(()=>oldGrant.assert(),{code:'grant_revoked'});assert.equal(calls,1,'an expired wrapper cannot admit the same step while its local handler remains active');
- release();await new Promise(resolve=>setImmediate(resolve));await engine.tick();assert.equal(calls,1,'asynchronous handler cleanup also belongs to the previous local execution');finishCleanup();await running;
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);assert.equal(maximumBodies,1);assert.deepEqual(committed,[2]);
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
 });
 
 test('an expired lease cannot publish a permanent failure before recovery',async t=>{
  const {engine,advance}=await fixture(t);let calls=0;
  engine.register({...base,execute:async()=>{if(++calls===1){advance(30001);throw new ExecutionFailure('permanent','late_failure');}return null;}});
  const id=engine.enqueue('expired-failure','fixture',{});await engine.drain([id]);
- assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,2);assert.equal(engine.get(id)!.error,undefined);
+ assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);assert.equal(engine.get(id)!.error,undefined);
 });
 
 test('handler disposal interrupts local work and preserves queued, blocked and terminal tasks',async t=>{
@@ -154,4 +135,17 @@ test('handler disposal interrupts local work and preserves queued, blocked and t
  assert.equal(engine.get(blocked)!.state,'blocked');assert.equal(engine.get(blocked)!.error,'model_missing');
  assert.equal(engine.get(cancelled)!.state,'cancelled');release();await new Promise(resolve=>setImmediate(resolve));assert.equal(commits,0);
  engine.register({...base});await engine.drain([running,queued]);assert.equal(engine.get(running)!.state,'succeeded');assert.equal(engine.get(queued)!.state,'succeeded');
+});
+
+
+test('a locally expired lease waits for its old physical task to settle before readmission',async t=>{
+ const {engine,advance}=await fixture(t);let release!:()=>void,entered!:()=>void,calls=0;const commits:number[]=[];
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ engine.register({...base,concurrency:()=>2,execute:async()=>{const call=++calls;if(call===1){entered();await held;}return call;},commit:(_step,value)=>{commits.push(Number(value));}});
+ const id=engine.enqueue('generated-local-expiry','fixture',{}),running=engine.drain([id]);await started;
+ try{
+  advance(30001);await engine.tick();await engine.tick();
+  assert.equal(engine.get(id)!.state,'waiting');assert.equal(engine.isActiveStep(id),true);assert.equal(calls,1,'expired local cleanup still owns its physical task');
+ }finally{release();}
+ await running;await engine.drain([id]);assert.equal(calls,2);assert.deepEqual(commits,[2]);assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
 });

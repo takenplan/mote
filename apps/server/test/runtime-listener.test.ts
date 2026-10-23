@@ -34,3 +34,23 @@ test('wildcard listeners resolve to their IPv4 or IPv6 loopback health address',
   assert.equal(healthAddress('0.0.0.0'), '127.0.0.1'); assert.equal(healthAddress('::'), '::1');
   assert.equal(healthAddress('127.0.0.2'), '127.0.0.2'); assert.equal(healthAddress('::1'), '::1');
 });
+
+test('shared-network health requires the runtime HTTP identity while local health also requires its PID', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'mote-shared-listener-')), file = join(directory, 'mote.yaml'), instanceId = randomUUID();
+  let responseInstance = instanceId, status = 200, requests = 0;
+  const server = createServer((_req, response) => { requests++; response.statusCode = status; response.setHeader('X-Mote-Runtime-Instance', responseInstance); response.end('{"ok":true}'); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { if (server.listening) await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); });
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  await writeRuntimeListener(file, {version: 1, pid: 2147483647, port: address.port, address: address.address, instanceId});
+  assert.equal(await probeRuntimeListener(file), false, 'the default local probe rejects a dead PID');
+  assert.equal(requests, 0, 'a rejected local PID does not reach HTTP');
+  assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), true, 'another PID namespace can verify the same runtime instance');
+  responseInstance = randomUUID();
+  assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking never accepts another instance');
+  responseInstance = instanceId; status = 503;
+  assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking still requires HTTP 200');
+  status = 200;
+  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking rejects an unreachable runtime listener');
+});

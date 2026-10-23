@@ -65,7 +65,7 @@ it('keeps scanning/staging files locally with no connection, restores them, and 
    await app.flushPending(new AbortController().signal);
   expect(received.every(body=>body.text==='')).toBe(true);
   expect(vi.mocked(fetch).mock.calls.every(([,init])=>(init?.headers as Record<string,string>)['X-Mote-Ingress-Version']==='2')).toBe(true);
-  expect(app.nodeBinding.snapshot()).toEqual({kind:'unbound'}); // Legacy algorithm fixture has no confirmed account.
+  await expect(app.nodeBinding.commit({ ...target, serverUrl: 'https://other.example' }, true, true)).rejects.toThrow();
 });
 it('a configured manual source can be added and edited without registration, upload, or heartbeat requests', async () => {
   const config = { ...defaultConfig(), token: 'synthetic-manual-token', syncMode: 'manual' as const };

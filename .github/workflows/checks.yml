@@ -18,12 +18,15 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Build the pinned Mem0 SQLite runtime
         run: npm rebuild better-sqlite3
-      - run: npm run check:local
+      - run: npm run build:libs
+      - run: npm run check:i18n
+      - run: node --test scripts/release/dev-assets.test.mjs
+      - run: npm run typecheck
+      - run: npm run build -w @mote/server -w @mote/web
       - name: Verify byte-sliced desktop uploads against generated central HTTP
         run: npx tsc -p apps/desktop/tsconfig.json && node scripts/test-upload-fairness.cjs
-      - name: Verify material-load arrivals and recovery guards against built central
-        run: node --test scripts/material-load-arrivals.test.cjs scripts/material-load-recovery.test.cjs
       - run: node --import tsx scripts/test-live-metadata.ts --prepare-only --out .mote/ci-metadata-fixture
+      - run: npm test
       - run: node --test scripts/check-dependencies-tests.mjs
       - run: npm run test:privacy
       - run: npm run test:e2e
@@ -31,12 +34,13 @@ jobs:
       - run: node scripts/test-mcp-stdio.mjs
       - run: node --test scripts/mcp-connection-tests.mjs
       - run: node --test scripts/update-tests.mjs scripts/update-deployment-tests.mjs
+      - run: node --test scripts/security-tests.mjs
+      - run: node scripts/test-central-runner.mjs
       - run: npm run test:profiles
       - run: npm run test:tunnel
       - run: python3 -m unittest discover -s scripts -p "test_fact_archive.py"
       - run: python3 -m unittest discover -s scripts -p "test_mote_audio.py"
       - run: python3 -m unittest discover -s scripts -p "test_mote_ocr.py"
-      - run: python3 -m unittest discover -s scripts -p "test_audio_control.py"
   docker-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 25

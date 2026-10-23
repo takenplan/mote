@@ -2,6 +2,7 @@ import { moteText, getLocale } from '@mote/shared/i18n';
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { hasCompleteTokenUsage, usageIdentity, usageLabel, type UsageReceipt, type ModelPrice, type UsageSummary, type UsageFilters, type UsageGroupBy, type UsageGroup } from '@mote/shared';
+import type { ModelSettingsView } from '@mote/shared/models';
 import { dateTime, errorMessage, type Api } from './api';
 const number = (n: number) => n.toLocaleString(getLocale());
 const money = (n: number | null, currency: string) => n === null ? moteText("{0} 未估算", currency) : new Intl.NumberFormat(getLocale(), { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(n);
@@ -60,11 +61,8 @@ export function Usage({ api }: {
             setLoading(false); });
         return () => c.abort();
     }, [api, from, to, timeZone, reload, groupBy, filters, page, pageSize]);
-    useEffect(() => { const c = new AbortController();
-        const selection=api.request<{provider:string;model:string}>('/api/models/selection/chat', { signal:c.signal });
-        void selection.then(v=>{if(!c.signal.aborted)setPrice(p=>({...p,provider:v.provider,model:v.model}));}).catch(()=>{});
-        return ()=>c.abort();
-    }, [api]);
+    useEffect(() => { const c = new AbortController(); void api.request<ModelSettingsView>('/api/model-settings', { signal: c.signal }).then(v => { if (!c.signal.aborted)
+        setPrice(p => ({ ...p, provider: v.settings.provider, model: v.settings.model })); }).catch(() => { }); return () => c.abort(); }, [api]);
     function preset(days: number) { setFrom(localDate(new Date(Date.now() - (days - 1) * 86400000))); setTo(localDate(new Date())); }
     async function savePrice() { setSaving(true); setNotice(''); try {
         await api.request('/api/usage/prices', { method: 'PUT', body: JSON.stringify(price) });

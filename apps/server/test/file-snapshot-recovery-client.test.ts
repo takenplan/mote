@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {LocalSourceManager} from '../../desktop/src/source-manager.js';
 import {defaultConfig} from '../../desktop/src/config.js';
 import {DEFAULT_SOURCE_OPTIONS,type SourceOptions} from '../../desktop/src/source-types.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
 // Real Desktop manual discovery/outbox/upload and Central routes/pipeline.
@@ -67,7 +67,7 @@ test('Desktop lost ACK plus expired input reuses the immutable pending version w
 test('Desktop manual sync cannot restart cancellation; only explicit owner retry permits same-capture resupply',async()=>{
  const first=await firstUpload();const cancelled=await node.app.inject({method:'POST',url:'/api/files/'+first.id+'/cancel',headers,payload:{}});assert.equal(cancelled.statusCode,200);assert.equal(node.files.detail(first.id).job!.state,'cancelled');
  const before=paths.length;await first.value.sync(true);await first.value.flushPending(new AbortController().signal);await node.processing.tick();identity(first.id,first.manifest);assert.equal(first.value.pendingStats().pendingRecords,0);assert.equal(node.files.detail(first.id).job!.state,'cancelled');assert.equal(paths.slice(before).some(path=>path.includes('/recovery/')&&path.endsWith('/uploads')),false);
- const retry=await node.app.inject({method:'POST',url:'/api/files/'+first.id+'/retry',headers,payload:{}});assert.equal(retry.statusCode,200);await recover(first.value);identity(first.id,first.manifest);await node.processing.tick();assert.equal(node.files.detail(first.id).job!.state,'succeeded');
+ const retry=await node.app.inject({method:'POST',url:'/api/files/'+first.id+'/retry',headers,payload:{}});assert.equal(retry.statusCode,200);await recover(first.value);identity(first.id,first.manifest);await finishPipeline(first.id);assert.equal(node.files.detail(first.id).job!.state,'succeeded');
 });
 
 test('a revoked source cannot restore expired input through Desktop manual sync',async()=>{
@@ -81,7 +81,7 @@ test('narrowing read permission creates a current restricted revision without re
  await first.value.update(first.sourceId,{...selectedSource,allowRead:false});await first.value.sync(true);assert.equal(first.value.pendingStats().pendingRecords,1);await first.value.flushPending(new AbortController().signal);
  const rows=node.store.db.prepare('SELECT capture_id,manifest FROM file_versions ORDER BY rowid').all();assert.equal(rows.length,2);const current=rows[1],manifest=JSON.parse(String(current.manifest));assert.notEqual(current.capture_id,first.id);assert.notEqual(manifest.item.revision,first.input.item.revision);assert.equal(manifest.previousRevision,first.input.item.revision);assert.equal(manifest.sha256,first.input.sha256);
  assert.equal(manifest.item.document.fileIndex.allowRead,false);assert.equal(manifest.item.document.fileIndex.maxIndexCharacters,100000);assert.equal(node.sources.getItem(first.sourceId,manifest.item.externalId)!.captureId,current.capture_id);assert.equal(paths.slice(before).some(path=>path.includes('/recovery/')&&path.endsWith('/uploads')),false);
- await node.processing.tick();assert.equal(node.files.detail(String(current.capture_id)).job!.state,'succeeded');assert.equal(node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_text').get()!.n,0);assert.equal(node.files.chunks(first.id).length,0);
+ await finishPipeline(String(current.capture_id));assert.equal(node.files.detail(String(current.capture_id)).job!.state,'succeeded');assert.equal(node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_text').get()!.n,0);assert.equal(node.files.chunks(first.id).length,0);
 });
 
 test('same inode metadata rename creates a successor snapshot instead of settling an expired version',async()=>{
@@ -98,6 +98,6 @@ test('same inode metadata rename creates a successor snapshot instead of settlin
   const rows=node.store.db.prepare('SELECT capture_id,manifest FROM file_versions WHERE source_id=? ORDER BY rowid').all(sourceId);assert.equal(rows.length,2,'unchanged bytes must not swallow changed file metadata');
   assert.equal(rows[0].manifest,firstManifest);const current=rows[1],next=JSON.parse(String(current.manifest));assert.notEqual(current.capture_id,firstId);assert.notEqual(next.item.revision,input.item.revision);assert.equal(next.previousRevision,input.item.revision);assert.equal(next.sha256,input.sha256);assert.equal(next.item.externalId,input.item.externalId);assert.equal(next.item.title,'renamed-generated.txt');assert.ok(next.item.uri.endsWith('/renamed-generated.txt'));
   assert.equal(paths.slice(start).some(path=>path.includes('/recovery/')&&path.endsWith('/uploads')),false,'changed metadata uses an ordinary successor manifest');
-  await node.processing.tick();assert.equal(node.files.detail(String(current.capture_id)).job!.state,'succeeded');assert.equal(node.sources.getItem(next.sourceId,next.item.externalId)!.captureId,current.capture_id);
+  await finishPipeline(String(current.capture_id));assert.equal(node.files.detail(String(current.capture_id)).job!.state,'succeeded');assert.equal(node.sources.getItem(next.sourceId,next.item.externalId)!.captureId,current.capture_id);
  }
 });

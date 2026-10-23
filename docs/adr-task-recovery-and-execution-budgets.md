@@ -5,165 +5,11 @@ these principles to all Central task registrations and failure handling,
 reproducing failures with generated fixtures, and opening a PR after verification.
 Historical failures must not be rerun. Defaults are in [task execution
 policies](task-execution-policies.md); verification and deployment scope are
-recorded separately from this decision.
+recorded separately from this decision. The owner approved the current
+single-owner bounded-retry restoration on 2026-10-23; its implementation is
+recorded below.
 
 ## Decision
-
-### Default bounded task retries (accepted 2026-10-21)
-
-The owner requested automatic retries by default and explicitly selected **two
-retries after the initial execution: at most three charged attempts per round**,
-including eligible unknown read-model outcomes. This supersedes the 2026-10-20
-per-query confirmation requirement below for this bounded read recovery. It
-also supersedes the old family defaults of one, four or five attempts. Existing
-explicit operation overrides, such as the foreground embedding query's single
-attempt/1200 ms boundary, remain documented exceptions.
-
-Central keeps one scheduler and the same input, recipes, model interpretation,
-independent review, publication checks, timing, fairness and user journey. A
-retry repairs the failed stage. Valid extraction drafts, accepted chunks,
-reviewed outputs and published siblings are reused after their existing current
-input checks. A raw completed query rejected by host validation remains immutable
-rejected evidence; a fresh failed-stage query gets its own generation and
-issuance. The existing maximum two independent review queries and finite
-in-session correction sequence apply within each attempt. These are separate
-budgets: three task attempts do not mean at most three supplier requests.
-
-The durable logical attempt is separate from the renewable execution fence.
-Resource/offline/admission waiting suspends the same attempt without an extra
-charge. A wholly known-not-started capacity reservation can be refunded; a later
-busy response cannot erase an earlier executed, pending or unknown call in that
-attempt. An actually charged interruption, shutdown or lease loss retains its
-charge. Restart and internal parent/ACK/program continuation cannot reset the
-round. At the cap, a suspended last attempt can complete its remaining stages,
-but no new attempt is sent. Only an explicit authenticated owner Retry action
-can start another bounded round, retaining the previous round's count/history.
-No historical terminal work is reopened or counters reset on deployment.
-
-A complete durable checkpoint may also finish through a validated, purely local
-continuation at the cap. For Memory feedback this consumes the exact saved
-proposal under fresh original account, model and input authority, then repeats
-checkpoint and proposal validation in the existing atomic commit. It does not
-repeat the planner, charge another attempt, derive a snapshot or manufacture
-cleanup, settlement, owner confirmation or policy replay. An unproven old
-physical callback remains recorded. Any new child keeps its own original
-account, resource and physical-call gates. Missing or invalid checkpoints fall
-back through the normal cleanup and attempt limits before any new call.
-
-Automatic unknown read-query replay requires an exact trusted physical cleanup
-receipt for that call, fresh account/input/model authority and remaining budget.
-The complete callback includes local child, tool queue and workspace cleanup;
-engine cancellation/lease release alone is insufficient. Another host using the
-same database waits while the physical owner is active. Only its exact original
-cleanup closure can mark it quiescent, including after its business fence is
-revoked; this cannot settle the remote outcome or authorize publication. Abrupt
-process death without such proof stays a visible cleanup prerequisite. PID,
-lease expiry, elapsed time, failed usage or absence of a result is not proof.
-Pre-tracking historical calls are not backfilled or automatically swept.
-
-Replay writes a distinct policy authorization event. It does **not** fabricate
-owner confirmation, successful settlement, remote non-execution or zero fees.
-The old call remains unknown/unsettled; bounded repetition can duplicate remote
-charges. No additional confirmation dialog is required for an eligible read
-query within the selected policy. Existing owner acknowledgments stay historical
-facts. Native calendar delivery, OAuth/login/session setup, media worker calls,
-plugin probes/invocations and provider CRUD retain their exact operation,
-idempotency, approval, execution-fact and cleanup/reconciliation contracts. A
-pending ACK is normal waiting; the default never grants a second mutation.
-Invalid input/configuration, required owner input, unsupported effects, revoked
-or stale authority and unclassified internal exceptions are not repaired by
-blind repetition.
-
-The owner's switch from Fast to ordinary service applies to the next new model
-retry attempt through a new immutable, tier-only snapshot of the same original
-model/reference under unchanged authorization. Historical snapshots, usage,
-prices and all other frozen settings remain. A suspended attempt restores its
-own snapshot. The original tier remains a checkpoint dependency, so a request
-speed change does not invalidate already accepted chunks. Configuration changes
-cannot revive a revoked lease. Portable task exports exclude model snapshots
-and their lineage; whole-instance backup retains them, and deletion follows the
-same fenced domain lifecycle.
-
-KEEP all cancellation, account isolation, source/privacy, worker and strict
-independent-proof boundaries. CHANGE eligible failure recovery to a visible
-finite default and immutable failed-stage generations. REMOVE confirmation as
-the default for eligible automatic read replay, interrupted-attempt refunds and
-internal round resets. EXCEPTION: explicit narrower budgets and unsupported
-physical/effect reconciliation remain prerequisites. UNKNOWN: historical remote
-outcomes/fees, supplier-internal request counts and any incident's cause.
-
-### Historical Memory query decision (2026-10-20; superseded above for bounded read recovery)
-
-The owner explicitly chose to keep main's unknown-outcome protection: a Memory
-query interrupted after issuance requires owner confirmation before repetition.
-An existing authenticated task retry with `confirmUnknown:true` records that
-confirmation; it does not establish the old outcome or rewrite failed/unknown
-usage. Preserve the same task, model, inputs, successful stages and account
-fences. A successful query result and its exact issuance settlement persist
-together and may be revalidated/reused before a later domain save completes.
-
-Definitively ended failures remain normally retryable. Concrete terminal provider
-rejections and completed bounded host-validation failures may settle only their
-exact external issuance, while keeping the query/domain failed and publishing
-no Memory. Timeouts, network failure, unavailable providers, local abort, lease
-loss and crashes retain unknown facts. Only concrete trusted types and fixed
-terminal category/code tuples establish completed failure; strings, copied
-errors and arbitrary provider fields cannot.
-
-KEEP independent review, failed usage, cancellation and publication fences.
-CHANGE the previous blanket assumption that every failed issued query remains
-unknown; REMOVE unconditional automatic repetition of an unknown reviewer after
-restart. EXCEPTION: owner-confirmed replay may incur another call while the old
-fact stays unknown. UNKNOWN: unsupported remote reconciliation and lost result
-bodies. Historical successful recovery reports retain their original scope;
-they do not establish automatic replay under this current decision.
-
-### Cross-client resource waiting (accepted 2026-10-18)
-
-The owner reaffirmed this rule for every client and processing entry point:
-when OCR, ASR, a language model or another finite execution resource is busy,
-retain the task in a fair queue and resume automatically when capacity becomes
-available. Failing to acquire capacity is not a processing failure. Waiting does
-not consume execution time or failure attempts, has no generic terminal age,
-and remains visible and cancellable. Independent resources may execute in
-parallel. Recheck authority and current input before dispatch.
-
-Central remains the sole workflow scheduler. Scoped media processing must share
-the physical worker's admission identity, rather than creating separate capacity
-for each user or original. A structured worker busy response is an internal
-known-not-started fallback: release the claim and return the task to resource
-waiting. Do not expose that response as a terminal parent or child failure.
-
-Keep prepared/waiting work distinct from an issued external request. Restarting
-while waiting must not invent an unknown external outcome. Execution ownership
-leases and physical execution are separate: lease expiry cannot prove that an
-issued call stopped, and a late response cannot restore publication authority.
-
-The owner also approved minimal persistent execution-fact receipts: trusted
-request identity, worker incarnation, execution state/times and fixed outcome
-codes, with authenticated read-only reconciliation. They do not contain original
-content, prompts or result bodies, and do not introduce a worker scheduling
-queue. A duplicate request identity must not start concurrent duplicate work.
-Unsupported remote-provider reconciliation remains explicitly unknown; neither
-receipt absence nor a disconnect proves non-execution. Result-body staging is
-outside this decision.
-
-KEEP central scheduling, fairness, checkpoints, cancellation, authorization and
-late-result fences. CHANGE scoped physical-resource admission and execution-fact
-reconciliation. REMOVE busy-as-failure handling and queue time charged as work.
-EXCEPTION: invalid input, missing configuration, revoked authority, actual
-execution failures and issued unknown outcomes retain their distinct contracts.
-UNKNOWN: remote outcomes without provider evidence and the incident's exact
-lease-renewal interruption; neither is inferred from worker health.
-
-This implementation targets the current wire/storage contracts only. It does
-not repair, backfill or rerun historical data and adds no version compatibility
-paths. Separate retention/capacity, Memory admission/context/retrieval, migration
-cancellation, modular-composition and document-polling proposals remain outside
-this work. The related current-entry-point decisions are recorded in
-[scoped processing reliability](adr-scoped-processing-reliability.md).
-
-### Task-type budgets
 
 A durable task must not inherit a universal short processing deadline, such as
 600 seconds. Each task type declares its own suitably generous default execution
@@ -212,16 +58,15 @@ capacity from an input exceeding a model's context or format capability.
 | A replayable transient execution/transport failure | Use the task type's finite safe-retry policy. Establish replay safety from known non-execution, idempotency or a confirmed failed outcome; keep this budget distinct from capacity waiting and output correction. |
 | Deterministic invalid input or an unsupported operation under unchanged conditions | Stop the affected execution with a precise reason. Examples include a corrupt archive or an unsupported format with no configured handler. Repeating identical work is not recovery. A changed input or configuration can support a later explicit run. |
 | Missing configuration, credentials, model/runtime dependency or required owner input | Expose the actual prerequisite and wait for repair/action. Do not repeatedly invoke the model or pretend a program failure is a request for owner context. |
-| An issued call with an unknown outcome | Retain known issuance and outcome facts; do not use the known-not-started capacity recovery path. Timeout, disconnect, local cancellation and lease expiry do not establish non-execution. Eligible read replay follows the bounded 2026-10-21 policy with exact physical cleanup and fresh authority; side effects retain their original reconciliation/idempotency contract. No unknown fact becomes settled merely by retrying. |
+| An issued call with an unknown outcome | Retain known issuance and outcome facts; do not use the known-not-started capacity recovery path. Timeout, disconnect, local cancellation and lease expiry do not establish non-execution. Replay follows the task's safety, idempotency, reconciliation and confirmation contract; this ADR introduces no new universal confirmation step. Existing file issued-call guards remain required. |
 | Cancellation, revoked authority or a stale input | Stop the old authorized execution and reject late publication. Neither model repair nor resource recovery renews authority or revives obsolete work. |
 | An unclassified internal exception | Preserve a safe failure receipt for diagnosis. Do not infer that another attempt is safe, that the input is invalid, or that capacity is unavailable. |
 
 A deterministic validator rejecting one model output does not prove another
 generation will fail. Finite output correction is required where the host knows
 how to ask for a valid correction. A task declares its repair boundary; exhausting
-that sequence reports the remaining validation failure. The 2026-10-21 decision permits a bounded new failed-stage generation after
-that sequence ends; it never reuses a rejected query as a new attempt or
-blindly restarts valid stages. Existing model-repair limits are
+that sequence reports the remaining validation failure. It does not trigger
+another outer loop of identical generations. Existing model-repair limits are
 not increased by this decision. Evidence changes, revoked grants and unknown
 execution are not repairable output errors. Feedback uses host-controlled
 instructions; captured content remains untrusted evidence.
@@ -231,6 +76,77 @@ retries. Recheck resource eligibility and current authority before dispatch,
 preserve fair scheduling and avoid holding a transaction or physical execution
 slot while waiting. A prolonged wait remains visible and cancellable; this
 decision adds no queue cap, expiry, retention rule or automatic terminal age.
+
+## Single-owner bounded retry restoration
+
+Replayable orchestration, local processing, model calls and recording network
+acquisition default to three attempts: the initial execution plus at most two
+automatic retries of an eligible failure. Deterministic and control policies
+remain at one attempt. Explicit single-attempt registrations, including
+non-replayable interactive observations, query embeddings, import prepare/commit
+and provider preparation, remain unchanged. This supersedes the former four-call
+model/local/delegation defaults, five-call recording default and two-call Actions
+extraction default. Permanent errors and unknown external outcomes do not become
+automatically retryable, and model-output correction rounds do not increase.
+
+The executor preserves attempt counts when reopening a task unless an existing
+explicit owner command resets the applicable failed execution. Automatic
+continuation, prerequisite healing, model-facing delegation retry and repeated
+observation of a terminal child are not owner reset authority. The executor
+checks exhaustion again before dispatch, so reopening or restarting cannot
+produce a fourth execution in the same bounded round. Current-input, privacy,
+configuration, cancellation and unknown-outcome checks still apply to an owner
+retry. Successful siblings are preserved; existing explicit recompute commands
+retain their separately declared scope.
+
+Resource and child waits do not consume a failed-execution attempt. Lifecycle
+windows persist both their retry time and the exact failure receipt already
+counted; a repeated observation after restart cannot increment the failure count
+or shorten the domain's backoff. An explicit reopen keeps its existing immediate
+wake behavior, so confirmed readiness is not delayed by a new generic wake
+policy. Prerequisites such as paused or unconfigured Memory status are checked
+before claiming a bookkeeping execution.
+
+After local lease expiry, the same host must wait for its old physical task to
+settle before admitting that task again. Its final cleanup may remove only its
+own active entry. Other hosts continue to use durable leases and commit fences;
+no lease transition proves that an external effect did not execute.
+
+Memory extraction and independent review now use separate durable phase tasks.
+Their identities pin the batch, input generation and strategy, independent of a
+renewed parent lease. Each phase owns three eligible execution attempts. Child
+waiting refunds the coordinator's attempt, and a terminal failed child stops
+that path instead of acquiring another budget from the parent. An explicit
+owner retry may reset current-generation failed or blocked children; it preserves
+successful extraction and review. Automatic continuation and model-facing retry
+cannot reset them.
+
+A dedicated `memory_phase_outputs` table stores the full semantic result,
+explicit independent-review receipt, evidence/image read dependencies and native
+draft/provider pins in the existing private envelope. The row and phase success
+commit in one transaction. These are owned checkpoints, not evictable cache
+entries: outputs above 512 KiB remain complete. Every successful-phase recovery
+requires a readable, valid checkpoint; missing or corrupt output fails closed
+without repeating the model call. Publication continues through its existing
+journal, with completed review reused after publication failure. Correction
+rounds and review acceptance contracts remain unchanged.
+
+Cancellation, input invalidation, dependency retirement and deletion remove the
+private outputs, with authority checks fencing late writes. An admitted batch
+may finish while its job is pausing, preserving the existing pause-drain
+contract. Bulk decryption traverses these envelopes before key retirement.
+Generated fixtures cover restart with encrypted and decrypted storage, actual
+process exit on both sides of local commit, failed-phase owner reset and
+successful-phase reuse. A response lost before local commit is not a completed
+checkpoint; recovery does not promise exactly-once model execution across that
+boundary.
+
+The restoration was checked with generated fixtures through the recording
+connector's authenticated HTTP entrypoint, Material publication and transient
+Memory extraction/review recovery. Tests retain the 1,000-original delegation
+corpus, local and two-host lease recovery, capacity waiting, failed-phase reuse,
+unknown-call protection, cancellation/deletion and source progress while Memory
+is held. This is fixture evidence, not physical-device or live-model evidence.
 
 ## File and worker admission
 
@@ -298,11 +214,36 @@ provider adapters retain transport facts and task types own recovery decisions.
 
 ## MVP scope and validation
 
+The single-owner recovery restores the independent media execution-fact
+contract from the owner-approved 2026-10-18 reliability decision (historical
+`2c78ca8d`, `docs/adr-scoped-processing-reliability.md`). Its account machinery is
+superseded by [the single-owner ADR](adr-single-owner-mvp.md). One managed
+worker request has a unique ID, exact stage and private instance/step scope;
+authenticated terminal metadata can establish a failed physical execution
+after response loss. Worker service incarnation does not identify model
+weights. Reloading a model never rewrites an existing request, and restarting a
+service maps its old accepted/running records to unknown rather than failure.
+
+The host reconciles outside model execution and restores only the original
+issued attempt count under matching current input, generation, configuration
+and wait identity in one settlement transaction. It does not reopen a terminal
+step, reset a budget or replay completed work. A successful physical execution
+with a missing body remains unavailable. Custom/remote services without this
+contract retain the existing unknown guard. Credentials and recognition bodies
+are absent from the fact journal; its private files contain fixed identities,
+timestamps, states and allowlisted failure codes. There is no result cache,
+historical loader, migration, new polling promise or new retention limit.
+
+R10 received independent pre-implementation **APPROVE** from Sol High against
+`38e1eb5a56302c7491415a4f86c95de2b2d48cda`, including the narrow engine attempt
+recovery method, authenticated status/erasure, consumed-ID tombstones and
+generated real-process validation. Actual test results remain separate from
+this decision.
+
 Historical terminal failures can be rerun manually in MVP. Do not build a
 historical recovery migration, reset attempts on deployment or automatically
-reopen old work. The 2026-10-21 default removes per-call confirmation only for eligible bounded
-read recovery. It does not itself execute a historical owner retry or waive an
-unsupported physical/effect prerequisite. The separate Android Memory
+reopen old work. This decision does not execute a manual retry or remove the
+existing confirmation for unknown outcomes. The separate Android Memory
 continuity issue is outside this ASR repair.
 
 Implementation validation must use generated content and real product entry

@@ -29,7 +29,7 @@ function generatedRecording(id='generated'):RecordingProvider{
     metadata:async()=>{throw Error('Unexpected fixture metadata read');},transcript:async()=>{throw Error('Unexpected fixture transcript read');},media:async()=>{throw Error('Unexpected fixture media read');}};
 }
 const generatedLark:LarkRunner=async command=>{
-  if(command.kind==='version')return 'lark-cli version 1.0.98';
+  if(command.kind==='version')return 'lark-cli version 1.0.85';
   if(command.kind==='status')return JSON.stringify({appId:'cli_generated_interval',identities:{user:{available:true,openId:'generated-interval-owner',scope:LARK_SCOPES.join(' ')}}});
   if(command.kind==='login')return JSON.stringify({verification_url:'https://accounts.feishu.cn/authorize?generated=interval',device_code:'generated-interval-device-code',expires_in:600});
   if(command.kind==='complete')return '{}';
@@ -144,5 +144,5 @@ test('recording interval reload preserves a running durable discovery step',asyn
   await connector.init();await connector.connect();await connector.select({enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-09-02T00:00:00Z',autoSync:true,backupAudio:true});await waiting;
   connector.configureSyncInterval(60000);t.mock.timers.tick(60000);await Promise.resolve();
   assert.equal(signal?.aborted,false);assert.equal(discoveries,1);
-  release();await connector.drain();assert.equal(connector.status().counts.pending,0);assert.equal(connector.status().counts.failed,0);
+  release();await connector.drain();assert.equal(connector.status().counts.pending,0);assert.equal(connector.status().counts.failed,0);await connector.close();
 });

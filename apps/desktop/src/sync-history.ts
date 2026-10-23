@@ -7,7 +7,6 @@ import type { CaptureEvent, Config } from './contracts';
 import type { SourceDefinition, SourceItem } from './source-types';
 import { UploadSliceYield } from './upload-slice';
 import { validateServerUrl } from './config';
-import {accountKey} from './account';
 
 export const syncSources = ['screen', 'ui_page', 'note', 'activity', 'notification', 'file', 'calendar', 'coding'] as const;
 export type SyncSource = typeof syncSources[number];
@@ -34,7 +33,7 @@ export interface SourceUploadObserver {
   settle(source: SourceDefinition, items: SourceItem[], acks: Record<string, unknown>[], rejected?: { item: SourceItem; status: number }[]): void;
   failed(source: SourceDefinition, items: SourceItem[], error: unknown): void;
 }
-type Connection = Pick<Config, 'serverUrl' | 'deviceId'|'account'>;
+type Connection = Pick<Config, 'serverUrl' | 'deviceId'>;
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 export const sourceVersionKey = (item: Pick<SourceItem, 'externalId' | 'revision'>) => hash(`${item.externalId}\0${item.revision}`);
 export function sourceHistoryItem(source: SourceDefinition, item: SourceItem): Omit<SyncHistoryItem, 'outcome' | 'firstReceipt'> {
@@ -46,7 +45,7 @@ export function captureHistoryItem(event: CaptureEvent): Omit<SyncHistoryItem, '
   // Never persist captured text, notifications, filenames outside filtered source titles, or images here.
   return { key: event.id, source: event.source, title: event.appName.slice(0, 200), observedAt: event.capturedAt, captureId: event.id };
 }
-function scope(config: Connection): string { return hash(`${accountKey(config)??(config.serverUrl ? validateServerUrl(config.serverUrl) : '')}\0${config.deviceId}`); }
+function scope(config: Connection): string { return hash(`${(config.serverUrl ? validateServerUrl(config.serverUrl) : '')}\0${config.deviceId}`); }
 function offset(value: unknown): number { if (value === undefined) return 0; if (!Number.isSafeInteger(value) || Number(value) < 0) throw Error(moteText('分页参数无效')); return Number(value); }
 function validSource(value: unknown): asserts value is SyncSource | undefined { if (value !== undefined && !syncSources.includes(value as SyncSource)) throw Error(moteText('记录来源无效')); }
 function validOutcome(value: unknown): void { if (value !== undefined && value !== 'received' && value !== 'unconfirmed') throw Error(moteText('同步结果筛选无效')); }

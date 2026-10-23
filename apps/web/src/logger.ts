@@ -1,28 +1,46 @@
-/** Leveled browser logger. Bounded single-line fields; never logs bodies or tokens. */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-const order: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-let minimum: LogLevel = 'debug';
-export function setLogLevel(level: LogLevel) { if (order.includes(level)) minimum = level; }
-const text = (value: unknown, max: number) => typeof value === 'string' && value.trim() ? value.replaceAll(/[\r\n\t]+/g, ' ').slice(0, max) : undefined;
-export interface LogFields {
-  method?: string; route?: string; name?: string; kind?: string; state?: string; code?: string;
-  status?: number; durationMs?: number; count?: number; bytes?: number; detail?: string;
+/** Local, bounded diagnostics. Only fixed enums and numeric metadata cross this boundary. */
+const events = ['api.request_started','api.request_completed','api.request_failed','api.request_rejected','api.response_invalid','auth.session_started','auth.session_cleared','auth.session_rejected','ui.unhandled_error','ui.unhandled_rejection'] as const;
+const routes = ['login','connections','configuration','status','captures','files','sources','devices','activity','query','insights','memories','plugins','models','other'] as const;
+const methods = ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
+const errorNames = ['Error','TypeError','RangeError','SyntaxError','DOMException','AbortError','TimeoutError','ApiError','OtherError'] as const;
+const codes = ['unauthorized','connection_revoked','forbidden','invalid_response','invalid_request','not_found','conflict','rate_limited','provider_unavailable','model_unavailable','internal_error','request_timeout','provider_quota','provider_authentication','provider_configuration','provider_timeout','provider_failed','model_not_configured','request_path_too_long','validation'] as const;
+export type LogLevel = 'debug'|'info'|'warn'|'error'|'off';
+type EventName = typeof events[number];
+type Fields = {method?:string;route?:string;errorName?:string;code?:string;status?:number;elapsedMs?:number;requestId?:string};
+export type LogEntry = Fields & {atMs:number;level:Exclude<LogLevel,'off'>;event:EventName};
+const priorities:Record<LogLevel,number> = {debug:0,info:1,warn:2,error:3,off:4};
+const history:LogEntry[]=[];
+let level:LogLevel='warn';
+export const logCapacity=200;
+export function setLogLevel(value:LogLevel) { if(Object.hasOwn(priorities,value))level=value; }
+export function clearLogs() { history.length=0; }
+export function readLogs():LogEntry[] { return history.map(entry=>({...entry})); }
+export function safeErrorName(error:unknown):string|undefined {
+  if(!error || typeof error!=='object')return;
+  try { const name=(error as {name?:unknown}).name; return typeof name==='string'&&(errorNames as readonly string[]).includes(name)?name:'OtherError'; }
+  catch { return 'OtherError'; }
 }
-function clean(fields: LogFields): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
-  for (const key of ['method', 'route', 'name', 'kind', 'state', 'code', 'detail'] as const) { const value = text(fields[key], key === 'detail' ? 400 : 160); if (value) out[key] = value; }
-  for (const key of ['status', 'durationMs', 'count', 'bytes'] as const) { const value = fields[key]; if (typeof value === 'number' && Number.isFinite(value)) out[key] = Math.round(value); }
-  return out;
+export function routeCategory(path:string):typeof routes[number] {
+  const root=path.split(/[/?#]/)[2];
+  return (routes as readonly string[]).includes(root)?root as typeof routes[number]:'other';
 }
-export function log(level: LogLevel, event: string, fields: LogFields = {}) {
-  if (order.indexOf(level) < order.indexOf(minimum)) return;
-  const record = { at: new Date().toISOString(), level, event, ...clean(fields) };
-  if (level === 'error') console.error(record);
-  else if (level === 'warn') console.warn(record);
-  else if (level === 'info') console.info(record);
-  else console.debug(record);
+export function log(event:EventName,severity:Exclude<LogLevel,'off'>,fields:Fields={}) {
+  if(!(events as readonly string[]).includes(event)||!['debug','info','warn','error'].includes(severity)||priorities[severity]<priorities[level])return;
+  const entry:LogEntry={atMs:Date.now(),level:severity,event};
+  if(fields.method&&(methods as readonly string[]).includes(fields.method))entry.method=fields.method;
+  if(fields.route&&(routes as readonly string[]).includes(fields.route))entry.route=fields.route;
+  if(fields.errorName&&(errorNames as readonly string[]).includes(fields.errorName))entry.errorName=fields.errorName;
+  if(fields.code&&(codes as readonly string[]).includes(fields.code))entry.code=fields.code;
+  if(Number.isInteger(fields.status)&&fields.status!>=100&&fields.status!<=599)entry.status=fields.status;
+  if(typeof fields.elapsedMs==='number'&&Number.isFinite(fields.elapsedMs)&&fields.elapsedMs>=0&&fields.elapsedMs<=Number.MAX_SAFE_INTEGER)entry.elapsedMs=Math.round(fields.elapsedMs);
+  if(fields.requestId&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(fields.requestId))entry.requestId=fields.requestId;
+  history.push(entry);if(history.length>logCapacity)history.shift();
+  // Logging cannot change API or UI outcomes, including when a console is unavailable.
+  try { console[severity]('[mote]',{...entry}); } catch { /* local diagnostics only */ }
 }
-export const debug = (event: string, fields?: LogFields) => log('debug', event, fields);
-export const info = (event: string, fields?: LogFields) => log('info', event, fields);
-export const warn = (event: string, fields?: LogFields) => log('warn', event, fields);
-export const error = (event: string, fields?: LogFields) => log('error', event, fields);
+export function installGlobalErrorLogging(target:EventTarget):()=>void {
+  const error=(event:Event)=>log('ui.unhandled_error','error',{errorName:safeErrorName((event as ErrorEvent).error)});
+  const rejection=(event:Event)=>log('ui.unhandled_rejection','error',{errorName:safeErrorName((event as PromiseRejectionEvent).reason)});
+  target.addEventListener('error',error);target.addEventListener('unhandledrejection',rejection);
+  return ()=>{target.removeEventListener('error',error);target.removeEventListener('unhandledrejection',rejection);};
+}

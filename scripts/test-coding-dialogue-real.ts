@@ -8,7 +8,7 @@ import {join,basename,dirname} from 'node:path';
 import {createHash,randomBytes} from 'node:crypto';
 import {scanCodingAgent,type CodingProvider,type CodingCheckpoint} from '../apps/desktop/src/coding-agents.js';
 import {DEFAULT_SOURCE_OPTIONS} from '../apps/desktop/src/source-types.js';
-import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
+import {buildApp} from '../apps/server/src/app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {codingConversationEvidence,type SourceItem} from '@mote/shared';
 import {CodexSession} from '../packages/agent/dist/codex-session.js';

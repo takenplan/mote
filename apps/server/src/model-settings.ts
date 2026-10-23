@@ -10,17 +10,8 @@ import {
 } from '@mote/shared/models';
 
 const line = (max: number, min = 0) => z.string().min(min).max(max).refine(value => !/[\u0000-\u001f\u007f]/.test(value));
-const registeredProviders=new Map<string,{validate:(settings:Readonly<ModelSettings>)=>void|boolean}>();
-/** Trusted installed provider declarations extend the same model schema used
- * by instance YAML and personal configuration. Transport validation stays in
- * validateModelOptions; registration never grants a user host credentials. */
-export function registerModelSettingsProvider(id:string,validate:(settings:Readonly<ModelSettings>)=>void|boolean=()=>true){
-  if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(id)||modelProvider(id)||registeredProviders.has(id))throw new ConfigServiceError('config_invalid','models');
-  const registration={validate};registeredProviders.set(id,registration);
-  return ()=>{if(registeredProviders.get(id)===registration)registeredProviders.delete(id);};
-}
 const parameters = {
-  provider: line(128, 1).refine(value => modelProvider(value) !== undefined||registeredProviders.has(value)),
+  provider: line(128, 1).refine(value => modelProvider(value) !== undefined),
   protocol: z.enum(MODEL_PROTOCOLS),
   baseUrl: line(4096),
   model: line(512),
@@ -44,9 +35,6 @@ const modelSettingsObjectSchema = z.object({ ...parameters, apiKey, headers, ext
   validateTimeouts(value,ctx);
   try {
     validateModelOptions(value);
-    const result=registeredProviders.get(value.provider)?.validate(structuredClone(value)) as unknown;
-    if(result&&typeof (result as {then?:unknown}).then==='function'){void Promise.resolve(result).catch(()=>{});throw Error();}
-    if(result===false)throw Error();
     if(value.protocol==='codex-app-server'&&value.apiKey)throw Error();
     if(value.protocol!=='codex-app-server'&&!value.baseUrl.trim()&&value.model.trim())throw Error();
   } catch {ctx.addIssue({code:'custom',message:'Invalid model parameters'});}
@@ -70,7 +58,7 @@ const updateSchema = z.object({
 const resetSchema = z.object({ revision: revisionSchema }).strict();
 export const modelProfileIdSchema = z.union([z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/),z.literal(DEPLOYMENT_MODEL_PROFILE_ID)]);
 const profileSchema = z.object({id:modelProfileIdSchema.refine(id=>!['default',DEPLOYMENT_MODEL_PROFILE_ID].includes(id)),name:line(100,1),settings:settingsSchema}).strict();
-const defaultsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,feature==='ocr'||feature==='asr'?modelProfileIdSchema.default(DEPLOYMENT_MODEL_PROFILE_ID):modelProfileIdSchema])) as Record<ModelFeature, typeof modelProfileIdSchema>).strict();
+const defaultsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,modelProfileIdSchema])) as Record<ModelFeature, typeof modelProfileIdSchema>).strict();
 const defaultModelsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,line(512,1)])) as Record<ModelFeature, ReturnType<typeof line>>).partial().strict();
 export const defaultModelAssignments=():ModelFeatureDefaults=>Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,DEPLOYMENT_MODEL_PROFILE_ID])) as ModelFeatureDefaults;
 export function defaultModelSettings():ModelSettings {
@@ -78,15 +66,13 @@ export function defaultModelSettings():ModelSettings {
   return {provider:'deepseek',protocol:preset.protocol,baseUrl:preset.baseUrl,model:'',reasoningEffort:'high',maxTokens:DEFAULT_MODEL_MAX_TOKENS,
     modelRequestTimeoutMs:DEFAULT_MODEL_REQUEST_TIMEOUT_MS,agentTimeoutMs:DEFAULT_AGENT_TIMEOUT_MS,allowUnauthenticatedLocal:false,apiKey:'',headers:{},extraBody:{}};
 }
-/** Shared by configuration validation and the page credential-reuse guard. */
-export function normalizeDeploymentModelSettingsInput(raw:unknown):unknown{
+export const deploymentModelSettingsSchema=z.preprocess(raw=>{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))return raw;
   const value=raw as Partial<ModelSettings>,provider=value.provider??'deepseek',preset=modelProvider(provider),protocol=value.protocol??preset?.protocol??'deepseek';
   return {...defaultModelSettings(),baseUrl:preset?.baseUrl??'',reasoningEffort:protocol==='deepseek'?'high':'auto',
     modelRequestTimeoutMs:protocol==='codex-app-server'?null:DEFAULT_MODEL_REQUEST_TIMEOUT_MS,agentTimeoutMs:protocol==='codex-app-server'?null:DEFAULT_AGENT_TIMEOUT_MS,
     ...(protocol==='codex-app-server'?{serviceTier:'default'}:{}),allowUnauthenticatedLocal:preset?.allowUnauthenticatedLocal??false,...value,provider,protocol};
-}
-export const deploymentModelSettingsSchema=z.preprocess(normalizeDeploymentModelSettingsInput,settingsSchema);
+},settingsSchema);
 export const modelDomainSchema = z.object({
   deployment:deploymentModelSettingsSchema.default({}),profiles:z.array(profileSchema).max(30).default([]),defaults:defaultsSchema.default(defaultModelAssignments),defaultModels:defaultModelsSchema.default({}),
   embedding:z.object({model:line(512).default(''),baseUrl:line(4096).default(''),apiKey:apiKey.default('')}).strict().default({}),
@@ -155,7 +141,6 @@ const testMessages: Record<ModelTestResult['code'], string> = {
   get provider_error() { return moteText("模型服务未能完成测试，请检查地址、凭据及模型配置。"); },
   get invalid_response() { return moteText("模型返回格式或工具调用能力未通过测试。"); },
 };
-export const modelTestMessage=(code:ModelTestResult['code'])=>testMessages[code];
 
 /** Owner-only configuration transactions. HTTP authentication belongs to the app. */
 export class ModelSettingsStore {

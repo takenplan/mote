@@ -22,8 +22,8 @@ test('one changed segment invalidates only its descendants; unchanged chunks and
  sources.register({id:'generated',name:'Generated audio',kind:'local-files',deviceId:'fixture',platform:'macos',retention:'archive'});
  const bytes=Buffer.from('Generated audio fixture'),upload=files.begin({sourceId:'generated',previousRevision:null,item:{externalId:'generated.wav',revision:'1',observedAt:'2025-01-01T00:00:00.000Z',title:'Generated',text:'',kind:'file',layer:'original',mimeType:'audio/wav',deleted:false},sizeBytes:bytes.length,sha256:sha256(bytes),relativePath:'generated.wav'},()=>{});files.part(upload.uploadId,0,bytes,()=>{});const original=await files.commit(upload.uploadId,()=>{});
  const processing=new FileProcessing(files,{transcribe:async()=>({durationMs:2000,segments:[{startMs:0,endMs:1000,text:'Stable first segment'},{startMs:1000,endMs:2000,text:'Second segment version '+revision}]})},undefined,{analyze:async records=>({answer:'Generated summary',citations:[{id:records[0].id}]})});
- const runs=new InsightRuns(store,{executor:processing.engine});
- t.after(async()=>{await processing.close();await runs.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ const runs=new InsightRuns(store,{executor:processing.engine});let organizers:MaterialOrganizerRuntime|undefined;
+ t.after(async()=>{await organizers?.close();await processing.close();await runs.close();store.close();rmSync(directory,{recursive:true,force:true});});
  await processing.runtime.ready;
  // This lineage fixture supplies only synthetic transcription; never call the default local diarizer.
  processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true,audioProcessor:'audio.http'},policy:fixtureFilePolicy({...processing.view().settings,enabled:true,audioProcessor:'audio.http'},processing.runtime.registry)});await processing.tick();
@@ -32,8 +32,8 @@ test('one changed segment invalidates only its descendants; unchanged chunks and
  const proposal=save(0),scope={after:'2025-01-01T00:00:00Z',before:'2025-01-02T00:00:00Z',deviceId:'fixture'},snapshot=createInsightSnapshot(store,randomUUID(),scope);
  const stable=memories.publish(proposal.id),changed=memories.publish(save(1).id),reportId=randomUUID();assert.notEqual(createInsightSnapshot(store,randomUUID(),scope).scopeFingerprint,snapshot.scopeFingerprint);store.saveInsight({runId:reportId,answer:'Historical generated report'},reportId);
  assert.ok(evidenceDependents(store,{kind:'file_chunk',id:before[0].id}).some(node=>node.kind==='memory'&&node.id===stable.id));
- const materials=new MaterialStore(store),organizers=new MaterialOrganizerRuntime(store,materials);
- t.after(()=>organizers.close());while(await organizers.tick(100));
+ const materials=new MaterialStore(store);organizers=new MaterialOrganizerRuntime(store,materials);
+while(await organizers.tick(100));
  const materialIdValue=materialId('generated','generated.wav'),formal=materials.get(materialIdValue)!;
  const anchors=materials.evidence(materials.evidenceIds(formal.ref));
  const stableAnchor=anchors.find(record=>record.ocrText==='Stable first segment')!,changedAnchor=anchors.find(record=>record.ocrText==='Second segment version 1')!;

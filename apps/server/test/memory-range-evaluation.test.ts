@@ -12,7 +12,7 @@ import {MemoryStore,MemoryOutputValidationError} from '../src/memory.js';
 import {MemoryPipeline,type MemoryPipelineQuery} from '../src/memory-pipeline.js';
 import {reviewMemory} from '../src/memory-review.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {fixtureMemoryPlan} from './fixtures/memory-planning.js';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';

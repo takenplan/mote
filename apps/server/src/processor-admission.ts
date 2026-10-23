@@ -1,6 +1,5 @@
 import {ProviderFailure} from '@mote/shared';
-import {createHash} from 'node:crypto';
-import type {ExecutionStorage} from './execution-storage.js';
+import {sha256,type Store} from './store.js';
 
 /** Recheck availability, not a prediction of when a long recording finishes. */
 export const PROCESSOR_BUSY_RECHECK_MS=5000;
@@ -9,7 +8,7 @@ export const PROCESSOR_BUSY_RECHECK_MS=5000;
  * The executor owns capacity leases; this class only identifies that resource
  * and persists a worker's explicit pre-execution busy feedback. */
 export class ProcessorAdmission {
- constructor(private store:ExecutionStorage,private now=Date.now){
+ constructor(private store:Store,private now=Date.now){
   store.db.exec('CREATE TABLE IF NOT EXISTS processor_cooldowns(scope TEXT PRIMARY KEY,until INTEGER NOT NULL)');
  }
  resourceKey(endpoint:string){
@@ -17,13 +16,10 @@ export class ProcessorAdmission {
   // localhost and literal loopback refer to the same managed listener. Paths
   // such as /transcribe and /diarize do not create separate physical capacity.
   const host=url.hostname==='localhost'?'127.0.0.1':url.hostname;
-  return 'processor:'+createHash('sha256').update(JSON.stringify([url.protocol,host,url.port||(url.protocol==='https:'?'443':'80')])).digest('hex');
+  return 'processor:'+sha256(JSON.stringify([url.protocol,host,url.port||(url.protocol==='https:'?'443':'80')]));
  }
  check(endpoint:string){
-  this.checkKey(this.resourceKey(endpoint));
- }
- checkKey(key:string){
-  const row=this.store.db.prepare('SELECT until FROM processor_cooldowns WHERE scope=? AND until>?').get(key,this.now());
+  const row=this.store.db.prepare('SELECT until FROM processor_cooldowns WHERE scope=? AND until>?').get(this.resourceKey(endpoint),this.now());
   if(row)throw new ProviderFailure({category:'transient',code:'rate_limited',executionStarted:false,retryAfterMs:Math.max(1,Number(row.until)-this.now())});
  }
  async run<T>(endpoint:string,task:()=>Promise<T>):Promise<T>{

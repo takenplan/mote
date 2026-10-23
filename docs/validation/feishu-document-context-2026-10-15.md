@@ -52,7 +52,7 @@
 - Mac 生产构建及隐藏 Electron 渲染器／真实 preload IPC 通过：首页和添加的第五入口、未连接时进入中央连接、连接后打开飞书页面、既有内容和同步旅程。原生采集 IPC 使用生成适配器，采集始终停止。
 - Android development APK 与测试 APK 构建通过，JVM 单测 321 项通过；专用 API 37 无窗口、只读、无快照模拟器中既有旅程 8/8、新飞书旅程 1/1 通过。新旅程验证原生第五入口、owner 登录、范围表单、零正文预览、首次确认、部分失败及重试，最终 2 篇正文、6 条活动。截图来自应用自身生成视图；安全标记未关闭。测试进程和专用 AVD 已清理。
 
-最终执行 `npm run check:affected` 选择全部消费者：`check:local` 通过，包含全部工作区和脚本类型检查、Mac 443 项、服务端 1854 项、Web 391 项、Agent 312 项及共享包和工具回归。服务端的 macOS sandbox 检查与 Agent 的可选已安装 Codex fixture 各跳过一项，不计为通过。Android 步骤首次因本机未设置 SDK 路径而失败；补充 `ANDROID_HOME=<redacted-personal-path>` 与 JDK 21 后，单独重跑选择器要求的同一条 `:app:testDebugUnitTest`，69 个套件的 321 项全部通过，零失败、错误或跳过。TypeScript 结果复用同一冻结代码，没有把首次命令退出码写成成功。
+最终执行 `npm run check:affected` 选择全部消费者：`check:local` 通过，包含全部工作区和脚本类型检查、Mac 443 项、服务端 1854 项、Web 391 项、Agent 312 项及共享包和工具回归。服务端的 macOS sandbox 检查与 Agent 的可选已安装 Codex fixture 各跳过一项，不计为通过。Android 步骤首次因本机未设置 SDK 路径而失败；补充 `ANDROID_HOME=/Users/utopiafar/Library/Android/sdk` 与 JDK 21 后，单独重跑选择器要求的同一条 `:app:testDebugUnitTest`，69 个套件的 321 项全部通过，零失败、错误或跳过。TypeScript 结果复用同一冻结代码，没有把首次命令退出码写成成功。
 
 ## 生成响应验收的边界
 

@@ -8,7 +8,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import type {QueryInput} from '@mote/agent';
-import {buildApp} from './fixtures/legacy-app.js';
+import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {defaultLifecycleSettings} from '../src/memory-lifecycle.js';
 import {restoreProfile} from '../../../scripts/profile-lib.mjs';
