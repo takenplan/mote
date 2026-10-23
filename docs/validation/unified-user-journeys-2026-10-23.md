@@ -596,11 +596,44 @@ Status at checkpoint 50: implementation-complete; full local affected qualificat
     commit, outputs and cleanup in the final PR and retained delivery record; do
     not reinterpret this affected receipt as browser or release evidence.
 
+51. Standalone current-entry qualification on `fcfee2e8dd4fca061556d2b6426f9aa4167da35e`
+    exposed two fixture-state gaps. The initial configuration browser run saw a
+    stale Memory revision after a real Usage price update; a controlled two-case
+    real-host/Web regression now proves conflict, draft preservation, no implicit
+    grant, explicit reload/reconfirmation and B isolation, alongside a current
+    clean-snapshot success. These and the existing configuration UI cases passed
+    **15/15**. Browser readiness now requires the current clean revision before
+    the next edit, including returning from dedicated Actions, and a real saved
+    notice after each save. Original assertions and deadlines remain. The repaired
+    complete configuration browser journey passed; no product auto-rebase,
+    permission default or conflict policy was introduced. Exact GET/DOM ordering
+    in the two historical browser failures was not captured and remains unknown.
+
+    The original image fixture disabled file automatic processing but left image
+    intake enabled. The first manual operation encountered `file_processing_active`;
+    visible generated text did not establish a successful manual acknowledgement.
+    Preparation now uses the real image setting, upload, blocked coordinator,
+    current-proof cancellation and re-enable. A finite setup/cleanup check proved
+    three cancelled seeds, no resurrection and zero OCR/pixel work. The repaired
+    image browser journey then passed real manual completion, PNG download,
+    recompute/cancel, physical settlement and equal-ID B isolation. It records
+    exact task identities and pending-operation acknowledgement; original actions,
+    input scale and deadlines remain. This was not a lost-acknowledgement fixture.
+
+    Across the initial two integrated attempts the other seven groups passed;
+    the compiled attachment → processing → Material asset → personal export
+    entry passed **1/1**. All initial source/build manifests were unchanged and
+    actual cleanup completed. These results and each failure are retained in the
+    work record. The four test/fixture corrections require renewed qualification:
+    complete exact-head E2E and the unchanged affected driver's eligible reuse or
+    rerun decisions remain pending. The root fixture input receives no exemption.
+
 ## Audit issue coverage ledger
 
-This ledger tracks the original audit scope after checkpoint 50. Complete local
-affected qualification passed; standalone browser and delivery evidence remain
-separate. See the timestamped checkpoint and final PR/delivery record.
+This ledger tracks the original audit scope after checkpoint 51. The application
+passed complete affected qualification at checkpoint 50; subsequent test/fixture
+corrections require renewed candidate qualification. See the timestamped
+checkpoints and final PR/delivery record.
 
 | Issues | Shared implementation | Current evidence / gap |
 | --- | --- | --- |
@@ -622,8 +655,8 @@ physical-device behavior.
 
 ## Validation / remaining work
 
-At checkpoint 50, local affected qualification is complete. Standalone current-entry
-generated E2E, PR, Dev packaging and artifact inspection are the remaining delivery
-stages. Their final status belongs to the exact-head PR and retained delivery
+At checkpoint 51, finite and affected browser repairs have passed. Renewed
+exact-head affected qualification and complete generated E2E, followed by PR, Dev
+packaging and artifact inspection, are the remaining delivery stages. Their final status belongs to the exact-head PR and retained delivery
 record under `artifacts/unified-user-journeys-2026-10-23/`. Physical-device and
 live-model checks are not performed and must not be inferred from fixture tests.
