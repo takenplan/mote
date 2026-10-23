@@ -28,6 +28,7 @@ export {skillCatalog,SKILL_VERSION} from './skills.js';
 export {createImportAgent} from './import-agent.js';
 export type {ImportAgentInput} from './import-agent.js';
 import {
+  AgentInputError,
   AgentNotConfiguredError,
   AgentResponseError,
   AgentTimeoutError,
@@ -192,8 +193,9 @@ export function createAgent(options: AgentOptions) {
     input.signal?.throwIfAborted();
     if (closed) throw new AgentClosedError();
     if (!configured) throw new AgentNotConfiguredError();
-    if (!input.question?.trim() || input.question.length > 20_000)
-      throw new Error("Question must contain 1–20000 characters");
+    // External schemas own user input limits; internal host policies remain complete.
+    if (typeof input.question !== 'string' || !input.question.trim())
+      throw new AgentInputError();
     // Validate the caller's display zone before creating a Harness process.
     displayTime(new Date().toISOString(), input.timeZone);
     reportProgress(input,{stage:'starting'});

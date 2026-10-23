@@ -300,6 +300,14 @@ export class AgentConfigurationError extends Error {
   }
 }
 
+/** A host request contract failure cannot be repaired by retrying a provider. */
+export class AgentInputError extends ProviderFailure {
+  constructor() {
+    super({category:'permanent',code:'invalid_agent_input',executionStarted:false},'The agent question must contain non-whitespace text.');
+    this.name = 'AgentInputError';
+  }
+}
+
 export class AgentProviderError extends ProviderFailure {
   constructor(details:ProviderFailureDetails={category:'transient',code:'provider_failed'}) {
     super(details,'The model request failed. Check the endpoint, API credential, model and protocol settings.');

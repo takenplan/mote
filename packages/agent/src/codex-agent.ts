@@ -12,7 +12,7 @@ import {bundledSkills} from './skills.js';
 import {displayTime} from './time.js';
 import {parseAnswer} from './index.js';
 import {systemInstructions} from './instructions.js';
-import {AgentNotConfiguredError,AgentProviderError,AgentResponseError,AgentTimeoutError,reportProgress,reportTrace,validateHostOutput,MAX_OUTPUT_REPAIRS,type AgentOptions,type QueryInput,type AgentAnswer} from './types.js';
+import {AgentInputError,AgentNotConfiguredError,AgentProviderError,AgentResponseError,AgentTimeoutError,reportProgress,reportTrace,validateHostOutput,MAX_OUTPUT_REPAIRS,type AgentOptions,type QueryInput,type AgentAnswer} from './types.js';
 
 const toolsFor=(input:QueryInput):CodexTool[]=>[...contextToolDefinitions(input).map(([name,description,fields]):CodexTool=>({
   type:'function',name,description,inputSchema:{...parameterSchemaSpecToJsonSchema(fields as unknown as Parameters<typeof parameterSchemaSpecToJsonSchema>[0]),additionalProperties:false},
@@ -27,7 +27,8 @@ export function createCodexAgent(options:AgentOptions){
     const runTools=toolsFor(input).filter(t=>taskTools(input).includes(t.name)||t.name==='skill');
     input.signal?.throwIfAborted();
     if(closed)throw new AgentProviderError();if(!options.model?.trim())throw new AgentNotConfiguredError();
-    if(!input.question?.trim()||input.question.length>20000)throw new AgentProviderError();
+    // Native capacity failures classify the complete request as processing_limit.
+    if(typeof input.question!=='string'||!input.question.trim())throw new AgentInputError();
     displayTime(new Date().toISOString(),input.timeZone);reportProgress(input,{stage:'starting'});
     const runId=randomUUID();
     const trace=(event:Parameters<typeof reportTrace>[1])=>reportTrace(input,{...event,runId});
