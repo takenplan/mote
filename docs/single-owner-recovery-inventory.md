@@ -76,6 +76,12 @@ new admission and indexes import progress by exact input/scope with a separate
 source check. Neither optimization changes authorization checks, coverage,
 retry budgets or the scale of the regression scenarios.
 
+Material metadata and import-declaration lineage reuse a small, fixed set of
+compiled SQL statements per store instance. Every read still executes against
+the current transaction; no result or authorization decision is cached. Focused
+regressions cover changed revisions, rollback, schema changes, revocation and
+reopened storage.
+
 The Docker Central command uses the owned persistent `/data` volume as its HOME
 for third-party CLI state. Native HOME and the media sidecar commands stay as
 defined by their deployment. Named volumes disable Docker copy-up so container
@@ -84,6 +90,13 @@ use the same verified profile UID/GID and empty-volume initializer as Central.
 The actual container fixture checks a non-default
 UID when requested, restart/replacement, private generated state and exclusion
 from portable archive backup; no personal authorization is used.
+
+Network-sharing media sidecars verify Central's HTTP runtime identity without
+interpreting its PID in their separate PID namespace. Central's own health probe
+retains the local PID check. The mutable-tag rollback fixture keeps a separate
+temporary reference to the old image so that artifact remains available, then
+asserts rollback selects its exact immutable ID. This does not establish automatic
+retention of externally overwritten images; published releases use immutable tags.
 
 ## Deliberate scope boundaries
 
