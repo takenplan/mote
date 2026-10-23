@@ -82,13 +82,13 @@ export function installEvidenceProjection(db:DatabaseSync){
 export function materialOriginalsSql(head='h',id='id',revision='revision',evidenceId?:string){
  const image=evidenceId?`(SELECT json_object('evidenceId',image_e.id,'blockId',image_e.block_id,'captureId',image_o.capture_id,'canonicalSource',json_extract(image_e.json,'$.source')) FROM mm_evidence image_e LEFT JOIN mm_images image_i ON image_i.user_id=image_e.user_id AND image_i.id=image_e.id LEFT JOIN ig_originals image_o ON image_o.user_id=image_i.user_id AND image_o.id=image_i.original_id AND image_o.hash=image_i.hash WHERE image_e.user_id=$user AND image_e.id=${evidenceId} AND image_e.material_id=${head}.${id} AND image_e.material_revision=${head}.${revision} AND json_extract(image_e.json,'$.imageMime') IN ('image/png','image/jpeg','image/webp'))`:'NULL';
  return `(WITH RECURSIVE tree(id,revision) AS(
-  SELECT ${head}.${id},${head}.${revision} UNION SELECT p.input_material_id,p.input_revision FROM pd_material_inputs p JOIN tree t ON p.material_id=t.id AND p.revision=t.revision WHERE p.user_id=$user
+  SELECT ${head}.${id},${head}.${revision} UNION SELECT p.input_material_id,p.input_revision FROM tree t CROSS JOIN pd_material_inputs p ON p.user_id=$user AND p.material_id=t.id AND p.revision=t.revision
  ),lineage(root_id,root_revision,id,revision) AS(
-  SELECT id,revision,id,revision FROM tree UNION SELECT t.root_id,t.root_revision,p.input_material_id,p.input_revision FROM pd_material_inputs p JOIN lineage t ON p.material_id=t.id AND p.revision=t.revision WHERE p.user_id=$user
+  SELECT id,revision,id,revision FROM tree UNION SELECT t.root_id,t.root_revision,p.input_material_id,p.input_revision FROM lineage t CROSS JOIN pd_material_inputs p ON p.user_id=$user AND p.material_id=t.id AND p.revision=t.revision
  ) SELECT json_object(
   'imageAnchor',json(${image}),
-  'captures',json((SELECT coalesce(json_group_array(json(c.json)),'[]') FROM pd_captures c WHERE c.user_id=$user AND c.id IN(SELECT d.capture_id FROM pd_material_captures d JOIN tree t ON t.id=d.material_id AND t.revision=d.revision WHERE d.user_id=$user))),
-  'materials',json((SELECT coalesce(json_group_object(ref,json(ids)),'{}') FROM(SELECT t.root_id||'@'||t.root_revision ref,json_group_array(DISTINCT d.capture_id) ids FROM lineage t JOIN pd_material_captures d ON d.material_id=t.id AND d.revision=t.revision WHERE d.user_id=$user GROUP BY t.root_id,t.root_revision)))
+  'captures',json((SELECT coalesce(json_group_array(json(c.json)),'[]') FROM pd_captures c WHERE c.user_id=$user AND c.id IN(SELECT d.capture_id FROM tree t CROSS JOIN pd_material_captures d ON d.user_id=$user AND d.material_id=t.id AND d.revision=t.revision))),
+  'materials',json((SELECT coalesce(json_group_object(ref,json(ids)),'{}') FROM(SELECT t.root_id||'@'||t.root_revision ref,json_group_array(DISTINCT d.capture_id) ids FROM lineage t CROSS JOIN pd_material_captures d ON d.user_id=$user AND d.material_id=t.id AND d.revision=t.revision GROUP BY t.root_id,t.root_revision)))
  ))`;
 }
 export function materialScopeSql(scope:EvidenceSelection,args:(string|number)[],head='h',version='v',blockId='NULL',evidenceId?:string){
