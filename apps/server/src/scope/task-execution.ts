@@ -92,6 +92,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  fairnessGroup?:(step:ExecutionStep)=>string;
  /** Resolve exact issued facts before another physical request is allowed. */
  reconcile?:(run:TaskRun)=>Promise<void>;
+ /** Trusted media metadata observation precedes a new charged processing attempt.
+  * The callback must use its bounded facts-only transport, not model execution. */
+ reconcileBeforeAttempt?:true;
  /** Synchronously consume a complete already-durable local result. The host
   * repeats this validation inside the original success transaction. */
  resumeLocal?:(run:TaskLocalResume)=>{value:unknown}|undefined;
@@ -283,6 +286,7 @@ export class TaskExecution {
  }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
+  if(handler.reconcileBeforeAttempt&&(!handler.reconcile||!handler.modelFeature||handler.modelAdmission==='per-call'||handler.policy!==EXECUTION_POLICIES.localProcessing||!['ocr','asr'].includes(handler.modelFeature)))throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);if(handler.publicProgress)this.progressViews.set(handler.kind,handler.publicProgress);
   const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,fairnessGroup:handler.fairnessGroup,deferTimeout:handler.policy===EXECUTION_POLICIES.modelCall||handler.modelAdmission==='per-call',deferAttempts:Boolean(handler.modelFeature)||handler.modelAdmission==='per-call',
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
@@ -316,8 +320,9 @@ export class TaskExecution {
     }
     if(this.physical.busy(step.id))throw new ExecutionFailure('waiting','physical_cleanup_pending',1000,{executionStarted:false});
     if(['issued','unknown'].includes(this.row(step.id)!.external_state)&&this.readReplayReady(this.row(step.id)!))grant.commit(()=>{handler.authorizeInput?.(context,step.input);this.prepareRecovery(context,step);});
-    if(handler.modelFeature&&handler.modelAdmission!=='per-call')grant.startAttempt();
+    if(handler.modelFeature&&handler.modelAdmission!=='per-call'&&!handler.reconcileBeforeAttempt)grant.startAttempt();
     await handler.reconcile?.(run);grant.assert();
+    if(handler.reconcileBeforeAttempt)grant.startAttempt();
     const work=()=>{if(handler.modelAdmission!=='per-call')grant.startBudget();return handler.execute(run);};
     const result=await (this.modelAdmission&&handler.policy===EXECUTION_POLICIES.modelCall&&handler.modelAdmission!=='per-call'?this.modelAdmission(run,work):work());grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure(this.readReplayReady(this.row(step.id)!)?'transient':'blocked','external_result_unknown');return {value:result,run};
    }),

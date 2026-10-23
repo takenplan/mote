@@ -62,9 +62,31 @@ cannot start a second execution. Authenticated scoped status reads can establish
 that the first call is still running, failed or completed. A missing fact, an
 unsupported provider or a former incarnation's unfinished fact remains unknown.
 There is no worker scheduling queue, provider-message classifier or result-body
-cache. A completed call without a durably accepted artifact requires an explicit
-ordinary retry (`processor_result_unavailable`); it cannot publish a missing or
-late body. For eligible read-model calls, exact completed local cleanup and fresh authority
+cache.
+
+Trusted scoped OCR/ASR handlers reconcile fixed worker metadata before starting a
+new charged processing attempt. An authenticated facts GET is observation, not
+OCR/ASR execution: it does not charge an attempt, mark one executed, derive a
+model-attempt snapshot or create usage. The read retains the genuine frozen M04
+lease, current grant/input checks, bounded cancellation and awaited local cleanup.
+It does not replace proof that the original physical callback has quiesced. Other
+handlers retain their existing reconciliation order and accounting.
+
+External settlement `succeeded` records terminal transport settlement; it does
+not establish successful OCR/ASR processing. Only a strictly validated, stored
+terminal `failed` fact from the supported authenticated worker, bound to the same
+owner, task, issuance, request, stage and frozen model snapshot, with the required worker incarnation
+and valid acceptance/completion times, establishes known processing failure. It
+retains the failed fact and permits an otherwise eligible new processing attempt
+within the existing three-attempt round; it does
+not fabricate an accepted result or owner replay confirmation. Missing, malformed,
+unsupported, mismatched or unknown facts retain their existing protection. A
+`succeeded` worker fact without a durably accepted artifact still requires an
+explicit ordinary retry (`processor_result_unavailable`); it cannot publish a
+missing or late body. Status observation never adds a fourth attempt, resets a
+round or revives historical terminal work.
+
+For eligible read-model calls, exact completed local cleanup and fresh authority
 permit bounded policy replay without a separate confirmation dialog. A distinct
 policy replay journal retains the old unknown call; it is not an owner
 confirmation or remote settlement. Native/media/plugin/provider operations keep
@@ -128,4 +150,5 @@ interruption and resumes after its saved record position. Only that internal
 execution grant can continue an `importing` job; the owner confirmation API still
 requires its reviewed preview, and completed imports are not rerun.
 
-See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md).
+See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md)
+and the [scoped media failed-fact recovery record](validation/scoped-media-failed-fact-recovery.md).
