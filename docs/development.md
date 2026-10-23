@@ -46,6 +46,8 @@ node scripts/dev-server.mjs
 
 账号初始化失败时，终端输出 `development.initialize_failed` 诊断：配置错误提供 `category: configuration` 和字段位置（例如 `field: models.defaults`）；运行中的数据目录、开发环境限制、存储格式、权限、文件系统及 SQLite 错误提供对应类别，已知系统错误附带错误码。配置值、原始异常、SQL、私有路径和堆栈不会输出；未知异常保留通用初始化失败类别。修正私有 YAML 后重试原启动命令，脚本不会自动删除不受支持的配置或迁移存储。
 
+启动日志先显示当前 checkout 的 Git 提交及 `clean` / `modified` 状态；源码归档或无法读取 Git 元数据时显示 `Git identity unavailable`，继续原启动流程。这是启动时的快照，不保证构建期间文件没有变化。`dev-server.mjs` 构建并运行当前 checkout，`node scripts/mote.mjs start --profile dev` 运行 profile 已选定的安装版本；前者不会更新安装版本选择。排查时核对进程记录实际使用的 release，并按实际运行版本判断配置字段是否有效。健康检查通过后，还应验证受影响账号的页面或 API：个人配置在首次访问时加载，不能仅凭 HTTP 健康检查判断所有配置均兼容。
+
 已构建中央服务并配置命名 Tunnel 的本机 DEV，可用一个命令前台运行两者：
 
 ```sh
