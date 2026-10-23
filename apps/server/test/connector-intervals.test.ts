@@ -144,5 +144,5 @@ test('recording interval reload preserves a running durable discovery step',asyn
   await connector.init();await connector.connect();await connector.select({enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-09-02T00:00:00Z',autoSync:true,backupAudio:true});await waiting;
   connector.configureSyncInterval(60000);t.mock.timers.tick(60000);await Promise.resolve();
   assert.equal(signal?.aborted,false);assert.equal(discoveries,1);
-  release();await connector.drain();assert.equal(connector.status().counts.pending,0);assert.equal(connector.status().counts.failed,0);
+  release();await connector.drain();assert.equal(connector.status().counts.pending,0);assert.equal(connector.status().counts.failed,0);await connector.close();
 });

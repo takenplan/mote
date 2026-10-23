@@ -59,7 +59,7 @@ export class ExecutionEngine {
  private stopping=false;
  private pumping=false;
  private pumpAgain=false;
- private scheduled=false;
+ private scheduled:ReturnType<typeof setImmediate>|undefined;
  private failureReceiptWriteFailures=0;
  private observer:((value:ExecutionLeaseObservation)=>void)|undefined;
  private observerEnabled:(()=>boolean)|undefined;
@@ -187,7 +187,7 @@ export class ExecutionEngine {
  /** Several completions in one turn need only one admission pass. */
  private scheduleTick(){
   if(this.stopping||this.scheduled)return;
-  this.scheduled=true;setImmediate(()=>{this.scheduled=false;void this.tick().catch(()=>{});});
+  this.scheduled=setImmediate(()=>{this.scheduled=undefined;if(!this.stopping)void this.tick().catch(()=>{});});
  }
  async drain(ids:string[]){
   void this.tick().catch(()=>{});
@@ -366,5 +366,5 @@ export class ExecutionEngine {
    throw new ExecutionFailure('waiting','step_pending',Math.max(1000,step.availableAt-this.now()));
   }finally{options.signal.removeEventListener('abort',abort);await unregister();}
  }
- async close(){this.stopping=true;for(const active of this.active.values())active.controller.abort(interrupted);await Promise.allSettled([...this.active.values()].map(a=>a.task));await Promise.allSettled([...this.programs.values()]);}
+ async close(){this.stopping=true;if(this.scheduled){clearImmediate(this.scheduled);this.scheduled=undefined;}for(const active of this.active.values())active.controller.abort(interrupted);await Promise.allSettled([...this.active.values()].map(a=>a.task));await Promise.allSettled([...this.programs.values()]);}
 }

@@ -37,7 +37,7 @@ async function fixture(t:any){
   const ctx:ConnectorContext={store,sources,config:{dataDir:join(directory,'vault'),token:owner,allowedOrigins:['https://synthetic.invalid'],connectors:{directory:join(directory,'private'),mcpEnabled:true,mcpReadToken:readToken,mcpWriteEnabled:true,mcpWriteToken:writeToken,mcpWriteSourceIds:['allowed'],googleClientId:'synthetic-client',googleClientSecret:'synthetic-secret',googleRedirectUri:'http://127.0.0.1/oauth/google/callback'}}};
   sources.register({id:'allowed',name:'Synthetic source',kind:'custom',deviceId:'synthetic-device',platform:'import'});
   sources.register({id:'other',name:'Other synthetic source',kind:'custom',deviceId:'synthetic-other',platform:'import'});
-  t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});return {ctx,directory,store,sources};
+  t.after(async()=>{await ctx.materialOrganizers?.close();store.close();await rm(directory,{recursive:true,force:true});});return {ctx,directory,store,sources};
 }
 const item=(text='Synthetic evidence')=>({externalId:'synthetic-item',revision:randomUUID(),observedAt:new Date().toISOString(),title:'Synthetic item',text,kind:'file',layer:'original'});
 

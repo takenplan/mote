@@ -24,10 +24,10 @@ const original={externalId:'entry',revision:'1',observedAt:'2026-10-01T00:00:00Z
 const note='  This diary is mine. The visitor and quoted AI remain separate actors.\nUse only the original narrator scope.  ';
 function fixture(t:TestContext,encrypted=false){
   const directory=mkdtempSync(join(tmpdir(),'mote-import-context-'));let store=new Store(directory,{dataKey:'ab'.repeat(32),contentEncryptionEnabled:encrypted});
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  const cleanup:Array<()=>Promise<void>>=[];t.after(async()=>{for(const close of cleanup.reverse())await close();store.close();rmSync(directory,{recursive:true,force:true});});
   const sourceId='generated-import',sources=new SourceStore(store),materials=new MaterialStore(store),attribution=new ImportAttributionStore(store);
   sources.register({id:sourceId,name:'Generated import',kind:'custom',deviceId:'fixture',platform:'import'});
-  return {directory,store,sources,materials,attribution,sourceId,reopen(contentEncryptionEnabled=false){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32),contentEncryptionEnabled});return store;}};
+  return {directory,store,sources,materials,attribution,sourceId,cleanup,reopen(contentEncryptionEnabled=false){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32),contentEncryptionEnabled});return store;}};
 }
 function draft(sourceId:string,captureId:string,externalId='entry'):MaterialDraft {
   return {id:materialId(sourceId,externalId),origin:{sourceId,externalId},title:'Generated mixed-actor text',kind:'mote.message',schemaVersion:1,
@@ -36,7 +36,7 @@ function draft(sourceId:string,captureId:string,externalId='entry'):MaterialDraf
 }
 
 test('capture-scoped host notes cannot be forged by content and preserve correction/current evidence fences',async t=>{
-  const {store,sources,materials,attribution,sourceId}=fixture(t),id=randomUUID();
+  const {store,sources,materials,attribution,sourceId,cleanup}=fixture(t),id=randomUUID();
   const pin=attribution.freeze({id,version:1,sourceId,instruction:note})!;
   const first=await sources.upsert(sourceId,original,undefined,ack=>{if(!ack.duplicate)attribution.bind(ack.id,pin);});
   const other=await sources.upsert(sourceId,{...original,externalId:'other',text:'Generated unrelated source text'});
@@ -55,7 +55,7 @@ test('capture-scoped host notes cannot be forged by content and preserve correct
   const anchors=materials.evidenceIds(material.ref),fingerprint=materials.input(material.ref,['body'])!.fingerprint;
   assert.equal(materials.evidence(anchors)[0].attributionContext?.importStatements?.[0].instruction,note);
   assert.equal(materials.contextForEvidence(materials.evidence(anchors)[0]).importStatements?.[0].instruction,note);
-  const runtime=new ProcessingRuntime(store,[],{semantic:{concurrency:1,enabled:true}},Date.now,undefined,materials);t.after(()=>runtime.close());
+  const runtime=new ProcessingRuntime(store,[],{semantic:{concurrency:1,enabled:true}},Date.now,undefined,materials);cleanup.push(()=>runtime.close());
   runtime.registry.register({id:'generated.context-fence',version:'1',lane:'semantic',async process(input){
     assert.equal(input.observations[0].attributionContext?.importStatements?.[0].instruction,note);
     materials.correctContext(material.id,material.revision,'third_party');return [{kind:'generated',text:'Late generated result',metadata:{}}];
@@ -69,15 +69,15 @@ test('capture-scoped host notes cannot be forged by content and preserve correct
 });
 
 test('real import duplicates retain the first context through restart and deleted import history',async t=>{
-  const {directory,store,sources,materials}=fixture(t),files=new ArchivedFileStore(store);
+  const {directory,store,sources,materials,cleanup}=fixture(t),files=new ArchivedFileStore(store);
   const runtime={prepare:async({workspace,inputPaths}:{workspace:string;inputPaths:string[]})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:original,evidencePaths:inputPaths})+'\n');return {summary:'Generated exact original'};}};
   const imports=new ImportStore(store,files,sources,runtime),request={files:[{name:'generated.custom',dataBase64:Buffer.from(original.text).toString('base64')}]};
-  const first=await imports.create({...request,instruction:note});await imports.prepare(first.id);const done=await imports.confirm(first.id);
+  cleanup.push(()=>imports.stop());const first=await imports.create({...request,instruction:note});await imports.prepare(first.id);const done=await imports.confirm(first.id);
   const capture=store.evidence(done.captureIds)[0],firstMaterial=materials.publish(draft(done.sourceId,capture.id));
   const duplicate=await imports.create({...request,instruction:'The text belongs to a visitor; this newer note must not replace earlier scope.'});await imports.prepare(duplicate.id);const again=await imports.confirm(duplicate.id);
   assert.equal(again.sourceId,done.sourceId);assert.equal(again.progress.duplicates,1);assert.equal(again.progress.imported,0);assert.deepEqual(again.captureIds,[]);
   assert.equal(materials.get(firstMaterial.id)?.revision,firstMaterial.revision);assert.equal(materials.contextForEvidence(capture).importStatements?.[0].instruction,note);
-  const restored=new ImportStore(store,files,sources,runtime);assert.equal((await restored.confirm(first.id)).progress.imported,1);
+  const restored=new ImportStore(store,files,sources,runtime);cleanup.push(()=>restored.stop());assert.equal((await restored.confirm(first.id)).progress.imported,1);
   assert.equal(imports.delete(first.id).retainedSharedSource,true);assert.equal(materials.contextForEvidence(capture).importStatements?.[0].instruction,note);
   assert.equal(store.db.prepare('SELECT count(*) n FROM import_owner_declarations').get()!.n,2);
   // The duplicate's unbound note is removed with its own history. The original
@@ -152,9 +152,9 @@ test('a combined Material keeps separate original scopes and replacement text do
 });
 
 test('media intake and excerpt lineage preserve exact capture statements without mapping equal speaker labels',async t=>{
-  const {store,sources,materials}=fixture(t),files=new ArchivedFileStore(store),fileStore=new FileStore(store,sources);
+  const {store,sources,materials,cleanup}=fixture(t),files=new ArchivedFileStore(store),fileStore=new FileStore(store,sources);
   const imports=new ImportStore(store,files,sources,{fileStore,prepare:async()=>{throw Error('Generated media-only intake must not use a parsing model');}});
-  const first=await imports.create({instruction:note,processing:'automatic',files:[{name:'first.mp3',dataBase64:Buffer.from('ID3generated first media').toString('base64')}]});
+  cleanup.push(()=>imports.stop());const first=await imports.create({instruction:note,processing:'automatic',files:[{name:'first.mp3',dataBase64:Buffer.from('ID3generated first media').toString('base64')}]});
   const done=await imports.prepare(first.id);assert.equal(done.status,'completed');assert.equal(done.captureIds.length,1);
   const originalId=done.captureIds[0],artifactId=randomUUID(),chunkId=randomUUID();
   // Generated transcript fixtures exercise host lineage, not real ASR accuracy.

@@ -19,7 +19,7 @@ function docx(){return Buffer.from(zipSync({'[Content_Types].xml':Buffer.from('<
 
 test('PDF, DOCX and XLSX share central decoding text and locators across automatic import and file processing',async t=>{
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-ingestion-'))),store=new Store(dir),sources=new SourceStore(store),files=new FileStore(store,sources),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,sources),processing=new FileProcessing(files);
- t.after(async()=>{await processing.close();store.close();rmSync(dir,{recursive:true,force:true});});
+ t.after(async()=>{await processing.close();await imports.stop();store.close();rmSync(dir,{recursive:true,force:true});});
  await processing.runtime.ready;
  sources.register({id:'generated-documents',name:'Generated documents',kind:'local-files',deviceId:'fixture',platform:'macos',retention:'archive'});
  processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true},policy:fixtureFilePolicy({...processing.view().settings,enabled:true},processing.runtime.registry)});
@@ -38,12 +38,12 @@ test('PDF, DOCX and XLSX share central decoding text and locators across automat
  }
 });
 test('a scanned PDF retains its original and explicitly fails extraction without inventing text',async t=>{
- const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-empty-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-empty-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(async()=>{await imports.stop();store.close();rmSync(dir,{recursive:true,force:true});});
  const bytes=pdf(),decoded=await decodeOriginal(bytes,'application/pdf');assert.equal(decoded.status,'unsupported');assert.equal(decoded.coverage,'none');
  const job=await imports.create({files:[{name:'scanned.pdf',dataBase64:bytes.toString('base64')}],processing:'automatic'}),result=await imports.prepare(job.id);assert.equal(result.status,'failed');assert.match(result.error??'',/unsupported_format/);assert.deepEqual(archive.read(result.files[0].id),bytes);assert.equal(store.list().items.length,0);
 });
 test('partial deterministic PDF extraction keeps valid text in preview for confirmation',async t=>{
- const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-partial-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'mote-document-partial-'))),store=new Store(dir),archive=new ArchivedFileStore(store),imports=new ImportStore(store,archive,new SourceStore(store));t.after(async()=>{await imports.stop();store.close();rmSync(dir,{recursive:true,force:true});});
  const bytes=pdf('Generated first page',true),job=await imports.create({files:[{name:'partial.pdf',dataBase64:bytes.toString('base64')}],processing:'automatic'});
  const preview=await imports.prepare(job.id);
  assert.equal(preview.status,'awaiting_confirmation');assert.equal(preview.reviewDecision?.confidence,'low');assert.equal(preview.reviewGate?.decision,'confirmation');

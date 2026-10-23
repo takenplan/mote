@@ -13,7 +13,7 @@ import {ExecutionEngine} from '../src/execution-engine.js';
 
 const entry=(name:string,text:string)=>({name,dataBase64:Buffer.from(text).toString('base64')});
 const item=(externalId='fixture-1')=>({externalId,revision:'v1',observedAt:'2026-09-15T12:00:00Z',kind:'file',layer:'original',title:'合成日记',text:'2020年的合成原文\n保留换行和引用。',document:{recordedAt:'2020-01-01T10:00:00Z',timeBasis:'recorded',contentRole:'authored'}});
-function fixture(t:any,runtime:ImportRuntime={}){const directory=mkdtempSync(join(tmpdir(),'mote-import-')),store=new Store(directory),files=new ArchivedFileStore(store),sources=new SourceStore(store),imports=new ImportStore(store,files,sources,runtime);t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});return {directory,store,files,sources,imports};}
+function fixture(t:any,runtime:ImportRuntime={}){const directory=mkdtempSync(join(tmpdir(),'mote-import-')),store=new Store(directory),files=new ArchivedFileStore(store),sources=new SourceStore(store),imports=new ImportStore(store,files,sources,runtime),cleanup:Array<()=>Promise<void>>=[];t.after(async()=>{for(const close of cleanup.reverse())await close();await imports.stop();store.close();rmSync(directory,{recursive:true,force:true});});return {directory,store,files,sources,imports,cleanup};}
 function deferred(){let resolve!:()=>void;const promise=new Promise<void>(done=>{resolve=done;});return {promise,resolve};}
 function runningStep(store:Store,kind:'imports.prepare'|'imports.commit',jobId:string){
  const row=store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND json_extract(input,'$.jobId')=? AND state='running'").get(kind,jobId) as {id:string}|undefined;
@@ -21,11 +21,11 @@ function runningStep(store:Store,kind:'imports.prepare'|'imports.commit',jobId:s
 }
 function revoke(imports:ImportStore,stepId:string){(imports as unknown as {executor:{cancel:(id:string)=>void}}).executor.cancel(stepId);}
 test('import creation survives lost responses and concurrent retries with one durable job',async t=>{
- const {imports,files,store,sources}=fixture(t),request={requestId:randomUUID(),files:[entry('first.txt','Generated first'),entry('second.txt','Generated second')]};
+ const {imports,files,store,sources,cleanup}=fixture(t),request={requestId:randomUUID(),files:[entry('first.txt','Generated first'),entry('second.txt','Generated second')]};
  const [first,concurrent]=await Promise.all([imports.create(request),imports.create(request)]);
  assert.equal(first.id,concurrent.id);assert.equal(first.files.length,2);assert.equal(imports.list().length,1);
  assert.equal((await imports.create(request)).id,first.id);
- const reopened=new ImportStore(store,files,sources);assert.equal((await reopened.create(request)).id,first.id);
+ const reopened=new ImportStore(store,files,sources);cleanup.push(()=>reopened.stop());assert.equal((await reopened.create(request)).id,first.id);
  assert.equal(reopened.list().length,1);assert.equal('createFingerprint' in first,false);
  await assert.rejects(reopened.create({...request,instruction:'Different intent'}),{statusCode:409});
  reopened.delete(first.id);await assert.rejects(reopened.create(request),{statusCode:410});
@@ -152,10 +152,10 @@ test('invalid manifests never partially import; original bytes survive and instr
  imports.updateInstruction(job.id,'重试通用解析');assert.equal((await imports.retry(job.id)).status,'awaiting_confirmation');assert.equal((await imports.confirm(job.id)).progress.imported,1);
 });
 test('manifest source paths and changed preview are rejected',async t=>{
- const {imports,directory}=fixture(t,{prepare:async({workspace})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item(),evidencePaths:['../outside']})+'\n');return {summary:'bad fixture'};}});
+ const {imports,directory,cleanup}=fixture(t,{prepare:async({workspace})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item(),evidencePaths:['../outside']})+'\n');return {summary:'bad fixture'};}});
  const job=await imports.create({files:[entry('fixture.txt','fixture')]});assert.equal((await imports.prepare(job.id)).status,'failed');assert.match(imports.get(job.id).error!,/outside/);
  const other=new ImportStore(imports.store,imports.files,imports.sources,{prepare:async({workspace,inputPaths})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item(),evidencePaths:inputPaths})+'\n');return {summary:'valid fixture'};}});
- await other.prepare(job.id);writeFileSync(join(directory,'imports',job.id,'prepared.jsonl'),'changed');assert.equal((await other.confirm(job.id)).status,'failed');assert.match(other.get(job.id).error!,/preview changed/);
+ cleanup.push(()=>other.stop());await other.retry(job.id);writeFileSync(join(directory,'imports',job.id,'prepared.jsonl'),'changed');assert.equal((await other.confirm(job.id)).status,'failed');assert.match(other.get(job.id).error!,/preview changed/);
 });
 test('retry after memory callback failure resumes archive without duplicate captures',async t=>{
  let attempts=0;const {imports,store}=fixture(t,{prepare:async({workspace,inputPaths})=>{writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item(),evidencePaths:inputPaths})+'\n');return {summary:'one fixture'};},onImported:async ids=>{assert.equal(ids.length,1);if(++attempts===1)throw Error('synthetic temporary failure');return {memoryJobId:'recovered'};}});
@@ -200,7 +200,7 @@ test('record, attachments and progress commit together; partial failures resume 
 });
 test('revoked prepare worker cannot publish an old preview over a newer analysis',async t=>{
  const started=deferred(),release=deferred(),finished=deferred();let oldWorkspace='';
- const {imports,store,files,sources,directory}=fixture(t,{prepare:async({workspace,inputPaths})=>{
+ const {imports,store,files,sources,directory,cleanup}=fixture(t,{prepare:async({workspace,inputPaths})=>{
    oldWorkspace=workspace;started.resolve();await release.promise;
    writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:{...item('old'),text:'Generated obsolete evidence'},evidencePaths:[inputPaths[0]]})+'\n');
    finished.resolve();return {summary:'Generated obsolete preview'};
@@ -211,7 +211,7 @@ test('revoked prepare worker cannot publish an old preview over a newer analysis
    writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:{...item('new'),text:'Generated current evidence'},evidencePaths:[inputPaths[0]]})+'\n');
    return {summary:'Generated current preview'};
  }});
- const stale=imports.prepare(job.id);await started.promise;
+ cleanup.push(()=>successor.stop());const stale=imports.prepare(job.id);await started.promise;
  revoke(imports,runningStep(store,'imports.prepare',job.id));await stale;
  successor.updateInstruction(job.id,'Reanalyze generated source');
  const current=await successor.prepare(job.id);assert.equal(current.status,'awaiting_confirmation');
@@ -227,7 +227,7 @@ test('revoked prepare worker cannot publish an old preview over a newer analysis
 
 test('revoked commit worker cannot insert or advance a record after a new lease takes over',async t=>{
  const entered=deferred(),release=deferred();
- const {imports,store,files,sources}=fixture(t,{prepare:async({workspace,inputPaths})=>{
+ const {imports,store,files,sources,cleanup}=fixture(t,{prepare:async({workspace,inputPaths})=>{
    writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item('fenced-record'),evidencePaths:[inputPaths[0]]})+'\n');
    return {summary:'Generated fenced preview'};
  }});
@@ -235,7 +235,7 @@ test('revoked commit worker cannot insert or advance a record after a new lease 
  const job=await imports.create({instruction,files:[entry('generated.custom','Generated original')]});
  await imports.prepare(job.id);
  const successor=new ImportStore(store,files,sources);
- const ingest=store.ingestBatch.bind(store);let paused=false;
+ cleanup.push(()=>successor.stop());const ingest=store.ingestBatch.bind(store);let paused=false;
  store.ingestBatch=async (...args:Parameters<Store['ingestBatch']>)=>{
    if(!paused){paused=true;entered.resolve();await release.promise;}
    return ingest(...args);
@@ -298,12 +298,12 @@ test('revoked ZIP expansion worker cannot add a child asset or import progress',
 });
 
 test('400 generated ZIP files recover an interrupted staging batch with stable original and child identities',async t=>{
- const {imports,files,store,sources}=fixture(t),entries=Object.fromEntries(Array.from({length:400},(_,i)=>['day-'+i+'.txt',Buffer.from(new Date(Date.UTC(2024,0,1+i)).toISOString()+' Synthetic daily source '+i)])),zip=Buffer.from(zipSync(entries));
+ const {imports,files,store,sources,cleanup}=fixture(t),entries=Object.fromEntries(Array.from({length:400},(_,i)=>['day-'+i+'.txt',Buffer.from(new Date(Date.UTC(2024,0,1+i)).toISOString()+' Synthetic daily source '+i)])),zip=Buffer.from(zipSync(entries));
  const put=files.putParts.bind(files);let staged=0,fail=true;
  files.putParts=(input,parts,size)=>{if(input.relativePath?.includes('.contents/')&&++staged===28&&fail){fail=false;throw Object.assign(new Error('Generated interrupted staging'),{statusCode:507});}return put(input,parts,size);};
  const job=await imports.create({files:[{name:'days.zip',dataBase64:zip.toString('base64')}]});assert.equal(job.status,'failed');assert.equal(job.archive.expandedFiles,27);
  const ids=new Map(job.files.map(file=>[file.relativePath,file.id]));files.putParts=put;
- const resumed=new ImportStore(store,files,sources),done=await resumed.retry(job.id);assert.equal(done.status,'needs_configuration');assert.equal(done.archive.expandedFiles,400);assert.equal(done.files.length,401);
+ const resumed=new ImportStore(store,files,sources);cleanup.push(()=>resumed.stop());const done=await resumed.retry(job.id);assert.equal(done.status,'needs_configuration');assert.equal(done.archive.expandedFiles,400);assert.equal(done.files.length,401);
  for(const file of done.files){if(ids.has(file.relativePath))assert.equal(file.id,ids.get(file.relativePath));if(file.relativePath!=='days.zip')assert.deepEqual(files.read(file.id),entries[file.relativePath.slice('days.zip.contents/'.length)]);}
  assert.deepEqual(files.read(done.files[0].id),zip);assert.equal(store.db.prepare('SELECT count(*) n FROM archived_files').get()!.n,401);
 });

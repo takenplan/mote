@@ -25,10 +25,11 @@ async function fixture(t:import('node:test').TestContext,modules:string[]=[],see
   // Advance durable workers explicitly, so wall-clock load cannot race assertions.
   t.mock.method(ServerFeatureScope.prototype,'every',()=>{});
   const directory=mkdtempSync(join(tmpdir(),'mote-media-import-'));
+  let node:Awaited<ReturnType<typeof buildApp>>;
+  t.after(async()=>{try{await node?.app.close();}finally{rmSync(directory,{recursive:true,force:true});}});
   await seed?.(directory);
   const config:Config={dataDir:directory,token:'generated-media-owner',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'http://127.0.0.1:19300/v1',apiKey:'',allowUnauthenticatedLocal:true,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,backendPluginModules:modules};
   const calls:string[]=[],modelCalls:string[]=[],failed=new Set<string>();
-  let node:Awaited<ReturnType<typeof buildApp>>;
   const start=async()=>{
     node=await buildApp(config,{backgroundWorker:false,transcriptionProvider:{transcribe:async input=>{
       const parts:Buffer[]=[];for await(const part of input.body)parts.push(part);const key=Buffer.concat(parts).toString();calls.push(key);
@@ -48,7 +49,6 @@ async function fixture(t:import('node:test').TestContext,modules:string[]=[],see
     return job;
   };
   const organize=async()=>{for(let attempt=0;attempt<20;attempt++)if(await node.materialOrganizer.tick(200)===0)return;throw Error('Generated organizer did not settle');};
-  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   return {get node(){return node;},calls,modelCalls,failed,create,organize,headers,async restart(){await node.app.close();await start();}};
 }
 const entry=(name:string,bytes:Buffer|string)=>({name,dataBase64:Buffer.from(bytes).toString('base64')});
@@ -133,14 +133,15 @@ test('retry recovers a retained zero-record import through media intake without 
   let legacyId='',originalId='';
   const f=await fixture(t,[],async directory=>{
     const store=new Store(directory),files=new ArchivedFileStore(store);
+    let imports:ImportStore|undefined;
     try{
-      const imports=new ImportStore(store,files,new SourceStore(store),{prepare:async input=>{
+      imports=new ImportStore(store,files,new SourceStore(store),{prepare:async input=>{
         writeFileSync(join(input.workspace,'records.jsonl'),'');
         return {summary:'Generated legacy parser cannot transcribe audio'};
       }});
       const job=await imports.create({files:[entry('2020-01-01-old.mp3','ID3-generated-legacy')],processing:'automatic'});legacyId=job.id;originalId=job.files[0].id;
       assert.equal((await imports.prepare(job.id)).status,'unsupported');assert.equal(store.list().items.length,0);
-    }finally{store.close();}
+    }finally{await imports?.stop();store.close();}
   });
   assert.equal(f.node.imports.get(legacyId).status,'unsupported');
   const admitted=await f.node.imports.retry(legacyId);assert.equal(admitted.status,'completed');assert.equal(admitted.media![0].fileId,originalId);

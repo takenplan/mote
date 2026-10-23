@@ -12,7 +12,7 @@ import {SourceStore} from '../src/sources.js';
 
 test('binary imports recover acknowledged parts, detect mismatched replay and import 480 archived originals',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-binary-imports-'));let store=new Store(directory),files=new ArchivedFileStore(store),uploads=new ImportUploads(store,files);
- t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
+ let imports:ImportStore|undefined;t.after(async()=>{await imports?.stop();await uploads.close();store.close();await rm(directory,{recursive:true,force:true});});
  const id=randomUUID(),body=Buffer.alloc(4*1024*1024+9,65),manifest={id,name:'generated-large.bin',sizeBytes:body.length};
  const start=uploads.begin(manifest);uploads.part(id,0,body.subarray(0,start.partBytes));
  await assert.rejects(uploads.commit(id),/incomplete/);
@@ -26,14 +26,14 @@ test('binary imports recover acknowledged parts, detect mismatched replay and im
   const bytes=Buffer.from('Generated '+new Date(Date.UTC(2026,2,1)+i*12*3600000).toISOString()+' note '+i),upload=uploads.begin({name:i+'.txt',sizeBytes:bytes.length});
   uploads.part(upload.id,0,bytes);originals.push((await uploads.commit(upload.id)).id);
  }
- const imports=new ImportStore(store,files,new SourceStore(store)),job=await imports.create({name:'Eight months of generated notes',archivedFileIds:originals,processing:'automatic'});
+ imports=new ImportStore(store,files,new SourceStore(store));const job=await imports.create({name:'Eight months of generated notes',archivedFileIds:originals,processing:'automatic'});
  assert.equal(job.files.length,480);assert.equal(job.archive.files,480);assert.equal(job.status,'queued');assert.equal(store.db.prepare('SELECT count(*) n FROM import_upload_parts').get()!.n,0);
  const completed=await imports.prepare(job.id);assert.equal(completed.status,'completed');assert.equal(completed.progress.imported,480);assert.equal(store.list({limit:1}).totalCount,480);
  const jobAgain=imports.get(job.id);assert.deepEqual(jobAgain.files.map(f=>f.id),originals);
 });
 
 test('expired uploads reclaim abandoned originals while preserving import jobs, active uploads and capture references',async t=>{
- const directory=await mkdtemp(join(tmpdir(),'mote-upload-expiry-')),store=new Store(directory),files=new ArchivedFileStore(store),uploads=new ImportUploads(store,files),imports=new ImportStore(store,files,new SourceStore(store));t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
+ const directory=await mkdtemp(join(tmpdir(),'mote-upload-expiry-')),store=new Store(directory),files=new ArchivedFileStore(store),uploads=new ImportUploads(store,files),imports=new ImportStore(store,files,new SourceStore(store));t.after(async()=>{await imports.stop();await uploads.close();store.close();await rm(directory,{recursive:true,force:true});});
  const add=async(name:string)=>{const bytes=Buffer.from(name),u=uploads.begin({name,sizeBytes:bytes.length});uploads.part(u.id,0,bytes);return {u,file:await uploads.commit(u.id)};};
  const abandoned=await add('abandoned.txt'),retained=await add('retained.txt'),shared=await add('shared.txt');
  await imports.create({archivedFileIds:[retained.file.id],name:'Retained original',processing:'automatic'});
@@ -54,7 +54,7 @@ test('large browser commit cancellation keeps resumable parts and duplicate repl
 
 test('retained import jobs do not impose a lifetime admission quota',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-import-admission-')),store=new Store(directory),files=new ArchivedFileStore(store),imports=new ImportStore(store,files,new SourceStore(store));
- t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await imports.stop();store.close();await rm(directory,{recursive:true,force:true});});
  const original=files.put({name:'generated.txt',bytes:Buffer.from('Generated reusable original')});
  let latest:string|undefined;
  for(let i=0;i<1001;i++)latest=(await imports.create({name:`Generated import ${i}`,archivedFileIds:[original.id],processing:'automatic'})).id;

@@ -622,6 +622,9 @@ const ORGANIZER_STEP='material.organizer';
 export class MaterialOrganizerRuntime {
   readonly registry:MaterialOrganizerRegistry;
   readonly executor:ExecutionEngine;
+  private readonly ownsExecutor:boolean;
+  private readonly ownedIndex:MaterialStore['index'];
+  private closing?:Promise<void>;
   readonly sourceItemRecipes:SourceItemRecipeCatalog;
   private readonly failures=new Map<string,unknown>();
   private running=false;
@@ -664,8 +667,8 @@ export class MaterialOrganizerRuntime {
     // through backfill; only changes after installation count as new intake.
     store.db.prepare("INSERT OR IGNORE INTO settings(key,value) SELECT 'material-organizer-cursor',CAST(coalesce(max(seq),0) AS TEXT) FROM changes").run();
     this.sourceItemRecipes=new SourceItemRecipeCatalog(store,sourceItem.version);
-    this.executor=executor??new ExecutionEngine(store);
-    materials.bindIndexEngine(this.executor);
+    this.ownsExecutor=!executor;this.executor=executor??new ExecutionEngine(store);
+    const index=materials.bindIndexEngine(this.executor);this.ownedIndex=this.ownsExecutor?index:undefined;
     this.unregister=this.executor.register({kind:ORGANIZER_STEP,pool:'material-organizer',concurrency:()=>8,policy:EXECUTION_POLICIES.deterministic,timeoutMs:900000,
       resourceKeys:step=>[`material:${(step.input as OrganizerJobInput).materialId}`],
       validate:step=>!this.closed&&this.valid(step),
@@ -925,7 +928,8 @@ export class MaterialOrganizerRuntime {
     }finally{this.running=false;}
   }
   async close(){
-    this.closed=true;await this.unregister();
+    if(this.closing)return this.closing;this.closed=true;
+    this.closing=(async()=>{try{await this.unregister();}finally{if(this.ownsExecutor){try{await this.ownedIndex?.close();}finally{await this.executor.close();}}}})();return this.closing;
   }
 
 }

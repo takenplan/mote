@@ -59,6 +59,7 @@ export class ImportStore {
   confirmationIdentity(id:string):string{return this.phaseId(this.load(id),'commit');}
   private creating=new Map<string,{fingerprint:string;promise:Promise<ImportJob>}>();
   private executor:ExecutionEngine;
+  private readonly ownsExecutor:boolean;
   private closed=false;
   private closing?:Promise<void>;
   private lifetime=new AbortController();
@@ -75,7 +76,7 @@ export class ImportStore {
     store.db.exec('CREATE TABLE IF NOT EXISTS image_intake_overrides(capture_id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE,profile_id TEXT NOT NULL)');
     store.db.exec('CREATE TABLE IF NOT EXISTS import_jobs(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,json TEXT NOT NULL)');
     store.db.exec('CREATE TABLE IF NOT EXISTS import_create_requests(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
-    this.executor=runtime.executor??new ExecutionEngine(store);
+    this.ownsExecutor=!runtime.executor;this.executor=runtime.executor??new ExecutionEngine(store);
     for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,validate:step=>{
       const row=store.db.prepare('SELECT json FROM import_jobs WHERE id=?').get(String(step.input.jobId)) as {json:string}|undefined;
       return Boolean(!this.closed&&row&&step.input.phase===phase&&step.id===this.phaseId(JSON.parse(row.json) as InternalJob,phase));
@@ -478,12 +479,12 @@ export class ImportStore {
     this.save(job);
     if(!['waiting','running'].includes(step.state)){const waiters=this.phaseWaiters.get(step.id);this.phaseWaiters.delete(step.id);for(const resolve of waiters??[])resolve();}
   }
-  private async runPhase(id:string,phase:'prepare'|'commit'){
+  private async runPhase(id:string,phase:'prepare'|'commit',ownerRetry=false){
     if(this.closed)throw new StoreError('Import feature is closed',503);
     if(this.running.has(id)||this.isScheduled(id))throw new StoreError('Import is already processing',409);
     const job=this.load(id),stepId=this.admitPhase(job,phase),step=this.executor.get(stepId)!;
     if(step.state==='succeeded')return this.public(this.load(id));
-    if(step.state!=='running')this.executor.retry(stepId,false);
+    if(step.state!=='running')this.executor.retry(stepId,ownerRetry);
     let resolveDone!:()=>void;
     const done=new Promise<void>(resolve=>{resolveDone=resolve;let waiters=this.phaseWaiters.get(stepId);if(!waiters){waiters=new Set();this.phaseWaiters.set(stepId,waiters);}waiters.add(resolve);});
     try{
@@ -496,13 +497,13 @@ export class ImportStore {
   async prepare(id:string,resumeCancelled=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='prepare'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.progress.processed>0||job.status==='completed')throw new StoreError('Saved records cannot be reanalyzed in the same job',409);
-    const result=await this.runPhase(id,'prepare');return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
+    const result=await this.runPhase(id,'prepare',resumeCancelled);return result.status==='awaiting_confirmation'&&result.reviewGate?.decision==='automatic'?this.confirm(id):result;
   }
   async confirm(id:string,resumeCancelled=false):Promise<ImportJob>{
     if(this.closed)throw new StoreError('Import feature is closed',503);
     const job=this.load(id);if(job.resourceWait==='commit'&&this.isScheduled(id))return this.public(job);if(job.status==='cancelled'&&!resumeCancelled)return this.public(job);if(job.status==='completed')return this.public(job);
     if(job.status!=='awaiting_confirmation'&&!(['failed','cancelled'].includes(job.status)&&job.failurePhase==='import')&&!(job.status==='importing'&&job.resourceWait==='commit'))throw new StoreError('Analyze and review a preview before confirming the import',409);
-    return this.runPhase(id,'commit');
+    return this.runPhase(id,'commit',resumeCancelled);
   }
   cancel(id:string):ImportJob {
     const job=this.load(id);
@@ -518,9 +519,9 @@ export class ImportStore {
   async retry(id:string):Promise<ImportJob>{const job=this.load(id);return job.failurePhase==='import'?this.confirm(id,true):this.prepare(id,true);}
   stop(){
     if(this.closing)return this.closing;this.closed=true;this.lifetime.abort();
-    const ids=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN ('imports.prepare','imports.commit') AND state IN ('waiting','running','blocked')").all().map(row=>String(row.id));
+    const ids=this.store.db.prepare("SELECT e.id FROM execution_steps e JOIN import_jobs j ON j.id=json_extract(e.input,'$.jobId') WHERE e.kind IN ('imports.prepare','imports.commit') AND e.state IN ('waiting','running','blocked')").all().map(row=>String(row.id));
     for(const id of ids){const step=this.executor.get(id)!,job=this.load(String(step.input.jobId));if(this.executor.closed&&step.state==='waiting'&&job.resourceWait){const waiters=this.phaseWaiters.get(id);this.phaseWaiters.delete(id);for(const resolve of waiters??[])resolve();continue;}if(this.executor.closed){if(['waiting','running'].includes(step.state))this.executor.fail(id,'interrupted');}else this.executor.cancel(id);}
-    this.closing=(async()=>{await Promise.all(this.unregister.map(unregister=>unregister()));await this.executor.drain(ids);await Promise.allSettled([...this.creationJobs]);})();return this.closing;
+    this.closing=(async()=>{try{await Promise.all(this.unregister.map(unregister=>unregister()));await this.executor.drain(ids);await Promise.allSettled([...this.creationJobs]);}finally{if(this.ownsExecutor)await this.executor.close();}})();return this.closing;
   }
   delete(id:string){
     const job=this.load(id);if(this.running.has(id)||this.isScheduled(id)||job.status==='preparing'||job.status==='importing')throw new StoreError('Wait for this import to stop before deleting it',409);

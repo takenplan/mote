@@ -19,8 +19,8 @@ function fixture(t:TestContext){
   const directory=mkdtempSync(join(tmpdir(),'mote-material-organizers-'));
   const store=new Store(directory),sources=new SourceStore(store),files=new FileStore(store,sources),materials=new MaterialStore(store);
   const organizers=new MaterialOrganizerRuntime(store,materials),archived=new ArchivedFileStore(store);
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
-  return {store,sources,files,materials,organizers,archived,directory};
+  const cleanup:Array<()=>Promise<void>>=[];t.after(async()=>{for(const close of cleanup.reverse())await close();await organizers.close();store.close();rmSync(directory,{recursive:true,force:true});});
+  return {store,sources,files,materials,organizers,archived,directory,cleanup};
 }
 const at=(seconds:number)=>new Date(Date.parse('2026-09-20T00:00:00.000Z')+seconds*1000).toISOString();
 
@@ -110,7 +110,7 @@ test('ordinary material revisions and retirement update the fenced Memory reques
   const store=new Store(directory),materials=new MaterialStore(store),memoryWork=new MaterialMemoryWork(store,materials);
   const sources=new SourceStore(store,undefined,memoryWork.inputs);
   const organizers=new MaterialOrganizerRuntime(store,materials,[],undefined,memoryWork);
-  t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{await organizers.close();store.close();rmSync(directory,{recursive:true,force:true});});
   sources.register({id:'fixture-memory-source',name:'Generated source',kind:'custom',deviceId:'fixture-device',platform:'import',retention:'archive'});
   const item={externalId:'doc-1',revision:'v1',observedAt:at(0),text:'Generated body',kind:'message' as const,layer:'original' as const};
   await sources.upsert('fixture-memory-source',item);
@@ -292,10 +292,10 @@ test('a source deletion during build revokes the old worker before publication',
 });
 
 test('failed organizer stays terminal across restart until explicitly retried',async t=>{
-  const {store,materials}=fixture(t),id=randomUUID();
+  const {store,materials,cleanup}=fixture(t),id=randomUUID();
   const custom:MaterialOrganizer={id:'fixture.probe',version:'1',select:r=>r.id===id?{captureId:r.id}:undefined,
     identity:g=>materialId('fixture-probe',g.captureId),build:()=>{throw Error('generated organizer failure');}};
-  const runtime=new MaterialOrganizerRuntime(store,materials,[custom]);
+  const runtime=new MaterialOrganizerRuntime(store,materials,[custom]);cleanup.push(()=>runtime.close());
   await store.ingest({id,deviceId:'fixture-device',deviceName:'Generated',platform:'import',source:'note',capturedAt:at(0),durationMs:0,ocrText:'Generated note'});
   await assert.rejects(runtime.tick(),/generated organizer failure/);
   assert.equal(runtime.status().cursor,1,'the cursor records durable discovery even when execution fails');
@@ -305,11 +305,11 @@ test('failed organizer stays terminal across restart until explicitly retried',a
   await runtime.close();
   const succeeding:MaterialOrganizer={...custom,build:()=>undefined};
   const restarted=new MaterialOrganizerRuntime(store,materials,[succeeding]);
-  t.after(()=>restarted.close());
+  cleanup.push(()=>restarted.close());
   assert.equal(await restarted.tick(),0,'startup cannot replay a deterministic failure');
   assert.equal(restarted.status().failedSteps,1);
   assert.equal(store.db.prepare('SELECT attempts FROM execution_steps WHERE id=?').get(failed.id)!.attempts,failed.attempts);
-  restarted.executor.retry(String(failed.id));
+  restarted.executor.retry(String(failed.id),true);
   assert.equal(await restarted.tick(),0,'explicit retry consumes the persisted step without rediscovering the capture');
   assert.equal(store.db.prepare("SELECT COUNT(*) n FROM material_organizer_inputs WHERE organizer_id='fixture.probe'").get()!.n,1);
   assert.equal(restarted.status().pendingSteps,0);
@@ -373,7 +373,7 @@ test('new higher priority organizer backfills old captures and replaces the fall
   organizers.registry.register(plugin);
   assert.equal(organizers.status().failedSteps,1,'registering the same component version cannot replay a terminal failure');
   const failed=store.db.prepare("SELECT id FROM execution_steps WHERE kind='material.organizer' AND state='failed' AND json_extract(input,'$.organizerId')=?").get(plugin.id)!;
-  organizers.executor.retry(String(failed.id));
+  organizers.executor.retry(String(failed.id),true);
   assert.equal(await organizers.tick(),0,'the corrected pinned component retries its durable step');
   const replacement=materials.get(id)!;
   assert.equal(replacement.kind,'fixture.document');
@@ -425,7 +425,7 @@ test('organizer plugins build from a bounded group reader without a Store handle
 });
 
 test('paged backfill replaces a multi-member coding group before all old mappings are rescanned',async t=>{
-  const {store,sources,materials,organizers}=fixture(t);
+  const {store,sources,materials,organizers,cleanup}=fixture(t);
   sources.register({id:'fixture-session-source',name:'Generated coding',kind:'coding-agent',deviceId:'fixture-device',platform:'import',retention:'archive'});
   for(let i=0;i<2;i++)await sources.upsert('fixture-session-source',{
     externalId:`event-${i}`,revision:'v1',observedAt:at(i),title:`Generated ${i}`,text:`Generated body ${i}`,kind:'message',layer:'original',
@@ -452,7 +452,7 @@ test('paged backfill replaces a multi-member coding group before all old mapping
   assert.equal(await organizers.tick(1),1);
   assert.equal(materials.get(id)?.kind,'fixture.coding-session');
   assert.equal(organizers.status().backfills.find(row=>row.id===plugin.id)?.complete,false);
-  const restarted=new MaterialOrganizerRuntime(store,materials,[plugin]);
+  const restarted=new MaterialOrganizerRuntime(store,materials,[plugin]);cleanup.push(()=>restarted.close());
   assert.equal(restarted.status().backfills.find(row=>row.id===plugin.id)?.cursorRowid,1);
   assert.equal(await restarted.tick(1),1);
   await restarted.tick(1);
@@ -463,11 +463,11 @@ test('paged backfill replaces a multi-member coding group before all old mapping
 
 
 test('organizer status excludes historical failures and counts current failures separately through source revisions',async t=>{
- const {store,sources,materials}=fixture(t);let fail=true;
+ const {store,sources,materials,cleanup}=fixture(t);let fail=true;
  const runtime=new MaterialOrganizerRuntime(store,materials,[{id:'fixture.status-count',version:'1',slot:'source-item',priority:100,exclusive:true,
   select:r=>r.provenance?.sourceId==='fixture-status'?{sourceId:'fixture-status',externalId:r.provenance.externalId}:undefined,
   identity:g=>materialId(g.sourceId,g.externalId),build:()=>{if(fail)throw Error('Generated failure');return undefined;}}]);
- t.after(()=>runtime.executor.close());
+ cleanup.push(()=>runtime.close());
  sources.register({id:'fixture-status',kind:'custom',name:'Generated source',deviceId:'fixture-device',platform:'import'});
  const item={externalId:'generated',revision:'1',kind:'message',layer:'original',observedAt:at(0),text:'Generated v1'};
  await sources.upsert('fixture-status',item);await assert.rejects(runtime.tick(),/Generated failure/);
@@ -484,7 +484,7 @@ test('organizer status excludes historical failures and counts current failures 
  assert.equal(detail.steps.find(step=>step.id===old.id)?.current,false);assert.equal(detail.steps.find(step=>step.id===old.id)?.state,'failed');
  fail=true;await sources.upsert('fixture-status',{...item,revision:'3',text:'Generated v3'});await assert.rejects(runtime.tick(),/Generated failure/);
  assert.equal(runtime.status().failedSteps,1);assert.equal(runtime.status().pendingSteps,0);
- await runtime.executor.close();
- const restarted=new MaterialOrganizerRuntime(store,materials);t.after(()=>restarted.executor.close());
+ await runtime.close();
+ const restarted=new MaterialOrganizerRuntime(store,materials);cleanup.push(()=>restarted.close());
  assert.equal(restarted.status().failedSteps,1,'a missing plugin must not silently remove the current failure');
 });
