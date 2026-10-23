@@ -14,7 +14,7 @@ import type {Config} from '../src/config.js';
 import {MEDIA_CATALOG} from '../src/media-assets.js';
 import {readMediaExecutionFact} from '../src/media-execution-facts.js';
 
-async function until(check:()=>Promise<boolean>,label:string){const deadline=Date.now()+15000;while(!await check()){if(Date.now()>deadline)throw Error('Generated media journey did not reach '+label);await delay(10);}}
+async function until(check:()=>Promise<boolean>,label:string,diagnostics?:()=>unknown){const deadline=Date.now()+15000;while(!await check()){if(Date.now()>deadline)throw Error('Generated media journey did not reach '+label+(diagnostics?' '+JSON.stringify(diagnostics()):''));await delay(10);}}
 async function fixture(t:TestContext,mode='fail2',hold=true){
  const root=await mkdtemp(join(tmpdir(),'mote-media-facts-')),modelDirectory=join(root,'models'),models=join(modelDirectory,'ocr'),secret='generated-media-worker-'+randomUUID();
  const cleanup:(()=>Promise<unknown>)[]=[()=>rm(root,{recursive:true,force:true})];t.after(async()=>{const errors:unknown[]=[];for(const action of cleanup.reverse())try{await action();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Generated media cleanup failed');});
@@ -78,7 +78,12 @@ test('actual Central and copied Python worker recover a lost response and refund
  assert.equal(node.executor.get(call.stepId)!.attempts,1,'status reads do not create attempts');
  await f.close();await running;await f.release();
  const restarted=await f.start();assert.equal(restarted.executor.get(call.stepId)!.attempts,0,'ordinary host shutdown refunded the interrupted local frame');
- await until(async()=>{await restarted.processing.tick();return Number(restarted.store.db.prepare("SELECT count(*) n FROM image_products WHERE capture_id=? AND kind='ocr'").get(id)!.n)===1;},'authenticated failed settlement and third-attempt OCR');
+ await until(async()=>{await restarted.processing.tick();return Number(restarted.store.db.prepare("SELECT count(*) n FROM image_products WHERE capture_id=? AND kind='ocr'").get(id)!.n)===1;},'authenticated failed settlement and third-attempt OCR',()=>({
+  posts:f.posts.length,probes:f.probes(),
+  steps:restarted.store.db.prepare('SELECT kind,state,attempts,error,available_at FROM execution_steps WHERE id=?').all(call.stepId),
+  calls:restarted.processing.mediaCalls.pending().map(({state,issuedAttempt,supported,fact})=>({state,issuedAttempt,supported,factState:fact?.state,failureCode:fact?.failureCode})),
+  waits:restarted.store.db.prepare('SELECT state,count(*) n FROM file_processor_waits GROUP BY state').all(),
+ }));
  assert.equal(f.posts.length,3);assert.equal(new Set(f.posts).size,3);assert.equal(restarted.executor.get(call.stepId)!.attempts,3,'each genuine failed issuance is restored exactly once');
  assert.match(restarted.store.evidence([id])[0].ocrText,/Generated retained OCR proof/);
  await restarted.materialOrganizer.tick(200);assert.ok(restarted.materials.list().items.length>0,'real intake reaches Material');
