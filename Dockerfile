@@ -33,7 +33,7 @@ COPY deploy/empty.env ./deploy/empty.env
 COPY packages/shared/src/config-file.ts ./packages/shared/src/config-file.ts
 COPY scripts/media-worker-entry.mjs scripts/media-workers.mjs scripts/storage-owner-entry.mjs ./scripts/
 COPY scripts/backup.ts scripts/plugin-memory-backup.mjs scripts/hindsight-backup.mjs ./scripts/
-COPY scripts/transcription-server.py scripts/mote_audio.py scripts/ocr-server.py scripts/mote_ocr.py ./scripts/
+COPY scripts/transcription-server.py scripts/mote_audio.py scripts/ocr-server.py scripts/mote_ocr.py scripts/mote_execution_facts.py ./scripts/
 COPY scripts/media-import.mjs ./scripts/media-import.mjs
 RUN mkdir -p /data /models && chown node:node /data /models
 USER node

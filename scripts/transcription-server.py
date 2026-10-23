@@ -13,6 +13,7 @@ import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from tempfile import TemporaryDirectory
+from mote_execution_facts import ExecutionFacts, execution_status, erase_execution
 
 
 def recognize(path, stage, settings, budget, speakers, sender):
@@ -33,9 +34,11 @@ def recognize(path, stage, settings, budget, speakers, sender):
                 raise OverflowError('output limit')
             sender.send_bytes(result)
     except OverflowError:
-        sender.send_bytes(b'{"status":413}')
+        sender.send_bytes(b'{"status":413,"failureCode":"unsupported_input"}')
+    except ValueError:
+        sender.send_bytes(b'{"status":422,"failureCode":"unsupported_input"}')
     except Exception:
-        sender.send_bytes(b'{"status":422}')
+        sender.send_bytes(b'{"status":422,"failureCode":"processing_failed"}')
     finally:
         sender.close()
 
@@ -57,8 +60,14 @@ def main():
     secret = os.environ.get('MOTE_MEDIA_WORKER_TOKEN') or os.environ.get('MOTE_TRANSCRIPTION_TOKEN', '')
     mp = multiprocessing.get_context('spawn')
     busy = threading.BoundedSemaphore(1)
+    facts = ExecutionFacts(Path(args.model).parent / 'execution-facts', 'asr')
 
     class Handler(BaseHTTPRequestHandler):
+        def end_headers(self):
+            if getattr(self, 'receipt_id', None):
+                self.send_header('X-Mote-Receipt-Id', self.receipt_id)
+            super().end_headers()
+
         def log_message(self, *_):
             pass
 
@@ -96,6 +105,10 @@ def main():
         def do_GET(self):
             if not self.authorized():
                 self.send_error(401)
+            elif self.path.startswith('/executions/') and not secret:
+                self.send_error(401)
+            elif execution_status(self, facts):
+                pass
             elif self.path == '/health':
                 dependencies = self.dependencies()
                 runtime = dependencies['ffmpeg'] and dependencies['faster_whisper']
@@ -113,6 +126,10 @@ def main():
             if not self.authorized():
                 self.send_error(401)
                 return
+            request_id, scope = self.headers.get('X-Mote-Request-Id', ''), self.headers.get('X-Mote-Request-Scope', '')
+            if request_id and (not secret or not facts.identity(request_id, scope)):
+                self.reject_before_execution(401 if not secret else 400, 'Invalid execution identity')
+                return
             if not Path(args.model, 'model.bin').is_file() or not shutil.which('ffmpeg') or importlib.util.find_spec('faster_whisper') is None:
                 self.reject_before_execution(503, 'Local ASR model or runtime unavailable')
                 return
@@ -129,7 +146,12 @@ def main():
                 self.reject_before_execution(429, 'Local worker busy', retry_after=5)
                 return
             worker = None
+            receiver = sender = None
             released = False
+            receipt_owned = False
+            failure_code = 'unsupported_input'
+            failure_status = 422
+            disconnected = False
             try:
                 requested_timeout = self.headers.get('X-Mote-Processing-Timeout-Ms')
                 if requested_timeout is not None and (len(requested_timeout) > 7 or not requested_timeout.isascii() or not requested_timeout.isdecimal() or not 1000 <= int(requested_timeout) <= 3600000):
@@ -162,30 +184,46 @@ def main():
                             remaining -= len(block)
                     receiver, sender = mp.Pipe(duplex=False)
                     worker = mp.Process(target=recognize, args=(str(audio), self.path[1:], {**settings, 'timeout': timeout, 'speaker_model': selected_model, 'embedding': embedding, 'speaker_range': speaker_range}, budget, speakers, sender))
+                    if request_id:
+                        if not facts.begin(request_id, scope, self.path[1:]):
+                            receiver.close()
+                            sender.close()
+                            worker = None
+                            self.send_error(409)
+                            return
+                        receipt_owned = True
+                        self.receipt_id = request_id
+                        facts.started(request_id)
+                    failure_code = 'processing_failed'
                     worker.start()
                     sender.close()
                     try:
                         if not receiver.poll(timeout):
-                            self.send_error(504, 'Audio processing timeout')
-                            return
+                            failure_code = 'processing_timeout'
+                            failure_status = 504
+                            raise TimeoutError('Audio processing timeout')
                         response = json.loads(receiver.recv_bytes(32 * 1024 * 1024))
                     finally:
                         receiver.close()
                     if response['status'] != 200:
-                        self.send_error(response['status'], 'Audio processing failed')
-                        return
+                        failure_status = response['status']
+                        failure_code = response.get('failureCode', 'processing_failed')
+                        raise ValueError('Audio processing failed')
                     worker.join(5)
                     if worker.is_alive():
                         raise TimeoutError('Worker did not finish')
                     busy.release()
                     released = True
+                    if request_id:
+                        facts.finish(request_id, True)
                     self.json_response(response['body'])
+                    return
             except (BrokenPipeError, ConnectionResetError):
-                pass
+                disconnected = True
             except Exception:
-                self.send_error(422, 'Audio processing failed')
+                pass
             finally:
-                if worker is not None:
+                if worker is not None and worker.pid is not None:
                     worker.join(0.2)
                     if worker.is_alive():
                         if hasattr(os, 'killpg'):
@@ -199,8 +237,24 @@ def main():
                         if worker.is_alive():
                             worker.kill()
                             worker.join()
+                if receiver is not None:
+                    receiver.close()
+                if sender is not None:
+                    sender.close()
                 if not released:
                     busy.release()
+                # No terminal failure is published until the actual recognizer
+                # has exited. A parent restart alone never supplies that proof.
+                if receipt_owned:
+                    facts.finish(request_id, False, failure_code)
+            if not disconnected:
+                self.send_error(failure_status, 'Audio processing failed')
+
+        def do_DELETE(self):
+            if not secret or not self.authorized():
+                self.send_error(401)
+            else:
+                erase_execution(self, facts)
 
     ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
 

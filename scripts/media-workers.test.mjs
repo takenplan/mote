@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import {mkdtemp, mkdir, writeFile, readFile, rm, chmod} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -61,6 +62,7 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   await writeFile(join(root,'delay'),'1.35');
   await mkdir(join(root,'bin'));await writeFile(join(root,'bin/ffmpeg'),'#!/bin/sh\nexit 0\n');await chmod(join(root,'bin/ffmpeg'),0o755);
   await writeFile(join(root,'worker.py'),await readFile(new URL('./transcription-server.py',import.meta.url)));
+  await writeFile(join(root,'mote_execution_facts.py'),await readFile(new URL('./mote_execution_facts.py',import.meta.url)));
   const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
   const python=execFileSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim();
   const child=spawn(python,[join(root,'worker.py'),'--model',model,'--segmentation-model',segmentation,'--speaker-model',embedding,'--wespeaker-model',optional,'--port',String(port),'--timeout','2'],{cwd:root,env:{PATH:join(root,'bin'),LANG:process.env.LANG,PYTHONPATH:root,MOTE_TRANSCRIPTION_TOKEN:'generated-token'},stdio:['ignore','ignore','pipe']});
@@ -68,13 +70,15 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   t.after(async()=>{if(!exited)child.kill('SIGTERM');await closed;});
   const url=`http://127.0.0.1:${port}`,headers={Authorization:'Bearer generated-token','Content-Type':'application/octet-stream'};
   const until=Date.now()+10000;for(;;){try{if((await fetch(url+'/health',{headers,signal:AbortSignal.timeout(1000)})).ok)break;}catch{}assert.ok(!exited&&Date.now()<until,stderr);await new Promise(r=>setTimeout(r,25));}
-  const post=async(timeout,authorization=headers.Authorization)=>{const response=await fetch(url+'/transcribe',{method:'POST',headers:{...headers,Authorization:authorization,...(timeout===undefined?{}:{'X-Mote-Processing-Timeout-Ms':String(timeout)})},body:'generated',signal:AbortSignal.timeout(5000)});await response.arrayBuffer();return response.status;};
+  const scope='a'.repeat(64);
+  const post=async(timeout,authorization=headers.Authorization,requestId)=>{const response=await fetch(url+'/transcribe',{method:'POST',headers:{...headers,Authorization:authorization,...(requestId?{'X-Mote-Request-Id':requestId,'X-Mote-Request-Scope':scope}:{}),...(timeout===undefined?{}:{'X-Mote-Processing-Timeout-Ms':String(timeout)})},body:'generated',signal:AbortSignal.timeout(5000)});await response.arrayBuffer();return response.status;};
   const health=await (await fetch(url+'/health',{headers})).json();assert.equal(health.dependencies.ffmpeg,true);assert.equal(health.asr,true);assert.equal(health.diarization,true);assert.equal(health.wespeaker,false);
   const diarize=extra=>fetch(url+'/diarize',{method:'POST',headers:{...headers,...extra},body:'generated'});
   const missingOptional=await diarize({'X-Mote-Speaker-Model':'wespeaker-zh'});assert.equal(missingOptional.status,503);assert.equal(missingOptional.headers.get('x-mote-execution-started'),'false');await missingOptional.arrayBuffer();
   await writeFile(optional,'generated optional embedding');assert.equal((await(await fetch(url+'/health',{headers})).json()).wespeaker,true);
   for(const invalid of [{'X-Mote-Speaker-Model':'arbitrary-url'},{'X-Mote-Speaker-Model':'wespeaker-zh','X-Mote-Speaker-Min':'1'},{'X-Mote-Speaker-Model':'wespeaker-zh','X-Mote-Speaker-Min':'3','X-Mote-Speaker-Max':'1'},{'X-Mote-Speaker-Model':'wespeaker-zh','X-Mote-Speaker-Min':'1','X-Mote-Speaker-Max':'3','X-Mote-Speaker-Count':'2'}]){const response=await diarize(invalid);assert.equal(response.status,400);assert.equal(response.headers.get('x-mote-execution-started'),'false');await response.arrayBuffer();}
-  const bounded=await diarize({'X-Mote-Speaker-Model':'wespeaker-zh','X-Mote-Speaker-Min':'1','X-Mote-Speaker-Max':'3'});assert.equal(bounded.status,200);assert.deepEqual(await bounded.json(),{embedding:'wespeaker-zh',count:0,range:[1,3],path:optional});
+  const diarizeId=randomUUID(),bounded=await diarize({'X-Mote-Speaker-Model':'wespeaker-zh','X-Mote-Speaker-Min':'1','X-Mote-Speaker-Max':'3','X-Mote-Request-Id':diarizeId,'X-Mote-Request-Scope':scope});assert.equal(bounded.status,200);assert.equal(bounded.headers.get('x-mote-receipt-id'),diarizeId);assert.deepEqual(await bounded.json(),{embedding:'wespeaker-zh',count:0,range:[1,3],path:optional});
+  const receipt=await(await fetch(url+'/executions/'+diarizeId,{headers:{...headers,'X-Mote-Request-Scope':scope}})).json();assert.equal(receipt.state,'succeeded');assert.equal(receipt.stage,'diarize');assert.ok(receipt.finishedAt>=receipt.startedAt);assert.ok(!JSON.stringify(receipt).includes(root),'worker status has no private output paths');
   await rm(join(root,'bin/ffmpeg'));const unavailable=await (await fetch(url+'/health',{headers})).json();assert.equal(unavailable.asr,false);assert.ok(unavailable.missingDependencies.includes('ffmpeg'));
   // Rejection must prove execution never started.
   await rm(join(model,'model.bin'));const rejected=await fetch(url+'/transcribe',{method:'POST',headers,body:'generated'});assert.equal(rejected.status,503);assert.equal(rejected.headers.get('x-mote-execution-started'),'false');assert.equal((await rejected.json()).executionStarted,false);
@@ -86,7 +90,10 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   const contention=await diarize({});assert.equal(contention.status,429);assert.equal(contention.headers.get('x-mote-execution-started'),'false');assert.equal(contention.headers.get('retry-after'),'5');assert.equal((await contention.json()).executionStarted,false);
   assert.equal((await fetch(url+'/health',{headers})).status,200,'health stays available while shared ASR/diarization capacity is occupied');
   assert.equal(await held,200);
-  assert.equal(await post(1000),504,'a shorter configured request must end before the worker host cap');
+  const timeoutId=randomUUID();assert.equal(await post(1000,headers.Authorization,timeoutId),504,'a shorter configured request must end before the worker host cap');
+  const failed=await(await fetch(url+'/executions/'+timeoutId,{headers:{...headers,'X-Mote-Request-Scope':scope}})).json();assert.equal(failed.state,'failed');assert.equal(failed.failureCode,'processing_timeout');assert.ok(failed.finishedAt>=failed.startedAt);
+  assert.equal((await fetch(url+'/executions/'+timeoutId,{method:'DELETE',headers:{...headers,'X-Mote-Request-Scope':scope}})).status,200);
+  assert.equal(await post(1000,headers.Authorization,timeoutId),409,'erased failed ASR identity cannot be submitted again');
   await new Promise(r=>setTimeout(r,300));
   assert.equal(await post(2000),200,'the next authorized request can use its larger configured budget');
   assert.equal(Number(await readFile(join(root,'seen-timeout'),'utf8')),2);
@@ -115,6 +122,7 @@ test('OCR HTTP worker certifies capacity rejection before execution with the sam
  await writeFile(join(root,'paddlex/inference/pipelines.py'),`def load_pipeline_config(name): return {'SubModules':{'TextDetection':{},'TextRecognition':{}}}\nclass Pipeline:\n    def predict(self, image): pass\ndef create_pipeline(**kwargs): return Pipeline()\n`);
  await writeFile(join(root,'mote_ocr.py'),`from pathlib import Path\nimport time\nclass UnsupportedImage(Exception): pass\ndef recognize_image(image, predict):\n    Path(__file__).with_name('recognition-started').write_text('generated')\n    time.sleep(0.5)\n    return {'durationMs':0,'segments':[{'startMs':0,'endMs':0,'text':'Generated OCR'}]}\n`);
  await writeFile(join(root,'worker.py'),await readFile(new URL('./ocr-server.py',import.meta.url)));
+ await writeFile(join(root,'mote_execution_facts.py'),await readFile(new URL('./mote_execution_facts.py',import.meta.url)));
  const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
  const python=execFileSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim();
  const child=spawn(python,[join(root,'worker.py'),'--model-root',models,'--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,PYTHONPATH:root,MOTE_MEDIA_WORKER_TOKEN:'generated-token'},stdio:'ignore'}),closed=new Promise(resolve=>child.once('close',resolve));
@@ -125,4 +133,17 @@ test('OCR HTTP worker certifies capacity rejection before execution with the sam
  const busy=await call();assert.equal(busy.status,429);assert.equal(busy.headers.get('retry-after'),'5');assert.equal(busy.headers.get('x-mote-execution-started'),'false');assert.equal((await busy.json()).executionStarted,false);
  const result=await held;assert.equal(result.status,200);await result.arrayBuffer();
  await rm(join(models,'complete.json'));const missing=await call();assert.equal(missing.status,503);assert.equal(missing.headers.get('x-mote-execution-started'),'false');assert.equal((await missing.json()).executionStarted,false);
+});
+
+test('ASR execution facts and identified POSTs stay private even when the old unauthenticated health endpoint is available',async t=>{
+ const {spawn}=await import('node:child_process'),{createServer}=await import('node:net'),{once}=await import('node:events');
+ const root=await fixture(t);
+ for(const file of ['transcription-server.py','mote_execution_facts.py'])await writeFile(join(root,file),await readFile(new URL('./'+file,import.meta.url)));
+ const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(resolve=>reservation.close(resolve));
+ const child=spawn('python3',[join(root,'transcription-server.py'),'--model',join(root,'models'),'--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,PYTHONPATH:root},stdio:'ignore'}),closed=once(child,'close');
+ t.after(async()=>{child.kill('SIGTERM');await closed;});const endpoint=`http://127.0.0.1:${port}`;
+ for(let i=0;;i++){try{if((await fetch(endpoint+'/health',{signal:AbortSignal.timeout(500)})).ok)break;}catch{}assert.ok(i<200,'ASR worker did not start');await new Promise(resolve=>setTimeout(resolve,10));}
+ const id=randomUUID(),headers={Authorization:'Bearer generated-but-not-configured','X-Mote-Request-Scope':'a'.repeat(64)};
+ for(const method of ['GET','DELETE'])assert.equal((await fetch(endpoint+'/executions/'+id,{method,headers})).status,401);
+ const response=await fetch(endpoint+'/transcribe',{method:'POST',headers:{...headers,'X-Mote-Request-Id':id},body:'generated'});assert.equal(response.status,401);assert.equal(response.headers.get('x-mote-execution-started'),'false');
 });

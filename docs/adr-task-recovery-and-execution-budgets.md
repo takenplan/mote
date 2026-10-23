@@ -214,6 +214,32 @@ provider adapters retain transport facts and task types own recovery decisions.
 
 ## MVP scope and validation
 
+The single-owner recovery restores the independent media execution-fact
+contract from the owner-approved 2026-10-18 reliability decision (historical
+`2c78ca8d`, `docs/adr-scoped-processing-reliability.md`). Its account machinery is
+superseded by [the single-owner ADR](adr-single-owner-mvp.md). One managed
+worker request has a unique ID, exact stage and private instance/step scope;
+authenticated terminal metadata can establish a failed physical execution
+after response loss. Worker service incarnation does not identify model
+weights. Reloading a model never rewrites an existing request, and restarting a
+service maps its old accepted/running records to unknown rather than failure.
+
+The host reconciles outside model execution and restores only the original
+issued attempt count under matching current input, generation, configuration
+and wait identity in one settlement transaction. It does not reopen a terminal
+step, reset a budget or replay completed work. A successful physical execution
+with a missing body remains unavailable. Custom/remote services without this
+contract retain the existing unknown guard. Credentials and recognition bodies
+are absent from the fact journal; its private files contain fixed identities,
+timestamps, states and allowlisted failure codes. There is no result cache,
+historical loader, migration, new polling promise or new retention limit.
+
+R10 received independent pre-implementation **APPROVE** from Sol High against
+`38e1eb5a56302c7491415a4f86c95de2b2d48cda`, including the narrow engine attempt
+recovery method, authenticated status/erasure, consumed-ID tombstones and
+generated real-process validation. Actual test results remain separate from
+this decision.
+
 Historical terminal failures can be rerun manually in MVP. Do not build a
 historical recovery migration, reset attempts on deployment or automatically
 reopen old work. This decision does not execute a manual retry or remove the

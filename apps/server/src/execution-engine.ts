@@ -164,6 +164,14 @@ export class ExecutionEngine {
   if(this.get(id)?.state==='running')throw new StoreError('Cancel the active step before retrying',409);
   this.active.get(id)?.controller.abort();this.store.db.prepare("UPDATE execution_steps SET state='waiting',attempts=CASE WHEN ? THEN 0 ELSE attempts END,available_at=0,lease_until=0,fence=NULL,error=NULL,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state!='running'").run(Number(resetAttempts),Number(resetAttempts),this.now(),id);this.project(id);
  }
+ /** Restore an issued attempt refunded by shutdown, without granting execution.
+  * The domain settles its exact authenticated receipt in this same transaction. */
+ recoverAttemptCount(id:string,expectedInput:Record<string,unknown>,issuedAttempt:number){
+  if(!Number.isSafeInteger(issuedAttempt)||issuedAttempt<1)throw new StoreError('Invalid recovered execution attempt',400);
+  if(!this.store.db.isTransaction)throw new StoreError('Recovered execution settlement needs a transaction',409);
+  if(this.active.has(id))return false;
+  return Boolean(this.store.db.prepare("UPDATE execution_steps SET attempts=max(attempts,?),updated_at=? WHERE id=? AND input=? AND state IN ('waiting','blocked')").run(issuedAttempt,this.now(),id,JSON.stringify(expectedInput)).changes);
+ }
  /** Stop only this host's work after another writer revoked its durable grant. */
  abortLocal(id:string){this.active.get(id)?.controller.abort();}
  isCurrentGrant(id:string,fence:string){return Boolean(this.store.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}

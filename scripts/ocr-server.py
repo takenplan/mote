@@ -9,6 +9,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore
 from mote_ocr import UnsupportedImage, recognize_image
+from mote_execution_facts import ExecutionFacts, execution_status, erase_execution
 
 
 def main():
@@ -22,6 +23,7 @@ def main():
     secret = os.environ.get('MOTE_MEDIA_WORKER_TOKEN', '')
     os.environ.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1', DO_NOT_TRACK='1', PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK='True')
     busy = BoundedSemaphore(1)
+    facts = ExecutionFacts(root.parent / 'execution-facts', 'ocr')
     pipeline = None
     pipeline_marker = None
 
@@ -47,6 +49,11 @@ def main():
         return recognize_image(image, pipeline.predict)
 
     class Handler(BaseHTTPRequestHandler):
+        def end_headers(self):
+            if getattr(self, 'receipt_id', None):
+                self.send_header('X-Mote-Receipt-Id', self.receipt_id)
+            super().end_headers()
+
         def log_message(self, *_):
             pass
 
@@ -61,6 +68,8 @@ def main():
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        json_response = send_json
 
         def reject_before_execution(self, status, message, retry_after=None):
             body = json.dumps({'error': message, 'executionStarted': False}).encode()
@@ -77,6 +86,8 @@ def main():
         def do_GET(self):
             if not self.authorized():
                 self.send_error(401)
+            elif execution_status(self, facts):
+                pass
             elif self.path == '/health':
                 # Readiness includes dependencies and model loading, not only files.
                 # The worker can start before model installation and load it later.
@@ -103,6 +114,10 @@ def main():
             if not self.authorized():
                 self.send_error(401)
                 return
+            request_id, scope = self.headers.get('X-Mote-Request-Id', ''), self.headers.get('X-Mote-Request-Scope', '')
+            if request_id and not facts.identity(request_id, scope):
+                self.reject_before_execution(400, 'Invalid execution identity')
+                return
             if not ready():
                 self.reject_before_execution(503, 'Model not installed')
                 return
@@ -110,6 +125,7 @@ def main():
                 # Recheck cadence; actual worker completion remains independent.
                 self.reject_before_execution(429, 'OCR worker busy', retry_after=5)
                 return
+            receipt_owned = False
             try:
                 size = int(self.headers.get('Content-Length', '-1'))
                 if not 0 < size <= 8 * 1024 * 1024:
@@ -119,14 +135,38 @@ def main():
                 if len(image) != size:
                     self.send_error(400)
                     return
+                if request_id:
+                    if not facts.begin(request_id, scope, 'ocr'):
+                        self.send_error(409)
+                        return
+                    receipt_owned = True
+                    self.receipt_id = request_id
                 try:
-                    self.send_json(recognize(image))
+                    if request_id:
+                        facts.started(request_id)
+                    result = recognize(image)
                 except UnsupportedImage:
+                    if request_id:
+                        facts.finish(request_id, False, 'unsupported_input')
                     self.send_error(422, 'Unsupported image')
                 except Exception:
+                    if request_id:
+                        facts.finish(request_id, False)
                     self.send_error(503, 'OCR execution unavailable')
+                else:
+                    if request_id:
+                        facts.finish(request_id, True)
+                    self.send_json(result)
             finally:
                 busy.release()
+                if receipt_owned:
+                    facts.finish(request_id, False)
+
+        def do_DELETE(self):
+            if not self.authorized():
+                self.send_error(401)
+            else:
+                erase_execution(self, facts)
 
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     def denied(*_args, **_kwargs):

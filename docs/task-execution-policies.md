@@ -124,6 +124,25 @@ explicit cancellation remains available.
 
 ## Existing work and validation
 
+Managed loopback OCR, ASR and diarization requests carry one UUID per actual
+POST and an instance/step/generation-bound scope. The authenticated worker
+retains only fixed execution metadata. Status GETs do not acquire a model or
+physical processing slot, create model usage or consume another attempt.
+Accepted/running facts retain waiting. A terminal failed fact may settle the
+original failed attempt and resume the same current phase with its remaining
+budget; shutdown-refunded attempts are restored once by identity, never reset.
+Three actual eligible failures remain terminal across polling and restart.
+Unsupported input remains permanent. The normal owner retry remains explicit.
+
+A successful worker fact cannot replace a lost result body. Missing facts,
+changed credentials/configuration and an old worker interrupted by process
+restart remain unknown. Existing unknown-outcome confirmation still applies;
+no status read manufactures an artifact or authorizes another POST. Successful
+artifact commit releases its exact issued wait in the same transaction.
+Cancellation, deletion and changed input authority permit only exact terminal
+receipt cleanup. Active/unknown worker records cannot be erased; terminal
+erasure retains consumed identity so an old POST cannot execute again.
+
 No historical terminal task is reopened and no historical attempt counter is
 reset on deployment. New file defaults do not revive old failed work. Manual
 retry retains current-input, permission and unknown-outcome checks. Original
