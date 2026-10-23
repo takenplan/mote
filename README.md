@@ -56,7 +56,7 @@ For a daily archive, use a profile outside the checkout. The [deployment guide](
 
 Start with **Record** in the web interface: save a short note, then find it in **Library**. You can also use Library's import tools to add selected material, inspect the preview, and confirm it.
 
-To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases). For Android Dev, bookmark [Android Dev downloads](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue&expanded=true), open the newest prerelease, and tap **Download APK** on your phone. Mac Dev builds remain available as [Actions artifacts](https://github.com/utopiafar/mote/actions):
+To collect from your devices, download the matching Prod app from [Releases](https://github.com/utopiafar/mote/releases). For Android Dev, bookmark [Android Dev downloads](https://github.com/utopiafar/mote/releases?q=tag%3Aandroid-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true), open the newest prerelease, and tap **Download APK** on your phone. Mac Dev builds remain available as [Actions artifacts](https://github.com/utopiafar/mote/actions):
 
 | Device | Install | Connect |
 | --- | --- | --- |
