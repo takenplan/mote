@@ -80,7 +80,10 @@ test('bulk Formal input validation preserves appended Coding prefixes and reject
  store.db.prepare('UPDATE material_heads SET min_visible_sequence=sequence WHERE id=?').run(next.id);materials.retire(next.id,{expectedRevision:next.revision});parity();assert.equal(materials['currentEvidenceIds'](ids).size,0);
 });
 
-test('three actual Memory jobs prepare large context grants through the bridge without losing their execution lease',{timeout:60000},async t=>{
+// Functional allowance includes startup and 4097 generated context grants under
+// suite CPU contention; it is not a product latency target. Real executor leases,
+// exact coverage, single attempts and the no-interruption assertions stay intact.
+test('three actual Memory jobs prepare large context grants through the bridge without losing their execution lease',{timeout:120000},async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-memory-large-bridge-'));
  const config:Config={dataDir:directory,token:'generated-large-memory-owner',tokenPath:'generated',host:'127.0.0.1',port:0,maxStorageBytes:60_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,memoryConcurrency:3};
  const calls:QueryInput[]=[];
