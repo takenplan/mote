@@ -420,7 +420,10 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   try{await processing.initializeConfiguration();}catch(error){await configService.close();await executor.close();await processing.close();await workflows.close();await sourcePipelines.close();await backendContext.fiber.dispose();await modelSettings.close();await agent.close();await connections.close();await indexer.close();if(!dependencies?.store)store.close();await diagnostics.close();throw error;}
 
   const disposeCaptureMemoryIntake=installCaptureMemoryIntake(store,materialMemoryWork);
-  const perception=new ImageProcessing(store,processing,executor,{configService,materials,mediaAssets,media:config.media,understanding:imageUnderstanding({factory,usage:usageLedger,selection:service=>{
+  const perception=new ImageProcessing(store,processing,executor,{configService,materials,mediaAssets,media:config.media,understanding:imageUnderstanding({factory,metered:async(settings,attribution,task)=>{
+    const meter=admittedUsage(settings.provider,settings.model,'image-understanding',{agentId:'image-understanding',moduleId:'images',skillId:null,...attribution});
+    return meter.run(async()=>{try{const output=await task(meter.update);meter.completed();return output;}catch(error){meter.failed(error);throw error;}});
+  },selection:service=>{
     const selected=modelSettings.select('file'),settings=resolveFileModel({...processing.currentSettings(),analysisModel:service}),configuration=modelConfiguration(service?.id??selected.id,settings,modelSettings.view().revision);
     return {fingerprint:configuration.fingerprint,configured:service?Boolean(service.apiKey||service.execution==='local'):agent.configuredFor(selected.id),settings,receipt:{profileId:service?.id??selected.id,provider:settings.provider,model:settings.model,revision:modelSettings.view().revision}};
   }})});

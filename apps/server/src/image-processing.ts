@@ -26,7 +26,7 @@ const settingsSchema=imageSettingsSchema;
 export type ImageSettings=z.infer<typeof settingsSchema>;
 export type ImageUnderstanding={
  selection(service?:ProcessingService):{fingerprint:string;configured:boolean;receipt:Record<string,unknown>};
- run(input:{record:CaptureRecord;original:ImageOriginal;ocr?:Transcript;signal:AbortSignal;readImage(input:import('@mote/shared').ImageReadInput):Promise<import('@mote/shared').ImageReadResult>;operationId:string;service?:ProcessingService}):Promise<ImageInterpretation>;
+ run(input:{record:CaptureRecord;original:ImageOriginal;ocr?:Transcript;signal:AbortSignal;readImage(input:import('@mote/shared').ImageReadInput):Promise<import('@mote/shared').ImageReadResult>;operationId:string;service?:ProcessingService;assertContextAuthority?:()=>void}):Promise<ImageInterpretation>;
 };
 type PlanStep={name:string;kind:string;stage:{id:string;version:string};dependsOn:string[]};
 type JobRow={capture_id:string;kind:string;state:string;error:string|null;attempts:number;available_at:number;auto_eligible:number};
@@ -303,7 +303,7 @@ export class ImageProcessing {
   const readImage=async(input:Omit<import('@mote/shared').ImageReadInput,'id'>)=>{signal.throwIfAborted();const bytes:Buffer[]=[];for await(const part of original.read())bytes.push(part);return imageOutput(Buffer.concat(bytes),original.mimeType,{...input,id:row.capture_id},()=>this.valid(step));};
   const payload=await stage.run({record,hash:original.hash,mimeType:original.mimeType,dependencies,signal,readImage,
    ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId),endpoint=this.processorEndpoint(step),run=()=>this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));const raw=await(endpoint?this.processorAdmission.run(endpoint,run):run());return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
-   understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),operationId:step.operationId,service:plan.binding.settings.analysisModel});},
+   understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),assertContextAuthority:()=>{signal.throwIfAborted();if(!this.valid(step))throw new ProviderFailure({category:'permanent',code:'context_evidence_restricted'});},operationId:step.operationId,service:plan.binding.settings.analysisModel});},
   });
   if(stage.kind==='ocr'){const transcript=transcriptSchema.parse(payload);if(transcript.durationMs!==0||transcript.segments.map(s=>s.text).join('\n').length>100000)throw new StoreError('Invalid image OCR output',422);return {payload:transcript,kind:'ocr'};}
   const interpretation=imageInterpretationSchema.parse(payload),metadata=await readImage({view:'metadata'}),imageView=metadata.imageView!;

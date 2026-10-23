@@ -16,14 +16,14 @@ export class HindsightModelRelay {
   private sessions=new Set<CodexSession>();
   private requests=new Set<AbortController>();
   private address?:{baseUrl:string;token:string};
-  constructor(private settings:ModelSettings,private options:{token?:string;port?:number;codex?:{executable?:string;home?:string};runModel?:AgentOptions['runModel'];assertModelAuthority?:(request:{requestId:string})=>void|Promise<void>;onUsage?:(usage:TokenUsage,request:{requestId:string})=>void;onRequestStarted?:(request:{requestId:string})=>void;onRequestFinished?:(request:{requestId:string;status:'completed'|'failed'})=>void}={}){
+  constructor(private settings:ModelSettings,private options:{token?:string;port?:number;codex?:{executable?:string;home?:string};runModel?:AgentOptions['runModel'];assertModelAuthority?:(request:{requestId:string})=>void|Promise<void>;onUsage?:(usage:TokenUsage,request:{requestId:string})=>void;onRequestAccepted?:(request:{requestId:string})=>void;onRequestSettled?:(request:{requestId:string})=>void;onRequestStarted?:(request:{requestId:string})=>void;onRequestFinished?:(request:{requestId:string;status:'completed'|'failed'})=>void}={}){
     this.settings=structuredClone(settings);
     if(!['codex-app-server','openai-completions'].includes(settings.protocol))throw new Error('Hindsight requires a Codex or OpenAI Chat Completions model profile');
   }
   async start(){
     if(this.address)return this.address;
     const token=this.options.token??randomUUID()+randomUUID();
-    this.server=createServer((req,res)=>{let activeRequest:string|undefined,controller:AbortController|undefined,completed=false;void (async()=>{
+    this.server=createServer((req,res)=>{let acceptedRequest:string|undefined,activeRequest:string|undefined,controller:AbortController|undefined,completed=false;void (async()=>{
       const authorization=req.headers.authorization??'',expected='Bearer '+token;
       if(Buffer.byteLength(authorization)!==Buffer.byteLength(expected)||!timingSafeEqual(Buffer.from(authorization),Buffer.from(expected))){res.writeHead(401);res.end();return;}
       if(req.method!=='POST'||req.url!=='/v1/chat/completions'){res.writeHead(404);res.end();return;}
@@ -31,12 +31,11 @@ export class HindsightModelRelay {
       for await(const chunk of req){bytes+=chunk.length;if(bytes>16*1024*1024){res.writeHead(413);res.end();return;}chunks.push(chunk);}
       const body=JSON.parse(Buffer.concat(chunks).toString()) as {messages:unknown[];tools?:{function:{name:string}}[];response_format?:unknown;stream?:boolean};
       if(!Array.isArray(body.messages))throw Error('Invalid inference request');
-      const requestId=randomUUID();
-      activeRequest=requestId;this.options.onRequestStarted?.({requestId});
+      const requestId=randomUUID();acceptedRequest=requestId;this.options.onRequestAccepted?.({requestId});
       controller=new AbortController();this.requests.add(controller);const requestController=controller;res.once('close',()=>{if(!res.writableEnded)requestController.abort();});
       // The HTTP callback does not inherit Central's async model context.
       // Recheck its captured operation fence after host admission has waited.
-      const runAdmitted:NonNullable<AgentOptions['runModel']>=async(task,signal)=>{const guarded=async()=>{requestController.signal.throwIfAborted();signal?.throwIfAborted();await this.options.assertModelAuthority?.({requestId});requestController.signal.throwIfAborted();signal?.throwIfAborted();return task();};return this.options.runModel?this.options.runModel(guarded,signal):guarded();};
+      const runAdmitted:NonNullable<AgentOptions['runModel']>=async(task,signal)=>{const guarded=async()=>{requestController.signal.throwIfAborted();signal?.throwIfAborted();await this.options.assertModelAuthority?.({requestId});requestController.signal.throwIfAborted();signal?.throwIfAborted();if(!activeRequest){activeRequest=requestId;this.options.onRequestStarted?.({requestId});}return task();};return this.options.runModel?this.options.runModel(guarded,signal):guarded();};
       let message:Record<string,unknown>,usage:TokenUsage|undefined;
       if(this.settings.protocol==='codex-app-server'){
         const session=new CodexSession({...this.settings,codex:this.options.codex,runModel:runAdmitted},async()=>{throw Error('Native tools unavailable');},undefined,value=>{usage=value;this.options.onUsage?.(value,{requestId});});
@@ -64,7 +63,7 @@ export class HindsightModelRelay {
       completed=true;
       if(body.stream){const delta={...message,...(Array.isArray(message.tool_calls)?{tool_calls:message.tool_calls.map((tool,index)=>({...tool,index}))}:{})};res.writeHead(200,{'Content-Type':'text/event-stream'});res.write('data: '+JSON.stringify({id,object:'chat.completion.chunk',created:Math.floor(Date.now()/1000),model:this.settings.model,choices:[{index:0,delta,finish_reason:null}]})+'\n\n');res.write('data: '+JSON.stringify({id,object:'chat.completion.chunk',created:Math.floor(Date.now()/1000),model:this.settings.model,choices:[{index:0,delta:{},finish_reason:finish}],...(measured?{usage:measured}:{})})+'\n\n');res.end('data: [DONE]\n\n');}
       else{res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({id,object:'chat.completion',created:Math.floor(Date.now()/1000),model:this.settings.model,choices:[{index:0,message,finish_reason:finish}],...(measured?{usage:measured}:{})}));}
-    })().catch(()=>{if(!res.headersSent)res.writeHead(502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Configured inference endpoint unavailable',type:'upstream_error'}}));}).finally(()=>{if(controller)this.requests.delete(controller);if(activeRequest)this.options.onRequestFinished?.({requestId:activeRequest,status:completed?'completed':'failed'});});});
+    })().catch(()=>{if(!res.headersSent)res.writeHead(502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'Configured inference endpoint unavailable',type:'upstream_error'}}));}).finally(()=>{if(controller)this.requests.delete(controller);try{if(activeRequest)this.options.onRequestFinished?.({requestId:activeRequest,status:completed?'completed':'failed'});}finally{if(acceptedRequest)this.options.onRequestSettled?.({requestId:acceptedRequest});}}).catch(()=>{});});
     await new Promise<void>((resolve,reject)=>{this.server!.once('error',reject);this.server!.listen(this.options.port??0,'127.0.0.1',()=>resolve());});
     const address=this.server.address();if(!address||typeof address==='string')throw Error('Inference relay did not bind');
     return this.address={baseUrl:`http://127.0.0.1:${address.port}/v1`,token};

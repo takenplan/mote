@@ -340,6 +340,18 @@ test('Codex host cancellation removes a waiting model admission before a turn st
  }finally{await session.close();}
 });
 
+test('Codex rechecks authority after queueing and before each repair turn',async t=>{
+ const root=await fake(t);let revoked=false,release,entered;const waiting=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+ const session=new CodexSession({model:'fixture',agentTimeoutMs:2000,authorizeModelRequest:()=>{if(revoked)throw Error('Generated authority revoked');},runModel:async task=>{entered();await gate;return task();}},async()=>({}));
+ try{await session.start('Generated queued authority fixture',[]);const pending=session.run('Generated');await waiting;revoked=true;release();await assert.rejects(pending,/Generated authority revoked/);}finally{await session.close();}
+ let rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(rpc.filter(m=>m.method==='turn/start').length,0);
+ let authorizations=0,validated=0;
+ const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:5000,authorizeModelRequest:()=>{authorizations++;if(authorizations>1)throw Error('Generated repair authority revoked');}});t.after(()=>agent.close());
+ await assert.rejects(agent.query({question:'Generated repair authority fixture',validateOutput:()=>{validated++;return {code:'quote_not_found',feedback:'Use exact supplied evidence.'};}}));
+ assert.equal(authorizations,2);assert.equal(validated,1);
+ rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);assert.equal(rpc.filter(m=>m.method==='turn/start').length,1);
+});
+
 test('Codex host admission wait can exceed the explicit active execution budget and still complete one generated query',async t=>{
  const root=await fake(t);let enter,release;const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve);let admissions=0;
  const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:1000,runModel:async(task,signal)=>{admissions++;enter();await gate;signal.throwIfAborted();return task();}});t.after(()=>agent.close());

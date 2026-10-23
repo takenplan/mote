@@ -56,7 +56,7 @@ export class CodexSession {
   private usage?:TokenUsage;
   private turnError?:unknown;
   private usageInterrupted=false;
-  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){this.budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);}
+  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'|'authorizeModelRequest'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){this.budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);}
 
   async start(instructions:string,tools:CodexTool[],workspace?:string):Promise<void>{
     if(this.initializing)throw new AgentProviderError();
@@ -210,7 +210,7 @@ export class CodexSession {
       else pending?.resolve([...this.messages.values()].at(-1)??'');
     }
   }
-  run(prompt:string,outputSchema?:unknown):Promise<string>{return (this.options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>this.budget.run(()=>this.runTurn(prompt,outputSchema)).catch(error=>{if(error instanceof AgentTimeoutError)this.fail(error);throw error;}),this.modelAdmission.signal);}
+  run(prompt:string,outputSchema?:unknown):Promise<string>{return (this.options.runModel??(async (task,_signal?:AbortSignal)=>task()))(async()=>{await this.options.authorizeModelRequest?.();return this.budget.run(()=>this.runTurn(prompt,outputSchema)).catch(error=>{if(error instanceof AgentTimeoutError)this.fail(error);throw error;});},this.modelAdmission.signal);}
   cancel(reason:unknown):void {
     // The host deadline may expire before this session's own timer. Preserve
     // that cause before cleanup rejects pending work with a generic failure.
