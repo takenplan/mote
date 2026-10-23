@@ -40,7 +40,7 @@ test('shared-network health requires the runtime HTTP identity while local healt
   let responseInstance = instanceId, status = 200, requests = 0;
   const server = createServer((_req, response) => { requests++; response.statusCode = status; response.setHeader('X-Mote-Runtime-Instance', responseInstance); response.end('{"ok":true}'); });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { if (server.listening) await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); });
   const address = server.address(); assert.ok(address && typeof address !== 'string');
   await writeRuntimeListener(file, {version: 1, pid: 2147483647, port: address.port, address: address.address, instanceId});
   assert.equal(await probeRuntimeListener(file), false, 'the default local probe rejects a dead PID');
@@ -50,4 +50,7 @@ test('shared-network health requires the runtime HTTP identity while local healt
   assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking never accepts another instance');
   responseInstance = instanceId; status = 503;
   assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking still requires HTTP 200');
+  status = 200;
+  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  assert.equal(await probeRuntimeListener(file, {checkLocalPid: false}), false, 'shared networking rejects an unreachable runtime listener');
 });
