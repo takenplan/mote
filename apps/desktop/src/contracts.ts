@@ -81,6 +81,7 @@ export interface Status {
   screenPermission: string;
   platform: Platform;
   encryptedTokenStorage: boolean;
+  credentialStorage?: 'system' | 'json';
   config: PublicConfig;
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }

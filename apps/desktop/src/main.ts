@@ -25,12 +25,13 @@ import { openCentralBrowser,validateCentralWorkId } from './central-browser';
 import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { resolveProfile, profileDefaults } from './profile';
+import { resolveProfile, profileDefaults, isDevelopmentProfile } from './profile';
+import { desktopSecretStorage } from './secret-storage';
 import { EventJournal, buildSupportBundle, failureCode, type EventStage } from './support';
 import { pathToFileURL } from 'node:url';
 import { readFile, realpath, stat, writeFile, open, mkdir } from 'node:fs/promises';
 import { currentPlatform, Collector } from './collector';
-import { ConfigStore, updateConfig } from './config';
+import { ConfigStore, updateConfig, signedOutConfig } from './config';
 import { LocalSourceManager } from './source-manager';
 import { normalizeSourceOptions } from './source-types';
 import { DesktopUpdater } from './updater';
@@ -47,6 +48,7 @@ import type { Config, ConfigUpdate, Status } from './contracts';
 const defaultDataDirectory = app.getPath('userData');
 const developmentBuild=Boolean((require('../package.json') as {moteDevelopment?:boolean}).moteDevelopment);
 const profile = resolveProfile(process.argv, developmentBuild?{...process.env,MOTE_PROFILE:process.env.MOTE_PROFILE??'dev'}:process.env, defaultDataDirectory);
+const developmentProfile = isDevelopmentProfile(profile, developmentBuild);
 if (!profile.defaultProfile) {
   mkdirSync(profile.dataDirectory, { recursive: true, mode: 0o700 });
   const sessionDirectory = join(profile.dataDirectory, 'session');
@@ -103,7 +105,7 @@ const events = new EventJournal(join(profile.dataDirectory, 'diagnostics'), () =
 let pendingNoteStatus = () => ({ count: 0, unbound: true, baseRecords: undefined as number | undefined });
 function includePreparedNote(status: Status): Status { const note = pendingNoteStatus(); return { ...status, sync: { ...status.sync, pendingRecords: (note.baseRecords ?? status.sync.pendingRecords) + note.count, localBacklogUnbound: (note.baseRecords ?? status.sync.pendingRecords) + note.count > 0 && note.unbound } }; }
 let storageStatus: () => Status['storage'] = () => undefined;
-function clientStatus(): Status { return { ...includePreparedNote(collector.status()), operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
+function clientStatus(): Status { return { ...includePreparedNote(collector.status()), operations: backgroundJobs.snapshot(), storage: storageStatus(), credentialStorage: developmentProfile ? 'json' : 'system', environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
 const backgroundJobs = new BackgroundJobs();
 let controlChain: Promise<unknown> = Promise.resolve();
 
@@ -113,6 +115,7 @@ function serialize<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 function encryptedStorageAvailable(): boolean {
+  if (developmentProfile) return false;
   return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
 }
 let browserLogin: ((page?:string,evidenceId?:string,durationMs?:number,workId?:string)=>Promise<void>)|undefined;
@@ -138,7 +141,7 @@ function trayIcon(): Electron.NativeImage {
   return icon;
 }
 function updateUi(status: Status): void {
-  status = { ...includePreparedNote(status), operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
+  status = { ...includePreparedNote(status), operations: backgroundJobs.snapshot(), storage: storageStatus(), credentialStorage: developmentProfile ? 'json' : 'system', environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
   if (window && !window.isDestroyed()) window.webContents.send('mote:status', status);
   tray?.setToolTip(moteText("Mote [{0}] · {1} · 待上传 {2}", profile.name, status.running ? moteText("采集中") : moteText("已停止"), status.queueDepth));
   tray?.setContextMenu(Menu.buildFromTemplate([
@@ -171,11 +174,7 @@ else {
     await mkdir(profile.dataDirectory, { recursive: true, mode: 0o700 });
     const dataDirectory = await realpath(profile.dataDirectory);
     await ensureStorageFormat(dataDirectory,['config.json','queue','notes','local-sources','content-key.json']);
-    const secrets = {
-      available: encryptedStorageAvailable,
-      encrypt: (value: string) => safeStorage.encryptString(value),
-      decrypt: (value: Buffer) => safeStorage.decryptString(value),
-    };
+    const secrets = desktopSecretStorage(profile, developmentBuild, () => safeStorage);
     const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
     settings = await store.load();
     await store.save(settings); // Persist stable device identity before the first observation.
@@ -360,7 +359,7 @@ else {
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
     handle('mote:connection-confirm', (id, origin, deviceName) => serialize(async () => { await connectionChange(async () => {
-      if (!encryptedStorageAvailable()) throw new Error(moteText("系统加密存储不可用，不能交换并保存凭据"));
+      if (!secrets.available()) throw new Error(moteText("系统加密存储不可用，不能交换并保存凭据"));
       if (typeof deviceName !== 'string') throw new Error('Invalid device name');
       const named = updateConfig(settings, { ...settings, deviceName });
       const result = await onboarding.redeem(id, origin, named, currentPlatform);
@@ -533,10 +532,10 @@ else {
     let loginGeneration=0;
     const endLogin=()=>serialize(async()=>{
       loginGeneration++;
-      const token=connectionToken(settings);
+      const previous=settings, token=connectionToken(previous);
       // Locally sign out even when the node is offline; never fall back to another credential.
-      await pausedSettings(()=>applySettings({...settings,authSignedOut:true}));
-      if(token)await loginRequest(settings,'/api/login/logout',{},token).catch(()=>{});
+      await pausedSettings(()=>applySettings(signedOutConfig(previous)));
+      if(token)await loginRequest(previous,'/api/login/logout',{},token).catch(()=>{});
       updateUi(clientStatus());
     });
     const installLogin=async(token:string,durationMs=30*86400000,expectedGeneration=loginGeneration)=>{

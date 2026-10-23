@@ -31,7 +31,7 @@ internal object CentralDraftWrites {
 
 internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, private val directory: File) {
     val client get() = requireNotNull(ui.client)
-    private val cipher = SecretBox()
+    private val cipher = ui.secretBox()
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)

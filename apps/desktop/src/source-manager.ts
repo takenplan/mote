@@ -162,7 +162,9 @@ export class LocalSourceManager {
     await this.interrupt();
     const binding = sourceConnectionBinding(connection);
     const switchingBucket = binding !== this.binding;
-    if (!switchingBucket) this.nodeBinding.assertChange(connection, (this.connectionActivity().pending > 0));
+    // Logout suspends authorization, while the durable queue retains its original owner.
+    const retainingBinding = connection.authSignedOut === true && !connection.token && !switchingBucket && connection.serverUrl === this.connection.serverUrl;
+    if ((!switchingBucket || (connection.authSignedOut && !connection.token)) && !retainingBinding) this.nodeBinding.assertChange(connection, (this.connectionActivity().pending > 0));
     if (switchingBucket) {
       const dirty = new Set(this.sources.map(s => s.id));
       // Persist before mutating the connection so an I/O failure can retain the old in-memory node.
@@ -171,7 +173,7 @@ export class LocalSourceManager {
       for (const source of this.sources) { const engine = new SourceSync(join(this.directory, 'nodes', binding, source.id + '.json')); await engine.initialize(); engines.set(source.id, engine); }
       this.binding = binding; this.engines = engines; this.states.clear(); this.readable.clear(); this.metadataDirty = dirty; this.metadataDirtyAt ??= new Date().toISOString();
     }
-    await this.nodeBinding.commit(connection, !switchingBucket && (this.connectionActivity().pending > 0));
+    if (!retainingBinding) await this.nodeBinding.commit(connection, !switchingBucket && (this.connectionActivity().pending > 0));
     this.connection = connection; void this.sync(true);
   }
   async sync(force = true): Promise<void> {

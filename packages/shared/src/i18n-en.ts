@@ -1,5 +1,16 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "凭据存储方式与当前 Profile 不匹配；请保留原目录并使用新的 Profile 重新登录。": "Credential storage does not match this profile. Keep the original directory and sign in with a new profile.",
+  "开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。": "Development stores credentials in private local JSON files without using the system credential store.",
+  "采集器 · 仅同步本设备": "Collector · sync this device only",
+  "设备权限": "Device permissions",
+  "本人客户端 · 完整权限": "Personal client · full access",
+  "独立采集器 · 仅同步": "Standalone collector · sync only",
+  "仅供独立采集程序使用：同步绑定设备的资料和来源，不能浏览归档或管理中央。Mac 和 Android 完整客户端请选择本人客户端。": "For standalone collection programs: sync the bound device’s content and sources without archive browsing or Central management. Choose Personal client for the full Mac or Android app.",
+  "重新配对时，请选择原设备以保留身份。成功配对后会替换该设备同权限类型的旧凭据。": "Select the original device when pairing again to retain its identity. Successful pairing replaces its previous credentials of the same permission type.",
+  "将邀请交给独立采集程序": "Give this invitation to the standalone collector",
+  "采集程序兑换后应检查 collector 身份和采集协议。此邀请不用于 Mac 或 Android 完整客户端登录。": "After redemption, the collector must verify its collector identity and intake protocol. This invitation cannot sign in to the full Mac or Android app.",
+
   "屏幕录制": "Screen Recording",
   "辅助功能": "Accessibility",
   "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。": "Content: extract article or product fields first, falling back to screenshots when structured content is unavailable.",

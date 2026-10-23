@@ -425,7 +425,9 @@ function render(status: import('./contracts').Status): void {
   if (status.lastUploadError) uploadInfo.push(status.lastUploadError);
   if (status.lastUploadAt) uploadInfo.push(moteText("最近上传 {0}", new Date(status.lastUploadAt).toLocaleTimeString(getLocale(), { hour12: false })));
   setText('upload-info', uploadInfo.join(' · '));
-  if (!status.encryptedTokenStorage) byId('token-hint').textContent = moteText("系统加密存储不可用，无法保存令牌。");
+  byId('token-hint').textContent = status.credentialStorage === 'json'
+    ? moteText("开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。")
+    : status.encryptedTokenStorage ? moteText("使用系统密钥存储加密；不会展示已有令牌。") : moteText("系统加密存储不可用，无法保存令牌。");
 
   if (status.diagnostics) {
     const d = status.diagnostics, latest = d.latest;

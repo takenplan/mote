@@ -25,7 +25,7 @@ class ConnectionClient(private val context: Context) {
                 validateResponse(body, invitation.serverUrl)
                 body!!.put("invitationHash", hash).put("deviceId", settings.deviceId)
                 val temp = File(pending.parentFile, "connection-pending.tmp")
-                try { FileOutputStream(temp).use { it.write(SecretBox().seal(body.toString().toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(pending)) }
+                try { FileOutputStream(temp).use { it.write(context.secretBox().seal(body.toString().toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(pending)) }
                 finally { temp.delete() }
                 body
             }
@@ -44,7 +44,7 @@ class ConnectionClient(private val context: Context) {
     }
     private fun readPending(): JSONObject {
         if (!pending.exists() || pending.length() > 16384) throw ConnectionFailure("no_pending")
-        val response = JSONObject(String(SecretBox().open(pending.readBytes()), Charsets.UTF_8))
+        val response = JSONObject(String(context.secretBox().open(pending.readBytes()), Charsets.UTF_8))
         if (response.optString("deviceId") != settings.deviceId) throw ConnectionFailure("identity")
         return response
     }

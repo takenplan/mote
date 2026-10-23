@@ -85,8 +85,8 @@ class CalendarActions(private val context: Context, private val foreground: Bool
         val origin = settings.read().server.trimEnd('/')
         val root = File(context.noBackupFilesDir, "calendar-actions/${SourceRules.hash(origin + settings.deviceId)}").apply { mkdirs() }
         val ledger = File(root, operation)
-        fun save(value: String) { val temp = File(root, "$operation.tmp"); FileOutputStream(temp).use { it.write(SecretBox().seal(value.toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(ledger)) }
-        val previous = if (ledger.exists()) String(SecretBox().open(ledger.readBytes()), Charsets.UTF_8) else null
+        fun save(value: String) { val temp = File(root, "$operation.tmp"); FileOutputStream(temp).use { it.write(context.secretBox().seal(value.toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(ledger)) }
+        val previous = if (ledger.exists()) String(context.secretBox().open(ledger.readBytes()), Charsets.UTF_8) else null
         try {
             var externalId = previous?.takeIf { it != "attempting" }
             if (externalId == null) {

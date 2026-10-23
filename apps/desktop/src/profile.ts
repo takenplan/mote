@@ -4,6 +4,9 @@ import { defaultConfig, isLoopback, updateConfig, validateServerUrl } from './co
 import type { Config } from './contracts';
 
 export interface DesktopProfile { name: string; defaultProfile: boolean; dataDirectory: string; defaultServerUrl: string }
+export function isDevelopmentProfile(profile: DesktopProfile, developmentBuild = false): boolean {
+  return developmentBuild || profile.name === 'dev';
+}
 /** Resolve before Electron acquires its instance lock or creates a browser session. */
 export function resolveProfile(argv: readonly string[], env: NodeJS.ProcessEnv, defaultDirectory: string): DesktopProfile {
   const selected: string[] = [];
