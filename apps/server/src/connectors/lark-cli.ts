@@ -19,7 +19,7 @@ export type LarkCommand =
   | {kind:'wiki-list';spaceId:string;parent:string;pageToken?:string}
   | {kind:'minutes-search';start:string;end:string;pageToken?:string}
   | {kind:'minutes-metadata';id:string}
-  | {kind:'minutes-transcript';id:string;outputDir:string}
+  | {kind:'minutes-transcript';id:string}
   | {kind:'minutes-media';id:string;output:string};
 export type LarkRunner=(command:LarkCommand,options?:{signal?:AbortSignal;onOutput?:(chunk:string)=>void})=>Promise<string>;
 
@@ -41,7 +41,9 @@ export function larkArguments(command:LarkCommand):string[]{
     case 'wiki-list':return ['wiki','nodes','list','--params',JSON.stringify({space_id:command.spaceId,parent_node_token:command.parent,page_size:50,...(command.pageToken?{page_token:command.pageToken}:{})}),'--as','user','--format','json'];
     case 'minutes-search':return ['minutes','+search','--owner-ids','me','--start',command.start,'--end',command.end,'--page-size','30',...(command.pageToken?['--page-token',command.pageToken]:[]),'--as','user','--format','json'];
     case 'minutes-metadata':return ['minutes','minutes','get','--params',JSON.stringify({minute_token:command.id}),'--as','user','--format','json'];
-    case 'minutes-transcript':return ['minutes','+detail','--minute-tokens',command.id,'--transcript','--output-dir',command.outputDir,'--as','user','--format','json'];
+    // +detail flattens per-minute API errors into prose in a batch envelope.
+    // The same read endpoint preserves typed errors and the original text.
+    case 'minutes-transcript':return ['api','GET',`/open-apis/minutes/v1/minutes/${encodeURIComponent(command.id)}/artifacts`,'--as','user','--format','json'];
     case 'minutes-media':return ['minutes','+download','--minute-tokens',command.id,'--output',command.output,'--as','user','--format','json'];
     case 'install':throw new ConnectorError('lark_command_invalid');
   }
@@ -65,6 +67,9 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
     let executable:string;try{executable=optionsConfig.binary??managedCliBinary('lark');}catch{throw new ConnectorError('lark_cli_platform_unsupported',503);}
     const args=larkArguments(command);
     const timeout=['setup','complete'].includes(command.kind)?610000:command.kind==='minutes-media'?300000:60000;
+    // JSON escaping and the other artifact fields must not shrink the existing
+    // 16 MiB decoded transcript limit, which the adapter enforces separately.
+    const maxOutputBytes=(command.kind==='minutes-transcript'?128:8)*1024*1024;
     return new Promise<string>((ok,fail)=>{
       let stdout='',stderr='',size=0,settled=false,terminal:ConnectorError|undefined;
       const child=spawn(executable,args,{cwd:root,env,shell:false,stdio:['pipe','pipe','pipe'],detached:process.platform!=='win32',windowsHide:true});
@@ -75,7 +80,7 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
       options.signal?.addEventListener('abort',abort,{once:true});
       if(options.signal?.aborted)abort();
       child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
-      const read=(chunk:string,isError:boolean)=>{if(terminal)return;size+=Buffer.byteLength(chunk);if(size>8*1024*1024){terminal=new ConnectorError('lark_output_too_large',413);stop();return;}const text=chunk;if(isError)stderr+=text;else stdout+=text;try{options.onOutput?.(text);}catch{terminal=new ConnectorError('lark_operation_cancelled',409);stop();}};
+      const read=(chunk:string,isError:boolean)=>{if(terminal)return;size+=Buffer.byteLength(chunk);if(size>maxOutputBytes){terminal=new ConnectorError('lark_output_too_large',413);stop();return;}const text=chunk;if(isError)stderr+=text;else stdout+=text;try{options.onOutput?.(text);}catch{terminal=new ConnectorError('lark_operation_cancelled',409);stop();}};
       child.stdout.on('data',chunk=>read(chunk,false));child.stderr.on('data',chunk=>read(chunk,true));
       child.on('error',error=>finish(new ConnectorError((error as NodeJS.ErrnoException).code==='ENOENT'?'lark_cli_missing':'lark_process_failed',503)));
       child.on('close',code=>{

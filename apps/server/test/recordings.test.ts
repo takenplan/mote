@@ -18,6 +18,7 @@ import {ProviderFailure} from '@mote/shared';
 import {planGeneratedMemory,generatedMemoryOutput} from './fixtures/memory-planning.js';
 import {recordingMemoryRecipe} from '../src/connectors/recording-memory.js';
 import {ConnectorError} from '../src/connectors/types.js';
+import {createLarkRunner} from '../src/connectors/lark-cli.js';
 const raw='Generated diary export\n\nOwner 00:00:00.000\nI felt proud of finishing a generated prototype.\n\nOwner 00:00:02.500\nI prefer quiet mornings for focused work.\n';
 const selection={enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00:00Z',autoSync:false,backupAudio:true};
 const wav=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
@@ -153,7 +154,7 @@ test('export parsers preserve speaker/timeline, long speech, structured DingTalk
 
 test('vendor adapters retain source corpus dates and validate actual envelopes and controlled exports',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-feishu-format-'));t.after(()=>rm(directory,{recursive:true,force:true}));
- const provider=createFeishuRecordings(directory,async command=>{switch(command.kind){case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});case 'minutes-metadata':return JSON.stringify({data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});case 'minutes-transcript':{const path=resolve(directory,'lark-runtime',command.outputDir,'transcript.txt');await writeFile(path,raw);return JSON.stringify({data:{minutes:[{minute_token:'r1',artifacts:{transcript_file:path}}]}});}case 'minutes-media':await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{}';default:return '{}';}});
+ const provider=createFeishuRecordings(directory,async command=>{switch(command.kind){case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});case 'minutes-metadata':return JSON.stringify({data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});case 'minutes-transcript':return JSON.stringify({ok:true,data:{transcript:raw}});case 'minutes-media':await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{}';default:return '{}';}});
  const account=await provider.account(),signal=new AbortController().signal;assert.equal((await provider.discover(account,selection,signal)).ids[0],'r1');const metadata=await provider.metadata(account,'r1',signal);assert.equal(metadata.recordedAt,undefined);assert.ok(metadata.createdAt);assert.equal((await provider.transcript(account,metadata,signal)).transcript!.segments.length,2);assert.equal((await provider.media(account,metadata,signal)).mimeType,'audio/wav');
  const dws=createDingtalkRecordings(directory,async command=>command.kind==='status'?{authenticated:true,corp_id:'corp',user_id:'user'}:command.kind==='metadata'?{data:{taskUuid:'d1',basic:{result:{uuid:'d1',title:'Generated',startTime:Date.parse('2026-09-20T00:00:00Z'),duration:5000}}}}:command.kind==='search'?{data:{minutes:[{taskUuid:'d1'}],complete:true},meta:{pagination:{endpoint_exhausted:true}}}:{data:{taskUuid:'d1',complete:true,paragraphList:[{paragraph:'Generated'}]}});
  const da=await dws.account(),dm=await dws.metadata(da,'d1',signal);assert.equal(dm.title,'Generated');assert.equal(dm.createdAt,'2026-09-20T00:00:00.000Z');assert.equal(dm.durationMs,5000);assert.equal((await dws.discover(da,selection,signal)).ids[0],'d1');assert.ok((await dws.transcript(da,dm,signal)).transcript!.segments.length);
@@ -234,6 +235,53 @@ test('empty exports remain available without full-text or Memory, survive restar
  f.state.text=raw;await f.request('POST','/sync');await f.flush();await f.memory();status=await f.request('GET');assert.equal(status.counts.empty,0);assert.equal(status.counts.transcripts,1);assert.ok(f.models.length>0);assert.equal(f.calls.filter(c=>c.phase==='media').length,1);
  assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).toString(),'2026-09-20 08:00:00 CST|5s\n\nKeywords:\n');
 });
+
+test('successful empty native Feishu artifacts retain a zero-byte original across restart and ordinary text recovery',async t=>{
+ let text='',downloads=0;
+ const f=await fixture(t,directory=>createFeishuRecordings(directory,async command=>{
+  switch(command.kind){
+   case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});
+   case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});
+   case 'minutes-metadata':return JSON.stringify({ok:true,data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});
+   case 'minutes-transcript':return JSON.stringify({ok:true,data:{transcript:text}});
+   case 'minutes-media':downloads++;await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{"ok":true}';
+   default:return '{}';
+  }
+ }));
+ await f.connect();await f.flush();await f.memory();let status=await f.request('GET');assert.equal(status.counts.empty,1);assert.equal(status.counts.transcripts,0);assert.equal(status.counts.audio,1);assert.equal(status.counts.failed,0);assert.equal(f.models.length,0);assert.equal(f.node.materials.list({sourceId:status.sourceId}).items.length,0);
+ const item=(await f.request('GET','/items?includeExports=true')).items[0];assert.equal(item.empty,true);assert.equal(item.captureId,undefined);assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).length,0);
+ await f.restart();await f.flush();await f.memory();assert.equal((await f.request('GET')).counts.empty,1);assert.equal(f.models.length,0);assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).length,0);
+ text=raw;await f.request('POST','/sync');await f.flush();await f.memory();status=await f.request('GET');assert.equal(status.counts.empty,0);assert.equal(status.counts.transcripts,1);assert.equal(status.counts.audio,1);assert.equal(downloads,1);assert.ok(f.models.length>0);assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).length,0,'later speech does not erase the earlier empty original');
+});
+
+test('typed native transcript throttling survives restart, recovers automatically and retains finite exhaustion and unknown failures',async t=>{
+ const cliDirectory=await mkdtemp(join(tmpdir(),'mote-transcript-throttle-')),binary=join(cliDirectory,'vendor'),control=join(cliDirectory,'control'),log=join(cliDirectory,'calls');t.after(()=>rm(cliDirectory,{recursive:true,force:true}));
+ await writeFile(control,JSON.stringify({remaining:1,type:'rate'}));
+ await writeFile(binary,`#!/usr/bin/env node
+ const fs=require('node:fs'),args=process.argv.slice(2);if(args.includes('--version'))console.log('lark-cli 1.0.98');else{
+ fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');const file=${JSON.stringify(control)},state=JSON.parse(fs.readFileSync(file,'utf8'));
+ if(args[0]!=='api'){console.error('[minutes +detail] generated progress');console.log(JSON.stringify({ok:false,data:{minutes:[{minute_token:'r1',error:'Generated provider prose'}]}}));process.exitCode=1;}
+ else if(state.remaining>0){state.remaining--;fs.writeFileSync(file,JSON.stringify(state));console.error(JSON.stringify({ok:false,error:state.type==='rate'?{type:'api',subtype:'rate_limit',code:99991400,retryable:true}:{type:'api',subtype:'unknown',retryable:true,message:'Generated rate limit prose is not a typed cause'}}));process.exitCode=1;}
+ else console.log(JSON.stringify({ok:true,data:{transcript:${JSON.stringify(raw)}}}));}`,{mode:0o700});
+ const f=await fixture(t,directory=>{const native=createLarkRunner(directory,{localProfile:true,binary});return createFeishuRecordings(directory,async(command,options)=>{
+  switch(command.kind){
+   case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});
+   case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});
+   case 'minutes-metadata':return JSON.stringify({ok:true,data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});
+   case 'minutes-transcript':return native(command,options);
+   case 'minutes-media':await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{"ok":true}';
+   default:return '{}';
+  }
+ });});
+ const row=()=>f.node.store.db.prepare("SELECT id,state,attempts,error,available_at FROM execution_steps WHERE kind='recording.feishu.transcript' ORDER BY rowid DESC LIMIT 1").get()!;
+ const before=Date.now();await f.request('POST','/connect');await f.request('PUT','/selection',{...selection,start:'2026-09-10T00:00:00Z'});await f.flush();const waiting=row();assert.equal(waiting.state,'waiting');assert.equal(waiting.error,'recording_rate_limited');assert.equal(waiting.attempts,1);assert.ok(Number(waiting.available_at)>=before+60000);assert.equal((await f.request('GET')).counts.audio,1);
+ await f.restart();await f.flush();assert.equal(row().available_at,waiting.available_at);assert.equal((await readFile(log,'utf8')).trim().split('\n').length,1);
+ f.node.store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE id=?').run(waiting.id);await f.flush();await f.memory();assert.equal(row().state,'succeeded');assert.equal(row().attempts,2);assert.equal((await f.request('GET')).counts.transcripts,1);const models=f.models.length;
+ await writeFile(control,JSON.stringify({remaining:10,type:'rate'}));await f.request('POST','/sync');await f.flush();const repeated=row();assert.equal(repeated.state,'waiting');assert.equal(repeated.attempts,1);
+ for(let attempt=2;attempt<=3;attempt++){f.node.store.db.prepare('UPDATE execution_steps SET available_at=0 WHERE id=?').run(repeated.id);await f.flush();assert.equal(row().attempts,attempt);assert.equal(row().state,attempt===3?'failed':'waiting');assert.equal(row().error,'recording_rate_limited');}
+ const calls=(await readFile(log,'utf8')).trim().split('\n').length;await f.flush();assert.equal((await readFile(log,'utf8')).trim().split('\n').length,calls);
+ await writeFile(control,JSON.stringify({remaining:10,type:'unknown'}));await f.request('POST','/retry');await f.flush();assert.equal(row().state,'failed');assert.equal(row().attempts,1);assert.equal(row().error,'recording_provider_failed');await f.memory();assert.equal(f.models.length,models);assert.equal((await f.request('GET')).counts.audio,1);
+});
 test('format structure distinguishes empty intervals, unsupported text and incomplete vendor exports',()=>{
  assert.equal(feishuTranscript('',5000),null);assert.equal(feishuTranscript('A 00:00:00.000\n\n',5000),null);
  const partial=feishuTranscript('A 00:00:00.000\nWords\nB 00:00:02.000\n\nC 00:00:03.000\nMore',5000)!;
@@ -254,7 +302,7 @@ test('old failures stay visible while all current recording steps paginate throu
 test('Feishu adapter retains unsupported exports and only explicit upstream not-ready is transient',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-feishu-empty-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  let response:unknown,content='Unknown generated export';
- const provider=createFeishuRecordings(directory,async command=>{if(command.kind!=='minutes-transcript')return '{}';if(response)return JSON.stringify(response);const path=resolve(directory,'lark-runtime',command.outputDir,'transcript.txt');await writeFile(path,content);return JSON.stringify({data:{minutes:[{minute_token:'r1',artifacts:{transcript_file:path}}]}});});
+ const provider=createFeishuRecordings(directory,async command=>{if(command.kind!=='minutes-transcript')return '{}';if(response)return JSON.stringify(response);return JSON.stringify({ok:true,data:{transcript:content}});});
  const account={id:'generated'},metadata={id:'r1',title:'Generated',durationMs:5000},signal=new AbortController().signal;
  const unsupported=await provider.transcript(account,metadata,signal);assert.equal(unsupported.rawText,content);assert.equal(unsupported.formatError,'recording_transcript_format_unsupported');
  content='2026-09-20 08:00:00 CST|5s\n\nKeywords:\n';assert.equal((await provider.transcript(account,metadata,signal)).transcript,null);

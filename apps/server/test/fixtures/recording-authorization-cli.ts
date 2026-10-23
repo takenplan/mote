@@ -22,7 +22,7 @@ export async function generatedRecordingCli(directory:string,provider:'feishu'|'
  if(args.includes('get'))return json({data:{minute:{token:'generated-recording',title:'Generated recording',create_time:'1789905600000',duration:'5000'}}});
  if(args.includes('+detail')&&provider==='dingtalk')return json({data:{'generated-recording':{basic:{result:{taskUuid:'generated-recording',title:'Generated recording',startTime:1789905600000,duration:5000}}}}});
  if(args.includes('+transcript'))return json({data:{taskUuid:'generated-recording',complete:true,paragraphList:[{paragraph:'Generated complete recording transcript.'}]}});
- if(args.includes('+detail')){const file=path.join(arg('--output-dir'),'transcript.txt');fs.writeFileSync(file,'Generated diary export\\n\\nOwner 00:00:00.000\\nGenerated complete recording transcript.\\n');return json({data:{minutes:[{minute_token:'generated-recording',artifacts:{transcript_file:file}}]}});}
+ if(args[0]==='api'&&args[1]==='GET'&&args[2]==='/open-apis/minutes/v1/minutes/generated-recording/artifacts')return json({ok:true,data:{transcript:'Generated diary export\\n\\nOwner 00:00:00.000\\nGenerated complete recording transcript.\\n'}});
  if(args.includes('+download')){const file=arg('--output');fs.writeFileSync(file,Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]));return provider==='feishu'?json({data:{}}):json({data:{ok:true,succeeded:1,results:[{taskUuid:'generated-recording'}]}});}
  process.exit(8);
  })().catch(()=>process.exit(7));`;
