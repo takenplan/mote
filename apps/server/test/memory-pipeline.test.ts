@@ -17,7 +17,7 @@ import {ProviderFailure} from '@mote/shared';
 function fixture(t:TestContext,beforeStoreClose?:()=>Promise<void>){
   const directory=mkdtempSync(join(tmpdir(),'mote-memory-generated-')),store=new Store(directory),sources=new SourceStore(store),memories=new MemoryStore(store);
   sources.register({id:'generated',name:'Generated archive',kind:'custom',deviceId:'generated-device',platform:'import'});
-  t.after(async()=>{if(beforeStoreClose)await beforeStoreClose();store.close();rmSync(directory,{recursive:true,force:true});});
+  t.after(async()=>{try{await beforeStoreClose?.();}finally{store.close();rmSync(directory,{recursive:true,force:true});}});
   return {directory,store,sources,memories};
 }
 const item=(externalId='a',text='合成原文：我计划学习 TypeScript，尚未开始。',revision='1',observedAt='2026-09-15T01:00:00Z')=>({externalId,text,revision,observedAt,title:'Generated record',kind:'file',layer:'original'});
