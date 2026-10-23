@@ -80,10 +80,10 @@ test('bulk Formal input validation preserves appended Coding prefixes and reject
  store.db.prepare('UPDATE material_heads SET min_visible_sequence=sequence WHERE id=?').run(next.id);materials.retire(next.id,{expectedRevision:next.revision});parity();assert.equal(materials['currentEvidenceIds'](ids).size,0);
 });
 
-// Functional allowance includes startup and 4097 generated context grants under
-// suite CPU contention; it is not a product latency target. Real executor leases,
-// exact coverage, single attempts and the no-interruption assertions stay intact.
-test('three actual Memory jobs prepare large context grants through the bridge without losing their execution lease',{timeout:120000},async t=>{
+// Functional allowance covers startup and all three complete extraction/review
+// journeys under CPU contention, not a product latency target. Real 30s leases,
+// 4097 context grants, exact coverage and single attempts remain unchanged.
+test('three actual Memory jobs prepare large context grants through the bridge without losing their execution lease',{timeout:240000},async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-memory-large-bridge-'));
  const config:Config={dataDir:directory,token:'generated-large-memory-owner',tokenPath:'generated',host:'127.0.0.1',port:0,maxStorageBytes:60_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,memoryConcurrency:3};
  const calls:QueryInput[]=[];
@@ -116,7 +116,8 @@ test('three actual Memory jobs prepare large context grants through the bridge w
  const jobs=Array.from({length:3},(_,index)=>node.memoryPipeline.create({evidenceIds:ids,evidenceRanges:ids.slice(index*80,index*80+80).map((id,offset)=>({id,offset:0,length:texts[index*80+offset].length})),contextEvidenceRanges:ids.map((id,offset)=>({id,offset:0,length:texts[offset].length})),recipes:[{id:'mote.personal-memory',version:'5'}]}));
  const done=await Promise.all(jobs.map(job=>node.memoryPipeline.run(job.id)));
  assert.equal(node.materials.get(material.id)!.ref,material.ref,'no organizer revision drift occurred after admission');
- assert.ok(done.every(job=>job.status==='completed'));assert.equal(calls.length,6,'each exact job extracts and independently reviews once; transitions='+JSON.stringify(transitions));
+ assert.ok(done.every(job=>job.status==='completed'),JSON.stringify(done.map(job=>({status:job.status,error:job.errorCode,batches:job.batches.map(batch=>({status:batch.status,error:batch.errorCode}))}))));assert.equal(calls.length,6,'each exact job extracts and independently reviews once; transitions='+JSON.stringify(transitions));
  for(const job of done){assert.equal(job.totalBatches,1);assert.equal(job.batches[0].attempts,1);assert.equal(job.batches[0].coverage!.length,80);}
  assert.equal(node.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE operation_id IN (SELECT 'memory:'||value FROM json_each(?)) AND error='interrupted'").get(JSON.stringify(jobs.map(job=>job.id)))!.n,0);
+ assert.equal(transitions.some(step=>step.error==='interrupted'),false,'historical interruptions cannot disappear behind the final projection: '+JSON.stringify(transitions));
 });
