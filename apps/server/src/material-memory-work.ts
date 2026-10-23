@@ -37,7 +37,8 @@ export class MaterialMemoryWork {
       material_id TEXT NOT NULL,scope TEXT NOT NULL,revision TEXT NOT NULL,required_json TEXT NOT NULL,ready_at INTEGER NOT NULL,
       job_id TEXT,error TEXT,input_key TEXT NOT NULL,auto_authorized INTEGER NOT NULL,binding_json TEXT,context_time TEXT,source_required_json TEXT NOT NULL,input_fingerprint TEXT,
       PRIMARY KEY(material_id,scope));
-      CREATE INDEX IF NOT EXISTS material_memory_requests_due ON material_memory_requests(ready_at,job_id);`);
+      CREATE INDEX IF NOT EXISTS material_memory_requests_due ON material_memory_requests(ready_at,job_id);
+      CREATE INDEX IF NOT EXISTS material_memory_requests_input ON material_memory_requests(input_key,scope,material_id);`);
     db.exec(`CREATE TRIGGER IF NOT EXISTS material_memory_forget BEFORE DELETE ON material_heads BEGIN
       INSERT OR IGNORE INTO material_memory_revocations SELECT job_id,material_id,revision FROM material_memory_requests WHERE material_id=old.id AND job_id IS NOT NULL;
       DELETE FROM memory_input_authorizations WHERE source_id=old.source_id AND input_key IN (SELECT input_key FROM material_memory_requests WHERE material_id=old.id);
