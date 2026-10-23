@@ -138,7 +138,7 @@ try {
   const envBeforeRollback = await readFile(dev.envFile);
   await run(dev, 'stop');
   // Write only inert fixture credentials. Google configuration is absent, so startup cannot contact Google.
-  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', 'mote', 'node', '-e', `const fs=require('node:fs');fs.mkdirSync('/data/connectors',{recursive:true,mode:0o700});fs.writeFileSync('/data/connectors/google-calendar.json',${JSON.stringify(JSON.stringify(credentials))},{mode:0o600});fs.writeFileSync('/data/connectors/opaque.json',JSON.stringify({credential:'synthetic-opaque-credential'}),{mode:0o600});`]);
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', 'mote', 'node', '-e', `const fs=require('node:fs');fs.writeFileSync('/data/content-key',${JSON.stringify(dev.env.MOTE_DATA_KEY)},{mode:0o600});fs.mkdirSync('/data/connectors',{recursive:true,mode:0o700});fs.writeFileSync('/data/connectors/google-calendar.json',${JSON.stringify(JSON.stringify(credentials))},{mode:0o600});fs.writeFileSync('/data/connectors/opaque.json',JSON.stringify({credential:'synthetic-opaque-credential'}),{mode:0o600});`]);
   await run(dev, 'start');
   await run(dev, 'rollback', ['--restore-data']);
   const current = await loadProfile(profilePaths('dev', home)); volumes.add(current.meta.volume);
@@ -156,6 +156,7 @@ try {
   // Assert inside the container; never print credential bodies, even synthetic ones.
   const restoredCredentials = { ...credentials, checkpoints: {} };
   await docker(['exec', restoredContainer, 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.deepEqual(JSON.parse(fs.readFileSync('/data/connectors/google-calendar.json','utf8')),${JSON.stringify(restoredCredentials)});assert.equal(fs.statSync('/data/connectors/google-calendar.json').mode&0o777,0o600);assert.equal(fs.statSync('/data/connectors/google-calendar.json').uid,process.getuid());assert.equal(fs.statSync('/data/connectors').mode&0o777,0o700);assert.equal(JSON.parse(fs.readFileSync('/data/connectors/opaque.json','utf8')).credential,'synthetic-opaque-credential');assert.equal(fs.existsSync('/data/connectors/.mote-rollback-connections.json'),false);`]);
+  await docker(['exec', restoredContainer, 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.readFileSync('/data/content-key','utf8'),${JSON.stringify(dev.env.MOTE_DATA_KEY)});const key=fs.statSync('/data/content-key');assert.equal(key.uid,process.getuid());assert.equal(key.gid,process.getgid());assert.equal(key.mode&0o777,0o600);assert.equal(fs.statSync('/data/connectors').gid,process.getgid());`]);
   const backupFolders = await readdir(join(dev.directory, 'backups'));
   assert.equal(backupFolders.some(name => name.startsWith('.connectors-')), false, 'Private handoff must be removed after rollback');
   for (const path of [current.meta.previous.backup, upgraded.meta.previous.backup]) {
