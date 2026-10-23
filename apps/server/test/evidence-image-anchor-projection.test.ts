@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
 import {createHash,randomUUID} from 'node:crypto';
 import {evidenceFixture} from './fixtures/evidence-projection.js';
 import {ScopedMemoryData} from '../src/scope/memory-data.js';
 import {PrivateSql,PrivateCursor,PrivateDataError} from '../src/scope/private-data-sql.js';
 import {PrivateData} from '../src/scope/private-data.js';
-import {EvidenceProjection,materialOriginalsSql,type EvidenceSelection} from '../src/scope/evidence-projection.js';
+import {EvidenceProjection,installEvidenceProjection,materialOriginalsSql,type EvidenceSelection} from '../src/scope/evidence-projection.js';
 import {memorySchema} from '../src/memory-schema.js';
 import {memoryBodyDigest} from '../src/memory-provider-contract.js';
 import {memoryEvidenceFingerprint} from '../src/memory-contract.js';
@@ -53,4 +54,42 @@ test('image projection retains current owner, full privacy closure and exact dir
  const bsql=new PrivateSql(f.db,'generated-b',()=>{}),bcursor=new PrivateCursor('generated-key','generated-host','generated-b'),bdata=new PrivateData(bsql,bcursor);bdata.registerSource({id:'generated-source',kind:'custom',name:'Generated B',deviceId:'generated-device',platform:'import',retention:'snapshot'});const bid=bdata.receiveSourceItems('generated-source',[{externalId:'visibility',revision:'1',observedAt:'2026-10-16T10:00:00Z',title:'Generated image',text:'',kind:'file',layer:'original',mimeType:'image/png'}]).receipts[0].id;assert.equal(bid,original.id);bsql.run('INSERT INTO ig_objects VALUES($user,?,?,?)',original.sha,96,0);bsql.run('INSERT INTO ig_originals VALUES($user,?,?,?,?,?,?)',original.ref,'generated-source',bid,original.sha,'image/png','archive');const bm=bdata.publishMaterial(JSON.parse(String(f.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision)!.json))),bmemory=new ScopedMemoryData(bsql,bdata,bcursor),bimage=bmemory.materialEvidence(bm.id,bm.revision).find(record=>record.imageMime==='image/png')!;assert.ok(bimage);assert.notEqual(bimage.id,image.id);
  const own=f.sql.get(`SELECT ${materialOriginalsSql('e','material_id','material_revision','e.id')} originals FROM mm_evidence e WHERE e.user_id=$user AND e.id=?`,image.id)!.originals;assert.equal(JSON.parse(String(own)).imageAnchor.evidenceId,image.id);const foreign=f.db.prepare(`SELECT ${materialOriginalsSql('e','material_id','material_revision','?')} originals FROM mm_evidence e WHERE e.user_id=$user AND e.id=?`).get({$user:'generated-a'},bimage.id,image.id)!;assert.equal(JSON.parse(String(foreign.originals)).imageAnchor,null,'actual other-owner image with equal original IDs and bytes provides no image descriptor');
  f.privateData.updateSource('generated-source',{enabled:false});assert.equal(f.data.page(range).rows.length,0);assert.throws(()=>f.projection.matches(image),PrivateDataError);assert.throws(()=>f.data.evidence([image.id]),PrivateDataError);
+});
+
+test('Memory pages project only their exact proof refs before LIMIT despite an owner-wide unrelated evidence catalog',t=>{
+ const f=fixture(t),selected=f.original('page-selected'),selectedMaterial=f.publish('page-selected',[selected.id]),selectedImage=f.image(selectedMaterial),selectedMemory=f.remember(selectedImage);
+ const late=f.original('page-late','2026-10-20T10:00:00Z'),lateImage=f.image(f.publish('page-late',[late.id])),lateMemory=f.remember(lateImage,'2026-10-20T12:00:00Z');
+ const excluded=f.original('page-excluded'),excludedImage=f.image(f.publish('page-excluded',[excluded.id]));f.remember(excludedImage);f.sql.run("UPDATE pd_captures SET json=json_set(json,'$.privacy.excluded',1) WHERE user_id=$user AND id=?",excluded.id);
+ // Two canonical evidence rows per unrelated Material approximate the catalog
+ // that exposed the production fanout, without creating additional Memories.
+ f.sql.transaction(()=>{for(let index=0;index<600;index++){const original=f.original('page-unrelated-'+index);f.image(f.publish('page-unrelated-'+index,[original.id],{blocks:[{id:'text',kind:'text',format:'plain',text:('GENERATED_UNRELATED_'+index+' ').repeat(64),memberIds:['original-0']}]}));}});
+ assert.ok(Number(f.sql.get('SELECT count(*) n FROM mm_evidence WHERE user_id=$user')!.n)>=1200);
+
+ // Equal original and Material IDs in another account must not contribute a
+ // projection, even though that account also has a valid published Memory.
+ const bsql=new PrivateSql(f.db,'generated-b',()=>{}),bcursor=new PrivateCursor('generated-key','generated-host','generated-b'),bdata=new PrivateData(bsql,bcursor),bmemory=new ScopedMemoryData(bsql,bdata,bcursor);
+ bdata.registerSource({id:'generated-source',kind:'custom',name:'Generated B',deviceId:'generated-device',platform:'import',retention:'snapshot'});
+ const bid=bdata.receiveSourceItems('generated-source',[{externalId:'page-selected',revision:'1',observedAt:'2026-10-16T10:00:00Z',title:'Generated image',text:'',kind:'file',layer:'original',mimeType:'image/png'}]).receipts[0].id;assert.equal(bid,selected.id);
+ bsql.run('INSERT INTO ig_objects VALUES($user,?,?,?)',selected.sha,96,0);bsql.run('INSERT INTO ig_originals VALUES($user,?,?,?,?,?,?)',selected.ref,'generated-source',bid,selected.sha,'image/png','archive');
+ const bm=bdata.publishMaterial(JSON.parse(String(f.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',selectedMaterial.id,selectedMaterial.revision)!.json))),bimage=bmemory.materialEvidence(bm.id,bm.revision).find(record=>record.imageMime==='image/png')!;assert.ok(bimage);assert.notEqual(bimage.id,selectedImage.id);
+ const foreignMemory=memorySchema.parse({...selectedMemory,id:randomUUID(),fingerprint:hash(['foreign-memory',bimage.id]),evidenceIds:[bimage.id]});
+ bsql.run('INSERT INTO mm_records VALUES($user,?,?,?,?,?,?,?)',foreignMemory.id,foreignMemory.version,foreignMemory.fingerprint,memoryBodyDigest(foreignMemory),JSON.stringify(bmemory.binding()),JSON.stringify(foreignMemory),foreignMemory.createdAt);bsql.run('INSERT INTO mm_dependencies VALUES($user,?,?,?)',foreignMemory.id,bimage.id,memoryEvidenceFingerprint(bimage));
+
+ const oracle=new DatabaseSync(':memory:');t.after(()=>oracle.close());installEvidenceProjection(oracle);
+ const project=oracle.prepare('SELECT me_material_matches(?,?,?,?,?) eligible');let calls=0;const projected=new Set<string>();
+ // Count the real projector rather than replacing eligibility with a constant.
+ // A separate connection avoids re-entering the statement under observation.
+ f.db.function('me_material_matches',{deterministic:true},(json,originals,createdAt,scope,blockId)=>{
+  calls++;const anchor=JSON.parse(String(originals)).imageAnchor;projected.add(anchor?String(anchor.evidenceId):'non-image:'+String(blockId));
+  return Number(project.get(json,originals,createdAt,scope,blockId)!.eligible);
+ });
+ const proofRefs=[selectedImage.id,lateImage.id,excludedImage.id],proofCount=Number(f.sql.get("SELECT sum(json_array_length(json,'$.evidenceIds')) n FROM mm_records WHERE user_id=$user")!.n);assert.equal(proofCount,proofRefs.length);
+ const page=(query:Parameters<ScopedMemoryData['page']>[0],expected:string[],predicates:number)=>{
+  calls=0;projected.clear();const result=f.data.page(query);assert.deepEqual(result.rows.map(row=>row.id).sort(),[...expected].sort());assert.equal(result.nextCursor,null);
+  if(expected.length)assert.ok(calls>0,'the measured query must execute the real projection');assert.ok(calls<=proofCount*predicates,`projected ${calls} times for ${proofCount} exact refs and ${predicates} predicates`);
+  assert.ok([...projected].every(id=>proofRefs.includes(id)),'unrelated or other-owner evidence must not enter the projector');assert.ok(!projected.has(bimage.id));
+ };
+ page({limit:100},[selectedMemory.id,lateMemory.id],1);
+ const scope={sourceId:'generated-source',source:'file' as const,after:'2026-10-16T09:00:00Z',before:'2026-10-16T11:00:00Z',limit:100};page(scope,[selectedMemory.id],2);
+ f.privateData.updateSource('generated-source',{enabled:false});page({limit:100},[],1);page(scope,[],2);
 });
