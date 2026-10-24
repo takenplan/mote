@@ -26,7 +26,9 @@ npm run start -w @mote/desktop
 npm run package -w @mote/desktop
 ```
 
-当前 DEV 包用 `MOTE_MAC_DEVELOPMENT=1 node scripts/release/mac-package.mjs` 生成；文件名按 `apps/desktop/package.json` 版本和当前架构生成，位于 `artifacts/release/`。普通 `npm run package -w @mote/desktop` 仍可生成本地 App。默认 ad-hoc 签名；Developer ID 与公证需配置 Apple 凭据，不能把本机构建当作已公证。当前公开发布只有 DEV ZIP，见 [发布流程](releasing.md)。
+当前 Dev 包用 `MOTE_BUILD_PROFILE=dev node scripts/release/mac-package.mjs` 生成；文件名按 `apps/desktop/package.json` 版本和当前架构生成，位于 `artifacts/release/`。普通 `npm run package -w @mote/desktop` 仍可生成本地 App。默认 ad-hoc 签名；Developer ID 与公证需配置 Apple 凭据，不能把本机构建当作已公证。
+
+收藏 [Mac Dev 下载入口](https://github.com/utopiafar/mote/releases?q=desktop-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，打开最新 Pre-release，点击 **Download Mac ZIP**。退出 Mote Collector Dev 后，解压并覆盖应用目录中的 `Mote Collector Dev.app`，保留包外资料目录。每次构建有独立的 `desktop-dev-<构建序号>-<短 SHA>` 标签，App 版本沿用组件版本，具体提交与签名模式见发布说明。Dev 的 Bundle ID 为 `dev.mote.collector.dev`，凭据使用私有本地文件。构建与发布命令见 [发布流程](releasing.md#日常-dev-构建)。
 
 Windows/Linux 可编译 TypeScript、运行界面和队列逻辑，但采集按钮被禁用。MVP 尚未接入其可靠前台/可见窗口身份与 OCR，不能以无过滤截图代替。
 
@@ -73,7 +75,7 @@ open -n "apps/desktop/release/mac-arm64/Mote Collector.app" --args --profile=dev
 
 `--profile` 优先于 `MOTE_PROFILE`。命名环境仅在 `MOTE_PROFILE` 精确匹配时才接受启动器注入的 `MOTE_URL` / `MOTE_TOKEN`；缺 profile 的 ambient 节点/令牌或切换 CLI profile 后遗留的凭据均不继承。它们只用于新环境首次配置，已有节点和已加密凭据始终成对保留。统一启动器从选定 `mote.yaml` 派生连接信息，`MOTE_CONFIG_FILE` 选择中央文件；采集器的本机采集、隐私与队列设置仍独立保存，不并入中央 YAML，也不另行寻找 `.env`。dev/test 等非 default、非 prod 环境的自动配置拒绝回环 47832；确需连接另一节点，用户仍可在原生设置中显式填写地址与新令牌。
 
-每个 profile 独立保存设备 UUID、Keychain 加密令牌、原生草稿、队列、模型和数值/事件诊断。浏览器中央页面使用浏览器自己的登录会话。新环境不自动复制模型或用户资料，可手动导入公开模型。支持包不跨环境读取。普通启动不会自动把 dev 变成日常环境；Finder 无参数启动进入 default。
+每个 profile 独立保存设备 UUID、连接令牌、原生草稿、队列、模型和数值/事件诊断。Dev 凭据使用私有本地文件，Prod 保留系统保护。浏览器中央页面使用浏览器自己的登录会话。新环境不自动复制模型或用户资料，可手动导入公开模型。支持包不跨环境读取。普通启动不会自动把 dev 变成日常环境；Prod 包从 Finder 无参数启动进入 default，独立 Dev 包默认进入 dev。
 
 default 以外的 profile 不注册系统默认登录项，避免 macOS 丢失启动参数后进入 default；界面给出提示。需使用明确带 profile 的启动命令。default 可使用登录项开关。该限制依据 [Electron 登录项文档](https://www.electronjs.org/docs/latest/api/app#appsetloginitemsettingssettings)：`args` 选项仅支持 Windows。本轮没有更改本机真实登录项。
 

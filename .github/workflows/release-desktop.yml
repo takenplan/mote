@@ -43,11 +43,10 @@ jobs:
       - name: Build desktop workspace dependencies
         run: npm run build:libs
       - name: Verify desktop workspaces and generated fixtures
-        if: needs.version.outputs.profile == 'prod' || vars.MOTE_PRE_RELEASE_CHECKS == 'true'
         run: npm run check:desktop
       - name: Build and verify the selected Mac profile
         env:
-          MOTE_PRE_RELEASE_CHECKS: ${{ needs.version.outputs.profile == 'prod' && 'true' || vars.MOTE_PRE_RELEASE_CHECKS || 'false' }}
+          MOTE_PRE_RELEASE_CHECKS: 'true'
           MOTE_MAC_SIGNING_MODE: ${{ vars.MOTE_MAC_SIGNING_MODE || 'adhoc' }}
           CSC_LINK: ${{ secrets.MOTE_MAC_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MOTE_MAC_CERTIFICATE_PASSWORD }}
@@ -76,3 +75,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release/publish.mjs desktop
+  publish-dev:
+    if: needs.version.outputs.profile == 'dev' && github.ref == 'refs/heads/main'
+    needs: [version, package]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24' }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: "${{ needs.version.outputs.build_id }}", path: artifacts/release }
+      - name: Publish immutable Desktop Dev prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node apps/desktop/scripts/publish-dev.mjs

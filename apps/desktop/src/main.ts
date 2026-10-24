@@ -47,6 +47,7 @@ import type { Config, ConfigUpdate, Status } from './contracts';
 
 const defaultDataDirectory = app.getPath('userData');
 const developmentBuild=Boolean((require('../package.json') as {moteDevelopment?:boolean}).moteDevelopment);
+const desktopDevDownloadsUrl='https://github.com/utopiafar/mote/releases?q=desktop-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true';
 const profile = resolveProfile(process.argv, developmentBuild?{...process.env,MOTE_PROFILE:process.env.MOTE_PROFILE??'dev'}:process.env, defaultDataDirectory);
 const developmentProfile = isDevelopmentProfile(profile, developmentBuild);
 if (!profile.defaultProfile) {
@@ -410,7 +411,7 @@ else {
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
     handle('mote:installed-applications', () => process.platform === 'darwin' ? readInstalledApplications(helperPath).catch(() => []) : []);
-    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml', message:moteText('DEV 构建按提交保存在 GitHub Actions，请选择对应运行的 Artifact 下载并手动安装。'), installReason:''});
+    const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:desktopDevDownloadsUrl, message:moteText('查看版本说明与安装包'), installReason:''});
     handle('mote:update-status', () => developmentBuild ? devUpdateStatus() : updater!.status());
     handle('mote:update-channel', channel => updater!.setChannel(channel));
     handle('mote:update-check', () => developmentBuild ? devUpdateStatus() : updater!.check());
@@ -418,7 +419,7 @@ else {
     handle('mote:update-cancel', () => updater!.cancel());
     handle('mote:update-install', () => serialize(() => updater!.install(async () => { collector.stop(); await collector.settleCapture(); await settleNoteWork(); }, () => app.quit())));
     handle('mote:update-reveal', () => { const archive = updater!.archivePath(); if (archive) shell.showItemInFolder(archive); });
-    handle('mote:update-notes', async () => { const url = developmentBuild ? 'https://github.com/utopiafar/mote/actions/workflows/release-desktop.yml' : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
+    handle('mote:update-notes', async () => { const url = developmentBuild ? desktopDevDownloadsUrl : updater!.status().notesUrl; if (url) await shell.openExternal(url); });
     handle('mote:feedback', () => shell.openExternal(githubFeedbackUrl({
       version: app.getVersion(),
       platform: `${process.platform === 'darwin' ? 'macOS' : currentPlatform} ${process.getSystemVersion()} · ${process.arch}`,
