@@ -142,9 +142,10 @@ class UiPageServiceInstrumentedTest {
                 val id=articleRows.first {it.getString("source")=="ui_page"}.getString("id")
                 // Use the actual outbox wire payload; capture() above is a display projection.
                 val wire=context.queue().peekBatch(100).single {it.getString("id")==id}
+                assertEquals("Actual generated Android Java HTTP health",200,HttpJson.get(fixtureCentralUrl+"/api/health",fixtureCentralToken).first)
                 val (status,ack)=HttpJson.post(fixtureCentralUrl+"/api/captures",wire,fixtureCentralToken)
                 assertTrue("Actual generated Android HTTP intake status $status",status in 200..299)
-                assertEquals(id,ack!!.getString("id"));assertEquals("received",ack.getString("state"))
+                assertTrue("Matching durable ingress receipt",IngressV2Protocol.validCapture(id,ack))
             }
             begin("product")
             waitFor("two independent product field records"){rows().count { it.optString("source")=="ui_page" }>=2}

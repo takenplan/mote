@@ -2,7 +2,6 @@ package dev.mote.collector
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.MessageDigest
 
 /** Bounded named observations. Descriptions are supplied only by UiPageReader's safe leaf gate. */
 internal object NamedPageRules {
@@ -38,8 +37,7 @@ internal object NamedPageRules {
         val hashes=mutableMapOf<String,String>()
         fun hash(n:JSONObject,depth:Int=0):String {
             if(depth>32)return "";val id=n.getString("id");hashes[id]?.let{return it}
-            val data=JSONArray().put(n.optString("resourceId")).put(n.optString("role")).put(JSONArray(children(id).map {hash(it,depth+1)})).toString()
-            return MessageDigest.getInstance("SHA-256").digest(data.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}.also{hashes[id]=it}
+            return UiStructureHash.hash(n.optString("resourceId"),n.optString("role"),children(id).map {hash(it,depth+1)}).also{hashes[id]=it}
         }
         val regions=rule.optJSONObject("region")?.let{s->nodes.filter{matches(it,s)}}
         if(regions!=null&&regions.size!=1)return emptyList();val region=regions?.singleOrNull()?.getString("id")

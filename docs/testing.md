@@ -84,13 +84,16 @@ MOTE_TEST_SHOW_UI=1 npm run test:ui -w @mote/desktop
 Android instrumentation 和 ADB UI 验证优先连接专用、无窗口的 `mote_fixture_api35` 模拟器。以下命令在另一个终端启动它（SDK 路径按本机配置调整）：
 
 ```sh
-"${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" \
+env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy \
+  "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" \
   -avd mote_fixture_api35 -port 5580 -no-window -no-audio -read-only -no-snapshot-save
 adb -s emulator-5580 wait-for-device
 adb -s emulator-5580 shell getprop sys.boot_completed
 ```
 
 确认 `sys.boot_completed` 返回 `1` 后，再执行 [Android 说明](android.md) 中带明确 serial 的安装、instrumentation 或页面采集命令。`-no-window` 隐藏的是主机上的模拟器窗口，Android Activity 仍可在虚拟设备内部前台运行；不要把 Activity 压到后台，否则不能验证实际页面。`-no-audio` 禁止声音，`-read-only` 和 `-no-snapshot-save` 避免写回 AVD/快照。端口占用时选另一空闲偶数端口并同步更新 serial；不要停止不属于本轮测试的模拟器。
+
+模拟器会自动读取启动进程的 `http_proxy`，并可在虚拟网络层重定向 TCP；Android 全局代理显示为空也不能排除这一点。上面的命令仅为生成 fixture 的模拟器移除继承的代理变量，避免本机 Central 请求被送往代理；不修改宿主机代理设置。
 
 现有 Android E2E 脚本连接已启动的模拟器，不负责启动或隐藏已有窗口。不要对正在使用的真机直接执行会切换页面的测试；需要真机或系统权限交互时，单独安排和报告该验证。本轮结束后只清理本轮创建的测试进程和临时目录。
 

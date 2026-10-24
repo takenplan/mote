@@ -6,6 +6,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UiPageRulesTest {
+    @Test fun portableSubtreeJsonMatchesNodeIncludingEscapesAndUnpairedSurrogates() {
+        assertEquals("f7663005ee16f9914f4245624a683e396a5973f9735bfde989cf614aaf265fab",UiStructureHash.hash("dev.generated:id/root","android.view.ViewGroup",emptyList()))
+        assertEquals("5f54ca9724e6fcf1c8c7b6ff59d2c37549f9672a98274c6e6e7f89c1b3b0c1a0",UiStructureHash.hash("generated/路径","role\"\\\n😀",listOf("abc")))
+        assertEquals("516caa0ea195791312a69335fb752c858c2c1738d7d7536772ab10acfc1405cf",UiStructureHash.hash("\uD800","\uDC00",emptyList()))
+    }
     private fun canonical(value: Any?): String = when (value) {
         is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(",", "{", "}") { JSONObject.quote(it) + ":" + canonical(value.get(it)) }
         is JSONArray -> (0 until value.length()).joinToString(",", "[", "]") { canonical(value.get(it)) }

@@ -10,6 +10,14 @@ import org.junit.runner.RunWith
 /** Entirely synthetic nodes: never queries a real app, screenshot, or personal content. */
 @RunWith(AndroidJUnit4::class)
 class UiPageReaderInstrumentedTest {
+    @Test fun portableGuardMatchesNodeOnAndroidWithActualResourceIdSlashes() {
+        assertEquals("f7663005ee16f9914f4245624a683e396a5973f9735bfde989cf614aaf265fab", UiStructureHash.hash("dev.generated:id/root", "android.view.ViewGroup", emptyList()))
+        val at="2026-10-24T00:00:00.000Z"
+        val rule=org.json.JSONObject("""{"formatVersion":3,"id":"generated.guard","version":"1","platform":"android","appId":"fixture","appVersion":"1","kind":"visible_text","repeat":{"resourceId":"dev.generated:id/root"},"repeatSubtreeHash":"f7663005ee16f9914f4245624a683e396a5973f9735bfde989cf614aaf265fab","fields":{"visible_text":{"select":{"resourceId":"dev.generated:id/root"},"required":true}}}""")
+        val snapshot=org.json.JSONObject("""{"appId":"fixture","appVersion":"1","activity":"","observedAt":"$at","truncated":false,"nodes":[{"id":"0","resourceId":"dev.generated:id/root","role":"android.view.ViewGroup","text":"Generated guarded content"}]}""")
+        val page=NamedPageRules.extract(snapshot,rule,at).single()
+        assertEquals("Generated guarded content",NamedPageRules.text(page))
+    }
     private fun body(page:org.json.JSONObject):org.json.JSONArray {
         val fields=page.getJSONArray("objects").getJSONObject(0).getJSONArray("fields")
         return (0 until fields.length()).map(fields::getJSONObject).single {it.getString("name")=="body"}.getJSONArray("values")
