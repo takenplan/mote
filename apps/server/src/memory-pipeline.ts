@@ -825,14 +825,14 @@ export class MemoryPipeline {
     const batch=this.batch(batchId),job=this.storedJob(id);
     if(batch.status==='invalidated'&&batch.coverage){batch.coverage=batch.coverage.map(member=>({...member,state:'stale',reason:batch.errorCode??'evidence_changed'}));this.saveBatch(batch);}
     if(batch.status!=='invalidated'){
-      batch.status=step.state==='blocked'&&['memory_context_required','memory_owner_material_required','memory_evaluation_incomplete','memory_provider_unknown_result','memory_provider_unavailable'].includes(step.error??'')?'failed':step.state==='succeeded'?'completed':step.state==='running'?'running':step.state==='failed'?'failed':step.state==='stale'?'invalidated':'pending';
+      batch.status=step.state==='blocked'&&['memory_context_required','memory_owner_material_required','image_disclosure_disabled','memory_evaluation_incomplete','memory_provider_unknown_result','memory_provider_unavailable'].includes(step.error??'')?'failed':step.state==='succeeded'?'completed':step.state==='running'?'running':step.state==='failed'?'failed':step.state==='stale'?'invalidated':'pending';
       if(batch.coverage&&!batch.supersededBy&&['failed','stale','cancelled'].includes(step.state))batch.coverage=batch.coverage.map(member=>({...member,state:step.state==='stale'?'stale':step.error==='memory_coverage_incomplete'?'needs_context':'failed',reason:step.error}));
       batch.errorCode=step.error==='input_changed'?'evidence_changed':step.error;
       batch.availableAt=['rate_limited','provider_unavailable','provider_timeout','provider_network'].includes(step.error??'')?step.availableAt:undefined;
       if(step.state==='running'){batch.phase='extract';batch.stage='starting';batch.startedAt=new Date().toISOString();batch.lastActivityAt=batch.startedAt;}
       this.saveBatch(batch);
     }
-    if(step.state==='blocked'&&['memory_context_required','memory_owner_material_required'].includes(step.error??'')&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_input';job.errorCode=step.error;this.saveJob(job);}
+    if(step.state==='blocked'&&['memory_context_required','memory_owner_material_required','image_disclosure_disabled'].includes(step.error??'')&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_input';job.errorCode=step.error;this.saveJob(job);}
     if(step.state==='blocked'&&['semantic_processing_blocked','configuration_changed','model_unconfigured','provider_authentication','provider_quota','provider_endpoint','provider_redirect','memory_provider_unavailable'].includes(step.error??'')&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_model';job.errorCode=step.error;this.saveJob(job);}
     else if(['waiting','running'].includes(step.state)&&job.status==='waiting_for_model'&&this.active.has(id)){job.status='queued';delete job.errorCode;this.saveJob(job);}
     this.refreshJob(id);this.wake();
@@ -842,7 +842,7 @@ export class MemoryPipeline {
     if(job.status==='pausing'&&Number(counts.running)===0)job.status='paused';
     {
       const steps=this.store.db.prepare("SELECT state,error,available_at FROM execution_steps WHERE operation_id=? AND kind='memory.input'").all('memory:'+id),inputWaiting=steps.some(step=>['waiting','running'].includes(String(step.state))),inputFailure=steps.some(step=>['blocked','failed','stale','cancelled'].includes(String(step.state)));
-      const contextError=this.store.db.prepare("SELECT error FROM execution_steps WHERE operation_id=? AND kind='memory.batch' AND state='blocked' AND error IN ('memory_context_required','memory_owner_material_required') ORDER BY error LIMIT 1").get('memory:'+id)?.error,contextWaiting=Boolean(contextError),ownerWaiting=this.ownerQuestions?.pending(id)??false;
+      const contextError=this.store.db.prepare("SELECT error FROM execution_steps WHERE operation_id=? AND kind='memory.batch' AND state='blocked' AND error IN ('memory_context_required','memory_owner_material_required','image_disclosure_disabled') ORDER BY error LIMIT 1").get('memory:'+id)?.error,contextWaiting=Boolean(contextError),ownerWaiting=this.ownerQuestions?.pending(id)??false;
       const runnable=this.store.db.prepare("SELECT 1 FROM memory_batches b LEFT JOIN execution_steps e ON e.id=b.id WHERE b.job_id=? AND json_extract(b.json,'$.status')='pending' AND (e.id IS NULL OR e.state IN ('waiting','running') OR (e.state='blocked' AND e.error='awaiting_activation')) LIMIT 1").get(id);
       if(!['cancelled','paused','pausing'].includes(job.status))job.status=Number(counts.running)>0?'running':runnable?'queued':inputWaiting||contextWaiting||ownerWaiting?'waiting_for_input':job.status==='waiting_for_model'&&Number(counts.pending)>0?'waiting_for_model':Number(counts.failed)+Number(counts.invalidated)>0||inputFailure?'failed':'completed';
       if(job.status==='waiting_for_input'){job.errorCode=ownerWaiting?'memory_owner_input_required':contextWaiting?String(contextError):'memory_input_pending';job.availableAt=contextWaiting||ownerWaiting?undefined:Math.min(...steps.filter(step=>step.state==='waiting').map(step=>Number(step.available_at)||0));}
@@ -979,6 +979,7 @@ export class MemoryPipeline {
           if(error instanceof MemoryProviderError)return retainFailureContext(new ExecutionFailure(error.code==='unknown_result'||error.code==='unavailable'?'blocked':'permanent','memory_provider_'+error.code),failureContext(error));
           if(error instanceof AgentResponseError&&['output_limit','response_too_large'].includes(error.reason))return new ExecutionFailure('permanent','model_output_capacity');
           if(error instanceof ProviderFailure&&error.details.category==='transient'&&!recoverableProviderFailure(error))return retainFailureContext(new ExecutionFailure('permanent',error.details.code,error.details.retryAfterMs),failureContext(error));
+          if(error instanceof AgentResponseError&&error.reason==='image_disclosure_disabled')return retainFailureContext(new ExecutionFailure('blocked','image_disclosure_disabled'),failureContext(error));
           if(error instanceof AgentTimeoutError)return retainFailureContext(new ExecutionFailure('permanent','provider_timeout'),failureContext(error));
           return retainFailureContext(error instanceof ExecutionFailure||error instanceof ProviderFailure?error:new ExecutionFailure(error instanceof StoreError&&error.statusCode===409?'stale':'permanent',signal.aborted?'cancelled':error instanceof StoreError&&error.statusCode===409?'evidence_changed':error instanceof StoreError&&error.statusCode===507?'storage_full':(error instanceof StoreError&&error.statusCode===502)||error instanceof AgentResponseError?'invalid_model_output':'model_failed'),failureContext(error));
         };
@@ -1127,6 +1128,7 @@ export class MemoryPipeline {
       // provider_failed fallback does not establish that replay is safe/useful.
       if(error instanceof ProviderFailure&&error.details.category==='transient'&&!recoverableProviderFailure(error))throw retainFailureContext(new ExecutionFailure('permanent',error.details.code,error.details.retryAfterMs),failureContext(error));
       if(error instanceof AgentTimeoutError)throw retainFailureContext(new ExecutionFailure('permanent','provider_timeout'),failureContext(error));
+      if(error instanceof AgentResponseError&&error.reason==='image_disclosure_disabled')throw retainFailureContext(new ExecutionFailure('blocked','image_disclosure_disabled'),failureContext(error));
       throw retainFailureContext(error instanceof ExecutionFailure||error instanceof ProviderFailure?error:new ExecutionFailure(error instanceof StoreError&&error.statusCode===409?'stale':'permanent',signal.aborted?'cancelled':error instanceof StoreError&&error.statusCode===409?'evidence_changed':error instanceof StoreError&&error.statusCode===507?'storage_full':(error instanceof StoreError&&error.statusCode===502)||error instanceof AgentResponseError?'invalid_model_output':'model_failed'),failureContext(error));
     }
   }

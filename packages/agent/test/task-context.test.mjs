@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {ARCHIVE_RECENCY_INSTRUCTIONS,buildContextEnvelope,taskTools} from '../dist/task-context.js';
+import {pinContextTools,registeredContextToolDefinitions} from '../dist/tool-contributions.js';
+import {dispatchTools} from '../dist/task-context.js';
 import {systemInstructions} from '../dist/instructions.js';
 
 test('proposal lifecycle has one instruction contract while the envelope supplies only host state',()=>{
@@ -197,4 +199,20 @@ test('historical dialogue status is visible while its privacy and permission rec
  assert.equal(envelope.conversation.turns[0].evidenceStale,true);assert.match(envelope.conversation.turns[0].answer,/second proposal/);
  assert.doesNotMatch(JSON.stringify(envelope),/generated-private-root|generated-private-conversation|historyContext|evidenceDependencies/);
  assert.match(systemInstructions({question:'Generated follow-up'},[]),/resolve earlier proposals.*never as verified current facts/);
+});
+
+test('disabled archive image disclosure removes image tools and guides OCR-only Memory without granting pixels',()=>{
+ const input={question:'Generated OCR review',evidenceIds:['generated'],processingImages:[{id:'generated',originalSha256:'a'.repeat(64)}],archiveImagesEnabled:false};
+ assert.ok(!taskTools(input).includes('read_image'));
+ assert.ok(!dispatchTools(input).includes('read_image'));
+ assert.ok(!registeredContextToolDefinitions(input).some(([name])=>name==='read_image'));
+ const pinned=pinContextTools(input,{});
+ assert.deepEqual(pinContextTools({...pinned,archiveImagesEnabled:true},{}).contextCapabilitySnapshot,pinned.contextCapabilitySnapshot,'availability does not alter the saved schema manifest');
+ const envelope=buildContextEnvelope(input,[]);
+ assert.equal(envelope.authorizedImages,undefined);
+ assert.match(envelope.imageEvidenceInstruction,/disabled/);
+ assert.match(envelope.imageEvidenceInstruction,/incomplete/);
+ assert.ok(!taskTools({question:'Generated archive question',archiveImagesEnabled:false}).includes('read_image'));
+ assert.ok(taskTools({...input,archiveImagesEnabled:true}).includes('read_image'));
+ assert.ok(taskTools({question:'Generated attachment',archiveImagesEnabled:false,directImages:[{id:'generated-dialogue'}]}).includes('read_image'));
 });
