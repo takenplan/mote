@@ -68,7 +68,11 @@ class AppCaptureSetupInstrumentedTest {
                 button("暂不开始").performClick()
             }
             scenario.recreate(); scenario.awaitMainUi()
-            scenario.onActivity { assertTrue(views(it.window.decorView).single { row -> row.tag == "primary:LIBRARY" }.isSelected); assertFalse(settings.enabled) }
+            scenario.onActivity { activity ->
+                assertTrue(views(activity.window.decorView).single {row->row.tag=="primary:SOURCES"}.isSelected)
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any {it.isShown&&it.text.toString()=="记录屏幕"})
+                assertFalse(settings.enabled);assertFalse(settings.capturePreviewSeen())
+            }
         }
     }
     @Test fun independentChoicesAndLocalOcrRemainDraftsAcrossRecreationUntilSaved() = fixture { settings ->
