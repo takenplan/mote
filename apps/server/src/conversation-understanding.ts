@@ -36,6 +36,11 @@ const materialInputsSchema=z.array(z.object({materialId:z.string().regex(/^mat_[
  fingerprint:z.string().regex(/^[a-f0-9]{64}$/),evidenceIds:z.array(z.string().uuid()).min(1).max(20000)}).strict()).min(1).max(32);
 const candidatePolicySchema=z.object({prompt:z.string().min(1).max(32000),profile:z.enum(['personal','coding']),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 
+/** Memory validators consume an internal projection of the unified response.
+ * Translate only host-owned instructions back to the producer's candidate field;
+ * their standalone Memory envelope is never a valid conversation response. */
+function conversationMemoryInstruction(instruction:string){return instruction.replace(/\bmemories\b/g,'memoryCandidates');}
+
 /** The caller supplies complete bounded pages, never an arbitrary slice of raw tool logs. */
 function originalScope(pages:MaterialReadPage[],resolve:ConversationUnderstandingOptions['resolveEvidence']){
  if(!pages.length||new Set(pages.map(page=>page.material.ref)).size!==1)throw new StoreError('One pinned Coding conversation is required',409);
@@ -118,6 +123,9 @@ export function conversationUnderstandingProcessor(options:ConversationUnderstan
   const candidatePolicy=candidatePolicySchema.optional().parse(preparation?.candidatePolicy??input.config.candidatePolicy),candidateProfile=candidatePolicy?.profile??profile.id;
   const work=(preparation?.memoryWork??input.config.memoryWork) as {members:MemoryWorkMember[];workContract?:MemoryWorkContract;maxCandidates?:number;instruction:string}|undefined;
   if(work&&!generationContract)throw new StoreError('Conversation candidate reuse requires the complete generation contract',409);
+  const coverageInstruction=work?' Additionally return coverage for every supplied target key, indexing memoryCandidates.'+(work.workContract?' Do not return capacity or saturated.':' Return capacity:{saturated:boolean}.'):'';
+  const responsePrompt=(work?.workContract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)
+   .replace('actionCues (always [])','actionCues (always [])'+(work?', coverage'+(work.workContract?'':', capacity'):''));
   const parse=(result:QueryResult)=>{
    const value=JSON.parse(result.answer),{coverage,capacity,...products}=value;
    if(work?.workContract&&capacity!==undefined)throw new MemoryOutputValidationError('schema','Range evaluation does not accept legacy capacity',{workContract:work.workContract});
@@ -134,10 +142,10 @@ export function conversationUnderstandingProcessor(options:ConversationUnderstan
     contextTime:typeof input.config.contextTime==='string'?input.config.contextTime:undefined,
     timeZone:typeof input.config.timeZone==='string'?input.config.timeZone:undefined,
     language:input.config.language==='en'?'en':input.config.language==='zh-CN'?'zh-CN':undefined,
-    taskContext:work?{turns:[],memoryWork:work}:undefined,
+    taskContext:work?{turns:[],memoryWork:{...work,instruction:conversationMemoryInstruction(work.instruction)}}:undefined,
     evidenceIds:scope.records.map(record=>record.id),evidenceRanges:scope.ranges,
-    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+(work?.workContract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)+(work?'\nThe host memoryWork contract supersedes the legacy eight-candidate ceiling. Additionally return coverage'+(work.workContract?'':' and capacity')+' for all supplied members. memoryCandidates is the memories array for this coverage contract. '+memoryWorkInstruction(work.members,work.maxCandidates,work.workContract):''),
-    validateOutput:result=>{try{parse(result);}catch(error){const detail=error instanceof MemoryOutputValidationError?error.repairInstruction:error instanceof z.ZodError?error.issues.slice(0,3).map(issue=>issue.path.join('.')+': '+issue.message).join('; '):error instanceof StoreError?error.message:'Invalid JSON object';return {code:'conversation_products',feedback:detail+' Return summary, evidence, workRecords, events, memoryCandidates and actionCues. Absent products use empty arrays; actionCues must be empty. Every claim must preserve attribution, status, basis, sourceTime and uncertainty, with exact cited original quotes inside the supplied ranges.'};}},
+    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+responsePrompt+(work?'\nThe host memoryWork contract supersedes the legacy eight-candidate ceiling. '+conversationMemoryInstruction(memoryWorkInstruction(work.members,work.maxCandidates,work.workContract)):''),
+    validateOutput:result=>{try{parse(result);}catch(error){const detail=error instanceof MemoryOutputValidationError?conversationMemoryInstruction(error.repairInstruction):error instanceof z.ZodError?error.issues.slice(0,3).map(issue=>issue.path.join('.')+': '+issue.message).join('; '):error instanceof StoreError?error.message:'Invalid JSON object';return {code:'conversation_products',feedback:detail+' Return the complete unified object: summary, evidence, workRecords, events, memoryCandidates and actionCues.'+coverageInstruction+' Absent products use empty arrays; actionCues must be empty. Every claim must preserve attribution, status, basis, sourceTime and uncertainty, with exact cited original quotes inside the supplied ranges.'};}},
     signal:input.signal,onUsage:meter.update});
    input.signal.throwIfAborted();const output=parse(result);
    if(options.selection(input.config).fingerprint!==selected.fingerprint)throw new StoreError('Model settings changed during conversation understanding',409);
