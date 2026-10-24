@@ -164,6 +164,8 @@ export interface QueryInput {
   processingEvidence?: Record<string,string>;
   /** Host-only named material outputs for a bounded background read. */
   processingMaterialInputs?: {materialId:string;required:string[];fingerprint:string;evidenceIds:string[]}[];
+  /** Host-only current archive image availability; never an authorization grant. */
+  archiveImagesEnabled?: boolean;
   /** Exact original-image grants attached to current named Material outputs.
    * They authorize no raw capture text or archive discovery. */
   processingImages?: readonly {id:string;materialId:string;required:string[];fingerprint:string;originalSha256:string}[];

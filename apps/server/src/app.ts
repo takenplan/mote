@@ -365,6 +365,8 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const queuedAt=performance.now(),lane=input.executionLane==='interactive'?'interactive':'background';
     return (lane==='interactive'?interactiveGate:agentGate).run(async()=>{
       await yieldPreparationTurn();input.signal?.throwIfAborted();
+      // Keep the live request identity: disclosure callbacks update its source pins.
+      input.archiveImagesEnabled=perception.settings().allowQueryImages;
       const operationId=input.traceContext?.operationId??(input.traceContext?.jobId?'job:'+input.traceContext.jobId:'query:'+randomUUID());
       const admittedAt=performance.now(),queueWaitMs=admittedAt-queuedAt;let status:'completed'|'failed'|'yielded'='failed';
       try{observeMemory(input,'catalog_snapshot',()=>evidenceReader.retainMemorySnapshot(input));const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);queryAccounting.getStore()?.agentStarted();return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
