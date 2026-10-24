@@ -14,12 +14,13 @@ Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配�
 
 | 场景 | 标识 | 产物位置 |
 | --- | --- | --- |
-| 日常 Dev（Central / Desktop） | `<组件>-dev-<commit SHA>`，不创建 Tag | GitHub Actions Artifact，含 `build-info.json` 和校验元数据 |
+| 日常 Dev（Central） | `central-dev-<commit SHA>`，不创建 Tag | GitHub Actions Artifact，含 `build-info.json` 和校验元数据 |
+| Desktop Dev | `desktop-dev-<workflow run number>-<短 SHA>` | Dev Profile；GitHub Pre-release，直接下载 Mac ZIP |
 | Android Dev | `android-dev-<workflow run number>-<短 SHA>` | Dev Profile；GitHub Pre-release，直接下载 APK |
 | Beta | `<组件>-vX.Y.Z-beta.N` | Prod Profile；GitHub Pre-release |
 | 正式 | `<组件>-vX.Y.Z` | Prod Profile；GitHub Release |
 
-组件为 `central`、`desktop`、`android`，各自递增版本；Android 每次发布还递增 versionCode。Tag 不可覆盖，Pre-release 只是发布状态，不控制 Profile 或 Debug；Android Dev 与 Prod Beta 都使用 Pre-release，但安装身份不同。Beta 与正式版使用同一 Prod 安装身份；Dev 与 Prod 的数据、配置、凭据及客户端身份隔离。当前仍手动安装/部署，不恢复签名在线更新或 GHCR 镜像。
+组件为 `central`、`desktop`、`android`，各自递增版本；Android 每次发布还递增 versionCode。Tag 不可覆盖，Pre-release 只是发布状态，不控制 Profile 或 Debug；客户端 Dev 与 Prod Beta 都使用 Pre-release，但安装身份不同。Beta 与正式版使用同一 Prod 安装身份；Dev 与 Prod 的数据、配置、凭据及客户端身份隔离。当前仍手动安装/部署，不恢复签名在线更新或 GHCR 镜像。
 
 | 发布单元 | 版本来源 | Prod 公开附件 |
 | --- | --- | --- |
@@ -31,7 +32,7 @@ Central 的运行 Profile 来自私有 YAML，源码包本身不包含环境配�
 
 ## MVP 阶段的 GitHub 检查开关
 
-2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Central / Desktop Dev 构建跳过可选测试。Android Dev 公开分发前始终执行 Development 单测。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。单用户回归恢复 Component checks 的受影响 PR 检查；完整 Checks 保留手动用途。2026-10-23 已通过 GitHub API 确认 Component checks 为 active；完整 Checks 暂未启用。
+2026-10-02 暂停 GitHub 的 `Checks` 和 `Component checks`，仓库变量 `MOTE_PRE_RELEASE_CHECKS=false`。Profile 规范落地后，该开关只允许 Central Dev 构建跳过可选测试。Desktop Dev 始终执行桌面组件检查和打包后 smoke；Android Dev 始终执行 Development 单测。Beta / 正式标签始终执行对应组件检查；Mac 还必须执行打包后 smoke，Android 执行 release 单测。构建、版本、签名、安装身份和附件完整性检查始终执行。单用户回归恢复 Component checks 的受影响 PR 检查；完整 Checks 保留手动用途。2026-10-23 已通过 GitHub API 确认 Component checks 为 active；完整 Checks 暂未启用。
 
 需要恢复时运行：
 
@@ -94,7 +95,17 @@ Mac 默认 adhoc 只提供本期可构建的分发方式，不代表 Apple 认�
 
 ## 日常 Dev 构建
 
-Central / Desktop：在对应 workflow 的 Run workflow 中选择分支与 `profile=dev`。工作流校验该组件和锁文件，构建 Dev 包并保留为 `<组件>-dev-<完整提交 SHA>` Artifact（保留 7 天）；不创建 Git Tag 或 GitHub Release。安装包本身保留组件版本；确切提交以 Artifact 名和 `build-info.json` 为准。Central 的文件名与 Prod 相同，因为它是同一份不带配置的源码。
+Central：在对应 workflow 的 Run workflow 中选择分支与 `profile=dev`。工作流校验该组件和锁文件，构建 Dev 包并保留为 `central-dev-<完整提交 SHA>` Artifact（保留 7 天）；不创建 Git Tag 或 GitHub Release。源码包保留组件版本；确切提交以 Artifact 名和 `build-info.json` 为准。Central 的文件名与 Prod 相同，因为它是同一份不带配置的源码。
+
+Desktop：在 `Release Desktop` 的 Run workflow 中选择 `main` 和 `profile=dev`，或执行：
+
+```sh
+gh workflow run release-desktop.yml --repo utopiafar/mote --ref main -f profile=dev
+```
+
+桌面组件检查、签名与打包后 smoke 通过后，发布 `desktop-dev-<run number>-<短 SHA>` Pre-release，公开附件只有当前构建架构的 `mote-desktop-macos-dev-<arch>-<组件版本>.zip`。收藏 [Mac Dev 下载入口](https://github.com/utopiafar/mote/releases?q=desktop-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，打开最新发布，点击 **Download Mac ZIP**；退出 Mote Collector Dev 后解压并覆盖应用目录中的同名 App，保留包外资料目录。App 版本沿用组件版本，每次分发由独立 Tag、构建序号和完整提交区分；不要求递增 Prod 版本。发布说明明确实际签名模式，默认 ad-hoc 不代表 Apple 公证。
+
+Desktop Dev 与 Android Dev 均只允许可信仓库 `main` 的手动触发公开分发，不设置全仓库 Latest，不覆盖已发布版本；失败草稿只允许原提交修复，旧构建不能晚于新构建发布。其他允许分支保留 Actions Artifact。公开 ZIP / APK 不随 7 天 Artifact 过期。
 
 Android：在 `Release Android` 的 Run workflow 中选择 `main` 和 `profile=dev`，或执行：
 

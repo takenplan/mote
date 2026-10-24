@@ -56,7 +56,7 @@ node scripts/mote.mjs token --profile dev
 
 先点击中央网页的 **记录**，保存一条简短笔记，再到 **资料库** 找到它。也可以使用资料库中的导入工具添加选定材料，检查预览后确认。
 
-需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 获取 Prod 安装包。Android Dev 可收藏 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=android-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，在手机上打开最新 Pre-release，点击 **Download APK** 直接下载安装。Mac Dev 仍从对应 [Actions](https://github.com/utopiafar/mote/actions) 下载 Artifact：
+需要从设备采集时，从 [Releases](https://github.com/utopiafar/mote/releases) 获取 Prod 安装包。Dev 可收藏 [Mac Dev 下载入口](https://github.com/utopiafar/mote/releases?q=desktop-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true) 或 [Android Dev 下载入口](https://github.com/utopiafar/mote/releases?q=android-dev-+prerelease%3Atrue+draft%3Afalse&expanded=true)，打开最新 Pre-release，点击 **Download Mac ZIP** 或 **Download APK** 直接下载安装：
 
 | 设备 | 安装 | 连接 |
 | --- | --- | --- |

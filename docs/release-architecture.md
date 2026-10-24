@@ -28,7 +28,7 @@ flowchart LR
 
 当前只接受声明的 wire 1 / Ingress 2 契约，不保留旧字段读写或迁移期接口。破坏契约的修改应同步调整受影响消费者与 fixture。平台 feature inventory 与来源 capability registry 继续描述实际安装能力；产品版本号不能用来猜测设备能做什么。TS、Kotlin 与连接链路共用生成的协议 fixture，真机和真实模型验证另行记录。
 
-Dev 分支构建保存 Actions Artifact；Android Dev 从可信 main 手动构建后另发独立且不可变的 Pre-release，提供直接下载 APK，强制 Development 单测。Central / Desktop Dev 仍仅保存 Artifact。Beta / 正式组件版本标签使用 Prod 身份并强制组件测试。三个工作流分别匹配三个组件版本标签前缀。版本脚本只递增选中的产品；Android Prod versionCode 随 Android 升级单调递增，CI Dev 使用独立的 workflow run number 版本码。CI 根据 workspace 依赖图和非 npm 构建输入选择检查范围：共享协议检查全部端，中央插件只检查 Central。根配置、lockfile 或未知构建输入采取保守的全消费者检查。各端发布 workflow 只检查对应组件与发布工具；纯文档（含 AGENTS.md 和各语言 README）不触发应用构建。本地 `npm run check:affected` 与 CI 共用选择规则，额外用户流程验证见[开发指南](testing.md#early-integration-and-candidate-checks)。测试范围和发布范围分开，CI 检查通过不会替任何端自动发版。
+Dev 分支构建保存 Actions Artifact；Android / Desktop Dev 从可信 main 手动构建后另发独立且不可变的 Pre-release，直接下载 APK / Mac ZIP。Android 强制 Development 单测；Desktop 强制组件检查和打包后 smoke。Central Dev 仍仅保存 Artifact。Beta / 正式组件版本标签使用 Prod 身份并强制组件测试。三个工作流分别匹配三个组件版本标签前缀。版本脚本只递增选中的产品；Android Prod versionCode 随 Android 升级单调递增，CI Dev 使用独立的 workflow run number 版本码。CI 根据 workspace 依赖图和非 npm 构建输入选择检查范围：共享协议检查全部端，中央插件只检查 Central。根配置、lockfile 或未知构建输入采取保守的全消费者检查。各端发布 workflow 只检查对应组件与发布工具；纯文档（含 AGENTS.md 和各语言 README）不触发应用构建。本地 `npm run check:affected` 与 CI 共用选择规则，额外用户流程验证见[开发指南](testing.md#early-integration-and-candidate-checks)。测试范围和发布范围分开，CI 检查通过不会替任何端自动发版。
 
 历史统一标签仍可作为发布记录阅读。当前更新器只读取所属组件标签和明确声明组件的签名清单，拒绝统一旧流及缺失组件。当前发布不附签名清单，仍由用户手动安装。签名验证与安装身份校验是当前功能，不能用旧清单兜底。
 
