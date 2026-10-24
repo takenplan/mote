@@ -15,9 +15,10 @@ import {memoryImageGrants,uninspectedMemoryImageTargets} from '../src/memory-ima
 import {materialId} from '../src/materials.js';
 import {generatedMemoryOutput,planGeneratedMemory} from './fixtures/memory-planning.js';
 import {HindsightEngine} from '../src/hindsight-engine.js';
+import {taskTools,buildContextEnvelope} from '../../../packages/agent/dist/task-context.js';
 import {generatedNativeAdapter} from './fixtures/native-engine-adapter.js';
 
-type Scenario={rewriteReview?:'uncovered'|'covering';deletionReview?:boolean;integration?:boolean;pendingUnderstanding?:boolean;ocr:'text'|'empty'|'failed';automatic?:boolean;denied?:boolean;skipReviewPixels?:boolean;deleteDuringReview?:boolean;replaceDuringReview?:boolean;attributionDuringReview?:boolean;metadataOnly?:boolean;unreadEmpty?:boolean;failFirstReview?:boolean};
+type Scenario={revokeImagesDuringExtract?:boolean;rewriteReview?:'uncovered'|'covering';deletionReview?:boolean;integration?:boolean;pendingUnderstanding?:boolean;ocr:'text'|'empty'|'failed';automatic?:boolean;denied?:boolean;skipReviewPixels?:boolean;deleteDuringReview?:boolean;replaceDuringReview?:boolean;attributionDuringReview?:boolean;metadataOnly?:boolean;unreadEmpty?:boolean;failFirstReview?:boolean};
 async function fixture(t:import('node:test').TestContext,scenario:Scenario){
  const directory=mkdtempSync(join(tmpdir(),'mote-memory-image-journey-')),token='generated-memory-image-owner';
  const config:Config={dataDir:directory,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-vision',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:'http://127.0.0.1:1234/v1',apiKey:'',allowUnauthenticatedLocal:true,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,logLevel:'silent'};
@@ -27,6 +28,8 @@ async function fixture(t:import('node:test').TestContext,scenario:Scenario){
   if(input.directImages?.length){await reader.readImage!({id:input.directImages[0].id});return {answer:JSON.stringify({text:'Fallible model interpretation claims the owner drew a red rectangle. Authorship is unverified.',regions:[]}),citations:[],trace:[],runId:randomUUID()};}
   if(await planGeneratedMemory(input))return {answer:'Generated packages submitted.',citations:[],trace:[],runId:randomUUID()};
   inputs.push(input);const phase=input.traceContext?.phase??'extract';
+  if(scenario.denied){assert.equal(input.archiveImagesEnabled,false);assert.ok(!taskTools(input).includes('read_image'));assert.equal(buildContextEnvelope(input,[]).authorizedImages,undefined);}
+  if(scenario.revokeImagesDuringExtract&&phase==='extract'){assert.equal(input.archiveImagesEnabled,true);await node.perception.save({revision:node.configService.revision,settings:{...node.perception.settings(),allowQueryImages:false}});}
   if(phase==='review'&&scenario.failFirstReview&&!failedReview){failedReview=true;throw new StoreError('Generated independent reviewer stopped',422);}
   const bridge=await startBridge(reader,input);
   try{
@@ -54,10 +57,12 @@ async function fixture(t:import('node:test').TestContext,scenario:Scenario){
    const text=bridge.seedEvidence.find(record=>record.ocrText.includes('GENERATED_OCR_TEXT'));
    let memories:any[]=[],incomplete=false;
    if(text&&scenario.ocr==='text')memories=[{title:'Generated article',statement:`The displayed third-party article says its author resigned. [${text.id}]`,uncertainty:'The author is not identified as the owner.',admission:{layer:'observation',reason:'Generated visible article',scope:'This generated image only',attribution:'third_party'},evidenceIds:[text.id],evidence:[{id:text.id,quote:'GENERATED_OCR_TEXT: the article author resigned.'}]}];
+   else if(scenario.denied)incomplete=true;
    else if(scenario.skipReviewPixels&&phase==='review')memories=(input.taskContext!.untrustedMemoryDraft as any).memories;
    else if(scenario.unreadEmpty){/* Deliberately invalid model response: no OCR/pixels were inspected. */}
    else {
     const metadata=await call('read_image',{id:grant.id,view:'metadata'});
+    if(scenario.revokeImagesDuringExtract)await bridge.failure;
     if(!scenario.denied&&metadata.status!==200)t.diagnostic(JSON.stringify(metadata.body));
     if(!scenario.denied)assert.equal(metadata.status,200,JSON.stringify(metadata.body));
     if(metadata.status!==200)incomplete=true;
@@ -200,4 +205,28 @@ test('actual app native visual preflight retains an empty integration delivery r
  const state=f.node.lifecycle.view().extensions.find(extension=>extension.id==='consolidation')!;assert.equal(state.error,'memory_provider_unsupported_input');assert.equal(state.manualRetryRequired,true);assert.equal(state.cursor,before.cursor);assert.equal(state.active?.id,request.json().id);assert.equal(remoteCalls,0);assert.equal(workerStarts,0);assert.equal(nativeCalls,1);
  const receipt=JSON.parse(String(f.node.store.db.prepare('SELECT json FROM memory_integration_deliveries').get()!.json));assert.deepEqual(receipt.memoryIds,[]);assert.deepEqual(receipt.evidenceIds,[],'local input preparation cannot certify transport delivery');assert.equal(f.inputs.filter(input=>input.skill==='memory-integration').length,0);
  await f.node.lifecycle.tick();assert.equal(nativeCalls,1,'unsupported input is not retried automatically');
+});
+
+
+test('disabled archive pixels still allow OCR-backed Memory extraction and independent review through Central startup',async t=>{
+ const f=await fixture(t,{ocr:'text',denied:true}),done=await f.node.memoryPipeline.run(f.jobId);
+ assert.equal(done.status,'completed',JSON.stringify(done));assert.equal(done.memoryIds.length,1);
+ assert.deepEqual(f.receipts.map(receipt=>receipt.phase),['extract','review']);assert.ok(f.receipts.every(receipt=>receipt.ids.length===0));
+ const saved=f.node.memories.get(done.memoryIds[0]);assert.equal(saved.evidence[0].quote,'GENERATED_OCR_TEXT: the article author resigned.');
+ assert.equal(f.node.perception.settings().allowQueryImages,false);
+});
+
+test('revoking image disclosure during extraction blocks the official task without publication or automatic replay',async t=>{
+ const f=await fixture(t,{ocr:'empty',revokeImagesDuringExtract:true}),done=await f.node.memoryPipeline.run(f.jobId);
+ assert.equal(done.status,'waiting_for_input',JSON.stringify(done));assert.equal(done.errorCode,'image_disclosure_disabled');
+ assert.equal(done.execution?.failure?.code,'image_disclosure_disabled');assert.equal(done.memoryIds.length,0);assert.equal(f.node.memories.list().length,0);
+ const count=f.inputs.length;await f.node.memoryPipeline.run(f.jobId);assert.equal(f.inputs.length,count,'a blocked permission refusal spends no automatic replay');
+ await f.restart();const restored=f.node.memoryPipeline.get(f.jobId);assert.equal(restored.status,'waiting_for_input');assert.equal(restored.errorCode,'image_disclosure_disabled');
+});
+
+
+test('disabled pixels without sufficient OCR retain an incomplete Memory outcome and no publication',async t=>{
+ const f=await fixture(t,{ocr:'empty',denied:true}),done=await f.node.memoryPipeline.run(f.jobId);
+ assert.notEqual(done.status,'completed');assert.equal(done.errorCode,'memory_evaluation_incomplete');
+ assert.equal(done.memoryIds.length,0);assert.equal(f.node.memories.list().length,0);assert.ok(f.receipts.every(receipt=>receipt.ids.length===0));
 });

@@ -39,8 +39,9 @@ export function pinContextTools(input:QueryInput,reader:ContextReader):QueryInpu
   input.onContextCapabilities?.(snapshot);
   return {...pinned,contextCapabilitySnapshot:snapshot};
 }
+export function imageToolAvailable(input:QueryInput){return input.archiveImagesEnabled!==false||Boolean(input.directImages?.length);}
 export function registeredContextToolDefinitions(input:QueryInput){
-  return [...CONTEXT_TOOLS.filter(([name])=>name!=='context_evidence'||input.evidenceIds!==undefined&&Boolean(input.evidenceReadRanges?.length)),...(input.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as [string,string,Record<string,Record<string,unknown>>]),...hostControlDefinitions(input.hostControlChannel)];
+  return [...CONTEXT_TOOLS.filter(([name])=>(name!=='read_image'||imageToolAvailable(input))&&(name!=='context_evidence'||input.evidenceIds!==undefined&&Boolean(input.evidenceReadRanges?.length))),...(input.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as [string,string,Record<string,Record<string,unknown>>]),...hostControlDefinitions(input.hostControlChannel)];
 }
 
 // Ordinary discovery/reading and image modalities need no catalog round trip.
