@@ -143,3 +143,34 @@ test('range-evaluation conversation products preserve 80 selected candidates and
  const outputs=await processor(f,async request=>{assert.equal((request.taskContext!.memoryWork as {workContract:string}).workContract,'range-evaluation@1');return result(f.anchor,{...value,coverage});}).process({...base,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
  const metadata=outputs[0].metadata;assert.equal(metadata.productsVersion,3);assert.equal(metadata.workContract,'range-evaluation@1');assert.equal((metadata.memoryCandidates as unknown[]).length,80);assert.deepEqual(metadata.memoryCoverage,coverage);assert.equal(metadata.memoryCapacity,undefined);assert.equal(metadata.generationContract,'d'.repeat(64));assert.equal(f.memories.list().length,0,'unreviewed shared candidates remain private products');
 });
+
+test('conversation coverage repairs keep the unified envelope through invalid coverage, schema and quote corrections',async t=>{
+ const f=await fixture(t),base=input(f.page()),member={key:'a'.repeat(64),id:f.anchor,offset:0,length:body.length,fingerprint:'c'.repeat(64),contextTime:userTime,state:'pending' as const,memoryIds:[]};
+ for(const selected of [true,false]){
+  const work={...(selected?{workContract:'range-evaluation@1' as const}:{}),members:[member],maxCandidates:selected?undefined:16,instruction:'Return {memories:[...],coverage:[...]}'},value=products(f.anchor);
+  const coverage=[{key:member.key,state:'checked',candidateIndexes:[0]}],valid={...value,coverage,...(selected?{}:{capacity:{saturated:false}})};
+  const outputs=await processor(f,async request=>{
+   for(const invalid of [
+    {...valid,coverage:undefined},
+    {...valid,coverage:[{...coverage[0],candidateIndexes:[1]}]},
+    {...valid,memoryCandidates:[{...value.memoryCandidates[0],admission:undefined}]},
+    {...valid,memoryCandidates:[{...value.memoryCandidates[0],evidence:[{id:f.anchor,quote:'Generated fabricated quote'}]}]},
+    {...valid,memories:value.memoryCandidates},
+    ...(selected?[{...valid,capacity:{saturated:false}}]:[]),
+   ]){
+    const rejection=await request.validateOutput!(result(f.anchor,invalid));assert.equal(rejection?.code,'conversation_products');
+    assert.match(rejection!.feedback,/memoryCandidates/);assert.match(rejection!.feedback,/coverage/);
+    assert.doesNotMatch(rejection!.feedback,/\bmemories\s*:|\bmemories array/);
+    if(selected)assert.match(rejection!.feedback,/Do not return capacity/);
+    else assert.match(rejection!.feedback,/capacity/);
+   }
+   // Both delivered instructions must describe the same candidate field as the strict producer schema.
+   assert.doesNotMatch(request.question.slice(request.question.indexOf('FINAL UNIFIED RESPONSE CONTRACT:')),/\bmemories\s*:/);
+   assert.doesNotMatch((request.taskContext!.memoryWork as {instruction:string}).instruction,/\bmemories\s*:/);
+   assert.equal(await request.validateOutput!(result(f.anchor,valid)),undefined);
+   return result(f.anchor,valid);
+  }).process({...base,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
+  assert.deepEqual(outputs[0].metadata.memoryCoverage,coverage);assert.equal((outputs[0].metadata.memoryCandidates as unknown[]).length,1);
+ }
+ assert.equal(f.memories.list().length,0,'repair never publishes unreviewed candidates');
+});
