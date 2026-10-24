@@ -1,3 +1,4 @@
+import {structuredObject} from './fixtures/structured-page.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -5,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
-import {uiPageText,type UiContentObject,type UiPageV2} from '@mote/shared';
+import {uiPageText,type UiContentObject,type UiPageV3} from '@mote/shared';
 import {buildApp} from '../src/app.js';
 import {EvidenceArchive} from '../src/evidence-archive.js';
 import type {Config} from '../src/config.js';
@@ -22,8 +23,8 @@ async function fixture(t:TestContext){
   return {...result,settings};
 }
 function record(object:UiContentObject,second=0,options:{deviceId?:string;appId?:string;appVersion?:string;firstAt?:string;count?:number}={}){
-  const page:UiPageV2={version:2,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:options.appVersion??'1.0',activity:'fixture.ArticleActivity',status:'ok',truncated:false,
-    observations:{firstAt:options.firstAt??at(second),lastAt:at(second),count:options.count??1},objects:[object]};
+  const page:UiPageV3={version:3,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:options.appVersion??'1.0',activity:'fixture.ArticleActivity',status:'ok',truncated:false,
+    observations:{firstAt:options.firstAt??at(second),lastAt:at(second),count:options.count??1},objects:[structuredObject(object)]};
   return {id:randomUUID(),deviceId:options.deviceId??'fixture-phone',deviceName:'Generated phone',platform:'android',source:'ui_page',appId:options.appId??'fixture.app',appName:'Generated App',capturedAt:at(second),durationMs:0,
     ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at(second),collector:{method:'accessibility'},uiPage:page}};
 }
@@ -111,4 +112,16 @@ test('Android gzip bundles acknowledge field objects individually and preserve i
   const rejected=await send([unseen,{...invalid,metadata:{...invalid.metadata,uiPage:{...invalid.metadata.uiPage,nodes:[]}}}]);
   assert.equal(rejected.statusCode,400);assert.equal(store.evidence([unseen.id,invalid.id]).length,0,'invalid bundle is rejected before partial intake');
   await ingest(app,unseen);assert.equal(store.evidence([unseen.id])[0]?.ocrText,unseen.ocrText);
+});
+
+test('invalid links and state-valued identifiers never merge unrelated named objects',async t=>{
+  const f=await fixture(t),values=[];
+  for(const url of ['Link unavailable','https://user:secret@fixture.invalid/private'])for(let index=0;index<2;index++)values.push(record({kind:'product',title:'Generated same card',url,body:[]},index));
+  for(let index=0;index<2;index++){
+    const value=record({kind:'product',title:'Generated same card',itemId:'true',body:[]},index);
+    value.metadata.uiPage.objects[0].fields.find(field=>field.name==='item_id')!.values[0]!.source='state';value.ocrText=uiPageText(value.metadata.uiPage);values.push(value);
+  }
+  for(const value of values)await ingest(f.app,value);await f.materialOrganizer.tick(100);
+  const materials=f.materials.list({kind:'mote.ui-page-object'}).items;assert.equal(materials.length,6);assert.ok(materials.every(material=>material.memberCount===1));
+  for(const value of values)assert.equal(f.store.evidence([value.id])[0].ocrText,value.ocrText,'invalid identity fields stay literal evidence');
 });

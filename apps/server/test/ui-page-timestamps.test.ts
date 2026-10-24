@@ -1,10 +1,11 @@
+import {structuredObject} from './fixtures/structured-page.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {captureSchema,uiPageText,type UiPageV2} from '@mote/shared';
+import {captureSchema,uiPageText,type UiPageV3} from '@mote/shared';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 
@@ -21,9 +22,9 @@ async function fixture(t:TestContext){
   return result;
 }
 function record(firstAt:string,lastAt:string){
-  const page:UiPageV2={version:2,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1.0',
+  const page:UiPageV3={version:3,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1.0',
     activity:'fixture.ArticleActivity',status:'ok',truncated:false,observations:{firstAt,lastAt,count:2},
-    objects:[{kind:'article',title:'Generated article',author:'Generated author',body:[{text:'Generated original body\n2026-10-10T08:00:02+08:00 remains literal.'}]}]};
+    objects:[structuredObject({kind:'article',title:'Generated article',author:'Generated author',body:[{text:'Generated original body\n2026-10-10T08:00:02+08:00 remains literal.'}]})]};
   return {id:randomUUID(),deviceId:'fixture-phone',deviceName:'Generated phone',platform:'android',source:'ui_page',
     appId:'fixture.app',appName:'Generated App',capturedAt:lastAt,durationMs:0,ocrText:uiPageText(page),
     privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},
@@ -43,8 +44,8 @@ for(const [name,firstAt,lastAt] of [
   const stored=source.store.evidence([input.id])[0]!;
   assert.equal(stored.capturedAt,new Date(lastAt).toISOString());
   assert.equal(stored.metadata?.observedAt,stored.capturedAt);
-  assert.equal(stored.metadata?.uiPage?.version,2);
-  if(stored.metadata?.uiPage?.version!==2)throw Error('Expected generated field page');
+  assert.equal(stored.metadata?.uiPage?.version,3);
+  if(stored.metadata?.uiPage?.version!==3)throw Error('Expected generated field page');
   assert.deepEqual(stored.metadata.uiPage.observations,{firstAt:new Date(firstAt).toISOString(),lastAt:new Date(lastAt).toISOString(),count:2});
   assert.deepEqual(stored.metadata.uiPage.objects,input.metadata.uiPage.objects);
   assert.equal(stored.ocrText,input.ocrText);

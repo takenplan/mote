@@ -7,7 +7,7 @@ import org.json.JSONObject
 internal object AppPageSetup {
     data class Adapter(val id: String, val kind: String, val fields: Set<String>)
     fun adapters(raw: String, appId: String, appVersion: String): List<Adapter> = UiPageRules.parse(raw)
-        .filter { it.optInt("formatVersion") == 2 && it.optString("platform") == "android" &&
+        .filter { it.optInt("formatVersion") in setOf(2, 3) && it.optString("platform") == "android" &&
             it.optString("appId") == appId && appVersion.isNotBlank() && it.optString("appVersion") == appVersion }
         .map { Adapter(it.getString("id"), it.getString("kind"), it.getJSONObject("fields").keys().asSequence().toSet()) }
 
@@ -15,9 +15,9 @@ internal object AppPageSetup {
     fun merge(current: String, imported: String, appId: String, appVersion: String): String {
         val incoming = UiPageRules.parse(imported)
         require(appVersion.isNotBlank() && incoming.isNotEmpty() && incoming.all {
-            it.optInt("formatVersion") == 2 && it.optString("platform") == "android" &&
+            it.optInt("formatVersion") in setOf(2, 3) && it.optString("platform") == "android" &&
                 it.optString("appId") == appId && it.optString("appVersion") == appVersion
-        }) { MoteI18n.text("规则必须是所选应用当前版本的文章或商品字段规则") }
+        }) { MoteI18n.text("规则必须匹配所选应用的当前安装版本") }
         val replace = incoming.map { it.getString("id") }.toSet()
         val previous = UiPageRules.parse(current)
         require(previous.none { it.optString("appId") != appId && it.getString("id") in replace }) {

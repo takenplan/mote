@@ -13,6 +13,6 @@ test('metadata details preserve zero/false, disclose missing fields and escape u
 test('file times are labeled separately and activity is intentionally content-free',()=>{
   const html=renderToStaticMarkup(React.createElement(Metadata,{modifiedAt:'2026-09-13T01:00:00Z',source:{version:1,file:{accessedAt:'2026-09-13T02:00:00Z',deletionObservedAt:'2026-09-14T01:00:00Z'}}}));
   assert.match(html,/源内容修改时间/);assert.match(html,/无法确认实际删除时刻/);assert.match(html,/不能据此断定你查看过文件/);
-  assert.equal(sourceLabels.activity,'仅应用活动');assert.match(activityExplanation,/没有采集截图/);
+  assert.equal(sourceLabels.activity,'应用活动');assert.match(activityExplanation,/这条记录仅包含前台应用与采样时长/);assert.match(activityExplanation,/独立选项/);
   const missing=renderToStaticMarkup(React.createElement(Metadata,{}));assert.match(missing,/未上报额外元数据/);
 });

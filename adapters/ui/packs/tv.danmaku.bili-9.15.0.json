@@ -1,0 +1,2530 @@
+[
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:video-detail-title-01",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "video_detail_title_01",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "b9c07265f5b25d172246d61d7160bb636de5f704281013d6093374378f4ef1a6",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_title_accessibility_description": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:video-detail-metadata-01",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "video_detail_metadata_01",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "01661c4cbd892bdb55fe14e4d4682ca59dfe77d68411807736155bc60dcf92a2",
+    "fields": {
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_time": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/time"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_online_viewers": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/online"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_description": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "platform_content_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/neutrality_label"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:video-detail-metadata-02",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "video_detail_metadata_02",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "de3b13bc90b456eb459d57c11811d600377210ab4f2434d3c33b239ce4dab4be",
+    "fields": {
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_time": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/time"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_online_viewers": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/online"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_description": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "platform_content_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/neutrality_label"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:recommended-video-card-01",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "recommended_video_card_01",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "aebfd58d92fd9c410022a7a58418573de59f4d15e729188611c4a7758865eb40",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/author"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_danmakus"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/reason"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:recommended-video-card-02",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "recommended_video_card_02",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "4eba4467fb5992bd42196ff4cffcf84fc74cc31e7089e54c81029762de592471",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/author"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_danmakus"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/reason"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:recommended-video-card-03",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "recommended_video_card_03",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "fb8872a16e5a814ee8e6b0a09fac362504b120f4551b7ea4697b9c87f7da41df",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/author"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_danmakus"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/reason"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:home-video-card",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "home_video_card",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "ef3b5a9259b23cb100b0b252b6b28fa3e6faaff0cd9f0c598e671180caaf7864",
+    "fields": {
+      "feed_card_accessibility_description": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/real_desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_right_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_left_text1"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_left_text2"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:home-mixed-card",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "home_mixed_card",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "257573c876d04e40292afe12f6c12658bdd37a57a0be9cbe65540fc1f43bc629",
+    "fields": {
+      "feed_card_accessibility_description": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:home-video-card-with-badge",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "home_video_card_with_badge",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "622807eafd6f56778abcb7302c1cea686ef1d53931573918e7f5e360d4754680",
+    "fields": {
+      "feed_card_accessibility_description": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_right_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_left_text1"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_danmaku_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_left_text2"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:home-film-card",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "home_film_card",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "fe153240fb89fae9a78a31baaa311688fe08e325f0dadb165dde703c73c12cf7",
+    "fields": {
+      "film_card_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "content_category_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_right_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "program_details_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/real_desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "recommendation_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:home-documentary-card",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "home_documentary_card",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "5fc25ceb9c6f905a4d31940c453d74c398bfec0c45537aa44b5ee0fbbe462a85",
+    "fields": {
+      "program_card_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "program_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/real_desc"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "content_category_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/cover_right_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:recommended-live-room",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "recommended_live_room",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "99339662096122034a5132d89ca48b43bf7585be3a124cf4615fba17949e93df",
+    "fields": {
+      "live_room_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "broadcaster_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/author"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "live_viewer_and_category_label": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/info_views"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "live_follow_badge": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/reason"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-01",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_01",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "5695d413c21d1d46cdceaf28868f74f48bbd844d3c9ffdcf1e10c391f081305c",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-02",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_02",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "a60f0447e7c89dc935b36da2ed74c500ffd11ee6f8c212bc840b94e0e697166a",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-03",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_03",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "ef7b97d2f9741e41976933218be702967529a36830933eff6f5c9c77b36f0f7f",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-04",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_04",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "e1cfd276806522bb23609bcbe2974d585a538046b6078aa027ce8c79a87428bb",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-05",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_05",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "bbcade46e004ac3189e150d5a21f070fb26a5d5438f9a51a7cc79f4d31374dd2",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:search-video-card-06",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "search_video_card_06",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "1c9badf0d88951c1045f99664807b28efda6996ba139141ea6fea268e7c37457",
+    "fields": {
+      "video_title": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/title"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "uploader_display_name": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/upuser"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "video_visible_duration": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/duration"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_play_count": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/play_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_publish_date": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/danmakus_num"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "displayed_comment_preview": {
+        "select": {
+          "resourceId": "tv.danmaku.bili:id/tv_bottom_text"
+        },
+        "source": "text",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-01",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_01",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "6a0d888f03e3171c4d93a3bcce626fe3439a89b2032838cbde4e6206a3dc22ad",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-02",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_02",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "5e6c5621a73135885cf543869c2252aca602c3acc11032f8fc0abb6959469636",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-03",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_03",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "5b759150423c34f52480add2a20906ddfea75279ecf0fc36883bd85f7177f6c6",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-04",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_04",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "262bd8062bdda581f296033fd5fbb0319b3d53960dff622be64923a7e16d82f8",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-05",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_05",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "7ff3d7bd2abdd8b6c8e4ad41f9d04a8669c1c0f23b9dda962e1d62b2bae0a820",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-06",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_06",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "f79970eae5bb88f04e84e2023a6b9f2cfc4464cfafad0decc71ed726d0e39f60",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-07",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_07",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "4ef1b143d24ec5f09b737e0a77521072cfef22666978f1f11d5eda528d0b04e1",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          5,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          7,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-08",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_08",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "39b107279fe8ec02dcb0909295f20d39b9bd8fb18761a476853a5819e1a39d83",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-09",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_09",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "9eee42822995777092dbf01ce618dfc09eb0525dfc149cdf8ec214ce680e57eb",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-10",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_10",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "9a554178f7489825110710ec33850b13068fd42d6811dffc25771d00200770dd",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-11",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_11",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "f777c506e74e68f00d8f3d681632325290f518e70b2c2c45340decfcef6a7de1",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-12",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_12",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "1952e2c097077a659acbcccc6164f097a6abcf5d5d014e192d9b5708673868fa",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-13",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_13",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "43abe522412b2294c57439810b70cf6978dbb98232de7ff58dc8ef79a70edeec",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-14",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_14",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "ffeaf834a8e31b587e712181915aef1569d68dab0afdaa45c92da4e97bcc0880",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-15",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_15",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "eb7acb13c4b993a01ddefc3af2eba2353812f5ffff0628886241d25b70645d83",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-16",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_16",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "8cb8c66493b4aeb8abb444610bf96e8401994b810ef08f7079796f91a9864625",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          5,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          7,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-17",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_17",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "fe6777392f2039c98bb77cfae948e3ebd65c72e3210ddc5920a9197fbaecf760",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-18",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_18",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "cdf4df62dac4b144c6a0318587efb47b27e724ea0c22083d727b98b6a648974c",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-19",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_19",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "4833d5ce7c02e0e8e6322d051fcbf7816faee5cb7b8170c092747ac40530ea46",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-20",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_20",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "49619c52f7a1bfb071bdbd1605d0066a3785d3986e73007633c860c1ad6a3b54",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-21",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_21",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "64264bd37642cde62e06aaaf632c903e10d2f162990a9910dc4219dd3defb171",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-22",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_22",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "1c1b94297c88fd80b4c55404d41cd01035a63e956a0caaf21447303cead70b2c",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          7,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          9,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-23",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_23",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "082d9b87117a35183ebcc07fd0248a4817e9e2818d53f1b942fa8a10396a7638",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-24",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_24",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "fb39e76a102ce65c094db3b1845630041a830e4fd17ded3d3aa7cfc55a32efa1",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-25",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_25",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "59125763343709d1e453a9780866304ec9fcc678ecb8b52ebac9995f15f03321",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-26",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_26",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "12111314f60ea7dc089cee1db4bd2a438aaf0b3ca50f3f006e42514deb670fce",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-27",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_27",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "f7bdf316426e4830a9d9aef659cc5643aea9a15d0e860819a6dae143fb2db18a",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          5
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          6,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          8,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "tv.danmaku.bili:9.15.0:compose-comment-28",
+    "version": "1",
+    "platform": "android",
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "kind": "compose_comment_28",
+    "repeat": {
+      "role": "android.view.View"
+    },
+    "repeatSubtreeHash": "11682b6e655dd36b148b3d25314333872c9121e9ed5ed1fa3a7ce0152c1bdfe1",
+    "fields": {
+      "comment_author_display_name": {
+        "select": {
+          "role": "android.widget.Button"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_visible_body": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          3
+        ],
+        "source": "description",
+        "cardinality": "one"
+      },
+      "comment_displayed_time_location": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          4,
+          1
+        ],
+        "source": "text",
+        "cardinality": "one"
+      },
+      "comment_displayed_like_description": {
+        "select": {
+          "role": "android.view.View"
+        },
+        "childPath": [
+          6,
+          0
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  }
+]

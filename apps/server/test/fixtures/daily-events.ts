@@ -1,12 +1,13 @@
+import {structuredObject} from './structured-page.js';
 import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
-import {uiPageText,type CaptureInput,type UiPageV2} from '@mote/shared';
+import {uiPageText,type CaptureInput,type UiPageV3} from '@mote/shared';
 
 /** All text and pixels are generated. Expectations are test-only, never model policy. */
 export async function dailyEventFixtures(){
   const fields=(at:string,title:string,body:string,kind:'article'|'product'='article'):CaptureInput=>{
-    const page:UiPageV2={version:2,scope:'visible_window',adapterId:'generated.daily-fields',adapterVersion:'1',appVersion:'fixture',activity:'fixture.Page',status:'ok',truncated:false,
-      observations:{firstAt:at,lastAt:at,count:1},objects:[{kind,title,...(kind==='article'?{author:'Mira (external author)'}:{}),body:body?[{text:body}]:[],...(kind==='article'?{identity:{type:'url',value:'https://fixture.invalid/ai-archive'},url:'https://fixture.invalid/ai-archive'}:{})}]};
+    const page:UiPageV3={version:3,scope:'visible_window',adapterId:'generated.daily-fields',adapterVersion:'1',appVersion:'fixture',activity:'fixture.Page',status:'ok',truncated:false,
+      observations:{firstAt:at,lastAt:at,count:1},objects:[structuredObject({kind,title,...(kind==='article'?{author:'Mira (external author)'}:{}),body:body?[{text:body}]:[],...(kind==='article'?{identity:{type:'url',value:'https://fixture.invalid/ai-archive'},url:'https://fixture.invalid/ai-archive'}:{})})]};
     return {id:randomUUID(),deviceId:'generated-daily-phone',deviceName:'Generated daily phone',platform:'android',source:'ui_page',appId:'fixture.reader',appName:'Generated reader',windowTitle:'',capturedAt:at,durationMs:0,
       ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'accessibility'},uiPage:page}};
   };
@@ -18,7 +19,7 @@ export async function dailyEventFixtures(){
       imageBase64:image.toString('base64'),imageMime:'image/png',ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:true,mode:'local',collection:'content'}};
   };
   const article=fields('2026-10-09T15:59:00.000Z','AI context archives','Mira writes: I believe every programmer should use daily event memory. This is my opinion as the article author.');
-  const nextDay=fields('2026-10-09T16:01:00.000Z',article.metadata!.uiPage!.version===2?article.metadata!.uiPage!.objects[0].title:'AI context archives','Mira proposes keeping original articles separate from personal memories.');
+  const nextDay=fields('2026-10-09T16:01:00.000Z','AI context archives','Mira proposes keeping original articles separate from personal memories.');
   const product=fields('2026-10-10T01:00:00.000Z','Generated Laptop Z — recommendation card','','product');
   const screenInputs=[
     {title:'Draft plan',at:'2026-10-10T02:00:00.000Z',lines:['Draft note: Plan to compare laptops next week.','No order has been placed. Task is not complete.']},

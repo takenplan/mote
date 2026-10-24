@@ -77,6 +77,36 @@ class AppPolicyInstrumentedTest {
             context.queue().acknowledge(second.getString("id"))
         } finally { settings.enabled = false; pipeline?.close(); restore(prefs, original) }
     }
+    @Test fun expiredNodeSampleSkipsEphemeralOcrWhileCaptureAuthorizationRemainsCurrent() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        require(context.packageName=="dev.mote.collector.dev"&&android.os.Build.FINGERPRINT.contains("emu64a"))
+        val settings=Settings(context);require(!settings.enabled&&context.queue().depth()==0&&!CaptureAccessibilityService.connected&&!ProjectionService.running)
+        val prefs=context.getSharedPreferences("mote",0);val original=prefs.all.toMap()
+        val numeric=context.getSharedPreferences("numeric_diagnostics",0);val originalNumeric=numeric.all.toMap()
+        var pipeline:CapturePipeline?=null
+        val bitmap=android.graphics.Bitmap.createBitmap(240,120,android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.WHITE)
+            android.graphics.Canvas(this).drawRect(0f,0f,120f,120f,android.graphics.Paint().apply {color=android.graphics.Color.BLACK})
+        }
+        try {
+            val config=settings.read().copy(server="",token="",syncMode="manual",mode="accessibility",screenCollectionEnabled=true,localContentOcr=true,
+                appCollectionRules=AppCollectionRules.fromLines(AppCollectionMode.STRUCTURED,"").json(),excludedPackages="",masks="",diagnosticsEnabled=true,chargingOnly=false,batteryPauseBelowPct=0,uploadGate=UploadGateConfig(false))
+            settings.save(config);settings.enabled=true
+            val windows=WindowSnapshot(setOf("generated.context"),"generated.context",true)
+            val current=java.util.concurrent.atomic.AtomicBoolean(true)
+            val sample=CaptureObservation(nodes=JSONObject().put("ocrSafe",true).put("ocrViewport",JSONObject().put("x",0).put("y",0).put("width",240).put("height",120)),contentCurrent=current::get)
+            val before=JSONObject(Diagnostics(context).export()).getJSONObject("totals").getLong("ocrCalls")
+            pipeline=CapturePipeline(context){}
+            pipeline.submit(bitmap,windows,config,sample=sample,isCurrent={current.set(false);true})
+            waitUntil {pipeline?.isBusy()==false&&ConnectionGuard.processing.get()==0}
+            assertFalse(current.get());assertEquals(before,JSONObject(Diagnostics(context).export()).getJSONObject("totals").getLong("ocrCalls"))
+            assertEquals(0,context.queue().depth());assertEquals(0,context.queue().inventory().images)
+            assertTrue(bitmap.isRecycled)
+        } finally {
+            settings.enabled=false;pipeline?.close();if(!bitmap.isRecycled)bitmap.recycle()
+            restore(prefs,original);restore(numeric,originalNumeric)
+        }
+    }
     @Test fun optionalGeneratedServiceActivityContentAndFileMetadataReachCentral() {
         val instrumentation = InstrumentationRegistry.getInstrumentation(); val context = instrumentation.targetContext
         val input = File(context.filesDir, "app-policy-fixture.json")
@@ -86,7 +116,7 @@ class AppPolicyInstrumentedTest {
         val server = fixture.getString("serverUrl"); require(server.startsWith("http://127.0.0.1:")); val token = fixture.getString("token")
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         fun shell(command: String) = automation.executeShellCommand(command).use { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() } }
-        val avd = shell("getprop ro.boot.qemu.avd_name"); require(avd in setOf("mote_fixture_api35", "mote_release_060"))
+        val avd = shell("getprop ro.boot.qemu.avd_name"); require(avd in setOf("mote_fixture_api35", "mote_fixture_api37", "mote_release_060"))
         val settings = Settings(context); require(!settings.enabled && context.queue().depth() == 0)
         val prefs = context.getSharedPreferences("mote", 0); val original = prefs.all.toMap()
         val services = shell("settings get secure enabled_accessibility_services"); val accessibility = shell("settings get secure accessibility_enabled")
@@ -122,7 +152,7 @@ class AppPolicyInstrumentedTest {
             for (i in 0 until activity.length()) {
                 val row = activity.getJSONObject(i); assertEquals("", row.getString("ocrText")); assertEquals("", row.getString("windowTitle")); assertTrue(row.isNull("blobHash"))
                 assertEquals("activity", row.getJSONObject("privacy").getString("collection"))
-                assertEquals(setOf("intervalMs"), row.getJSONObject("metadata").getJSONObject("capture").keys().asSequence().toSet())
+                assertTrue(row.getJSONObject("metadata").getJSONObject("captureObservation").getJSONObject("selected").getBoolean("duration"))
             }
             settings.save(config.copy(excludedPackages = context.packageName + ".test")); settings.enabled = true
             val saved = count("ACTIVITY_QUEUED"); Thread.sleep(5500); stop()
@@ -172,14 +202,25 @@ class AppPolicyInstrumentedTest {
             val c = settings.read().copy(server = "https://127.0.0.1:1", token = "generated-timing-fixture-only-123456789", intervalSeconds = 15,
                 excludedPackages = "", appCollectionRules = AppCollectionRules.CONTENT_DEFAULT)
             settings.save(c); settings.enabled = true; pipeline = CapturePipeline(context) { }
-            pipeline.submit(generated(), windows, c, "2026-09-14T00:00:00Z", 0)
-            waitUntil { context.queue().depth() == 1 && pipeline?.isBusy() == false }
-            val first = context.queue().peek()!!; assertEquals(0, first.getLong("durationMs")); context.queue().acknowledge(first.getString("id"))
-            Thread.sleep(250) // Independent asynchronous processing gap, deliberately not fifteen seconds.
-            pipeline.submit(generated(), windows, c, "2026-09-14T00:00:15Z", 15000)
-            waitUntil { context.queue().depth() == 1 && pipeline?.isBusy() == false }
-            val second = context.queue().peek()!!; assertEquals(15000, second.getLong("durationMs")); assertEquals("2026-09-14T00:00:15Z", second.getString("capturedAt"))
-            assertEquals("", second.getString("ocrText")); assertEquals("disabled", second.getJSONObject("ocr").getString("status")); assertNotNull(context.queue().image(second.getString("id"))); context.queue().acknowledge(second.getString("id"))
+            val firstSample=CaptureObservation(at="2026-09-14T00:00:00Z",elapsed=0)
+            pipeline.recordDuration(windows,c,firstSample)
+            pipeline.submit(generated(),windows,c,firstSample.at,firstSample.elapsed,firstSample)
+            waitUntil {context.queue().depth()==2&&pipeline?.isBusy()==false}
+            val first=context.queue().syncIds(limit=10).mapNotNull {context.queue().capture(it)}
+            assertTrue(first.all {it.getLong("durationMs")==0L})
+            first.forEach {context.queue().acknowledge(it.getString("id"))}
+            Thread.sleep(250) // Processing completion is deliberately independent from the fifteen-second observation interval.
+            val nextSample=CaptureObservation(at="2026-09-14T00:00:15Z",elapsed=15000)
+            pipeline.recordDuration(windows,c,nextSample)
+            pipeline.submit(generated(),windows,c,nextSample.at,nextSample.elapsed,nextSample)
+            waitUntil {context.queue().depth()==2&&pipeline?.isBusy()==false}
+            val next=context.queue().syncIds(limit=10).mapNotNull {context.queue().capture(it)}
+            val activity=next.single {it.getString("source")=="activity"};val screen=next.single {it.getString("source")=="screen"}
+            assertEquals(15000,activity.getLong("durationMs"));assertEquals(0,screen.getLong("durationMs"))
+            assertEquals("2026-09-14T00:00:15Z",screen.getString("capturedAt"))
+            assertEquals(activity.getJSONObject("metadata").getJSONObject("captureObservation").getString("id"),screen.getJSONObject("metadata").getJSONObject("captureObservation").getString("id"))
+            assertEquals("",screen.getString("ocrText"));assertEquals("disabled",screen.getJSONObject("ocr").getString("status"));assertNotNull(context.queue().image(screen.getString("id")))
+            next.forEach {context.queue().acknowledge(it.getString("id"))}
         } finally { settings.enabled = false; pipeline?.close(); restore(prefs, original) }
     }
     @Test fun optionalGeneratedProjectionReusesDisplayAndNeverAttachesActivitySurface() {
@@ -190,7 +231,7 @@ class AppPolicyInstrumentedTest {
         val fixture = JSONObject(input.readText()); require(fixture.getBoolean("generatedOnly")); require(fixture.getString("serverUrl").startsWith("http://127.0.0.1:"))
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         fun shell(command: String) = automation.executeShellCommand(command).use { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() } }
-        require(shell("getprop ro.boot.qemu.avd_name") in setOf("mote_fixture_api35", "mote_release_060"))
+        require(shell("getprop ro.boot.qemu.avd_name") in setOf("mote_fixture_api35", "mote_fixture_api37", "mote_release_060"))
         require(context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED)
         val settings = Settings(context); require(!settings.enabled && context.queue().depth() == 0)
         val prefs = context.getSharedPreferences("mote", 0); val original = prefs.all.toMap()

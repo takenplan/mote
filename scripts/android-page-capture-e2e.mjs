@@ -1,5 +1,5 @@
 import {spawnSync} from 'node:child_process';
-import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, writeFileSync, readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {resolve} from 'node:path';
 
@@ -13,7 +13,8 @@ function call(args) {
   if (result.error || result.status !== 0) throw result.error ?? new Error(result.stderr || result.stdout);
   return result.stdout.trim();
 }
-if (call(['shell', 'getprop', 'ro.boot.qemu.avd_name']) !== 'mote_fixture_api35') throw new Error('Only mote_fixture_api35 is allowed');
+const avd=call(['shell','getprop','ro.boot.qemu.avd_name']);
+if(!['mote_fixture_api35','mote_fixture_api37'].includes(avd))throw new Error('Only dedicated Mote fixture AVDs are allowed');
 for (const path of ['apps/android/app/build/outputs/apk/development/app-development.apk', 'apps/android/app/build/outputs/apk/androidTest/development/app-development-androidTest.apk']) {
   if (!existsSync(path)) throw new Error(`Build the generated fixture APK first: ${path}`);
   call(['install', '-r', resolve(path)]);
@@ -29,15 +30,25 @@ const tests = [
   'dev.mote.collector.UiPageServiceInstrumentedTest',
   'dev.mote.collector.AppPolicyInstrumentedTest#activityPipelineDoesNotNeedModelsAndMetadataTogglePreservesQueuedBytes',
   'dev.mote.collector.AppPolicyInstrumentedTest#generatedProviderReportsActualSizeAndModificationWithoutInventingDates',
+  'dev.mote.collector.AppPolicyInstrumentedTest#expiredNodeSampleSkipsEphemeralOcrWhileCaptureAuthorizationRemainsCurrent',
 ];
+const expectedTests=tests.reduce((count,test)=>{
+  if(test.includes('#'))return count+1;
+  const source=readFileSync(resolve('apps/android/app/src/androidTest/java',test.replaceAll('.','/')+'.kt'),'utf8');
+  return count+(source.match(/@Test\b/g)??[]).length;
+},0);
+const centralIndex=process.argv.indexOf('--central-ready');
+const central=centralIndex<0?undefined:JSON.parse(readFileSync(resolve(process.argv[centralIndex+1]),'utf8'));
+if(central&&(!/^http:\/\/10\.0\.2\.2:\d+$/.test(central.url)||typeof central.token!=='string'||central.token.length<32))throw new Error('Central integration requires the generated isolated host fixture');
+const fixtureArgs=central?['-e','fixtureCentralUrl',central.url,'-e','fixtureCentralToken',central.token]:[];
 const startedAt = new Date().toISOString();
 let output = '';
 let failure;
 try {
   call(['shell', 'pm', 'grant', application, permission]);
-  output = call(['shell', 'am', 'instrument', '-w', '-r', '-e', 'class', tests.join(','), `${application}.test/androidx.test.runner.AndroidJUnitRunner`]);
+  output = call(['shell', 'am', 'instrument', '-w', '-r', '-e', 'class', tests.join(','), ...fixtureArgs, `${application}.test/androidx.test.runner.AndroidJUnitRunner`]);
   process.stdout.write(output + '\n');
-  if (!/OK \(7 tests\)/.test(output)) throw new Error('The generated collection lifecycle suite did not pass all seven tests');
+  if (!output.includes(`OK (${expectedTests} tests)`) || /FAILURES!!!|INSTRUMENTATION_FAILED/.test(output)) throw new Error('The generated collection lifecycle suite did not pass');
 } catch (error) {
   failure = error;
 } finally {
@@ -54,7 +65,7 @@ try {
 const reportDirectory = resolve('apps/android/app/build/reports/page-capture-fixture');
 mkdirSync(reportDirectory, {recursive: true});
 writeFileSync(resolve(reportDirectory, 'last-run.json'), JSON.stringify({
-  fixtureOnly: true, serial, avd: 'mote_fixture_api35', startedAt,
+  fixtureOnly: true, serial, avd, centralFixture:Boolean(central), startedAt,
   finishedAt: new Date().toISOString(), tests, status: failure ? 'failed' : 'passed',
   output, error: failure?.message,
 }, null, 2) + '\n');

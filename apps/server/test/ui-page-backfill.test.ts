@@ -1,10 +1,11 @@
+import {structuredObject} from './fixtures/structured-page.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {uiPageText,type UiPageV2} from '@mote/shared';
+import {uiPageText,type UiPageV3} from '@mote/shared';
 import {buildApp} from '../src/app.js';
 import {Store} from '../src/store.js';
 import type {Config} from '../src/config.js';
@@ -16,9 +17,9 @@ const headers={authorization:`Bearer ${token}`};
 const agent={configured:false,query:async()=>{throw Error('No live model in generated fixtures');},close:async()=>{}};
 function config(dataDir:string):Config{return {dataDir,token,tokenPath:join(dataDir,'token'),host:'127.0.0.1',port:0,dataKey:'32'.repeat(32),maxStorageBytes:30_000_000,maxExportBytes:10_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};}
 function record(source:'screen'|'ui_page',second:number){
-  const page:UiPageV2={version:2,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1',activity:'fixture.ArticleActivity',status:'ok',truncated:false,
-    observations:{firstAt:at(second),lastAt:at(second),count:1},objects:[{kind:'article',title:'Generated article',body:[{text:'Generated retained paragraph'}],
-      url:'https://fixture.invalid/article/1',identity:{type:'url',value:'https://fixture.invalid/article/1'}}]};
+  const page:UiPageV3={version:3,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1',activity:'fixture.ArticleActivity',status:'ok',truncated:false,
+    observations:{firstAt:at(second),lastAt:at(second),count:1},objects:[structuredObject({kind:'article',title:'Generated article',body:[{text:'Generated retained paragraph'}],
+      url:'https://fixture.invalid/article/1',identity:{type:'url',value:'https://fixture.invalid/article/1'}})]};
   return {id:randomUUID(),deviceId:'fixture-backfill-phone',deviceName:'Generated phone',platform:'android',source,appId:'fixture.app',appName:'Generated App',capturedAt:at(second),durationMs:0,
     ocrText:source==='ui_page'?uiPageText(page):'Generated screenshot transcription',privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},
     ...(source==='ui_page'?{metadata:{version:1,observedAt:at(second),collector:{method:'accessibility'},uiPage:page}}:{})};
@@ -76,21 +77,22 @@ test('durable screen version upgrade and field-page backfill preserve rebuild st
   assert.deepEqual(rebuilt.map(item=>item.change).sort(),['source','source','source']);
 });
 
-test('legacy queued pages and field pages share the mechanical window group but retain separate materials',async t=>{
+test('active Desktop selected nodes and Android named fields retain separate materials while retired Android nodes are rejected',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-field-legacy-group-'));
   const runtime=await buildApp(config(directory),{agent,backgroundWorker:false});
   t.after(async()=>{await runtime.app.close();rmSync(directory,{recursive:true,force:true});});
   const current=record('ui_page',30),generatedLegacy=record('ui_page',0);
-  const legacy={...generatedLegacy,ocrText:'Generated legacy selected-node original',metadata:{version:1,observedAt:at(0),collector:{method:'accessibility'},uiPage:{
+  const legacy={...generatedLegacy,platform:'macos',deviceId:'generated-desktop',ocrText:'Generated legacy selected-node original',metadata:{version:1,observedAt:at(0),collector:{method:'accessibility'},uiPage:{
     version:1,scope:'visible_window',adapterId:'generated.legacy',adapterVersion:'1',appVersion:'1',activity:'fixture.ArticleActivity',status:'partial',truncated:false,
     nodes:[{id:'fixture-title',resourceId:'fixture:id/title',role:'android.widget.TextView',text:'Generated legacy selected-node original',bounds:{x:0,y:0,width:100,height:40}}],
   }}};
+  const rejected=await runtime.app.inject({method:'POST',url:'/api/captures',headers,payload:{...legacy,id:randomUUID(),platform:'android'}});assert.equal(rejected.statusCode,400,rejected.body);
   for(const payload of [legacy,current]){
     const response=await runtime.app.inject({method:'POST',url:'/api/captures',headers,payload});
     assert.equal(response.statusCode,201,response.body);
   }
   const groups=runtime.store.db.prepare('SELECT group_key FROM context_observations WHERE id IN (?,?)').all(legacy.id,current.id);
-  assert.equal(groups.length,2);assert.equal(groups[0]?.group_key,groups[1]?.group_key,'fixture exercises the same UI-page five-minute group');
+  assert.equal(groups.length,2);assert.notEqual(groups[0]?.group_key,groups[1]?.group_key,'independent active devices keep their mechanical observation groups');
   await runtime.materialOrganizer.tick(100);
   const screen=runtime.materials.list({kind:'mote.screen-segment'}).items[0]!,field=runtime.materials.list({kind:'mote.ui-page-object'}).items[0]!;
   assert.ok(screen);assert.ok(field);
@@ -108,7 +110,7 @@ test('a long repeated article group keeps newest bounded material text while eve
   const originals:ReturnType<typeof record>[]=[];
   for(let index=0;index<80;index++){
     const value=record('ui_page',index),page=value.metadata!.uiPage;
-    page.objects[0]!.body=Array.from({length:3},(_,paragraph)=>({text:`Generated observation ${index}, paragraph ${paragraph}. `.padEnd(21000,'x')}));
+    page.objects[0]!.fields.find(field=>field.name==='body')!.values=Array.from({length:3},(_,paragraph)=>({text:`Generated observation ${index}, paragraph ${paragraph}. `.padEnd(21000,'x'),source:'text'}));
     value.ocrText=uiPageText(page);
     originals.push(value);
     const response=await runtime.app.inject({method:'POST',url:'/api/captures',headers,payload:value});

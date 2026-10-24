@@ -141,6 +141,7 @@ class MainActivity : MoteActivity() {
     private lateinit var syncChargingOnly: CheckBox
     private lateinit var syncBatteryNotLow: CheckBox
     private lateinit var chargingOnly: CheckBox
+    private lateinit var localContentOcr: CheckBox
     private lateinit var ocrMode: Spinner
     private lateinit var ocrAppModes: EditText
     private lateinit var diagnosticEnabled: CheckBox
@@ -839,13 +840,13 @@ class MainActivity : MoteActivity() {
         }
         section(MoteI18n.text("选择要记录的应用"))
         listOf(
-            "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。",
-            "仅应用活动：记录应用与时长。不记录：跳过该应用。",
-            "隐私过滤不通过时不会回退截图。"
+            "应用时长、截图和结构化内容可分别选择，也可组合。",
+            "截图开关决定是否保存图片；结构化内容开关决定是否提取可见字段。",
+            "隐私过滤不通过时不采集；字段解析失败不会扩大已选范围。"
         ).forEach { text(MoteI18n.text(it), NativeFontRole.SUPPORT, NativeColorRole.MUTED) }
         val appRules = AppCollectionRules.parse(config.appCollectionRules)
         appDefault = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("默认：记录截图与内容"), MoteI18n.text("默认：只记应用和时长"), MoteI18n.text("默认：不记录（仅记录单独开启的应用）")))
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, AppCollectionMode.entries.map { MoteI18n.text("默认：{0}", appModeLabel(it)) })
             setSelection(AppCollectionMode.entries.indexOf(appRules.defaultMode))
         }; content.addView(appDefault, LinearLayout.LayoutParams(-1, dp(56))); track(appDefault, "appDefault")
         appRuleRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(appRuleRows)
@@ -856,8 +857,9 @@ class MainActivity : MoteActivity() {
         button(MoteI18n.text("高级：手工编辑包名规则")) { rawRules.visibility = if (rawRules.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         regular.addView(rawRules); content = rawRules
         excludes = field(MoteI18n.text("不采集的应用包名（每行一个或逗号分隔）"), config.excludedPackages, "com.example.private", multiline = true)
-        appPolicies = field(MoteI18n.text("应用级别（每行 包名=content/activity/off）"), appRules.apps.entries.joinToString("\n") { "${it.key}=${it.value.wire}" }, "com.example.chat=activity\ncom.example.private=off", multiline = true)
+        appPolicies = field(MoteI18n.text("应用选项（每行 包名=采集选项）"), appRules.apps.entries.joinToString("\n") { "${it.key}=${it.value.wire}" }, "com.example.chat=activity\ncom.example.private=off", multiline = true)
         appPolicies.filters = arrayOf(android.text.InputFilter.LengthFilter(32768))
+        text(AppCollectionMode.entries.joinToString("\n") { "${it.wire}：${appModeLabel(it)}" }, NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = regular
         val rulesWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -876,20 +878,22 @@ class MainActivity : MoteActivity() {
         text(MoteI18n.text("开启后附带实际系统/机型、采集器版本、语言/时区、电量/充电、网络类型、锁屏与可用空间；不取设备序列号、IMEI、MAC、SSID或定位。关闭只影响新记录和心跳，已入队内容不追溯修改。授权文件来源自身的大小/修改时间不受此开关影响。"), NativeFontRole.SUPPORT)
         text(MoteI18n.text("没有内置应用黑名单。配置排除后，无法识别应用、多个应用窗口或系统遮挡时暂停。投屏模式需要同时启用无障碍服务才能可靠执行排除；仅使用情况权限不足以保证所有可见窗口。"), NativeFontRole.SUPPORT)
         section(MoteI18n.text("页面采集方式"))
-        text(MoteI18n.text("端侧只提取可见字段并轻量合并；中央端负责组织、索引与进一步处理。解析未取得内容时，按已授权范围采集过滤后的截图。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-        text(MoteI18n.text("页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+        text(MoteI18n.text("端侧提取可见字段，中央端组织资料和活动。每个应用分别选择截图和结构化内容。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+        text(MoteI18n.text("结构化字段规则按应用和版本匹配，仅在该应用已选择结构化内容时运行。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         uiPageMode=Spinner(this).apply {
             adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf(MoteI18n.text("只截图"),MoteI18n.text("页面优先，未取得内容时截图")))
             setSelection(if (config.uiPageMode == "screen_only") 0 else 1)
-        }; content.addView(uiPageMode); track(uiPageMode, "uiPageMode")
-        text(MoteI18n.text("按应用版本隔离字段规则。未配置当前版本时回退截图；选择只截图则不会解析页面。投屏模式只支持只截图。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+        }; uiPageMode.visibility = View.GONE
+        text(MoteI18n.text("截图和结构化内容独立执行，解析结果不改变截图选择。投屏模式不支持结构化内容。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         val ruleEditor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级：查看或编辑全部页面规则")) { ruleEditor.visibility = if (ruleEditor.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         content.addView(ruleEditor)
         val pageOwner = content; content = ruleEditor
         uiPageRules=field(MoteI18n.text("页面规则 JSON"),config.uiPageRules,"[]",multiline=true)
-        text(MoteI18n.text("字段规则需要匹配实际应用版本与控件 ID；配置匹配不代表已经通过真机验证。旧文字规则保留用于查看，不能替代文章或商品字段适配。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+        text(MoteI18n.text("字段规则需要匹配实际应用版本与控件 ID；配置匹配不代表已经通过真机验证。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = pageOwner
+        localContentOcr = check(MoteI18n.text("使用本机 OCR 补充结构化内容"), config.localContentOcr)
+        text(MoteI18n.text("仅对已选择结构化内容的应用启用。截图关闭时，临时像素只在本机识别后释放，不保存、不上传图片。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         section(MoteI18n.text("固定遮罩"))
         text(MoteI18n.text("拖动示意图添加矩形；绿色区域会在 OCR 和保存前被遮住。这里不会读取你的屏幕。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         val maskFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -927,7 +931,7 @@ class MainActivity : MoteActivity() {
         content.addView(ocrMode); track(ocrMode, "ocrMode")
         ocrAppModes = field(MoteI18n.text("按应用指定隐私审查引擎（JSON）"), config.ocrAppModes, "{}")
         text(MoteI18n.text("可填写包名到 chinese、latin 或 dual 的映射；未指定的应用使用上方模式。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-        text(MoteI18n.text("仅在截图文字规则需要时运行本机识别。识别结果仅用于隐私审查，不保存、不上传；完整内容识别由中央执行。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+        text(MoteI18n.text("隐私审查使用本机识别。只有另行选择本机 OCR 补充时，识别文字才会作为结构化内容保存；截图按独立选择执行。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = privacyContent
     }
 
@@ -1061,7 +1065,7 @@ class MainActivity : MoteActivity() {
             jpegQuality = number(jpegQuality, 40..95), captureMaxSide = number(captureMaxSide, 640..2560),
             imageDedupeMode = imageDedupeModes[imageDedupeMode.selectedItemPosition])
         Page.PRIVACY -> current.copy(
-            uiPageMode=uiPageModes[uiPageMode.selectedItemPosition], uiPageRules=checked(uiPageRules){uiPageRules.text.toString().also{UiPageRules.parse(it)}},
+            localContentOcr = localContentOcr.isChecked, uiPageMode=current.uiPageMode, uiPageRules=checked(uiPageRules){uiPageRules.text.toString().also{UiPageRules.parse(it)}},
             excludedPackages = excludes.text.toString(), masks = checked(masks) { masks.text.toString().also { Mask.parse(it) } },
             appCollectionRules = checked(appPolicies) { AppCollectionRules.fromLines(AppCollectionMode.entries[appDefault.selectedItemPosition], appPolicies.text.toString()).json() },
             ocrMode = OcrPolicy.modes[ocrMode.selectedItemPosition], ocrAppModes = checked(ocrAppModes) { ocrAppModes.text.toString().also { OcrPolicy.validate(OcrPolicy.modes[ocrMode.selectedItemPosition], it) } },
@@ -1170,7 +1174,7 @@ class MainActivity : MoteActivity() {
             return
         }
         if (c.effectiveMode() == "accessibility") {
-            if (Build.VERSION.SDK_INT < 30 && AppCollectionRules.parse(c.appCollectionRules).mayCollectContent()) { toast(MoteI18n.text("Android 10 内容截图请勾选投屏模式；仅活动无需投屏")); return }
+            if (Build.VERSION.SDK_INT < 30 && (c.collectionRules.mayCollectScreenshots() || c.localContentOcr && c.collectionRules.mayCollectStructured())) { toast(MoteI18n.text("Android 10 内容截图请勾选投屏模式；仅活动无需投屏")); return }
             if (!CaptureAccessibilityService.connected) { showPage(Page.PERMISSIONS); toast(MoteI18n.text("请先启用无障碍截图服务，返回后再开始")); return }
             enableCapture(c, MoteI18n.text("采集已启用，等待首帧；配置页受系统安全保护")) {}
         } else {
@@ -1220,14 +1224,14 @@ class MainActivity : MoteActivity() {
             val previousRules = uiPageRules.text.toString()
             uiTask.start(MoteI18n.text("正在读取字段规则…"), { saveHint.text = it }, {
                 val imported = contentResolver.openInputStream(uri)?.use { input ->
-                    val buffer = ByteArray(65537); var size = 0
+                    val buffer = ByteArray(1048577); var size = 0
                     while (size < buffer.size) {
                         val count = input.read(buffer, size, buffer.size - size)
                         if (count < 0) break
                         if (count == 0) continue
                         size += count
                     }
-                    require(size <= 65536) { MoteI18n.text("字段规则文件超过大小上限") }
+                    require(size <= 1048576) { MoteI18n.text("字段规则文件超过大小上限") }
                     buffer.copyOf(size).toString(Charsets.UTF_8)
                 } ?: error(MoteI18n.text("字段规则文件不可读取"))
                 AppPageSetup.merge(previousRules, imported, target.first, target.second)
@@ -1816,7 +1820,14 @@ class MainActivity : MoteActivity() {
             }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
     }
-    private fun appModeLabel(mode: AppCollectionMode) = when (mode) { AppCollectionMode.CONTENT -> MoteI18n.text("截图与内容"); AppCollectionMode.ACTIVITY -> MoteI18n.text("仅应用和时长"); AppCollectionMode.OFF -> MoteI18n.text("不记录") }
+    private fun appModeLabel(mode: AppCollectionMode): String {
+        val choices = buildList {
+            if (mode.duration) add(MoteI18n.text("应用时长"))
+            if (mode.screenshots) add(MoteI18n.text("截图"))
+            if (mode.structured) add(MoteI18n.text("结构化内容"))
+        }
+        return choices.joinToString(" + ").ifBlank { MoteI18n.text("不记录") }
+    }
     @Suppress("DEPRECATION")
     private fun appVersion(id: String): String = runCatching { packageManager.getPackageInfo(id, 0).versionName.orEmpty() }.getOrDefault("")
     private fun appLabel(id: String): String = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(id, 0)).toString() }.getOrDefault(id)
@@ -1824,9 +1835,9 @@ class MainActivity : MoteActivity() {
     private fun pageAdapterSummary(raw: String, id: String, version: String): String {
         if (version.isBlank()) return MoteI18n.text("应用未安装或版本不可读取；不会使用其他版本的字段规则")
         val adapters = runCatching { AppPageSetup.adapters(raw, id, version) }.getOrDefault(emptyList())
-        if (adapters.isEmpty()) return MoteI18n.text("当前版本未配置文章或商品字段规则；内容范围内回退截图")
+        if (adapters.isEmpty()) return MoteI18n.text("当前版本未配置字段规则；截图仍按独立选择执行")
         return adapters.joinToString("\n") { rule ->
-            val kind = if (rule.kind == "article") MoteI18n.text("文章") else MoteI18n.text("商品")
+            val kind = when (rule.kind) { "article" -> MoteI18n.text("文章"); "product" -> MoteI18n.text("商品"); else -> rule.kind }
             MoteI18n.text("已配置 {0} · {1}；实际页面仍需匹配", kind, rule.fields.joinToString("、") { field -> when (field) {
                 "title" -> MoteI18n.text("标题"); "author" -> MoteI18n.text("作者"); "body" -> MoteI18n.text("正文")
                 "url" -> MoteI18n.text("链接"); "itemId" -> MoteI18n.text("商品 ID"); else -> field
@@ -1843,7 +1854,7 @@ class MainActivity : MoteActivity() {
         fun refresh() {
             val candidate = runCatching { draft() }.getOrNull() ?: return
             summary.text = appModeLabel(draftAppMode(id, candidate)) + "\n" +
-                if (candidate.uiPageMode == "screen_only") MoteI18n.text("当前选择只截图，页面字段规则不会运行")
+                if (!draftAppMode(id, candidate).structured) MoteI18n.text("此应用未选择结构化内容，字段规则不会运行")
                 else pageAdapterSummary(candidate.uiPageRules, id, version)
             onChanged()
         }
@@ -1856,7 +1867,7 @@ class MainActivity : MoteActivity() {
         action(MoteI18n.text("载入当前版本内置字段规则")) {
             runCatching {
                 val builtin = UiPageRules.parse(assets.open("ui-page-rules.json").bufferedReader().use { it.readText() })
-                    .filter { it.optInt("formatVersion") == 2 && it.optString("platform") == "android" && it.optString("appId") == id && version.isNotBlank() && it.optString("appVersion") == version }
+                    .filter { it.optInt("formatVersion") in setOf(2, 3) && it.optString("platform") == "android" && it.optString("appId") == id && version.isNotBlank() && it.optString("appVersion") == version }
                 require(builtin.isNotEmpty()) { MoteI18n.text("内置规则没有适配当前安装版本，请配置字段或导入规则") }
                 val merged = AppPageSetup.merge(uiPageRules.text.toString(), org.json.JSONArray(builtin).toString(), id, version)
                 uiPageRules.setText(merged); uiPageMode.setSelection(uiPageModes.indexOf("ui_preferred")); refresh()
@@ -1869,7 +1880,7 @@ class MainActivity : MoteActivity() {
             @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 106)
         }
         detail(MoteI18n.text("规则配置与应用内容授权分开。修改只形成草稿，返回后保存生效；保存不会开始采集。"))
-        detail(MoteI18n.text("字段配置匹配不代表已经通过真机验证。未取得结构化内容时回退截图；隐私拒绝时不采集。"))
+        detail(MoteI18n.text("字段配置匹配不代表已经通过真机验证。截图按独立选择执行；隐私拒绝时不采集。"))
         refresh()
         MoteDialogBuilder(this).setTitle(label).setView(ScrollView(this).apply { addView(body) }).setNegativeButton(MoteI18n.text("完成"), null).show()
     }
@@ -1914,16 +1925,14 @@ class MainActivity : MoteActivity() {
         if (appId == null) detail(MoteI18n.text("未单独设置的应用：{0}\n屏幕与应用活动：{1}", appModeLabel(config.collectionRules.defaultMode), if (config.screenCollectionEnabled) MoteI18n.text("已选择") else MoteI18n.text("未选择")))
         ids.forEach { id ->
             val mode = draftAppMode(id, config)
-            detail("${appLabel(id)} · ${appModeLabel(mode)}\n" + if (mode == AppCollectionMode.CONTENT) {
-                if (config.uiPageMode == "screen_only") MoteI18n.text("只保存过滤后的截图，不解析页面") else pageAdapterSummary(config.uiPageRules, id, appVersion(id))
-            } else if (mode == AppCollectionMode.ACTIVITY) MoteI18n.text("仅记录应用身份和时长，不读取正文，不保存截图") else MoteI18n.text("跳过该应用，包括截图回退"))
+            detail("${appLabel(id)} · ${appModeLabel(mode)}\n" + if (mode.structured) pageAdapterSummary(config.uiPageRules, id, appVersion(id)) else "")
         }
-        val contentAllowed = config.screenCollectionEnabled && if (appId == null) config.collectionRules.mayCollectContent() else draftAppMode(appId, config) == AppCollectionMode.CONTENT
-        if (contentAllowed && config.uiPageMode != "screen_only") {
-            detail(MoteI18n.text("文章格式示例\n标题：生成的阅读示例\n作者：示例作者\n正文：页面可见的原文片段；滚动后的可靠重叠片段在端侧轻量合并。"))
-            detail(MoteI18n.text("商品格式示例\n标题：生成的商品示例\n链接：仅保留页面实际提供的链接\n商品 ID：仅保留页面实际提供的 ID"))
-            detail(MoteI18n.text("这些格式示例不代表所有应用已适配。匹配当前版本且取得字段才记录结构化内容；其余页面按授权范围截图。"))
-        } else if (contentAllowed) detail(MoteI18n.text("截图示例：保存经过隐私过滤与遮罩的截图；完整内容识别由中央端执行。"))
+        val structuredAllowed = config.screenCollectionEnabled && if (appId == null) config.collectionRules.mayCollectStructured() else draftAppMode(appId, config).structured
+        if (structuredAllowed) {
+            detail(MoteI18n.text("结构化格式示例\n类型：可见内容\n字段：标题、正文、价格或控件状态等实际可见字段\n来源：可见文字、本机 OCR 或安全控件状态"))
+            detail(MoteI18n.text("这些格式示例不代表所有应用已适配。字段仅记录匹配规则取得的可见内容；截图按独立选择执行。"))
+            detail(MoteI18n.text("本机 OCR 补充：{0}", if (config.localContentOcr) MoteI18n.text("已选择") else MoteI18n.text("未选择")))
+        }
         if (appId == null) detail(MoteI18n.text("通知：{0} · 设备事件：{1} · 媒体：{2}", if (config.notificationCollectionEnabled) MoteI18n.text("已选择") else MoteI18n.text("未选择"), if (config.deviceEventCollectionEnabled) MoteI18n.text("已选择") else MoteI18n.text("未选择"), if (config.mediaCollectionEnabled && config.metadataEnabled) MoteI18n.text("已选择") else MoteI18n.text("未选择")))
         detail(if (config.hasSyncConnection()) MoteI18n.text("记录按已保存的同步策略发送到：{0}", config.server) else MoteI18n.text("尚未连接中央节点，记录只保存在本机"))
         val builder = MoteDialogBuilder(this).setTitle(MoteI18n.text("开启前预览"))
@@ -1937,16 +1946,26 @@ class MainActivity : MoteActivity() {
     }
     private fun chooseAppMode(id: String, label: String, onChanged: () -> Unit = {}) {
         val current = runCatching { AppCollectionRules.fromLines(AppCollectionMode.entries[appDefault.selectedItemPosition], appPolicies.text.toString()) }.getOrElse { toast(MoteI18n.text("请先修正高级规则")); return }
-        val selectedIndex = if (id in PrivacyRules.exclusions(excludes.text.toString())) 2 else current.apps[id]?.ordinal ?: 3
-        MoteDialogBuilder(this).setTitle(label).setSingleChoiceItems(arrayOf(MoteI18n.text("截图与内容 · 页面优先或只截图"), MoteI18n.text("仅应用和时长 · 不保存截图"), MoteI18n.text("不记录 · 跳过此应用"), MoteI18n.text("使用默认方式 · {0}", appModeLabel(current.defaultMode))), selectedIndex) { dialog, index ->
+        val excluded = id in PrivacyRules.exclusions(excludes.text.toString())
+        val initial = if (excluded) AppCollectionMode.OFF else current.apps[id] ?: current.defaultMode
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(12)) }
+        fun option(label: String, selected: Boolean) = CheckBox(this).apply { text = label; isChecked = selected; body.addView(this) }
+        val followDefault = option(MoteI18n.text("使用默认方式 · {0}", appModeLabel(current.defaultMode)), !excluded && id !in current.apps)
+        val duration = option(MoteI18n.text("应用时长"), initial.duration)
+        val screenshots = option(MoteI18n.text("截图"), initial.screenshots)
+        val structured = option(MoteI18n.text("结构化内容"), initial.structured)
+        fun refreshChoices() { listOf(duration, screenshots, structured).forEach { it.isEnabled = !followDefault.isChecked } }
+        followDefault.setOnCheckedChangeListener { _, _ -> refreshChoices() }; refreshChoices()
+        MoteDialogBuilder(this).setTitle(label).setView(body).setPositiveButton(MoteI18n.text("加入配置草稿")) { _, _ ->
             runCatching {
                 val rules = AppCollectionRules.fromLines(AppCollectionMode.entries[appDefault.selectedItemPosition], appPolicies.text.toString())
                 val selected = rules.apps.toMutableMap()
-                if (index == 3) selected.remove(id) else selected[id] = AppCollectionMode.entries[index]
+                if (followDefault.isChecked) selected.remove(id)
+                else selected[id] = AppCollectionMode.fromChoices(duration.isChecked, screenshots.isChecked, structured.isChecked)
                 AppCollectionRules.parse(AppCollectionRules(rules.defaultMode, selected).json())
                 excludes.setText(PrivacyRules.exclusions(excludes.text.toString()).filterNot { it == id }.joinToString("\n"))
                 appPolicies.setText(selected.entries.joinToString("\n") { "${it.key}=${it.value.wire}" })
-                dialog.dismiss(); onChanged()
+                onChanged()
             }.onFailure { toast(it.message ?: MoteI18n.text("请检查应用规则")) }
         }.setNegativeButton(MoteI18n.text("取消"), null).show()
     }
@@ -1957,7 +1976,7 @@ class MainActivity : MoteActivity() {
         val search = MoteUi.field(EditText(this)).apply { hint = MoteI18n.text("搜索应用名称"); setSingleLine() }; body.addView(search)
         val list = ListView(this); body.addView(list, LinearLayout.LayoutParams(-1, dp(340)))
         val modes = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("全部应用"), MoteI18n.text("截图与内容"), MoteI18n.text("仅应用和时长"), MoteI18n.text("不记录")))
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("全部应用")) + AppCollectionMode.entries.map(::appModeLabel))
         }; body.addView(modes, 1)
         val summary = TextView(this); body.addView(summary, 2)
         var shown = apps

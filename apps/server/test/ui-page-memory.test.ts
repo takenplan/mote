@@ -1,3 +1,4 @@
+import {structuredObject} from './fixtures/structured-page.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -5,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
-import {uiPageText,type CaptureInput,type UiPageV2} from '@mote/shared';
+import {uiPageText,type CaptureInput,type UiPageV3} from '@mote/shared';
 import type {ContextRecord,QueryInput} from '@mote/agent';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
@@ -18,9 +19,9 @@ const token='generated-page-memory-owner-token-000000',headers={authorization:`B
 const personal={id:'mote.personal-memory',version:'2'},coding={id:'mote.coding-memory',version:'2'};
 function record(kind:'article'|'product'='article',deviceId='generated-phone'):CaptureInput{
   const at='2026-10-10T00:00:00.000Z';
-  const page:UiPageV2={version:2,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1',activity:'fixture.Page',status:'ok',truncated:false,
-    observations:{firstAt:at,lastAt:at,count:1},objects:[{kind,title:kind==='article'?'Generated AI article':'Generated laptop card',
-      ...(kind==='article'?{author:'Generated external author'}:{}),body:kind==='article'?[{text:'The article describes a generated AI context archive.'}]:[]}]};
+  const page:UiPageV3={version:3,scope:'visible_window',adapterId:'generated.fields',adapterVersion:'1',appVersion:'1',activity:'fixture.Page',status:'ok',truncated:false,
+    observations:{firstAt:at,lastAt:at,count:1},objects:[structuredObject({kind,title:kind==='article'?'Generated AI article':'Generated laptop card',
+      ...(kind==='article'?{author:'Generated external author'}:{}),body:kind==='article'?[{text:'The article describes a generated AI context archive.'}]:[]})]};
   return {id:randomUUID(),deviceId,deviceName:'Generated phone',platform:'android',source:'ui_page',appId:'fixture.app',appName:'Generated App',capturedAt:at,durationMs:0,
     ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'accessibility'},uiPage:page}};
 }

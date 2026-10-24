@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 /** Versioned portable settings. Device identity, run state and Android grants are never imported. */
 object ConfigurationArchive {
-    const val MAX_BYTES = 256 * 1024
+    const val MAX_BYTES = 4 * 1024 * 1024
     fun encode(c: CollectorConfig, includeToken: Boolean = false): String {
         val settings = JSONObject().put("uiPageMode", c.uiPageMode).put("uiPageRules", c.uiPageRules)
             .put("server", c.server)
@@ -40,19 +40,20 @@ object ConfigurationArchive {
             .put("syncChargingOnly", c.syncChargingOnly)
             .put("syncBatteryNotLow", c.syncBatteryNotLow)
             .put("imageDedupeMode", c.imageDedupeMode)
+            .put("localContentOcr", c.localContentOcr)
             .put("ocrMode", c.ocrMode)
             .put("ocrAppModes", c.ocrAppModes)
             .put("imageDedupeDiagnosticsEnabled", c.imageDedupeDiagnosticsEnabled)
 
             .put("uploadedRetentionDays", c.uploadedRetentionDays)
         if (includeToken) settings.put("token", c.token)
-        return JSONObject().put("format", "mote-android-settings").put("version", 1).put("settings", settings).toString(2)
+        return JSONObject().put("format", "mote-android-settings").put("version", 2).put("settings", settings).toString(2)
     }
     fun decode(raw: String, current: CollectorConfig): CollectorConfig {
         require(raw.toByteArray().size <= MAX_BYTES) { MoteI18n.text("配置文件过大") }
         StrictJson.validate(raw)
         val root = JSONObject(raw)
-        require(root.getString("format") == "mote-android-settings" && root.get("version") == 1) { MoteI18n.text("不支持的配置格式或版本") }
+        require(root.getString("format") == "mote-android-settings" && root.get("version") == 2) { MoteI18n.text("不支持的配置格式或版本") }
         val values = root.getJSONObject("settings")
         require(values.keys().asSequence().all { it in keys }) { MoteI18n.text("配置包含未知字段") }
         val nextServer = string(values, "server", current.server)
@@ -93,6 +94,7 @@ object ConfigurationArchive {
             syncChargingOnly = boolean(values, "syncChargingOnly", current.syncChargingOnly),
             syncBatteryNotLow = boolean(values, "syncBatteryNotLow", current.syncBatteryNotLow),
             imageDedupeMode = string(values, "imageDedupeMode", current.imageDedupeMode),
+            localContentOcr = boolean(values, "localContentOcr", current.localContentOcr),
             ocrMode = string(values, "ocrMode", current.ocrMode),
             ocrAppModes = string(values, "ocrAppModes", current.ocrAppModes),
             imageDedupeDiagnosticsEnabled = boolean(values, "imageDedupeDiagnosticsEnabled", current.imageDedupeDiagnosticsEnabled),
@@ -110,5 +112,5 @@ object ConfigurationArchive {
     private fun int(j: JSONObject, key: String, fallback: Int): Int {
         val n = long(j, key, fallback.toLong()); require(n in Int.MIN_VALUE..Int.MAX_VALUE); return n.toInt()
     }
-    private val keys = setOf("syncPaused", "packedUpload", "uploadGateEnabled", "uploadGateText", "uploadGateFailure", "uiPageMode", "uiPageRules", "server", "token", "deviceName", "intervalSeconds", "maxQueueMiB", "wifiOnly", "excludedPackages", "masks", "debugHttp", "mode", "jpegQuality", "captureMaxSide", "chargingOnly", "batteryPauseBelowPct", "diagnosticsEnabled", "diagnosticsIntervalSeconds", "appCollectionRules", "metadataEnabled", "syncMode", "syncIntervalMinutes", "syncBatchSize", "jsonlWindowMinutes", "mediaCollectionEnabled", "screenCollectionEnabled", "notificationCollectionEnabled", "deviceEventCollectionEnabled", "syncChargingOnly", "syncBatteryNotLow", "imageDedupeMode", "ocrMode", "ocrAppModes", "imageDedupeDiagnosticsEnabled", "uploadedRetentionDays")
+    private val keys = setOf("syncPaused", "packedUpload", "uploadGateEnabled", "uploadGateText", "uploadGateFailure", "uiPageMode", "uiPageRules", "server", "token", "deviceName", "intervalSeconds", "maxQueueMiB", "wifiOnly", "excludedPackages", "masks", "debugHttp", "mode", "jpegQuality", "captureMaxSide", "chargingOnly", "batteryPauseBelowPct", "diagnosticsEnabled", "diagnosticsIntervalSeconds", "appCollectionRules", "metadataEnabled", "syncMode", "syncIntervalMinutes", "syncBatchSize", "jsonlWindowMinutes", "mediaCollectionEnabled", "screenCollectionEnabled", "notificationCollectionEnabled", "deviceEventCollectionEnabled", "syncChargingOnly", "syncBatteryNotLow", "imageDedupeMode", "localContentOcr", "ocrMode", "ocrAppModes", "imageDedupeDiagnosticsEnabled", "uploadedRetentionDays")
 }

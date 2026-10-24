@@ -109,6 +109,7 @@ class ProjectionService : Service() {
                     AppCollectionMode.ACTIVITY -> { lastTick = SystemClock.elapsedRealtime(); selected.submitActivity(windows, c) }
                     AppCollectionMode.CONTENT -> { lastTick = SystemClock.elapsedRealtime(); requestFrame(windows) }
                     AppCollectionMode.OFF -> Unit
+                    else -> Unit
                 }
             }
         }

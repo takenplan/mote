@@ -14,8 +14,8 @@ test('UI pages ingest, retry, browse, index and export without an image or OCR j
  const {app,store}=await buildApp(config,{agent:{configured:false,query:async()=>{throw Error('No live models');},close:async()=>{}}});
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const f=JSON.parse(readFileSync(new URL('../../../adapters/ui/fixtures/conformance.json',import.meta.url),'utf8'))[0];
- const page=extractUiPage(uiSnapshotSchema.parse(f.snapshot),uiRulesSchema.parse(f.rules),'android')!;
- const record={id:randomUUID(),deviceId:'fixture-page',deviceName:'Generated',platform:'android',capturedAt:'2026-09-20T00:00:00Z',durationMs:0,source:'ui_page',appId:f.snapshot.appId,appName:'Generated App',ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:'2026-09-20T00:00:00Z',collector:{method:'accessibility'},uiPage:page}};
+ const page=extractUiPage(uiSnapshotSchema.parse(f.snapshot),uiRulesSchema.parse(f.rules.map((rule:Record<string,unknown>)=>({...rule,platform:'macos'}))),'macos')!;
+ const record={id:randomUUID(),deviceId:'fixture-page',deviceName:'Generated',platform:'macos',capturedAt:'2026-09-20T00:00:00Z',durationMs:0,source:'ui_page',appId:f.snapshot.appId,appName:'Generated App',ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:'2026-09-20T00:00:00Z',collector:{method:'accessibility'},uiPage:page}};
  const headers={authorization:`Bearer ${token}`};
  for(const status of [201,200]){const response=await app.inject({method:'POST',url:'/api/captures',headers,payload:record});assert.equal(response.statusCode,status,response.body);}
  const detail=await app.inject({url:`/api/capture-browser/${record.id}`,headers});assert.equal(detail.statusCode,200);assert.deepEqual(detail.json().metadata.uiPage,page);assert.equal(detail.json().blobHash,null);

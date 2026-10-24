@@ -1,0 +1,1875 @@
+[
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-e0a5ef6306b06a56",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_e0a5ef6306b06a56",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "e0a5ef6306b06a5622c6c6a7a2b4c188747e6cf35581d87665eb7a53ac81e946",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-26c594599d471c91",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_26c594599d471c91",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "26c594599d471c91a358444edeaa7e8528243051651ec5ecca1680fdbe74fb9d",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-7b9ea69837e103c4",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_7b9ea69837e103c4",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "7b9ea69837e103c477f9a9cdb557c4e5e0c7048fde45b5e37edd258d6af217b4",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-1273b2473d6b8f2f",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_1273b2473d6b8f2f",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "1273b2473d6b8f2f78b210fd9b691454de5ebab77bde7c8a5d2818be971bff90",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-66adce01ea01d57d",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_66adce01ea01d57d",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "66adce01ea01d57d8daa70cc576469521bdbc46e36b0e89b108f2f2ecdc155a4",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-2cea55af7f9205aa",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_2cea55af7f9205aa",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "2cea55af7f9205aac0f85b699d4ee9d3c161628fbd2511f81a21e7a74f34de2a",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-123b2df98766a207",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_123b2df98766a207",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "123b2df98766a2074be1aaf88b851b67f306d5ecbbef2734329386e24164b5a8",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-1860bc12ba3b98d3",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_1860bc12ba3b98d3",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "1860bc12ba3b98d3be446e1f7691c7ee0d98e15951f8a24a20d29302c14d8692",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-a06b3c934f31c3ae",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_a06b3c934f31c3ae",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "a06b3c934f31c3ae5bfb91cd152e3a71b50d00b20f0d627943df46b74d907673",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-57b5e4f9d87b9856",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_57b5e4f9d87b9856",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "57b5e4f9d87b985626eaca29699432102bd314d534868d290485d30225bf1749",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-eb0d4e92d093684b",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_eb0d4e92d093684b",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "eb0d4e92d093684b92b3e4f92139f0df582bcda6dc22ceafca4a90acfe0aa77c",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-97c90146f9d531c2",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_97c90146f9d531c2",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "97c90146f9d531c2e39ede8eefe993cbefb8ea05ec3e36ab5f8639d4225d363d",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-fc2b10568cb80f57",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_fc2b10568cb80f57",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "fc2b10568cb80f57f62c7912bcb534ce659e597827b5d62f9e7adcd377370e87",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-097b4f7cde7594e8",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_097b4f7cde7594e8",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "097b4f7cde7594e847a1e625fd48b681919ddf2586d08c8794a7a059d2f23daf",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-a2db5fe43a61e47f",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_a2db5fe43a61e47f",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "a2db5fe43a61e47f2a6f3deb3e362c8740b64538bba6ccb9b73fa9779fa4e2fd",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-97948cd2b68e07d6",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_97948cd2b68e07d6",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "97948cd2b68e07d67bbea4169f8bae7d7b5f2455d05b7041eecab8a5ba8dadac",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-eb41a0155c83863f",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_eb41a0155c83863f",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "eb41a0155c83863f92991378abfde41254d44a09c5eb2b080f206842b984489f",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-c843ad49a61d0c74",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_c843ad49a61d0c74",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "c843ad49a61d0c7441cec073fd41234c4e3107a3109af8edb612d67055e8b339",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-b94a1c903e115481",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_b94a1c903e115481",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "b94a1c903e115481f938f01c56e7f552ecff3aa144ba54291adee74f728dbf88",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-65e4bde60ea9a1a2",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_65e4bde60ea9a1a2",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "65e4bde60ea9a1a268a5eda27cfde6f92af7516da3e39c20a8baaddf23bde156",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-be5a79409591545c",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_be5a79409591545c",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "be5a79409591545c08fabf123fb6effbe34801a8ceb0b83b096690ac460cf006",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-0cf2c4fe885533b3",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_0cf2c4fe885533b3",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "0cf2c4fe885533b3cac1246476fedab08dbed4a8492349cc83ca9ac319c1002d",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-1b4028fa38290434",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_1b4028fa38290434",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "1b4028fa38290434a39101ad14adaac4fea77a5cb42c157c32e5152c628d3307",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-482f630c79a0aff2",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_482f630c79a0aff2",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "482f630c79a0aff2a1920a9afa9524f4d5c4b8f78edc09b756ff649807cd294c",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-31d852c5037563ab",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_31d852c5037563ab",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "31d852c5037563abed17e374db358506982cf659143f2971224be035e83f6901",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-26e90e4dbec0e831",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_26e90e4dbec0e831",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "26e90e4dbec0e831c7590db3cc534618a965ea70769b71084e39c7f38666a281",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-6872db354385f459",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_6872db354385f459",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "6872db354385f45916498a3b5ac732ebf9511a083d44d798fa5d17a9651cf275",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-5e1c6550a7c6faa7",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_5e1c6550a7c6faa7",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "5e1c6550a7c6faa7d094a614d785e7a04b2915178c48ff209f1cfb1dc4e41892",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-630e4d6a1b898052",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_630e4d6a1b898052",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "630e4d6a1b898052debb877fe00d0454effab957eba446aae3c4ac1d4644a856",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-b6b061d72655401e",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_b6b061d72655401e",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "b6b061d72655401e55be4031e2cced5f88c7211ae6c0d2ee6dd17fc730a07a79",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:container-a30412dca09e4a36",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "container_a30412dca09e4a36",
+    "repeat": {
+      "resourceId": "com.tencent.mobileqq:id/root",
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "a30412dca09e4a3622d34dea60a4b587ba386fd67fac9afe60a864000af8c678",
+    "fields": {
+      "message_visible_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjm"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "message_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mjp"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_message_body": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ov"
+        },
+        "source": "text",
+        "cardinality": "many"
+      },
+      "quoted_author_display_name": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2ol"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "quoted_displayed_time": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/2om"
+        },
+        "source": "text",
+        "cardinality": "one"
+      },
+      "message_media_description": {
+        "select": {
+          "resourceId": "com.tencent.mobileqq:id/mki"
+        },
+        "source": "description",
+        "cardinality": "many"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:app-summary-aaf5b0074a7b685e",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "app_summary_aaf5b0074a7b685e",
+    "repeat": {
+      "role": "android.widget.FrameLayout"
+    },
+    "repeatSubtreeHash": "aaf5b0074a7b685e00976d4951a633d867f088ea91d76081567d97f93056db90",
+    "fields": {
+      "app_generated_summary_fragment": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          2
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:app-summary-466d34dbf10be098",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "app_summary_466d34dbf10be098",
+    "repeat": {
+      "role": "android.widget.FrameLayout"
+    },
+    "repeatSubtreeHash": "466d34dbf10be0980b6cec2227aeba3d7c9fc9126b94783f5b23005967b3f415",
+    "fields": {
+      "app_generated_summary_fragment": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          2
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.mobileqq:9.3.75:app-summary-7e32d72cfdc119c6",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "kind": "app_summary_7e32d72cfdc119c6",
+    "repeat": {
+      "role": "android.widget.FrameLayout"
+    },
+    "repeatSubtreeHash": "7e32d72cfdc119c6161b81d0d41a46a1abb51823ac1e96a4410f89cb9f274426",
+    "fields": {
+      "app_generated_summary_fragment": {
+        "select": {
+          "role": "android.widget.TextView"
+        },
+        "childPath": [
+          2
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  }
+]

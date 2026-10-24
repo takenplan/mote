@@ -11,7 +11,7 @@ export {uiPageCaptureSource} from './capture-memory-source.js';
 export function installCaptureMemoryIntake(store:Store,work:MaterialMemoryWork){
   const receive=(input:CaptureInput)=>{
     const sourceId=input.imageBase64?screenImageSource(input.deviceId,sha256):
-      input.source==='ui_page'&&input.metadata?.uiPage?.version===2?uiPageCaptureSource(input.deviceId):undefined;
+      input.source==='ui_page'&&input.metadata?.uiPage?.version===3?uiPageCaptureSource(input.deviceId):undefined;
     if(!sourceId)return;
     const db=store.db,now=new Date().toISOString();
     if(!db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(sourceId)){

@@ -16,13 +16,13 @@ import java.util.concurrent.TimeUnit
 /** Real AccessibilityService and screenshot API, restricted to this test APK's generated pages. */
 @RunWith(AndroidJUnit4::class)
 class UiPageServiceInstrumentedTest {
-    @Test fun generatedArticlesProductsAndFallbacksUseTheActualCollectionLifecycle() {
+    @Test fun generatedIndependentChannelsUseTheActualCollectionLifecycle() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
         val automation=instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.serviceInfo=automation.serviceInfo.apply { flags=flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS }
         fun shell(command: String)=automation.executeShellCommand(command).use { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() } }
-        require(context.packageName=="dev.mote.collector.dev" && shell("getprop ro.boot.qemu.avd_name")=="mote_fixture_api35")
+        require(context.packageName=="dev.mote.collector.dev" && shell("getprop ro.boot.qemu.avd_name") in setOf("mote_fixture_api35","mote_fixture_api37"))
         val settings=Settings(context)
         require(!settings.enabled && context.queue().depth()==0 && !CaptureAccessibilityService.connected && !ProjectionService.running)
         val prefs=context.getSharedPreferences("mote",0);val original=prefs.all.toMap()
@@ -54,8 +54,14 @@ class UiPageServiceInstrumentedTest {
             settings.enabled=false;instrumentation.runOnMainSync { CaptureAccessibilityService.instance?.stopCapture() }
             waitFor("capture drained"){ConnectionGuard.processing.get()==0}
         }
-        fun rows(): List<JSONObject> = context.queue().peekBatch(100)
+        // A transport batch intentionally separates metadata windows from image records.
+        fun rows(): List<JSONObject> = context.queue().syncIds(limit=100).mapNotNull {context.queue().capture(it)}
         fun clear() { while(context.queue().depth()>0) { val batch=rows();check(batch.isNotEmpty());batch.forEach { context.queue().acknowledge(it.getString("id")) } } }
+        fun values(objectValue:JSONObject,name:String):List<String> {
+            val fields=objectValue.getJSONArray("fields")
+            val field=(0 until fields.length()).map(fields::getJSONObject).singleOrNull {it.getString("name")==name}?:return emptyList()
+            val values=field.getJSONArray("values");return (0 until values.length()).map {values.getJSONObject(it).getString("text")}
+        }
         fun field(name: String, required: Boolean = false)=JSONObject().put("select",JSONObject().put("resourceId","$fixture:id/mote_fixture_$name")).put("required",required)
         val article=JSONObject().put("formatVersion",2).put("id","generated.article").put("version","1").put("platform","android").put("appId",fixture).put("appVersion",version)
             .put("activity",ExternalFixtureActivity::class.java.name).put("kind","article").put("region",JSONObject().put("resourceId","$fixture:id/mote_fixture_article"))
@@ -65,7 +71,7 @@ class UiPageServiceInstrumentedTest {
             .put("repeat",JSONObject().put("resourceId","$fixture:id/mote_fixture_card")).put("repeatParent",JSONObject().put("resourceId","$fixture:id/mote_fixture_products"))
             .put("fields",JSONObject().put("title",field("product_title",true)).put("url",field("product_url")).put("itemId",field("product_id")))
         val base=settings.read().copy(server="",token="",syncMode="manual",mode="accessibility",intervalSeconds=5,screenCollectionEnabled=true,mediaCollectionEnabled=false,notificationCollectionEnabled=false,deviceEventCollectionEnabled=false,
-            excludedPackages="",masks="",appCollectionRules=AppCollectionRules.fromLines(AppCollectionMode.OFF,"$fixture=content").json(),chargingOnly=false,batteryPauseBelowPct=0,uiPageMode="ui_preferred",imageDedupeMode="off",uploadGate=UploadGateConfig(false))
+            excludedPackages="",masks="",localContentOcr=false,appCollectionRules=AppCollectionRules.fromLines(AppCollectionMode.OFF,"$fixture=duration_structured").json(),chargingOnly=false,batteryPauseBelowPct=0,uiPageMode="ui_preferred",imageDedupeMode="off",uploadGate=UploadGateConfig(false))
         fun renderedScene(scene: String): Boolean {
             automation.clearCache()
             val root=automation.rootInActiveWindow ?: return false
@@ -120,30 +126,76 @@ class UiPageServiceInstrumentedTest {
             shell("input keyevent KEYCODE_WAKEUP");shell("wm dismiss-keyguard")
             waitFor("real accessibility service connected"){CaptureAccessibilityService.connected}
             begin("article")
-            waitFor("article field record and measured activity"){rows().any { it.optString("source")=="ui_page" } && rows().any { it.optString("source")=="activity" }}
+            waitFor("article field record and independent duration record"){rows().any { it.optString("source")=="ui_page" } && rows().any { it.optString("source")=="activity" }}
             stop()
             val articleRows=rows();assertTrue(articleRows.all { it.getString("source") in setOf("ui_page","activity") });assertEquals(0,context.queue().inventory().images)
             val observed=articleRows.first { it.getString("source")=="ui_page" }.getJSONObject("metadata").getJSONObject("uiPage")
-            assertFalse(observed.has("nodes"));assertEquals("Generated article title",observed.getJSONArray("objects").getJSONObject(0).getString("title"))
+            assertFalse(observed.has("nodes"));assertEquals("Generated article title",values(observed.getJSONArray("objects").getJSONObject(0),"title").single())
             assertTrue(UiPageRules.text(observed).contains("Generated original paragraph two."))
+            val args=InstrumentationRegistry.getArguments()
+            val fixtureCentralUrl=args.getString("fixtureCentralUrl")
+            val fixtureCentralToken=args.getString("fixtureCentralToken")
+            require(fixtureCentralUrl.isNullOrBlank()==fixtureCentralToken.isNullOrBlank()) {"Fixture central URL and token must be provided together"}
+            if(!fixtureCentralUrl.isNullOrBlank()) {
+                require(Regex("http://10\\.0\\.2\\.2:[0-9]+").matches(fixtureCentralUrl)&&java.net.URI(fixtureCentralUrl).port in 1..65535)
+                require(fixtureCentralToken!!.length>=32)
+                val id=articleRows.first {it.getString("source")=="ui_page"}.getString("id")
+                // Use the actual outbox wire payload; capture() above is a display projection.
+                val wire=context.queue().peekBatch(100).single {it.getString("id")==id}
+                assertEquals("Actual generated Android Java HTTP health",200,HttpJson.get(fixtureCentralUrl+"/api/health",fixtureCentralToken).first)
+                val (status,ack)=HttpJson.post(fixtureCentralUrl+"/api/captures",wire,fixtureCentralToken)
+                assertTrue("Actual generated Android HTTP intake status $status",status in 200..299)
+                assertTrue("Matching durable ingress receipt",IngressV2Protocol.validCapture(id,ack))
+            }
             begin("product")
             waitFor("two independent product field records"){rows().count { it.optString("source")=="ui_page" }>=2}
             stop()
             val products=rows().filter { it.getString("source")=="ui_page" }.map { it.getJSONObject("metadata").getJSONObject("uiPage").getJSONArray("objects").getJSONObject(0) }
-            assertEquals(setOf("generated-item-0","generated-item-1"),products.map { it.getString("itemId") }.toSet());assertEquals(0,context.queue().inventory().images)
+            assertEquals(setOf("generated-item-0","generated-item-1"),products.flatMap { values(it,"item_id") }.toSet());assertEquals(0,context.queue().inventory().images)
+            val both=base.copy(appCollectionRules=AppCollectionRules.fromLines(AppCollectionMode.OFF,"$fixture=content").json(),uiPageRules=JSONArray().put(article).put(product).toString())
+            begin("article",both)
+            waitFor("selected screenshot and structured fields both persist"){rows().any {it.optString("source")=="ui_page"}&&context.queue().inventory().images>0};stop()
+            assertTrue(rows().any {it.optString("source")=="screen"})
             for(scene in listOf("missingBody","empty")) {
-                begin(scene);waitFor("missing fields fallback screenshot"){context.queue().inventory().images>0};stop()
+                begin(scene,both);waitFor("selected screenshot survives missing fields"){context.queue().inventory().images>0};stop()
                 assertTrue(rows().any { it.getString("source")=="screen" });assertFalse(rows().any { it.getString("source")=="ui_page" })
+                begin(scene)
+                waitFor("duration remains when structured fields are absent"){rows().any {it.optString("source")=="activity"}};stop()
+                assertEquals(0,context.queue().inventory().images);assertTrue(rows().all {it.getString("source")=="activity"})
             }
             val wrong=JSONObject(article.toString()).put("appVersion",version+"-wrong")
-            begin("article",base.copy(uiPageRules=JSONArray().put(wrong).toString()))
-            waitFor("wrong version fallback screenshot"){context.queue().inventory().images>0};stop();assertFalse(rows().any { it.getString("source")=="ui_page" })
+            begin("article",both.copy(uiPageRules=JSONArray().put(wrong).toString()))
+            waitFor("wrong version keeps independently selected screenshot"){context.queue().inventory().images>0};stop();assertFalse(rows().any { it.getString("source")=="ui_page" })
+            for(choice in AppCollectionMode.entries) {
+                val selected=base.copy(appCollectionRules=AppCollectionRules.fromLines(AppCollectionMode.OFF,"$fixture=${choice.wire}").json(),uiPageRules=JSONArray().put(article).toString())
+                begin("article",selected)
+                if(choice==AppCollectionMode.OFF)Thread.sleep(5500)
+                else waitFor("independent channel selection ${choice.wire}") {
+                    val records=rows()
+                    (!choice.duration||records.any {it.optString("source")=="activity"})&&
+                        (!choice.screenshots||context.queue().inventory().images>0)&&
+                        (!choice.structured||records.any {it.optString("source")=="ui_page"})&&
+                        (choice!=AppCollectionMode.ACTIVITY||records.any {it.optString("source")=="activity"&&it.getLong("durationMs")>0L})
+                }
+                stop()
+                val records=rows()
+                assertEquals(choice.wire,choice.duration,records.any {it.optString("source")=="activity"})
+                assertEquals(choice.wire,choice.screenshots,context.queue().inventory().images>0)
+                assertEquals(choice.wire,choice.structured,records.any {it.optString("source")=="ui_page"})
+                assertTrue(records.filter {it.optString("source")!="activity"}.all {it.getLong("durationMs")==0L})
+                val groups=records.groupBy {it.getJSONObject("metadata").getJSONObject("captureObservation").getString("id")}
+                if(choice.duration&&choice.structured)assertTrue(groups.values.any {group->group.any {it.optString("source")=="activity"}&&group.any {it.optString("source")=="ui_page"}})
+                for(record in records) {
+                    val policy=record.getJSONObject("metadata").getJSONObject("captureObservation").getJSONObject("selected")
+                    assertEquals(choice.duration,policy.getBoolean("duration"));assertEquals(choice.screenshots,policy.getBoolean("screenshots"));assertEquals(choice.structured,policy.getBoolean("structured"))
+                }
+            }
             val privateConfig=base.copy(uiPageRules=JSONArray().put(article).toString(),uploadGate=UploadGateConfig(true,"GENERATED_BLOCKED_LITERAL","drop"))
             val beforeRequests=Operations.ledger(context).read().getJSONObject("counts").getLong("CAPTURE_REQUESTED")
             begin("private",privateConfig)
             waitFor("structured privacy gate rejection"){settings.message().contains(MoteI18n.text("页面隐私审查未通过，已跳过"))}
             Thread.sleep(5500);stop()
-            assertEquals(0,context.queue().depth());assertEquals(beforeRequests,Operations.ledger(context).read().getJSONObject("counts").getLong("CAPTURE_REQUESTED"))
+            assertTrue(rows().isNotEmpty());assertTrue(rows().all {it.getString("source")=="activity"});assertEquals(0,context.queue().inventory().images);assertEquals(beforeRequests,Operations.ledger(context).read().getJSONObject("counts").getLong("CAPTURE_REQUESTED"))
         } catch(error: Throwable) { testFailure=error;throw error }
         finally {
             var cleanupFailure: Throwable? = null
