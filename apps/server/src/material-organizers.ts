@@ -70,10 +70,14 @@ const uiPageObservation=(r:CaptureRecord)=>{
 };
 const observedUiIdentity=(record:CaptureRecord)=>{
   const page=record.metadata?.uiPage;if(page?.version!==3)return;
-  const fields=page.objects[0]!.fields.filter(field=>field.values.length===1&&field.values[0]!.source!=='state');
-  const item=fields.find(field=>field.name==='item_id');if(item)return item;
+  const fields=page.objects[0]!.fields.filter(field=>field.values.length===1);
+  const item=fields.find(field=>field.name==='item_id'&&field.values[0]!.source!=='state');if(item)return item;
   return fields.find(field=>{
-    if(field.name!=='url')return false;const text=field.values[0]!.text;
+    if(field.name!=='url')return false;
+    // Browser URLs are observed document state, bound by the native/DOM producer
+    // contract. Ordinary state fields remain ineligible as source identity.
+    if(field.values[0]!.source==='state'&&!(record.platform==='macos'&&record.appId==='com.google.Chrome'&&record.metadata?.collector?.method==='browser_dom'))return false;
+    const text=field.values[0]!.text;
     if(!/^https?:\/\//i.test(text)||/\s/.test(text))return false;
     try{const url=new URL(text);return Boolean(url.hostname)&&!url.username&&!url.password&&['http:','https:'].includes(url.protocol);}catch{return false;}
   });

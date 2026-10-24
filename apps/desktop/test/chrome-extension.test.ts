@@ -8,7 +8,7 @@ function fixture(html:string,url='https://fixture.example/article'){const dom=ne
  w.Element.prototype.getBoundingClientRect=function(){return box(this) as any;};
  w.Range.prototype.getClientRects=function(){return [box(this.startContainer.parentElement!)] as any;};
  w.document.elementFromPoint=(x:number,y:number)=>[...w.document.querySelectorAll('[data-box]')].reverse().find(e=>{const b=box(e);return x>=b.x&&x<=b.right&&y>=b.y&&y<=b.bottom;})??w.document.body;
- const style=w.getComputedStyle.bind(w);w.getComputedStyle=((e:Element,pseudo?:string)=>{if(pseudo)return {content:e.getAttribute('data-pseudo')??'none',display:'block',visibility:'visible',opacity:'1'} as any;const real=style(e);return new Proxy(real,{get(t,p){const value=Reflect.get(t,p);if(['opacity'].includes(String(p)))return value||'1';if(['filter','transform','clipPath','maskImage'].includes(String(p)))return value||'none';return value;}});}) as any;
+ const style=w.getComputedStyle.bind(w);w.getComputedStyle=((e:Element,pseudo?:string)=>{if(pseudo)return {content:e.getAttribute(pseudo==='::before'?'data-pseudo-before':'data-pseudo-after')??e.getAttribute('data-pseudo')??'none',display:'block',visibility:'visible',opacity:'1'} as any;const real=style(e);return new Proxy(real,{get(t,p){const value=Reflect.get(t,p);if(['opacity'].includes(String(p)))return value||'1';if(['filter','transform','clipPath','maskImage'].includes(String(p)))return value||'none';return value;}});}) as any;
  const run=(structured=true,masks:any[]=[])=>w.eval(`${source}\nextractVisible(${JSON.stringify({structured,masks,observedAt:'2026-10-24T00:00:00Z',observationId:'fixture-observation'})})`);
  return {w,run};}
 describe('shipped isolated-world visible extraction',()=>{
@@ -22,10 +22,28 @@ describe('shipped isolated-world visible extraction',()=>{
  w.document.elementFromPoint=(x:number,y:number)=>[...w.document.querySelectorAll('p')].find(e=>{const b=e.getBoundingClientRect();return x>=b.x&&x<=b.right&&y>=b.y&&y<=b.bottom;})??w.document.body;
  const body=run().pages[0].objects[0].fields.find((f:any)=>f.name==='body');expect(body.values.map((v:any)=>v.text)).toEqual(['Uncovered text']);
  });
- it('omits text covered by a descendant box or generated pseudo overlay',()=>{
- const {w,run}=fixture('<main><p data-box="10,10,150,20">Safe text</p><p data-box="10,50,150,20">Descendant covered text<span style="position:absolute;pointer-events:none" data-box="62,52,2,15"></span></p><p data-box="10,90,150,20" data-pseudo="&quot;&quot;">Pseudo covered text</p></main>');
+ it('omits text covered by a descendant box',()=>{
+ const {w,run}=fixture('<main><p data-box="10,10,150,20">Safe text</p><p data-box="10,50,150,20">Descendant covered text<span style="position:absolute;pointer-events:none" data-box="62,52,2,15"></span></p></main>');
  w.document.elementFromPoint=(x:number,y:number)=>[...w.document.querySelectorAll('p')].find(e=>{const b=e.getBoundingClientRect();return x>=b.x&&x<=b.right&&y>=b.y&&y<=b.bottom;})??w.document.body;
  expect(run().pages[0].objects[0].fields.find((f:any)=>f.name==='body').values.map((v:any)=>v.text)).toEqual(['Safe text']);
+ });
+ it.each(['before','after'])('refuses unrelated zero-size sibling ::%s paint before reading covered text',pseudo=>{
+ const {w,run}=fixture(`<main><p data-box="10,10,150,20">Covered generated fixture</p></main><aside data-pseudo-${pseudo}="&quot;&quot;" style="width:0;height:0;pointer-events:none"></aside>`);
+ const paragraph=w.document.querySelector('p')!,owner=w.document.querySelector('aside')!;expect(owner.getBoundingClientRect().width).toBe(0);expect(owner.getBoundingClientRect().height).toBe(0);
+ // The opaque fixed pseudo cover does not participate in pointer hit testing.
+ w.document.elementFromPoint=()=>paragraph;expect(w.document.elementFromPoint(20,20)).toBe(paragraph);
+ const originalStyle=w.getComputedStyle;w.getComputedStyle=((element:Element,part?:string)=>element===owner&&part===`::${pseudo}`?{content:'""',display:'block',visibility:'visible',opacity:'1',position:'fixed',inset:'0px',backgroundColor:'rgb(0, 0, 0)',pointerEvents:'none'}:originalStyle(element,part)) as any;
+ let textReads=0;Object.defineProperty(paragraph.firstChild!,'nodeValue',{get(){textReads++;return 'Covered generated fixture';}});
+ expect(run()).toEqual({blocked:true});expect(textReads).toBe(0);
+ });
+ it('retains visible evidence when unrelated pseudos have no generated content',()=>{
+ const {run}=fixture('<main><p data-box="10,10,150,20">Uncovered generated fixture</p></main><aside data-pseudo-before="none" data-pseudo-after="normal" style="width:0;height:0"></aside>');expect(run().pages[0].objects[0].fields.find((f:any)=>f.name==='body').values[0].text).toBe('Uncovered generated fixture');
+ });
+ it('refuses generated ancestor paint with unknown extent',()=>{
+ const {run}=fixture('<main data-pseudo-after="&quot;&quot;"><p data-box="10,10,150,20">Covered fixture</p></main>');expect(run()).toEqual({blocked:true});
+ });
+ it('refuses an exhausted scan before content reads even if a later zero-size sibling paints',()=>{
+ const {w,run}=fixture('<main><p data-box="10,10,150,20">Must remain unread</p></main>'+'<i></i>'.repeat(4000)+'<aside data-pseudo-after="&quot;&quot;"></aside>');let reads=0;Object.defineProperty(w.document.querySelector('p')!.firstChild!,'nodeValue',{get(){reads++;return 'Must remain unread';}});expect(run()).toEqual({blocked:true});expect(reads).toBe(0);
  });
  it('keeps playback position separate and preserves media identity until the visible video source changes',()=>{
  const {w,run}=fixture('<main><h1 class="video-title" data-box="10,10,150,20">Generated video</h1><video data-box="10,50,300,200"></video></main>','https://www.bilibili.com/video/BVfixture');const video=w.document.querySelector('video')!;let source='https://media.fixture/video-1';Object.defineProperties(video,{duration:{value:120},currentTime:{value:10,writable:true},paused:{value:false},currentSrc:{get:()=>source}});

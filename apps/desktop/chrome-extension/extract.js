@@ -9,13 +9,23 @@ export function extractVisible(request) {
   let budget=24000,visits=0,partial=true;
   // Hit testing alone misses pointer-events:none overlays and narrow covers between
   // sample points. Any overlapping unrelated painted box makes a range ambiguous.
-  const boxes=[],elements=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_ELEMENT);let candidate,elementCount=0;
-  while((candidate=elements.nextNode())){if(++elementCount>4000)return {blocked:true};const b=candidate.getBoundingClientRect();if(b.width<=0||b.height<=0||b.bottom<=0||b.right<=0||b.x>=innerWidth||b.y>=innerHeight)continue;const s=getComputedStyle(candidate);if(s.display==='none'||s.visibility!=='visible'||Number(s.opacity)===0)continue;boxes.push({element:candidate,bounds:rect(b)});}
+  // A pseudo element can paint outside its owner's box, including a zero-size
+  // or offscreen sibling, and pointer-events:none makes hit testing miss it.
+  // DOM geometry cannot establish that generated paint's extent. Refuse the
+  // observation before text/media reads unless the paint is provably disabled.
+  const hasGeneratedPaint=element=>{
+    const generated=['::before','::after'].some(pseudo=>{const s=getComputedStyle(element,pseudo);return s.content&&s.content!=='none'&&s.content!=='normal'&&s.display!=='none'&&s.visibility!=='hidden'&&s.visibility!=='collapse'&&Number(s.opacity)!==0;});
+    if(!generated)return false;
+    for(let p=element;p;p=p.parentElement){const s=getComputedStyle(p);if(s.display==='none'||Number(s.opacity)===0)return false;}
+    return true;
+  };
+  const boxes=[],elements=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_ELEMENT);let candidate=document.documentElement,elementCount=0;
+  do{if(++elementCount>4000)return {blocked:true};if(hasGeneratedPaint(candidate))return {blocked:true};const b=candidate.getBoundingClientRect();if(b.width<=0||b.height<=0||b.bottom<=0||b.right<=0||b.x>=innerWidth||b.y>=innerHeight)continue;const s=getComputedStyle(candidate);if(s.display==='none'||s.visibility!=='visible'||Number(s.opacity)===0)continue;boxes.push({element:candidate,bounds:rect(b)});}while((candidate=elements.nextNode()));
   const visible=(element,r)=>{
     if(r.width<=0||r.height<=0||r.x<0||r.y<0||r.right>innerWidth||r.bottom>innerHeight)return false;
     if(boxes.some(b=>b.element!==element&&!b.element.contains(element)&&intersects(rect(r),b.bounds)))return false;
     const screen={x:r.x+viewport.x,y:r.y+viewport.y,width:r.width,height:r.height};if(masks.some(m=>intersects(screen,m)))return false;
-    for(let p=element;p;p=p.parentElement){for(const pseudo of ['::before','::after']){const ps=getComputedStyle(p,pseudo);if(ps.content&&ps.content!=='none'&&ps.content!=='normal'&&ps.display!=='none'&&ps.visibility==='visible'&&Number(ps.opacity)>0)return false;}const s=getComputedStyle(p);if(s.display==='none'||s.visibility!=='visible'||Number(s.opacity)<1||s.filter!=='none'||s.transform!=='none'||s.clipPath!=='none'||s.maskImage!=='none'||p.hidden||p.inert||p.getAttribute('aria-hidden')==='true')return false;
+    for(let p=element;p;p=p.parentElement){const s=getComputedStyle(p);if(s.display==='none'||s.visibility!=='visible'||Number(s.opacity)<1||s.filter!=='none'||s.transform!=='none'||s.clipPath!=='none'||s.maskImage!=='none'||p.hidden||p.inert||p.getAttribute('aria-hidden')==='true')return false;
       if(/(hidden|clip|scroll|auto)/.test(s.overflow+s.overflowX+s.overflowY)){const b=p.getBoundingClientRect();if(r.x<b.x||r.y<b.y||r.right>b.right||r.bottom>b.bottom)return false;}}
     for(const [x,y] of [[r.x+1,r.y+1],[r.right-1,r.y+1],[r.x+1,r.bottom-1],[r.right-1,r.bottom-1],[r.x+r.width/2,r.y+r.height/2]]){const top=document.elementFromPoint(x,y);if(!top||!(element===top||element.contains(top)||top.contains(element)))return false;}return true;
   };
