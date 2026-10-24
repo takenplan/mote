@@ -36,6 +36,7 @@ export class Collector {
   private locked = false;
   private sleeping = false;
   private capturing = false;
+  private captureOnResume = false;
   private uploading = false;
   private heartbeatInFlight = false;
   private heartbeatAbort?: AbortController;
@@ -62,9 +63,9 @@ export class Collector {
   constructor(config: Config, private readonly queue: DurableQueue, private readonly helperPath: string, private readonly tokenStorageAvailable: () => boolean, private readonly onChange: (status: Status) => void, private readonly diagnostics?: DiagnosticsRecorder, private readonly events?: EventJournal, private readonly sources?: LocalSourceManager, private readonly history?: SyncHistory, private readonly browserCapture?: BrowserCaptureProvider) {
     this.config = config; this.lastUploadAt = this.queue.stats().lastUploadAt; this.archiveAcknowledgment=this.queue.stats().archiveAcknowledgment;
     powerMonitor.on('lock-screen', () => { this.locked = true; this.pause(moteText("屏幕已锁定，暂停采集")); });
-    powerMonitor.on('unlock-screen', () => { this.locked = false; this.lastSample = undefined; });
+    powerMonitor.on('unlock-screen', () => { this.locked = false; this.resumeCapture(); });
     powerMonitor.on('suspend', () => { this.sleeping = true; this.pause(moteText("电脑休眠，暂停采集")); });
-    powerMonitor.on('resume', () => { this.sleeping = false; this.lastSample = undefined; });
+    powerMonitor.on('resume', () => { this.sleeping = false; this.resumeCapture(); });
   }
   initialize(): void {
     this.uploadTimer = setInterval(() => { if (this.uploading) this.publish(); else void this.upload(); }, 1000);
@@ -103,6 +104,14 @@ export class Collector {
     this.lastSample = undefined;this.lastMediaSample=undefined;
     this.captureAbort?.abort();
     if (this.running) { this.state = 'paused'; this.message = message; this.publish(); }
+  }
+  private resumeCapture(): void {
+    this.lastSample = undefined; this.lastMediaSample = undefined;
+    if (!this.running || this.locked || this.sleeping) return;
+    if (this.timer) clearTimeout(this.timer);
+    // A cancelled native capture may still be draining. Its finally schedules the retry.
+    if (this.capturing) { this.captureOnResume = true; return; }
+    void this.capture();
   }
   connectionActivity(): { inFlight: boolean } { return { inFlight: this.capturing || this.uploading || this.heartbeatInFlight }; }
   async holdConnection(): Promise<() => void> {
@@ -254,6 +263,7 @@ export class Collector {
       if (!valid()) return;
       const selected = collectionForApp(foreground.appId, cfg);
       if (!selected.duration&&!selected.screenshots&&!selected.structured) { this.pause(moteText("当前应用设置为不记录，已跳过本次采样")); return; }
+      this.state = 'capturing'; this.message = moteText("已开启；按应用级别记录，完整内容先经过本地隐私过滤"); this.publish();
       const observationId=randomUUID(),at=new Date(startedAt).toISOString();
       const observation={id:observationId,selected:{...selected}};
       const base={deviceId:cfg.deviceId,deviceName:cfg.deviceName,platform:currentPlatform,capturedAt:at,appId:foreground.appId,appName:foreground.appName};
@@ -371,7 +381,9 @@ export class Collector {
       this.publish();
     } finally {
       this.capturing = false;
-      if (this.running) this.timer = setTimeout(() => void this.capture(), Math.max(1000, cfg.intervalMs - (Date.now() - startedAt)));
+      const resume = this.captureOnResume && !this.locked && !this.sleeping;
+      this.captureOnResume = false;
+      if (this.running) this.timer = setTimeout(() => void this.capture(), resume ? 0 : Math.max(1000, cfg.intervalMs - (Date.now() - startedAt)));
     }
   }
   async upload(explicit = false): Promise<void> {

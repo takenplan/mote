@@ -167,6 +167,93 @@ describe.skipIf(process.platform !== 'darwin')('collector pipeline with generate
 
 });
 
+describe.skipIf(process.platform !== 'darwin')('capture recovery after screen unlock and wake', () => {
+  it.each([
+    ['lock-screen', 'unlock-screen', content],
+    ['suspend', 'resume', content],
+    ['lock-screen', 'unlock-screen', activity],
+    ['suspend', 'resume', activity],
+  ] as const)('resumes immediately after %s/%s with %j without retaining the pause message', async (pause, resume, collection) => {
+    const { collector, queue } = await makeCollector({ intervalMs: 300000, syncMode: 'manual', defaultCollection: collection });
+    await collector.start(); await collector.settleCapture();
+    (powerMonitor as unknown as EventEmitter).emit(pause);
+    expect(collector.status().state).toBe('paused');
+    (powerMonitor as unknown as EventEmitter).emit(resume);
+    await collector.settleCapture();
+    expect(queue.stats().depth).toBe(2);
+    expect(collector.status()).toMatchObject({ running: true, state: 'capturing' });
+    expect(collector.status().message).not.toMatch(/暂停|锁定|休眠/);
+  });
+
+  it.each(['idle', 'battery', 'system-lock'])('rechecks the %s pause condition on unlock', async condition => {
+    mocks.power.mockResolvedValue({ onBattery: false, batteryPercent: 50, charging: true });
+    const { collector, queue } = await makeCollector({ syncMode: 'manual', pauseOnBattery: condition === 'battery' });
+    await collector.start(); await collector.settleCapture();
+    const power = powerMonitor as unknown as EventEmitter;
+    power.emit('lock-screen');
+    if (condition === 'idle') mocks.idle.mockReturnValue(301);
+    else if (condition === 'battery') mocks.power.mockResolvedValue({ onBattery: true, batteryPercent: 50, charging: false });
+    else mocks.idleState.mockReturnValue('locked');
+    power.emit('unlock-screen'); await collector.settleCapture();
+    expect(collector.status()).toMatchObject({ running: true, state: 'paused' });
+    expect(queue.stats().depth).toBe(1);
+    expect(mocks.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['unlock-screen', 'resume'],
+    ['resume', 'unlock-screen'],
+  ])('waits for both lock and sleep to clear when %s arrives first', async (first, last) => {
+    const { collector, queue } = await makeCollector({ intervalMs: 300000, syncMode: 'manual' });
+    await collector.start(); await collector.settleCapture();
+    const power = powerMonitor as unknown as EventEmitter;
+    power.emit('lock-screen'); power.emit('suspend');
+    power.emit(first); await collector.settleCapture();
+    expect(queue.stats().depth).toBe(1);
+    expect(collector.status().state).toBe('paused');
+    power.emit(last); await collector.settleCapture();
+    expect(queue.stats().depth).toBe(2);
+    expect(collector.status().state).toBe('capturing');
+  });
+
+  it('discards a capture interrupted by locking and retries after it drains', async () => {
+    let release!: (sources: unknown[]) => void;
+    const sources = await mocks.capture(); mocks.capture.mockClear();
+    mocks.capture.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const { collector, queue } = await makeCollector({ intervalMs: 300000, syncMode: 'manual' });
+    await collector.start();
+    await vi.waitFor(() => expect(mocks.capture).toHaveBeenCalledTimes(1));
+    const power = powerMonitor as unknown as EventEmitter;
+    power.emit('lock-screen'); power.emit('unlock-screen');
+    expect(mocks.capture).toHaveBeenCalledTimes(1);
+    release(sources);
+    await vi.waitFor(() => expect(queue.stats().depth).toBe(1));
+    await collector.settleCapture();
+    expect(mocks.capture).toHaveBeenCalledTimes(2);
+    expect(collector.status().message).not.toMatch(/暂停|锁定|休眠/);
+  });
+
+  it.each(['stopped', 'settings', 'shutdown'])('does not restart a %s collector on unlock or wake', async mode => {
+    const { collector, queue } = await makeCollector({ syncMode: 'manual' });
+    await collector.start(); await collector.settleCapture();
+    const power = powerMonitor as unknown as EventEmitter;
+    power.emit('lock-screen'); power.emit('suspend');
+    let releaseSettings: (() => Promise<void>) | undefined;
+    if (mode === 'stopped') collector.stop();
+    else if (mode === 'settings') releaseSettings = await collector.suspendForSettings();
+    else collector.shutdown();
+    try {
+      power.emit('resume'); power.emit('unlock-screen');
+      await collector.settleCapture();
+      expect(collector.status().running).toBe(false);
+      expect(queue.stats().depth).toBe(1);
+      expect(mocks.capture).toHaveBeenCalledTimes(1);
+    } finally {
+      if (releaseSettings) { collector.stop(); await releaseSettings(); }
+    }
+  });
+});
+
 describe.skipIf(process.platform !== 'darwin')('per-application collection boundaries', () => {
   it('records activity without any screenshot, window enumeration, OCR, permission prompt or model even when screen access is denied', async () => {
     mocks.permission.mockReturnValue('denied');
