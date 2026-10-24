@@ -2,22 +2,52 @@ package dev.mote.collector
 
 import org.json.JSONObject
 
-enum class AppCollectionMode(val wire: String) { CONTENT("content"), ACTIVITY("activity"), OFF("off");
-    companion object { fun from(value: String) = entries.singleOrNull { it.wire == value } ?: error(MoteI18n.text("应用采集级别必须为 content / activity / off")) }
+enum class AppCollectionChannel { DURATION, SCREENSHOT, STRUCTURED, OCR }
+
+enum class AppCollectionMode(val wire: String, val duration: Boolean, val screenshots: Boolean, val structured: Boolean) {
+    CONTENT("content", true, true, true), ACTIVITY("activity", true, false, false), OFF("off", false, false, false),
+    SCREENSHOT("screenshot", false, true, false), STRUCTURED("structured", false, false, true),
+    DURATION_SCREENSHOT("duration_screenshot", true, true, false), DURATION_STRUCTURED("duration_structured", true, false, true),
+    SCREENSHOT_STRUCTURED("screenshot_structured", false, true, true);
+    fun allows(channel: AppCollectionChannel) = when(channel) {
+        AppCollectionChannel.DURATION -> duration
+        AppCollectionChannel.SCREENSHOT -> screenshots
+        AppCollectionChannel.STRUCTURED, AppCollectionChannel.OCR -> structured
+    }
+    companion object {
+        fun from(value: String) = entries.singleOrNull { it.wire == value } ?: error(MoteI18n.text("应用采集选项无效"))
+        fun fromChoices(duration: Boolean, screenshots: Boolean, structured: Boolean) = entries.single {
+            it.duration == duration && it.screenshots == screenshots && it.structured == structured
+        }
+    }
 }
 
 /** Explicit app identity rules only; unknown surfaces use the default unless a privacy rule needs identity. */
 data class AppCollectionRules(val defaultMode: AppCollectionMode, val apps: Map<String, AppCollectionMode>) {
-    fun mayCollectContent() = defaultMode == AppCollectionMode.CONTENT || apps.values.any { it == AppCollectionMode.CONTENT }
+    fun mayCollectContent() = defaultMode.screenshots || defaultMode.structured || apps.values.any { it.screenshots || it.structured }
+    fun mayCollectScreenshots() = defaultMode.screenshots || apps.values.any { it.screenshots }
+    fun mayCollectStructured() = defaultMode.structured || apps.values.any { it.structured }
     fun requiresWindowIdentity(excludedPackages: Set<String>) = excludedPackages.isNotEmpty() || defaultMode != AppCollectionMode.CONTENT || apps.values.any { it != AppCollectionMode.CONTENT }
-    fun decide(windows: WindowSnapshot, excludedPackages: Set<String>): AppCollectionMode {
-        if (windows.packages.any { it in excludedPackages }) return AppCollectionMode.OFF
-        if (!windows.trustworthy && requiresWindowIdentity(excludedPackages)) return AppCollectionMode.OFF
-        // Every identified auxiliary window obeys the same explicit rules. Never downgrade a sample.
+    /** Independent channel admission. OCR is structured content, with its separate opt-in checked by the caller. */
+    fun allows(windows: WindowSnapshot, excludedPackages: Set<String>, channel: AppCollectionChannel): Boolean {
+        if (windows.packages.any { it in excludedPackages }) return false
+        if (!windows.trustworthy && requiresWindowIdentity(excludedPackages)) return false
         val selected = windows.foreground?.let { apps[it] } ?: defaultMode
-        if (selected == AppCollectionMode.ACTIVITY && (!windows.trustworthy || windows.foreground.isNullOrBlank() || windows.foreground !in windows.packages)) return AppCollectionMode.OFF
-        if (selected == AppCollectionMode.CONTENT && windows.packages.any { it != windows.foreground && (apps[it] ?: defaultMode) != AppCollectionMode.CONTENT }) return AppCollectionMode.OFF
-        return selected
+        if (!selected.allows(channel)) return false
+        if (channel == AppCollectionChannel.DURATION) return windows.trustworthy && !windows.foreground.isNullOrBlank() && windows.foreground in windows.packages
+        return windows.packages.none { it != windows.foreground && !(apps[it] ?: defaultMode).allows(channel) }
+    }
+    fun selection(windows: WindowSnapshot, excludedPackages: Set<String>) = AppCollectionMode.fromChoices(
+        allows(windows, excludedPackages, AppCollectionChannel.DURATION),
+        allows(windows, excludedPackages, AppCollectionChannel.SCREENSHOT),
+        allows(windows, excludedPackages, AppCollectionChannel.STRUCTURED))
+    /** Scheduling projection for existing metadata observers; never capture-channel authorization. */
+    fun decide(windows: WindowSnapshot, excludedPackages: Set<String>): AppCollectionMode {
+        val selected = selection(windows, excludedPackages)
+        val requested = windows.foreground?.let { apps[it] } ?: defaultMode
+        return if (selected.screenshots || selected.structured) AppCollectionMode.CONTENT
+        else if (requested.screenshots || requested.structured) AppCollectionMode.OFF
+        else if (selected.duration) AppCollectionMode.ACTIVITY else AppCollectionMode.OFF
     }
     fun json(): String = JSONObject().put("default", defaultMode.wire).put("apps", JSONObject().apply { apps.toSortedMap().forEach { (key, value) -> put(key, value.wire) } }).toString()
     companion object {
@@ -39,7 +69,7 @@ data class AppCollectionRules(val defaultMode: AppCollectionMode, val apps: Map<
         fun fromLines(defaultMode: AppCollectionMode, value: String): AppCollectionRules {
             val apps = linkedMapOf<String, AppCollectionMode>()
             value.lineSequence().map(String::trim).filter(String::isNotEmpty).forEach { line ->
-                val parts = line.split('='); require(parts.size == 2) { MoteI18n.text("每行使用 包名=content/activity/off") }
+                val parts = line.split('='); require(parts.size == 2) { MoteI18n.text("每行使用 包名=采集选项") }
                 val id = parts[0].trim(); require(!apps.containsKey(id)) { MoteI18n.text("同一应用不能配置两次") }
                 apps[id] = AppCollectionMode.from(parts[1].trim())
             }

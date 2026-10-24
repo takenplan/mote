@@ -102,7 +102,41 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
     }
     private fun duration(now: Long, appId: String?, mode: AppCollectionMode, intervalSeconds: Int): Long =
         observationClock.interval(now, appId, mode, intervalSeconds * 1000L)
-    fun submit(bitmap: Bitmap, windows: WindowSnapshot, config: CollectorConfig, capturedAt: String = Instant.now().toString(), observedAtMs: Long = SystemClock.elapsedRealtime(), isCurrent: () -> Boolean = { true }) {
+    /** Duration is a separate durable observation, never multiplied by content objects. */
+    @Synchronized internal fun recordDuration(windows:WindowSnapshot,config:CollectorConfig,sample:CaptureObservation,isCurrent:()->Boolean={true}) {
+        if(!allows(config,windows,AppCollectionChannel.DURATION)||closed||!isCurrent()||!settings.enabled||!unlocked(context)||!settings.read().sameCaptureConfiguration(config))return
+        val battery=Diagnostics.battery(context)
+        if(config.chargingOnly&&!battery.second||config.batteryPauseBelowPct>0&&(battery.first<0||battery.first<config.batteryPauseBelowPct))return
+        val app=windows.foreground?:return
+        val event=JSONObject().put("id",java.util.UUID.randomUUID().toString()).put("deviceId",settings.deviceId).put("deviceName",config.deviceName).put("platform","android")
+            .put("capturedAt",sample.at).put("durationMs",duration(sample.elapsed,app,AppCollectionMode.CONTENT,config.intervalSeconds)).put("appId",app).put("appName",CollectorMetadata.appName(context,app)).put("source","activity")
+            .put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","none").put("collection","activity"))
+            .put("metadata",JSONObject().put("version",1).put("observedAt",sample.at).put("collector",JSONObject().put("method","accessibility")).put("captureObservation",sample.metadata(config,windows)))
+        if(!isCurrent())return
+        context.queue().enqueue(event,null,config.maxQueueMiB*1024L*1024L)
+        observationClock.accept(sample.elapsed,app,AppCollectionMode.CONTENT);settings.captured(sample.at);scheduleUpload(config)
+    }
+    private class ContentPrivacyRejected:IllegalStateException()
+    private fun contentOcr(bitmap:Bitmap,windows:WindowSnapshot,config:CollectorConfig,sample:CaptureObservation,isCurrent:()->Boolean) {
+        if(!config.localContentOcr||!sample.contentCurrent()||!allows(config,windows,AppCollectionChannel.OCR)||sample.nodes?.optBoolean("ocrSafe")!=true)return
+        val approved=bitmap.copy(Bitmap.Config.ARGB_8888,true)
+        try {
+            ImagePrivacy.applyMasks(approved,Mask.parse(config.masks))
+            if(!ImagePrivacy.applyOcrRegions(approved,sample.nodes))return
+            val text=ocrInstance.value.recognize(approved,config,windows.foreground){sample.contentCurrent()&&isCurrent()&&settings.enabled&&unlocked(context)&&settings.read().sameCaptureConfiguration(config)}
+            if(text.isBlank()||!sample.contentCurrent()||!isCurrent()||!allows(config,windows,AppCollectionChannel.OCR))return
+            if(UploadGate.review(config.uploadGate){text}!="allow")throw ContentPrivacyRejected()
+            val app=windows.foreground?:return
+            val page=sample.ocrPage(text,sample.nodes.optString("appVersion"),sample.nodes.optString("activity"))
+            val event=JSONObject().put("id",UUID.randomUUID().toString()).put("deviceId",settings.deviceId).put("deviceName",config.deviceName).put("platform","android").put("capturedAt",sample.at).put("durationMs",0).put("appId",app).put("appName",CollectorMetadata.appName(context,app)).put("source","ui_page").put("ocrText",UiPageRules.text(page))
+                .put("privacy",JSONObject().put("excluded",false).put("redacted",true).put("mode","local").put("collection","content"))
+                .put("metadata",JSONObject().put("version",1).put("observedAt",sample.at).put("collector",JSONObject().put("method","accessibility")).put("captureObservation",sample.metadata(config,windows)).put("uiPage",page))
+            UiPageRules.validateEvent(event)
+            if(!sample.contentCurrent()||!isCurrent()||!settings.enabled||!unlocked(context)||!settings.read().sameCaptureConfiguration(config))return
+            context.queue().enqueue(event,null,config.maxQueueMiB*1024L*1024L);settings.captured(sample.at);scheduleUpload(config)
+        } finally {approved.recycle()}
+    }
+    fun submit(bitmap: Bitmap, windows: WindowSnapshot, config: CollectorConfig, capturedAt: String = Instant.now().toString(), observedAtMs: Long = SystemClock.elapsedRealtime(), sample: CaptureObservation = CaptureObservation(at=capturedAt,elapsed=observedAtMs), isCurrent: () -> Boolean = { true }) {
         if (closed || !busy.compareAndSet(false, true)) { bitmap.recycle(); Operations.record(context, OperationKind.FRAME_BLOCKED, OperationReason.STATE_CHANGED); return }
         ConnectionGuard.processing.incrementAndGet()
         try { executor.execute {
@@ -118,25 +152,32 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
                 if (CapturedFrame.isBlank(bitmap)) { pause("系统返回空白屏幕帧，已跳过；下一周期重试", OperationReason.SYSTEM); return@execute }
                 stage = EventStage.QUEUE
                 checkStorage(config)
+                if(config.effectiveMode()=="projection")recordDuration(windows,config,sample,isCurrent)
+                try { contentOcr(bitmap,windows,config,sample,isCurrent) }
+                catch(_:ContentPrivacyRejected){pause(MoteI18n.text("页面隐私审查未通过，已跳过"));return@execute}
+                catch(error:Exception){if(!isCurrent())return@execute;Operations.record(context,OperationKind.CAPTURE_FAILED,Operations.failure(error,EventStage.CAPTURE))}
+                if(!allows(config,windows,AppCollectionChannel.SCREENSHOT))return@execute
                 // Approximate matches only discard this frame. They never inherit an approval,
                 // image, or OCR result. Diagnostics deliberately retains the reviewed-pair path.
                 if (earlyConfig != config || earlyWindows != windows || earlySize != (bitmap.width to bitmap.height)) earlySignature = null
-                val earlyFeatures = if (config.imageDedupeMode != "off" && !config.imageDedupeDiagnosticsEnabled && windows.trustworthy && windows.foreground != null)
+                val earlyFeatures = if (allows(config,windows,AppCollectionChannel.DURATION) && config.imageDedupeMode != "off" && !config.imageDedupeDiagnosticsEnabled && windows.trustworthy && windows.foreground != null)
                     features(bitmap, ScreenshotDedupeHelper.Mode.fromRaw(config.imageDedupeMode)) else null
                 if (earlyFeatures != null && ScreenshotDedupeHelper.shouldSkip(earlySignature, earlyFeatures, ScreenshotDedupeHelper.Mode.fromRaw(config.imageDedupeMode)).duplicate) {
                     if (!isCurrent() || !settings.enabled || closed || ConnectionGuard.changing() || !settings.read().sameCaptureConfiguration(config) || !unlocked(context)) return@execute
                     val appId = requireNotNull(windows.foreground)
                     val event = JSONObject().put("id", UUID.randomUUID().toString()).put("deviceId", settings.deviceId)
                         .put("deviceName", config.deviceName).put("platform", "android").put("capturedAt", capturedAt)
-                        .put("durationMs", duration(observedAtMs, appId, AppCollectionMode.CONTENT, config.intervalSeconds))
+                        .put("durationMs", 0L)
                         .put("appId", appId).put("appName", CollectorMetadata.appName(context, appId)).put("source", "activity")
                         .put("privacy", JSONObject().put("excluded", false).put("redacted", false).put("mode", "none").put("collection", "activity"))
                         .apply { if (config.metadataEnabled) put("metadata", CollectorMetadata.snapshot(context,
                             if (config.effectiveMode() == "projection") "media_projection" else "accessibility", config.intervalSeconds * 1000L, activityOnly = true)) }
                     if (!isCurrent()) return@execute
+                    val correlation=event.optJSONObject("metadata")?:JSONObject().put("version",1).put("observedAt",capturedAt)
+                    event.put("metadata",correlation.put("captureObservation",sample.metadata(config,windows)))
                     context.queue().enqueue(event, null, config.maxQueueMiB * 1024L * 1024L)
                     diagnostics.add("earlySkippedFrames")
-                    observationClock.accept(observedAtMs, appId, AppCollectionMode.CONTENT)
+
                     settings.captured(capturedAt); settings.status("capturing", MoteI18n.text("重复画面已丢弃，仅保存应用活动；未执行审查与 OCR")); settings.screenStatus(settings.message())
                     scheduleUpload(config)
                     return@execute
@@ -162,13 +203,14 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
                 val comparison = features?.let { ScreenshotDedupeHelper.shouldSkip(previousSignature, it, dedupeMode) }
                 val duplicate = gate != "hold" && comparison?.duplicate == true
                 val now = observedAtMs
-                val duration = duration(now, windows.foreground, AppCollectionMode.CONTENT, config.intervalSeconds)
+                val duration = 0L
                 val event = JSONObject().put("id", UUID.randomUUID().toString()).put("deviceId", settings.deviceId)
                     .put("deviceName", config.deviceName).put("platform", "android").put("capturedAt", capturedAt)
                     .put("durationMs", duration).put("appId", windows.foreground).put("appName", windows.foreground?.let { CollectorMetadata.appName(context, it) })
                     .put("imageMime", "image/jpeg").put("ocrText", text).put("source", "screen")
                     .put("ocr", JSONObject().put("status", "disabled"))
                     .apply { if (config.metadataEnabled) put("metadata", CollectorMetadata.snapshot(context, if (config.effectiveMode() == "projection") "media_projection" else "accessibility", config.intervalSeconds * 1000L).apply {
+                        put("captureObservation",sample.metadata(config,windows))
                         getJSONObject("capture").put("width", output.width).put("height", output.height).put("ocrEnabled", false)
                         if (appliedMaskCount <= 200) getJSONObject("capture").put("maskCount", appliedMaskCount)
                     }) }
@@ -191,7 +233,9 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
                 val encoded = if (!duplicate) jpeg(output, config.jpegQuality) else null
                 if (!duplicate) diagnostics.timing("encodeMs", SystemClock.elapsedRealtime() - encodeStart)
                 val queueStart = SystemClock.elapsedRealtime()
-                if (!isCurrent()) return@execute
+                if (!isCurrent() || !allows(config,windows,AppCollectionChannel.SCREENSHOT)) return@execute
+                val correlation=event.optJSONObject("metadata")?:JSONObject().put("version",1).put("observedAt",capturedAt)
+                event.put("metadata",correlation.put("captureObservation",sample.metadata(config,windows)))
                 val committedId = context.queue().enqueue(event, encoded, config.maxQueueMiB * 1024L * 1024L, gate == "hold")
                 diagnostics.timing("queueMs", SystemClock.elapsedRealtime() - queueStart)
                 if (!duplicate) runCatching {
@@ -223,7 +267,7 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
                 SupportEvents.record(context, stage, EventCode.OK)
                 diagnostics.add("capturedCount")
                 lastPause = null
-                observationClock.accept(now, windows.foreground, AppCollectionMode.CONTENT)
+
                 settings.captured(capturedAt)
                 lastPause = null
                 settings.status("capturing", MoteI18n.text("采集中 · {0}", if (duplicate) MoteI18n.text("图片去重命中，仅元数据已保存") else if (gate == "hold") MoteI18n.text("审查未完成，已隔离暂存待复核") else MoteI18n.text("图片已保存，上传后由中央识别")))
@@ -249,6 +293,8 @@ class CapturePipeline(private val context: Context, private val scheduleUpload: 
     }
     @Synchronized fun close() { if (closed) return; closed = true; dedupeReference = null; executor.execute { if (ocrInstance.isInitialized()) ocrInstance.value.close() }; executor.shutdown() }
     companion object {
+        fun allows(config:CollectorConfig,windows:WindowSnapshot,channel:AppCollectionChannel):Boolean = (channel==AppCollectionChannel.DURATION || !protectedWindow(windows)) && config.screenCollectionEnabled && config.collectionRules.allows(windows,PrivacyRules.exclusions(config.excludedPackages),channel)
+
         fun protectedWindow(windows: WindowSnapshot) = MoteApplication.visibleActivities > 0 || BuildConfig.APPLICATION_ID in windows.packages || windows.foreground == BuildConfig.APPLICATION_ID
         fun policy(config: CollectorConfig, windows: WindowSnapshot): AppCollectionMode {
             val selected = config.collectionRules.decide(windows, PrivacyRules.exclusions(config.excludedPackages))

@@ -1,0 +1,82 @@
+[
+  {
+    "appId": "com.xingin.xhs",
+    "appVersion": "9.50.0",
+    "converted": 25,
+    "excluded": [
+      {
+        "id": "stable-note-author",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "stable-video-caption",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "reviewed-diandian-answer",
+        "reason": "nonportable_whole_page_hash"
+      }
+    ]
+  },
+  {
+    "appId": "com.tencent.weread",
+    "appVersion": "10.2.2",
+    "converted": 4,
+    "excluded": [
+      {
+        "id": "bookshelf-books",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "player-controls",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "reading-body-d0cf9633f1103ec6",
+        "reason": "nonportable_whole_page_hash"
+      }
+    ]
+  },
+  {
+    "appId": "tv.danmaku.bili",
+    "appVersion": "9.15.0",
+    "converted": 46,
+    "excluded": [
+      {
+        "id": "detail-uploader",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "ad-card-evidence",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "video-engagement",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "player-visible-state",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "collection-display",
+        "reason": "requires_individual_native_selector_review"
+      }
+    ]
+  },
+  {
+    "appId": "com.tencent.mobileqq",
+    "appVersion": "9.3.75",
+    "converted": 34,
+    "excluded": [
+      {
+        "id": "conversation-header",
+        "reason": "requires_individual_native_selector_review"
+      },
+      {
+        "id": "conversation-preview-rows",
+        "reason": "requires_individual_native_selector_review"
+      }
+    ]
+  }
+]

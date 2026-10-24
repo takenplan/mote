@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
@@ -40,7 +41,7 @@ class AppCaptureSetupInstrumentedTest {
             MoteI18n.select(context, "zh-CN")
             prefs.edit().putBoolean("capturePreviewSeen", false).commit()
             settings.save(original.copy(server = "", token = "", screenCollectionEnabled = true, mode = "accessibility", uiPageMode = "ui_preferred",
-                appCollectionRules = AppCollectionRules.DEFAULT, uiPageRules = "[]"))
+                localContentOcr = false, appCollectionRules = AppCollectionRules.DEFAULT, uiPageRules = "[]"))
             block(settings)
         } finally {
             assertFalse("Setup must not silently start capture", settings.enabled)
@@ -55,7 +56,7 @@ class AppCaptureSetupInstrumentedTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("这里是生成的格式示例") })
-                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("未单独设置的应用：仅应用和时长") })
+                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("未单独设置的应用：应用时长") })
                 assertFalse(settings.enabled); assertFalse(settings.capturePreviewSeen())
                 button("暂不开始").performClick()
             }
@@ -63,32 +64,40 @@ class AppCaptureSetupInstrumentedTest {
             scenario.onActivity { assertTrue(views(it.window.decorView).single { row -> row.tag == "primary:LIBRARY" }.isSelected); assertFalse(settings.enabled) }
         }
     }
-    @Test fun saveAndPreviewUsesTwoModesAndNormalizesLegacyOnlyAfterSaving() = fixture { settings ->
-        for ((storedMode, selectedIndex, savedMode) in listOf(Triple("ui_preferred", 0, "screen_only"), Triple("hybrid", 1, "ui_preferred"), Triple("page_only", 1, "ui_preferred"))) {
-            settings.save(settings.read().copy(uiPageMode = storedMode))
-            ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-                scenario.onActivity { activity ->
-                    activity.openGeneratedAdd(MoteAddAction.SCREEN)
-                    val mode = views(activity.window.decorView).filterIsInstance<Spinner>().single { it.tag == "uiPageMode" }
-                    assertEquals(2, mode.count)
-                    assertEquals("只截图", mode.getItemAtPosition(0).toString())
-                    assertEquals("页面优先，未取得内容时截图", mode.getItemAtPosition(1).toString())
-                    assertEquals(1, mode.selectedItemPosition)
-                    assertEquals(storedMode, settings.read().uiPageMode)
-                    assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。" })
-                    mode.setSelection(selectedIndex)
-                    button("保存并预览").performClick()
-                }
-                waitFor { settings.read().uiPageMode == savedMode }
-                waitFor {
-                    var shown = false
-                    instrumentation.runOnMainSync { shown = dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("这里是生成的格式示例") } }
-                    shown
-                }
-                instrumentation.runOnMainSync { button("关闭预览").performClick() }
-                assertFalse(settings.enabled); assertFalse(settings.capturePreviewSeen())
-                assertEquals(AppCollectionRules.DEFAULT, settings.read().appCollectionRules)
+    @Test fun independentChoicesAndLocalOcrRemainDraftsAcrossRecreationUntilSaved() = fixture { settings ->
+        settings.save(settings.read().copy(uiPageMode="screen_only",appCollectionRules=AppCollectionRules(AppCollectionMode.ACTIVITY,mapOf(context.packageName to AppCollectionMode.ACTIVITY)).json()))
+        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+            scenario.onActivity { activity ->
+                activity.openGeneratedAdd(MoteAddAction.SCREEN)
+                assertFalse(views(activity.window.decorView).filterIsInstance<Spinner>().any {it.isShown&&it.tag=="uiPageMode"})
+                views(activity.window.decorView).filterIsInstance<Button>().single {it.isShown&&it.contentDescription?.toString()?.contains(context.packageName)==true}.performClick()
             }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {button("修改此应用的记录范围").performClick()}
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val choices=dialogViews().filterIsInstance<CheckBox>().filter {it.isShown}
+                assertTrue(choices.single {it.text.toString()=="应用时长"}.isChecked)
+                choices.single {it.text.toString()=="应用时长"}.performClick()
+                choices.single {it.text.toString()=="截图"}.performClick()
+                choices.single {it.text.toString()=="结构化内容"}.performClick()
+                button("加入配置草稿").performClick()
+            }
+            assertEquals(AppCollectionMode.ACTIVITY,settings.read().collectionRules.apps[context.packageName])
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {button("完成").performClick()}
+            scenario.onActivity {activity ->views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="使用本机 OCR 补充结构化内容"}.performClick()}
+            assertFalse(settings.read().localContentOcr);assertFalse(settings.enabled)
+            scenario.recreate();scenario.awaitMainUi()
+            scenario.onActivity {activity ->
+                assertTrue(views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="使用本机 OCR 补充结构化内容"}.isChecked)
+                button("保存并预览").performClick()
+            }
+            waitFor {settings.read().localContentOcr&&settings.read().collectionRules.apps[context.packageName]==AppCollectionMode.SCREENSHOT_STRUCTURED}
+            waitFor {var shown=false;instrumentation.runOnMainSync {shown=dialogViews().filterIsInstance<TextView>().any {it.isShown&&it.text.contains("这里是生成的格式示例")}};shown}
+            instrumentation.runOnMainSync {button("关闭预览").performClick()}
+            assertEquals("screen_only",settings.read().uiPageMode)
+            assertFalse(settings.enabled);assertFalse(settings.capturePreviewSeen())
         }
     }
     @Test fun configuredAppDetailShowsExactVersionAndFieldsWithoutClaimingLiveValidation() = fixture { settings ->
@@ -105,12 +114,12 @@ class AppCaptureSetupInstrumentedTest {
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("安装版本：$version") })
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("已配置 文章") && it.text.contains("正文") })
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("不代表已经通过真机验证") })
-                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。" })
+                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "结构化字段规则按应用和版本匹配，仅在该应用已选择结构化内容时运行。" })
                 button("预览此应用的记录格式").performClick()
             }
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
-                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("文章格式示例") && it.text.contains("示例作者") })
+                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("结构化格式示例") && it.text.contains("实际可见字段") })
                 button("关闭预览").performClick(); button("完成").performClick()
             }
             assertFalse(settings.enabled)
@@ -136,7 +145,7 @@ class AppCaptureSetupInstrumentedTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync { button("完成").performClick() }
             scenario.onActivity { activity ->
-                assertEquals(1, views(activity.window.decorView).filterIsInstance<Spinner>().single { it.tag == "uiPageMode" }.selectedItemPosition)
+                assertFalse(views(activity.window.decorView).filterIsInstance<Spinner>().any {it.isShown&&it.tag=="uiPageMode"})
                 button("保存并预览").performClick()
             }
             waitFor { settings.read().uiPageRules != "[]" }
@@ -148,7 +157,7 @@ class AppCaptureSetupInstrumentedTest {
             instrumentation.runOnMainSync { button("关闭预览").performClick() }
             @Suppress("DEPRECATION") val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName!!
             assertEquals(1, AppPageSetup.adapters(settings.read().uiPageRules, context.packageName, version).size)
-            assertEquals("ui_preferred", settings.read().uiPageMode)
+            assertEquals("screen_only", settings.read().uiPageMode)
             assertEquals(AppCollectionMode.ACTIVITY, settings.read().collectionRules.apps[context.packageName])
             assertFalse(settings.enabled); assertFalse(settings.capturePreviewSeen())
         }

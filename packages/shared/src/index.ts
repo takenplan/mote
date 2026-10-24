@@ -38,11 +38,14 @@ export const captureSchema = z.object({
   metadata: recordMetadataSchema.optional(),
   privacy: privacySchema.default({excluded:false,redacted:false,mode:'local'}),
 }).strict().superRefine((v,ctx) => {
+  const selected=v.metadata?.captureObservation?.selected;
+  if(selected && (v.source==='ui_page'&&!selected.structured || v.source==='screen'&&!selected.screenshots || v.source==='activity'&&!selected.duration || ['screen','ui_page'].includes(v.source)&&v.durationMs!==0))ctx.addIssue({code:'custom',message:'Capture channels disagree with the selected sampling policy'});
   if (v.metadata?.uiPage && v.source !== 'ui_page') ctx.addIssue({code:'custom',message:'Page evidence belongs to ui_page'});
   if (v.source === 'ui_page') {
     const p=v.metadata?.uiPage;
+    if(v.platform==='android'&&p?.version!==3)ctx.addIssue({code:'custom',message:'Android requires the current named-field representation'});
     if (!p || !['android','macos'].includes(v.platform) || !v.appId || v.durationMs!==0 || v.imageBase64 || v.imageMime || v.windowTitle || v.provenance || v.mood || v.privacy.collection!=='content' || v.metadata?.collector?.method!=='accessibility' || v.metadata?.capture || v.metadata?.media || v.metadata?.notification || v.metadata?.deviceEvent || p && v.ocrText!==uiPageText(p)) ctx.addIssue({code:'custom',message:'Invalid UI page observation'});
-    if (p?.version === 2 && (v.capturedAt !== p.observations.lastAt || v.metadata?.observedAt !== p.observations.lastAt))
+    if (p?.version === 3 && (v.capturedAt !== p.observations.lastAt || v.metadata?.observedAt !== p.observations.lastAt))
       ctx.addIssue({code:'custom',message:'Structured page capture and metadata times must match the last observation'});
   }
   if (v.appId && !v.appName.trim()) ctx.addIssue({code:'custom',path:['appName'],message:'An application identifier requires a nonblank application name'});

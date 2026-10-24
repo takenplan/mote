@@ -19,6 +19,7 @@ class CaptureAccessibilityService : AccessibilityService() {
     private var pipeline: CapturePipeline? = null
     private val pixels = java.util.concurrent.ThreadPoolExecutor(1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS, java.util.concurrent.ArrayBlockingQueue<Runnable>(1))
     @Volatile private var destroyed = false
+    @Volatile private var contentRevision=0L
     @Volatile private var pageActivity = ""
     @Volatile private var pagePackage = ""
     private val activityClasses = linkedMapOf<Pair<String,String>, Boolean>()
@@ -59,6 +60,7 @@ class CaptureAccessibilityService : AccessibilityService() {
         }
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if(event!=null && (event.packageName?.toString()==pagePackage || event.eventType in setOf(AccessibilityEvent.TYPE_WINDOWS_CHANGED,AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)))contentRevision++
         ProjectionService.instance?.onWindowChanged()
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val app = event.packageName?.toString().orEmpty()
@@ -185,20 +187,21 @@ class CaptureAccessibilityService : AccessibilityService() {
             runCatching { SupportEvents.runtime(this).captureDecision(windowCounts.first, windowCounts.second, windowCounts.third, restricted, snapshot.trustworthy, snapshot.foreground != null, protected, mode) }
             lastDecision = decision; lastDecisionAt = now
         }
-        if (mode == AppCollectionMode.ACTIVITY) {
-            if (pipeline!!.canCollect(config, snapshot, mode)) {
-                nextCapture = android.os.SystemClock.elapsedRealtime() + config.intervalSeconds * 1000L
-                val generation = configurationGeneration
-                pipeline!!.submitActivity(snapshot, config, isCurrent = { captureCurrent(snapshot,config,generation,AppCollectionMode.ACTIVITY) })
-            }; return
+        val revision=contentRevision
+        val sample=CaptureObservation(contentCurrent={revision==contentRevision})
+        val generation=configurationGeneration
+        if(CapturePipeline.allows(config,snapshot,AppCollectionChannel.DURATION)) {
+            ConnectionGuard.processing.incrementAndGet()
+            try {pageWorker.execute {
+                try {runCatching {pipeline?.recordDuration(snapshot,config,sample){captureValid(snapshot,config,generation)}}}
+                finally {ConnectionGuard.processing.decrementAndGet()}
+            }} catch(_:java.util.concurrent.RejectedExecutionException){ConnectionGuard.processing.decrementAndGet()}
         }
+        if (mode == AppCollectionMode.ACTIVITY || mode == AppCollectionMode.OFF) return
         if (!pipeline!!.canCapture(config, snapshot)) return
-        if (config.uiPageMode != "screen_only" && config.pageRules.any { it.optInt("formatVersion", 1) == 2 && it.getString("platform") == "android" && it.getString("appId") == snapshot.foreground }) {
-            collectPage(snapshot,config); return
-        }
-        captureScreen(snapshot,config)
+        collectPage(snapshot,config,sample)
     }
-    private fun captureScreen(snapshot: WindowSnapshot, config: CollectorConfig) {
+    private fun captureScreen(snapshot: WindowSnapshot, config: CollectorConfig, sample:CaptureObservation=CaptureObservation()) {
         if (destroyed || ConnectionGuard.changing() || !settings.enabled || windowSnapshot()!=snapshot || !CapturePipeline.unlocked(this)) {
             Operations.record(this, OperationKind.FRAME_BLOCKED, OperationReason.WINDOW_CHANGED)
             return
@@ -208,18 +211,19 @@ class CaptureAccessibilityService : AccessibilityService() {
             val current = runCatching { settings.read().sameCaptureConfiguration(config) && settings.enabled && !ConnectionGuard.changing() }.getOrDefault(false)
             handler.post {
                 if (!destroyed && generation == configurationGeneration && current && !ConnectionGuard.changing() && settings.enabled && windowSnapshot() == snapshot && CapturePipeline.unlocked(this))
-                    requestScreen(snapshot, config)
+                    requestScreen(snapshot, config, sample)
             }
         }
     }
-    private fun requestScreen(snapshot: WindowSnapshot, config: CollectorConfig) {
+    private fun requestScreen(snapshot: WindowSnapshot, config: CollectorConfig, sample:CaptureObservation) {
+        if(!CapturePipeline.allows(config,snapshot,AppCollectionChannel.SCREENSHOT)&&!(config.localContentOcr&&sample.contentCurrent()&&CapturePipeline.allows(config,snapshot,AppCollectionChannel.OCR)&&sample.nodes?.optBoolean("ocrSafe")==true))return
         if (Build.VERSION.SDK_INT < 30) { stateWorker.execute { settings.status("permission_required", MoteI18n.text("此系统需投屏模式采集内容；仅应用活动无需截图API")) }; return }
         val capturePipeline = pipeline!!
         val generation = configurationGeneration
         inFlight = true
         nextCapture = android.os.SystemClock.elapsedRealtime() + config.intervalSeconds * 1000L
-        val at = Instant.now().toString()
-        val observedAtMs = android.os.SystemClock.elapsedRealtime()
+        val at = sample.at
+        val observedAtMs = sample.elapsed
         Operations.record(this, OperationKind.CAPTURE_REQUESTED)
         stateWorker.execute { Diagnostics(this).add("captureRequests") }
         takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
@@ -242,7 +246,7 @@ class CaptureAccessibilityService : AccessibilityService() {
                             if (generation == configurationGeneration) inFlight = false
                             if (bitmap != null) {
                                 if (!destroyed && generation == configurationGeneration && !ConnectionGuard.changing() && settings.enabled && windowSnapshot() == snapshot && CapturePipeline.unlocked(this@CaptureAccessibilityService))
-                                    capturePipeline.submit(bitmap, snapshot, config, at, observedAtMs) { captureCurrent(snapshot, config, generation) }
+                                    capturePipeline.submit(bitmap, snapshot, config, at, observedAtMs, sample) { captureCurrent(snapshot, config, generation) }
                                 else { bitmap.recycle(); Operations.record(this@CaptureAccessibilityService, OperationKind.FRAME_BLOCKED, OperationReason.WINDOW_CHANGED) }
                             } else if (settingsValid) Operations.record(this@CaptureAccessibilityService, OperationKind.CAPTURE_FAILED, OperationReason.PIXEL_COPY)
                             else Operations.record(this@CaptureAccessibilityService, OperationKind.FRAME_BLOCKED, OperationReason.STATE_CHANGED)
@@ -262,27 +266,30 @@ class CaptureAccessibilityService : AccessibilityService() {
             }
         })
     }
+    private fun captureValid(snapshot:WindowSnapshot,config:CollectorConfig,generation:Long):Boolean = runCatching { !destroyed && generation==configurationGeneration && !ConnectionGuard.changing() && settings.enabled && settings.read().sameCaptureConfiguration(config) && CapturePipeline.unlocked(this) && windowSnapshot()==snapshot }.getOrDefault(false)
     private fun captureCurrent(snapshot: WindowSnapshot, config: CollectorConfig, generation: Long, collection: AppCollectionMode = AppCollectionMode.CONTENT): Boolean =
         runCatching { !destroyed && generation == configurationGeneration && !ConnectionGuard.changing() && settings.enabled && settings.read().sameCaptureConfiguration(config) &&
             CapturePipeline.unlocked(this) && windowSnapshot() == snapshot && CapturePipeline.policy(config, snapshot) == collection }.getOrDefault(false)
-    private fun collectPage(snapshot: WindowSnapshot, config: CollectorConfig) {
+    private fun collectPage(snapshot: WindowSnapshot, config: CollectorConfig, sample:CaptureObservation) {
         inFlight=true
         val generation=configurationGeneration
-        val sampledAt=Instant.now().toString()
-        val observedAtMs=android.os.SystemClock.elapsedRealtime()
+        val sampledAt=sample.at
+        val observedAtMs=sample.elapsed
         val activity=if(pagePackage==snapshot.foreground) pageActivity else ""
         ConnectionGuard.processing.incrementAndGet()
         try { pageWorker.execute {
             var outcome = UiPageOutcome.STATE_CHANGED
             var queued = 0
+            var localSnapshot:org.json.JSONObject?=null
             try {
                 val appId=snapshot.foreground ?: return@execute
-                fun valid() = captureCurrent(snapshot, config, generation) && (pagePackage != appId || pageActivity == activity)
+                fun valid() = sample.contentCurrent() && captureCurrent(snapshot, config, generation) && (pagePackage != appId || pageActivity == activity)
                 if(!valid())return@execute
                 outcome = UiPageOutcome.EMPTY
                 val version=runCatching { packageManager.getPackageInfo(appId,0).versionName.orEmpty() }.getOrDefault("")
-                val rules=config.pageRules.filter { it.optInt("formatVersion", 1) == 2 && it.getString("platform")=="android" && it.getString("appId")==appId && (!it.has("activity")||it.getString("activity")==activity) && it.getString("appVersion")==version }
-                if(rules.isEmpty())return@execute
+                if(!CapturePipeline.allows(config,snapshot,AppCollectionChannel.STRUCTURED)) {outcome=UiPageOutcome.EMPTY;return@execute}
+                val rules=config.pageRules.filter { it.optInt("formatVersion", 1) in setOf(2,3) && it.getString("platform")=="android" && it.getString("appId")==appId && (!it.has("activity")||it.getString("activity")==activity) && it.getString("appVersion")==version }
+
                 val root=rootInActiveWindow ?: return@execute
                 val windowId=root.windowId
                 val pageSnapshot=try {
@@ -297,12 +304,13 @@ class CaptureAccessibilityService : AccessibilityService() {
                     val masks=Mask.parse(config.masks).map { android.graphics.Rect((it.left*size.widthPixels).toInt(),(it.top*size.heightPixels).toInt(),kotlin.math.ceil(it.right*size.widthPixels.toDouble()).toInt(),kotlin.math.ceil(it.bottom*size.heightPixels.toDouble()).toInt()) }
                     UiPageReader.read(root,appId,version,activity,viewport,masks,occlusions).put("observedAt", sampledAt)
                 } finally { @Suppress("DEPRECATION") root.recycle() }
+                localSnapshot=pageSnapshot
                 if(!valid())return@execute
                 val current=rootInActiveWindow
                 val sameWindow=current?.windowId==windowId
                 @Suppress("DEPRECATION") current?.recycle()
                 if(!sameWindow)return@execute
-                val allText=UiPageRules.text(pageSnapshot)
+                val allText=pageSnapshot.getJSONArray("nodes").let{nodes->(0 until nodes.length()).flatMap{i->val n=nodes.getJSONObject(i);listOf(n.optString("text"),n.optString("description"))}.joinToString("\n")}
                 if(UploadGate.review(config.uploadGate){allText}!="allow"){outcome=UiPageOutcome.PRIVACY_REJECTED;pipeline?.pause(MoteI18n.text("页面隐私审查未通过，已跳过"));return@execute}
                 val pages=UiPageRules.extractAll(pageSnapshot,rules,sampledAt)
                 if (pages.isEmpty()) return@execute
@@ -316,7 +324,7 @@ class CaptureAccessibilityService : AccessibilityService() {
                         .put("deviceName",config.deviceName).put("platform","android").put("capturedAt",sampledAt).put("durationMs",0)
                         .put("appId",appId).put("appName",CollectorMetadata.appName(this,appId)).put("source","ui_page").put("ocrText",UiPageRules.text(page))
                         .put("privacy",org.json.JSONObject().put("excluded",false).put("redacted",true).put("mode","local").put("collection","content"))
-                        .put("metadata",org.json.JSONObject().put("version",1).put("observedAt",sampledAt).put("collector",org.json.JSONObject().put("method","accessibility")).put("uiPage",page))
+                        .put("metadata",org.json.JSONObject().put("version",1).put("observedAt",sampledAt).put("collector",org.json.JSONObject().put("method","accessibility")).put("captureObservation",sample.metadata(config,snapshot)).put("uiPage",page))
                     UiPageRules.validateEvent(event)
                     if(!valid()) { outcome=UiPageOutcome.STATE_CHANGED; return@execute }
                     queue().enqueue(event,null,config.maxQueueMiB*1024L*1024L)
@@ -342,9 +350,9 @@ class CaptureAccessibilityService : AccessibilityService() {
                 handler.post { if(generation==configurationGeneration){
                     inFlight=false
                     if (!captureCurrent(snapshot,config,generation)) return@post
-                    if (outcome==UiPageOutcome.CAPTURED && pipeline?.canCapture(config,snapshot)==true)
-                        pipeline!!.submitPageActivity(snapshot,config,sampledAt,observedAtMs) { captureCurrent(snapshot,config,generation) }
-                    else if(UiPageCaptureChoice.screenshot(config.uiPageMode,outcome)) captureScreen(snapshot,config)
+                    val selected=CapturePipeline.allows(config,snapshot,AppCollectionChannel.SCREENSHOT)
+                    if(UiPageCaptureChoice.screenshot(selected,outcome) || outcome !in setOf(UiPageOutcome.PRIVACY_REJECTED,UiPageOutcome.STATE_CHANGED) && config.localContentOcr && localSnapshot?.optBoolean("ocrSafe")==true)
+                        captureScreen(snapshot,config,sample.copy(nodes=localSnapshot,fieldsSaved=outcome==UiPageOutcome.CAPTURED))
                 } }
             }
         } } catch (_: java.util.concurrent.RejectedExecutionException) { inFlight=false; ConnectionGuard.processing.decrementAndGet() }

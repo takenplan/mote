@@ -13,6 +13,7 @@ export function evidencePresentation(capture: Pick<Capture, 'id' | 'source' | 'p
     : capture.source === 'activity' ? moteText("应用活动")
     : capture.source === 'note' ? moteText("用户原文")
     : capture.source === 'screen' ? moteText("OCR 全文")
+    : capture.source === 'ui_page' ? moteText("页面字段证据")
     : nativeFile ? moteText("文件元信息")
     : imported ? moteText("原始文本") : moteText("捕获文本");
   const deleteDescription = nativeFile

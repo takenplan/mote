@@ -19,7 +19,7 @@ data class CollectorConfig(
     val mediaCollectionEnabled: Boolean = false, val screenCollectionEnabled: Boolean = true,
     val notificationCollectionEnabled: Boolean = false, val deviceEventCollectionEnabled: Boolean = false,
     val syncChargingOnly: Boolean = false, val syncBatteryNotLow: Boolean = false, val imageDedupeMode: String = "off",
-    val ocrMode: String = "chinese", val ocrAppModes: String = "{}",
+    val localContentOcr: Boolean = false, val ocrMode: String = "chinese", val ocrAppModes: String = "{}",
     val imageDedupeDiagnosticsEnabled: Boolean = false, val uploadedRetentionDays: Int = 7
 ) {
     /** Sending pause never changes screen/media/privacy authorization or an in-flight capture. */
@@ -38,7 +38,7 @@ data class CollectorConfig(
     }
     fun validate() {
         require(uiPageMode in UiPageRules.modes); UiPageRules.parse(uiPageRules)
-        require(uiPageMode == "screen_only" || mode == "accessibility") { "UI pages require accessibility capture mode" }
+        require(!collectionRules.mayCollectStructured() || mode == "accessibility") { "Structured collection requires accessibility capture mode" }
         uploadGate.validate()
         if (server.isNotBlank()) PrivacyRules.validateEndpoint(server, debugHttp, BuildConfig.DEBUG)
         require(token.isBlank() || token.length >= 32) { MoteI18n.text("节点令牌至少需要 32 个字符；留空时仅保存在本机") }
@@ -83,7 +83,7 @@ class Settings(private val context: Context) {
         }
         // SharedPreferences already keeps values in memory. Compare only configuration keys,
         // so status/counter writes never rebuild a snapshot or decrypt credentials.
-        val values = prefs.all.filterKeys { it in configurationKeys || it == "syncPaused" }
+        val values = prefs.all.filterKeys { it in configurationKeys || it == "syncPaused" || it == "localContentOcr" }
         if (cachedPrefs === prefs && cachedValues == values) return@synchronized requireNotNull(cachedConfig)
         val config = CollectorConfig(
         uiPageMode = prefs.getString("uiPageMode", "ui_preferred")!!, uiPageRules = prefs.getString("uiPageRules", "[]")!!,
@@ -108,7 +108,7 @@ class Settings(private val context: Context) {
         syncChargingOnly = prefs.getBoolean("syncChargingOnly", false), syncBatteryNotLow = prefs.getBoolean("syncBatteryNotLow", false), imageDedupeMode = prefs.getString("imageDedupeMode", "off")!!,
         imageDedupeDiagnosticsEnabled = prefs.getBoolean("imageDedupeDiagnosticsEnabled", false),
         uploadedRetentionDays = prefs.getInt("uploadedRetentionDays", 7),
-        ocrMode = prefs.getString("ocrMode", "chinese")!!, ocrAppModes = prefs.getString("ocrAppModes", "{}")!!
+        localContentOcr = prefs.getBoolean("localContentOcr", false), ocrMode = prefs.getString("ocrMode", "chinese")!!, ocrAppModes = prefs.getString("ocrAppModes", "{}")!!
     )
         if (!prefs.contains("configurationFormat")) {
             val editor = prefs.edit().putBoolean("enabled", prefs.getBoolean("enabled", false))
@@ -135,7 +135,7 @@ class Settings(private val context: Context) {
             "uiPageMode" to c.uiPageMode, "uiPageRules" to c.uiPageRules,
             "uploadGateEnabled" to c.uploadGate.enabled, "uploadGateText" to c.uploadGate.blockedText, "uploadGateFailure" to c.uploadGate.failureAction,
             "uploadedRetentionDays" to c.uploadedRetentionDays,
-            "ocrMode" to c.ocrMode, "ocrAppModes" to c.ocrAppModes, "imageDedupeMode" to c.imageDedupeMode, "imageDedupeDiagnosticsEnabled" to c.imageDedupeDiagnosticsEnabled,
+            "localContentOcr" to c.localContentOcr, "ocrMode" to c.ocrMode, "ocrAppModes" to c.ocrAppModes, "imageDedupeMode" to c.imageDedupeMode, "imageDedupeDiagnosticsEnabled" to c.imageDedupeDiagnosticsEnabled,
             "syncPaused" to c.syncPaused, "dataOrigin" to origin, "syncMode" to c.syncMode, "syncIntervalMinutes" to c.syncIntervalMinutes,
             "syncChargingOnly" to c.syncChargingOnly, "syncBatteryNotLow" to c.syncBatteryNotLow,
             "packedUpload" to c.packedUpload, "syncBatchSize" to c.syncBatchSize, "jsonlWindowMinutes" to c.jsonlWindowMinutes, "server" to c.server.trim().trimEnd('/'),

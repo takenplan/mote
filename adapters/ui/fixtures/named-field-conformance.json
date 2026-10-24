@@ -1,0 +1,2683 @@
+{
+  "provenance": "Only structural role/resource IDs and original child ordering are retained from reviewed declarative mappings. All strings and bounds are generated. No device coverage claim.",
+  "cases": [
+    {
+      "name": "image-note-title-body",
+      "rule": {
+        "formatVersion": 3,
+        "id": "com.xingin.xhs:9.50.0:image-note-title-body",
+        "version": "1",
+        "platform": "android",
+        "appId": "com.xingin.xhs",
+        "appVersion": "9.50.0",
+        "kind": "image_note_title_body",
+        "repeat": {
+          "role": "android.widget.LinearLayout"
+        },
+        "repeatSubtreeHash": "d8b6bf3c2c06f1acae24fb27898286dd2e9f9704fafaa90e538c4f01619ffddf",
+        "fields": {
+          "note_visible_title": {
+            "select": {
+              "role": "android.widget.TextView"
+            },
+            "childPath": [
+              0
+            ],
+            "source": "text",
+            "cardinality": "one"
+          },
+          "note_visible_body": {
+            "select": {
+              "role": "android.widget.TextView"
+            },
+            "childPath": [
+              2
+            ],
+            "source": "text",
+            "cardinality": "one"
+          }
+        }
+      },
+      "snapshot": {
+        "appId": "com.xingin.xhs",
+        "appVersion": "9.50.0",
+        "activity": "com.xingin.matrix.notedetail.NoteDetailActivity",
+        "observedAt": "2026-10-24T00:00:00.000Z",
+        "nodes": [
+          {
+            "id": "n0",
+            "resourceId": "",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": ""
+          },
+          {
+            "id": "n1",
+            "resourceId": "com.xingin.xhs:id/0_resource_name_obfuscated",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated note_visible_title 1",
+            "parentId": "n0",
+            "childIndex": 0
+          },
+          {
+            "id": "n2",
+            "resourceId": "com.xingin.xhs:id/0_resource_name_obfuscated",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 1
+          },
+          {
+            "id": "n3",
+            "resourceId": "com.xingin.xhs:id/0_resource_name_obfuscated",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated note_visible_body 1",
+            "parentId": "n0",
+            "childIndex": 2
+          }
+        ],
+        "truncated": false
+      },
+      "expectedFields": [
+        {
+          "name": "note_visible_body",
+          "values": [
+            {
+              "text": "Generated note_visible_body 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "note_visible_title",
+          "values": [
+            {
+              "text": "Generated note_visible_title 1",
+              "source": "text"
+            }
+          ]
+        }
+      ],
+      "expectedSubtreeHash": "d8b6bf3c2c06f1acae24fb27898286dd2e9f9704fafaa90e538c4f01619ffddf"
+    },
+    {
+      "name": "audio-title-32717aa2de23e454",
+      "rule": {
+        "formatVersion": 3,
+        "id": "com.tencent.weread:10.2.2:audio-title-32717aa2de23e454",
+        "version": "1",
+        "platform": "android",
+        "appId": "com.tencent.weread",
+        "appVersion": "10.2.2",
+        "kind": "audio_title_32717aa2de23e454",
+        "repeat": {
+          "role": "android.view.ViewGroup"
+        },
+        "repeatSubtreeHash": "32717aa2de23e454b5e19950b8bcd0410ac1cd56ba0232024983a1d89e524ebd",
+        "fields": {
+          "chapter_display_title": {
+            "select": {
+              "role": "android.view.ViewGroup"
+            },
+            "childPath": [
+              1
+            ],
+            "source": "description",
+            "cardinality": "one"
+          }
+        }
+      },
+      "snapshot": {
+        "appId": "com.tencent.weread",
+        "appVersion": "10.2.2",
+        "activity": "com.tencent.weread.weHear.combo.panel.PanelFragmentActivity",
+        "observedAt": "2026-10-24T00:00:00.000Z",
+        "nodes": [
+          {
+            "id": "n0",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": ""
+          },
+          {
+            "id": "n1",
+            "resourceId": "ViewID_PlayerAlbumCoverButton",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 0
+          },
+          {
+            "id": "n2",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n1",
+            "childIndex": 0
+          },
+          {
+            "id": "n3",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n2",
+            "childIndex": 0
+          },
+          {
+            "id": "n4",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n3",
+            "childIndex": 0
+          },
+          {
+            "id": "n5",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n3",
+            "childIndex": 1
+          },
+          {
+            "id": "n6",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 1
+          },
+          {
+            "id": "n7",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n6",
+            "childIndex": 0
+          },
+          {
+            "id": "n8",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n7",
+            "childIndex": 0
+          },
+          {
+            "id": "n9",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n8",
+            "childIndex": 0
+          },
+          {
+            "id": "n10",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n7",
+            "childIndex": 1
+          },
+          {
+            "id": "n11",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n10",
+            "childIndex": 0
+          },
+          {
+            "id": "n12",
+            "resourceId": "",
+            "role": "android.view.View",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n6",
+            "childIndex": 1
+          },
+          {
+            "id": "n13",
+            "resourceId": "",
+            "role": "android.view.View",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n6",
+            "childIndex": 2
+          },
+          {
+            "id": "n14",
+            "resourceId": "ViewID_PlayerToolBarSetTime",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 2
+          },
+          {
+            "id": "n15",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n14",
+            "childIndex": 0
+          },
+          {
+            "id": "n16",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n14",
+            "childIndex": 1
+          },
+          {
+            "id": "n17",
+            "resourceId": "WRUI_Pressable_ViewID_PlayerSetLecturer",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 3
+          },
+          {
+            "id": "n18",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n17",
+            "childIndex": 0
+          },
+          {
+            "id": "n19",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n17",
+            "childIndex": 1
+          },
+          {
+            "id": "n20",
+            "resourceId": "ViewID_PlayerToolBarSetSpeed",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 4
+          },
+          {
+            "id": "n21",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n20",
+            "childIndex": 0
+          },
+          {
+            "id": "n22",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n20",
+            "childIndex": 1
+          },
+          {
+            "id": "n23",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n20",
+            "childIndex": 2
+          },
+          {
+            "id": "n24",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n23",
+            "childIndex": 0
+          },
+          {
+            "id": "n25",
+            "resourceId": "ViewID_PlayerToolBarSubscribe",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 5
+          },
+          {
+            "id": "n26",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n25",
+            "childIndex": 0
+          },
+          {
+            "id": "n27",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n25",
+            "childIndex": 1
+          },
+          {
+            "id": "n28",
+            "resourceId": "ViewID_PlayerToolBarBack",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 6
+          },
+          {
+            "id": "n29",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n28",
+            "childIndex": 0
+          },
+          {
+            "id": "n30",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 7
+          },
+          {
+            "id": "n31",
+            "resourceId": "",
+            "role": "android.view.View",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n30",
+            "childIndex": 0
+          },
+          {
+            "id": "n32",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 8
+          },
+          {
+            "id": "n33",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n32",
+            "childIndex": 0
+          },
+          {
+            "id": "n34",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n33",
+            "childIndex": 0
+          },
+          {
+            "id": "n35",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n34",
+            "childIndex": 0
+          },
+          {
+            "id": "n36",
+            "resourceId": "ViewID_PlayerToolBarAhead",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 9
+          },
+          {
+            "id": "n37",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n36",
+            "childIndex": 0
+          },
+          {
+            "id": "n38",
+            "resourceId": "ViewID_PlayerToolBarLyric",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 10
+          },
+          {
+            "id": "n39",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n38",
+            "childIndex": 0
+          },
+          {
+            "id": "n40",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n38",
+            "childIndex": 1
+          },
+          {
+            "id": "n41",
+            "resourceId": "ViewID_PlayerToolBarPrev",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 11
+          },
+          {
+            "id": "n42",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n41",
+            "childIndex": 0
+          },
+          {
+            "id": "n43",
+            "resourceId": "ViewID_PlayerToolBarPlay",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 12
+          },
+          {
+            "id": "n44",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n43",
+            "childIndex": 0
+          },
+          {
+            "id": "n45",
+            "resourceId": "ViewID_PlayerToolBarNext",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 13
+          },
+          {
+            "id": "n46",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n45",
+            "childIndex": 0
+          },
+          {
+            "id": "n47",
+            "resourceId": "ViewID_PlayerToolBarCatalog",
+            "role": "android.widget.Button",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 14
+          },
+          {
+            "id": "n48",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n47",
+            "childIndex": 0
+          },
+          {
+            "id": "n49",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n47",
+            "childIndex": 1
+          },
+          {
+            "id": "n50",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 15
+          },
+          {
+            "id": "n51",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n50",
+            "childIndex": 0
+          },
+          {
+            "id": "n52",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n51",
+            "childIndex": 0
+          },
+          {
+            "id": "n53",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n50",
+            "childIndex": 1
+          },
+          {
+            "id": "n54",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 0
+          },
+          {
+            "id": "n55",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 1
+          },
+          {
+            "id": "n56",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n55",
+            "childIndex": 0
+          },
+          {
+            "id": "n57",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n56",
+            "childIndex": 0
+          },
+          {
+            "id": "n58",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n57",
+            "childIndex": 0
+          },
+          {
+            "id": "n59",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n58",
+            "childIndex": 0
+          },
+          {
+            "id": "n60",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n56",
+            "childIndex": 1
+          },
+          {
+            "id": "n61",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n60",
+            "childIndex": 0
+          },
+          {
+            "id": "n62",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n61",
+            "childIndex": 0
+          },
+          {
+            "id": "n63",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n56",
+            "childIndex": 2
+          },
+          {
+            "id": "n64",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n63",
+            "childIndex": 0
+          },
+          {
+            "id": "n65",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n64",
+            "childIndex": 0
+          },
+          {
+            "id": "n66",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n55",
+            "childIndex": 1
+          },
+          {
+            "id": "n67",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 2
+          },
+          {
+            "id": "n68",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n67",
+            "childIndex": 0
+          },
+          {
+            "id": "n69",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n68",
+            "childIndex": 0
+          },
+          {
+            "id": "n70",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n69",
+            "childIndex": 0
+          },
+          {
+            "id": "n71",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n70",
+            "childIndex": 0
+          },
+          {
+            "id": "n72",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n68",
+            "childIndex": 1
+          },
+          {
+            "id": "n73",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n72",
+            "childIndex": 0
+          },
+          {
+            "id": "n74",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n73",
+            "childIndex": 0
+          },
+          {
+            "id": "n75",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n68",
+            "childIndex": 2
+          },
+          {
+            "id": "n76",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n75",
+            "childIndex": 0
+          },
+          {
+            "id": "n77",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n76",
+            "childIndex": 0
+          },
+          {
+            "id": "n78",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n67",
+            "childIndex": 1
+          },
+          {
+            "id": "n79",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 3
+          },
+          {
+            "id": "n80",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n79",
+            "childIndex": 0
+          },
+          {
+            "id": "n81",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n80",
+            "childIndex": 0
+          },
+          {
+            "id": "n82",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n81",
+            "childIndex": 0
+          },
+          {
+            "id": "n83",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n82",
+            "childIndex": 0
+          },
+          {
+            "id": "n84",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n80",
+            "childIndex": 1
+          },
+          {
+            "id": "n85",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n84",
+            "childIndex": 0
+          },
+          {
+            "id": "n86",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n85",
+            "childIndex": 0
+          },
+          {
+            "id": "n87",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n80",
+            "childIndex": 2
+          },
+          {
+            "id": "n88",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n87",
+            "childIndex": 0
+          },
+          {
+            "id": "n89",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n88",
+            "childIndex": 0
+          },
+          {
+            "id": "n90",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n79",
+            "childIndex": 1
+          },
+          {
+            "id": "n91",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 4
+          },
+          {
+            "id": "n92",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n91",
+            "childIndex": 0
+          },
+          {
+            "id": "n93",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n92",
+            "childIndex": 0
+          },
+          {
+            "id": "n94",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n93",
+            "childIndex": 0
+          },
+          {
+            "id": "n95",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n94",
+            "childIndex": 0
+          },
+          {
+            "id": "n96",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n92",
+            "childIndex": 1
+          },
+          {
+            "id": "n97",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n96",
+            "childIndex": 0
+          },
+          {
+            "id": "n98",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n97",
+            "childIndex": 0
+          },
+          {
+            "id": "n99",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n92",
+            "childIndex": 2
+          },
+          {
+            "id": "n100",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n99",
+            "childIndex": 0
+          },
+          {
+            "id": "n101",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n100",
+            "childIndex": 0
+          },
+          {
+            "id": "n102",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n91",
+            "childIndex": 1
+          },
+          {
+            "id": "n103",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 5
+          },
+          {
+            "id": "n104",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n103",
+            "childIndex": 0
+          },
+          {
+            "id": "n105",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n104",
+            "childIndex": 0
+          },
+          {
+            "id": "n106",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n105",
+            "childIndex": 0
+          },
+          {
+            "id": "n107",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n106",
+            "childIndex": 0
+          },
+          {
+            "id": "n108",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n104",
+            "childIndex": 1
+          },
+          {
+            "id": "n109",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n108",
+            "childIndex": 0
+          },
+          {
+            "id": "n110",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n109",
+            "childIndex": 0
+          },
+          {
+            "id": "n111",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n104",
+            "childIndex": 2
+          },
+          {
+            "id": "n112",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n111",
+            "childIndex": 0
+          },
+          {
+            "id": "n113",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n112",
+            "childIndex": 0
+          },
+          {
+            "id": "n114",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n103",
+            "childIndex": 1
+          },
+          {
+            "id": "n115",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 6
+          },
+          {
+            "id": "n116",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n115",
+            "childIndex": 0
+          },
+          {
+            "id": "n117",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n116",
+            "childIndex": 0
+          },
+          {
+            "id": "n118",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n117",
+            "childIndex": 0
+          },
+          {
+            "id": "n119",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n118",
+            "childIndex": 0
+          },
+          {
+            "id": "n120",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n116",
+            "childIndex": 1
+          },
+          {
+            "id": "n121",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n120",
+            "childIndex": 0
+          },
+          {
+            "id": "n122",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n121",
+            "childIndex": 0
+          },
+          {
+            "id": "n123",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n116",
+            "childIndex": 2
+          },
+          {
+            "id": "n124",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n123",
+            "childIndex": 0
+          },
+          {
+            "id": "n125",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n124",
+            "childIndex": 0
+          },
+          {
+            "id": "n126",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n115",
+            "childIndex": 1
+          },
+          {
+            "id": "n127",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n53",
+            "childIndex": 7
+          },
+          {
+            "id": "n128",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n127",
+            "childIndex": 0
+          }
+        ],
+        "truncated": false
+      },
+      "expectedFields": [],
+      "expectedSubtreeHash": "32717aa2de23e454b5e19950b8bcd0410ac1cd56ba0232024983a1d89e524ebd"
+    },
+    {
+      "name": "video-detail-title-01",
+      "rule": {
+        "formatVersion": 3,
+        "id": "tv.danmaku.bili:9.15.0:video-detail-title-01",
+        "version": "1",
+        "platform": "android",
+        "appId": "tv.danmaku.bili",
+        "appVersion": "9.15.0",
+        "kind": "video_detail_title_01",
+        "repeat": {
+          "role": "android.view.ViewGroup"
+        },
+        "repeatSubtreeHash": "b9c07265f5b25d172246d61d7160bb636de5f704281013d6093374378f4ef1a6",
+        "fields": {
+          "video_title": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/title"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "video_title_accessibility_description": {
+            "select": {
+              "role": "android.view.ViewGroup"
+            },
+            "childPath": [],
+            "source": "description",
+            "cardinality": "one"
+          }
+        }
+      },
+      "snapshot": {
+        "appId": "tv.danmaku.bili",
+        "appVersion": "9.15.0",
+        "activity": "com.bilibili.ship.theseus.detail.UnitedBizDetailsActivity",
+        "observedAt": "2026-10-24T00:00:00.000Z",
+        "nodes": [
+          {
+            "id": "n0",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": ""
+          },
+          {
+            "id": "n1",
+            "resourceId": "tv.danmaku.bili:id/title",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated video_title 1",
+            "parentId": "n0",
+            "childIndex": 0
+          },
+          {
+            "id": "n2",
+            "resourceId": "tv.danmaku.bili:id/arrow",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 1
+          }
+        ],
+        "truncated": false
+      },
+      "expectedFields": [
+        {
+          "name": "video_title",
+          "values": [
+            {
+              "text": "Generated video_title 1",
+              "source": "text"
+            }
+          ]
+        }
+      ],
+      "expectedSubtreeHash": "b9c07265f5b25d172246d61d7160bb636de5f704281013d6093374378f4ef1a6"
+    },
+    {
+      "name": "video-detail-metadata-01",
+      "rule": {
+        "formatVersion": 3,
+        "id": "tv.danmaku.bili:9.15.0:video-detail-metadata-01",
+        "version": "1",
+        "platform": "android",
+        "appId": "tv.danmaku.bili",
+        "appVersion": "9.15.0",
+        "kind": "video_detail_metadata_01",
+        "repeat": {
+          "role": "android.view.ViewGroup"
+        },
+        "repeatSubtreeHash": "01661c4cbd892bdb55fe14e4d4682ca59dfe77d68411807736155bc60dcf92a2",
+        "fields": {
+          "displayed_play_count": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/views"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "displayed_danmaku_count": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/danmakus"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "displayed_publish_time": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/time"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "displayed_online_viewers": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/online"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "video_description": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/desc"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "platform_content_label": {
+            "select": {
+              "resourceId": "tv.danmaku.bili:id/neutrality_label"
+            },
+            "source": "text",
+            "cardinality": "one"
+          }
+        }
+      },
+      "snapshot": {
+        "appId": "tv.danmaku.bili",
+        "appVersion": "9.15.0",
+        "activity": "com.bilibili.ship.theseus.detail.UnitedBizDetailsActivity",
+        "observedAt": "2026-10-24T00:00:00.000Z",
+        "nodes": [
+          {
+            "id": "n0",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": ""
+          },
+          {
+            "id": "n1",
+            "resourceId": "tv.danmaku.bili:id/views",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated displayed_play_count 1",
+            "parentId": "n0",
+            "childIndex": 0
+          },
+          {
+            "id": "n2",
+            "resourceId": "tv.danmaku.bili:id/score",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 1
+          },
+          {
+            "id": "n3",
+            "resourceId": "tv.danmaku.bili:id/danmakus",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated displayed_danmaku_count 1",
+            "parentId": "n0",
+            "childIndex": 2
+          },
+          {
+            "id": "n4",
+            "resourceId": "tv.danmaku.bili:id/time",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated displayed_publish_time 1",
+            "parentId": "n0",
+            "childIndex": 3
+          },
+          {
+            "id": "n5",
+            "resourceId": "tv.danmaku.bili:id/online",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated displayed_online_viewers 1",
+            "parentId": "n0",
+            "childIndex": 4
+          },
+          {
+            "id": "n6",
+            "resourceId": "tv.danmaku.bili:id/neutrality_label",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated platform_content_label 1",
+            "parentId": "n0",
+            "childIndex": 5
+          },
+          {
+            "id": "n7",
+            "resourceId": "tv.danmaku.bili:id/desc",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated video_description 1",
+            "parentId": "n0",
+            "childIndex": 6
+          }
+        ],
+        "truncated": false
+      },
+      "expectedFields": [
+        {
+          "name": "displayed_danmaku_count",
+          "values": [
+            {
+              "text": "Generated displayed_danmaku_count 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "displayed_online_viewers",
+          "values": [
+            {
+              "text": "Generated displayed_online_viewers 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "displayed_play_count",
+          "values": [
+            {
+              "text": "Generated displayed_play_count 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "displayed_publish_time",
+          "values": [
+            {
+              "text": "Generated displayed_publish_time 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "platform_content_label",
+          "values": [
+            {
+              "text": "Generated platform_content_label 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "video_description",
+          "values": [
+            {
+              "text": "Generated video_description 1",
+              "source": "text"
+            }
+          ]
+        }
+      ],
+      "expectedSubtreeHash": "01661c4cbd892bdb55fe14e4d4682ca59dfe77d68411807736155bc60dcf92a2"
+    },
+    {
+      "name": "container-e0a5ef6306b06a56",
+      "rule": {
+        "formatVersion": 3,
+        "id": "com.tencent.mobileqq:9.3.75:container-e0a5ef6306b06a56",
+        "version": "1",
+        "platform": "android",
+        "appId": "com.tencent.mobileqq",
+        "appVersion": "9.3.75",
+        "kind": "container_e0a5ef6306b06a56",
+        "repeat": {
+          "resourceId": "com.tencent.mobileqq:id/root",
+          "role": "android.view.ViewGroup"
+        },
+        "repeatSubtreeHash": "e0a5ef6306b06a5622c6c6a7a2b4c188747e6cf35581d87665eb7a53ac81e946",
+        "fields": {
+          "message_visible_body": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/mjm"
+            },
+            "source": "text",
+            "cardinality": "many"
+          },
+          "message_author_display_name": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/mjp"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "quoted_message_body": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/2ov"
+            },
+            "source": "text",
+            "cardinality": "many"
+          },
+          "quoted_author_display_name": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/2ol"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "quoted_displayed_time": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/2om"
+            },
+            "source": "text",
+            "cardinality": "one"
+          },
+          "message_media_description": {
+            "select": {
+              "resourceId": "com.tencent.mobileqq:id/mki"
+            },
+            "source": "description",
+            "cardinality": "many"
+          }
+        }
+      },
+      "snapshot": {
+        "appId": "com.tencent.mobileqq",
+        "appVersion": "9.3.75",
+        "activity": "com.tencent.richframework.gallery.QQGalleryActivity",
+        "observedAt": "2026-10-24T00:00:00.000Z",
+        "nodes": [
+          {
+            "id": "n0",
+            "resourceId": "com.tencent.mobileqq:id/root",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": ""
+          },
+          {
+            "id": "n1",
+            "resourceId": "com.tencent.mobileqq:id/f24",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 0
+          },
+          {
+            "id": "n2",
+            "resourceId": "",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n1",
+            "childIndex": 0
+          },
+          {
+            "id": "n3",
+            "resourceId": "com.tencent.mobileqq:id/wj2",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 1
+          },
+          {
+            "id": "n4",
+            "resourceId": "com.tencent.mobileqq:id/mh9",
+            "role": "android.widget.RelativeLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n3",
+            "childIndex": 0
+          },
+          {
+            "id": "n5",
+            "resourceId": "",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n4",
+            "childIndex": 0
+          },
+          {
+            "id": "n6",
+            "resourceId": "",
+            "role": "android.widget.ImageView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n5",
+            "childIndex": 0
+          },
+          {
+            "id": "n7",
+            "resourceId": "com.tencent.mobileqq:id/wvy",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 2
+          },
+          {
+            "id": "n8",
+            "resourceId": "",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n7",
+            "childIndex": 0
+          },
+          {
+            "id": "n9",
+            "resourceId": "",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n8",
+            "childIndex": 0
+          },
+          {
+            "id": "n10",
+            "resourceId": "com.tencent.mobileqq:id/mjp",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated message_author_display_name 1",
+            "parentId": "n9",
+            "childIndex": 0
+          },
+          {
+            "id": "n11",
+            "resourceId": "com.tencent.mobileqq:id/p3v",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 3
+          },
+          {
+            "id": "n12",
+            "resourceId": "",
+            "role": "android.view.ViewGroup",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n11",
+            "childIndex": 0
+          },
+          {
+            "id": "n13",
+            "resourceId": "",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n12",
+            "childIndex": 0
+          },
+          {
+            "id": "n14",
+            "resourceId": "",
+            "role": "android.widget.LinearLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n13",
+            "childIndex": 0
+          },
+          {
+            "id": "n15",
+            "resourceId": "com.tencent.mobileqq:id/mjm",
+            "role": "android.widget.TextView",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "Generated message_visible_body 1",
+            "parentId": "n14",
+            "childIndex": 0
+          },
+          {
+            "id": "n16",
+            "resourceId": "",
+            "role": "android.view.View",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n12",
+            "childIndex": 1
+          },
+          {
+            "id": "n17",
+            "resourceId": "com.tencent.mobileqq:id/wja",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 4
+          },
+          {
+            "id": "n18",
+            "resourceId": "com.tencent.mobileqq:id/wjc",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 5
+          },
+          {
+            "id": "n19",
+            "resourceId": "com.tencent.mobileqq:id/wkd",
+            "role": "android.widget.FrameLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n0",
+            "childIndex": 6
+          },
+          {
+            "id": "n20",
+            "resourceId": "",
+            "role": "android.widget.RelativeLayout",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 100,
+              "height": 20
+            },
+            "text": "",
+            "parentId": "n19",
+            "childIndex": 0
+          }
+        ],
+        "truncated": false
+      },
+      "expectedFields": [
+        {
+          "name": "message_author_display_name",
+          "values": [
+            {
+              "text": "Generated message_author_display_name 1",
+              "source": "text"
+            }
+          ]
+        },
+        {
+          "name": "message_visible_body",
+          "values": [
+            {
+              "text": "Generated message_visible_body 1",
+              "source": "text"
+            }
+          ]
+        }
+      ],
+      "expectedSubtreeHash": "e0a5ef6306b06a5622c6c6a7a2b4c188747e6cf35581d87665eb7a53ac81e946"
+    }
+  ]
+}

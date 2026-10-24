@@ -109,7 +109,7 @@ export class EvidenceArchive {
         if(!this.store.isCurrentEvidence(String(row.id)))continue;
         const record=this.store.evidence([String(row.id)])[0];if(!record)continue;
         // Field pages have a dedicated, original-preserving Material organizer.
-        if(record.metadata?.uiPage?.version===2)continue;
+        if(record.metadata?.uiPage?.version===3)continue;
         const text=record.ocrText;
         // Large originals remain directly pageable; segments carry a bounded preview and mark it.
         const cost=texts.has(text)?0:Math.min(text.length,12000);

@@ -1,3 +1,4 @@
+import {StructuredObservation} from './StructuredObservation';
 import {ImageProgress} from './ImageProgress';
 import {formatEvidenceRef} from '@mote/shared';
 import {memorySourceRoute} from './memory-source-route';
@@ -224,7 +225,7 @@ export function AuthImage({
       {!hasImage ? (
         <>
           {capture.source==='media'?<Headphones size={28}/>:<FileText size={23} />}
-          <p>{capture.source==='media'?mediaCardText(media,'privacy' in capture?capture.privacy.collection:undefined):capture.source === 'activity' ? moteText("仅应用活动 · 未采集内容") : text.slice(0, 170) || moteText("来源元数据")}</p>
+          <p>{capture.source==='media'?mediaCardText(media,'privacy' in capture?capture.privacy.collection:undefined):capture.source === 'activity' ? moteText("应用活动 · 应用与时长记录") : text.slice(0, 170) || moteText("来源元数据")}</p>
         </>
       ) : src ? (
         <img
@@ -276,7 +277,7 @@ export function CaptureCard({
           </time>
         </div>
         <p>
-          {('stateSummary' in capture&&capture.stateSummary)?moteText("合并 {0} 次状态观察",capture.stateSummary.count):capture.source==='media'?moteText("媒体播放 · {0}", capture.durationMs>0?moteText("播放采样 {0}", duration(capture.durationMs)):moteText("状态观察 · 不累计时长")):capture.source === 'activity' ? moteText("仅应用活动 · 本次采样 {0}", duration(capture.durationMs)) : ('summary' in capture && capture.summary) ||
+          {('stateSummary' in capture&&capture.stateSummary)?moteText("合并 {0} 次状态观察",capture.stateSummary.count):capture.source==='media'?moteText("媒体播放 · {0}", capture.durationMs>0?moteText("播放采样 {0}", duration(capture.durationMs)):moteText("状态观察 · 不累计时长")):capture.source === 'activity' ? moteText("应用活动 · 本次采样 {0}", duration(capture.durationMs)) : ('summary' in capture && capture.summary) ||
             capture.windowTitle ||
             text ||
             (capture.source === 'screen' ? ocr.description : moteText("此记录没有正文"))}
@@ -472,9 +473,9 @@ export function EvidenceDialog({
               <div className="evidence-text"><EvidenceState compact/>
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
                 <h3 className="evidence-body-heading">{presentation?.textLabel}</h3>
-                <pre>
+                {capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
-                </pre>
+                </pre>}
                 <EvidenceProcessingHelp/>
                 <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
                   capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
@@ -508,7 +509,7 @@ export function EvidenceDialog({
                   <div>
                     <dt>{moteText("隐私处理")}</dt>
                     <dd>
-                      {capture.source==='media'?(capture.privacy.collection==='activity'?moteText("仅应用与播放状态，不采集标题等内容"):moteText("保留应用上报的媒体信息，不录制音频")):capture.source === 'activity' ? moteText("仅记应用活动，不采集内容") : capture.privacy.redacted
+                      {capture.source==='media'?(capture.privacy.collection==='activity'?moteText("仅应用与播放状态，不采集标题等内容"):moteText("保留应用上报的媒体信息，不录制音频")):capture.source === 'activity' ? moteText("这条记录仅包含应用活动") : capture.privacy.redacted
                         ? moteText("客户端报告已脱敏")
                         : moteText("未标记脱敏")}
                     </dd>

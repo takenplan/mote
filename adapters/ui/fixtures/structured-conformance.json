@@ -134,7 +134,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -150,21 +150,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -954,7 +981,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -970,21 +997,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -1125,7 +1179,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -1141,21 +1195,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph one."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -1456,7 +1537,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -1472,21 +1553,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -1614,7 +1722,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -1630,14 +1738,37 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -1780,7 +1911,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -1796,14 +1927,37 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -1946,7 +2100,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -1962,21 +2116,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. "
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. Generated long visible paragraph. ",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -2936,7 +3117,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -2952,207 +3133,296 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated bounded paragraph 0."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated bounded paragraph 1."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated bounded paragraph 0.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 1.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 2.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 3.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 4.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 5.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 6.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 7.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 8.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 9.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 10.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 11.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 12.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 13.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 14.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 15.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 16.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 17.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 18.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 19.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 20.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 21.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 22.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 23.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 24.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 25.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 26.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 27.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 28.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 29.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 30.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 31.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 32.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 33.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 34.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 35.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 36.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 37.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 38.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 39.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 40.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 41.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 42.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 43.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 44.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 45.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 46.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 47.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 48.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 49.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 50.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 51.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 52.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 53.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 54.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 55.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 56.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 57.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 58.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 59.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 60.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 61.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 62.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated bounded paragraph 63.",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated bounded paragraph 2."
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated bounded paragraph 3."
-              },
-              {
-                "text": "Generated bounded paragraph 4."
-              },
-              {
-                "text": "Generated bounded paragraph 5."
-              },
-              {
-                "text": "Generated bounded paragraph 6."
-              },
-              {
-                "text": "Generated bounded paragraph 7."
-              },
-              {
-                "text": "Generated bounded paragraph 8."
-              },
-              {
-                "text": "Generated bounded paragraph 9."
-              },
-              {
-                "text": "Generated bounded paragraph 10."
-              },
-              {
-                "text": "Generated bounded paragraph 11."
-              },
-              {
-                "text": "Generated bounded paragraph 12."
-              },
-              {
-                "text": "Generated bounded paragraph 13."
-              },
-              {
-                "text": "Generated bounded paragraph 14."
-              },
-              {
-                "text": "Generated bounded paragraph 15."
-              },
-              {
-                "text": "Generated bounded paragraph 16."
-              },
-              {
-                "text": "Generated bounded paragraph 17."
-              },
-              {
-                "text": "Generated bounded paragraph 18."
-              },
-              {
-                "text": "Generated bounded paragraph 19."
-              },
-              {
-                "text": "Generated bounded paragraph 20."
-              },
-              {
-                "text": "Generated bounded paragraph 21."
-              },
-              {
-                "text": "Generated bounded paragraph 22."
-              },
-              {
-                "text": "Generated bounded paragraph 23."
-              },
-              {
-                "text": "Generated bounded paragraph 24."
-              },
-              {
-                "text": "Generated bounded paragraph 25."
-              },
-              {
-                "text": "Generated bounded paragraph 26."
-              },
-              {
-                "text": "Generated bounded paragraph 27."
-              },
-              {
-                "text": "Generated bounded paragraph 28."
-              },
-              {
-                "text": "Generated bounded paragraph 29."
-              },
-              {
-                "text": "Generated bounded paragraph 30."
-              },
-              {
-                "text": "Generated bounded paragraph 31."
-              },
-              {
-                "text": "Generated bounded paragraph 32."
-              },
-              {
-                "text": "Generated bounded paragraph 33."
-              },
-              {
-                "text": "Generated bounded paragraph 34."
-              },
-              {
-                "text": "Generated bounded paragraph 35."
-              },
-              {
-                "text": "Generated bounded paragraph 36."
-              },
-              {
-                "text": "Generated bounded paragraph 37."
-              },
-              {
-                "text": "Generated bounded paragraph 38."
-              },
-              {
-                "text": "Generated bounded paragraph 39."
-              },
-              {
-                "text": "Generated bounded paragraph 40."
-              },
-              {
-                "text": "Generated bounded paragraph 41."
-              },
-              {
-                "text": "Generated bounded paragraph 42."
-              },
-              {
-                "text": "Generated bounded paragraph 43."
-              },
-              {
-                "text": "Generated bounded paragraph 44."
-              },
-              {
-                "text": "Generated bounded paragraph 45."
-              },
-              {
-                "text": "Generated bounded paragraph 46."
-              },
-              {
-                "text": "Generated bounded paragraph 47."
-              },
-              {
-                "text": "Generated bounded paragraph 48."
-              },
-              {
-                "text": "Generated bounded paragraph 49."
-              },
-              {
-                "text": "Generated bounded paragraph 50."
-              },
-              {
-                "text": "Generated bounded paragraph 51."
-              },
-              {
-                "text": "Generated bounded paragraph 52."
-              },
-              {
-                "text": "Generated bounded paragraph 53."
-              },
-              {
-                "text": "Generated bounded paragraph 54."
-              },
-              {
-                "text": "Generated bounded paragraph 55."
-              },
-              {
-                "text": "Generated bounded paragraph 56."
-              },
-              {
-                "text": "Generated bounded paragraph 57."
-              },
-              {
-                "text": "Generated bounded paragraph 58."
-              },
-              {
-                "text": "Generated bounded paragraph 59."
-              },
-              {
-                "text": "Generated bounded paragraph 60."
-              },
-              {
-                "text": "Generated bounded paragraph 61."
-              },
-              {
-                "text": "Generated bounded paragraph 62."
-              },
-              {
-                "text": "Generated bounded paragraph 63."
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -3306,7 +3576,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -3322,20 +3592,39 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph one."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph one.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph two."
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -3476,7 +3765,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-reader.article",
         "adapterVersion": "1",
@@ -3492,21 +3781,48 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated article title",
-            "author": "Generated author",
-            "url": "https://example.invalid/articles/one",
-            "body": [
+            "fields": [
               {
-                "text": "Generated paragraph two."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated paragraph three."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated paragraph two.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated paragraph three.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated article title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/articles/one",
+                    "source": "text"
+                  }
+                ]
               }
-            ],
-            "identity": {
-              "type": "url",
-              "value": "https://example.invalid/articles/one"
-            }
+            ]
           }
         ]
       }
@@ -3683,7 +3999,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -3699,19 +4015,40 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "url": "https://example.invalid/products/one",
-            "itemId": "one",
-            "body": [],
-            "identity": {
-              "type": "source_id",
-              "value": "one"
-            }
+            "fields": [
+              {
+                "name": "item_id",
+                "values": [
+                  {
+                    "text": "one",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/products/one",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -3727,14 +4064,35 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "url": "https://example.invalid/products/two",
-            "itemId": "two",
-            "body": [],
-            "identity": {
-              "type": "source_id",
-              "value": "two"
-            }
+            "fields": [
+              {
+                "name": "item_id",
+                "values": [
+                  {
+                    "text": "two",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/products/two",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -4543,7 +4901,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -4559,13 +4917,22 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "body": []
+            "fields": [
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -4581,8 +4948,17 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "body": []
+            "fields": [
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -4759,7 +5135,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -4775,19 +5151,40 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "url": "https://example.invalid/products/one",
-            "itemId": "one",
-            "body": [],
-            "identity": {
-              "type": "source_id",
-              "value": "one"
-            }
+            "fields": [
+              {
+                "name": "item_id",
+                "values": [
+                  {
+                    "text": "one",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/products/one",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "generated-shop.products",
         "adapterVersion": "1",
@@ -4803,14 +5200,35 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated matching product title",
-            "url": "https://example.invalid/products/two",
-            "itemId": "two",
-            "body": [],
-            "identity": {
-              "type": "source_id",
-              "value": "two"
-            }
+            "fields": [
+              {
+                "name": "item_id",
+                "values": [
+                  {
+                    "text": "two",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated matching product title",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "url",
+                "values": [
+                  {
+                    "text": "https://example.invalid/products/two",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -4964,7 +5382,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "wechat-article-android-8.0.78",
         "adapterVersion": "1",
@@ -4980,11 +5398,33 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated historical article title",
-            "author": "Generated historical author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated historical article paragraph."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated historical author",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated historical article paragraph.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -5789,7 +6229,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "wechat-article-android-8.0.78",
         "adapterVersion": "1",
@@ -5805,11 +6245,33 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated historical article title",
-            "author": "Generated historical author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated historical article paragraph."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated historical author",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated historical article paragraph.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -6125,7 +6587,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "wechat-article-android-8.0.78",
         "adapterVersion": "1",
@@ -6141,11 +6603,33 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated historical article title",
-            "author": "Generated historical author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated historical article paragraph."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated historical author",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated historical article paragraph.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -6626,7 +7110,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "wechat-article-android-8.0.78",
         "adapterVersion": "1",
@@ -6642,14 +7126,37 @@
         "objects": [
           {
             "kind": "article",
-            "title": "Generated historical article title",
-            "author": "Generated historical author",
-            "body": [
+            "fields": [
               {
-                "text": "Generated historical paragraph at depth 25."
+                "name": "author",
+                "values": [
+                  {
+                    "text": "Generated historical author",
+                    "source": "text"
+                  }
+                ]
               },
               {
-                "text": "Generated historical paragraph at depth 27."
+                "name": "body",
+                "values": [
+                  {
+                    "text": "Generated historical paragraph at depth 25.",
+                    "source": "text"
+                  },
+                  {
+                    "text": "Generated historical paragraph at depth 27.",
+                    "source": "text"
+                  }
+                ]
+              },
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical article title",
+                    "source": "text"
+                  }
+                ]
               }
             ]
           }
@@ -6821,7 +7328,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "taobao-products-android-10.66.22",
         "adapterVersion": "1",
@@ -6837,8 +7344,17 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated historical product title",
-            "body": []
+            "fields": [
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical product title",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -7717,7 +8233,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "taobao-products-android-10.66.22",
         "adapterVersion": "1",
@@ -7733,8 +8249,17 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated historical product title",
-            "body": []
+            "fields": [
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical product title",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -8381,7 +8906,7 @@
     },
     "expected": [
       {
-        "version": 2,
+        "version": 3,
         "scope": "visible_window",
         "adapterId": "taobao-products-android-10.66.22",
         "adapterVersion": "1",
@@ -8397,8 +8922,17 @@
         "objects": [
           {
             "kind": "product",
-            "title": "Generated historical product title",
-            "body": []
+            "fields": [
+              {
+                "name": "title",
+                "values": [
+                  {
+                    "text": "Generated historical product title",
+                    "source": "text"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

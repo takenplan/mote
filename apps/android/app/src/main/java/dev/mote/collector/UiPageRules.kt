@@ -8,11 +8,12 @@ object UiPageRules {
     val modes = listOf("screen_only", "hybrid", "ui_preferred", "page_only")
     private val selectorKeys = setOf("resourceId", "role", "textEquals")
     fun parse(raw: String): List<JSONObject> {
-        require(raw.toByteArray().size <= 65536); StrictJson.validate(raw)
-        val array = JSONArray(raw); require(array.length() <= 32)
+        require(raw.toByteArray().size <= 1048576); StrictJson.validate(raw)
+        val array = JSONArray(raw); require(array.length() <= 512)
         val ids = mutableSetOf<String>()
         return (0 until array.length()).map { i ->
             array.getJSONObject(i).also { r ->
+                if (r.optInt("formatVersion") == 3) { NamedPageRules.validate(r); require(ids.add(r.getString("id"))); return@also }
                 val structured = r.optInt("formatVersion", 1) == 2
                 require(r.keys().asSequence().all { it in if (structured) setOf("formatVersion", "id", "version", "platform", "appId", "activity", "appVersion", "required", "region", "repeat", "repeatParent", "kind", "fields") else setOf("id", "version", "platform", "appId", "activity", "appVersion", "required", "select", "ancestor", "complete") })
                 for (key in listOf("id", "version", "platform", "appId")) require(r.get(key) is String && r.getString(key).length in 1..300)
@@ -53,42 +54,7 @@ object UiPageRules {
         for (key in s.keys()) require(s.get(key) is String && s.getString(key).length in (if (key == "textEquals") 0..500 else 1..300))
     }
     private fun matches(n: JSONObject, s: JSONObject) = s.keys().asSequence().all { n.optString(if (it == "textEquals") "text" else it) == s.getString(it) }
-    fun extract(snapshot: JSONObject, rules: List<JSONObject>): JSONObject? {
-        if (rules.any { it.optInt("formatVersion", 1) == 2 }) {
-            extractAll(snapshot, rules).firstOrNull()?.let { return it }
-        }
-        val all = snapshot.getJSONArray("nodes"); require(all.length() <= 256)
-        val nodes = (0 until all.length()).map(all::getJSONObject)
-        val byId = nodes.associateBy { it.getString("id") }
-        for (r in rules) {
-            if (r.optInt("formatVersion", 1) == 2) continue
-            if (r.getString("platform") != "android" || r.getString("appId") != snapshot.getString("appId")) continue
-            if (listOf("activity", "appVersion").any { r.has(it) && r.getString(it) != snapshot.optString(it) }) continue
-            val required = r.optJSONArray("required") ?: JSONArray()
-            if ((0 until required.length()).any { j -> nodes.none { matches(it, required.getJSONObject(j)) } }) continue
-            var legacyTruncated = snapshot.getBoolean("truncated")
-            var budget = 32000
-            val chosen = nodes.filter { n ->
-                if (n.optString("text").isBlank() || !matches(n, r.getJSONObject("select"))) false
-                else if (!r.has("ancestor")) true
-                else { var parent = n.optString("parentId"); var found = false
-                    for (depth in 0 until 32) { val p = byId[parent] ?: break; if (matches(p, r.getJSONObject("ancestor"))) { found = true; break }; parent = p.optString("parentId") }; found }
-            }.mapNotNull {
-                if (budget <= 0) { legacyTruncated = true; null }
-                else JSONObject(it.toString()).apply {
-                    remove("parentId"); remove("childIndex")
-                    val original = getString("text"); val text = original.take(minOf(2000, budget)); budget -= text.length
-                    if (text.length != original.length) legacyTruncated = true
-                    put("text", text)
-                }
-            }
-            if (chosen.isNotEmpty()) return JSONObject().put("version", 1).put("scope", "visible_window").put("adapterId", r.getString("id"))
-                .put("adapterVersion", r.getString("version")).put("activity", snapshot.optString("activity")).put("appVersion", snapshot.optString("appVersion"))
-                .put("status", if (r.optBoolean("complete") && !legacyTruncated) "ok" else "partial")
-                .put("truncated", legacyTruncated).put("nodes", JSONArray(chosen))
-        }
-        return null
-    }
+    fun extract(snapshot: JSONObject, rules: List<JSONObject>): JSONObject? = extractAll(snapshot,rules).firstOrNull()
     /** New collection never publishes the local tree. Each object has an immutable queue record. */
     fun extractAll(snapshot: JSONObject, rules: List<JSONObject>, observedAt: String = snapshot.optString("observedAt")): List<JSONObject> {
         if (runCatching { java.time.Instant.parse(observedAt) }.isFailure) return emptyList()
@@ -118,7 +84,12 @@ object UiPageRules {
             }
             return false
         }
+        val allPages=mutableListOf<JSONObject>()
         for (rule in rules) {
+            if(rule.optInt("formatVersion")==3 && rule.getString("platform")=="android" && rule.getString("appId")==snapshot.getString("appId") && rule.getString("appVersion")==snapshot.optString("appVersion") && (!rule.has("activity")||rule.getString("activity")==snapshot.optString("activity"))){
+                val required=rule.optJSONArray("required")?:JSONArray();if((0 until required.length()).all {j->nodes.any{matches(it,required.getJSONObject(j))}})allPages+=NamedPageRules.extract(snapshot,rule,observedAt)
+                if(allPages.size>=64)break;continue
+            }
             if (rule.optInt("formatVersion", 1) != 2 || rule.getString("platform") != "android" || rule.getString("appId") != snapshot.getString("appId")) continue
             if (rule.getString("appVersion") != snapshot.optString("appVersion") || rule.has("activity") && rule.getString("activity") != snapshot.optString("activity")) continue
             val required = rule.optJSONArray("required") ?: JSONArray()
@@ -174,53 +145,27 @@ object UiPageRules {
                     .put("appVersion", snapshot.optString("appVersion")).put("activity", snapshot.optString("activity")).put("status", if (truncated) "partial" else "ok").put("truncated", truncated)
                     .put("observations", JSONObject().put("firstAt", observedAt).put("lastAt", observedAt).put("count", 1)).put("objects", JSONArray().put(objectValue))
             }
-            if (pages.isNotEmpty()) return pages
+            allPages += pages.map(NamedPageRules::fromArticle)
+            if(allPages.size>=64)break
         }
-        return emptyList()
+        if(allPages.size>=64)allPages.take(64).forEach{it.put("truncated",true).put("status","partial")}
+        return allPages.take(64)
     }
     private fun validUrl(value: String): Boolean = runCatching {
         Regex("""^https?://[A-Za-z0-9.\[\]:-]+(?:[/?#]|$)""").containsMatchIn(value) &&
             value.none { it.isWhitespace() || Character.isSpaceChar(it) || it == '\uFEFF' } &&
             java.net.URI(value).let { it.scheme in setOf("http", "https") && !it.host.isNullOrBlank() && it.userInfo == null && it.port <= 65535 }
     }.getOrDefault(false)
-    fun text(page: JSONObject): String {
-        if (page.optInt("version") != 2) return page.getJSONArray("nodes").let { nodes -> (0 until nodes.length()).joinToString("\n") { nodes.getJSONObject(it).getString("text") } }
-        val objects = page.getJSONArray("objects")
-        return (0 until objects.length()).flatMap { index ->
-            val value = objects.getJSONObject(index)
-            listOf("title", "author", "url", "itemId").mapNotNull { key -> value.optString(key).takeIf { it.isNotEmpty() } } +
-                value.getJSONArray("body").let { body -> (0 until body.length()).map { body.getJSONObject(it).getString("text") } }
-        }.joinToString("\n")
-    }
-    fun validateEvent(event: JSONObject) {
-        require(event.getString("source") == "ui_page" && event.getLong("durationMs") == 0L)
-        require(event.getJSONObject("privacy").getString("collection") == "content")
-        require(event.getString("appId").isNotBlank() && listOf("imageMime", "imageBase64", "ocr", "mood", "provenance").none(event::has))
-        val metadata=event.getJSONObject("metadata"); require(metadata.getJSONObject("collector").getString("method")=="accessibility")
-        val p=metadata.getJSONObject("uiPage"); require(p.getInt("version") in setOf(1, 2) && p.getString("scope")=="visible_window" && p.getString("status") in setOf("ok","partial"))
-        require(!(p.getBoolean("truncated") && p.getString("status")=="ok"))
-        if (p.getInt("version") == 1) { val nodes=p.getJSONArray("nodes"); require(nodes.length() in 1..256) }
-        else {
-            require(p.keys().asSequence().all { it in setOf("version", "scope", "adapterId", "adapterVersion", "appVersion", "activity", "status", "truncated", "observations", "objects") })
-            require(p.getJSONArray("objects").length() == 1 && p.getString("appVersion").isNotBlank())
-            val value = p.getJSONArray("objects").getJSONObject(0)
-            require(value.keys().asSequence().all { it in setOf("kind", "title", "author", "url", "itemId", "body", "identity") })
-            require(value.getString("kind") in setOf("article", "product") && value.getString("title").isNotBlank() && value.getString("title").length <= 2000)
-            for (key in listOf("author", "itemId")) if (value.has(key)) require(value.getString(key).length in 1..1000)
-            if (value.has("url")) require(value.getString("url").length <= 2000 && validUrl(value.getString("url")))
-            val body = value.getJSONArray("body"); require(body.length() <= 64 && (value.getString("kind") != "article" || body.length() > 0))
-            for (i in 0 until body.length()) { val block = body.getJSONObject(i); require(block.length() == 1 && block.getString("text").length in 1..32000) }
-            require((0 until body.length()).sumOf { body.getJSONObject(it).getString("text").length } + listOf("title", "author", "url", "itemId").sumOf { value.optString(it).length } <= 64000)
-            value.optJSONObject("identity")?.let { identity ->
-                require(identity.keys().asSequence().toSet() == setOf("type", "value"))
-                val field = when (identity.getString("type")) { "source_id" -> "itemId"; "url" -> "url"; else -> error("Invalid page identity") }
-                require(value.has(field) && value.getString(field) == identity.getString("value"))
-            }
-            val observations = p.getJSONObject("observations")
-            require(observations.keys().asSequence().toSet() == setOf("firstAt", "lastAt", "count") && observations.get("count") is Number && observations.getDouble("count") == observations.getInt("count").toDouble())
-            require(observations.getInt("count") in 1..256 && observations.getString("lastAt") == event.getString("capturedAt") && metadata.getString("observedAt") == event.getString("capturedAt"))
-            require(!java.time.Instant.parse(observations.getString("firstAt")).isAfter(java.time.Instant.parse(observations.getString("lastAt"))))
-        }
-        val text=text(p); require(text.length <= if (p.getInt("version") == 2) 64067 else 32255); require(event.getString("ocrText")==text)
+    fun text(page: JSONObject): String = NamedPageRules.text(page)
+    fun validateEvent(event:JSONObject){
+        require(event.getString("source")=="ui_page"&&event.getLong("durationMs")==0L&&event.getJSONObject("privacy").getString("collection")=="content")
+        require(listOf("imageMime","imageBase64","ocr","mood","provenance").none(event::has))
+        val m=event.getJSONObject("metadata");require(m.getJSONObject("collector").getString("method")=="accessibility")
+        val p=m.getJSONObject("uiPage");NamedPageRules.validatePage(p)
+        require(p.keys().asSequence().toSet()==setOf("version","scope","adapterId","adapterVersion","activity","appVersion","status","truncated","observations","objects"))
+        require(p.getString("scope")=="visible_window"&&p.getString("status") in setOf("ok","partial")&&!(p.getBoolean("truncated")&&p.getString("status")=="ok"))
+        val times=p.getJSONObject("observations");require(times.keys().asSequence().toSet()==setOf("firstAt","lastAt","count")&&times.getInt("count") in 1..256&&times.getDouble("count")==times.getInt("count").toDouble())
+        require(times.getString("lastAt")==event.getString("capturedAt")&&m.getString("observedAt")==event.getString("capturedAt")&&!java.time.Instant.parse(times.getString("firstAt")).isAfter(java.time.Instant.parse(times.getString("lastAt"))))
+        require(event.getString("ocrText")==text(p))
     }
 }

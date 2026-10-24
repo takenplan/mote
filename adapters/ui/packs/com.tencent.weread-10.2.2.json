@@ -1,0 +1,102 @@
+[
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.weread:10.2.2:audio-title-32717aa2de23e454",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.weread",
+    "appVersion": "10.2.2",
+    "kind": "audio_title_32717aa2de23e454",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "32717aa2de23e454b5e19950b8bcd0410ac1cd56ba0232024983a1d89e524ebd",
+    "fields": {
+      "chapter_display_title": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.weread:10.2.2:audio-title-6535e8e348ff584a",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.weread",
+    "appVersion": "10.2.2",
+    "kind": "audio_title_6535e8e348ff584a",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "6535e8e348ff584ac5d76d1608f46512d3cdfdb52e10440bd51aadf4a70bb5e2",
+    "fields": {
+      "chapter_display_title": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.weread:10.2.2:audio-title-dca7e481e6448fba",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.weread",
+    "appVersion": "10.2.2",
+    "kind": "audio_title_dca7e481e6448fba",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "dca7e481e6448fba7f90293ba05dbfe9557576e2ae6d1ffd7c389b12a79da2b7",
+    "fields": {
+      "chapter_display_title": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  },
+  {
+    "formatVersion": 3,
+    "id": "com.tencent.weread:10.2.2:audio-title-705a7b3e485e7c9e",
+    "version": "1",
+    "platform": "android",
+    "appId": "com.tencent.weread",
+    "appVersion": "10.2.2",
+    "kind": "audio_title_705a7b3e485e7c9e",
+    "repeat": {
+      "role": "android.view.ViewGroup"
+    },
+    "repeatSubtreeHash": "705a7b3e485e7c9e21e77af51e9b5ebf32cb1ce224cf3b4926c85172c4f442df",
+    "fields": {
+      "chapter_display_title": {
+        "select": {
+          "role": "android.view.ViewGroup"
+        },
+        "childPath": [
+          1
+        ],
+        "source": "description",
+        "cardinality": "one"
+      }
+    }
+  }
+]

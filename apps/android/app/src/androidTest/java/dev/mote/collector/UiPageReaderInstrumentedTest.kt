@@ -10,6 +10,10 @@ import org.junit.runner.RunWith
 /** Entirely synthetic nodes: never queries a real app, screenshot, or personal content. */
 @RunWith(AndroidJUnit4::class)
 class UiPageReaderInstrumentedTest {
+    private fun body(page:org.json.JSONObject):org.json.JSONArray {
+        val fields=page.getJSONArray("objects").getJSONObject(0).getJSONArray("fields")
+        return (0 until fields.length()).map(fields::getJSONObject).single {it.getString("name")=="body"}.getJSONArray("values")
+    }
     @Suppress("DEPRECATION")
     private fun node()=AccessibilityNodeInfo.obtain().apply { packageName="fixture";className="android.widget.TextView";text="Generated fixture text";isVisibleToUser=true;setBoundsInScreen(Rect(10,10,80,30)) }
     private fun read(n: AccessibilityNodeInfo, masks: List<Rect> = emptyList(), occluded: List<Rect> = emptyList())=UiPageReader.read(n,"fixture","1","fixture.Page",Rect(0,0,100,100),masks,occluded)
@@ -24,6 +28,50 @@ class UiPageReaderInstrumentedTest {
         assertTrue(bounded.getBoolean("truncated"));assertEquals(32000,bounded.getJSONArray("nodes").getJSONObject(0).getString("text").length)
         assertEquals(0,bounded.getJSONArray("nodes").getJSONObject(0).getInt("childIndex"))
     }
+    @Test fun leafDescriptionBudgetPreservesUnicodeAndCannotBypassVisibilityOrMasks() {
+        val described=node().apply {text="";contentDescription="Generated visible label"}
+        assertEquals("Generated visible label",read(described).getJSONArray("nodes").getJSONObject(0).getString("description"))
+        assertEquals("",read(described,listOf(Rect(0,0,20,20))).getJSONArray("nodes").getJSONObject(0).getString("description"))
+        assertEquals("",read(described,occluded=listOf(Rect(0,0,20,20))).getJSONArray("nodes").getJSONObject(0).getString("description"))
+        assertEquals(0,read(node().apply {isVisibleToUser=false;contentDescription="Generated hidden label"}).getJSONArray("nodes").length())
+        val bounded=read(node().apply {text="";contentDescription="d".repeat(32001)})
+        assertTrue(bounded.getBoolean("truncated"));assertFalse(bounded.getBoolean("ocrSafe"))
+        assertEquals(32000,bounded.getJSONArray("nodes").getJSONObject(0).getString("description").length)
+        val unicode=read(node().apply {text="x".repeat(31999);contentDescription="\uD83D\uDE00"})
+        assertTrue(unicode.getBoolean("truncated"));assertFalse(unicode.getBoolean("ocrSafe"))
+        assertEquals("",unicode.getJSONArray("nodes").getJSONObject(0).getString("description"))
+    }
+    @Test fun ephemeralOcrReceivesOnlySafeViewportAndExplicitPrivateRegions() {
+        val viewport=Rect(5,6,95,94);val overlay=Rect(40,30,60,50)
+        val snapshot=UiPageReader.read(node(),"fixture","1","fixture.Page",viewport,emptyList(),listOf(overlay))
+        val visible=snapshot.getJSONObject("ocrViewport")
+        assertEquals(5,visible.getInt("x"));assertEquals(6,visible.getInt("y"));assertEquals(90,visible.getInt("width"));assertEquals(88,visible.getInt("height"))
+        val masks=snapshot.getJSONArray("ocrMasks")
+        assertTrue((0 until masks.length()).map(masks::getJSONObject).any {it.getInt("x")==40&&it.getInt("y")==30&&it.getInt("width")==20&&it.getInt("height")==20})
+        val sensitive=read(node().apply {isPassword=true})
+        assertTrue(sensitive.getBoolean("ocrSafe"));assertEquals(1,sensitive.getJSONArray("ocrMasks").length())
+        assertEquals(10,sensitive.getJSONArray("ocrMasks").getJSONObject(0).getInt("x"))
+        assertFalse(read(node().apply {isPassword=true;setBoundsInScreen(Rect())}).getBoolean("ocrSafe"))
+        assertFalse(read(node().apply {packageName="foreign";setBoundsInScreen(Rect())}).getBoolean("ocrSafe"))
+        assertFalse(read(node().apply {text="x".repeat(32001)}).getBoolean("ocrSafe"))
+    }
+    @Test fun generatedPixelsOutsideInspectedViewportOrInsidePrivateRegionsStayBlack() {
+        val viewport=Rect(5,6,95,94);val overlay=Rect(40,30,60,50)
+        val snapshot=UiPageReader.read(node().apply {isPassword=true},"fixture","1","fixture.Page",viewport,emptyList(),listOf(overlay))
+        val bitmap=android.graphics.Bitmap.createBitmap(100,100,android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(android.graphics.Color.WHITE)
+            ImagePrivacy.applyMasks(bitmap,listOf(Mask(.8f,.6f,.9f,.8f)))
+            assertTrue(ImagePrivacy.applyOcrRegions(bitmap,snapshot))
+            for(y in 0 until 100)for(x in 0 until 100) {
+                val masked=!viewport.contains(x,y)||overlay.contains(x,y)||Rect(10,10,80,30).contains(x,y)||Rect(80,60,90,80).contains(x,y)
+                assertEquals("Generated pixel $x,$y",if(masked)android.graphics.Color.BLACK else android.graphics.Color.WHITE,bitmap.getPixel(x,y))
+            }
+            val unknown=read(node().apply {isPassword=true;setBoundsInScreen(Rect())})
+            assertFalse(ImagePrivacy.applyOcrRegions(bitmap,unknown))
+            assertFalse(ImagePrivacy.applyOcrRegions(bitmap,org.json.JSONObject().put("ocrSafe",true)))
+        } finally {bitmap.recycle()}
+    }
     @Test fun extractedLongArticleContainsOnlyFields() {
         val raw = read(node().apply { text="Generated article. "+"正文".repeat(4000);viewIdResourceName="fixture:id/body" }).put("observedAt","2026-10-10T00:00:00Z")
         raw.getJSONArray("nodes").put(org.json.JSONObject().put("id","title").put("resourceId","fixture:id/title").put("role","android.widget.TextView").put("text","Generated title"))
@@ -32,7 +80,7 @@ class UiPageReaderInstrumentedTest {
         assertEquals(1,pages.size)
         val page = pages.single()
         assertFalse(page.has("nodes"));assertFalse(page.toString().contains("resourceId"))
-        val body=page.getJSONArray("objects").getJSONObject(0).getJSONArray("body")
+        val body=body(page)
         assertEquals(1,body.length())
         assertEquals(raw.getJSONArray("nodes").getJSONObject(0).getString("text"),(0 until body.length()).joinToString(""){body.getJSONObject(it).getString("text")})
     }
@@ -42,7 +90,7 @@ class UiPageReaderInstrumentedTest {
         val context=instrumentation.targetContext
         val automation=instrumentation.getUiAutomation(android.app.UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         val avd=automation.executeShellCommand("getprop ro.boot.qemu.avd_name").use { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() } }
-        require(context.packageName=="dev.mote.collector.dev" && avd=="mote_fixture_api35")
+        require(context.packageName=="dev.mote.collector.dev" && avd in setOf("mote_fixture_api35","mote_fixture_api37"))
         require(!Settings(context).enabled && !CaptureAccessibilityService.connected && !ProjectionService.running && context.queue().depth()==0)
         val fixture=context.packageName+".test"
         val version=context.packageManager.getPackageInfo(fixture,0).versionName.orEmpty()
@@ -86,7 +134,7 @@ class UiPageReaderInstrumentedTest {
                 val pages=UiPageRules.extractAll(snapshot,UiPageRules.parse(rule))
                 if(expectedDepth==29) {
                     assertFalse(snapshot.getBoolean("truncated"));assertEquals(1,pages.size)
-                    assertEquals("Generated deeply nested original article body.",pages.single().getJSONArray("objects").getJSONObject(0).getJSONArray("body").getJSONObject(0).getString("text"))
+                    assertEquals("Generated deeply nested original article body.",body(pages.single()).getJSONObject(0).getString("text"))
                 } else { assertTrue(snapshot.getBoolean("truncated"));assertTrue(pages.isEmpty()) }
             }
         } finally {
