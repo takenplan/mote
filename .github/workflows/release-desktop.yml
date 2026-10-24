@@ -40,8 +40,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: '24', cache: npm }
       - run: npm ci
-      - name: Build desktop workspace dependencies
-        run: npm run build:libs
       - name: Verify desktop workspaces and generated fixtures
         run: npm run check:desktop
       - name: Build and verify the selected Mac profile
