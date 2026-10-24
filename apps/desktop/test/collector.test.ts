@@ -11,23 +11,27 @@ import { SyncHistory } from '../src/sync-history';
 import * as localContent from '../src/local-content';
 import {imageWork} from '../src/background';
 
-const fixtureConfig=()=>({...defaultConfig(),syncMode:'realtime' as const,syncIntervalMinutes:15,syncBatchSize:20,packedUpload:false});
+const off={duration:false,screenshots:false,structured:false};
+const activity={...off,duration:true};
+const content={...off,screenshots:true};
+const fixtureConfig=()=>({...defaultConfig(),defaultCollection:content,syncMode:'realtime' as const,syncIntervalMinutes:15,syncBatchSize:20,packedUpload:false});
 
 const mocks = vi.hoisted(() => ({ notifications: vi.fn(), page: vi.fn(), capture: vi.fn(), foreground: vi.fn(), metadata: vi.fn(), idleState: vi.fn(), active: vi.fn(), ocr: vi.fn(), idle: vi.fn(), permission: vi.fn(), power: vi.fn() }));
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events');
   class GeneratedImage {
-    constructor(readonly pixels: Buffer) {}
-    getSize() { return { width: 4, height: 4 }; }
+    constructor(readonly pixels: Buffer,readonly width=4,readonly height=4) {}
+    getSize() { return {width:this.width,height:this.height}; }
+    crop(region:{x:number;y:number;width:number;height:number}) {const pixels=Buffer.alloc(region.width*region.height*4);for(let y=0;y<region.height;y++)this.pixels.copy(pixels,y*region.width*4,((y+region.y)*this.width+region.x)*4,((y+region.y)*this.width+region.x+region.width)*4);return new GeneratedImage(pixels,region.width,region.height);}
     isEmpty() { return false; }
     toBitmap() { return Buffer.from(this.pixels); }
     toJPEG() { return Buffer.concat([Buffer.from([0xff, 0xd8]), this.pixels, Buffer.from([0xff, 0xd9])]); }
   }
   return {
     desktopCapturer: { getSources: mocks.capture },
-    nativeImage: { createFromBitmap: (buffer: Buffer) => new GeneratedImage(buffer) },
+    nativeImage: { createFromBitmap: (buffer: Buffer,options:{width:number;height:number}) => new GeneratedImage(buffer,options.width,options.height) },
     powerMonitor: Object.assign(new EventEmitter(), { getSystemIdleTime: mocks.idle, getSystemIdleState: mocks.idleState }),
-    screen: { getPrimaryDisplay: () => ({ id: 1, size: { width: 4, height: 4 }, scaleFactor: 2 }) },
+    screen: { getPrimaryDisplay: () => ({ id: 1, size: { width: 4, height: 4 }, bounds:{x:0,y:0,width:4,height:4}, scaleFactor: 2 }) },
     systemPreferences: { getMediaAccessStatus: mocks.permission },
   };
 });
@@ -133,7 +137,7 @@ describe.skipIf(process.platform !== 'darwin')('collector pipeline with generate
   });
   it('never requests screenshot pixels when an excluded app is visible behind the foreground app', async () => {
     mocks.active.mockResolvedValue({ ...application, visibleAppIds: ['dev.mote.fixture', 'dev.private'] });
-    const { collector, queue } = await makeCollector({ appCollectionRules: {'dev.private': 'off'} });
+    const { collector, queue } = await makeCollector({ appCollectionRules: {'dev.private': off} });
     await collector.start(); await collector.settleCapture();
     expect(mocks.capture).not.toHaveBeenCalled(); expect(queue.stats().depth).toBe(0);
   });
@@ -166,7 +170,7 @@ describe.skipIf(process.platform !== 'darwin')('collector pipeline with generate
 describe.skipIf(process.platform !== 'darwin')('per-application collection boundaries', () => {
   it('records activity without any screenshot, window enumeration, OCR, permission prompt or model even when screen access is denied', async () => {
     mocks.permission.mockReturnValue('denied');
-    const { collector, queue } = await makeCollector({ appCollectionRules: { [application.appId]: 'activity' } });
+    const { collector, queue } = await makeCollector({ appCollectionRules: { [application.appId]: activity } });
     await collector.start(); await collector.settleCapture();
     const archive = await queue.exportArchive(); expect(archive.records).toHaveLength(1); expect(archive.blobs).toEqual({});
     const event = archive.records[0].event;
@@ -176,18 +180,18 @@ describe.skipIf(process.platform !== 'darwin')('per-application collection bound
   });
   it.each(['off', 'explicit off', 'unknown'])('records nothing for %s without reading content', async mode => {
     if (mode === 'unknown') mocks.foreground.mockRejectedValue(new Error('identity unavailable'));
-    const { collector, queue } = await makeCollector({ defaultCollection: mode === 'off' ? 'off' : 'content', appCollectionRules: mode === 'explicit off' ? {[application.appId]:'off'} : {} });
+    const { collector, queue } = await makeCollector({ defaultCollection: mode === 'off' ? off : content, appCollectionRules: mode === 'explicit off' ? {[application.appId]:off} : {} });
     await collector.start(); await collector.settleCapture();
     expect(queue.stats().depth).toBe(0); expect(mocks.capture).not.toHaveBeenCalled(); expect(mocks.active).not.toHaveBeenCalled(); expect(mocks.ocr).not.toHaveBeenCalled();
   });
   it.each(['activity', 'off', 'unknown'])('skips mixed-screen %s windows without downgrading to activity', async mode => {
     mocks.active.mockResolvedValue({ ...application, visibleAppIds: [application.appId, 'dev.restricted'], unknownVisibleWindows: mode === 'unknown' });
-    const { collector, queue } = await makeCollector({ appCollectionRules: { 'dev.restricted': mode === 'unknown' ? 'off' : mode } });
+    const { collector, queue } = await makeCollector({ appCollectionRules: { 'dev.restricted': mode === 'activity' ? activity : off } });
     await collector.start(); await collector.settleCapture();
     expect(queue.stats().depth).toBe(0); expect(mocks.capture).not.toHaveBeenCalled();
   });
   it('breaks duration continuity across content/activity modes and unrecorded foreground apps', async () => {
-    const { collector, queue } = await makeCollector({ defaultCollection: 'activity', appCollectionRules: { 'dev.off': 'off' } });
+    const { collector, queue } = await makeCollector({ defaultCollection: activity, appCollectionRules: { 'dev.off': off } });
     let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
     try {
       await collector.start(); await collector.settleCapture();
@@ -196,21 +200,21 @@ describe.skipIf(process.platform !== 'darwin')('per-application collection bound
       mocks.foreground.mockResolvedValue({ appId: 'dev.off', appName: 'Off fixture', pid: 2 }); await sample();
       mocks.foreground.mockResolvedValue(application); await sample();
       collector.stop(); await collector.settleCapture();
-      const changed = { ...fixtureConfig(), token: 'synthetic-token', defaultCollection: 'content' as const }; collector.updateConfig(changed); now += 15000; await collector.start(); await collector.settleCapture();
+      const changed = { ...fixtureConfig(), token: 'synthetic-token', defaultCollection: content }; collector.updateConfig(changed); now += 15000; await collector.start(); await collector.settleCapture();
       const events = (await queue.exportArchive()).records.map(r => r.event);
-      expect(events.flatMap(e=>e.stateSeries?.samples.map(s=>s.durationMs)??[e.durationMs])).toEqual([0,15000,0,0]);expect(events.map(e=>e.source)).toEqual(['activity','screen']);
+      expect(events.flatMap(e=>e.stateSeries?.samples.map(s=>s.durationMs)??[e.durationMs])).toEqual([0,15000,0,0]);expect(events.map(e=>e.source)).toEqual(['activity','activity','activity','screen']);
     } finally { clock.mockRestore(); }
   });
   it('does not send metadata when disabled, and preserves the opted-in stored record after settings change', async () => {
-    const { collector, queue } = await makeCollector({ defaultCollection: 'activity', metadataEnabled: false });
+    const { collector, queue } = await makeCollector({ defaultCollection: activity, metadataEnabled: false });
     await collector.start(); await collector.settleCapture();
-    const record = (await queue.exportArchive()).records[0].event; expect(record).not.toHaveProperty('metadata'); expect(mocks.metadata).not.toHaveBeenCalled();
-    collector.stop(); const changed = { ...fixtureConfig(), token: 'synthetic-token', defaultCollection: 'off' as const }; collector.updateConfig(changed);
+    const record = (await queue.exportArchive()).records[0].event; expect(record.metadata).toMatchObject({captureObservation:{selected:activity}}); expect(record.metadata).not.toHaveProperty('device'); expect(mocks.metadata).not.toHaveBeenCalled();
+    collector.stop(); const changed = { ...fixtureConfig(), token: 'synthetic-token', defaultCollection: off }; collector.updateConfig(changed);
     expect((await queue.exportArchive()).records[0].event).toEqual(record);
   });
   it('permission loss pauses only content and the next explicitly activity app still records', async () => {
     mocks.permission.mockReturnValue('denied');
-    const { collector, queue } = await makeCollector({ appCollectionRules: { 'dev.activity': 'activity' } });
+    const { collector, queue } = await makeCollector({ appCollectionRules: { 'dev.activity': activity } });
     await collector.start(); await collector.settleCapture(); expect(collector.status().state).toBe('permission_required'); expect(collector.status().running).toBe(true);
     mocks.foreground.mockResolvedValue({ appId: 'dev.activity', appName: 'Activity fixture', pid: 2 }); clearTimeout((collector as any).timer); await (collector as any).capture();
     expect(queue.stats().depth).toBe(1); expect(mocks.capture).not.toHaveBeenCalled(); expect(mocks.active).not.toHaveBeenCalled();
@@ -224,15 +228,15 @@ describe.skipIf(process.platform !== 'darwin')('central OCR capture contract',()
  });
 });
 describe.skipIf(process.platform !== 'darwin')('desktop and missing foreground under default privacy policy', () => {
-  it('captures an unidentified foreground and window when no application is restricted', async () => {
+  it('refuses unidentified foreground and windows even with screenshot selection', async () => {
     const unknown = { appId: 'dev.mote.unknown-foreground', appName: '无前台应用', pid: 0 };
     mocks.foreground.mockResolvedValue(unknown); mocks.active.mockResolvedValue({ ...unknown, visibleAppIds: [], unknownVisibleWindows: true });
     const { collector, queue } = await makeCollector({ syncMode: 'manual' }); await collector.start(); await collector.settleCapture();
-    expect(queue.stats().depth).toBe(1); expect(mocks.capture).toHaveBeenCalledTimes(1);
+    expect(queue.stats().depth).toBe(0); expect(mocks.capture).not.toHaveBeenCalled();
   });
   it('still refuses missing foreground when any user application restriction might apply', async () => {
     mocks.foreground.mockResolvedValue({ appId: 'dev.mote.unknown-foreground', appName: '无前台应用', pid: 0 });
-    const { collector, queue } = await makeCollector({ appCollectionRules: {'dev.private': 'off'} }); await collector.start(); await collector.settleCapture();
+    const { collector, queue } = await makeCollector({ appCollectionRules: {'dev.private': off} }); await collector.start(); await collector.settleCapture();
     expect(queue.stats().depth).toBe(0); expect(mocks.capture).not.toHaveBeenCalled();
   });
 });
@@ -272,7 +276,7 @@ describe('capture and synchronization are independent', () => {
     expect(collector.status().sync).toMatchObject({ pendingRecords: 0, state: 'idle' });
   });
   it.skipIf(process.platform !== 'darwin')('captures generated activity locally before any URL or token is configured', async () => {
-    const { collector, queue } = await makeCollector({ serverUrl: '', token: undefined, defaultCollection: 'activity' });
+    const { collector, queue } = await makeCollector({ serverUrl: '', token: undefined, defaultCollection: activity });
     await collector.start(); await collector.settleCapture();
     expect(queue.stats().depth).toBe(1); expect(collector.status().running).toBe(true); expect(fetch).not.toHaveBeenCalled();
   });
@@ -356,7 +360,7 @@ describe.skipIf(process.platform !== 'darwin')('immediate settings with generate
     await resume(); expect(mocks.capture).toHaveBeenCalledTimes(2);
   });
   it.each(['stopped', 'stop during save', 'shutdown during save'])('does not auto-start when %s', async mode => {
-    const { collector } = await makeCollector({ syncMode: 'manual', defaultCollection: 'off' });
+    const { collector } = await makeCollector({ syncMode: 'manual', defaultCollection: off });
     if (mode !== 'stopped') { await collector.start(); await collector.settleCapture(); }
     const resume = await collector.suspendForSettings();
     if (mode === 'stop during save') collector.stop();
@@ -377,86 +381,132 @@ describe.skipIf(process.platform !== 'darwin')('exact deduplication with generat
   it('retains every repeated observation and its measured time through queue restart',async()=>{
     let at=Date.parse('2026-10-01T00:00:00Z');const clock=vi.spyOn(Date,'now').mockImplementation(()=>at);
     try{
-      const {collector,queue}=await makeCollector({syncMode:'manual',imageDedupeMode:'exact',intervalMs:30000});
+      const {collector,queue}=await makeCollector({syncMode:'manual',imageDedupeMode:'exact',intervalMs:30000,defaultCollection:{...content,duration:true}});
       await collector.start();await collector.settleCapture();
       for(let i=0;i<4;i++){at+=30000;clearTimeout((collector as any).timer);await (collector as any).capture();}
       const archive=await queue.exportArchive();expect(Object.keys(archive.blobs)).toHaveLength(1);
-      const samples=archive.records.flatMap(record=>record.event.stateSeries?.samples??[{at:record.event.capturedAt,durationMs:record.event.durationMs}]);
+      const samples=archive.records.filter(record=>record.event.source==='activity').flatMap(record=>record.event.stateSeries?.samples??[{at:record.event.capturedAt,durationMs:record.event.durationMs}]);
       expect(samples).toHaveLength(5);expect(samples.map(v=>v.at)).toEqual(Array.from({length:5},(_,i)=>new Date(Date.parse('2026-10-01T00:00:00Z')+i*30000).toISOString()));expect(samples.reduce((n,sample)=>n+sample.durationMs,0)).toBe(120000);
-      const reopened=new DurableQueue(directory,fixtureConfig());await reopened.initialize();expect((await reopened.exportArchive()).records.flatMap(record=>record.event.stateSeries?.samples??[record.event])).toHaveLength(5);expect(mocks.ocr).not.toHaveBeenCalled();
+      const reopened=new DurableQueue(directory,fixtureConfig());await reopened.initialize();expect((await reopened.exportArchive()).records.filter(record=>record.event.source==='activity').flatMap(record=>record.event.stateSeries?.samples??[record.event])).toHaveLength(5);expect(mocks.ocr).not.toHaveBeenCalled();
     }finally{clock.mockRestore();}
   });
   it.each(['off', 'exact'])('honors %s mode and never merges different applications', async mode => {
     const { collector, queue } = await makeCollector({ syncMode: 'manual', imageDedupeMode: mode });
     await collector.start(); await collector.settleCapture();
     clearTimeout((collector as any).timer); await (collector as any).capture();
-    expect(queue.stats().depth).toBe(2);
+    expect(queue.stats().depth).toBe(mode==='exact'?1:2);
     mocks.active.mockResolvedValue({ ...application, appId: 'dev.mote.other' });
     mocks.foreground.mockResolvedValue({ ...application, appId: 'dev.mote.other' });
     clearTimeout((collector as any).timer); await (collector as any).capture();
-    expect(queue.stats().depth).toBe(3);
+    expect(queue.stats().depth).toBe(mode==='exact'?2:3);
   });
 });
 
-const pageRule={id:'generated-page',version:'1',platform:'macos',appId:application.appId,select:{role:'AXStaticText'},required:[],complete:true};
+const pageRule={id:'generated-page',version:'1',formatVersion:3,platform:'macos',appId:application.appId,appVersion:'fixture',kind:'visible_text',fields:{body:{select:{role:'AXStaticText'},required:true,source:'text',cardinality:'many'}},required:[]};
 const pageSnapshot={appId:application.appId,appVersion:'fixture',activity:'',truncated:false,nodes:[{id:'1',role:'AXStaticText',resourceId:'fixture-body',text:'GENERATED PAGE BODY',bounds:{x:0,y:0,width:100,height:20}}]};
-describe.skipIf(process.platform!=='darwin')('UI page collection privacy and screenshot decisions',()=>{
- it('stores a complete page with no screenshot permission, image or OCR; survives restart',async()=>{
+describe.skipIf(process.platform!=='darwin')('independent collection channel journeys',()=>{
+ it.each(Array.from({length:8},(_,bits)=>({duration:Boolean(bits&1),screenshots:Boolean(bits&2),structured:Boolean(bits&4)})))('honors every channel combination: %j',async selected=>{
+  mocks.page.mockResolvedValue({snapshot:pageSnapshot});
+  const {collector,queue}=await makeCollector({syncMode:'manual',defaultCollection:selected,uiPageRules:[pageRule]});
+  await collector.start();await collector.settleCapture();
+  const records=(await queue.exportArchive()).records.map(r=>r.event);
+  expect(records.map(e=>e.source).sort()).toEqual([...(selected.duration?['activity']:[]),...(selected.screenshots?['screen']:[]),...(selected.structured?['ui_page']:[])].sort());
+  expect(mocks.capture).toHaveBeenCalledTimes(Number(selected.screenshots));
+  expect(mocks.page).toHaveBeenCalledTimes(Number(selected.structured));
+  expect(mocks.active).toHaveBeenCalledTimes(selected.screenshots?2:0);expect(mocks.ocr).not.toHaveBeenCalled();
+  if(records.length){expect(new Set(records.map(e=>e.metadata?.captureObservation?.id)).size).toBe(1);expect(records.every(e=>JSON.stringify(e.metadata?.captureObservation?.selected)===JSON.stringify(selected))).toBe(true);}
+  expect(records.filter(e=>e.source!=='activity').every(e=>e.durationMs===0)).toBe(true);
+  const reopened=new DurableQueue(directory,fixtureConfig());await reopened.initialize();expect((await reopened.exportArchive()).records.sort((a,b)=>a.event.id.localeCompare(b.event.id))).toEqual((await queue.exportArchive()).records.sort((a,b)=>a.event.id.localeCompare(b.event.id)));
+ });
+ it.each(['unsupported','failed','blocked'])('structured %s leaves an independently selected screenshot enabled',async status=>{
+  mocks.page.mockResolvedValue({status});const {collector,queue}=await makeCollector({defaultCollection:{...content,structured:true},uiPageRules:[pageRule]});
+  await collector.start();await collector.settleCapture();expect(mocks.capture).toHaveBeenCalledOnce();expect((await queue.exportArchive()).records.map(r=>r.event.source)).toEqual(['screen']);
+ });
+ it('keeps selected structure when screenshot permission is denied',async()=>{
   mocks.page.mockResolvedValue({snapshot:pageSnapshot});mocks.permission.mockReturnValue('denied');
-  const {collector,queue}=await makeCollector({syncMode:'manual',uiPageMode:'ui_preferred',uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();
-  const archive=await queue.exportArchive();expect(archive.records).toHaveLength(2);expect(archive.blobs).toEqual({});const page=archive.records.find(r=>r.event.source==='ui_page')!;expect(page.event.ocrText).toBe('GENERATED PAGE BODY');expect(archive.records.find(r=>r.event.source==='activity')!.event.durationMs).toBe(0);
-  expect(mocks.capture).not.toHaveBeenCalled();expect(mocks.ocr).not.toHaveBeenCalled();
-  const reopened=new DurableQueue(directory,fixtureConfig());await reopened.initialize();expect((await reopened.exportArchive()).records.find(r=>r.event.source==='ui_page')?.event.metadata?.uiPage?.adapterId).toBe(pageRule.id);
+  const {collector,queue}=await makeCollector({defaultCollection:{duration:true,screenshots:true,structured:true},uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();
+  expect((await queue.exportArchive()).records.map(r=>r.event.source).sort()).toEqual(['activity','ui_page']);expect(mocks.capture).not.toHaveBeenCalled();
  });
- it.each(['off','activity'])('does not read nodes for %s privacy',async collection=>{
-  const {collector}=await makeCollector({uiPageMode:'hybrid',uiPageRules:[pageRule],appCollectionRules:{[application.appId]:collection}});await collector.start();await collector.settleCapture();expect(mocks.page).not.toHaveBeenCalled();
+ it('discards late AX content after stop and never continues to screenshot reading',async()=>{
+  let finish!:(value:unknown)=>void;const pending=new Promise(resolve=>finish=resolve);mocks.page.mockReturnValue(pending);
+  const {collector,queue}=await makeCollector({defaultCollection:{...content,structured:true},uiPageRules:[pageRule]});await collector.start();
+  while(!mocks.page.mock.calls.length)await new Promise(resolve=>setTimeout(resolve,1));collector.stop();finish({snapshot:pageSnapshot});await collector.settleCapture();
+  expect(queue.stats().depth).toBe(0);expect(mocks.capture).not.toHaveBeenCalled();
  });
- it('never falls back to pixels after a page privacy rejection',async()=>{
-  mocks.page.mockResolvedValue({snapshot:pageSnapshot});const {collector,queue}=await makeCollector({uiPageMode:'hybrid',uiPageRules:[pageRule],uploadGate:{enabled:true,blockedText:['GENERATED'],failureAction:'hold'}});await collector.start();await collector.settleCapture();expect(mocks.capture).not.toHaveBeenCalled();expect(queue.stats().depth).toBe(0);
+ it('drops private selected nodes while still taking the independently selected privacy-reviewed screenshot',async()=>{
+  mocks.page.mockResolvedValue({snapshot:pageSnapshot});mocks.ocr.mockResolvedValue('Generated clear screenshot');
+  const {collector,queue}=await makeCollector({defaultCollection:{...content,structured:true},uiPageRules:[pageRule],uploadGate:{enabled:true,blockedText:['GENERATED PAGE'],failureAction:'hold'}});
+  await collector.start();await collector.settleCapture();expect((await queue.exportArchive()).records.map(r=>r.event.source)).toEqual(['screen']);expect(mocks.capture).toHaveBeenCalledOnce();
  });
- it('rejects a foreground switch after node reading',async()=>{
-  mocks.page.mockImplementation(async()=>{mocks.foreground.mockResolvedValue({...application,appId:'other'});return {snapshot:pageSnapshot};});const {collector,queue}=await makeCollector({uiPageMode:'hybrid',uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();expect(queue.stats().depth).toBe(0);expect(mocks.capture).not.toHaveBeenCalled();
+ it('rejects a foreground switch after AX reading before saving content or reading pixels',async()=>{
+  mocks.page.mockImplementation(async()=>{mocks.foreground.mockResolvedValue({...application,appId:'other'});return {snapshot:pageSnapshot};});
+  const {collector,queue}=await makeCollector({defaultCollection:{...content,structured:true},uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();expect(queue.stats().depth).toBe(0);expect(mocks.capture).not.toHaveBeenCalled();
  });
- it.each(['ui_preferred','hybrid'])('keeps screenshots for partial pages in %s',async mode=>{
-  mocks.page.mockResolvedValue({snapshot:pageSnapshot});const {collector,queue}=await makeCollector({uiPageMode:mode,uiPageRules:[{...pageRule,complete:false}]});await collector.start();await collector.settleCapture();expect(mocks.capture).toHaveBeenCalledTimes(1);expect((await queue.exportArchive()).records.map(r=>r.event.source).sort()).toEqual(['screen','ui_page']);
- });
- it('page_only does not capture pixels for unsupported pages',async()=>{
-  mocks.page.mockResolvedValue({status:'unsupported'});const {collector,queue}=await makeCollector({uiPageMode:'page_only',uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();expect(mocks.capture).not.toHaveBeenCalled();expect((await queue.exportArchive()).records.map(r=>r.event.source)).toEqual(['activity']);
- });
-});
-
-describe.skipIf(process.platform!=='darwin')('capture user journeys',()=>{
- it('applies literal text rules to notifications before persistence or upload',async()=>{
-  mocks.notifications.mockResolvedValue(['GENERATED FORBIDDEN NOTIFICATION']);
-  const {collector,queue}=await makeCollector({syncMode:'manual',notificationCollectionEnabled:true,defaultCollection:'content',appCollectionRules:{},uiPageMode:'page_only',uploadGate:{enabled:true,blockedText:['FORBIDDEN'],failureAction:'hold'}});
-  await collector.start();await collector.settleCapture();
-  const archive=await queue.exportArchive();expect(archive.records.every(r=>r.event.source==='activity')).toBe(true);expect(archive.records.some(r=>r.event.metadata?.notification)).toBe(false);
-  // Removing the rule admits a later fresh observation, not the previously blocked text.
-  collector.stop();await collector.settleCapture();collector.updateConfig({...collector.status().config,token:'synthetic-token',uploadGate:{enabled:true,blockedText:[],failureAction:'hold'}} as any);
-  await collector.start();await collector.settleCapture();
-  const notification=(await queue.exportArchive()).records.find(r=>r.event.source==='notification');expect(notification?.event.metadata?.notification?.text).toContain('FORBIDDEN');
- });
- it.each(['page_only','ui_preferred'])('keeps measured activity when %s replaces screenshots',async mode=>{
-  mocks.page.mockResolvedValue({snapshot:pageSnapshot});const clock=vi.spyOn(Date,'now');const start=Date.parse('2026-10-05T00:00:00Z');clock.mockReturnValue(start);
-  const {collector,queue}=await makeCollector({syncMode:'manual',uiPageMode:mode,uiPageRules:[pageRule]});
+ it('counts each interval once when all three channels are selected',async()=>{
+  mocks.page.mockResolvedValue({snapshot:pageSnapshot});const start=Date.parse('2026-10-05T00:00:00Z'),clock=vi.spyOn(Date,'now').mockReturnValue(start);
   try{
-   await collector.start();await collector.settleCapture();
+   const {collector,queue}=await makeCollector({syncMode:'manual',defaultCollection:{duration:true,screenshots:true,structured:true},uiPageRules:[pageRule]});await collector.start();await collector.settleCapture();
    for(let i=1;i<=2;i++){clock.mockReturnValue(start+i*15000);clearTimeout((collector as any).timer);await (collector as any).capture();}
-   const records=(await queue.exportArchive()).records;
-   expect(records.filter(r=>r.event.source==='ui_page')).toHaveLength(3);expect(records.filter(r=>r.event.source==='ui_page').every(r=>r.event.durationMs===0)).toBe(true);
-   const samples=records.filter(r=>r.event.source==='activity').flatMap(r=>r.event.stateSeries?.samples??[{at:r.event.capturedAt,durationMs:r.event.durationMs}]);
-   expect(samples.map(s=>s.durationMs)).toEqual([0,15000,15000]);expect(mocks.capture).not.toHaveBeenCalled();
-   mocks.foreground.mockResolvedValue({...application,appId:'dev.other'});mocks.active.mockResolvedValue({...application,appId:'dev.other',visibleAppIds:['dev.other']});clock.mockReturnValue(start+45000);clearTimeout((collector as any).timer);await (collector as any).capture();
-   expect((await queue.exportArchive()).records.find(r=>r.event.appId==='dev.other')?.event.durationMs).toBe(0);
+   const records=(await queue.exportArchive()).records;expect(records.filter(r=>r.event.source==='ui_page')).toHaveLength(3);expect(records.filter(r=>r.event.source==='screen')).toHaveLength(3);
+   expect(records.flatMap(r=>r.event.stateSeries?.samples??[{durationMs:r.event.durationMs}]).reduce((total,s)=>total+s.durationMs,0)).toBe(30000);
+   expect(records.filter(r=>r.event.source!=='activity').every(r=>r.event.durationMs===0)).toBe(true);
   }finally{clock.mockRestore();}
  });
- it('hybrid pages add no duplicate measured interval',async()=>{
-  mocks.page.mockResolvedValue({snapshot:pageSnapshot});const clock=vi.spyOn(Date,'now');const start=Date.parse('2026-10-05T00:00:00Z');clock.mockReturnValue(start);
-  const {collector,queue}=await makeCollector({syncMode:'manual',uiPageMode:'hybrid',uiPageRules:[pageRule]});
-  try{await collector.start();await collector.settleCapture();clock.mockReturnValue(start+15000);clearTimeout((collector as any).timer);await (collector as any).capture();
-   const records=(await queue.exportArchive()).records;expect(records.some(r=>r.event.source==='activity')).toBe(false);
-   const duration=records.flatMap(r=>r.event.stateSeries?.samples??[{durationMs:r.event.durationMs}]).reduce((total,s)=>total+s.durationMs,0);expect(duration).toBe(15000);
+ it('does not autoenable notifications when structured collection is selected',async()=>{
+  const {collector}=await makeCollector({defaultCollection:{...off,structured:true}});await collector.start();await collector.settleCapture();expect(mocks.notifications).not.toHaveBeenCalled();
+ });
+ it('applies literal notification text rules before persistence or upload',async()=>{
+  mocks.notifications.mockResolvedValue(['GENERATED FORBIDDEN NOTIFICATION']);
+  const {collector,queue}=await makeCollector({syncMode:'manual',notificationCollectionEnabled:true,defaultCollection:{...activity,structured:true},uploadGate:{enabled:true,blockedText:['FORBIDDEN'],failureAction:'hold'}});
+  await collector.start();await collector.settleCapture();expect((await queue.exportArchive()).records.some(r=>r.event.metadata?.notification)).toBe(false);
+  collector.stop();collector.updateConfig({...collector.status().config,token:'synthetic-token',uploadGate:{enabled:true,blockedText:[],failureAction:'hold'}} as any);await collector.start();await collector.settleCapture();
+  expect((await queue.exportArchive()).records.find(r=>r.event.source==='notification')?.event.metadata?.notification?.text).toContain('FORBIDDEN');
+ });
+ it.each([false,true])('reads scoped WeChat OCR only with explicit consent=%s and no persisted screenshot',async enabled=>{
+  const appId='com.tencent.xinWeChat';mocks.foreground.mockResolvedValue({...application,appId});mocks.active.mockResolvedValue({...application,appId,visibleAppIds:[appId]});
+  mocks.page.mockResolvedValue({snapshot:{appId,appVersion:'4.1.15',activity:'',truncated:false,nodes:[{id:'list',resourceId:'chat_message_list',role:'AXList',text:'',bounds:{x:1,y:1,width:2,height:2}}]}});
+  const {collector,queue}=await makeCollector({syncMode:'manual',defaultCollection:{...off,structured:true},structuredOcrEnabled:enabled});await collector.start();await collector.settleCapture();
+  expect(mocks.capture).toHaveBeenCalledTimes(Number(enabled));expect(mocks.ocr).toHaveBeenCalledTimes(Number(enabled));
+  const archive=await queue.exportArchive();expect(archive.blobs).toEqual({});expect(archive.records).toHaveLength(Number(enabled));
+  if(enabled){expect(mocks.page.mock.calls.slice(1).every(call=>JSON.parse(call[2].toString()).requireUnoccludedRegion===true)).toBe(true);const page=archive.records[0].event.metadata?.uiPage;expect(page).toMatchObject({version:3,adapterId:'macos.wechat.local-ocr',status:'partial',objects:[{kind:'visible_text',fields:[{name:'text',values:[{source:'ocr'}]}]}]});const pixels=await sharp(mocks.ocr.mock.calls[0][1]).metadata();expect(pixels.width).toBe(2);expect(pixels.height).toBe(2);}
+ });
+ it.each(['before','after'])('rejects WeChat OCR when native occlusion proof is blocked %s pixel acquisition',async phase=>{
+  const appId='com.tencent.xinWeChat';mocks.foreground.mockResolvedValue({...application,appId});mocks.active.mockResolvedValue({...application,appId,visibleAppIds:[appId]});
+  const snapshot={appId,appVersion:'4.1.15',activity:'',truncated:false,nodes:[{id:'list',resourceId:'chat_message_list',role:'AXList',text:'',bounds:{x:1,y:1,width:2,height:2}}]};
+  let proofs=0;mocks.page.mockImplementation(async(_path,_command,input:Buffer)=>{if(JSON.parse(input.toString()).requireUnoccludedRegion&&++proofs===(phase==='before'?1:2))return {status:'blocked'};return {snapshot};});
+  const {collector,queue}=await makeCollector({defaultCollection:{...off,structured:true},structuredOcrEnabled:true});await collector.start();await collector.settleCapture();
+  expect(mocks.capture).toHaveBeenCalledTimes(phase==='before'?0:1);expect(mocks.ocr).not.toHaveBeenCalled();expect(queue.stats().depth).toBe(0);
+ });
+ it.each([false,true])('requires a verified single Chrome window before screenshot pixels (safe=%s)',async screenshotSafe=>{
+  const appId='com.google.Chrome';mocks.foreground.mockResolvedValue({...application,appId});mocks.active.mockResolvedValue({...application,appId,visibleAppIds:[appId]});
+  const provider={sample:vi.fn(async()=>({status:'ok' as const,identity:'binding',screenshotSafe,pages:[]})),validate:vi.fn(async()=>true)};
+  const config={...fixtureConfig(),syncMode:'manual' as const},queue=new DurableQueue(directory,config);await queue.initialize();collector=new Collector(config,queue,'/fixture',()=>true,()=>undefined,undefined,undefined,undefined,undefined,provider);await collector.start();await collector.settleCapture();
+  expect(mocks.capture).toHaveBeenCalledTimes(Number(screenshotSafe));expect(queue.stats().depth).toBe(Number(screenshotSafe));
+ });
+ it('refuses screenshot pixels for visible background Chrome because its active page binding is unavailable',async()=>{
+  mocks.active.mockResolvedValue({...application,visibleAppIds:[application.appId,'com.google.Chrome']});const {collector,queue}=await makeCollector();await collector.start();await collector.settleCapture();expect(mocks.capture).not.toHaveBeenCalled();expect(queue.stats().depth).toBe(0);
+ });
+ it('measures media only across valid matching playing observations and resets on pause, stale binding and restart',async()=>{
+  const appId='com.google.Chrome',appName='Google Chrome';mocks.foreground.mockResolvedValue({...application,appId,appName});
+  let state:'playing'|'paused'='playing',bound=true,mediaId='generated-a';
+  const provider={sample:vi.fn(async()=>({status:'ok' as const,identity:'binding',pages:[],media:{status:'available' as const,sessions:[{sessionId:'stable-generated-player',mediaId,appId,appName,appVisibility:'foreground' as const,playbackType:'local' as const,playbackState:state,positionMs:999999}]}})),validate:vi.fn(async()=>bound)};
+  const config={...fixtureConfig(),syncMode:'manual' as const,defaultCollection:{...activity,structured:true}},queue=new DurableQueue(directory,config);await queue.initialize();collector=new Collector(config,queue,'/fixture',()=>true,()=>undefined,undefined,undefined,undefined,undefined,provider);
+  let now=Date.parse('2026-10-24T00:00:00.000Z');const clock=vi.spyOn(Date,'now').mockImplementation(()=>now);
+  try{
+   await collector.start();await collector.settleCapture();const next=async(gap=15000)=>{now+=gap;clearTimeout((collector as any).timer);await (collector as any).capture();};
+   await next(15001);state='paused';await next();state='playing';await next();await next();bound=false;await next();bound=true;await next();mediaId='generated-b';await next();await next();await next(30001);await next();
+   collector.stop();await collector.start();await collector.settleCapture();
+   const media=(await queue.exportArchive()).records.filter(r=>r.event.source==='media');expect(media.map(r=>r.event.durationMs)).toEqual([0,15000,0,0,15000,0,0,15000,0,15000,0]);
+   expect(mocks.capture).not.toHaveBeenCalled();expect(mocks.active).not.toHaveBeenCalled();
   }finally{clock.mockRestore();}
+ });
+ it.each([false,true])('validates Chrome binding and admits media with zero duration when duration=%s',async duration=>{
+  mocks.foreground.mockResolvedValue({...application,appId:'com.google.Chrome'});
+  const {namedPage}=await import('@mote/shared');const page=namedPage({...pageSnapshot,appId:'com.google.Chrome'},{id:'generated.browser',version:'1',kind:'article'},[{name:'body',values:[{text:'Generated browser content',source:'text'}]}],new Date().toISOString());
+  const provider={sample:vi.fn(async(request:{observedAt:string})=>({status:'ok' as const,identity:'fixture-document',pages:[{...page,observations:{...page.observations,firstAt:request.observedAt,lastAt:request.observedAt}}],media:{status:'available' as const,sessions:[{sessionId:'generated-player',appId:'com.google.Chrome',appName:'Google Chrome',playbackState:'playing' as const,appVisibility:'foreground' as const,playbackType:'local' as const,title:'Generated video',positionMs:1000}]}})),validate:vi.fn(async()=>true)};
+  const config={...fixtureConfig(),syncMode:'manual' as const,defaultCollection:{duration,screenshots:false,structured:true}};const queue=new DurableQueue(directory,config);await queue.initialize();
+  collector=new Collector(config,queue,'/fixture',()=>true,()=>undefined,undefined,undefined,undefined,undefined,provider);await collector.start();await collector.settleCapture();
+  const records=(await queue.exportArchive()).records;expect(records.some(r=>r.event.source==='media')).toBe(true);expect(records.find(r=>r.event.source==='media')?.event.durationMs).toBe(0);expect(provider.validate).toHaveBeenCalled();expect(mocks.capture).not.toHaveBeenCalled();
  });
 });
 
@@ -469,7 +519,7 @@ it('a global send pause blocks explicit retries and heartbeat without changing t
 });
 
 it.skipIf(process.platform!=='darwin')('pausing sends preserves an active local recording and its measured sampling continuity',async()=>{
-  const {collector,queue}=await makeCollector({syncMode:'manual',metadataEnabled:false,defaultCollection:'activity',intervalMs:300000});
+  const {collector,queue}=await makeCollector({syncMode:'manual',metadataEnabled:false,defaultCollection:activity,intervalMs:300000});
   await collector.start();await collector.settleCapture();const sample=(collector as any).lastSample,timer=(collector as any).timer;
   await collector.setSyncPaused(true);expect(collector.status().running).toBe(true);expect((collector as any).lastSample).toBe(sample);expect((collector as any).timer).toBe(timer);
   mocks.foreground.mockResolvedValue({appId:'dev.mote.generated.second',appName:'Generated second app',pid:2});

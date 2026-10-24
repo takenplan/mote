@@ -64,7 +64,7 @@ async function execute(request: BackgroundRequest, progress: (value: WorkProgres
       const file = await open(temporary, 'wx', 0o600);
       const blobs = new Set<string>();
       try {
-        await file.writeFile('{"format":"mote-desktop-queue","version":3,"records":[');
+        await file.writeFile(`{"format":"mote-desktop-queue","version":${DESKTOP_STORAGE_VERSION},"records":[`);
         for (let i = 0; i < names.length; i++) {
           const record = validateRecord(JSON.parse((await readLocalContent(join(request.directory, 'events', names[i]))).toString('utf8')));
           if (record.blobHash) blobs.add(record.blobHash);

@@ -1,25 +1,30 @@
-import { describe, expect, it } from 'vitest';
-import { collectionForApp, normalizeAppCollectionRules, permitsVisibleContent } from '../src/app-collection';
-import { defaultConfig, updateConfig } from '../src/config';
-describe('explicit collection policy', () => {
-  it('preserves default content and exact off rules while allowing per-app activity/off', () => {
-    const cfg = { ...defaultConfig(), appCollectionRules: { 'dev.activity': 'activity', 'dev.off': 'off', 'dev.legacy': 'off' } } as const;
-    expect(collectionForApp('dev.normal', cfg)).toBe('content'); expect(collectionForApp('dev.activity', cfg)).toBe('activity'); expect(collectionForApp('dev.off', cfg)).toBe('off'); expect(collectionForApp('dev.legacy', cfg)).toBe('off'); expect(collectionForApp(undefined, cfg)).toBe('off'); expect(collectionForApp('dev.activity.other', cfg)).toBe('content');
-    expect(permitsVisibleContent(['dev.normal', 'dev.activity'], false, cfg)).toBe(false); expect(permitsVisibleContent(['dev.normal'], true, cfg)).toBe(false);
-  });
-  it('rejects malformed policies instead of weakening filters', () => {
-    const cfg = defaultConfig();
-    for (const rules of [[], { 'dev.app': 'keyword-guess' }, { '': 'off' }, JSON.parse('{"__proto__":"content"}')]) expect(() => normalizeAppCollectionRules(rules)).toThrow();
-    expect(() => updateConfig(cfg, { ...cfg, defaultCollection: 'invalid' } as never)).toThrow();
-  });
-  it('allows desktop or unknown windows under an unrestricted default while preserving explicit restrictions', () => {
-    const cfg = defaultConfig();
-    expect(collectionForApp('com.apple.finder', cfg)).toBe('content');
-    expect(collectionForApp(undefined, cfg)).toBe('content');
-    expect(collectionForApp('dev.mote.unknown-foreground', cfg)).toBe('content');
-    expect(permitsVisibleContent([], true, cfg)).toBe(true);
-    expect(permitsVisibleContent([], true, { ...cfg, appCollectionRules: {'dev.private': 'off'} })).toBe(false);
-    expect(collectionForApp('dev.mote.unknown-foreground', { ...cfg, appCollectionRules: { 'dev.private': 'activity' } })).toBe('off');
-    expect(collectionForApp('com.apple.finder', { ...cfg, appCollectionRules: {'com.apple.finder': 'off'} })).toBe('off');
-  });
+import {describe,expect,it} from 'vitest';
+import {collectionForApp,normalizeAppCollectionRules,normalizeCollectionMode,permitsVisibleContent} from '../src/app-collection';
+import {defaultConfig,updateConfig,normalizeChromeOrigins} from '../src/config';
+const off={duration:false,screenshots:false,structured:false};
+describe('independent collection policy',()=>{
+ it('defaults to duration only and matches exact per-app overrides',()=>{
+  const config={...defaultConfig(),appCollectionRules:{'dev.private':off,'dev.screen':{...off,screenshots:true}}};
+  expect(collectionForApp('dev.normal',config)).toEqual({...off,duration:true});
+  expect(collectionForApp('dev.screen',config)).toEqual({...off,screenshots:true});
+  expect(collectionForApp('dev.private',config)).toEqual(off);
+  expect(collectionForApp('dev.private.other',config)).toEqual({...off,duration:true});
+ });
+ it('fails closed for unknown foregrounds and unknown visible windows under every policy',()=>{
+  const config={...defaultConfig(),defaultCollection:{duration:true,screenshots:true,structured:true}};
+  expect(collectionForApp(undefined,config)).toEqual(off);expect(collectionForApp('dev.mote.unknown-foreground',config)).toEqual(off);
+  expect(permitsVisibleContent([],true,config)).toBe(false);
+  expect(permitsVisibleContent(['dev.app'],false,config)).toBe(true);
+  expect(permitsVisibleContent(['dev.app','dev.private'],false,{...config,appCollectionRules:{'dev.private':{duration:true,screenshots:false,structured:true}}})).toBe(false);
+ });
+ it('rejects legacy modes, missing/extra keys and malformed per-app grants',()=>{
+  for(const value of ['content','activity','off',{}, {...off,duration:'true'}, {...off,content:true}])expect(()=>normalizeCollectionMode(value)).toThrow();
+  for(const rules of [[],{'dev.app':'content'},{'':off},JSON.parse('{"__proto__":{"duration":true,"screenshots":true,"structured":true}}')])expect(()=>normalizeAppCollectionRules(rules)).toThrow();
+  expect(()=>updateConfig(defaultConfig(),{...defaultConfig(),uiPageMode:'page_only'} as never)).toThrow();
+  for(const key of ['defaultCollection','appCollectionRules','chromeOrigins'])expect(()=>updateConfig(defaultConfig(),{...defaultConfig(),[key]:null} as never)).toThrow();
+ });
+ it('normalizes only exact bounded HTTP(S) Chrome origins',()=>{
+  expect(normalizeChromeOrigins(['https://EXAMPLE.test:443/','https://example.test'])).toEqual(['https://example.test']);
+  for(const value of [['https://*.test'],['https://user@example.test'],['https://example.test/path'],['https://example.test?q=a'],['file:///tmp'],[' https://example.test'],Array(101).fill('https://example.test')])expect(()=>normalizeChromeOrigins(value)).toThrow();
+ });
 });

@@ -861,3 +861,7 @@ input,select,textarea { accent-color:var(--mote-accent); }
 @media (prefers-contrast: more) {
   :root, body { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
 }
+
+.capture-channels{display:flex;flex-wrap:wrap;gap:12px}.capture-channels .checkbox{display:flex;align-items:center;gap:6px;white-space:nowrap}.capture-channels input{width:auto}.app-rule .capture-channels{min-width:260px}
+
+.capture-choice{border:0;padding:0;margin:0}.capture-choice legend{margin-bottom:8px}

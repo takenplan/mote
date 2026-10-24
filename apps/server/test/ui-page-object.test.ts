@@ -125,3 +125,40 @@ test('invalid links and state-valued identifiers never merge unrelated named obj
   const materials=f.materials.list({kind:'mote.ui-page-object'}).items;assert.equal(materials.length,6);assert.ok(materials.every(material=>material.memberCount===1));
   for(const value of values)assert.equal(f.store.evidence([value.id])[0].ocrText,value.ocrText,'invalid identity fields stay literal evidence');
 });
+
+test('verified browser state URLs join visible fragments and provenance without turning ordinary state or WeChat text into identity',async t=>{
+  const {app,store,materials,materialOrganizer}=await fixture(t);
+  const browser=(body:string[],second:number,url:string|null='https://fixture.invalid/article/1')=>{
+    const object=article(body,url??undefined);if(url===null){delete object.url;delete object.identity;}
+    const original=record(object,second),page=original.metadata.uiPage;
+    page.adapterId='chrome.generated.article';page.activity='';
+    for(const field of page.objects[0].fields)if(field.name==='url'||field.name==='title')field.values[0].source='state';
+    return {...original,platform:'macos',appId:'com.google.Chrome',appName:'Google Chrome',ocrText:uiPageText(page),metadata:{...original.metadata,collector:{method:'browser_dom'},captureObservation:{id:randomUUID(),objectIndex:0,selected:{duration:false,screenshots:false,structured:true}}}};
+  };
+  const first=browser(['Generated first browser paragraph','Generated shared browser paragraph'],0);
+  const second=browser(['Generated shared browser paragraph','Generated final browser paragraph'],5);
+  const other=browser(['Generated distinct browser page'],6,'https://fixture.invalid/article/2');
+  const ordinaryState=[7,8].map(second=>{const value=browser(['Generated ordinary state URL'],second);value.metadata.collector.method='accessibility';return value;});
+  const titleOnly=[9,10].map(second=>browser(['Generated repeated state title without source identity'],second,null));
+  const messages=[11,12].map(second=>{const value=browser(['Generated repeated WeChat message'],second,null);value.appId='com.tencent.xinWeChat';value.appName='WeChat';value.metadata.collector.method='accessibility';value.metadata.uiPage.objects[0].kind='message';return value;});
+  const invalidUrls=['Link unavailable','https://user:secret@fixture.invalid/private'].flatMap((url,index)=>[0,1].map(offset=>browser(['Generated invalid browser URL'],13+index*2+offset,url)));
+  const values=[first,second,other,...ordinaryState,...titleOnly,...messages,...invalidUrls];
+  for(const value of values)await ingest(app,value);
+  await ingest(app,first,200);await materialOrganizer.tick(100);
+  const all=materials.list({kind:'mote.ui-page-object'}).items;
+  assert.equal(all.length,values.length-1,'only the two verified equal browser URLs share a material');
+  const combined=all.find(material=>material.memberCount===2);assert.ok(combined,'same-page visible fragments need one source material');
+  assert.deepEqual(materials.members(combined.id).items.map(member=>member.id).sort(),[first.id,second.id].sort());
+  const text=materials.read(combined.id).text;
+  assert.match(text,/Generated first browser paragraph[\s\S]*Generated shared browser paragraph[\s\S]*Generated final browser paragraph/);
+  assert.equal(text.match(/Generated shared browser paragraph/g)?.length,1,'exact overlap retains one body fragment');
+  const blocks=Array.from({length:combined.blockCount},(_,index)=>materials.block(combined.id,index)!.block);
+  const observations=blocks.find(block=>block.id==='observations');assert.ok(observations&&observations.kind==='text');
+  const evidence=JSON.parse(observations.text);
+  assert.deepEqual(evidence.map((entry:{captureId:string;extractionMethod:string;captureObservation:unknown})=>({captureId:entry.captureId,extractionMethod:entry.extractionMethod,captureObservation:entry.captureObservation})),[first,second].map(value=>({captureId:value.id,extractionMethod:'browser_dom',captureObservation:value.metadata.captureObservation})));
+  assert.ok(blocks.some(block=>block.kind==='text'&&JSON.stringify(JSON.parse(block.text))===JSON.stringify({name:'url',source:'state',text:'https://fixture.invalid/article/1'})),'the observed URL retains its state provenance');
+  for(const value of values){
+    assert.equal(store.evidence([value.id])[0].ocrText,value.ocrText,'original fields remain immutable literal evidence');
+    if(value!==first&&value!==second){const material=all.find(material=>materials.members(material.id).items.some(member=>member.id===value.id));assert.ok(material);assert.equal(material.memberCount,1,'distinct URLs, ordinary state values, state titles and repeated messages stay independent');}
+  }
+});

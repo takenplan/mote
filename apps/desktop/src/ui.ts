@@ -289,7 +289,9 @@ function readInput(id: string): string { return byId<HTMLInputElement>(id).value
 function numberInput(id: string): number { return Number(readInput(id)); }
 function fillConfig(config: import('./contracts').PublicConfig): void {
   byId<HTMLInputElement>('packed-upload').checked = config.packedUpload ?? false;
-  byId<HTMLSelectElement>('ui-page-mode').value=config.uiPageMode??'screen_only';
+  writeChannels(byId('default-collection'),config.defaultCollection);
+  byId<HTMLInputElement>('structured-ocr').checked=config.structuredOcrEnabled;
+  byId<HTMLTextAreaElement>('chrome-origins').value=config.chromeOrigins.join('\n');
   byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(config.uiPageRules??[],null,2);
   byId<HTMLInputElement>('notification-collection').checked=Boolean(config.notificationCollectionEnabled);
   captureStorageDirectory = config.captureStorageDirectory || '';
@@ -298,7 +300,7 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
     'diagnostic-interval': config.diagnosticIntervalSeconds, 'image-dedupe': config.imageDedupeMode ?? 'off', 'jpeg-quality': config.jpegQuality, 'capture-max-side': config.captureMaxSide, 'battery-pause-below': config.batteryPauseBelowPct,
     'server-url': config.serverUrl, 'device-name': config.deviceName, interval: config.intervalMs / 1000,
     'queue-mb': config.maxQueueBytes / 1024 / 1024, 'queue-events': config.maxQueueEvents,
-    'default-collection': config.defaultCollection, 'sync-interval': config.syncIntervalMinutes, 'sync-batch': config.syncBatchSize,
+    'sync-interval': config.syncIntervalMinutes, 'sync-batch': config.syncBatchSize,
     masks: JSON.stringify(config.masks, null, 2),
     idle: config.idlePauseSeconds,
   };
@@ -474,10 +476,10 @@ byId('settings').addEventListener('submit', event => {
     let updated: import('./contracts').Status;
     try { updated = await desktopApi.configure({
       syncPaused:currentStatus.config.syncPaused, captureStorageDirectory,
-      uiPageMode:readInput('ui-page-mode') as import('@mote/shared').UiMode, uiPageRules:JSON.parse(readInput('ui-page-rules')||'[]'),
+      structuredOcrEnabled:byId<HTMLInputElement>('structured-ocr').checked, chromeOrigins:readInput('chrome-origins').split('\n').map(s=>s.trim()).filter(Boolean), uiPageRules:JSON.parse(readInput('ui-page-rules')||'[]'),
       notificationCollectionEnabled: byId<HTMLInputElement>('notification-collection').checked,
       metadataEnabled: byId<HTMLInputElement>('metadata-enabled').checked,
-      defaultCollection: readInput('default-collection') as import('./contracts').CollectionMode, appCollectionRules,
+      defaultCollection: readChannels(byId('default-collection')), appCollectionRules,
       diagnosticsEnabled: byId<HTMLInputElement>('diagnostics-enabled').checked, diagnosticIntervalSeconds: numberInput('diagnostic-interval'),
       packedUpload: byId<HTMLInputElement>('packed-upload').checked, imageDedupeMode: readInput('image-dedupe') as import('./image-dedupe').ImageDedupeMode, jpegQuality: numberInput('jpeg-quality'), captureMaxSide: numberInput('capture-max-side'), pauseOnBattery: byId<HTMLInputElement>('pause-on-battery').checked, batteryPauseBelowPct: numberInput('battery-pause-below'),
       syncMode: selectedSyncMode(), syncIntervalMinutes: numberInput('sync-interval'), syncBatchSize: numberInput('sync-batch'),
@@ -498,8 +500,8 @@ const captureConfirmation=byId<HTMLDialogElement>('capture-confirm-dialog');
 let captureConfirmedConfig='';
 function showCaptureConfirmation():void {
   const config=currentStatus.config;captureConfirmedConfig=JSON.stringify(config);
-  const levels={content:moteText('完整内容'),activity:moteText('仅应用活动'),off:moteText('不记录')};
-  byId('capture-confirm-range').textContent=[moteText('未单独配置的应用：{0}',levels[config.defaultCollection]),...Object.entries(config.appCollectionRules).map(([id,mode])=>`${id} · ${levels[mode]}`),moteText('固定遮挡：{0} 个区域',config.masks.length)].join('\n');
+  const describe=(v:import('./contracts').CollectionMode)=>[v.duration?moteText('记录时长'):'',v.screenshots?moteText('保存截图'):'',v.structured?moteText('结构化解析'):''].filter(Boolean).join(' / ')||moteText('不记录');
+  byId('capture-confirm-range').textContent=[moteText('未单独配置的应用：{0}',describe(config.defaultCollection)),...Object.entries(config.appCollectionRules).map(([id,mode])=>`${id} · ${describe(mode)}`),moteText('固定遮挡：{0} 个区域',config.masks.length)].join('\n');
   byId('capture-confirm-destination').textContent=config.serverUrl?moteText('先保存本机，再按发送策略发送到：{0}',config.serverUrl):moteText('尚未连接中央，先保存在本机');
   captureConfirmation.showModal();
 }
@@ -512,7 +514,7 @@ byId('capture-confirm-start').addEventListener('click',()=>{
   captureConfirmation.close();if(captureConfirmedConfig!==JSON.stringify(currentStatus.config)){showCaptureConfirmation();return;}
   void perform(async () => {
     const permissions = await desktopApi.permissionStatus();
-    if ((currentStatus.config.defaultCollection === 'content' || Object.values(currentStatus.config.appCollectionRules).includes('content')) && permissions.screen !== 'granted') { window.alert(moteText("屏幕录制尚未授权，请在权限管理中开启。")); showPage('permissions'); return; }
+    // Each producer handles missing permissions without disabling independent channels.
     const status = await desktopApi.start();
     if (status.running) reviewCollectionSetup();
     render(status);
@@ -841,20 +843,32 @@ byId('connection-connect').addEventListener('click', () => void perform(async ()
 byId('connection-test').addEventListener('click', () => void perform(async () => renderConnection(await desktopApi.testConnection())));
 void desktopApi.connectionStatus().then(renderConnection).catch(() => {});
 
-function addAppRule(id = '', mode: import('./contracts').CollectionMode = 'activity'): void {
+function channelControls(mode: import('./contracts').CollectionMode):HTMLElement {
+  const controls=document.createElement('div');controls.className='capture-channels';
+  for(const [key,label] of [['duration',moteText('记录时长')],['screenshots',moteText('保存截图')],['structured',moteText('结构化解析')]] as const){
+    const field=document.createElement('label');field.className='checkbox';
+    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.dataset.channel=key;checkbox.checked=mode[key];
+    const text=document.createElement('span');text.textContent=label;field.append(checkbox,text);controls.append(field);
+  }
+  return controls;
+}
+function writeChannels(target:HTMLElement,mode:import('./contracts').CollectionMode):void{target.replaceChildren(channelControls(mode));}
+function readChannels(target:Element):import('./contracts').CollectionMode{return {
+ duration:Boolean(target.querySelector<HTMLInputElement>('[data-channel="duration"]')?.checked),
+ screenshots:Boolean(target.querySelector<HTMLInputElement>('[data-channel="screenshots"]')?.checked),
+ structured:Boolean(target.querySelector<HTMLInputElement>('[data-channel="structured"]')?.checked),
+};}
+function addAppRule(id = '', mode: import('./contracts').CollectionMode = {duration:true,screenshots:false,structured:false}): void {
   const row = document.createElement('div'); row.className = 'app-rule';
   const input = document.createElement('input'); input.value = id; input.placeholder = 'com.example.app'; input.maxLength = 256; input.setAttribute('aria-label', moteText("应用 Bundle ID")); input.spellcheck = false;
-  const select = document.createElement('select'); select.setAttribute('aria-label', moteText("应用采集级别"));
-  for (const [value, label] of [['content', moteText("完整内容")], ['activity', moteText("仅应用活动")], ['off', moteText("不记录")]]) { const option = document.createElement('option'); option.value = value; option.textContent = label; select.append(option); }
-  select.value = mode;
   const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = moteText("移除规则"); remove.addEventListener('click', () => { row.remove(); markSettingsDirty(); });
   const identity = document.createElement('label'); identity.className = 'app-identity'; const name = document.createElement('span'); name.textContent = installedApps.find(app => app.appId === id)?.appName || (id ? moteText("应用规则") : moteText("自定义应用")); identity.append(name, input);
-  row.append(identity, select, remove); byId('app-collection-rules').append(row);
+  row.append(identity, channelControls(mode), remove); byId('app-collection-rules').append(row);
 }
 function readAppRules(): Record<string, import('./contracts').CollectionMode> {
   const rules: Record<string, import('./contracts').CollectionMode> = {};
   for (const row of Array.from(byId('app-collection-rules').children)) {
-    const id = row.querySelector('input')!.value.trim(); const mode = row.querySelector('select')!.value as import('./contracts').CollectionMode;
+    const id = row.querySelector('input')!.value.trim(); const mode = readChannels(row);
     if (!id) { revealField(row.querySelector('input')!); throw new Error(moteText("应用规则需要填写 Bundle ID；不用的规则请移除")); }
     if (Object.hasOwn(rules, id)) { revealField(row.querySelector('input')!); throw new Error(moteText("同一应用只能设置一条采集规则")); }
     Object.defineProperty(rules, id, { value: mode, enumerable: true });
@@ -955,9 +969,9 @@ byId('add-app-rule').addEventListener('click', () => void perform(async () => {
 function useInstalledApp(exclude: boolean): void {
   const id = readInput('installed-app-choice'); if (!id) return;
   const existing = Array.from(byId('app-collection-rules').children).find(row => row.querySelector('input')?.value === id);
-  if(existing){const mode=existing.querySelector<HTMLSelectElement>('select');if(mode){if(exclude)mode.value='off';mode.focus();}}
-  else addAppRule(id,exclude?'off':'activity');
-  byId('app-picker-hint').textContent = exclude ? moteText("{0} 已加入完全排除列表，保存设置后生效。",installedApps.find(app=>app.appId===id)?.appName||id) : moteText("已添加为仅活动。可在规则中选择完整内容或不记录，保存设置后生效。");
+  if(existing){if(exclude)existing.querySelectorAll<HTMLInputElement>('[data-channel]').forEach(input=>input.checked=false);existing.querySelector<HTMLInputElement>('[data-channel]')?.focus();}
+  else addAppRule(id,{duration:!exclude,screenshots:false,structured:false});
+  byId('app-picker-hint').textContent = exclude ? moteText("{0} 已加入完全排除列表，保存设置后生效。",installedApps.find(app=>app.appId===id)?.appName||id) : moteText("已添加为仅记录时长。可在规则中分别选择截图与结构化，保存设置后生效。");
   markSettingsDirty();
 }
 byId('use-installed-app').addEventListener('click', () => useInstalledApp(false));
@@ -1208,3 +1222,5 @@ byId('ask-new').addEventListener('click', () => { if (askBusy || askRun?.status 
 byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; renderAsk(); await askHistory(); }); });
 byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
 byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); renderAsk(); }));
+
+byId('chrome-setup').addEventListener('click',()=>void perform(async()=>{const result=await desktopApi.setupChromeCapture();byId('chrome-setup-result').textContent=moteText('扩展目录：{0}；扩展 ID：{1}',result.extensionDirectory,result.extensionId);feedback(moteText('本机桥接已准备。请在 Chrome 扩展程序中加载该目录，并在扩展中授权所选站点。'),true);}));

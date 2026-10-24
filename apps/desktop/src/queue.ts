@@ -34,7 +34,7 @@ export interface QueueLimits { maxQueueBytes: number; maxQueueEvents: number }
 export interface QueueStats { archiveAcknowledgment?:{at:string;origin:string}; depth: number; bytes: number; nextRetryAt?: string; oldestPendingAt?: string; lastUploadAt?: string; eligibleDepth: number; blocked: number }
 export interface QueueArchive {
   format: 'mote-desktop-queue';
-  version: 3;
+  version: typeof DESKTOP_STORAGE_VERSION;
   records: QueueRecord[];
   blobs: Record<string, string>;
 }
@@ -60,18 +60,20 @@ function activeUsage(records:Iterable<QueueRecord>):{depth:number;bytes:number}{
 function validateEvent(value: unknown): CaptureEvent {
   if (!value || typeof value !== 'object') throw new Error(moteText("队列事件无效"));
   const v = value as CaptureEvent;
-  if (!UUID.test(v.id) || !UUID.test(v.deviceId) || !['macos', 'windows', 'linux'].includes(v.platform) || !Number.isFinite(Date.parse(v.capturedAt)) || !Number.isInteger(v.durationMs) || v.durationMs < 0 || v.durationMs > 300000 || !['screen', 'note', 'activity', 'notification', 'ui_page'].includes(v.source)) throw new Error(moteText("队列事件元数据无效"));
+  if (!UUID.test(v.id) || !UUID.test(v.deviceId) || !['macos', 'windows', 'linux'].includes(v.platform) || !Number.isFinite(Date.parse(v.capturedAt)) || !Number.isInteger(v.durationMs) || v.durationMs < 0 || v.durationMs > 300000 || !['screen', 'note', 'activity', 'notification', 'ui_page', 'media'].includes(v.source)) throw new Error(moteText("队列事件元数据无效"));
   for (const [key, max] of [['deviceName', 128], ['appId', 256], ['appName', 200]] as const) {
     if (typeof v[key] !== 'string' || !v[key].trim() || v[key].length > max) throw new Error(moteText("队列事件应用或设备信息无效"));
   }
   if (v.ocrText !== undefined && (typeof v.ocrText !== 'string' || v.ocrText.length > 100000)) throw new Error(moteText("OCR 文本超出限制"));
   if (v.privacy?.excluded !== false || typeof v.privacy?.redacted !== 'boolean') throw new Error(moteText("队列隐私标记无效"));
+  if (v.metadata?.captureObservation || v.source === 'media') captureSchema.parse({...v,ocrText:v.ocrText??'',...(v.source==='screen'?{imageBase64:'/9j/2Q=='}:{})});
   const metadata = v.metadata === undefined ? undefined : recordMetadataSchema.parse(v.metadata);
   const stateSeries=v.stateSeries?stateSeriesSchema.parse(v.stateSeries):undefined;
   if(stateSeries&&(!stateOnly(v)||Date.parse(stateSeries.samples[0].at)!==Date.parse(v.capturedAt)||stateSeries.samples[0].durationMs!==v.durationMs||stateSeries.samples.some((sample,i)=>i>0&&(Date.parse(sample.at)<=Date.parse(stateSeries.samples[i-1].at)||Date.parse(sample.at)-Date.parse(stateSeries.samples[i-1].at)>300000))||Date.parse(stateSeries.samples.at(-1)!.at)-Date.parse(v.capturedAt)>21600000))throw Error('Invalid state series');
   if(stateSeries)for(const sample of stateSeries.samples)sample.at=new Date(sample.at).toISOString();
   const base = { ...(stateSeries?{stateSeries}:{}),id: v.id, deviceId: v.deviceId, deviceName: v.deviceName, platform: v.platform,
     capturedAt: new Date(v.capturedAt).toISOString(), durationMs: v.durationMs, appId: v.appId, appName: v.appName, ...(metadata ? { metadata } : {}) };
+  if(v.source==='media'){captureSchema.parse({...v,ocrText:v.ocrText??''});return {...base,source:'media',ocrText:'',privacy:v.privacy};}
   if(v.source==='ui_page'){captureSchema.parse({...v,ocrText:v.ocrText??''});return {...base,source:'ui_page',ocrText:v.ocrText,privacy:v.privacy};}
   if (v.source === 'notification') {
     if(v.platform!=='macos'||v.durationMs!==0||v.imageMime||v.ocrText||v.mood!==undefined||v.privacy.redacted||!metadata?.notification||!metadata.observation||metadata.collector?.method!=='accessibility'||metadata.media||metadata.capture||v.privacy.collection!=='content'||v.privacy.mode!=='none')throw new Error('Invalid notification observation');

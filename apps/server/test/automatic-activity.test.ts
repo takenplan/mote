@@ -178,3 +178,19 @@ test('activity-only, removed and content-free notifications stay deterministic w
   await f.node.automaticActivity.tick();assert.equal(f.calls.length,0);for(const value of deterministic)assert.equal(f.node.store.db.prepare('SELECT reason FROM activity_intake_receipts WHERE capture_id=?').get(value.id)!.reason,'deterministic_only');
   assert.equal((await f.ingest(make('updated','content','Generated changed notification body'))).statusCode,201);await f.node.automaticActivity.tick();assert.equal(f.calls.length,1);
 });
+
+test('Mac browser observations reach activity in observed order instead of random capture-ID order',async t=>{
+  const f=await fixture(t);assert.equal((await f.save(true)).statusCode,200);
+  const observationId=randomUUID(),first=observation(),second=observation();
+  const make=(record:ReturnType<typeof observation>,objectIndex:number,text:string,id:string)=>{
+    const page=record.metadata.uiPage;page.adapterId='chrome.generated.messages';page.appVersion='1';page.activity='';page.objects=[{kind:'message',fields:[{name:'message_visible_body',values:[{text,source:'text'}]}]}];
+    return {...record,id,platform:'macos',appId:'com.google.Chrome',appName:'Chrome',ocrText:uiPageText(page),metadata:{...record.metadata,collector:{method:'browser_dom'},captureObservation:{id:observationId,objectIndex,selected:{duration:false,screenshots:false,structured:true}}}};
+  };
+  const before=make(first,0,'Generated first message','ffffffff-ffff-4fff-8fff-ffffffffffff');
+  const after=make(second,1,'Generated second message','00000000-0000-4000-8000-000000000001');
+  assert.equal((await f.ingest(after)).statusCode,201);assert.equal((await f.ingest(before)).statusCode,201);
+  f.node.store.db.prepare("UPDATE execution_steps SET available_at=0 WHERE kind='activity.understand'").run();await f.node.automaticActivity.tick();
+  assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].evidenceIds,[before.id,after.id]);
+  assert.equal(f.node.store.db.prepare('SELECT count(*) n FROM memory_jobs').get()!.n,0);
+  assert.equal((await f.ingest(before)).statusCode,200);await f.node.automaticActivity.tick();assert.equal(f.calls.length,1,'retries must not reinterpret accepted content');
+});

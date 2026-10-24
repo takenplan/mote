@@ -63,13 +63,13 @@ export const memoryScopeRefSchema=z.object({projectName:z.string().max(400).opti
 export const recordMetadataSchema = z.object({
   memoryCorrection:z.object({memoryId:z.string().uuid(),domain:z.enum(['personal','coding']),scopeRefs:z.array(memoryScopeRefSchema).max(30),coding:z.object({kind:z.enum(['pitfall','decision','principle','preference']),scope:z.enum(['session','project','shared']),applicability:z.string().max(2000),validation:z.literal('user_confirmed')}).strict().optional()}).strict().optional(),
   uiPage: uiPageSchema.optional(),
-  captureObservation:z.object({id:z.string().uuid(),selected:z.object({duration:z.boolean(),screenshots:z.boolean(),structured:z.boolean()}).strict()}).strict().optional(),
+  captureObservation:z.object({id:z.string().uuid(),objectIndex:z.number().int().min(0).max(63).optional(),selected:z.object({duration:z.boolean(),screenshots:z.boolean(),structured:z.boolean()}).strict()}).strict().optional(),
   attachments: z.array(z.string().uuid()).max(10).optional(),
   version: z.literal(1),
   observedAt: timestamp,
   collector: z.object({
     version: label.optional(),
-    method: z.enum(['accessibility', 'media_projection', 'screen_capture', 'media_session', 'notification_listener', 'manual', 'file', 'calendar', 'mcp', 'import']).optional(),
+    method: z.enum(['accessibility', 'browser_dom', 'media_projection', 'screen_capture', 'media_session', 'notification_listener', 'manual', 'file', 'calendar', 'mcp', 'import']).optional(),
   }).strict().optional(),
   device: z.object({
     osVersion: label.optional(), osBuild: label.optional(), manufacturer: label.optional(),

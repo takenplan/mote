@@ -96,7 +96,7 @@ export class AutomaticActivity {
   private selectedAll(step:ExecutionStep){const ids=this.store.db.prepare('SELECT capture_id FROM activity_input_grants WHERE scope_key=? AND epoch=? AND consumed=0 ORDER BY capture_id').all(String(step.input.scopeKey),String(step.input.epoch)).map(row=>String(row.capture_id));
     const records=this.store.evidence(ids).filter(record=>this.store.isCurrentEvidence(record.id));
     const ui=records.filter(record=>record.source==='ui_page'),screens=records.filter(record=>record.source==='screen');
-    return (ui.length?ui:screens.length?screens:records).sort((a,b)=>a.id.localeCompare(b.id));}
+    return (ui.length?ui:screens.length?screens:records).sort((a,b)=>(a.metadata?.captureObservation?.objectIndex??0)-(b.metadata?.captureObservation?.objectIndex??0)||a.id.localeCompare(b.id));}
   private selected(step:ExecutionStep){let characters=0;return this.selectedAll(step).slice(0,8).filter((record,index)=>{characters+=record.ocrText.length;return index===0||characters<=66000;});}
   private imageProducts(records:CaptureRecord[]):ImageProducts[]{return records.filter(record=>record.source==='screen').map(record=>({id:record.id,products:imageMaterialProjection(this.store,record.id)?.products??[]}));}
   private async understand(step:ExecutionStep,signal:AbortSignal):Promise<Prepared>{
@@ -110,7 +110,12 @@ export class AutomaticActivity {
     const fingerprints=Object.fromEntries(records.map(current=>[current.id,this.store.archive.fingerprint(current.id)!])),selectionKey=hash(records.map(current=>current.id)),images=this.imageProducts(records);
     const all=this.store.evidence(this.store.db.prepare('SELECT capture_id FROM activity_input_grants WHERE scope_key=? AND epoch=?').all(String(step.input.scopeKey),String(step.input.epoch)).map(row=>String(row.capture_id))).filter(current=>current.source==='ui_page'),structure=all.length>0&&all.every(current=>current.metadata?.uiPage?.version===3)?{
       stream:hash([record.deviceId,[...new Set(all.map(current=>JSON.stringify([current.appId,current.metadata?.uiPage?.adapterId])))].sort()]),
-      key:hash(all.map(current=>{const page=current.metadata!.uiPage!;if(page.version!==3)return {};const {observations:_,...fields}=page;return fields;}).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))),
+      key:hash(all.map(current=>{
+        const page=current.metadata!.uiPage!;
+        if(page.version!==3)return {objectIndex:0};
+        const {observations:_,...fields}=page;
+        return {objectIndex:current.metadata?.captureObservation?.objectIndex??0,...fields};
+      }).sort((a,b)=>a.objectIndex-b.objectIndex||JSON.stringify(a).localeCompare(JSON.stringify(b)))),
     }:undefined;
     if(structure&&this.store.db.prepare('SELECT 1 FROM activity_structured_heads WHERE stream_key=? AND content_key=?').get(structure.stream,structure.key))return {fingerprints,records,selectionKey,images,configuration:selected,leads:[],structure,unchanged:true,output:{activities:[],coverage:'complete',limitation:'Identical full structured snapshot; originals remain independently archived.'}};
     const inputIds=new Set(records.map(current=>current.id));

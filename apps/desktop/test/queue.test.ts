@@ -13,7 +13,7 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'mote-desktop-
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 
 describe('durable capture queue', () => {
-  it('rejects a pre-format-3 queue without altering its generated records or originals', async () => {
+  it('rejects an unversioned queue without altering its generated records or originals', async () => {
     await queue.enqueue(event(),image);
     const original=await readFile(join(directory,'events',event().id+'.json'));
     await rm(join(directory,'storage-format.json'));
@@ -66,7 +66,7 @@ describe('durable capture queue', () => {
   });
   it('rejects obsolete pending OCR records and old portable archives before any write',async()=>{
     await expect(queue.enqueue({...event(),ocr:{status:'pending'}},image)).rejects.toThrow();
-    const archive=await queue.exportArchive();expect(archive.version).toBe(3);
+    const archive=await queue.exportArchive();expect(archive.version).toBe(4);
     await expect(queue.importArchive({...archive,version:1})).rejects.toThrow();
     expect(queue.stats().depth).toBe(0);
     expect(await readdir(join(directory,'blobs'))).toEqual([]);
@@ -204,4 +204,20 @@ it('packs stable snapshots without acknowledging other records when a receipt is
   expect((await queue.nextBatch()).map(item => item.record.event.id)).toEqual([b.id]);
   const reopened = new DurableQueue(directory, limits); await reopened.initialize();
   expect((await reopened.next())?.record.event.id).toBe(b.id);
+});
+
+it('rejects contradictory sampled channel records before durable writes',async()=>{
+ const base=event(),selected={duration:true,screenshots:false,structured:false};
+ await expect(queue.enqueue({...base,durationMs:0,metadata:{version:1,observedAt:base.capturedAt,captureObservation:{id:base.id,selected}}},image)).rejects.toThrow();
+ expect(queue.stats().depth).toBe(0);expect(await readdir(join(directory,'events'))).toEqual([]);expect(await readdir(join(directory,'blobs'))).toEqual([]);
+});
+
+it('preserves structured media facts and retry state through restart without duration or pixels',async()=>{
+ const base=event(),selected={duration:false,screenshots:false,structured:true};
+ const media={...base,appId:'com.google.Chrome',source:'media' as const,durationMs:0,imageMime:undefined,ocr:undefined,ocrText:'',privacy:{excluded:false as const,redacted:false,mode:'none' as const,collection:'content' as const},metadata:{version:1 as const,observedAt:base.capturedAt,captureObservation:{id:base.id,selected},collector:{method:'browser_dom' as const},media:{status:'available' as const,sessions:[{sessionId:'generated-media',appId:'com.google.Chrome',appName:base.appName,appVisibility:'foreground' as const,playbackType:'local' as const,playbackState:'playing' as const,title:'Generated media title',positionMs:3000}]}}};
+ await queue.enqueue(media);await queue.failed(base.id,Date.now(),()=>0.5);
+ const reopened=new DurableQueue(directory,limits);await reopened.initialize();const stored=reopened.recordForHistory(base.id);expect(stored?.event.metadata).toEqual(media.metadata);expect(stored?.attempts).toBe(1);expect(stored?.nextAttemptAt).toBeGreaterThan(Date.now());expect(await readdir(join(directory,'blobs'))).toEqual([]);
+ await expect(reopened.enqueue({...media,id:crypto.randomUUID(),durationMs:5000})).rejects.toThrow();
+ await expect(reopened.enqueue({...media,id:crypto.randomUUID(),metadata:{...media.metadata,media:{...media.metadata.media,unexpected:true}}} as any)).rejects.toThrow();
+ expect(reopened.stats().depth).toBe(1);
 });

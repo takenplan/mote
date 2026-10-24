@@ -23,6 +23,7 @@ const api: DesktopApi = {
   browseCaptures: input => ipcRenderer.invoke('mote:captures-browse', input),
   captureDetail: (location, id) => ipcRenderer.invoke('mote:captures-detail', location, id),
   captureImage: (location, id, thumbnail) => ipcRenderer.invoke('mote:captures-image', location, id, thumbnail),
+  setupChromeCapture: () => ipcRenderer.invoke('mote:chrome-setup'),
   installedApplications: () => ipcRenderer.invoke('mote:installed-applications'),
   onNavigate: callback => {
     const handler = (_event: Electron.IpcRendererEvent, page: 'overview' | 'notes' | 'sources' | 'settings') => callback(page);

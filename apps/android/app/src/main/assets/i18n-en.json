@@ -8439,5 +8439,20 @@
   "这条记录仅包含前台应用与采样时长。截图和结构化内容按该应用的独立选项保存。时长存在采样空隙，不代表完整使用历史。": "This record contains only the foreground app and sampled duration. Screenshots and structured content follow the app’s separate settings. Sampling gaps mean duration does not represent a complete usage history.",
   "这条记录仅包含应用活动": "This record contains only app activity",
   "应用活动 · 应用与时长记录": "App activity · App and duration record",
-  "应用活动 · 本次采样 {0}": "App activity · This sample: {0}"
+  "应用活动 · 本次采样 {0}": "App activity · This sample: {0}",
+  "记录时长": "Record duration",
+  "保存截图": "Save screenshots",
+  "结构化解析": "Extract structured content",
+  "扩展目录：{0}；扩展 ID：{1}": "Extension directory: {0}; extension ID: {1}",
+  "本机桥接已准备。请在 Chrome 扩展程序中加载该目录，并在扩展中授权所选站点。": "The local bridge is ready. Load this directory in Chrome Extensions, then authorize your selected sites in the extension.",
+  "保存截图或使用本机临时 OCR 需要此权限；仅记录时长无需授权。": "Saving screenshots or using temporary local OCR requires this permission. Recording duration alone does not.",
+  "截图与结构化按应用分别选择。结构化失败不会改变截图选择；所有字段仅表示实际观察到的范围。": "Select screenshots and structured content independently for each app. Failed extraction does not change screenshot selection. Fields cover only what was observed.",
+  "使用本机临时 OCR 补充结构化内容": "Use temporary local OCR to supplement structured content",
+  "未选择保存截图时，临时像素识别后释放，不保存或上传图片。": "When screenshot saving is off, temporary pixels are released after recognition. Images are neither saved nor uploaded.",
+  "Chrome 页面采集": "Chrome page collection",
+  "允许采集的站点来源（每行一个完整来源地址）": "Allowed site origins (one complete origin per line)",
+  "仅采集前台活动页面。无痕窗口不采集；还需在扩展中授予所选站点权限。": "Only the foreground active page is collected. Incognito windows are excluded. Selected sites also need permission in the extension.",
+  "准备 Chrome 扩展与本机桥接": "Prepare Chrome extension and local bridge",
+  "使用精确 Bundle ID，分别选择时长、截图与结构化。全部关闭时不产生该应用记录。截图要求画面中的每个应用都允许截图；身份未知或浏览器范围无法确认时跳过截图，已选择的时长仍独立记录。设置只作用后续采样，旧队列保留入队时的策略。": "Use exact bundle IDs and select duration, screenshots and structured content separately. With all three off, no records are created for that app. Screenshots require every visible app to allow them. Unknown identities or unverified browser scope skip screenshots while selected duration is still recorded independently. Changes affect future samples; queued records retain their admission policy.",
+  "已添加为仅记录时长。可在规则中分别选择截图与结构化，保存设置后生效。": "Added with duration recording only. Select screenshots and structured content independently in the rule, then save to apply."
 }

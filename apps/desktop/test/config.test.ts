@@ -60,7 +60,7 @@ it('persists image deduplication and renamed identity without replacing the devi
 
 it('rejects old and incomplete saved configuration instead of filling fields or restoring excluded lists',async()=>{
  const store=new ConfigStore(directory,{available:()=>true,encrypt:Buffer.from,decrypt:value=>value.toString()}),config=defaultConfig();
- for(const value of [{version:1,config},{version:3,config:{...config,credentialScope:'collector'}},{version:3,config:{...config,credentialScope:'mcp'}},{version:3,config:{...config,excludedAppIds:['dev.private']}},{version:3,config:Object.fromEntries(Object.entries(config).filter(([key])=>key!=='appCollectionRules'))}]){
+ for(const value of [{version:1,config},{version:4,config:{...config,credentialScope:'collector'}},{version:4,config:{...config,credentialScope:'mcp'}},{version:4,config:{...config,excludedAppIds:['dev.private']}},{version:4,config:Object.fromEntries(Object.entries(config).filter(([key])=>key!=='appCollectionRules'))}]){
   const raw=JSON.stringify(value);await writeFile(join(directory,'config.json'),raw);await expect(store.load()).rejects.toThrow('Unsupported desktop storage format');expect(await readFile(join(directory,'config.json'),'utf8')).toBe(raw);
  }
 });
@@ -68,17 +68,18 @@ it('rejects old and incomplete saved configuration instead of filling fields or 
 
 it('retires model settings from an installed client while rejecting explicit obsolete controls',async()=>{
  const store=new ConfigStore(directory,{available:()=>true,encrypt:Buffer.from,decrypt:value=>value.toString()}), config=defaultConfig();
- const prior={version:3,config:{...config,nsfwEnabled:true,reviewPolicy:'retired fixture policy',privacyModelUrl:'http://127.0.0.1:1/review'}};
+ const prior={version:4,config:{...config,nsfwEnabled:true,reviewPolicy:'retired fixture policy',privacyModelUrl:'http://127.0.0.1:1/review'}};
  await writeFile(join(directory,'config.json'),JSON.stringify(prior));
  const loaded=await store.load();expect(loaded.deviceId).toBe(config.deviceId);expect(loaded.uploadGate).toEqual(config.uploadGate);
  for(const key of ['nsfwEnabled','reviewPolicy','privacyModelUrl']){expect(loaded).not.toHaveProperty(key);expect(JSON.parse(await readFile(join(directory,'config.json'),'utf8')).config).not.toHaveProperty(key);}
  expect(()=>updateConfig(config,{...config,nsfwEnabled:true} as any)).toThrow('已停用');
 });
 
-it('adds a persisted send pause without rejecting existing format-3 configuration or overwriting cadence',async()=>{
+it('requires every current configuration field and persists independent channels',async()=>{
  const store=new ConfigStore(directory,{available:()=>true,encrypt:Buffer.from,decrypt:value=>value.toString()}),config=defaultConfig();
- const {syncPaused:_,...old}=config;await writeFile(join(directory,'config.json'),JSON.stringify({version:3,config:old}));
- const loaded=await store.load();expect(loaded.syncPaused).toBe(false);
- const paused=updateConfig(loaded,{...loaded,syncPaused:true});await store.save(paused);expect(await store.load()).toMatchObject({syncPaused:true,syncMode:loaded.syncMode});
- expect(()=>updateConfig(loaded,{...loaded,syncPaused:'true'} as any)).toThrow();
+ const {syncPaused:_,...incomplete}=config;await writeFile(join(directory,'config.json'),JSON.stringify({version:4,config:incomplete}));
+ await expect(store.load()).rejects.toThrow('Unsupported desktop storage format');
+ const selected={duration:false,screenshots:true,structured:true};await store.save({...config,defaultCollection:selected,chromeOrigins:['https://example.test'],structuredOcrEnabled:true});
+ expect(await store.load()).toMatchObject({defaultCollection:selected,chromeOrigins:['https://example.test'],structuredOcrEnabled:true});
+ expect(()=>updateConfig(config,{...config,syncPaused:'true'} as any)).toThrow();
 });

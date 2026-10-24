@@ -1,7 +1,7 @@
 import {test,afterEach} from 'vitest';import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';import {sourceState,sourceStatePatch} from '../src/source-state-store';
-async function fixture(){const directory=await mkdtemp(join(tmpdir(),'mote-state3-'));afterEach(()=>rm(directory,{recursive:true,force:true}));return join(directory,'source.json');}
+async function fixture(){const directory=await mkdtemp(join(tmpdir(),'mote-state4-'));afterEach(()=>rm(directory,{recursive:true,force:true}));return join(directory,'source.json');}
 test('rejects JSON and old SQLite source states without converting or clearing them',async()=>{
  const path=await fixture(),raw=JSON.stringify({version:2,pendingRealtime:[{externalId:'generated',revision:'old'}]});await writeFile(path,raw);
  assert.throws(()=>sourceState(path),/Unsupported desktop storage format/);assert.equal(await readFile(path,'utf8'),raw);
@@ -9,12 +9,12 @@ test('rejects JSON and old SQLite source states without converting or clearing t
  const before=await readFile(path+'.sqlite');assert.throws(()=>sourceState(path),/Unsupported desktop storage format/);assert.deepEqual(await readFile(path+'.sqlite'),before);
 });
 test('current row outbox capacity rolls back with its checkpoint and ACK deletes only its own revision',async()=>{
- const path=await fixture(),before={version:3,known:{a:{revision:'1'}},pendingRealtime:[{externalId:'one',revision:'1'}],pendingHistory:[],checkpoint:{cursor:1}};
+ const path=await fixture(),before={version:4,known:{a:{revision:'1'}},pendingRealtime:[{externalId:'one',revision:'1'}],pendingHistory:[],checkpoint:{cursor:1}};
  sourceState(path,sourceStatePatch({},before));assert.deepEqual(sourceState(path),before);
  const next={...before,checkpoint:{cursor:2},pendingRealtime:[{externalId:'one',revision:'2',body:'x'.repeat(1000)}]};
  assert.throws(()=>sourceState(path,sourceStatePatch(before,next),100),/队列已满/);assert.deepEqual(sourceState(path),before);
  const ack={...before,pendingRealtime:[],checkpoint:{cursor:2}};sourceState(path,sourceStatePatch(before,ack),100);assert.deepEqual(sourceState(path),ack);
- const inspect=new DatabaseSync(path+'.sqlite');assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version,3);inspect.close();
+ const inspect=new DatabaseSync(path+'.sqlite');assert.equal(inspect.prepare('PRAGMA user_version').get()!.user_version,4);inspect.close();
 });
 test('current initialization waits for a concurrent transaction',async()=>{
  const {Worker}=await import('node:worker_threads'),path=await fixture();sourceState(path);
@@ -24,7 +24,7 @@ test('current initialization waits for a concurrent transaction',async()=>{
 });
 test('current catalog commits only changed rows and rejects embedded old layouts',async()=>{
  const path=await fixture(),catalog=Object.fromEntries(Array.from({length:1000},(_,i)=>['file-'+i,{size:i,lastSeenScan:1}]));
- const before={version:3,known:{},pendingRealtime:[],pendingHistory:[],checkpoint:{version:1,root:'/generated',scanNumber:1,catalog}};sourceState(path,sourceStatePatch({},before));assert.deepEqual(sourceState(path),before);
+ const before={version:4,known:{},pendingRealtime:[],pendingHistory:[],checkpoint:{version:1,root:'/generated',scanNumber:1,catalog}};sourceState(path,sourceStatePatch({},before));assert.deepEqual(sourceState(path),before);
  const next={...before,checkpoint:{...before.checkpoint,catalog:{...catalog,'file-7':{size:42,lastSeenScan:2}}}},patches=sourceStatePatch(before,next);assert.deepEqual(patches.map(p=>[p.section,p.key]),[['catalog','file-7']]);sourceState(path,patches);assert.deepEqual(sourceState(path),next);
  const db=new DatabaseSync(path+'.sqlite');db.prepare("UPDATE entries SET value=? WHERE section='state' AND key='checkpoint'").run(Buffer.from(JSON.stringify(before.checkpoint)));db.close();assert.throws(()=>sourceState(path),/Unsupported desktop storage format/);
 });

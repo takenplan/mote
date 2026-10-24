@@ -8,7 +8,7 @@ import type { SourceDefinition, SourceItem } from './source-types';
 import { UploadSliceYield } from './upload-slice';
 import { validateServerUrl } from './config';
 
-export const syncSources = ['screen', 'ui_page', 'note', 'activity', 'notification', 'file', 'calendar', 'coding'] as const;
+export const syncSources = ['screen', 'ui_page', 'note', 'activity', 'notification', 'media', 'file', 'calendar', 'coding'] as const;
 export type SyncSource = typeof syncSources[number];
 export type SyncOutcome = 'sending' | 'received' | 'unconfirmed' | 'interrupted';
 export interface SyncHistoryItem {

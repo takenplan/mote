@@ -5,7 +5,7 @@ import {decodeLocalContent,encodeLocalContent,readLocalContent} from '../src/loc
 import {DurableQueue,imageHash} from '../src/queue';import {defaultConfig} from '../src/config';
 import {NoteDraftStore} from '../src/note-draft';import {SourceSync} from '../src/source-sync';import {event,image} from './fixtures';
 let directory:string;
-beforeEach(async()=>{directory=await mkdtemp(join(tmpdir(),'mote-content-format3-'));});
+beforeEach(async()=>{directory=await mkdtemp(join(tmpdir(),'mote-content-format4-'));});
 afterEach(async()=>{await rm(directory,{recursive:true,force:true});});
 it('writes directly readable current records, originals and drafts and survives restart and portable export',async()=>{
  const config=defaultConfig(),queue=new DurableQueue(join(directory,'queue'),config);await queue.initialize();await queue.enqueue(event(),image);
@@ -15,10 +15,10 @@ it('writes directly readable current records, originals and drafts and survives 
  const sources=new SourceSync(join(directory,'sources','state.json'));await sources.initialize();await sources.stage({items:[{externalId:'generated',title:'Generated',text:'Generated body',kind:'message',layer:'snapshot',deleted:false}],seen:['generated'],complete:true,skipped:0},false);
  const reopened=new DurableQueue(queue.directory,config);await reopened.initialize();expect(reopened.stats().depth).toBe(1);
  const restartedDraft=new NoteDraftStore(join(directory,'notes'));await restartedDraft.initialize();expect(restartedDraft.get().text).toBe('Generated draft');
- const archive=join(directory,'archive.json');await reopened.exportArchiveFile(archive);expect(JSON.parse(await readFile(archive,'utf8')).version).toBe(3);
+ const archive=join(directory,'archive.json');await reopened.exportArchiveFile(archive);expect(JSON.parse(await readFile(archive,'utf8')).version).toBe(4);
  const target=new DurableQueue(join(directory,'target'),config);await target.initialize();await target.importArchiveFile(archive);expect(await target.imageForBrowser(event().id)).toEqual(image);
 });
-it('preserves arbitrary format3 bytes and authored text resembling retired envelope prefixes',async()=>{
+it('preserves arbitrary current-format bytes and authored text resembling retired envelope prefixes',async()=>{
  for(const prefix of ['MOTE-CONTENT-AES256GCM-V1\0','MOTE-CONTENT-PLAIN-V1\0']){
   const bytes=Buffer.concat([Buffer.from(prefix),Buffer.alloc(40,73)]),path=join(directory,'old-content');await writeFile(path,bytes);
   expect(decodeLocalContent(encodeLocalContent(bytes))).toEqual(bytes);

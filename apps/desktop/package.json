@@ -67,6 +67,10 @@
       {
         "from": "resources/zh_CN.lproj",
         "to": "zh_CN.lproj"
+      },
+      {
+        "from": "chrome-extension",
+        "to": "chrome-extension"
       }
     ],
     "mac": {
