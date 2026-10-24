@@ -111,13 +111,14 @@ test('direct Memory extraction preserves a generated range beyond the retired co
 });
 
 test('explicit cancellation reaches the executing agent and cannot archive a late answer',async t=>{
-  const dir=mkdtempSync(join(tmpdir(),'mote-query-cancel-'));let observed:AbortSignal|undefined,release!:()=>void;
+  const dir=mkdtempSync(join(tmpdir(),'mote-query-cancel-'));let observed:AbortSignal|undefined,release!:()=>void,started!:()=>void;
+  const startedPromise=new Promise<void>(resolve=>{started=resolve;});
   const agent:QueryAgent={configured:true,close:async()=>{},query:async input=>{
-    observed=input.signal;await new Promise<void>(r=>{release=r;});return {answer:'Late generated answer',citations:[],trace:[],runId:randomUUID()};
+    observed=input.signal;started();await new Promise<void>(r=>{release=r;});return {answer:'Late generated answer',citations:[],trace:[],runId:randomUUID()};
   }};
   const {app}=await buildApp(config(dir),{agent});t.after(async()=>{release?.();await app.close();rmSync(dir,{recursive:true,force:true});});
   const id=randomUUID();await app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id,input:{question:'fixture'}}});
-  await new Promise(r=>setImmediate(r));assert.ok(observed);
+  await startedPromise;assert.ok(observed);
   assert.equal((await app.inject({method:'POST',url:`/api/query-runs/${id}/cancel`})).statusCode,401);
   const cancelled=await app.inject({method:'POST',url:`/api/query-runs/${id}/cancel`,headers});assert.equal(cancelled.json().status,'cancelled');assert.equal(observed.aborted,true);
   release();await new Promise(r=>setTimeout(r,30));
