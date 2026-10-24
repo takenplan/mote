@@ -96,5 +96,5 @@ app.on('window-all-closed',()=>{if(!finished)app.exit(1);});
 app.on('quit',()=>{server.close();void rm(profile,{recursive:true,force:true});});
 server.listen(0,'127.0.0.1',()=>{
   const config={...defaultConfig(),serverUrl:'http://127.0.0.1:'+server.address().port,deviceName:'Generated workspace Mac',metadataEnabled:false,syncMode:'manual',credentialScope:'owner'};
-  writeFileSync(join(profile,'config.json'),JSON.stringify({version:3,config,encryptedToken:safeStorage.encryptString(token).toString('base64')}),{mode:0o600});writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});require('../dist/main');
+  writeFileSync(join(profile,'config.json'),JSON.stringify({version:4,config,encryptedToken:safeStorage.encryptString(token).toString('base64')}),{mode:0o600});writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});require('../dist/main');
 });

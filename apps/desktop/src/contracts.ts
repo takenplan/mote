@@ -1,6 +1,6 @@
 export type SyncMode = 'realtime' | 'interval' | 'batch' | 'manual';
 export interface SyncStatus { uploadBytesPerSecond?: number; state: 'unconfigured' | 'idle' | 'waiting' | 'uploading' | 'error' | 'manual'; mode: SyncMode; message: string; nextUploadAt?: string; lastUploadAt?: string; pendingRecords: number; localBacklogUnbound?: boolean }
-export type CollectionMode = 'content' | 'activity' | 'off';
+export interface CollectionMode { duration: boolean; screenshots: boolean; structured: boolean }
 export type Platform = 'macos' | 'windows' | 'linux';
 export type Rectangle = { x: number; y: number; width: number; height: number };
 export interface Config {
@@ -16,7 +16,8 @@ export interface Config {
   maxQueueBytes: number;
   maxQueueEvents: number;
   captureStorageDirectory: string;
-  uiPageMode?: import('@mote/shared').UiMode;
+  structuredOcrEnabled: boolean;
+  chromeOrigins: string[];
   uiPageRules?: import('@mote/shared').UiRule[];
   notificationCollectionEnabled?: boolean;
   defaultCollection: CollectionMode;
@@ -56,7 +57,7 @@ export interface CaptureEvent {
   imageMime?: 'image/jpeg';
   ocrText?: string;
   ocr?: { status: 'pending' | 'completed' | 'disabled' | 'failed'; reason?: 'charging'; updatedAt?: string };
-  source: 'screen' | 'note' | 'activity' | 'notification' | 'ui_page';
+  source: 'screen' | 'note' | 'activity' | 'notification' | 'ui_page' | 'media';
   metadata?: import('@mote/shared').RecordMetadata;
   mood?: string;
   privacy: { excluded: false; redacted: boolean; mode: 'local' | 'none'; collection?: 'content' | 'activity'; reason?: string };
@@ -86,6 +87,7 @@ export interface Status {
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }
 export interface DesktopApi {
+  setupChromeCapture():Promise<{extensionId:string;extensionDirectory:string;manifestPath:string}>;
   initialAppearance: import('@mote/shared').AppearanceSnapshot;
   setAppearance(preference: import('@mote/shared').AppearancePreference): Promise<import('@mote/shared').AppearanceSnapshot>;
   onAppearance(callback: (value: import('@mote/shared').AppearanceSnapshot) => void): () => void;

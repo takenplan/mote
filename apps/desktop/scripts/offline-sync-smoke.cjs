@@ -20,8 +20,8 @@ safeStorage.encryptString = value => Buffer.from('fixture:' + Buffer.from(value)
 safeStorage.decryptString = value => Buffer.from(value.toString().slice(8), 'base64').toString();
 desktopCapturer.getSources = async () => { throw new Error('Real screenshots are forbidden in this generated fixture'); };
 const config = { ...defaultConfig(), serverUrl: '', syncMode: 'manual', deviceName: 'Synthetic offline Mac', metadataEnabled: false };
-writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:3, config }), { mode: 0o600 });
-writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:4, config }), { mode: 0o600 });
+writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
 const file = join(profile, 'generated-source.md'); writeFileSync(file, 'Generated offline source version. No personal files.');
 dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
 const token = 'synthetic-offline-sync-token-' + 'x'.repeat(32), requests = [], captureBodies = [], sourceBodies = [];

@@ -28,7 +28,7 @@ interface RejectedItem { item: SourceItem; status: number }
 interface BatchResult { acks: Record<string, unknown>[]; rejected?: RejectedItem[] }
 export interface SnapshotRecovery {captureId:string;externalId:string;revision:string;sha256:string;sizeBytes:number;observedAt:string}
 interface State {
-  version: 3;
+  version: typeof DESKTOP_STORAGE_VERSION;
   /** Distinct from the local outbox schema version; old server receipts cannot be replayed. */
   ingressVersion: 2;
   predecessors?: Record<string, string | null>;
@@ -59,7 +59,7 @@ export class SourceSync {
   private scheduler=new PriorityScheduler(16*1024*1024);
   private manifestBatch?:boolean;
   private knownItems=0;
-  private data: State = { version: 3, ingressVersion:2, adapterVersion:1, known: {}, pendingRealtime: [], pendingHistory: [] };
+  private data: State = { version: DESKTOP_STORAGE_VERSION, ingressVersion:2, adapterVersion:1, known: {}, pendingRealtime: [], pendingHistory: [] };
   private readonly limits: { maxEvents: number; maxBytes: number; batchSize: number; concurrency: number };
   constructor(private readonly path: string, limits?: Partial<{ maxEvents: number; maxBytes: number; batchSize: number; concurrency: number }>) { this.limits = { maxEvents: 4000, maxBytes: 32 * 1024 * 1024, batchSize: 100, concurrency: 4, ...limits }; }
 

@@ -19,8 +19,8 @@ app.setPath('userData',profile);process.env.MOTE_PROFILE='default';
 for(const key of ['MOTE_URL','MOTE_TOKEN','MOTE_ENV_FILE','MOTE_CONFIG_FILE'])delete process.env[key];
 const {defaultConfig}=require('../dist/config');
 if(!process.env.MOTE_THEME_FIXTURE_RESTART){
-writeFileSync(join(profile,'config.json'),JSON.stringify({version:3,config:{...defaultConfig(),serverUrl:'',deviceName:'Generated theme fixture',metadataEnabled:false}}),{mode:0o600});
-writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+writeFileSync(join(profile,'config.json'),JSON.stringify({version:4,config:{...defaultConfig(),serverUrl:'',deviceName:'Generated theme fixture',metadataEnabled:false}}),{mode:0o600});
+writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
 writeFileSync(join(profile,'appearance.json'),JSON.stringify(preference),{mode:0o600});
 }
 const out=resolve(__dirname,'../../../.mote/appearance/electron');mkdirSync(out,{recursive:true});

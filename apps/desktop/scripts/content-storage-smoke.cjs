@@ -15,8 +15,8 @@ process.env.MOTE_PROFILE = 'default'; delete process.env.MOTE_URL; delete proces
 safeStorage.isEncryptionAvailable = () => true;
 safeStorage.encryptString = value => Buffer.from(value).map(byte => byte ^ 91);
 safeStorage.decryptString = value => Buffer.from(value).map(byte => byte ^ 91).toString();
-writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:3, config: { ...defaultConfig(), serverUrl: '', syncMode: 'manual', metadataEnabled: false, deviceName: 'Generated content fixture' } }));
-writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:4, config: { ...defaultConfig(), serverUrl: '', syncMode: 'manual', metadataEnabled: false, deviceName: 'Generated content fixture' } }));
+writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
 const timeout = setTimeout(() => { process.stderr.write('Content storage UI timeout\n'); app.exit(1); }, 45000);
 let finished = false;
 app.on('browser-window-created', (_event, window) => {

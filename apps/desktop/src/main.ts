@@ -1,3 +1,5 @@
+import {ChromeCaptureBridge} from './chrome-bridge';
+import {registerChromeNativeHost} from './chrome-registration';
 import {appearancePreference,resolveColorScheme,linearUiTheme,type AppearancePreference} from '@mote/shared';
 import { connectionToken, loginRequest, loginVerifier } from './login-session';
 import { SyncHistory, type SyncHistoryQuery, type SyncHistoryContentQuery } from './sync-history';
@@ -160,6 +162,8 @@ function updateUi(status: Status): void {
   ]));
 }
 
+let chromeCaptureBridge:ChromeCaptureBridge|undefined;
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', showWindow);
@@ -167,7 +171,7 @@ else {
     quitting = true; void events.record('APP', 'STOPPED'); collector?.shutdown();
     if (notesSettledForQuit) return;
     event.preventDefault();
-    void Promise.allSettled([controlChain, settleNoteWork(), localSources?.close(), updater?.close(), collector?.settleCapture()]).then(() => events.read()).finally(() => { notesSettledForQuit = true; app.quit(); });
+    void Promise.allSettled([controlChain, settleNoteWork(), localSources?.close(), updater?.close(), chromeCaptureBridge?.close(), collector?.settleCapture()]).then(() => events.read()).finally(() => { notesSettledForQuit = true; app.quit(); });
   });
   app.on('window-all-closed', () => { /* Tray keeps the collector and durable uploader alive. */ });
   app.on('activate', showWindow);
@@ -203,7 +207,8 @@ else {
       queueBytes: queue.stats().bytes, modelBytes: 0, ...await readPowerState(helperPath).catch(() => ({})),
     }));
     const syncHistory = new SyncHistory(join(dataDirectory,'sync-history.sqlite')); await syncHistory.initialize();
-    collector = new Collector(settings, queue, helperPath, encryptedStorageAvailable, updateUi, diagnostics, events, localSources,syncHistory);
+    if(process.platform==='darwin'){chromeCaptureBridge=new ChromeCaptureBridge({profileDirectory:dataDirectory,helperPath});await chromeCaptureBridge.start();}
+    collector = new Collector(settings, queue, helperPath, encryptedStorageAvailable, updateUi, diagnostics, events, localSources,syncHistory,chromeCaptureBridge);
     let calendarDelivery:Promise<void>|undefined;
     const calendarTimer=setInterval(()=>{
       if(calendarDelivery||!connectionToken(settings)||!settings.serverUrl||settings.syncMode==='manual'||process.platform!=='darwin')return;
@@ -410,6 +415,12 @@ else {
     handle('mote:captures-browse', input => browseWithConnection(config => browseCaptures(queue, config, input as BrowseRequest)));
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
+    handle('mote:chrome-setup',async()=>{
+      if(process.platform!=='darwin')throw Error('Chrome capture requires macOS');
+      const extensionDirectory=app.isPackaged?join(process.resourcesPath,'chrome-extension'):join(__dirname,'..','chrome-extension');
+      const result=await registerChromeNativeHost({profileDirectory:dataDirectory,extensionDirectory,electronExecutable:process.execPath,nativeHostScript:join(__dirname,'chrome-native-host.js')});
+      await shell.openPath(extensionDirectory);return result;
+    });
     handle('mote:installed-applications', () => process.platform === 'darwin' ? readInstalledApplications(helperPath).catch(() => []) : []);
     const devUpdateStatus = () => ({...updater!.status(), manualDownload:true, state:'idle' as const, canInstall:false, availableVersion:undefined, notesUrl:desktopDevDownloadsUrl, message:moteText('查看版本说明与安装包'), installReason:''});
     handle('mote:update-status', () => developmentBuild ? devUpdateStatus() : updater!.status());

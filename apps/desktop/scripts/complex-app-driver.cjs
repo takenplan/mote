@@ -18,8 +18,8 @@ if (process.env.MOTE_COMPLEX_RESUME) {
 } else {
   const profile = join(directory, 'profile-' + randomUUID()); mkdirSync(profile, { mode: 0o700 });
   const config = { ...defaultConfig(), serverUrl: connection.url, deviceName: 'desktop-complex-' + randomUUID().slice(0,8),  };
-  writeFileSync(join(profile,'config.json'),JSON.stringify({version:3,config}),{mode:0o600});
-writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+  writeFileSync(join(profile,'config.json'),JSON.stringify({version:4,config}),{mode:0o600});
+writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
   statePath = join(directory, 'run-' + randomUUID() + '.json');
   writeFileSync(statePath, JSON.stringify({ profile, marker: config.deviceName, deviceId:config.deviceId, startedAt: new Date().toISOString(), connectionPath }), {mode:0o600});
 }

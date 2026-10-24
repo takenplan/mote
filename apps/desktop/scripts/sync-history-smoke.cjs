@@ -170,6 +170,6 @@ server.listen(0, '127.0.0.1', async () => {
   const config = { ...defaultConfig(), serverUrl: `http://127.0.0.1:${server.address().port}`, token: 'generated-token', deviceName: 'Synthetic Mac', syncMode: 'manual', metadataEnabled: false };
   const store = new ConfigStore(profile, { available: () => safeStorage.isEncryptionAvailable(), encrypt: value => safeStorage.encryptString(value), decrypt: value => safeStorage.decryptString(value) });
   await store.save(config);
-  writeFileSync(join(profile, 'storage-format.json'), JSON.stringify({ version: 3 }), { mode: 0o600 });
+  writeFileSync(join(profile, 'storage-format.json'), JSON.stringify({ version:4 }), { mode: 0o600 });
   require('../dist/main');
 });

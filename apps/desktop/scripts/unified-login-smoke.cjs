@@ -60,6 +60,6 @@ async function finish(code){clearTimeout(timeout);if(window&&!window.isDestroyed
 app.whenReady().then(async()=>{
  assert.ok(safeStorage.isEncryptionAvailable());const config={...defaultConfig(),serverUrl:origin,deviceName:'Generated unified Mac',metadataEnabled:false};
  const grant=await(await request('/api/login/session',owner,{serverUrl:origin,deviceId:config.deviceId,deviceName:config.deviceName,platform:'macos',durationMs:86400000})).json();assert.ok(grant.token);
- writeFileSync(join(root,'config.json'),JSON.stringify({version:3,config:{...config,authExpiresAt:grant.expiresAt},encryptedToken:safeStorage.encryptString(grant.token).toString('base64')}),{mode:0o600});require('../dist/main');
-writeFileSync(join(root,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+ writeFileSync(join(root,'config.json'),JSON.stringify({version:4,config:{...config,authExpiresAt:grant.expiresAt},encryptedToken:safeStorage.encryptString(grant.token).toString('base64')}),{mode:0o600});require('../dist/main');
+writeFileSync(join(root,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
 }).catch(error=>{console.error(error.stack);console.error(JSON.stringify({checkFailures}));void finish(1);});

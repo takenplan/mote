@@ -18,8 +18,8 @@ if (process.env.MOTE_UI_ROLLOUT) app.getVersion = () => require('../package.json
 const profile = mkdtempSync(join(tmpdir(), 'mote-ui-fixture-'));
 app.setPath('userData', profile);
 process.env.MOTE_PROFILE = 'default'; delete process.env.MOTE_URL; delete process.env.MOTE_TOKEN; delete process.env.MOTE_ENV_FILE;
-writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:3, config: { ...defaultConfig(), serverUrl: '', deviceName: 'Synthetic Mac', metadataEnabled: false } }), { mode: 0o600 });
-writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:3}),{mode:0o600});
+writeFileSync(join(profile, 'config.json'), JSON.stringify({ version:4, config: { ...defaultConfig(), serverUrl: '', deviceName: 'Synthetic Mac', metadataEnabled: false } }), { mode: 0o600 });
+writeFileSync(join(profile,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
 const sourceFile = join(profile, 'synthetic-source.md');
 writeFileSync(sourceFile, '合成原生来源 UI：仅用于测试 🧑🏽‍💻');
 dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [sourceFile] });
@@ -183,8 +183,9 @@ app.on('browser-window-created', (_event, window) => {
       startRequested = false;
       await navigate('screen');
       await js(`document.querySelector('#start').click(); document.querySelector('#capture-confirm-start').click(); new Promise(resolve => setTimeout(resolve, 100))`);
-      assert(!startRequested, 'Missing screen permission blocks the start action');
-      assert(await js(`!document.querySelector('[data-page="permissions"]').hidden && window.fixturePermissionAlert.includes('屏幕录制')`));
+      assert(startRequested, 'Duration-only collection can start without screen permission (IPC stub, no personal reads)');
+      assert(await js(`!document.querySelector('[data-page="screen"]').hidden && !window.fixturePermissionAlert`));
+      await navigate('permissions');
       assert.equal(await js(`document.querySelector('#permission-screen').textContent`), '! 未授权');
       await navigate('overview');
       assert(await js(`Array.from(document.querySelectorAll('[data-page]')).filter(el => !el.hidden).every(el => el.dataset.page === 'overview')`));
@@ -328,10 +329,10 @@ app.on('browser-window-created', (_event, window) => {
       await navigate('privacy');
       await js(`document.querySelector('#add-app-rule').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert.equal(await js(`document.querySelector('#installed-app-choice').options[0].textContent`), '合成私密应用 · dev.mote.synthetic.private');
-      await js(`document.querySelector('#use-installed-app').click(); document.querySelector('#app-collection-rules select').value = 'off'; document.querySelector('[data-mask=notification]').click()`);
+      await js(`document.querySelector('#use-installed-app').click(); document.querySelectorAll('#app-collection-rules [data-channel]').forEach(input=>input.checked=false); document.querySelector('[data-mask=notification]').click()`);
       assert.equal(await js(`document.querySelectorAll('#mask-editor input[type=range]').length`), 4);
       await js(`const width = document.querySelector('[aria-label="区域 1 宽度"]'); width.value = '25'; width.dispatchEvent(new Event('input', { bubbles: true }));`);
-      await js(`document.querySelector('#default-collection').value = 'activity'; document.querySelector('#settings').requestSubmit()`);
+      await js(`document.querySelectorAll('#default-collection [data-channel]').forEach(input=>input.checked=input.dataset.channel==='duration'); document.querySelector('#settings').requestSubmit()`);
       await settingsIdle('save privacy settings');
       await js(`document.querySelector('#gate-text').value = 'synthetic.secret'; document.querySelector('#gate-failure').value = 'hold'; document.querySelector('#settings').requestSubmit()`);
       await settingsIdle('save upload review');
@@ -359,7 +360,7 @@ app.on('browser-window-created', (_event, window) => {
       }
       assert.equal(updated.config.deviceName, 'UI Fixture Renamed');
       assert.equal(updated.config.syncMode, 'manual'); assert.equal(updated.config.intervalMs, 60000); assert.deepEqual(updated.config.masks, [{ x: .7, y: 0, width: .25, height: .2 }]);
-      assert.equal(updated.running, false); assert.equal(updated.config.defaultCollection, 'activity'); assert.deepEqual(updated.config.appCollectionRules, { 'dev.mote.synthetic.private': 'off' }); assert.equal(updated.config.metadataEnabled, false);
+      assert.equal(updated.running, false); assert.deepEqual(updated.config.defaultCollection, {duration:true,screenshots:false,structured:false}); assert.deepEqual(updated.config.appCollectionRules, { 'dev.mote.synthetic.private': {duration:false,screenshots:false,structured:false} }); assert.equal(updated.config.metadataEnabled, false);
       const savedNote = await window.webContents.executeJavaScript('window.mote.noteDraft().then(draft => window.mote.saveNote({...draft,text:"Synthetic native app note",mood:"calm",revision:draft.revision+1}))');
       assert.match(savedNote.id, /^[a-f0-9-]{36}$/);
       const noteStatus = await window.webContents.executeJavaScript('window.mote.status()');
@@ -460,7 +461,7 @@ app.on('browser-window-created', (_event, window) => {
       const notificationId = randomUUID();
       const notificationArchive = join(profile, 'generated-notification-archive.json');
       const notificationOriginal = 'Generated notification original; never a personal notification.';
-      writeFileSync(notificationArchive, JSON.stringify({format:'mote-desktop-queue',version:3,blobs:{},records:[{
+      writeFileSync(notificationArchive, JSON.stringify({format:'mote-desktop-queue',version:4,blobs:{},records:[{
         event:{id:notificationId,deviceId:status.config.deviceId,deviceName:'Generated_Notification_Source_'+ 'x'.repeat(96),platform:'macos',capturedAt:notificationAt,
           durationMs:0,appId:'dev.mote.generated.notification',appName:'Generated notification',ocrText:'',source:'notification',
           privacy:{excluded:false,redacted:false,mode:'none',collection:'content'},
@@ -513,7 +514,7 @@ app.on('browser-window-created', (_event, window) => {
       const hash = imageHash(generatedJpeg), day = new Date(), fixtureRecords = [];
       for (let index = 0; index < 31; index++) fixtureRecords.push({ event: { id: randomUUID(), deviceId: status.config.deviceId, deviceName: '合成截图设备', platform: 'macos', capturedAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, index).toISOString(), durationMs: 0, appId: 'dev.mote.fixture', appName: '合成截图', imageMime: 'image/jpeg', ocrText: '合成 OCR <script>不可执行的证据</script>', ocr: { status: 'completed' }, source: 'screen', privacy: { excluded: false, redacted: false, mode: 'local', reason: 'generated fixture only' } }, blobHash: hash, blobBytes: generatedJpeg.length, attempts: 0, nextAttemptAt: 0 });
       const fixtureArchive = join(profile, 'generated-records.json');
-      writeFileSync(fixtureArchive, JSON.stringify({ format: 'mote-desktop-queue', version: 3, records: fixtureRecords, blobs: { [hash]: generatedJpeg.toString('base64') } }));
+      writeFileSync(fixtureArchive, JSON.stringify({ format: 'mote-desktop-queue', version:4, records: fixtureRecords, blobs: { [hash]: generatedJpeg.toString('base64') } }));
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixtureArchive] });
       assert.equal((await js('window.mote.importQueue()')).imported, 31);
       const captureBrowser = require('../dist/capture-browser');

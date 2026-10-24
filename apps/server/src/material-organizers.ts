@@ -65,7 +65,7 @@ const member=(record:CaptureRecord)=>({id:record.id,kind:'capture' as const,ref:
 const iso=(value:string)=>new Date(value).toISOString();
 const uiPageObservation=(r:CaptureRecord)=>{
   const page=r.metadata?.uiPage;if(page?.version!==3)throw Error('Expected structured page evidence');
-  return {captureId:r.id,appVersion:page.appVersion,adapterId:page.adapterId,adapterVersion:page.adapterVersion,
+  return {captureId:r.id,...(r.metadata?.captureObservation?{captureObservation:r.metadata.captureObservation}:{}),extractionMethod:r.metadata?.collector?.method,appVersion:page.appVersion,adapterId:page.adapterId,adapterVersion:page.adapterVersion,
     activity:page.activity,status:page.status,truncated:page.truncated,...page.observations};
 };
 const observedUiIdentity=(record:CaptureRecord)=>{
@@ -464,7 +464,7 @@ const uiPageObject:MaterialOrganizer={
   identity:g=>materialId(uiPageCaptureSource(g.deviceId),uiPageExternalId(g)),
   build(reader,g){
     const {records:input,truncated}=reader.uiPageGroup();
-    const records=input.sort((a,b)=>Date.parse(a.capturedAt)-Date.parse(b.capturedAt)||a.id.localeCompare(b.id));
+    const records=input.sort((a,b)=>Date.parse(a.capturedAt)-Date.parse(b.capturedAt)||(a.metadata?.captureObservation?.objectIndex??0)-(b.metadata?.captureObservation?.objectIndex??0)||a.id.localeCompare(b.id));
     if(!records.length)return;
     const body=new MaterialBody(),observations:unknown[]=[];
     if(truncated)body.limitations.add('ui_page_group_limit');
@@ -473,7 +473,7 @@ const uiPageObject:MaterialOrganizer={
     // displays without model-free semantic object/event inference.
     for(const r of records){
       const page=r.metadata?.uiPage;if(page?.version!==3)continue;
-      body.addMember(r);observations.push({captureId:r.id,...page.observations,status:page.status,truncated:page.truncated});
+      body.addMember(r);observations.push(uiPageObservation(r));
       for(const field of page.objects[0]!.fields){
         const prior=values.filter(value=>value.name===field.name),incoming=field.values;
         let overlap=0;

@@ -1,6 +1,6 @@
 import {DESKTOP_STORAGE_VERSION,RESET_REQUIRED} from './storage-format';
 import { connectionToken, sourceConnectionBinding, validSourceBinding } from './login-session';
-import {uiRulesSchema,uiModeSchema} from '@mote/shared';
+import {uiRulesSchema} from '@mote/shared';
 import { uploadGateConfig } from './upload-gate';
 import { moteText } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
@@ -13,15 +13,26 @@ import type { Config, ConfigUpdate, PublicConfig, Rectangle } from './contracts'
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export function defaultConfig(): Config {
   return {
-    uiPageMode:'screen_only', uiPageRules:[],
+    uiPageRules:[], structuredOcrEnabled:false, chromeOrigins:[],
     uploadGate: uploadGateConfig(undefined),
     serverUrl: 'http://127.0.0.1:47832', deviceId: randomUUID(), deviceName: hostname(),
     syncPaused:false, syncMode: 'batch', syncIntervalMinutes: 1, syncBatchSize: 100, packedUpload:true,
     intervalMs: 15000, maxQueueBytes: 512 * 1024 * 1024, maxQueueEvents: 10000, captureStorageDirectory: '', notificationCollectionEnabled: false,
-    defaultCollection: 'content', appCollectionRules: {}, masks: [], idlePauseSeconds: 300,
+    defaultCollection: {duration:true,screenshots:false,structured:false}, appCollectionRules: {}, masks: [], idlePauseSeconds: 300,
     openAtLogin: false,
     metadataEnabled: true, diagnosticsEnabled: false, diagnosticIntervalSeconds: 60, imageDedupeMode: 'off', jpegQuality: 75, captureMaxSide: 1600, pauseOnBattery: false, batteryPauseBelowPct: 0,
   };
+}
+
+/** Explicit origins grant only the exact HTTP(S) authority; no wildcard or path grants. */
+export function normalizeChromeOrigins(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 100) throw new Error('Expected at most 100 Chrome origins');
+  return [...new Set(value.map(origin => {
+    if (typeof origin !== 'string' || origin.length > 2048 || origin !== origin.trim() || !/^https?:\/\/[^/\\?#]+\/?$/i.test(origin)) throw new Error('Invalid Chrome origin');
+    let url: URL; try { url = new URL(origin); } catch { throw new Error('Invalid Chrome origin'); }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || !['', '/'].includes(url.pathname) || /[\s\x00-\x1f]/.test(origin) || origin.includes('*')) throw new Error('Chrome grants require exact HTTP(S) origins');
+    return url.origin;
+  }))];
 }
 
 function integer(value: unknown, min: number, max: number, name: string): number {
@@ -56,12 +67,13 @@ export function validateServerUrl(value: unknown): string {
 
 const retiredModelKeys = ['privacyModelUrl','nsfwEnabled','reviewPolicy','reviewMaxTokens','reviewMaxSide','nsfwThreads','nsfwTimeoutMs','nsfwSource','nsfwCustomUrl'];
 export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents = 0, confirmedUnboundBacklog = false): Config {
-  if(['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>input&&Object.hasOwn(input,key)))throw Error(RESET_REQUIRED);
+  if(['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging','uiPageMode'].some(key=>input&&Object.hasOwn(input,key)))throw Error(RESET_REQUIRED);
   if ((current.credentialScope!==undefined&&current.credentialScope!=='owner')||(input?.credentialScope!==undefined&&input.credentialScope!=='owner'))throw Error(RESET_REQUIRED);
   if (retiredModelKeys.some(key => input && Object.hasOwn(input,key))) throw new Error(moteText("配置包含已停用的本机模型设置，请移除后导入"));
   if (!input || typeof input !== 'object') throw new Error(moteText("配置格式不正确"));
   if (typeof input.deviceName !== 'string' || !input.deviceName.trim() || input.deviceName.length > 128) throw new Error(moteText("设备名需为 1–128 字符"));
   if (input.metadataEnabled !== undefined && typeof input.metadataEnabled !== 'boolean') throw new Error(moteText("设备元数据开关值无效"));
+  if (input.structuredOcrEnabled !== undefined && typeof input.structuredOcrEnabled !== 'boolean') throw new Error('Invalid structured OCR setting');
   if (input.notificationCollectionEnabled !== undefined && typeof input.notificationCollectionEnabled !== 'boolean') throw new Error('Invalid notification setting');
   const imageDedupeMode = input.imageDedupeMode ?? current.imageDedupeMode;
   if (!['off', 'exact', 'conservative', 'balanced', 'aggressive'].includes(imageDedupeMode)) throw new Error('Invalid image deduplication mode');
@@ -77,7 +89,8 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
   const config: Config = {
     authSourceBinding: serverUrl === current.serverUrl && current.authSourceBinding ? validSourceBinding(current.authSourceBinding) : undefined,
     authSignedOut: current.authSignedOut, authExpiresAt: current.authExpiresAt, authSessionOnly: current.authSessionOnly,
-    uiPageMode:uiModeSchema.parse(input.uiPageMode??current.uiPageMode),
+    structuredOcrEnabled:input.structuredOcrEnabled??current.structuredOcrEnabled,
+    chromeOrigins:normalizeChromeOrigins(input.chromeOrigins===undefined?current.chromeOrigins:input.chromeOrigins),
     uiPageRules:uiRulesSchema.parse(input.uiPageRules??current.uiPageRules),
     uploadGate: uploadGateConfig(input.uploadGate ?? current.uploadGate),
     serverUrl,
@@ -88,8 +101,8 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
     captureStorageDirectory, imageDedupeMode, packedUpload: input.packedUpload === undefined ? (current.packedUpload) : input.packedUpload === true,
     notificationCollectionEnabled: input.notificationCollectionEnabled ?? current.notificationCollectionEnabled,
     idlePauseSeconds: integer(input.idlePauseSeconds, 0, 86400, moteText("空闲暂停秒数")),
-    defaultCollection: normalizeCollectionMode(input.defaultCollection ?? current.defaultCollection),
-    appCollectionRules: normalizeAppCollectionRules(input.appCollectionRules ?? current.appCollectionRules),
+    defaultCollection: normalizeCollectionMode(input.defaultCollection===undefined?current.defaultCollection:input.defaultCollection),
+    appCollectionRules: normalizeAppCollectionRules(input.appCollectionRules===undefined?current.appCollectionRules:input.appCollectionRules),
     masks: validateRectangles(input.masks),
     openAtLogin: input.openAtLogin,
     metadataEnabled: input.metadataEnabled ?? current.metadataEnabled, diagnosticsEnabled: input.diagnosticsEnabled, diagnosticIntervalSeconds: integer(input.diagnosticIntervalSeconds, 15, 3600, moteText("诊断采样秒数")),
@@ -130,8 +143,8 @@ export class ConfigStore {
       // A profile never converts another credential format or consults the OS store to adopt it.
       if ((this.secrets.mode === 'json' && stored.encryptedToken !== undefined) || (this.secrets.mode !== 'json' && stored.developmentToken !== undefined)) throw new CredentialStorageMismatch();
       if (stored.developmentToken !== undefined && (typeof stored.developmentToken !== 'string' || !stored.developmentToken)) throw new CredentialStorageMismatch();
-      const required=Object.keys(defaultConfig()).filter(key=>key!=='syncPaused');
-      if(required.some(key=>!Object.hasOwn(stored.config,key))||['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>Object.hasOwn(stored.config,key)))throw Error(RESET_REQUIRED);
+      const required=Object.keys(defaultConfig());
+      if(required.some(key=>!Object.hasOwn(stored.config,key))||['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging','uiPageMode'].some(key=>Object.hasOwn(stored.config,key)))throw Error(RESET_REQUIRED);
       const current: Config = { ...Object.fromEntries(Object.entries(stored.config).filter(([key]) => !retiredModelKeys.includes(key))), token: undefined } as Config;
       if (this.secrets.mode === 'json' && !current.authSignedOut) current.token = stored.developmentToken;
       if (stored.encryptedToken && !current.authSignedOut) {

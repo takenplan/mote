@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Mote visible context",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzuLg8uqVkkwRqBR6Ij8TyiB/Hk8R0hJOAXgfngaNjZpOjegzOFKmuskx3/qgTbWjJOkmdb2a7B9AGKBex3/vS+W/BQka8h85n8J9H0z9mWNTZgRIrdAF+eldT/K60LnJcxspqxW1Is+XI+5eVXW6vG5dzH1WFvKJhmJRxEdDcnMm/omjXXrXWMrfknjv+2PEo0VMobRJEhlZV29qMKdilJpFlUJe8vroKdmN3KcvwghTYMWkXWdTzFlaPe565fq51wtX62jRGdg2IkmZKBMP2W3Ot+jvzWcvZ3miTkANoOXqRtHZPufIqrGyBZMjssiM3C3ByS4FtUyBCgZ1yx4tnQIDAQAB",
+  "description": "Reads visible page evidence only when your local Mote collector requests it.",
+  "permissions": [
+    "nativeMessaging",
+    "scripting",
+    "activeTab",
+    "storage",
+    "webNavigation",
+    "alarms"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "incognito": "not_allowed"
+}

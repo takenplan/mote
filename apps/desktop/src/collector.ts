@@ -1,8 +1,10 @@
 import { SyncHistory, captureHistoryItem } from './sync-history';
 import { connectionToken } from './login-session';
 import {collectorStatusView} from './native-status';
-import {extractUiPage,uiSnapshotSchema,uiPageText} from '@mote/shared';
+import {extractUiPages,uiSnapshotSchema,uiPageText,namedPage,type UiSnapshot,type UiPageV3} from '@mote/shared';
 import {runHelper} from './native';
+import type {BrowserCaptureProvider} from './browser-capture';
+import {extractWechatPages,WECHAT_APP_ID,WECHAT_VERSION} from './wechat-page';
 import { reviewUpload, uploadGateConfig } from './upload-gate';
 import { uploadMeter } from './upload-meter';
 import { moteText, statusMessage } from '@mote/shared/i18n';
@@ -28,6 +30,7 @@ export const currentPlatform: Platform = process.platform === 'darwin' ? 'macos'
 export class Collector {
   private notificationSeen=new Set<string>();
   private authorizationGeneration = 0;
+  private captureConfigGeneration = 0;
   private notificationSession=randomUUID();
   private running = false;
   private locked = false;
@@ -46,14 +49,17 @@ export class Collector {
   private closed = false;
   private stopIntent = 0;
   private lastImageFeatures?: FrameFeatures;
-  private lastSample?: { at: number; appId: string; collection: 'content' | 'activity' };
+  private lastSample?: {at:number;appId:string};
+  private lastImageAppId?:string;
+  private lastImageAt?:number;
+  private lastMediaSample?:{at:number;identity:string};
   private state: Status['state'] = 'stopped';
   private message = moteText("尚未开始采集。请确认隐私设置后手动开始。");
   private lastCaptureAt?: string;
   private lastUploadAt?: string;
   private archiveAcknowledgment?:{at:string;origin:string};
   private lastUploadError?: string;
-  constructor(config: Config, private readonly queue: DurableQueue, private readonly helperPath: string, private readonly tokenStorageAvailable: () => boolean, private readonly onChange: (status: Status) => void, private readonly diagnostics?: DiagnosticsRecorder, private readonly events?: EventJournal, private readonly sources?: LocalSourceManager, private readonly history?: SyncHistory) {
+  constructor(config: Config, private readonly queue: DurableQueue, private readonly helperPath: string, private readonly tokenStorageAvailable: () => boolean, private readonly onChange: (status: Status) => void, private readonly diagnostics?: DiagnosticsRecorder, private readonly events?: EventJournal, private readonly sources?: LocalSourceManager, private readonly history?: SyncHistory, private readonly browserCapture?: BrowserCaptureProvider) {
     this.config = config; this.lastUploadAt = this.queue.stats().lastUploadAt; this.archiveAcknowledgment=this.queue.stats().archiveAcknowledgment;
     powerMonitor.on('lock-screen', () => { this.locked = true; this.pause(moteText("屏幕已锁定，暂停采集")); });
     powerMonitor.on('unlock-screen', () => { this.locked = false; this.lastSample = undefined; });
@@ -94,7 +100,7 @@ export class Collector {
   }
   private publish(): void { this.onChange(this.status()); }
   private pause(message: string): void {
-    this.lastSample = undefined;
+    this.lastSample = undefined;this.lastMediaSample=undefined;
     this.captureAbort?.abort();
     if (this.running) { this.state = 'paused'; this.message = message; this.publish(); }
   }
@@ -138,6 +144,7 @@ export class Collector {
     this.uploadAbort?.abort();
 
     if (config.token !== this.config.token || config.serverUrl !== this.config.serverUrl || config.deviceId !== this.config.deviceId || config.authSignedOut !== this.config.authSignedOut) this.authorizationGeneration++;
+    this.captureConfigGeneration++;this.lastMediaSample=undefined;
     this.config = config;
     this.queue.setLimits(config);
     this.publish();
@@ -150,13 +157,13 @@ export class Collector {
     if (this.queue.atCapacity()) throw new QueueFullError();
     void this.events?.record('CAPTURE', 'STARTED');
     this.running = true; this.state = 'capturing'; this.message = moteText("已开启；按应用级别记录，完整内容先经过本地隐私过滤");
-    this.lastSample = undefined;
+    this.lastSample = undefined;this.lastMediaSample=undefined;this.lastImageFeatures=undefined;this.lastImageAt=undefined;
     this.publish(); void this.capture(); void this.sendHeartbeat();
   }
   stop(): void {
     this.stopIntent++;
     void this.events?.record('CAPTURE', 'STOPPED');
-    this.running = false; this.lastSample = undefined; this.captureAbort?.abort();
+    this.running = false; this.lastSample = undefined;this.lastMediaSample=undefined; this.captureAbort?.abort();
     if (this.timer) clearTimeout(this.timer);
     this.state = 'stopped'; this.message = moteText("采集已停止；本地记录保留，同步按设置独立运行"); this.publish(); void this.sendHeartbeat();
   }
@@ -181,15 +188,45 @@ export class Collector {
     const { width, height } = image.getSize();
     return Buffer.from(await imageWork.run<Uint8Array>({ kind: 'jpeg', bytes: image.toBitmap(), width, height, quality }));
   }
+  /** OCR may read only the verified WeChat message-list rectangle; no region means no OCR. */
+  private async readWechatOcr(cfg:Config,snapshot:UiSnapshot,foreground:Awaited<ReturnType<typeof foregroundApplication>>,at:string,signal:AbortSignal,valid:()=>boolean):Promise<UiPageV3|undefined>{
+    if(!cfg.structuredOcrEnabled||snapshot.appId!==WECHAT_APP_ID||snapshot.appVersion!==WECHAT_VERSION||!valid())return;
+    const lists=snapshot.nodes.filter(node=>node.resourceId==='chat_message_list');if(lists.length!==1)return;
+    const scopeIdentity=(value:UiSnapshot)=>JSON.stringify({bounds:value.nodes.filter(node=>node.resourceId==='chat_message_list').map(node=>node.bounds),conversation:value.nodes.filter(node=>node.resourceId==='current_chat_name_label').map(node=>node.text)});
+    const verifyRegion=async()=>{
+      const raw=await runHelper(this.helperPath,'ui-page',Buffer.from(JSON.stringify({appId:foreground.appId,pid:foreground.pid,masks:cfg.masks,versions:[WECHAT_VERSION],requireUnoccludedRegion:true})),signal) as {status?:string;snapshot?:unknown};
+      const parsed=uiSnapshotSchema.safeParse(raw.snapshot);
+      return valid()&&raw.status!=='blocked'&&parsed.success&&parsed.data.appId===snapshot.appId&&parsed.data.appVersion===snapshot.appVersion&&scopeIdentity(parsed.data)===scopeIdentity(snapshot);
+    };
+    if(systemPreferences.getMediaAccessStatus('screen')!=='granted')return;
+    const allows=(value:Awaited<ReturnType<typeof activeApplication>>)=>!value.unknownVisibleWindows&&value.appId===foreground.appId&&value.pid===foreground.pid&&value.visibleAppIds.every(id=>{const selected=collectionForApp(id,cfg);return selected.screenshots||selected.structured&&cfg.structuredOcrEnabled;});
+    const before=await activeApplication(this.helperPath,signal);if(!valid()||!allows(before)||!await verifyRegion())return;
+    const display=screen.getPrimaryDisplay(),bounds=display.bounds,region=lists[0].bounds;
+    if(!bounds||region.x<bounds.x||region.y<bounds.y||region.x+region.width>bounds.x+bounds.width||region.y+region.height>bounds.y+bounds.height)return;
+    const scale=Math.min(1,cfg.captureMaxSide/Math.max(display.size.width,display.size.height));
+    const sources=await desktopCapturer.getSources({types:['screen'],thumbnailSize:{width:Math.round(display.size.width*scale),height:Math.round(display.size.height*scale)},fetchWindowIcons:false});
+    const source=sources.find(item=>item.display_id===String(display.id));if(!source||source.thumbnail.isEmpty())return;
+    const after=await activeApplication(this.helperPath,signal);if(!valid()||!allows(after)||before.visibleAppIds.join('\n')!==after.visibleAppIds.join('\n')||!await verifyRegion())return;
+    // Masks are applied before both cropping and OCR. Ephemeral pixels are never queued.
+    const masked=await this.finalImage(source.thumbnail,cfg.masks),size=masked.getSize();
+    const x=Math.ceil((region.x-bounds.x)*size.width/bounds.width),y=Math.ceil((region.y-bounds.y)*size.height/bounds.height);
+    const right=Math.floor((region.x+region.width-bounds.x)*size.width/bounds.width),bottom=Math.floor((region.y+region.height-bounds.y)*size.height/bounds.height);
+    if(right<=x||bottom<=y||x<0||y<0||right>size.width||bottom>size.height)return;
+    const bytes=await this.encodeImage(masked.crop({x,y,width:right-x,height:bottom-y}),cfg.jpegQuality);
+    const text=(await recognizeText(this.helperPath,bytes,signal)).trim();
+    const final=await foregroundApplication(this.helperPath,signal);
+    if(!valid()||final.appId!==foreground.appId||final.pid!==foreground.pid||!text||text.length>32000||!await verifyRegion())return;
+    return namedPage(snapshot,{id:'macos.wechat.local-ocr',version:'1',kind:'visible_text'},[{name:'text',values:[{text,source:'ocr'}]}],at,true);
+  }
   private async capture(): Promise<void> {
     if (!this.running || this.capturing) return;
     this.capturing = true;
     const startedAt = Date.now();
-    const cfg = this.config;
+    const cfg = this.config,captureGeneration=this.captureConfigGeneration;
     let inferenceMs = 0, ocrMs = 0;
     let stage: EventStage = 'CAPTURE';
     const abort = this.captureAbort = new AbortController();
-    const valid = () => this.running && !abort.signal.aborted && !this.locked && !this.sleeping;
+    const valid = () => this.running && this.captureConfigGeneration===captureGeneration && !abort.signal.aborted && !this.locked && !this.sleeping;
     try {
       if (this.locked || this.sleeping || powerMonitor.getSystemIdleState(60) === 'locked') { this.pause(moteText("锁屏或休眠中，暂停采集")); return; }
       if (cfg.idlePauseSeconds > 0 && powerMonitor.getSystemIdleTime() >= cfg.idlePauseSeconds) { this.pause(moteText("已达到空闲阈值，暂停采集；操作电脑后恢复")); return; }
@@ -199,7 +236,8 @@ export class Collector {
         if (power.onBattery === undefined || (cfg.batteryPauseBelowPct > 0 && power.batteryPercent === undefined)) { this.pause(moteText("无法确认电量，按你启用的电量策略暂停")); return; }
         if (power.onBattery && (cfg.pauseOnBattery || (power.batteryPercent ?? 100) <= cfg.batteryPauseBelowPct)) { this.pause(moteText("已达到你设置的电量暂停条件")); return; }
       }
-      if(cfg.notificationCollectionEnabled && cfg.defaultCollection==='content' && Object.values(cfg.appCollectionRules).every(v=>v==='content')) {
+      // Notifications have their own opt-in; new channel bits never enable them.
+      if(cfg.notificationCollectionEnabled && cfg.defaultCollection.structured && Object.values(cfg.appCollectionRules).every(v=>v.structured)) {
         const visible=await readVisibleNotifications(this.helperPath,abort.signal);
         const observedAt=new Date().toISOString();
         for(const text of visible){
@@ -211,126 +249,121 @@ export class Collector {
           this.notificationSeen.add(key);
         }
         if(this.notificationSeen.size>1000)this.notificationSeen=new Set([...this.notificationSeen].slice(-500));
-        if(visible.length)void this.upload();
       }
       const foreground = await foregroundApplication(this.helperPath, abort.signal);
       if (!valid()) return;
-      const collection = collectionForApp(foreground.appId, cfg);
-      if (collection === 'off') { this.pause(moteText("当前应用设置为不记录，已跳过本次采样")); return; }
-      if (collection === 'activity') {
-        // This branch never requests screen permission, window enumeration, pixels, OCR or a model.
-        const metadata = cfg.metadataEnabled ? await collectRecordMetadata(this.helperPath, this.queue.directory, undefined, abort.signal) : undefined;
-        const after = await foregroundApplication(this.helperPath, abort.signal);
-        if (!valid()) return;
-        if (after.appId !== foreground.appId || after.pid !== foreground.pid) { this.pause(moteText("活动采样期间前台应用变化，已跳过")); return; }
-        if (metadata?.state?.screenLocked) { this.pause(moteText("屏幕已锁定，暂停记录")); return; }
-        const durationMs = this.lastSample?.appId === foreground.appId && this.lastSample.collection === 'activity' ? Math.max(0, Math.min(cfg.intervalMs, startedAt - this.lastSample.at)) : 0;
-        const event: CaptureEvent = {
-          id: randomUUID(), deviceId: cfg.deviceId, deviceName: cfg.deviceName, platform: currentPlatform,
-          capturedAt: new Date(startedAt).toISOString(), durationMs, appId: foreground.appId, appName: foreground.appName,
-          source: 'activity', privacy: { excluded: false, redacted: false, mode: 'none', collection: 'activity' },
-          ...(metadata ? { metadata: { ...metadata, capture: { intervalMs: cfg.intervalMs } } } : {}),
-        };
-        stage = 'QUEUE'; await this.queue.enqueue(event);
-        this.lastSample = { at: startedAt, appId: foreground.appId, collection }; this.lastCaptureAt = event.capturedAt;
-        void this.events?.record('QUEUE', 'OK', { elapsedMs: Date.now() - startedAt });
-        this.state = 'capturing'; this.message = moteText("仅记录应用活动；未采集屏幕、窗口标题或正文"); this.publish(); void this.upload(); return;
-      }
-      if ((cfg.uiPageMode??'screen_only')!=='screen_only' && cfg.uiPageRules?.some(r=>r.platform==='macos'&&r.appId===foreground.appId)) {
-        const candidates=cfg.uiPageRules.filter(r=>r.platform==='macos'&&r.appId===foreground.appId&&!r.activity);
-        const versions=candidates.some(r=>!r.appVersion)?[]:candidates.map(r=>r.appVersion);
-        const raw=candidates.length ? await runHelper(this.helperPath,'ui-page',Buffer.from(JSON.stringify({appId:foreground.appId,pid:foreground.pid,masks:cfg.masks,versions})),abort.signal).catch(()=>({status:'failed'})) as {snapshot?:unknown;status?:string} : {status:'unsupported'};
-        if(!valid()||raw.status==='blocked')return;
-        if(raw.snapshot){
-          const snapshot=uiSnapshotSchema.parse(raw.snapshot);
-          const after=await foregroundApplication(this.helperPath,abort.signal);
-          if(!valid()||after.appId!==foreground.appId||after.pid!==foreground.pid||snapshot.appId!==foreground.appId)return;
-          const page=extractUiPage(snapshot,cfg.uiPageRules,'macos');
-          if(page){
-            // Review ALL sanitized text before selector projection; rules cannot hide a privacy match.
-            const gate=await reviewUpload(uploadGateConfig(cfg.uploadGate),async()=>snapshot.nodes.map(n=>n.text).join('\n'));
-            if(!valid()||gate!=='allow'){this.pause(moteText("页面隐私审查未通过，已跳过"));return;}
-            const at=new Date(startedAt).toISOString();
-            await this.queue.enqueue({id:randomUUID(),deviceId:cfg.deviceId,deviceName:cfg.deviceName,platform:currentPlatform,capturedAt:at,durationMs:0,appId:foreground.appId,appName:foreground.appName,source:'ui_page',ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'accessibility'},uiPage:page}});
-            this.lastCaptureAt=at;this.state='capturing';this.message=moteText("页面内容已保存");this.publish();void this.upload();
-            if(cfg.uiPageMode==='page_only'||cfg.uiPageMode==='ui_preferred'&&page.status==='ok'){
-              await this.recordPageActivity(cfg,foreground,startedAt,abort.signal);return;
+      const selected = collectionForApp(foreground.appId, cfg);
+      if (!selected.duration&&!selected.screenshots&&!selected.structured) { this.pause(moteText("当前应用设置为不记录，已跳过本次采样")); return; }
+      const observationId=randomUUID(),at=new Date(startedAt).toISOString();
+      const observation={id:observationId,selected:{...selected}};
+      const base={deviceId:cfg.deviceId,deviceName:cfg.deviceName,platform:currentPlatform,capturedAt:at,appId:foreground.appId,appName:foreground.appName};
+      const sameForeground=async()=>{const after=await foregroundApplication(this.helperPath,abort.signal),current=valid()&&after.appId===foreground.appId&&after.pid===foreground.pid;if(!current)this.lastMediaSample=undefined;return current;};
+      // Duration is the sole usage accumulator. It does not require window or content access.
+      if(selected.duration){
+        const metadata=cfg.metadataEnabled?await collectRecordMetadata(this.helperPath,this.queue.directory,undefined,abort.signal):undefined;
+        if(!await sameForeground()||metadata?.state?.screenLocked){this.lastSample=undefined;return;}
+        const durationMs=this.lastSample?.appId===foreground.appId?Math.max(0,Math.min(cfg.intervalMs,startedAt-this.lastSample.at)):0;
+        await this.queue.enqueue({...base,id:randomUUID(),durationMs,source:'activity',privacy:{excluded:false,redacted:false,mode:'none',collection:'activity'},metadata:{...metadata,version:1,observedAt:at,capture:{intervalMs:cfg.intervalMs},captureObservation:observation}});
+        this.lastSample={at:startedAt,appId:foreground.appId};this.lastCaptureAt=at;
+      }else this.lastSample=undefined;
+      if(!valid())return;
+      if(!selected.structured||!selected.duration||foreground.appId!=='com.google.Chrome')this.lastMediaSample=undefined;
+      let browserIdentity:string|undefined,chromeReady=true,browserScreenshotSafe=false;
+      if(foreground.appId==='com.google.Chrome'&&(selected.screenshots||selected.structured)){
+        const result=await this.browserCapture?.sample({appId:foreground.appId,pid:foreground.pid,origins:cfg.chromeOrigins,observedAt:at,observationId,masks:cfg.masks,structured:selected.structured},abort.signal).catch(()=>undefined);
+        if(!valid()||!await sameForeground())return;
+        browserIdentity=result?.identity;chromeReady=result?.status==='ok'&&Boolean(browserIdentity);browserScreenshotSafe=result?.screenshotSafe===true;if(!chromeReady||!result?.media)this.lastMediaSample=undefined;
+        if(chromeReady&&result){
+          const browserValid=async()=>{const current=Boolean(browserIdentity&&await this.browserCapture?.validate(browserIdentity,abort.signal))&&await sameForeground();if(!current)this.lastMediaSample=undefined;return current;};
+          if(selected.structured){
+            for(const [objectIndex,page] of result.pages.entries()){
+              if(!await browserValid())return;
+              const text=uiPageText(page),gate=await reviewUpload(uploadGateConfig(cfg.uploadGate),async()=>text);
+              if(!valid()||!await browserValid())return;
+              if(gate==='drop')continue;
+              await this.queue.enqueue({...base,id:randomUUID(),durationMs:0,source:'ui_page',ocrText:text,privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'browser_dom'},captureObservation:{...observation,objectIndex},uiPage:page}},undefined,gate==='hold');
+              this.lastCaptureAt=at;
+            }
+            if(result.media&&await browserValid()){
+              const gate=await reviewUpload(uploadGateConfig(cfg.uploadGate),async()=>JSON.stringify(result.media));
+              if(!valid()||!await browserValid())return;
+              const sessions=result.media.sessions,session=result.media.status==='available'&&sessions.length===1?sessions[0]:undefined;
+              const identity=selected.duration&&session?.playbackState==='playing'&&session.appId===foreground.appId&&session.appName===foreground.appName?JSON.stringify([foreground.appId,session.sessionId,session.mediaId??'']):undefined;
+              const elapsed=this.lastMediaSample?startedAt-this.lastMediaSample.at:0;
+              const durationMs=identity&&this.lastMediaSample?.identity===identity&&elapsed>0&&elapsed<=cfg.intervalMs*2?Math.min(cfg.intervalMs,60000,elapsed):0;
+              if(gate!=='drop'){
+                await this.queue.enqueue({...base,id:randomUUID(),durationMs,source:'media',ocrText:'',privacy:{excluded:false,redacted:false,mode:'none',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'browser_dom'},captureObservation:observation,media:result.media}},undefined,gate==='hold');
+                this.lastMediaSample=identity?{at:startedAt,identity}:undefined;this.lastCaptureAt=at;
+              }else this.lastMediaSample=undefined;
+            }
+          }
+        }
+      }else if(selected.structured){
+        // Only selected applications reach AX. Unsupported/failed structure never enables pixels.
+        const candidates=(cfg.uiPageRules??[]).filter(r=>r.platform==='macos'&&r.appId===foreground.appId&&!r.activity);
+        const versions=foreground.appId===WECHAT_APP_ID?[WECHAT_VERSION]:candidates.some(r=>!r.appVersion)?[]:candidates.map(r=>r.appVersion);
+        if(foreground.appId===WECHAT_APP_ID||candidates.length){
+          const raw=await runHelper(this.helperPath,'ui-page',Buffer.from(JSON.stringify({appId:foreground.appId,pid:foreground.pid,masks:cfg.masks,versions})),abort.signal).catch(()=>({status:'failed'})) as {snapshot?:unknown;status?:string};
+          if(!valid()||!await sameForeground())return;
+          if(raw.status!=='blocked'&&raw.snapshot){
+            const parsed=uiSnapshotSchema.safeParse(raw.snapshot);
+            if(parsed.success&&parsed.data.appId===foreground.appId){
+              const snapshot=parsed.data;
+              let pages:UiPageV3[]=[];
+              try{pages=foreground.appId===WECHAT_APP_ID?extractWechatPages(snapshot,at):extractUiPages(snapshot,candidates,'macos',at).filter((page):page is UiPageV3=>page.version===3);}catch{/* Unsupported evidence cannot authorize another reader. */}
+              if(!pages.length&&foreground.appId===WECHAT_APP_ID){
+                const ocrPage=await this.readWechatOcr(cfg,snapshot,foreground,at,abort.signal,valid).catch(()=>undefined);
+                if(ocrPage)pages=[ocrPage];
+              }
+              // Review all sanitized evidence before projection, including descriptions and state.
+              const gate=await reviewUpload(uploadGateConfig(cfg.uploadGate),async()=>[...snapshot.nodes.flatMap(n=>[n.text,n.description??'',n.state??'']),...pages.map(uiPageText)].join('\n'));
+              if(!valid()||!await sameForeground())return;
+              if(gate!=='drop')for(const [objectIndex,page] of pages.slice(0,64).entries()){
+                if(!valid()||!await sameForeground())return;
+                await this.queue.enqueue({...base,id:randomUUID(),durationMs:0,source:'ui_page',ocrText:uiPageText(page),privacy:{excluded:false,redacted:true,mode:'local',collection:'content'},metadata:{version:1,observedAt:at,collector:{method:'accessibility'},captureObservation:{...observation,objectIndex},uiPage:page}},undefined,gate==='hold');
+                this.lastCaptureAt=at;
+              }
             }
           }
         }
       }
-      if(cfg.uiPageMode==='page_only'){await this.recordPageActivity(cfg,foreground,startedAt,abort.signal);return;}
+      if(!selected.screenshots||!chromeReady){this.state='capturing';this.publish();void this.upload();return;}
       if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-        this.lastSample = undefined; this.state = 'permission_required'; this.message = moteText("完整内容需要屏幕录制授权；仅活动应用仍可采样。请打开系统权限设置");
+        this.state = 'permission_required'; this.message = moteText("完整内容需要屏幕录制授权；仅活动应用仍可采样。请打开系统权限设置");
         void this.events?.record('CAPTURE', 'PERMISSION'); this.publish(); return;
       }
-      if (!valid()) return;
-      const readyForeground = await foregroundApplication(this.helperPath, abort.signal);
-      if (readyForeground.appId !== foreground.appId || readyForeground.pid !== foreground.pid || collectionForApp(readyForeground.appId, cfg) !== 'content') { this.pause(moteText("准备期间前台应用变化，已跳过本次内容采样")); return; }
+      if (!valid()||!await sameForeground()) return;
       const before = await activeApplication(this.helperPath, abort.signal);
-      if (before.appId !== foreground.appId || before.pid !== foreground.pid || collectionForApp(before.appId, cfg) !== 'content' || !permitsVisibleContent(before.visibleAppIds, before.unknownVisibleWindows, cfg)) { this.pause(moteText("屏幕含仅活动、不记录或身份未知的窗口，整张截图已跳过")); return; }
+      if (!valid()||before.appId !== foreground.appId || before.pid !== foreground.pid || !collectionForApp(before.appId,cfg).screenshots || !permitsVisibleContent(before.visibleAppIds, before.unknownVisibleWindows, cfg)) return;
+      if(before.visibleAppIds.includes('com.google.Chrome')&&(foreground.appId!=='com.google.Chrome'||!browserScreenshotSafe||!browserIdentity||!await this.browserCapture?.validate(browserIdentity,abort.signal)))return;
       const display = screen.getPrimaryDisplay();
       const scale = Math.min(1, cfg.captureMaxSide / Math.max(display.size.width, display.size.height));
-      this.message = moteText("正在读取屏幕画面…"); this.publish();
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) }, fetchWindowIcons: false });
       const source = sources.find(s => s.display_id === String(display.id));
       if (!source || source.thumbnail.isEmpty()) throw new Error(moteText("无法获取主屏截图，本次采集已跳过"));
       const after = await activeApplication(this.helperPath, abort.signal);
-      if (!valid()) return;
-      if (before.appId !== after.appId || before.pid !== after.pid || collectionForApp(after.appId, cfg) !== 'content' || !permitsVisibleContent(after.visibleAppIds, after.unknownVisibleWindows, cfg) || before.visibleAppIds.join('\n') !== after.visibleAppIds.join('\n') || before.unknownVisibleWindows !== after.unknownVisibleWindows) { this.pause(moteText("采样期间屏幕应用发生变化或存在排除窗口，已跳过本次采集")); return; }
-      // All unredacted pixels remain only in process memory. Never write a raw image.
-      let sanitized = await this.finalImage(source.thumbnail, cfg.masks);
-      let appliedMasks = cfg.masks.length;
+      if (!valid()||before.appId!==after.appId||before.pid!==after.pid||!permitsVisibleContent(after.visibleAppIds,after.unknownVisibleWindows,cfg)||before.visibleAppIds.join('\n')!==after.visibleAppIds.join('\n')||before.unknownVisibleWindows!==after.unknownVisibleWindows) return;
+      if(browserIdentity&&!await this.browserCapture?.validate(browserIdentity,abort.signal))return;
+      const sanitized = await this.finalImage(source.thumbnail, cfg.masks);
       const jpeg = await this.encodeImage(sanitized, cfg.jpegQuality);
       if (jpeg.length > MAX_IMAGE_BYTES) throw new Error(moteText("截图超出单张大小限制，本次采集已跳过"));
-      const mode = cfg.imageDedupeMode ?? 'off';
-      const size = sanitized.getSize();
-      const dedupeScale = mode !== 'off' && mode !== 'exact' && Math.max(size.width, size.height) > 96 ? 96 / Math.max(size.width, size.height) : 1;
-      const sample = dedupeScale < 1 ? sanitized.resize({ width: Math.max(1, Math.floor(size.width * dedupeScale)), height: Math.max(1, Math.floor(size.height * dedupeScale)) }) : sanitized;
-      const features = mode === 'off' ? undefined : imageFeatures(sample.toBitmap(), sample.getSize().width, sample.getSize().height);
-      if (features && duplicateImage(this.lastImageFeatures, features, mode) && this.lastSample?.appId === before.appId && startedAt - this.lastSample.at <= cfg.intervalMs * 2) {
-        const metadata = cfg.metadataEnabled ? await collectRecordMetadata(this.helperPath, this.queue.directory, undefined, abort.signal) : undefined;
-        if (!valid() || metadata?.state?.screenLocked) return;
-        const event: CaptureEvent = {
-          id: randomUUID(), deviceId: cfg.deviceId, deviceName: cfg.deviceName, platform: currentPlatform,
-          capturedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Math.min(cfg.intervalMs, startedAt - this.lastSample.at)),
-          appId: before.appId, appName: before.appName, source: 'activity',
-          privacy: { excluded: false, redacted: false, mode: 'none', collection: 'activity' },
-          ...(metadata ? { metadata: { ...metadata, capture: { intervalMs: cfg.intervalMs } } } : {}),
-        };
-        // Image deduplication saves bytes, never measured observations. The queue
-        // may pack exact state samples while retaining every timestamp and duration.
-        await this.queue.enqueue(event);
-        this.lastSample = { at: startedAt, appId: before.appId, collection: 'content' };
-        this.lastCaptureAt = event.capturedAt;
-        this.state = 'capturing'; this.message = moteText("重复截图已跳过"); this.publish(); void this.upload(); return;
-      }
-      const gate = await reviewUpload(uploadGateConfig(cfg.uploadGate), () => recognizeText(this.helperPath, jpeg, abort.signal));
-      if (!valid()) return;
-      if (gate === 'drop') { this.pause('上传审查未通过，本次截图不保存、不上传'); return; }
-      const ocrText = '';
-      const ocr = { status: 'disabled' as const }; // Local review text is never persisted or transmitted.
-      const metadata = cfg.metadataEnabled ? await collectRecordMetadata(this.helperPath, this.queue.directory, 'screen_capture', abort.signal) : undefined;
-      if (!valid()) return;
-      const durationMs = this.lastSample?.appId === before.appId && this.lastSample.collection === 'content' ? Math.max(0, Math.min(cfg.intervalMs, startedAt - this.lastSample.at)) : 0;
-      const event: CaptureEvent = {
-        id: randomUUID(), deviceId: cfg.deviceId, deviceName: cfg.deviceName, platform: currentPlatform,
-        capturedAt: new Date(startedAt).toISOString(), durationMs, appId: before.appId, appName: before.appName,
-        imageMime: 'image/jpeg', ocrText, ocr, source: 'screen',
-        ...(metadata ? { metadata: { ...metadata, capture: { intervalMs: cfg.intervalMs, ...sanitized.getSize(), displayScale: display.scaleFactor, ocrEnabled: false, maskCount: appliedMasks } } } : {}),
-        privacy: { excluded: false, redacted: appliedMasks > 0, mode: 'local', collection: 'content', reason: gate === 'hold' ? 'upload review pending' : 'explicit app and mask rules; optional text upload review' },
-      };
-      stage = 'QUEUE'; void this.events?.record(stage, 'STARTED');
-      this.message = moteText("正在保存采集记录…"); this.publish();
-      await this.queue.enqueue(event, jpeg, gate === 'hold');
-      this.lastImageFeatures = features;
-      void this.events?.record('QUEUE', 'OK', { elapsedMs: Date.now() - startedAt });
-      this.diagnostics?.recordCapture({ outcome: 'saved', imageBytes: jpeg.length, inferenceMs, ocrMs, durationMs: Date.now() - startedAt });
-      this.lastSample = { at: startedAt, appId: before.appId, collection: 'content' }; this.lastCaptureAt = event.capturedAt;
-      this.state = 'capturing'; this.message = gate === 'hold' ? '审查未完成，已隔离暂存，等待复核' : '已保存截图，上传后由中央识别'; this.publish(); void this.upload();
+      const mode = cfg.imageDedupeMode ?? 'off',size=sanitized.getSize();
+      const dedupeScale=mode!=='off'&&mode!=='exact'&&Math.max(size.width,size.height)>96?96/Math.max(size.width,size.height):1;
+      const sample=dedupeScale<1?sanitized.resize({width:Math.max(1,Math.floor(size.width*dedupeScale)),height:Math.max(1,Math.floor(size.height*dedupeScale))}):sanitized;
+      const features=mode==='off'?undefined:imageFeatures(sample.toBitmap(),sample.getSize().width,sample.getSize().height);
+      if(features&&duplicateImage(this.lastImageFeatures,features,mode)&&this.lastImageAppId===foreground.appId&&this.lastImageAt!==undefined&&startedAt-this.lastImageAt<=cfg.intervalMs*2){this.lastImageAt=startedAt;this.publish();void this.upload();return;}
+      const gate=await reviewUpload(uploadGateConfig(cfg.uploadGate),()=>recognizeText(this.helperPath,jpeg,abort.signal));
+      const metadata=cfg.metadataEnabled?await collectRecordMetadata(this.helperPath,this.queue.directory,'screen_capture',abort.signal):undefined;
+      if(!valid()||metadata?.state?.screenLocked||!await sameForeground()||browserIdentity&&!await this.browserCapture?.validate(browserIdentity,abort.signal))return;
+      if(gate==='drop'){this.publish();return;}
+      const event:CaptureEvent={...base,id:randomUUID(),durationMs:0,source:'screen',imageMime:'image/jpeg',ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:cfg.masks.length>0,mode:'local',collection:'content',reason:gate==='hold'?'upload review pending':'explicit screenshot channel and mask rules'},metadata:{...metadata,version:1,observedAt:at,captureObservation:observation,capture:{intervalMs:cfg.intervalMs,...sanitized.getSize(),displayScale:display.scaleFactor,ocrEnabled:false,maskCount:cfg.masks.length}}};
+      stage='QUEUE';await this.queue.enqueue(event,jpeg,gate==='hold');
+      this.lastImageFeatures=features;this.lastImageAppId=foreground.appId;this.lastImageAt=startedAt;this.lastCaptureAt=at;
+      this.diagnostics?.recordCapture({outcome:'saved',imageBytes:jpeg.length,inferenceMs,ocrMs,durationMs:Date.now()-startedAt});
+      this.state='capturing';this.publish();void this.upload();
     } catch (error) {
       void this.events?.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt, errorName:safeErrorName(error) });
-      this.lastSample = undefined;
+      this.lastSample = undefined;this.lastMediaSample=undefined;
       this.diagnostics?.recordCapture({ outcome: 'failed', inferenceMs, ocrMs, durationMs: Date.now() - startedAt });
       if (!this.running || abort.signal.aborted) return;
       if (error instanceof QueueFullError) { this.stop(); this.state = 'error'; this.message = error.message; }
@@ -340,27 +373,6 @@ export class Collector {
       this.capturing = false;
       if (this.running) this.timer = setTimeout(() => void this.capture(), Math.max(1000, cfg.intervalMs - (Date.now() - startedAt)));
     }
-  }
-  /** A page can replace pixels, but not the independent foreground observation. */
-  private async recordPageActivity(cfg: Config, foreground: Awaited<ReturnType<typeof foregroundApplication>>, observedAt: number, signal: AbortSignal): Promise<void> {
-    const metadata = cfg.metadataEnabled ? await collectRecordMetadata(this.helperPath, this.queue.directory, undefined, signal) : undefined;
-    const after = await foregroundApplication(this.helperPath, signal);
-    if (!this.running || signal.aborted || this.locked || this.sleeping || metadata?.state?.screenLocked ||
-      after.appId !== foreground.appId || after.pid !== foreground.pid || collectionForApp(after.appId, cfg) !== 'content') {
-      this.lastSample = undefined; return;
-    }
-    const durationMs = this.lastSample?.appId === foreground.appId && this.lastSample.collection === 'content'
-      ? Math.max(0, Math.min(cfg.intervalMs, observedAt - this.lastSample.at)) : 0;
-    const event: CaptureEvent = {
-      id: randomUUID(), deviceId: cfg.deviceId, deviceName: cfg.deviceName, platform: currentPlatform,
-      capturedAt: new Date(observedAt).toISOString(), durationMs, appId: foreground.appId, appName: foreground.appName,
-      source: 'activity', privacy: { excluded: false, redacted: false, mode: 'none', collection: 'activity' },
-      ...(metadata ? { metadata: { ...metadata, capture: { intervalMs: cfg.intervalMs } } } : {}),
-    };
-    await this.queue.enqueue(event);
-    this.lastSample = { at: observedAt, appId: foreground.appId, collection: 'content' };
-    this.lastCaptureAt = event.capturedAt; this.state = 'capturing';
-    this.message = moteText("页面采样的应用活动已保存"); this.publish(); void this.upload();
   }
   async upload(explicit = false): Promise<void> {
     if (this.closed || this.uploading || this.connectionHeld) return;

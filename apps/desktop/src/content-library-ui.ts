@@ -9,7 +9,7 @@ export function createContentLibraryUi(api:DesktopApi){
   let generation=0,detailGeneration=0,status:Status|undefined,localOffset=0,remoteCursor:string|undefined,localMore=false,remoteMore=false;
   let archiveGeneration=0,archiveAuthorizationDenied=false,detailIsCentral=false;
   let items:ContentItem[]=[],selected:ContentItem|undefined,selectedButton:HTMLElement|undefined,chunkOffset=0,centralId:string|undefined;
-  const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')})[source]??moteText('内容');
+  const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),media:moteText('媒体状态'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')})[source]??moteText('内容');
   function renderFeed(id:string,rows:ContentItem[]){
     const root=el(id);root.replaceChildren();
     if(!rows.length){const empty=document.createElement('div');empty.className='content-empty';const title=document.createElement('strong');title.textContent=moteText('还没有内容，从一个小动作开始');const copy=document.createElement('p');copy.textContent=moteText('同步文件夹、导入文件、记录屏幕或写一条随手记。内容会先保存在本机。');empty.append(title,copy);root.append(empty);return;}
