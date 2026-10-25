@@ -20,6 +20,7 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | 飞书文档与个人活动 | [接入](lark-integration.md)、[已确认决定](adr-feishu-document-context.md)、[生成场景验收](testing-feishu-document-context.md) |
 | 浅色 / 深色 / 跟随系统 | [外观决定](adr-cross-platform-appearance.md)、[验证矩阵](validation/cross-platform-appearance.md) |
 | 当前界面、对话和运行状态 | [Slate 导航](ui-slate.md)、[对话](conversations.md)、[Operations](operations.md)、[执行器](execution-engine.md)、[排错](troubleshooting.md) |
+| 当前用户旅程与三端 UI 衔接 | [UI IA v1](adr-ui-ia-v1.md)、[模块与完整旅程](ui-user-journeys.md)；区分已确认交互、当前能力与暂缓内容 |
 | 第五轮三端 UI 落地与逐页验收 | [落地方案与验收门槛](design/ui-rollout-2026-10-14.md)、[当前验证记录](validation/ui-rollout-2026-10-14.md) |
 | 2026-10-10 系统改造 | [已确认方案](design/system-refactor-2026-10-10.md)、[当前ADR](adr-system-refactor.md)、[验收结果与边界](validation/system-refactor-2026-10-10.md) |
 | 插件中心与可替换记忆一期 | [已确认实施方案](design/plugin-center-phase-one-2026-10-12.md)、[架构决定](adr-plugin-center-memory-replacement.md)、[验证计划](design/plugin-center-phase-one-validation-2026-10-12.md)；产品实现尚未完成 |

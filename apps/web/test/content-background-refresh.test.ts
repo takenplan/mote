@@ -108,7 +108,7 @@ for(const populated of [false,true])test(`Insight ${populated?'populated':'empty
  const {root,d,apiWith}=await fixture(t),first=deferred(),refresh=deferred();let refreshing=false;
  const api=apiWith(path=>path==='/api/insights'?(refreshing?refresh.promise:first.promise):{items:[]});
  await act(async()=>root.render(insightView(api)));assert.match(d.querySelector('.workspace-list')!.textContent!,/正在读取/);
- await act(async()=>first.resolve({items:populated?[report]:[]}));const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
+ await act(async()=>first.resolve({items:populated?[report]:[]}));await act(async()=>button(d,'新建洞察').click());const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
  refreshing=true;await act(async()=>resources(api).invalidate(path=>path==='/api/insights'));
  assert.doesNotMatch(list.textContent!,/正在读取/);assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);assert.equal(d.querySelector('textarea'),compose);assert.equal(compose!.disabled,false);assert.equal(d.querySelector('.insights-page')!.getAttribute('aria-busy'),'false');
  await act(async()=>refresh.resolve({items:populated?[report]:[]}));assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);

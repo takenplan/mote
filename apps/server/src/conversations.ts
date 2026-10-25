@@ -6,7 +6,7 @@ import {combineDependencies,resolveDependencies,historyEvidenceDependencies} fro
 import {SourceContextStore} from './source-context.js';
 import {assertSourceContextDependencies,combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
 
-export type ConversationScope = Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'evidenceIds'>;
+export type ConversationScope = Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'evidenceIds'|'anchorEvidenceIds'>;
 export type ConversationTurn = {id:string;question:string;scope:ConversationScope;result?:QueryResult;status:'completed'|'failed';error?:{code:string;message:string};createdAt:string;evidenceDeleted?:boolean;evidenceStale?:boolean;historyEvidenceDependencies?:QueryResult['evidenceDependencies'];attachments?:{id:string;name:string;mimeType:string}[]};
 export type ConversationSummary = {id:string;title:string;createdAt:string;updatedAt:string;turnCount:number;scope:ConversationScope;status:'completed'|'failed'};
 export type Conversation = ConversationSummary & {turns:ConversationTurn[];revision?:number};

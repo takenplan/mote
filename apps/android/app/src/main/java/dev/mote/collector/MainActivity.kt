@@ -67,6 +67,7 @@ class MainActivity : MoteActivity() {
     private val scrollPositions = mutableMapOf<Page, Int>()
     private lateinit var navigation: MotePrimaryNavigation
     private lateinit var todaySummary: TextView
+    private lateinit var homeCaptureStatus: TextView
     private lateinit var homeSyncStatus: TextView
     private lateinit var homeSyncDetailStatus: TextView
     private lateinit var homeSyncRate: TextView
@@ -271,6 +272,15 @@ class MainActivity : MoteActivity() {
         page(Page.OVERVIEW, null)
         button(MoteI18n.text("问一问"), true) { showPage(Page.ASK) }
 
+        homeCaptureStatus = text(MoteI18n.text("正在检查…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED).apply {
+            tag = "home-capture-status"; minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+            setOnClickListener { showPage(Page.SOURCES) }
+        }
+        homeSyncStatus = text(MoteI18n.text("正在检查…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED).apply {
+            tag = "home-sync-status"; minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+            setOnClickListener { startActivity(Intent(this@MainActivity, SyncQueueActivity::class.java)) }
+        }
+
         val pageContent = content
         val guide = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         content.addView(guide); firstUseGuide = guide; content = guide
@@ -282,14 +292,10 @@ class MainActivity : MoteActivity() {
         homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "home-recent-content" }
         content.addView(homeRecentList)
         button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
+        button(MoteI18n.text("发现与洞察")) { openCentral("insights") }
 
         val summary = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         content.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        homeSyncStatus = TextView(this).apply {
-            text = MoteI18n.text("正在检查…"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
-            setLineSpacing(0f, 1.15f)
-        }
-        summary.addView(homeSyncStatus, LinearLayout.LayoutParams(0, -2, 1f))
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-status-details" }
         val toggle = TextView(this).apply {
             text = MoteI18n.text("查看状态与操作"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.ACCENT)
@@ -436,6 +442,15 @@ class MainActivity : MoteActivity() {
         val pageContent = content
         val index = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         pageContent.addView(index, LinearLayout.LayoutParams(-1, -2)); content = index
+        val views = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; tag = "library-primary-views" }
+        views.addView(MoteUi.button(Button(this).apply {
+            text = MoteI18n.text("我的资料"); isSelected = true
+            setOnClickListener { loadLocalLibrary() }
+        }, primary = true), LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
+        views.addView(MoteUi.button(Button(this).apply {
+            text = MoteI18n.text("我的记忆"); setOnClickListener { openCentral("memories") }
+        }), LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(views, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {
             text = MoteI18n.text("本机保留"); MoteUi.type(this, NativeFontRole.ACTION, medium = true); gravity = Gravity.CENTER; minHeight = dp(MoteTheme.controlHeight)
@@ -446,7 +461,7 @@ class MainActivity : MoteActivity() {
             text = MoteI18n.text("中央归档"); setOnClickListener { openCentral("archive") }
         }).apply { background = MoteUi.clickable(this@MainActivity, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL) }, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(scope, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        button(MoteI18n.text("记忆")) { openCentral("memories") }
+        text(MoteI18n.text("本机与中央资料暂分别浏览。"), NativeFontRole.META, NativeColorRole.MUTED)
         val types = listOf("" to "全部记录", "file" to "文件", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
         val selector = Spinner(this).apply {
             contentDescription = MoteI18n.text("资料类型")
@@ -559,8 +574,11 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("已支持的来源"))
         menu(MoteI18n.text("屏幕与应用活动"), MoteI18n.text("采集来源、频率与电量策略"), "capture") { showPage(Page.CAPTURE) }
         menu(MoteI18n.text("按应用配置"), MoteI18n.text("采集内容、可用能力与字段规则"), "shield") { showPage(Page.PRIVACY) }
+        menu(MoteI18n.text("导入文件"), MoteI18n.text("选择文件"), "folder") { addContent(MoteAddAction.FILE) }
+        menu(MoteI18n.text("同步文件夹"), MoteI18n.text("选择文件夹"), "folder") { addContent(MoteAddAction.FOLDER) }
         menu(MoteI18n.text("日历与文件"), MoteI18n.text("连接日历、选择文件或授权目录"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
         menu(MoteI18n.text("中央来源"), MoteI18n.text("连接与同步"), "sync") { openCentral("sources") }
+        menu(MoteI18n.text("同步与上传"), MoteI18n.text("当前任务与上传历史"), "sync") { startActivity(Intent(this, SyncQueueActivity::class.java)) }
     }
 
     private fun buildConnection(config: CollectorConfig) {
@@ -1321,7 +1339,8 @@ class MainActivity : MoteActivity() {
                 result.onSuccess { snapshot ->
                     snapshot.config?.let { if (!applyingSettings && it != loadedConfig) reloadSettings(it) }
                     if (::homeSyncStatus.isInitialized) {
-                        homeSyncStatus.text = snapshot.title + " · " + if (loadedConfig.syncPaused) MoteI18n.text("暂停全部发送") else snapshot.syncQueue
+                        homeCaptureStatus.text = snapshot.title + "  ›"
+                        homeSyncStatus.text = MoteI18n.text("同步 · {0}", if (loadedConfig.syncPaused) MoteI18n.text("暂停全部发送") else snapshot.connectionTitle) + " · " + snapshot.syncQueue + "  ›"
                         homeSyncDetailStatus.text = snapshot.syncFacts
                         homeSyncRate.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label()
                         homeSendAction.text = MoteI18n.text(if (loadedConfig.syncPaused) "恢复全部发送" else "暂停全部发送")

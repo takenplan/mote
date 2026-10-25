@@ -57,6 +57,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var modelSettings = JSONObject()
     private var messages: LinearLayout? = null
     private var scopeBox: LinearLayout? = null
+    private var scopeLabel: TextView? = null
     private var runStatus: TextView? = null
     private var send: Button? = null
     private var stop: Button? = null
@@ -167,11 +168,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
 
         ui.button(MoteI18n.text("新对话")) {
             if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@button }
-            askState.remove("runId"); askState.remove("conversationId"); askState.remove("runStatus"); askState.remove("evidenceIds"); askState.remove("scopeDirty"); askState.put("question", ""); persistAsk(); refresh()
+            askState.remove("runId"); askState.remove("conversationId"); askState.remove("runStatus"); askState.remove("evidenceIds"); askState.remove("anchorEvidenceIds"); askState.remove("scopeDirty"); askState.put("question", ""); persistAsk(); refresh()
         }
         ui.button(MoteI18n.text("刷新")) { refresh() }
         scopeBox = ui.card().also { box ->
-            ui.text(MoteI18n.text("基于这条记录提问"), NativeFontRole.SUPPORT, box)
+            scopeLabel = ui.text("", NativeFontRole.SUPPORT, box)
+            ui.button(MoteI18n.text("仅查这条记录"), parent = box) {
+                val id = (askState.optJSONArray("anchorEvidenceIds") ?: askState.optJSONArray("evidenceIds"))?.optString(0)
+                if (!id.isNullOrBlank()) {
+                    if (!NativeAskEvidenceScope.selectOnly(askState, id)) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
+                    else { persistAsk(); updateScope() }
+                }
+            }
             ui.button(MoteI18n.text("清除范围"), parent = box) { if (!NativeAskEvidenceScope.clear(askState)) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")) else { persistAsk(); updateScope() } }
         }
         updateScope()
@@ -220,7 +228,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val item = items.getJSONObject(i)
             ui.button(item.optString("title") + "\n" + item.optString("updatedAt")) {
                 if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@button }
-                askState.put("conversationId", item.getString("id")); askState.remove("runId"); askState.remove("evidenceIds"); askState.remove("scopeDirty"); persistAsk(); loadConversation(item.getString("id"))
+                askState.put("conversationId", item.getString("id")); askState.remove("runId"); askState.remove("evidenceIds"); askState.remove("anchorEvidenceIds"); askState.remove("scopeDirty"); persistAsk(); loadConversation(item.getString("id"))
             }
         }
         next(history)?.let { cursor ->
@@ -238,7 +246,12 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else MoteI18n.text("发送")
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
     }
-    private fun updateScope() { scopeBox?.visibility = if ((askState.optJSONArray("evidenceIds")?.length() ?: 0) > 0) android.view.View.VISIBLE else android.view.View.GONE }
+    private fun updateScope() {
+        val strict = (askState.optJSONArray("evidenceIds")?.length() ?: 0) > 0
+        val anchored = (askState.optJSONArray("anchorEvidenceIds")?.length() ?: 0) > 0
+        scopeBox?.visibility = if (strict || anchored) android.view.View.VISIBLE else android.view.View.GONE
+        scopeLabel?.text = MoteI18n.text(if (strict) "仅查这条记录" else "参考这条记录，自动查找相关上下文")
+    }
     private fun submitAsk() {
         val api = client
         val request = askState.optJSONObject("pending") ?: run {

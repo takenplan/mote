@@ -31,7 +31,7 @@ export function Overview({ api, status, devices, recent, insights, onPage, onOpe
    <button className="panel" onClick={()=>onPage('connections')}><Bot size={20}/><strong>{moteText('AI 接入')}</strong><span>{connections.data?(aiReady?moteText('已授权'):moteText('未连接')):'—'}</span></button>
   </section>
   {issues.length>0&&<button className="notice central-issue" onClick={()=>onPage('sources')}>{moteText('来源需要处理')}<ArrowRight size={16}/></button>}
-  {discovery&&<button className="home-insight" onClick={()=>onPage('insights')}><Sparkles size={21}/><div><strong>{moteText('你最近的洞察')}</strong><p>{answerPreview(discovery,125)}</p><small>{moteText('{0} 条证据',discovery.citations.length)}</small></div><ArrowRight size={18}/></button>}
+  {discovery&&<a className="home-insight" href={'#/library/insights?insight='+encodeURIComponent(discovery.runId)}><Sparkles size={21}/><div><strong>{moteText('你最近的洞察')}</strong><p>{answerPreview(discovery,125)}</p><small>{moteText('{0} 条证据',discovery.citations.length)}</small></div><ArrowRight size={18}/></a>}
   <section className="recent-section"><div className="section-heading"><h2>{moteText('最近同步的记录')}</h2><button className="text-button" onClick={()=>onPage('archive')}>{moteText('查看全部')}<ArrowRight size={15}/></button></div><div className="home-record-list">{recent.slice(0,4).map(capture=><CaptureCard compact key={capture.id} capture={capture} api={api} onOpen={onOpen}/>)}</div>{!recent.length&&<button className="button subtle" onClick={()=>onPage(collected?'archive':'imports')}>{moteText(collected?'打开资料库':'导入资料')}<ArrowRight size={15}/></button>}</section>
   <details className="home-extensions"><summary>{moteText('更多上下文视图')}</summary><FeatureHome api={api} onPage={onPage}/></details>
  </div>;

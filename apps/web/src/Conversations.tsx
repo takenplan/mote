@@ -20,7 +20,7 @@ interface ConversationSummary {
   createdAt: string;
   updatedAt: string;
   turnCount: number;
-  scope: Range & {timeZone?: string;evidenceIds?:string[]};
+  scope: Range & {timeZone?: string;evidenceIds?:string[];anchorEvidenceIds?:string[]};
   status: 'completed'|'failed';
 }
 interface ConversationTurn {
@@ -185,7 +185,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
     try {
       const id=crypto.randomUUID();
-      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null}:{})}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null}:{})}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
       let accepted:QueryRun;
       try{accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});}
       catch(e){
@@ -247,6 +247,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
       <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
       {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
+      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
       {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}
       {opening && <p className="loading" role="status"><LoaderCircle size={16} className="spin"/>{moteText("正在打开对话…")}</p>}
       <div className="conversation-messages">

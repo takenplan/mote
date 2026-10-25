@@ -3,6 +3,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {buildApp,type QueryAgent} from '../apps/server/src/app.js';
+import type {ContextReader} from '@mote/agent';
 import type {Config} from '../apps/server/src/config.js';
 import {noteCapture} from '@mote/shared';
 import {prepareAndroidDetailFixture} from './android-ui-detail-fixture.js';
@@ -16,14 +17,24 @@ const config:Config={dataDir,dataKey:undefined,token,tokenPath:join(dataDir,'own
  tokenFromEnvironment:true,maxStorageBytes:64*1024*1024,maxExportBytes:16*1024*1024,retentionDays:0,insightIntervalHours:0,
  allowedOrigins:[],model:'generated-fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'generated-fixture-key',
  allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:true};
-const agent:QueryAgent={configured:true,close:async()=>{},query:async input=>{
+const relatedId=randomUUID();
+// A file-analysis factory receives its own scoped reader. Never share that reader
+// with the normal query agent or another concurrent generated operation.
+function fixtureAgent(fixtureReader:ContextReader):QueryAgent { return {configured:true,close:async()=>{},query:async input=>{
  input.onProgress?.({stage:'tool',tool:'search_context',phase:'started'});
  await new Promise<void>(resolve=>setTimeout(resolve,1500));
  input.onProgress?.({stage:'tool',tool:'search_context',phase:'completed',count:1});
- return {answer:'Generated native answer · 原生回答 fixture',citations:[],trace:[],runId:randomUUID()};
-}};
-const value=await buildApp(config,{agent,createModelAgent:async()=>agent,...(detailFixture?{backgroundWorker:false}:{})});
-await value.store.ingest(noteCapture({id:randomUUID(),deviceId:'generated-fixture-phone',deviceName:'Generated phone',platform:'android',
+ const anchors=input.anchorEvidenceIds??input.evidenceIds;
+ if(anchors?.length){
+  const ids=[...new Set([...anchors,...(input.evidenceIds?[]:[relatedId])])];
+  const records=await fixtureReader.evidence({ids,after:input.after,before:input.before,deviceId:input.deviceId});
+  if(records.length!==ids.length)throw Error(`Generated fixture originals are not readable (${records.length}/${ids.length})`);
+  return {answer:'Generated native answer · 原生回答 fixture\n'+records.map(record=>record.ocrText+' ['+record.id+']').join('\n'),citations:records.map(record=>({id:record.id,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText.slice(0,200)})),trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids}};
+ }
+ return {answer:'Generated native answer · 原生回答 fixture',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[]}};
+}}; }
+const value=await buildApp(config,{createModelAgent:async(_settings,reader)=>fixtureAgent(reader),...(detailFixture?{backgroundWorker:false}:{})});
+await value.store.ingest(noteCapture({id:relatedId,deviceId:'generated-fixture-phone',deviceName:'Generated phone',platform:'android',
  capturedAt:new Date().toISOString(),text:'Generated native note · 中文 🐾 <script>untrusted evidence</script>'}));
 const detail=detailFixture?await prepareAndroidDetailFixture(value,dataDir):undefined;
 if(detail)await writeFile(join(dataDir,'generated-ui-detail-identity.json'),JSON.stringify(detail));
@@ -43,7 +54,7 @@ if (process.env.MOTE_SETTINGS_UI_FIXTURE === '1') {
  }
 }
 await writeFile(join(dataDir,'fixture.json'),JSON.stringify({origin:`http://127.0.0.1:${config.port}`,token}));
-console.log(`Generated Android central fixture listening on port ${config.port}`);
+console.log(`Generated Android central fixture listening on port ${config.port}; isolated agent readers`);
 let closing=false;
 async function close(){if(closing)return;closing=true;await value.app.close();await rm(dataDir,{recursive:true,force:true});}
 process.on('SIGINT',()=>{void close();});process.on('SIGTERM',()=>{void close();});

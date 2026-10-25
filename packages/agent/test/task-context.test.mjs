@@ -229,3 +229,23 @@ test('selected original Ask answers normally while explicit Memory and Calendar 
  const denied=await call('evidence',{ids:['different-generated-original']});assert.notEqual(denied.status,200,'answer output mode never widens evidence tool authority');
  assert.equal((await call('search_context',{query:'unrelated archive'})).status,400,'exact Ask never exposes archive discovery');
 });
+
+test('record references remain unread starting points while ordinary discovery can retrieve and cite a second original',async t=>{
+ const other={...record,id:'7289a721-2737-4b57-a474-24f13b44fa5a',ocrText:'Generated related original: the blue observatory opens at 16:10.'};
+ const reads=[],input={question:'Compare this record with relevant context',anchorEvidenceIds:[record.id],deviceId:'fixture',after:'2026-09-01T00:00:00Z',before:'2026-10-01T00:00:00Z',processingEvidence:{[record.id]:'host-only-pin'},contextEvidenceDependencies:{version:1,complete:true,ids:[record.id]}};
+ const envelope=buildContextEnvelope(input,[]);
+ assert.deepEqual(envelope.referenceEvidenceIds,[record.id]);assert.match(envelope.referenceInstruction,/Inspect them first with evidence/);assert.match(envelope.referenceInstruction,/not a restriction.*or an additional authorization/);assert.match(envelope.referenceInstruction,/time and device scope/);
+ assert.equal(envelope.untrustedEvidence,undefined);assert.equal(envelope.request,input.question);assert.ok(!JSON.stringify(envelope).includes(record.ocrText));assert.ok(!JSON.stringify(envelope).includes('host-only-pin'));
+ assert.deepEqual(envelope.taskProfile,{output:'answer',retrieval:'archive'});assert.ok(taskTools(input).includes('search_context'));assert.ok(taskTools(input).includes('evidence'));
+ const referenceReader={...reader,evidence:async args=>{reads.push(args);return [record,other].filter(item=>args.ids.includes(item.id));},search:async()=>[other]};
+ const bridge=await startBridge(referenceReader,input,12);t.after(()=>bridge.close());
+ assert.equal(reads.length,0,'an anchor ID does not pre-deliver its original body');assert.equal(bridge.records.has(record.id),false);assert.equal(bridge.records.has(other.id),false);
+ assert.throws(()=>parseAnswer(JSON.stringify({answer:'Unverified reference claim',citationIds:[record.id]}),bridge.records),/not retrieved/);
+ const call=async(tool,args)=>{const response=await fetch(bridge.url+'/'+tool,{method:'POST',headers:{Authorization:'Bearer '+bridge.token},body:JSON.stringify(args)});return {status:response.status,body:await response.json()};};
+ assert.equal((await call('evidence',{ids:[record.id],length:100})).status,200);assert.equal(bridge.records.has(record.id),true);
+ const discovered=await call('search_context',{query:'blue observatory'});assert.equal(discovered.status,200);assert.match(discovered.body.data[0].ocrText,/16:10/);
+ assert.equal((await call('evidence',{ids:[other.id]})).status,200,'ordinary evidence reads are not narrowed to the starting record');
+ const result=parseAnswer(JSON.stringify({answer:'The related original gives 16:10.',citationIds:[other.id]}),bridge.records);assert.equal(result.citations[0].id,other.id);assert.match(result.citations[0].excerpt,/16:10/);
+ assert.equal((await call('search_context',{query:'blue observatory',deviceId:'different-device'})).status,400,'a reference record cannot override the explicit device restriction');
+ assert.equal((await call('search_context',{query:'blue observatory',after:'2026-11-01T00:00:00Z'})).status,400,'a reference record cannot widen the explicit time restriction');
+});

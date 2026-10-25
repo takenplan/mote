@@ -16,7 +16,7 @@ import {resources} from '../src/resource-cache.js';
 const activityId='http:GET:/api/work-activity',codingId='http:GET:/api/coding/uploads';
 const capability=(id:string,version='1',state:FeatureCapability['state']='active'):FeatureCapability=>({id,version,state,featureId:id.startsWith('connector:')?'mote.connector.'+id.slice(10):'generated.catalog-server',surface:id.startsWith('connector:')?'ingress':'data'});
 const inventory=(capabilities:FeatureCapability[]):FeatureInventory=>({schemaVersion:1,revision:1,features:[],capabilities});
-const routes={activity:'activity',overview:'today',archive:'library',recordings:'generated/recordings',connections:'connections/access',imports:'library/import',lark:'connections/lark',sources:'connections',featureGuide:'guide'};
+const routes={activity:'activity',overview:'today',archive:'library',recordings:'generated/recordings',connections:'connections/access',deviceConnections:'connections/pair',imports:'library/import',lark:'connections/lark',sources:'connections',featureGuide:'guide'};
 const provider='generated-recorder',recorderKey=provider+'-recordings';
 const providerDetailId='connector:'+recorderKey;
 const recorder:RecordingStatus={provider,category:'recordings',label:'Generated recording provider',connected:false,selection:{enabled:false,start:'2026-01-01T00:00:00Z',autoSync:false,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};

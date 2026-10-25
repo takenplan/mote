@@ -3379,7 +3379,7 @@ h1 { font-family:inherit;font-weight:600;letter-spacing:-.8px; }
 .first-record h2 {font-size:17px;}
 .first-record p {font-size:13px;color:var(--muted);margin-top:8px;line-height:1.8;}
 .home-empty {padding:38px;display:flex;align-items:center;justify-content:center;gap:15px;border:1px dashed var(--mote-border);border-radius:13px;color:var(--mote-muted);font-size:14px;line-height:1.8;}
-.home-insight {display:flex;gap:18px;text-align:left;align-items:flex-start;width:100%;padding:24px;margin-top:28px;background:var(--mote-tint);border:1px solid var(--mote-border);border-radius:12px;color:var(--mote-muted);}
+.home-insight {text-decoration:none;font:inherit;display:flex;gap:18px;text-align:left;align-items:flex-start;width:100%;padding:24px;margin-top:28px;background:var(--mote-tint);border:1px solid var(--mote-border);border-radius:12px;color:var(--mote-muted);}
 .home-insight>div {flex:1;min-width:0;}
 .home-insight p {font-size:13px;line-height:1.85;color:var(--mote-muted);margin:9px 0;}
 .home-insight small {font-size:12px;}

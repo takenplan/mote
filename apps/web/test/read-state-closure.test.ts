@@ -304,7 +304,7 @@ test('connection permission selection cannot relabel an already issued invitatio
   if(init?.method==='POST'){writes.push(path);if(path.endsWith('/revoke'))return {revoked:true};return {scope:path.includes('collector-')?'collector':'owner',uri:'mote://connect?data=generated',invitation:{format:'mote.connection',version:1,serverUrl:'http://localhost',code:'g'.repeat(43),expiresAt:new Date(Date.now()+600000).toISOString()}};}
   throw Error('Unexpected '+path);
  });
- await act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'http://localhost',devices:[]})));
+ await act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'http://localhost',devices:[],mode:'device'})));
  const selector=d.querySelector<HTMLSelectElement>('[aria-label="设备权限"]')!;
  await act(async()=>{selector.value='collector';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
  await act(async()=>button(d,'生成设备二维码').click());

@@ -195,7 +195,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 image("/api/capture-browser/" + enc(id) + "/image", body)
             }
             ui.button(MoteI18n.text("删除记录")) {
-                screens.confirm(MoteI18n.text("删除记录"), MoteI18n.text("删除后无法恢复。")) {
+                screens.confirm(MoteI18n.text("删除中央记录"), MoteI18n.text("删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {
                     ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/captures/" + enc(id)) }) { screens.refresh() }
                 }
             }
@@ -319,7 +319,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                     if (cancellation?.optString("wait") == "unknown") screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
                 }
             }
-            ui.button(MoteI18n.text("删除文件")) { screens.confirm(MoteI18n.text("删除文件"), MoteI18n.text("删除后无法恢复。")) {
+            ui.button(MoteI18n.text("删除文件")) { screens.confirm(MoteI18n.text("删除中央文件"), MoteI18n.text("删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。")) {
                 ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/files/" + enc(id)) }) { screens.refresh() }
             } }
         }
