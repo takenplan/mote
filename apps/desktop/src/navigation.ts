@@ -7,8 +7,8 @@ const advanced = new Set<DesktopPage>(['statistics', 'activity', 'developer', 'a
 
 /** UI routes only. Captured content never influences navigation or authorization. */
 export class DesktopNavigation {
-  page: DesktopPage = 'records';
-  section: DesktopSection = 'records';
+  page: DesktopPage = 'overview';
+  section: DesktopSection = 'overview';
   private trail: DesktopPage[] = [];
 
   get backTarget(): DesktopPage { return this.trail.at(-1) ?? this.section; }

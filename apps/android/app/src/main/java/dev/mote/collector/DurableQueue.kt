@@ -38,6 +38,7 @@ class DurableQueue(private val dir: File, private val cipher: ByteCipher, create
         }
     }
     /** Origin snapshot supplied by the connection-owned queue handle; unbound handles fail closed for pinned records. */
+    internal var externalStorageBytes: () -> Long = { 0L }
     internal var archiveOrigin: String = ""
     private fun matchesOrigin(event: JSONObject) = !event.has("_archiveOrigin") || event.getString("_archiveOrigin") == archiveOrigin.trim().trimEnd('/')
     private fun unfinished(event: JSONObject) = !event.optBoolean("_uploaded") || syncFailed(event) || event.optBoolean("_reviewHeld")
@@ -187,7 +188,7 @@ class DurableQueue(private val dir: File, private val cipher: ByteCipher, create
     fun depth(): Int = guarded { dir.listFiles()?.count { it.extension == "event" } ?: 0 }
     fun diskBytes(): Long = guarded { dir.listFiles()?.filter { it.isFile && it.name != ".mote-local-format" }?.sumOf { it.length() } ?: 0L }
     fun reservedOcrBytes(): Long = stats().reservedOcrBytes
-    fun bytes(): Long = stats().bytes
+    fun bytes(): Long = stats().bytes + externalStorageBytes()
     private fun read(file: File): JSONObject = JSONObject(String(cipher.open(file.readBytes()), Charsets.UTF_8)).also(LocalDataFormat::validateEvent)
     private fun syncFailed(event: JSONObject) = event.optBoolean("_archiveMissing") || event.optBoolean("_uploadConflict")
     private fun atomic(file: File, bytes: ByteArray, modifiedAt: Long? = null) {
@@ -210,7 +211,7 @@ class DurableQueue(private val dir: File, private val cipher: ByteCipher, create
             event.optString("ocrText").isEmpty() && event.optJSONObject("ocr")?.optString("status") == "disabled" &&
             !event.has("imageMime") && !event.has("imageBase64")
     }
-    private fun capacityUpperBound(): Long = diskBytes() + browseIndex().pendingDiskBytes() + browseIndex().reservationUpperBound(browseFiles())
+    private fun capacityUpperBound(): Long = externalStorageBytes() + diskBytes() + browseIndex().pendingDiskBytes() + browseIndex().reservationUpperBound(browseFiles())
     private fun validateStageCapture(capture: StageCapture): JSONObject {
         val event = capture.event
         LocalDataFormat.validateEvent(event)

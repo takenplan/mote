@@ -1,3 +1,4 @@
+import {noteBody} from './note-presentation';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
 import { readResponseText } from './response-body';
@@ -23,6 +24,7 @@ function recordText(source: SyncHistoryItem['source'], record: Record<string, un
     if (notification) return ['title', 'text', 'bigText', 'subText'].map(key => text(notification[key])).concat(Array.isArray(notification.textLines) ? notification.textLines.slice(0, 100).map(line => text(line)) : []).filter(Boolean).join('\n').slice(0, 100000);
   }
   if (source === 'activity') return JSON.stringify({ appName: record.appName, appId: record.appId, capturedAt: record.capturedAt, durationMs: record.durationMs, stateSeries: record.stateSeries }, null, 2).slice(0, 100000);
+  if(source==='note')return noteBody(typeof record.ocrText==='string'?record.ocrText:'',record.metadata);
   return text(record.ocrText);
 }
 async function request(config: Config, path: string): Promise<Response> {
@@ -47,7 +49,7 @@ export async function syncContent(history: SyncHistory, queue: DurableQueue, sou
       }
     } else if (item.captureId) {
       const record = queue.recordForHistory(item.captureId);
-      if (record) { const bytes = includeImage ? await queue.imageForBrowser(item.captureId) : undefined; return { item, location: 'local', hasImage:Boolean(record.blobHash), text: recordText(item.source, record.event as unknown as Record<string, unknown>), ...(bytes && includeImage ? { image: await previewWork.run<string>({ kind: 'preview', bytes, thumbnail: false }) } : {}), metadata: JSON.stringify(record.event.metadata ?? {}, null, 2) }; }
+      if (record) { const bytes = includeImage ? await queue.imageForBrowser(item.captureId) : undefined; return { item, location: 'local', hasImage:Boolean(record.blobHash), truncated:recordText(item.source,record.event as unknown as Record<string,unknown>).length>100000,text:recordText(item.source,record.event as unknown as Record<string,unknown>).slice(0,100000), ...(bytes && includeImage ? { image: await previewWork.run<string>({ kind: 'preview', bytes, thumbnail: false }) } : {}), metadata: JSON.stringify(record.event.metadata ?? {}, null, 2) }; }
     }
     // A later retry can have cleared the local copy. Resolve only a receipt from this same node/device.
     const receipt = history.receivedCapture(config, item.key);
@@ -64,7 +66,7 @@ export async function readCentralContent(config:Config,item:SyncHistoryItem,chun
   item.observedAt=typeof record.capturedAt==='string'?record.capturedAt:item.observedAt;
   const provenance = record.provenance as Record<string, unknown> | undefined;
   if (item.sourceId && provenance?.sourceId !== item.sourceId) throw Error(moteText('记录不属于当前设备'));
-  const result: SyncContent = { truncated:typeof record.ocrText==='string'&&record.ocrText.length>100000,item, location: 'central', captureId: item.captureId, text: recordText(item.source, record), metadataOnly: item.layer === 'reference'||provenance?.layer==='reference', metadata: JSON.stringify({ capturedAt: record.capturedAt, appName: record.appName, provenance, metadata: record.metadata }, null, 2).slice(0, 100000) };
+  const result: SyncContent = { truncated:recordText(item.source,record).length>100000,item, location: 'central', captureId: item.captureId, text:recordText(item.source,record).slice(0,100000), metadataOnly: item.layer === 'reference'||provenance?.layer==='reference', metadata: JSON.stringify({ capturedAt: record.capturedAt, appName: record.appName, provenance, metadata: record.metadata }, null, 2).slice(0, 100000) };
   const ocr = record.ocr as { status?: string } | undefined;
   result.processing = ocr?.status === 'pending';
   result.hasImage=Boolean(record.imageMime && item.source==='screen'); if(record.imageMime)result.retainsOriginal=true;

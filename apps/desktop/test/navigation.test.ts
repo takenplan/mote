@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopNavigation, needsCollectionSetup } from '../src/navigation';
 
 describe('desktop library navigation', () => {
-  it('starts in Content and keeps source controls under their primary destination', () => {
+  it('starts in Workbench and keeps source controls under their primary destination', () => {
     const navigation = new DesktopNavigation();
-    expect(navigation.page).toBe('records');
+    expect(navigation.page).toBe('overview');
     navigation.navigate('sources');
     expect(navigation.section).toBe('sources');
     expect(navigation.canGoBack).toBe(false);
@@ -61,8 +61,8 @@ it('offers a first collection setup without requiring a central connection, and 
   }
 });
 
-it('keeps delivery details subordinate to Content, Sources or Activity and retains the auxiliary Home route',()=>{
- const navigation=new DesktopNavigation();navigation.navigate('uploads');expect(navigation.section).toBe('records');expect(navigation.backTarget).toBe('records');
+it('keeps delivery details subordinate to Content, Sources or Activity and defaults to Workbench',()=>{
+ const navigation=new DesktopNavigation();navigation.navigate('uploads');expect(navigation.section).toBe('overview');expect(navigation.backTarget).toBe('overview');
  navigation.navigate('records');navigation.navigate('uploads');expect(navigation.section).toBe('records');expect(navigation.backTarget).toBe('records');
  navigation.navigate('work');navigation.navigate('uploads');expect(navigation.section).toBe('work');expect(navigation.backTarget).toBe('work');
  navigation.navigate('overview');navigation.navigate('screen');expect(navigation.section).toBe('overview');expect(navigation.backTarget).toBe('overview');

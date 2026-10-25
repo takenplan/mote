@@ -79,7 +79,7 @@ function refreshApplicationMenu() {
       ] },
       { role: 'editMenu', label: moteText("编辑") },
       { label: moteText("前往"), submenu: [
-        { label: moteText("概览"), accelerator: 'CmdOrCtrl+1', click: () => showClientPage('overview') },
+        { label: moteText("工作台"), accelerator: 'CmdOrCtrl+1', click: () => showClientPage('overview') },
         { label: moteText("随手记"), accelerator: 'CmdOrCtrl+2', click: () => showClientPage('notes') },
         { label: moteText("来源"), accelerator: 'CmdOrCtrl+3', click: () => showClientPage('sources') },
       ] },
@@ -90,6 +90,8 @@ function refreshApplicationMenu() {
 const profileLabel = profile.name;
 let window: BrowserWindow | undefined;
 let tray: Tray | undefined;
+let quickNoteWindow: BrowserWindow | undefined;
+let openQuickNote: (()=>Promise<void>) | undefined;
 let collector: Collector;
 let localSources: LocalSourceManager | undefined;
 let updater: DesktopUpdater | undefined;
@@ -132,6 +134,7 @@ async function showCentral(page?: string, evidenceId?: string,workId?:string): P
 }
 function showWindow(): void { window?.show(); window?.focus(); }
 function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings'): void {
+  if (page === 'notes') { void openQuickNote?.(); return; }
   showWindow(); window?.webContents.send('mote:navigate', page);
 }
 function trayIcon(): Electron.NativeImage {
@@ -146,6 +149,7 @@ function trayIcon(): Electron.NativeImage {
 function updateUi(status: Status): void {
   status = { ...includePreparedNote(status), operations: backgroundJobs.snapshot(), storage: storageStatus(), credentialStorage: developmentProfile ? 'json' : 'system', environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
   if (window && !window.isDestroyed()) window.webContents.send('mote:status', status);
+  if (quickNoteWindow && !quickNoteWindow.isDestroyed()) quickNoteWindow.webContents.send('mote:status', status);
   tray?.setToolTip(moteText("Mote [{0}] · {1} · 待上传 {2}", profile.name, status.running ? moteText("采集中") : moteText("已停止"), status.queueDepth));
   tray?.setContextMenu(Menu.buildFromTemplate([
     { label: `Mote [${profile.name}] · ${status.running ? moteText("采集中") : moteText("已停止")}`, enabled: false },
@@ -153,10 +157,8 @@ function updateUi(status: Status): void {
     { type: 'separator' },
     { label: moteText("打开 Mote"), click: () => showClientPage('overview') },
     { label: moteText("随手记"), click: () => showClientPage('notes') },
-    { label: moteText("设置…"), click: () => showClientPage('settings') },
-    { label: moteText("打开中央仓库"), click: () => { void showCentral().catch(e => dialog.showErrorBox(moteText("中央仓库"), (e as Error).message)); } },
-    { label: moteText("开始采集"), enabled: !status.running, click: () => { void serialize(() => collector.start()).catch(error => dialog.showErrorBox(moteText("无法开始采集"), (error as Error).message)); } },
-    { label: moteText("停止采集"), enabled: status.running, click: () => { collector.stop(); void serialize(() => collector.settleCapture()); } },
+    { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else void serialize(()=>collector.start()).catch(error=>dialog.showErrorBox(moteText("无法开始采集"),(error as Error).message)); } },
+    { label: moteText("立即发送"), enabled: !status.config.syncPaused, click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
     { type: 'separator' },
     { label: moteText("退出 Mote（停止采集和上传）"), click: () => app.quit() },
   ]));
@@ -232,9 +234,20 @@ else {
     window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     window.on('close', event => { if (!quitting) { event.preventDefault(); window?.hide(); } });
     const trusted = (event: IpcMainInvokeEvent) => {
-      if (!window || event.sender !== window.webContents || event.senderFrame?.url !== pageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
+      if (!([window,quickNoteWindow].some(owned=>owned && !owned.isDestroyed() && event.sender===owned.webContents && event.senderFrame===owned.webContents.mainFrame && event.senderFrame?.url===(owned===quickNoteWindow?pageUrl+'#quick-note':pageUrl)))) throw new Error(moteText("请求来源不受信任"));
     };
-    ipcMain.on('mote:appearance-initial',(event)=>{trusted(event);event.returnValue=appearanceState();});
+    openQuickNote=async()=>{
+      if(quickNoteWindow&&!quickNoteWindow.isDestroyed()){quickNoteWindow.show();quickNoteWindow.focus();return;}
+      const noteWindow=new BrowserWindow({width:480,height:560,minWidth:380,minHeight:420,title:moteText('随手记'),backgroundColor:appearanceBackground(),webPreferences:{preload:join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:developmentProfile}});
+      quickNoteWindow=noteWindow;
+      noteWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+      noteWindow.webContents.on('will-navigate',event=>event.preventDefault());
+      noteWindow.webContents.on('will-attach-webview',event=>event.preventDefault());
+      const appearance=()=>{noteWindow.setBackgroundColor(appearanceBackground());noteWindow.webContents.send('mote:appearance',appearanceState());};nativeTheme.on('updated',appearance);
+      noteWindow.once('closed',()=>{nativeTheme.removeListener('updated',appearance);if(quickNoteWindow===noteWindow)quickNoteWindow=undefined;});
+      await noteWindow.loadURL(pageUrl+'#quick-note');
+    };
+    ipcMain.on('mote:appearance-initial' ,(event)=>{trusted(event);event.returnValue=appearanceState();});
     ipcMain.handle('mote:set-appearance',(event,raw:unknown)=>{
       trusted(event);
       if(raw!=='auto'&&raw!=='light'&&raw!=='dark')throw Error('Invalid appearance');
@@ -500,6 +513,7 @@ else {
       await showCentral(typeof page === 'string' ? page : undefined, evidenceId);
     });
     handle('mote:central-work',async workId=>showCentral('activity',undefined,validateCentralWorkId(workId)));
+    handle('mote:quick-note', () => openQuickNote?.());
     handle('mote:note-draft', () => noteDrafts.get());
     handle('mote:note-draft-update', input => trackNote(noteDrafts.update(input as NoteDraft)));
     handle('mote:note', input => trackNote(serialize(async () => {

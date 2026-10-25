@@ -42,8 +42,8 @@ internal object CentralAttachments {
     const val MAX_BYTES = 50 * 1024 * 1024
     fun upload(client: CentralClient, file: File, name: String, mime: String, deviceId: String,
         resolveTime: (String) -> Long,
-        progress: (Int, Int) -> Unit = { _, _ -> }): String {
-        require((mime.startsWith("image/") || mime.startsWith("audio/")) && file.length() in 1..MAX_BYTES.toLong()) {
+        identityScope: String = "", progress: (Int, Int) -> Unit = { _, _ -> }): String {
+        require(mime.matches(Regex("[A-Za-z0-9!#$&^_.+\\-]+/[A-Za-z0-9!#$&^_.+\\-]+")) && file.length() in 1..MAX_BYTES.toLong()) {
             MoteI18n.text("附件必须是图片或音频，且每个文件最多 50 MiB。")
         }
         val sourceId = "notes-$deviceId"
@@ -52,7 +52,7 @@ internal object CentralAttachments {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input -> val buffer = ByteArray(65536); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) } }
         val hash = digest.digest().joinToString("") { "%02x".format(it) }
-        val identity = SourceRules.hash(JSONArray().put(hash).put(name).toString())
+        val identity = SourceRules.hash(JSONArray().put(hash).put(name).apply { if (identityScope.isNotBlank()) put(identityScope) }.toString())
         val modifiedAt = resolveTime(identity)
         val manifest = JSONObject().put("sourceId", sourceId).put("sha256", hash).put("sizeBytes", file.length()).put("item", JSONObject()
             .put("externalId", "attachment:$identity").put("revision", hash).put("observedAt", java.time.Instant.ofEpochMilli(modifiedAt).toString())

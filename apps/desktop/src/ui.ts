@@ -20,7 +20,9 @@ byId('device-name').addEventListener('input', () => markSettingsDirty());
 const pageNames = desktopPages;
 type Page = DesktopPage;
 const navigation = new DesktopNavigation();
-let currentPage: Page = 'records';
+const quickNote = location.hash === '#quick-note';
+if (quickNote) document.body.classList.add('quick-note-window');
+let currentPage: Page = 'overview';
 let settingsDirty = false;
 let captureStorageDirectory = '';
 let settingsApplying = false;
@@ -39,6 +41,8 @@ let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
 function showPage(page: Page, focus = true, preserveSettingsDraft = false): boolean {
+  if (page === 'notes' && !quickNote && desktopApi.openQuickNote) { void desktopApi.openQuickNote(); return false; }
+  if (quickNote && page !== 'notes') return false;
   if (!navigation.navigate(page, () => preserveSettingsDraft || !settingsDirty || !settingsPages.has(currentPage) || window.confirm(moteText("有未保存的修改。离开并丢弃修改？")))) return false;
   if (settingsPages.has(currentPage)) pageScroll.delete(currentPage);
   else pageScroll.set(currentPage, window.scrollY);
@@ -68,7 +72,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     button.classList.toggle('selected', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  const heading = (target: Page) => target === 'overview' ? moteText('首页') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
+  const heading = (target: Page) => target === 'overview' ? moteText('工作台') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
   byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
   byId('workspace-back').hidden = !navigation.canGoBack;
@@ -105,6 +109,7 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-ad
   addDialog.close(); const action=button.dataset.addChoice;
   if(action==='note')showPage('notes');
   else if(action==='screen')showPage('screen');
+  else if(action==='source')showPage('sources');
   else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files');
   else if(action==='lark'){
     if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}
@@ -160,7 +165,7 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);
 });
 desktopApi.onNavigate?.(page => { if (pageNames.includes(page)) showPage(page); });
-showPage('records', false);
+showPage(quickNote ? 'notes' : 'overview', false);
 
 function feedback(message: string, success = false): void {
   const box = byId('feedback'); box.textContent = message; box.hidden = !message; box.className = success ? 'success' : '';
@@ -376,7 +381,9 @@ function render(status: import('./contracts').Status): void {
   const firstCollection = needsCollectionSetup({ reviewed: setupReviewed, running: status.running, hasCapture: Boolean(status.lastCaptureAt), queuedRecords: status.queueDepth, recoveryRequired: status.state === 'error' || Boolean(status.storage?.recoveryRequired) });
   byId('setup-prompt').hidden = !firstCollection;
   byId('collection-workbench').hidden = firstCollection;
-  setText('home-sync-line', status.config.syncPaused ? moteText('全部发送已暂停；本机记录与来源检查继续') : !hasCentralConnection ? moteText('内容先保存在本机，连接中央后可搜索与提问') : status.sync.message);
+  setText('home-screen-state',status.running ? moteText('采集中') : moteText('已停止'));
+  setText('home-central-state',centralTitle);
+  setText('home-sync-line',status.config.syncPaused?moteText('暂停全部发送'):moteText('待上传 {0} 条',status.sync.pendingRecords));
   setText('pause-sending',status.config.syncPaused?moteText('恢复全部发送'):moteText('暂停全部发送'));
   byId<HTMLButtonElement>('retry').disabled=busy||Boolean(status.config.syncPaused);
   updateNoteAction();
@@ -569,6 +576,7 @@ byId('note-form').addEventListener('submit', event => {
   void perform(async () => {
     try {
       const result = await desktopApi.saveNote(input); renderDraft(result.draft);void refreshContent();
+      if (quickNote) window.close();
       byId('note-feedback').textContent = currentStatus.sync.state === 'unconfigured' ? moteText("已保存到本机。连接节点并确认后，再按你的策略同步。") : moteText("已保存到本机 · {0}上传。中央确认后清理待传记录。", syncModeLabels[currentStatus.config.syncMode]);
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("保存未完成，请重试");
@@ -658,8 +666,8 @@ async function beginSourceSelection(mode:'files'|'directory'):Promise<void>{
 }
 byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();});
 byId('source-confirm').addEventListener('click',()=>void sourceAction(async()=>{
-  if(!sourceSelection)return;const selected=sourceSelection;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
-  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();await refreshContent();
+  if(!sourceSelection)return;const selected=sourceSelection;const oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
+  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();await refreshContent();if(oneTime)showPage('records');
 }));
 function sourceOptions(): import('./source-types').SourceOptions {
   return { syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) };
@@ -695,12 +703,24 @@ async function refreshSources(): Promise<void> {
   sourcesReading = true;
   try {
   const rows = await desktopApi.sources(); localSourceRows = rows;
-  const list = byId('source-list'); list.replaceChildren();
+  const list = byId('source-list'); list.replaceChildren();byId('source-attention').replaceChildren();
   const home=byId('home-sources');home.replaceChildren();
   if(!rows.length){const empty=document.createElement('p');empty.className='helper';empty.textContent=moteText('同步文件夹后，它会出现在这里。也可以连接日历与编码对话。');home.append(empty);}
-  for(const row of rows){const button=document.createElement('button');button.type='button';button.className='home-source';const title=document.createElement('strong');title.textContent=row.source.name;const state=document.createElement('span');state.textContent=row.source.syncContinuously===false?moteText('单次导入'):row.source.enabled?row.message:moteText('本机已暂停');button.append(title,state);button.addEventListener('click',()=>{if(showPage('sources'))editSource(row.source.id);});home.append(button);}
-  if (!rows.length) { const p = document.createElement('p'); p.className = 'helper'; p.textContent = moteText("尚未连接本地来源。选择只包含你希望归档资料的目录。"); list.append(p); }
-  for (const row of rows) {
+  for(const row of rows.filter(row=>row.source.syncContinuously!==false).sort((a,b)=>Number(Boolean(b.blocked))-Number(Boolean(a.blocked))).slice(0,4)){const button=document.createElement('button');button.type='button';button.className='home-source';const title=document.createElement('strong');title.textContent=row.source.name;const state=document.createElement('span');state.textContent=row.blocked?moteText('本机待处理 {0} 项',row.blocked):row.source.enabled?row.message:moteText('本机已暂停');button.append(title,state);button.addEventListener('click',()=>{if(showPage('sources'))editSource(row.source.id);});home.append(button);}
+  const ongoing = rows.filter(row => row.source.syncContinuously !== false);
+  byId('home-onboarding').hidden = ongoing.length > 0 || Boolean(currentStatus?.lastCaptureAt) || Boolean(currentStatus?.running);
+  if (!ongoing.length) { const p = document.createElement('p'); p.className = 'helper'; p.textContent = moteText("尚未连接本地来源。选择只包含你希望归档资料的目录。"); list.append(p); }
+  const groups = [
+    { title: '需要处理', rows: ongoing.filter(row=>Boolean(row.blocked)) },
+    { title: '文件与文件夹', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='local-files') },
+    { title: 'Coding Agent', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='coding-agent') },
+    { title: '本机日历与其他来源', rows: ongoing.filter(row=>!row.blocked && !['local-files','coding-agent'].includes(row.source.kind)) },
+  ];
+  for (const group of groups) {
+    if (!group.rows.length) continue;
+    const target=group.title==='需要处理'?byId('source-attention'):list;
+    const heading=document.createElement('h2');heading.textContent=moteText(group.title);target.append(heading);
+  for (const row of group.rows) {
     const card = document.createElement('article'); card.className = 'source-card';
     const title = document.createElement('strong'); title.textContent = `${row.source.kind === 'local-calendar' ? moteText("日历") : row.source.kind === 'coding-agent' ? moteText("编码对话") : moteText("文件")} · ${row.source.name} · ${row.source.retention === 'reference' ? moteText("仅文件目录") : row.source.retention === 'archive' ? moteText("原件归档") : row.source.kind==='local-files'?moteText("中央提取正文，不保留原件"):moteText("内容快照")}`;
     const detail = document.createElement('p'); detail.className = 'helper profile-path'; detail.textContent = row.source.path || moteText("所选系统日历");
@@ -716,7 +736,8 @@ async function refreshSources(): Promise<void> {
       for(const failure of row.failures??[]){const item=document.createElement('p');item.className='helper profile-path';item.textContent=`${failure.title||failure.externalId} · ${failure.status===410?moteText('中央已删除此文件'):failure.status===409?moteText('文件版本冲突'):moteText('中央拒绝此文件（{0}）',failure.status)}`;failures.append(item);}
       card.append(failures);
     }
-    card.append(actions); list.append(card);
+    card.append(actions); target.append(card);
+  }
   }
   } finally { sourcesReading = false; }
 }

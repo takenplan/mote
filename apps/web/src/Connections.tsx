@@ -57,7 +57,7 @@ export function Connections({ api, serverUrl, devices }: {
     serverUrl: string;
     devices: Device[];
 }) {
-    const [method, setMethod] = useState<'device' | 'chatbot'>('device');
+    const [method, setMethod] = useState<'device' | 'chatbot'>(()=>new URLSearchParams(window.location.hash.split('?')[1]??'').get('mode')==='device'?'device':'chatbot');
     const [endpoint, setEndpoint] = useState(serverUrl);
     const [label, setLabel] = useState(moteText("我的新设备"));
     const [deviceId, setDeviceId] = useState('');
@@ -212,8 +212,8 @@ export function Connections({ api, serverUrl, devices }: {
             ...devices.map(device => [device.deviceId, device] as const),
         ]).values()];
     return <section className="panel connections" aria-labelledby="connections-title">
-    <div className="section-heading"><div><span className="eyebrow">CONNECT ONCE</span><h2 id="connections-title"><QrCode size={19}/>{moteText("设备二维码与连接授权")}</h2><p>{moteText("扫码或导入一次性邀请，把手机和电脑连接到中央节点。")}</p></div><span className="badge muted">{activeCount}{' '}{moteText("个有效连接")}</span></div>
-    <p className="discovery-pairing-note">{moteText("此页面只生成连接授权。先安装 Mac / Android 客户端，再填写客户端可访问的节点地址；二维码不会创建公网地址或隧道。")}</p><p><a className="text-button" href="https://github.com/utopiafar/mote/releases" target="_blank" rel="noreferrer">{moteText("下载 Mac / Android 客户端 →")}</a></p><div className="connection-steps"><span><b>1</b>{moteText("填写设备可访问的地址")}</span><span><b>2</b>{moteText("生成邀请或 MCP 配置")}</span><span><b>3</b>{moteText("在客户端确认并连接")}</span></div>
+    <div className="section-heading"><div><span className="eyebrow">CONNECT ONCE</span><h2 id="connections-title"><QrCode size={19}/>{moteText("AI 接入")}</h2></div><span className="badge muted">{activeCount}{' '}{moteText("个有效连接")}</span></div>
+    <details className="connection-help"><summary>{moteText('连接帮助')}</summary><p>{moteText("此页面只生成连接授权。先安装 Mac / Android 客户端，再填写客户端可访问的节点地址；二维码不会创建公网地址或隧道。")}</p><p><a className="text-button" href="https://github.com/utopiafar/mote/releases" target="_blank" rel="noreferrer">{moteText("下载 Mac / Android 客户端 →")}</a></p></details>
     {Boolean(error || inventoryResource.error || configuration.error) && <div className="notice error" role="alert">{error || errorMessage(inventoryResource.error || configuration.error)}</div>}
     {message && <div className="notice" role="status"><Check size={16}/>{message}</div>}
     <div className="connection-fields">

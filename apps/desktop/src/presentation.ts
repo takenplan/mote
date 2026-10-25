@@ -1,4 +1,4 @@
-import {UiPresentationHost,applyAppearanceTheme,type AppearanceStore,defaultUiLayout,linearUiTheme,type UiDestination,type UiLayoutProfile} from '@mote/shared';
+import {UiPresentationHost,applyAppearanceTheme,type AppearanceStore,desktopUiLayout,linearUiTheme,type UiDestination,type UiLayoutProfile} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import type {DesktopPage,DesktopSection} from './navigation';
 
@@ -31,9 +31,9 @@ function createPresentationScope(root:HTMLElement){
   }};
   return {scope,abort(){controller.abort();},dispose(){controller.abort();const errors:unknown[]=[];for(const cleanup of [...cleanups].reverse())try{cleanup();}catch(error){errors.push(error);}return errors;}};
 }
-export const desktopDestination:Record<UiDestination,DesktopPage>={library:'records',ask:'ask',sources:'sources',activity:'work'};
-const labels:Record<UiDestination,string>={library:'内容',ask:'问一问',sources:'来源',activity:'活动'};
-const icons:Record<UiDestination,string>={library:'source',ask:'ask',sources:'folder',activity:'activity'};
+export const desktopDestination:Record<UiDestination,DesktopPage>={home:'overview',library:'records',ask:'ask',sources:'sources',activity:'work',connections:'connection'};
+const labels:Record<UiDestination,string>={home:'工作台',library:'内容',ask:'问一问',sources:'来源',activity:'活动',connections:'连接与设备'};
+const icons:Record<UiDestination,string>={home:'home',library:'source',ask:'ask',sources:'folder',activity:'activity',connections:'link'};
 
 /** Presentation receives stable DOM slots and navigation commands, never the preload API.
  * Replacing it cannot recreate editors, restart work, or acquire platform capabilities. */
@@ -80,7 +80,7 @@ function retainShell(root:HTMLElement){
 }
 
 export function createDesktopPresentation(slots:DesktopShellSlots,appearance?:AppearanceStore){
-  const host=new UiPresentationHost<DesktopLayoutRenderer>({theme:linearUiTheme,layout:{...defaultUiLayout,implementation:defaultDesktopRenderer}});
+  const host=new UiPresentationHost<DesktopLayoutRenderer>({theme:linearUiTheme,layout:{...desktopUiLayout,implementation:defaultDesktopRenderer}});
   type Mounted={resources:ReturnType<typeof createPresentationScope>;handle?:ReturnType<DesktopLayoutRenderer['mount']>};
   let model:DesktopShellModel={section:'records'},mounted:Mounted|undefined,layout:unknown,restoreTheme:(()=>void)|undefined,disposed=false;
   const notice=slots.root.ownerDocument.createElement('p');notice.id='presentation-fallback';notice.className='helper';notice.setAttribute('role','status');notice.hidden=true;slots.main.prepend(notice);
@@ -104,7 +104,7 @@ export function createDesktopPresentation(slots:DesktopShellSlots,appearance?:Ap
     current.handle=renderer.mount(context,profile);current.handle.update(model);
   };
   const recover=(restore:()=>void)=>{
-    stop(restore);mount(defaultDesktopRenderer,defaultUiLayout);
+    stop(restore);mount(defaultDesktopRenderer,desktopUiLayout);
     slots.root.dataset.presentationFallback='layout_failed';notice.textContent=moteText('组件暂不可用');notice.hidden=false;
   };
   const update=()=>{const restore=retainShell(slots.root);try{mounted?.handle?.update(model);}catch{recover(restore);}};

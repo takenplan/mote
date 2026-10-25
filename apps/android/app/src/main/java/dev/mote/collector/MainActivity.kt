@@ -82,6 +82,7 @@ class MainActivity : MoteActivity() {
     private var libraryGeneration = 0
     private var libraryRefreshPending = false
     private var libraryRecordsRevision = -1L
+    private var firstUseGuide: LinearLayout? = null
     private var firstUse = true
     private val controls = mutableListOf<View>()
     private val controlPages = mutableMapOf<View, Page>()
@@ -92,7 +93,7 @@ class MainActivity : MoteActivity() {
     private var currentPage = Page.LIBRARY
     private var draftGeneration = 0
     private enum class Page(private val titleKey: String, val parent: String? = null) {
-        OVERVIEW("首页"), LIBRARY("内容"), ASK("问一问"), ACTIVITY("活动"), NOTES("随手记", "LIBRARY"), SOURCES("来源"), SETTINGS("设置", "LIBRARY"),
+        OVERVIEW("首页"), LIBRARY("资料"), ASK("问一问"), ACTIVITY("活动"), NOTES("随手记", "LIBRARY"), SOURCES("来源"), SETTINGS("设置", "LIBRARY"),
         CONNECTION("连接与同步", "SETTINGS"), CAPTURE("采集与存储", "SETTINGS"),
         PROCESSING("图像质量与去重", "CAPTURE"), STORAGE("本机存储", "CAPTURE"),
         PRIVACY("记录屏幕", "OVERVIEW"), PERMISSIONS("权限与后台运行", "SETTINGS"),
@@ -205,8 +206,8 @@ class MainActivity : MoteActivity() {
         headerTitle = TextView(this).apply { text = "Mote"; tag = "local-page-title"; MoteUi.type(this, NativeFontRole.APPBAR, medium = true); MoteUi.textColor(this, NativeColorRole.INK) }
         headerHeading.addView(headerTitle, LinearLayout.LayoutParams(0, -2, 1f))
         val quickNote = MoteUi.button(Button(this).apply {
-            text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
-            setOnClickListener { showMoteAddActions() }
+            text = MoteI18n.text("记下"); contentDescription = MoteI18n.text("记下")
+            setOnClickListener { openRecordEditor() }
         })
         headerAddAction = quickNote
         headerActions.addView(quickNote, LinearLayout.LayoutParams(-2, dp(48)))
@@ -260,116 +261,73 @@ class MainActivity : MoteActivity() {
 
     private fun buildToday() {
         val local = LocalStateRepository.get(this).state.value
-        firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0)
-        page(Page.OVERVIEW, MoteI18n.text("本机内容先保存；飞书文档由中央归档。整理后可搜索和提问。"))
-        val choices = MoteAddAction.entries
-        val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
-        collection.addView(TextView(this).apply {
-            text = MoteI18n.text("添加内容"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED)
-            setPadding(dp(MoteTheme.spaceItem), dp(4), dp(MoteTheme.spaceItem), dp(4))
-        })
-        val inputs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity); clipToOutline = true; setPadding(dp(MoteTheme.borderWidth), dp(MoteTheme.borderWidth), dp(MoteTheme.borderWidth), dp(MoteTheme.borderWidth)) }
-        collection.addView(inputs)
-        choices.forEachIndexed { index, action ->
-                inputs.addView(LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.TRANSPARENT, radius = 0, outline = false)
-                    setPadding(dp(MoteTheme.spaceInline), dp(4), dp(MoteTheme.spaceInline), dp(4)); minimumHeight = dp(64)
-                    isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey) + "，" + MoteI18n.text(action.subtitleKey)
-                    addView(ImageView(this@MainActivity).apply {
-                        setImageDrawable(MoteNavigationIcon(this@MainActivity, action.icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                        background = MoteUi.shape(this@MainActivity, NativeColorRole.TINT, NativeRadiusRole.INDICATOR, false); setPadding(dp(4), dp(4), dp(4), dp(4))
-                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(MoteTheme.spaceInline) })
-                    addView(LinearLayout(this@MainActivity).apply {
-                        orientation = LinearLayout.VERTICAL; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.titleKey); MoteUi.type(this, NativeFontRole.ROW, medium = true); MoteUi.textColor(this, NativeColorRole.INK) })
-                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, dp(4), 0, 0) })
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; MoteUi.textColor(this, NativeColorRole.ACCENT); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(4) })
-                    setOnClickListener { openMoteAdd(action) }
-                }, LinearLayout.LayoutParams(-1, -2))
-            if (index != choices.lastIndex) inputs.addView(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(56); marginEnd = dp(12) })
+        firstUse = !settings.enabled && settings.lastCapture() == null && (local.active?.records ?: 0) == 0 && (local.sourcePending ?: 0) == 0
+        page(Page.OVERVIEW, null)
+        button(MoteI18n.text("问一问"), true) { showPage(Page.ASK) }
+
+        val pageContent = content
+        val guide = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        content.addView(guide); firstUseGuide = guide; content = guide
+        section(MoteI18n.text("从你想留下的内容开始"))
+        rowButtons(MoteI18n.text("随手记"), { openRecordEditor() }, MoteI18n.text("添加来源"), { showPage(Page.SOURCES) })
+        content = pageContent
+
+        section(MoteI18n.text("随手记"))
+        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "home-recent-content" }
+        content.addView(homeRecentList)
+        button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
+
+        val summary = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        content.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        homeSyncStatus = TextView(this).apply {
+            text = MoteI18n.text("正在检查…"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
+            setLineSpacing(0f, 1.15f)
         }
-        val previousContent = content
-        val recovery = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), 0) }
-        collection.addView(recovery); content = recovery
-        text(MoteI18n.text("保存之后，回看或提问"), NativeFontRole.META, NativeColorRole.MUTED).apply { (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0 }
-        val retrieval = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        listOf("查看内容 →" to Page.LIBRARY, "问一问 →" to Page.ASK).forEach { (label, destination) ->
-            retrieval.addView(TextView(this).apply {
-                text = MoteI18n.text(label); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.ACCENT); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
-                isFocusable = true; contentDescription = MoteI18n.text(label); setOnClickListener { showPage(destination) }
-            }, LinearLayout.LayoutParams(0, -2, 1f))
+        summary.addView(homeSyncStatus, LinearLayout.LayoutParams(0, -2, 1f))
+        val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-status-details" }
+        val toggle = TextView(this).apply {
+            text = MoteI18n.text("查看状态与操作"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.ACCENT)
+            minHeight = dp(48); gravity = Gravity.CENTER; setPadding(dp(12), 0, 0, 0); isFocusable = true
+            setOnClickListener { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         }
-        content.addView(retrieval, LinearLayout.LayoutParams(-1, -2))
-        val syncEdge = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(10)); background = MoteUi.shape(this@MainActivity)
-        }
-        collection.addView(syncEdge); content = syncEdge
-        run {
-            val summary = LinearLayout(this@MainActivity).apply { gravity = Gravity.CENTER_VERTICAL }
-            content.addView(summary, LinearLayout.LayoutParams(-1, -2))
-            homeSyncStatus = TextView(this@MainActivity).apply {
-                text = MoteI18n.text("仅保存在本机 · 连接后可发送到中央"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.INK); setLineSpacing(0f, 1.25f)
-            }
-            summary.addView(homeSyncStatus, LinearLayout.LayoutParams(0, -2, 1f))
-            val details = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            summary.addView(TextView(this@MainActivity).apply {
-                text = MoteI18n.text("查看同步详情"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.ACCENT); minHeight = dp(48); gravity = Gravity.CENTER
-                setPadding(dp(12), 0, 0, 0); isFocusable = true
-                setOnClickListener { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
-            }, LinearLayout.LayoutParams(-2, -2))
-            content.addView(details)
-            val previous = content; content = details
-            content.addView(View(this@MainActivity).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER) }, LinearLayout.LayoutParams(-1, dp(MoteTheme.borderWidth)).apply { bottomMargin = dp(MoteTheme.spaceInline) })
-            text(MoteI18n.text("接收与整理状态"), NativeFontRole.ROW).apply { MoteUi.type(this, NativeFontRole.ROW, medium = true) }
+        summary.addView(toggle, LinearLayout.LayoutParams(-2, -2))
+        content.addView(details); content = details
+        try {
             homeSyncDetailStatus = text("", NativeFontRole.SUPPORT, NativeColorRole.MUTED)
             syncStatus = homeSyncDetailStatus
             homeSyncRate = text("", NativeFontRole.META, NativeColorRole.MUTED)
-            content.addView(View(this@MainActivity).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER) }, LinearLayout.LayoutParams(-1, dp(MoteTheme.borderWidth)).apply { topMargin = dp(MoteTheme.spaceInline); bottomMargin = dp(MoteTheme.spaceInline) })
-            centralConnectionTitle = text(MoteI18n.text("正在检查…"), NativeFontRole.ROW).apply { MoteUi.type(this, NativeFontRole.ROW, medium = true) }
-            centralConnectionStatus = text(MoteI18n.text("正在读取保存的连接与同步状态…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-            text(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。"), NativeFontRole.META, NativeColorRole.MUTED)
-            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) }, leftPrimary = true)
+            centralConnectionTitle = text(MoteI18n.text("正在检查…"), NativeFontRole.ROW)
+            centralConnectionStatus = text("", NativeFontRole.SUPPORT, NativeColorRole.MUTED)
+            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) })
             homeSendAction = button(MoteI18n.text("暂停全部发送")) { changeSendPause() }
-            menu(MoteI18n.text("发送中的内容"), MoteI18n.text("查看待发条目、阻塞原因与恢复操作"), "sync") { startActivity(Intent(this@MainActivity, SyncQueueActivity::class.java)) }
-            content = previous
-        }
-        content = previousContent
-        help(MoteI18n.text("资料如何整理"), MoteI18n.text("文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。"))
-        section(MoteI18n.text("持续来源"))
-        card {
-            text(MoteI18n.text("采集状态"), NativeFontRole.META, NativeColorRole.ACCENT)
-            captureTitle = text(MoteI18n.text("采集已暂停"), NativeFontRole.SECTION)
+            button(MoteI18n.text("发送中的内容")) { startActivity(Intent(this, SyncQueueActivity::class.java)) }
+
+            captureTitle = text(MoteI18n.text("采集已暂停"), NativeFontRole.ROW)
             status = text(settings.message(), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-            captureProgress = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = View.GONE }
+            captureProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = View.GONE }
             content.addView(captureProgress)
             captureAction = button(MoteI18n.text("开始采集"), primary = !settings.enabled) { if (settings.enabled) stopCapture() else startCapture() }
-            text(MoteI18n.text("未连接节点也能采集；随时可以暂停。"), NativeFontRole.META, NativeColorRole.MUTED)
-        }
-        text(MoteI18n.text("屏幕与应用活动"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-        homeScreenAction = button(MoteI18n.text("记录屏幕")) {
-            if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
-            else showPage(Page.PRIVACY)
-        }
-        homeSourceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(homeSourceList)
-        menu(MoteI18n.text("来源管理"), MoteI18n.text("逐个查看范围、暂停或重新授权"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
-        section(MoteI18n.text("最近内容"))
-        todaySummary = text(local.imageLabel(), NativeFontRole.META, NativeColorRole.MUTED)
-        totalsStatus = text(MoteI18n.text("正在读取统计…"), NativeFontRole.META, NativeColorRole.MUTED)
-        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "home-recent-content" }; content.addView(homeRecentList)
-        button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
-        section(MoteI18n.text("中央工作台"))
-        menu(MoteI18n.text("全部功能与设置"), MoteI18n.text("连接中央后，查看完整资料库、记忆、洞察与处理进度。"), "library") {
-            startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview").putExtra("featureGuide", true))
-        }
+            homeScreenAction = button(MoteI18n.text("记录屏幕")) {
+                if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
+                else showPage(Page.PRIVACY)
+            }
+            homeSourceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            content.addView(homeSourceList)
+            button(MoteI18n.text("来源管理")) { showPage(Page.SOURCES) }
+            todaySummary = text(local.imageLabel(), NativeFontRole.META, NativeColorRole.MUTED)
+            totalsStatus = text("", NativeFontRole.META, NativeColorRole.MUTED)
+            button(MoteI18n.text("活动")) { showPage(Page.ACTIVITY) }
+            button(MoteI18n.text("中央工作台")) {
+                startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview"))
+            }
+        } finally { content = pageContent }
     }
 
     internal fun addContent(action: MoteAddAction) {
         when (action) {
             MoteAddAction.FOLDER, MoteAddAction.FILE -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", action.name))
             MoteAddAction.SCREEN -> showPage(Page.PRIVACY)
-            MoteAddAction.NOTE -> showPage(Page.NOTES)
+            MoteAddAction.NOTE -> openRecordEditor()
             MoteAddAction.FEISHU -> openCentral("lark")
         }
     }
@@ -410,10 +368,14 @@ class MainActivity : MoteActivity() {
                     }
                 }
             }
-            val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3, source = "").getJSONArray("items")
+            val captures = applicationContext.withNativeNotePreviews(applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3, source = "note"))
+            captures.put("hasAnyRecords", applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 1, source = "").getInt("totalCount") > 0)
             Triple(sources, captures, applicationContext.localFileContents(3))
         }) { result ->
-            result.onSuccess { (sources, captures, files) ->
+            result.onSuccess { (sources, capturePage, files) ->
+                val captures = capturePage.getJSONArray("items")
+                firstUse = !settings.enabled && settings.lastCapture() == null && !capturePage.getBoolean("hasAnyRecords") && files.isEmpty() && sources.none { it.first.syncContinuously }
+                firstUseGuide?.visibility = if (firstUse) View.VISIBLE else View.GONE
                 homeSourceList.removeAllViews(); homeRecentList.removeAllViews()
                 if (sources.none { it.first.syncContinuously }) homeSourceList.addView(TextView(this).apply { text = MoteI18n.text("尚未添加文件夹。添加后可在这里查看范围和状态。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) })
                 sources.filter { it.first.syncContinuously }.forEach { (source, state) ->
@@ -421,10 +383,10 @@ class MainActivity : MoteActivity() {
                         startActivity(Intent(this, SourcesActivity::class.java).putExtra("sourceId", source.id))
                     }
                 }
-                files.forEach { row -> addFileRow(homeRecentList, row) }
+
                 for (index in 0 until captures.length()) addCaptureRow(homeRecentList, captures.getJSONObject(index))
-                if (files.isEmpty() && captures.length() == 0) homeRecentList.addView(TextView(this).apply { text = MoteI18n.text("还没有内容。选一个动作，留下第一份资料。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) })
-            }.onFailure { todaySummary.text = MoteI18n.text("资料暂不可读取，请稍后重试。") }
+                if (captures.length() == 0) homeRecentList.addView(TextView(this).apply { text = MoteI18n.text("还没有内容。选一个动作，留下第一份资料。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) })
+            }.onFailure { homeRecentList.removeAllViews(); homeRecentList.addView(TextView(this).apply { text = MoteI18n.text("资料暂不可读取，请稍后重试。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) }) }
         }
     }
 
@@ -458,7 +420,7 @@ class MainActivity : MoteActivity() {
         val timestamp = runCatching { java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT).withLocale(resources.configuration.locales[0]).withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(item.getString("capturedAt"))) }.getOrDefault(item.optString("capturedAt"))
         val kind = MoteI18n.text(if (note) "随手记" else "采集记录")
         val provenance = if (title == kind) timestamp else "$kind · $timestamp"
-        addContentRow(parent, title, item.optString("textPreview"), "library-record:" + item.getString("id"), if (note) "notes" else "capture", provenance) {
+        addContentRow(parent, title, NativeRecordPreview.text(item), "library-record:" + item.getString("id"), if (note) "notes" else "capture", provenance) {
             startActivity(Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()))
         }
     }
@@ -478,7 +440,7 @@ class MainActivity : MoteActivity() {
             text = MoteI18n.text("中央归档"); setOnClickListener { openCentral("archive") }
         }).apply { background = MoteUi.clickable(this@MainActivity, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL) }, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(scope, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        text(MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"), NativeFontRole.META, NativeColorRole.MUTED)
+        button(MoteI18n.text("记忆")) { openCentral("memories") }
         val types = listOf("" to "全部记录", "file" to "文件", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
         val selector = Spinner(this).apply {
             contentDescription = MoteI18n.text("资料类型")
@@ -495,7 +457,7 @@ class MainActivity : MoteActivity() {
         localLibraryStatus = text(MoteI18n.text("正在读取…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         localLibraryList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(localLibraryList)
         button(MoteI18n.text("按日期浏览更多记录")) { startActivity(Intent(this, CaptureRecordsActivity::class.java)) }
-        help(MoteI18n.text("查看记录说明"), MoteI18n.text("所有资料，在一处浏览和找回") + "\n\n" + MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"))
+
         content = pageContent
     }
     private fun openCentral(page: String) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", page)) }
@@ -506,7 +468,7 @@ class MainActivity : MoteActivity() {
         if (libraryTask.busy) { libraryRefreshPending = true; return }
         val list = localLibraryList; val label = localLibraryStatus; val source = librarySource
         libraryTask.start(MoteI18n.text("正在读取…"), { label.text = it }, {
-            applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 20, source = source) to (if (source.isEmpty() || source == "file") applicationContext.localFileContents(20) else emptyList())
+            applicationContext.withNativeNotePreviews(applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 20, source = source)) to (if (source.isEmpty() || source == "file") applicationContext.localFileContents(20) else emptyList())
         }) { result ->
             if (generation == libraryGeneration && list === localLibraryList) {
                 list.removeAllViews()
@@ -587,15 +549,12 @@ class MainActivity : MoteActivity() {
     }
 
     private fun buildSources() {
-        page(Page.SOURCES, MoteI18n.text("把你选择的生活线索，收进同一份档案"))
+        page(Page.SOURCES, null)
         section(MoteI18n.text("已支持的来源"))
         menu(MoteI18n.text("屏幕与应用活动"), MoteI18n.text("采集来源、频率与电量策略"), "capture") { showPage(Page.CAPTURE) }
         menu(MoteI18n.text("按应用配置"), MoteI18n.text("应用范围、版本字段与截图回退"), "shield") { showPage(Page.PRIVACY) }
         menu(MoteI18n.text("日历与文件"), MoteI18n.text("连接日历、选择文件或授权目录"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
-        card(MoteUi.tint) {
-            text(MoteI18n.text("只连接你选择的内容"), NativeFontRole.SECTION)
-            text(MoteI18n.text("日历和文件只在主动授权后读取；你可以为每个来源调整同步范围和保留方式。"), NativeFontRole.BODY, NativeColorRole.MUTED)
-        }
+        menu(MoteI18n.text("中央来源"), MoteI18n.text("连接与同步"), "sync") { openCentral("sources") }
     }
 
     private fun buildConnection(config: CollectorConfig) {
@@ -1321,7 +1280,7 @@ class MainActivity : MoteActivity() {
                 result.onSuccess { snapshot ->
                     snapshot.config?.let { if (!applyingSettings && it != loadedConfig) reloadSettings(it) }
                     if (::homeSyncStatus.isInitialized) {
-                        homeSyncStatus.text = snapshot.syncQueue + "\n" + if (loadedConfig.syncPaused) MoteI18n.text("已暂停全部发送 · 本机继续保存") else snapshot.syncPolicy
+                        homeSyncStatus.text = snapshot.title + " · " + if (loadedConfig.syncPaused) MoteI18n.text("暂停全部发送") else snapshot.syncQueue
                         homeSyncDetailStatus.text = snapshot.syncFacts
                         homeSyncRate.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label()
                         homeSendAction.text = MoteI18n.text(if (loadedConfig.syncPaused) "恢复全部发送" else "暂停全部发送")
@@ -1575,7 +1534,7 @@ class MainActivity : MoteActivity() {
         headerBackAction.contentDescription = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.CENTRAL_CALLER)
             MoteI18n.text("返回上一页") else pageBackTarget(page)?.let { MoteI18n.text("返回{0}", it.title) }
         homeHeader.visibility = if (page in setOf(Page.ASK, Page.ACTIVITY)) View.GONE else View.VISIBLE
-        headerAddAction.visibility = if (page.belongsToSettings()) View.GONE else View.VISIBLE
+        headerAddAction.visibility = View.GONE
         headerSettingsAction.visibility = if (page == Page.SETTINGS) View.GONE else View.VISIBLE
         val compactHeader = page != Page.OVERVIEW && (resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f)
         homeHeader.orientation = if (compactHeader) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL

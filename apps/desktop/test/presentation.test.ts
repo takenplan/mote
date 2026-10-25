@@ -1,7 +1,7 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {JSDOM} from 'jsdom';
 import {readFileSync} from 'node:fs';
-import {defaultUiLayout,linearUiTheme} from '@mote/shared';
+import {desktopUiLayout,linearUiTheme} from '@mote/shared';
 import {createDesktopPresentation,defaultDesktopRenderer,type DesktopLayoutRenderer,type DesktopPresentationScope} from '../src/presentation';
 
 let dom:JSDOM|undefined;
@@ -13,9 +13,9 @@ it('replaces a real layout and theme without recreating editors or duplicating n
   const originalOrder=Array.from(root.childNodes),editor=document.getElementById('note-text') as HTMLTextAreaElement;
   editor.value='Generated unsaved note';
   const shell=createDesktopPresentation(slots);shell.update({section:'sources'});
-  expect(Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(node=>(node as HTMLElement).dataset.nav)).toEqual(['records','ask','sources','work']);
+  expect(Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(node=>(node as HTMLElement).dataset.nav)).toEqual(['overview','records','sources','ask']);
   expect(document.querySelector('.main-nav [aria-current=page]')?.getAttribute('data-nav')).toBe('sources');
-  const remove=shell.host.registerLayout({...defaultUiLayout,id:'fixture.top',navigation:'top',primary:['activity','sources','ask','library'],implementation:defaultDesktopRenderer});
+  const remove=shell.host.registerLayout({...desktopUiLayout,id:'fixture.top',navigation:'top',primary:['sources','ask','library','home'],implementation:defaultDesktopRenderer});
   const theme={...linearUiTheme,id:'fixture.theme',tokens:{...linearUiTheme.tokens,background:'#101010'}};
   const removeTheme=shell.host.registerTheme(theme);
   shell.host.activate({theme,layout:{id:'fixture.top',version:'1'}});
@@ -36,14 +36,14 @@ it('isolates a throwing renderer and restores the default around the same focuse
   const slots={root,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:document.getElementById('main-content')!,navigate};
   const shell=createDesktopPresentation(slots),editor=document.getElementById('note-text') as HTMLTextAreaElement;
   editor.value='Generated unsaved focused original';editor.focus();editor.setSelectionRange(4,12);shell.update({section:'ask'});
-  shell.host.registerLayout({...defaultUiLayout,id:'fixture.throwing',implementation:{mount(context){context.main.replaceChildren();context.sidebar.remove();editor.value='Generated discarded renderer mutation';throw Error('Generated renderer failure');}}});
+  shell.host.registerLayout({...desktopUiLayout,id:'fixture.throwing',implementation:{mount(context){context.main.replaceChildren();context.sidebar.remove();editor.value='Generated discarded renderer mutation';throw Error('Generated renderer failure');}}});
   expect(()=>shell.host.activate({theme:linearUiTheme,layout:{id:'fixture.throwing',version:'1'}})).not.toThrow();
-  expect(root.dataset.presentationFallback).toBe('layout_failed');expect(root.dataset.navigation).toBe(defaultUiLayout.navigation);
+  expect(root.dataset.presentationFallback).toBe('layout_failed');expect(root.dataset.navigation).toBe(desktopUiLayout.navigation);
   expect(document.getElementById('note-text')).toBe(editor);expect(editor.value).toBe('Generated unsaved focused original');expect(document.activeElement).toBe(editor);expect(editor.selectionStart).toBe(4);expect(editor.selectionEnd).toBe(12);
   expect(document.getElementById('presentation-fallback')!.hidden).toBe(false);
   expect(document.querySelectorAll('.main-nav [aria-current=page]')).toHaveLength(1);
   document.querySelector<HTMLButtonElement>('.main-nav [data-nav=ask]')!.click();expect(navigate).toHaveBeenCalledOnce();
-  shell.host.activate({theme:linearUiTheme,layout:defaultUiLayout});expect(document.getElementById('presentation-fallback')!.hidden).toBe(true);expect(root.dataset.presentationFallback).toBeUndefined();
+  shell.host.activate({theme:linearUiTheme,layout:desktopUiLayout});expect(document.getElementById('presentation-fallback')!.hidden).toBe(true);expect(root.dataset.presentationFallback).toBeUndefined();
   shell.dispose();
 });
 
@@ -53,7 +53,7 @@ it('releases partial mount listeners and subscriptions even when setup or a clea
   const slots={root,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:document.getElementById('main-content')!,navigate};
   const shell=createDesktopPresentation(slots),subscribers=new Set<()=>void>(),subscription=vi.fn(),released=vi.fn();
   let scope!:DesktopPresentationScope,staleNavigate!:()=>void;
-  shell.host.registerLayout({...defaultUiLayout,id:'fixture.partial',implementation:{mount(context){
+  shell.host.registerLayout({...desktopUiLayout,id:'fixture.partial',implementation:{mount(context){
     scope=context.scope;staleNavigate=()=>context.navigate('settings');
     context.scope.listen(root,'click',()=>context.navigate('settings'));
     root.addEventListener('click',()=>context.navigate('settings'),{signal:context.scope.signal});
@@ -75,7 +75,7 @@ it('restores attached host slots when a registered cleanup mutates the DOM befor
   const slots={root,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:document.getElementById('main-content')!,navigate};
   const shell=createDesktopPresentation(slots),editor=document.getElementById('note-text') as HTMLTextAreaElement;
   editor.value='Generated draft survives a partial cleanup';
-  const remove=shell.host.registerLayout({...defaultUiLayout,id:'fixture.cleanup',implementation:{mount(context){
+  const remove=shell.host.registerLayout({...desktopUiLayout,id:'fixture.cleanup',implementation:{mount(context){
     context.scope.effect(()=>{context.sidebar.remove();editor.value='Generated discarded cleanup mutation';throw Error('Generated partial cleanup failure');});
     return {update(){},dispose(){}};
   }}});
@@ -100,7 +100,7 @@ it.each(['update','dispose'] as const)('cleans the active mount scope before def
     subscribers.add(subscription);context.scope.effect(()=>subscribers.delete(subscription));
     return {update(model){if(fail&&failure==='update')throw Error('Generated update failure');normal.update(model);},dispose(){if(failure==='dispose')throw Error('Generated dispose failure');normal.dispose();}};
   }};
-  const remove=shell.host.registerLayout({...defaultUiLayout,id:'fixture.active',implementation});
+  const remove=shell.host.registerLayout({...desktopUiLayout,id:'fixture.active',implementation});
   shell.host.activate({theme:linearUiTheme,layout:{id:'fixture.active',version:'1'}});
   expect(scope.signal.aborted).toBe(false);expect(subscribers.size).toBe(1);
   if(failure==='update'){fail=true;shell.update({section:'ask'});}else remove();

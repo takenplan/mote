@@ -865,3 +865,21 @@ input,select,textarea { accent-color:var(--mote-accent); }
 .capture-channels{display:flex;flex-wrap:wrap;gap:12px}.capture-channels .checkbox{display:flex;align-items:center;gap:6px;white-space:nowrap}.capture-channels input{width:auto}.app-rule .capture-channels{min-width:260px}
 
 .capture-choice{border:0;padding:0;margin:0}.capture-choice legend{margin-bottom:8px}
+
+/* Workbench keeps status and actions compact; content remains the visual focus. */
+.home-task-actions { padding: 12px 0; }
+.home-status { flex-wrap: wrap; align-items: center; }
+.home-status > p { flex: 1; min-width: 180px; }
+.quick-note-window .sidebar, .quick-note-window .workspace-toolbar { display: none !important; }
+.quick-note-window { display: block !important; padding: 0; }
+.quick-note-window #main-content { margin: 0; padding: 24px; width: 100%; }
+.quick-note-window .note-composer { padding: 0; border: 0; box-shadow: none; }
+.quick-note-window .page-footnote { display: none; }
+
+.workspace-home .home-intro { margin: 12px 0; padding: 0; }
+.workspace-home #home-onboarding { margin: 16px 0; padding: 16px; }
+.workspace-home .content-empty { padding: 24px var(--mote-space-panel); text-align: left; }
+.workspace-home .content-empty p { margin-left: 0; }
+.workspace-home .home-status { gap: 16px; padding: 12px 0; }
+.workspace-home .home-status > p { min-width: auto; margin: 0; }
+.workspace-home .home-status > span { color: var(--muted); font-size: var(--mote-font-support); }

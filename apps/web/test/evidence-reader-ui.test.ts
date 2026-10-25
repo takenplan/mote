@@ -26,7 +26,8 @@ test('note reader leads with the exact original, keeps real source facts and ret
  const facts=Array.from(d.querySelectorAll('.evidence-text>dl>div'));
  assert.ok(facts.some(row=>row.querySelector('dt')!.textContent==='窗口标题'&&row.querySelector('dd')!.textContent===generated.windowTitle));
  assert.ok(facts.some(row=>row.textContent==='索引状态等待索引'));assert.ok(facts.some(row=>row.textContent==='隐私处理未标记脱敏'));
- assert.match(d.querySelector('[data-archive-state]')!.textContent!,/归档不代表整理完成/);assert.equal(help.open,false);assert.equal(help.querySelector('summary')!.textContent,'归档与处理说明');
+ // Everyday reading shows the archival fact; processing explanation stays collapsed.
+ assert.equal(d.querySelector('[data-archive-state]')!.textContent,'资料已归档');assert.equal(d.querySelector('[data-processing-state]')!.getAttribute('data-processing-state'),'unknown');assert.equal(help.open,false);assert.equal(help.querySelector('summary')!.textContent,'归档与处理说明');
  assert.ok(body.compareDocumentPosition(help)&d.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING);assert.ok(body.compareDocumentPosition(d.querySelector('.evidence-source-actions')!)&d.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING);
  help.open=true;assert.match(help.textContent!,/OCR、索引和记忆分别处理/);
  const route=d.querySelector('.evidence-source-actions a')!.getAttribute('href')!;assert.equal(new URLSearchParams(route.split('?')[1]).get('memorySource'),'capture:'+id);

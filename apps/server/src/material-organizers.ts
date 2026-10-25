@@ -100,6 +100,7 @@ const captureText=(record:CaptureRecord)=>{
     ...(record.appName?{appName:record.appName}:{}),
     ...(record.durationMs?{durationMs:record.durationMs}:{}),
     ...(record.ocrText?{text:record.ocrText}:{}),
+    ...(record.metadata?.noteOrigin?{noteOrigin:record.metadata.noteOrigin}:{}),
     ...(record.ocr?{ocrStatus:record.ocr.status}:{}),
     ...(record.stateSeries?{stateSeries:record.stateSeries}:{}),
     ...(record.metadata?.state?{state:record.metadata.state}:{}),
@@ -214,6 +215,15 @@ function organizerReader(store:Store,selection:Record<string,string>,pinnedSourc
     const attachedFiles=includeAttached?fileAttachmentChildren(store,captureId).flatMap(({record,fileId})=>{
       permit(record);const selected=file(record.id,false);return selected?[{fileId,record,file:selected}]:[];
     }):[];
+    if(includeAttached){
+      const parent=capture(store,captureId);
+      if(parent?.source==='note')for(const id of parent.metadata?.attachments??[]){
+        const record=current(store,id)?capture(store,id):undefined;
+        if(!record)continue;
+        permit(record);const selected=file(id,false);
+        if(selected)attachedFiles.push({fileId:id,record,file:selected});
+      }
+    }
     const extraction=store.db.prepare("SELECT json FROM file_artifacts WHERE capture_id=? AND current=1 AND kind IN ('text','image-text','transcript','dialogue','corrected-dialogue') ORDER BY rowid DESC LIMIT 1").get(captureId);
     const extracted=extraction?JSON.parse(String(extraction.json)):undefined;
     return {image:imageMaterialProjection(store,captureId),extraction:extracted?{complete:extracted.complete,coverage:extracted.coverage}:undefined,processingRequired:!!original,providerTranscript,objectHash:original?.object_hash??undefined,...(attachedFiles.length?{attachedFiles}:{}),
@@ -614,13 +624,32 @@ const authored:MaterialOrganizer={
     const r=reader.capture();if(!r)return;
     const sourceId=sourceKey('authored',r.deviceId),body=new MaterialBody();body.addMember(r);
     body.text('record',r.ocrText,r.id,'plain',undefined,undefined,evidenceContext(r,r.source==='note'?'authored':undefined));
+    if(r.metadata?.noteOrigin?.text)body.text('shared-original',r.metadata.noteOrigin.text,r.id,'plain',undefined,undefined,evidenceContext(r,'reference'));
     const {text:_body,...metadata}=JSON.parse(captureText(r));
+    if(metadata.noteOrigin){const {text:_shared,...origin}=metadata.noteOrigin;metadata.noteOrigin=origin;}
     body.text('record-metadata',JSON.stringify(metadata),r.ocrText?[]:r.id,'json',undefined,undefined,evidenceContext(r,r.source==='note'?'authored':undefined));
     const file=reader.file(r.id);if(!file)return;
     for(const attachment of file.attachments)body.asset(`attachment:${attachment.id}`,attachment.hash,attachment.mimeType,r.id,{fileId:attachment.id,...(attachment.relativePath?{relativePath:attachment.relativePath}:{})});
+    const artifacts:NonNullable<MaterialDraft['artifacts']>=[{key:'authored-record',state:'ready'}];
+    for(const {record:attached,file:processed} of file.attachedFiles??[]){
+      if(!body.addMember(attached))break;
+      if(processed.attachmentsTruncated)body.limitations.add('attachment_processing_truncated');
+      if(processed.extraction?.complete===false||processed.extraction?.coverage==='partial'||processed.chunks.some(chunk=>chunk.artifact.complete===false||chunk.artifact.coverage==='partial'))body.limitations.add('attachment_processing_incomplete');
+      if(processed.objectHash)body.asset(`record-attachment:${attached.id}`,processed.objectHash,attached.provenance?.mimeType??'application/octet-stream',attached.id);
+      const blockIds:string[]=[];
+      for(const chunk of processed.chunks){
+        const before=body.blocks.length;
+        body.text(`record-attachment:${attached.id}:${chunk.id}`,chunk.text,[r.id,attached.id],chunk.startMs===null?'plain':'transcript',
+          {captureId:attached.id,chunkId:chunk.id,...(chunk.startMs===null?{}:{startMs:chunk.startMs,endMs:chunk.endMs})},[chunk.id],evidenceContext(attached,chunk.startMs===null?'reference':'transcript'));
+        blockIds.push(...body.blocks.slice(before).map(block=>block.id));
+      }
+      artifacts.push({key:`attachment/${attached.id}/text`,blockIds,state:processed.extraction?'ready':['failed','blocked'].includes(processed.job?.state??'')?'failed':['waiting','running'].includes(processed.job?.state??'waiting')?'pending':'unavailable'});
+      artifacts.push(...imageBlocks(body,attached,processed.image,`attachment/${attached.id}`));
+    }
     if(file.attachmentsTruncated)body.limitations.add('attachment_limit');
+    if((file.attachedFiles?.length??0)!==(r.metadata?.attachments?.length??0))body.limitations.add('attachment_unavailable');
     return {id:materialId(sourceId,r.id),kind:`mote.${r.source}`,schemaVersion:2,title:r.windowTitle||r.metadata?.notification?.title?.slice(0,500)||r.appName||r.source,
-      origin:origin(sourceId,r.id,[r]),blocks:body.blocks,members:body.members,coverage:body.coverage(),artifacts:[{key:'authored-record',state:'ready'}],fidelity:body.fidelity('derived',['metadata_projected']),retention:{original:'retained',policy:'keep'}};
+      origin:origin(sourceId,r.id,[r]),blocks:body.blocks,members:body.members,coverage:body.coverage(artifacts.some(item=>item.state!=='ready')?'partial':'complete'),artifacts,fidelity:body.fidelity('derived',['metadata_projected']),retention:{original:'retained',policy:'keep'}};
   },
 };
 
@@ -860,6 +889,9 @@ export class MaterialOrganizerRuntime {
     // Reject only changes that could alter this group; unrelated writes proceed.
     if(db.prepare(`SELECT 1 FROM changes c JOIN material_organizer_inputs m ON m.capture_id=c.id
       WHERE c.seq>? AND m.organizer_id=? AND m.group_json=? LIMIT 1`).get(input.checkpoint,input.organizerId,row.group_json))return false;
+    if(input.organizerId===authored.id&&db.prepare(`SELECT 1 FROM changes c JOIN captures parent ON parent.id=?
+      WHERE c.seq>? AND EXISTS(SELECT 1 FROM json_each(parent.json,'$.metadata.attachments') a WHERE a.value=c.id) LIMIT 1`)
+      .get(input.group.captureId,input.checkpoint))return false;
     // The built-in source item has an exact declared identity. Unrelated source
     // backlog cannot join that group; do not run every organizer selector for
     // every later source on every lease check. Attachment children can join the
@@ -898,6 +930,11 @@ export class MaterialOrganizerRuntime {
         .find(row=>this.registry.get(row.id)?.version===row.version);
       const backfillRows=backfill?db.prepare('SELECT rowid,id FROM captures WHERE rowid>? ORDER BY rowid LIMIT ?').all(backfill.cursorRowid,batchSize) as {rowid:number;id:string}[]:[];
       const changedIds=[...new Set([...rows.map(row=>row.id),...backfillRows.map(row=>row.id)])];
+      // Note attachments keep their own file processing identity. Rebuild each
+      // exact referring note on completion, failure or withdrawal of that file.
+      const noteParents=db.prepare(`SELECT id FROM captures WHERE json_extract(json,'$.source')='note'
+        AND EXISTS(SELECT 1 FROM json_each(captures.json,'$.metadata.attachments') a WHERE a.value=?)`);
+      for(const id of [...changedIds])for(const row of noteParents.all(id))if(!changedIds.includes(String(row.id)))changedIds.push(String(row.id));
       const changedSourceIds=new Set(rows.map(row=>row.id));
       const touched=new Map<string,{organizerId:string;group:Record<string,string>;priorMaterialId:string|null;sourceChanged:boolean}>();
       const replacements=new Map<string,Set<string>>();

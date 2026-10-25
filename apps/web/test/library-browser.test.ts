@@ -55,7 +55,7 @@ test('explicit library navigation leads directly into rows and source details wi
   const {root,d}=await fixture(t),reads:string[]=[],opened:string[]=[];
   const api=apiWith(path=>{reads.push(path);if(path.startsWith('/api/capture-browser?'))return {items:[row()],nextCursor:null,totalCount:1};if(path.startsWith('/api/capture-browser/'))return capture();throw Error('Unexpected generated request '+path);});
   await act(async()=>root.render(view(api,{onOpen:ref=>opened.push(ref)})));
-  assert.deepEqual(Array.from(d.querySelectorAll('.library-navigation button'),button=>button.getAttribute('data-collection-id')),webFeatures.collections().filter(entry=>entry.id!=='coding-status').map(entry=>entry.id));
+  assert.deepEqual(Array.from(d.querySelectorAll('.library-type-filters button'),button=>button.getAttribute('data-collection-id')),webFeatures.collections().filter(entry=>!['coding-status','memories'].includes(entry.id)).map(entry=>entry.id));
   assert.equal(d.querySelector('[data-collection-id="coding-status"]'),null,'Coding receipts are contextual in Processing tasks; the legacy collection remains registered');
   assert.ok(webFeatures.collections().some(entry=>entry.id==='coding-status'));
   assert.equal(d.querySelector('[data-collection-id="segments"]')?.textContent,'片段');assert.equal(d.querySelector('select[aria-label="资料类型"]'),null);assert.equal(d.querySelector('[aria-label="记录视图"]'),null);
@@ -75,20 +75,17 @@ test('explicit library navigation leads directly into rows and source details wi
   assert.equal(d.activeElement,record,'return preserves the original list and keyboard opener');
 });
 
-test('compact library categories preserve the full registered choices, selected type and explicit unavailable type',async t=>{
- const {root,d,w}=await fixture(t),selected:string[]=[];
+test('two primary library tabs keep registered specialized views secondary and unavailable links recoverable',async t=>{
+ const {root,d}=await fixture(t),selected:string[]=[];
  const api=apiWith(path=>path.startsWith('/api/library/catalog?')?{items:[],nextCursor:null}:{items:[row()],nextCursor:null,totalCount:1});
  await act(async()=>root.render(view(api,{setTab:tab=>selected.push(tab)})));
- const picker=d.querySelector<HTMLSelectElement>('.library-compact-categories select')!;
- assert.equal(picker.value,'records');
- assert.deepEqual(Array.from(picker.options,option=>option.value),Array.from(d.querySelectorAll('.library-navigation button'),button=>button.getAttribute('data-collection-id')));
- assert.equal(picker.querySelector('option[value="coding-status"]'),null,'transfer receipts stay in their existing Processing context');
- await act(async()=>{picker.value='memories';picker.dispatchEvent(new w.Event('change',{bubbles:true}));});
- assert.deepEqual(selected,['memories'],'the compact control selects the same registered collection directly');
+ assert.deepEqual(Array.from(d.querySelectorAll('.library-primary-tabs button'),node=>node.textContent),['我的资料','我的记忆']);
+ assert.equal(d.querySelector('.library-secondary-views')?.hasAttribute('open'),false);
+ assert.equal(d.querySelector('[data-collection-id="coding-status"]'),null);
+ await act(async()=>button(d,'我的记忆').click());assert.deepEqual(selected,['memories']);
  await act(async()=>root.render(view(api,{tab:'generated-removed-collection'})));
- assert.equal(picker.value,'generated-removed-collection','an explicit unavailable type never falls back to another visible type');
- assert.equal(picker.selectedOptions[0].disabled,true);
- assert.match(picker.selectedOptions[0].textContent??'',/当前不可用/);
+ assert.equal(d.querySelector('.library-secondary-views summary')?.textContent,'资料库分类');
+ assert.match(d.querySelector('.library-content')?.textContent??'',/当前不可用/);
 });
 
 test('record pagination and explicit device filters keep their request scope while returning from detail',async t=>{
@@ -191,5 +188,5 @@ test('an explicit missing collection shows unavailable and never reads the first
  assert.match(d.querySelector('.library-content')!.textContent!,/此资料库分类当前不可用/);
  assert.equal(d.querySelector('.library-content .library-record'),null);
  assert.deepEqual(reads,[]);
- assert.equal(d.querySelector('.library-navigation button[aria-current=page]'),null);
+ assert.equal(d.querySelector('.library-type-filters button[aria-current=page]'),null);
 });

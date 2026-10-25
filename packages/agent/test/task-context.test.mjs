@@ -216,3 +216,16 @@ test('disabled archive image disclosure removes image tools and guides OCR-only 
  assert.ok(taskTools({...input,archiveImagesEnabled:true}).includes('read_image'));
  assert.ok(taskTools({question:'Generated attachment',archiveImagesEnabled:false,directImages:[{id:'generated-dialogue'}]}).includes('read_image'));
 });
+
+
+test('selected original Ask answers normally while explicit Memory and Calendar tasks retain extraction output',async t=>{
+ const input={question:'Distinguish this generated original from my comment',evidenceIds:[record.id]};
+ assert.deepEqual(buildContextEnvelope(input,[record]).taskProfile,{output:'answer',retrieval:'evidence'});
+ assert.deepEqual(taskTools(input),['evidence']);
+ for(const memory of [{responseMode:'memory-extraction'},{skill:'memory-extraction'},{skill:'coding-memory'}])assert.deepEqual(buildContextEnvelope({...input,...memory},[record]).taskProfile,{output:'memory-extraction',retrieval:'evidence'});
+ assert.deepEqual(buildContextEnvelope({...input,skill:'calendar-extraction'},[record]).taskProfile,{output:'calendar-extraction',retrieval:'evidence'});
+ const {bridge,call}=await fixture(t,input);
+ assert.equal(bridge.records.has(record.id),true,'the selected original is delivered to the actual bridge');
+ const denied=await call('evidence',{ids:['different-generated-original']});assert.notEqual(denied.status,200,'answer output mode never widens evidence tool authority');
+ assert.equal((await call('search_context',{query:'unrelated archive'})).status,400,'exact Ask never exposes archive discovery');
+});

@@ -50,11 +50,13 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
     if(browseOwner!==api)return <Spinner/>;
     const content = <LibraryCollectionBoundary key={entry?.id}>{entry ? <CollectionContent entry={entry} props={props}/> : <p role="status">{moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</p>}</LibraryCollectionBoundary>;
     return <div className={'archive-page library-archive' + (selected ? ' has-selection' : '')}>
-   <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1><p>{moteText('按来源浏览已发布资料，上传与处理状态单独查看。')}</p></div><a className="button" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>
-   <label className="library-compact-categories"><span>{moteText('资料库分类')}</span><select aria-label={moteText('资料库分类')} value={tab} onChange={event=>{clearSelection();setTab(event.target.value);}}>{(!entry||entry.id==='coding-status')&&<option value={tab} disabled>{entry?.label??moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</option>}{collectionGroups.map(group=><optgroup key={group.group} label={group.label}>{group.items.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
-   <div className="library-workspace"><nav className="library-navigation" aria-label={moteText('资料库分类')}>
-     {collectionGroups.map(group => <section key={group.group}><h2>{group.label}</h2>{group.items.map(item => <button key={item.id} data-collection-id={item.id} aria-current={item.id === entry?.id ? 'page' : undefined} onClick={() => { clearSelection(); setTab(item.id); }}>{item.label}</button>)}</section>)}
-   </nav><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
+   <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1></div><a className="button" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>
+   <nav className="segmented-nav library-primary-tabs" aria-label={moteText('资料库')}>
+     <button className={tab!=='memories'?'active':''} aria-current={tab!=='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('materials');}}>{moteText('我的资料')}</button>
+     <button className={tab==='memories'?'active':''} aria-current={tab==='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('memories');}}>{moteText('我的记忆')}</button>
+   </nav>
+   {tab!=='memories'&&<details className="library-secondary-views"><summary>{entry?.label??moteText('资料库分类')}</summary><nav className="library-type-filters" aria-label={moteText('资料库分类')}>{collectionGroups.flatMap(group=>group.items).filter(item=>item.id!=='memories').map(item=><button className="button subtle" key={item.id} data-collection-id={item.id} aria-current={item.id===tab?'page':undefined} onClick={()=>{clearSelection();setTab(item.id);}}>{item.label}</button>)}</nav></details>}
+   <div className="library-workspace central-library-workspace"><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
  </div>;
 }
 class LibraryCollectionBoundary extends React.Component<{

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
-import {UiPresentationHost,linearUiTheme,defaultUiLayout} from '../dist/ui-presentation.js';
+import {UiPresentationHost,linearUiTheme,defaultUiLayout,androidUiLayout} from '../dist/ui-presentation.js';
 
 const fixture=()=>new UiPresentationHost({theme:linearUiTheme,layout:{...defaultUiLayout,implementation:{name:'default'}}});
 test('one failed presentation observer does not split the committed binding across consumers',()=>{
@@ -16,7 +16,7 @@ test('one failed presentation observer does not split the committed binding acro
 test('native assets, CSS and the compiled theme derive from the same selected design',()=>{
   execFileSync(process.execPath,[fileURLToPath(new URL('../../../scripts/generate-design-tokens.mjs',import.meta.url)),'--check'],{cwd:tmpdir()});
   const asset=JSON.parse(readFileSync(new URL('../../../apps/android/app/src/main/assets/ui-presentation.json',import.meta.url),'utf8'));
-  assert.equal(asset.schemaVersion,1);assert.deepEqual(asset.theme,linearUiTheme);assert.deepEqual(asset.layout,defaultUiLayout);
+  assert.equal(asset.schemaVersion,1);assert.deepEqual(asset.theme,linearUiTheme);assert.deepEqual(asset.layout,androidUiLayout);
 });
 test('presentation changes atomically and disposal restores the built-in provider',()=>{
   const host=fixture();

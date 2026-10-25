@@ -145,6 +145,7 @@ export interface DesktopApi {
   openCalendarPermissions(): Promise<void>;
   setSyncPaused(paused:boolean): Promise<Status>;
   status(): Promise<Status>;
+  openQuickNote?(): Promise<void>;
   noteDraft(): Promise<import('./note-draft').NoteDraft>;
   updateNoteDraft(input: import('./note-draft').NoteDraft): Promise<import('./note-draft').NoteDraft>;
   saveNote(input: import('./note-draft').NoteDraft): Promise<{ id: string; draft: import('./note-draft').NoteDraft }>;

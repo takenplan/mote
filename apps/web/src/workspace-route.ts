@@ -11,7 +11,7 @@ export function canonicalDestination(page: string, collection: string, available
 export function readWorkspaceRoute(hash: string, readPage: (hash: string) => string, available: readonly string[]) {
   const query = new URLSearchParams(hash.split('?')[1] ?? '');
   const raw=hash.replace(/^#\/?/,'').split('?')[0];
-  if (!raw) return canonicalDestination('archive', query.get('view') ?? 'materials', available);
+  if (!raw) return canonicalDestination('overview', query.get('view') ?? 'materials', available);
   const legacyRoutes:Record<string,string>={'library/materials':'materials','library/files':'files','library/memories':'memories','library/segments':'segments'};
   if(Object.hasOwn(legacyRoutes,raw))return canonicalDestination('archive',legacyRoutes[raw],available);
   if(['files','timeline','memories'].includes(raw))return canonicalDestination(raw,query.get('view')??'materials',available);

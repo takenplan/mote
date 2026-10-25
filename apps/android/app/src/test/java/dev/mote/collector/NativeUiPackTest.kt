@@ -13,7 +13,7 @@ class NativeUiPackTest {
             listOf("radius", "radius-container", "radius-control", "radius-reading", "radius-indicator", "border-width", "panel-border-width", "font-title", "font-title-mobile", "font-appbar", "font-section", "font-row", "font-body", "font-support", "font-meta", "font-action", "space-page", "space-panel", "space-group", "space-item", "space-inline").associateWith { "14px" } + mapOf(
                 "control-height-mobile" to "48px", "weight-title" to "600", "weight-section" to "600", "weight-body" to "400", "line-body" to "1.65", "letter-title" to "-0.025em", "font" to "sans-serif", "font-heading" to "sans-serif"))
     }
-    private fun layout(value: NativeLayoutSnapshot = NativeLayoutSnapshot(layoutId, listOf("library", "ask", "sources", "activity"), "library", "adaptive", "split")) = object : NativeLayoutProvider { override val snapshot = value }
+    private fun layout(value: NativeLayoutSnapshot = NativeLayoutSnapshot(layoutId, listOf("home", "library", "ask", "sources"), "home", "adaptive", "split")) = object : NativeLayoutProvider { override val snapshot = value }
     @Test fun explicitBindingSelectsExactInstalledThemeAndLayoutVersions() {
         val registry = NativeUiPackRegistry(); registry.register(theme()); registry.register(theme("2")); registry.register(layout())
         assertThrows(IllegalArgumentException::class.java) { registry.bind(NativeUiBinding(themeId.copy(version = "missing"), layoutId)) }

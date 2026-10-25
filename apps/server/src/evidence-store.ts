@@ -37,6 +37,7 @@ type Row = {id:string;json:string;received_at:string;blob_hash:string|null;mime:
 // Media evidence is searchable without rewriting the original screenshot OCR.
 function searchText(record:Pick<CaptureInput,'appId'|'appName'|'windowTitle'|'ocrText'|'mood'|'metadata'>) {
   return [record.appId,record.appName,record.windowTitle,record.ocrText,record.mood,
+    record.metadata?.noteOrigin?.text,record.metadata?.noteOrigin?.url,
     ...Object.values(record.metadata?.notification??{}).flat(), ...Object.values(record.metadata?.deviceEvent??{}),
     ...(record.metadata?.media?.sessions??[]).flatMap(s=>[s.appId,s.appName,s.title,s.artist,s.album,s.displaySubtitle,s.mediaId])].filter(Boolean).join('\n');
 }

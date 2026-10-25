@@ -49,7 +49,9 @@ class QueueStorage(private val context: Context) {
         return DurableQueue.exclusive {
         val state = store(); val location = state.current()
         DurableQueue(File(location.path), context.localContentCipher(), createMissing = false) { kind, bytes, id -> Operations.record(context, kind, bytes = bytes, recordId = id) }
-            .apply { onMutation = { LocalStateChanges.changed(records = it, storage = true) }; assertCurrent = { state.assertCurrent(location) }; recoveryFailure = null }
+            .apply { externalStorageBytes = { recordOriginalDiskBytes(context) }; onMutation = { LocalStateChanges.changed(records = it, storage = true) }; assertCurrent = { state.assertCurrent(location) }; recoveryFailure = null }
         }
     }
 }
+
+internal fun recordOriginalDiskBytes(context: Context): Long = File(context.noBackupFilesDir, "record-draft").listFiles().orEmpty().filter { it.isFile }.sumOf { it.length() } + File(context.filesDir, "record-pending").listFiles().orEmpty().filter { it.isFile }.sumOf { it.length() }

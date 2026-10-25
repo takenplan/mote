@@ -128,3 +128,12 @@ it('uses the stored file manifest for reference and current original availabilit
   vi.mocked(fetch).mockImplementation(async url=>new Response(JSON.stringify(String(url).includes('/api/files/')?{item:{layer:'reference'},hasOriginal:false}:{id:event().id,deviceId:config.deviceId,source:'file',fileArchive:{},provenance:{sourceId:source.id,layer:'reference'}})));
   expect(await read(run,key)).toMatchObject({metadataOnly:true,readiness:'metadata',retainsOriginal:false});
 });
+
+
+it('shows shared note evidence with attribution separately from the owner comment',async()=>{
+  const {run,item}=receipt();
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({id:item.captureId,deviceId:config.deviceId,source:'note',ocrText:'My generated comment',metadata:{noteOrigin:{kind:'share',text:'Third-party generated original',app:'Generated browser',url:'https://generated.invalid/article'}}})));
+  const result=await read(run,item.key);
+  expect(result.text).toBe('备注\nMy generated comment\n\n原文 · Generated browser · https://generated.invalid/article\nThird-party generated original');
+  expect(result.metadata).toContain('"kind": "share"');
+});

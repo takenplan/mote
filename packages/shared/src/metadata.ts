@@ -65,6 +65,15 @@ export const recordMetadataSchema = z.object({
   uiPage: uiPageSchema.optional(),
   captureObservation:z.object({id:z.string().uuid(),objectIndex:z.number().int().min(0).max(63).optional(),selected:z.object({duration:z.boolean(),screenshots:z.boolean(),structured:z.boolean()}).strict()}).strict().optional(),
   attachments: z.array(z.string().uuid()).max(10).optional(),
+  /** Explicit input provenance, never an assertion of the owner's beliefs. */
+  noteOrigin: z.object({
+    kind: z.enum(['manual', 'share', 'conversation']),
+    text: z.string().max(100000).optional(),
+    url: z.string().max(4000).optional(),
+    app: z.string().max(300).optional(),
+    conversationId: z.string().max(200).optional(),
+    messageIds: z.array(z.string().min(1).max(200)).max(50).optional(),
+  }).strict().optional(),
   version: z.literal(1),
   observedAt: timestamp,
   collector: z.object({
