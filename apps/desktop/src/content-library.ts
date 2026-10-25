@@ -1,3 +1,4 @@
+import {noteBody} from './note-presentation';
 import { moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
 import type { DurableQueue } from './queue';
@@ -17,7 +18,7 @@ export async function localContentDetail(queue:DurableQueue,sources:LocalSourceM
   if(typeof key!=='string'||key.length>160||typeof image!=='boolean')throw Error(moteText('记录标识无效'));
   if(key.startsWith('queue:')){
     const record=queue.recordForHistory(key.slice(6));if(!record)throw Error(moteText('该记录已完成同步，请切换到中央已归档查看'));
-    const event=record.event;let text=event.ocrText??'';
+    const event=record.event;let text=event.source==='note'?noteBody(event.ocrText??'',event.metadata):event.ocrText??'';
     if(event.source==='notification'){const value=event.metadata?.notification;text=value?[value.title,value.text,value.bigText,value.subText,...(value.textLines??[])].filter(Boolean).join('\n'):text;}
     const bytes=image?await queue.imageForBrowser(event.id):undefined;
     return {truncated:text.length>100000,text:text.slice(0,100000),sourceName:event.deviceName,metadata:JSON.stringify({capturedAt:event.capturedAt,appName:event.appName,durationMs:event.durationMs,metadata:event.metadata},null,2),hasImage:Boolean(record.blobHash),retainsOriginal:record.blobHash?true:undefined,...(bytes?{image:await previewWork.run<string>({kind:'preview',bytes,thumbnail:false})}:{})};

@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 
 class RetentionWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
     override fun doWork(): Result = try {
-        ConnectionGuard.sync { applicationContext.queue().pruneUploaded() }?.let { Result.success() } ?: Result.retry()
+        ConnectionGuard.sync { applicationContext.queue().pruneUploaded(); applicationContext.recordDraftStore().prune { applicationContext.queue().capture(it) != null } }?.let { Result.success() } ?: Result.retry()
     } catch (_: Exception) {
         SupportEvents.record(applicationContext, EventStage.QUEUE, EventCode.STORAGE)
         Result.retry()

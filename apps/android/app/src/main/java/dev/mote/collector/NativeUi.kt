@@ -273,10 +273,19 @@ class MotePrimaryNavigation(private val activity: Activity, private val onSelect
         removeAllViews(); items.clear()
         val rail = NativeUiPacks.registry.layout().navigation == "adaptive" && resources.configuration.screenWidthDp >= 600
         orientation = if (rail) VERTICAL else HORIZONTAL
+        isBaselineAligned = false
+        gravity = if (rail) Gravity.TOP else Gravity.CENTER_VERTICAL
         setPadding(activity.moteDp(8), activity.moteDp(8), activity.moteDp(8), activity.moteDp(8))
         MoteUi.backgroundColor(this, NativeColorRole.SIDEBAR)
         contentDescription = MoteI18n.text("主导航")
-        MoteNavigation.primaryTabs().forEach { tab ->
+        MoteNavigation.primaryTabs().forEachIndexed { index, tab ->
+            if (index == 2) {
+                val record = MoteUi.button(Button(activity).apply {
+                    text = MoteI18n.text("＋记下"); contentDescription = MoteI18n.text("＋记下"); tag = "global-record-action"
+                    setOnClickListener { activity.openRecordEditor() }
+                }, true)
+                addView(record, if (rail) LayoutParams(activity.moteDp(88), activity.moteDp(58)) else LayoutParams(0, activity.moteDp(58), 1f))
+            }
             val item = TextView(activity).apply {
                 text = MoteI18n.text(tab.titleKey); MoteUi.type(this, NativeFontRole.META); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
                 compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
@@ -356,8 +365,8 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
     val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
     if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
         tag = "detail-add-action"
-        text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
-        setOnClickListener { showMoteAddActions() }
+        text = MoteI18n.text("记下"); contentDescription = MoteI18n.text("记下")
+        setOnClickListener { openRecordEditor() }
     }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
     root.header(header)
     root.content(ScrollView(this).apply { isFillViewport = true; addView(body) })
@@ -443,7 +452,7 @@ fun Activity.openMoteAdd(action: MoteAddAction) {
     when (action) {
         MoteAddAction.FOLDER, MoteAddAction.FILE -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", action.name))
         MoteAddAction.SCREEN -> openMoteLocalPage("PRIVACY")
-        MoteAddAction.NOTE -> openMoteLocalPage("NOTES")
+        MoteAddAction.NOTE -> openRecordEditor()
         MoteAddAction.FEISHU -> startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "lark"))
     }
 }

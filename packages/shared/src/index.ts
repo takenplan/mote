@@ -38,6 +38,8 @@ export const captureSchema = z.object({
   metadata: recordMetadataSchema.optional(),
   privacy: privacySchema.default({excluded:false,redacted:false,mode:'local'}),
 }).strict().superRefine((v,ctx) => {
+  const noteContent=v.source==='note'&&Boolean(v.metadata?.attachments?.length||v.metadata?.noteOrigin?.text?.trim());
+  if(v.metadata?.noteOrigin&&v.source!=='note')ctx.addIssue({code:'custom',message:'Note origin belongs only to notes'});
   const selected=v.metadata?.captureObservation?.selected;
   if(selected && (v.source==='ui_page'&&!selected.structured || v.source==='screen'&&!selected.screenshots || v.source==='activity'&&!selected.duration || v.source==='media'&&(!selected.structured||!selected.duration&&v.durationMs!==0) || ['screen','ui_page'].includes(v.source)&&v.durationMs!==0))ctx.addIssue({code:'custom',message:'Capture channels disagree with the selected sampling policy'});
   if (v.metadata?.uiPage && v.source !== 'ui_page') ctx.addIssue({code:'custom',message:'Page evidence belongs to ui_page'});
@@ -56,7 +58,7 @@ export const captureSchema = z.object({
   if (v.ocr?.status === 'pending' && (!v.imageBase64 || v.ocrText)) ctx.addIssue({code:'custom',message:'Pending OCR requires a screenshot without recognized text'});
   if (Boolean(v.imageBase64) !== Boolean(v.imageMime)) ctx.addIssue({code:'custom',message:'imageBase64 and imageMime must be supplied together'});
   if (v.privacy.excluded) ctx.addIssue({code:'custom',message:'Excluded captures must never be uploaded'});
-  if (!v.imageBase64 && !v.ocrText.trim() && !v.provenance && !v.metadata?.capture?.deduplication && !['activity','media','notification','device_event'].includes(v.source)) ctx.addIssue({code:'custom',message:'An image or text is required'});
+  if (!v.imageBase64 && !v.ocrText.trim() && !noteContent && !v.provenance && !v.metadata?.capture?.deduplication && !['activity','media','notification','device_event'].includes(v.source)) ctx.addIssue({code:'custom',message:'An image or text is required'});
   if (v.source === 'activity') {
     if (v.privacy.collection !== 'activity' || !v.appId.trim() || v.imageBase64 !== undefined || v.imageMime !== undefined || v.ocrText || v.windowTitle || v.mood !== undefined || v.provenance || v.privacy.redacted)
       ctx.addIssue({code:'custom',message:'Activity records require an app identity and activity collection, without content, images or source references'});
@@ -96,7 +98,7 @@ export const captureSchema = z.object({
   if (v.provenance?.metadata?.file && v.source !== 'file') ctx.addIssue({code:'custom',message:'File metadata belongs to file sources'});
   if (v.provenance?.metadata?.file?.deletionObservedAt && !v.provenance.deleted) ctx.addIssue({code:'custom',message:'Deletion observation requires a deletion revision'});
   if (v.mood !== undefined && v.source !== 'note') ctx.addIssue({code:'custom',path:['mood'],message:'Mood must be explicitly supplied for a user note'});
-  if (v.source === 'note' && (v.durationMs !== 0 || v.imageBase64 || !v.ocrText.trim())) ctx.addIssue({code:'custom',message:'Notes require original text, zero duration and no image'});
+  if (v.source === 'note' && (v.durationMs !== 0 || v.imageBase64 || !v.ocrText.trim()&&!noteContent)) ctx.addIssue({code:'custom',message:'Notes require text or attachments, zero duration and no inline image'});
 });
 export type CaptureInput = z.infer<typeof captureSchema>;
 export const noteSchema = z.object({
@@ -104,10 +106,10 @@ export const noteSchema = z.object({
   id: z.string().uuid(), deviceId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_.:-]+$/),
   deviceName: z.string().min(1).max(200), platform: platformSchema,
   capturedAt: z.string().max(64).datetime({offset:true}),
-  text: z.string().max(100000).refine(value => value.trim().length > 0, 'Note text cannot be blank'),
+  text: z.string().max(100000),
   mood: moodSchema.optional(),
   metadata: recordMetadataSchema.optional(),
-}).strict();
+}).strict().refine(v=>Boolean(v.text.trim()||v.metadata?.attachments?.length||v.metadata?.noteOrigin?.text?.trim()),'Note requires text or attachments');
 export type NoteInput = z.infer<typeof noteSchema>;
 export function noteCapture(note: NoteInput): CaptureInput {
   return captureSchema.parse({

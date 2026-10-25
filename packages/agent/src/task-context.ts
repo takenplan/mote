@@ -10,6 +10,7 @@ export const TASK_PROFILES = {
   answer:{output:'answer',retrieval:'archive'},
   insight:{output:'personal-insight',retrieval:'archive'},
   extraction:{output:'memory-extraction',retrieval:'evidence'},
+  selectedAnswer:{output:'answer',retrieval:'evidence'},
   calendar:{output:'calendar-extraction',retrieval:'evidence'},
   working:{output:'answer',retrieval:'none'},
 } as const;
@@ -18,7 +19,8 @@ export function taskProfile(input:QueryInput){
   if(input.skill==='working-memory')return TASK_PROFILES.working;
   if(input.skill==='calendar-extraction')return TASK_PROFILES.calendar;
   if(input.skill==='personal-insight')return TASK_PROFILES.insight;
-  if(input.evidenceIds!==undefined)return TASK_PROFILES.extraction;
+  if(input.responseMode==='memory-extraction'||input.skill==='memory-extraction'||input.skill==='coding-memory')return TASK_PROFILES.extraction;
+  if(input.evidenceIds!==undefined)return TASK_PROFILES.selectedAnswer;
   return TASK_PROFILES.answer;
 }
 export function taskTools(input:QueryInput):string[]{

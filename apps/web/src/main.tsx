@@ -44,6 +44,7 @@ type Status
 import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage,featuresReady,webFeatures } from './features/runtime';
 import { PresentationSurface } from './presentation';
+import { GlobalRetrieval } from './GlobalRetrieval';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { pageLabels,readPage,routes,type Page } from './navigation';
 import { canonicalDestination,readWorkspaceRoute,workspaceHash } from './workspace-route';
@@ -318,7 +319,7 @@ function App() {
               <strong>{pageLabels[page]??moteText("当前服务未提供此入口")}</strong>
             </span>
           </div>
-          <div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('今天')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
+          <GlobalRetrieval onPage={onPage}/><div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('总览')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
             <CentralStatusPill
               connection={connection}
               verified={verified}

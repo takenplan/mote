@@ -15,6 +15,7 @@ type SavedInput=QueryInput&{hostRequest:unknown;executionTimeoutMs?:number;lastF
 const capacityWaiting=(error:unknown)=>error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&(error.details.admissionWaiting===true||error.details.category==='transient'&&error.details.code==='rate_limited');
 type QueryCallbacks={
   contextTime?:()=>string;
+  resolveInput?:(input:unknown)=>unknown;
   prepare:(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress'])=>Promise<QueryInput>;
   query:(input:QueryInput)=>Promise<QueryResult>;
   commit:(body:unknown,result:QueryResult,work:DelegationWork)=>Receipt;
@@ -165,15 +166,17 @@ export class DelegatedQueryRuns {
     if(typeof (input as {question?:unknown})?.question!=='string')throw new StoreError('Query requires a question',400);
     const requestHash=createHash('sha256').update(JSON.stringify(input)).digest('hex'),existing=this.store.db.prepare('SELECT request_hash FROM query_runs WHERE id=?').get(id);
     if(existing){if(existing.request_hash!==requestHash)throw new StoreError('Run ID belongs to a different request',409);return this.get(id);}
-    const request=input as {question:string;conversationId?:string;after?:string;before?:string;deviceId?:string;timeZone?:string;modelProfileId?:string;modelOverride?:string};
+    input=this.callbacks.resolveInput?.(input)??input;
+    const request=input as {evidenceIds?:string[]|null;question:string;conversationId?:string;after?:string;before?:string;deviceId?:string;timeZone?:string;modelProfileId?:string;modelOverride?:string};
     if(request.conversationId&&this.store.db.prepare("SELECT 1 FROM query_runs WHERE json_extract(json,'$.conversationId')=? AND json_extract(json,'$.status')='running'").get(request.conversationId))throw new StoreError('An answer is already running in this conversation',409);
     const at=new Date().toISOString(),contextTime=this.callbacks.contextTime?.()??at,run:QueryRun={id,operationId:'query:'+id,status:'running',createdAt:at,updatedAt:at,events:[],evidenceRevision:this.store.deletionRevision(),...(request.conversationId?{conversationId:request.conversationId}:{})};
     const saved:SavedInput={question:request.question,hostRequest:input,language:requestLocale.getStore()??'zh-CN',...(deadline.timeoutMs!==undefined&&deadline.timeoutMs!==null?{executionTimeoutMs:Math.max(1,deadline.timeoutMs)}:{})};
     const foreground=this.foregroundRequests.get(id);if(foreground)foreground.executionTimeoutMs=saved.executionTimeoutMs;
+    if(foreground)foreground.hostRequest=structuredClone(input);
     this.store.db.exec('BEGIN IMMEDIATE');
     try{
       this.store.reserveMetadata(32768);this.store.db.prepare('INSERT INTO query_runs VALUES(?,?,?)').run(id,requestHash,JSON.stringify(run));
-      this.runtime.start({id:'query:'+id,operationId:'query:'+id,profileId:'query',goal:request.question,input:saved,scope:{...(request.after?{after:request.after}:{}),...(request.before?{before:request.before}:{}),...(request.deviceId?{deviceId:request.deviceId}:{}),...(request.timeZone?{timeZone:request.timeZone}:{}),contextTime},allowedCapabilities:['context.research']});
+      this.runtime.start({id:'query:'+id,operationId:'query:'+id,profileId:'query',goal:request.question,input:saved,scope:{...(request.evidenceIds?{evidenceIds:request.evidenceIds}:{}),...(request.after?{after:request.after}:{}),...(request.before?{before:request.before}:{}),...(request.deviceId?{deviceId:request.deviceId}:{}),...(request.timeZone?{timeZone:request.timeZone}:{}),contextTime},allowedCapabilities:['context.research']});
       this.store.db.exec('COMMIT');
     }catch(error){if(this.store.db.isTransaction)this.store.db.exec('ROLLBACK');throw error;}
     return this.get(id);

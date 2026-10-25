@@ -226,15 +226,15 @@
     }
   },
   "layout": {
-    "id": "mote.workspace",
+    "id": "mote.android",
     "version": "1",
     "primary": [
+      "home",
       "library",
       "ask",
-      "sources",
-      "activity"
+      "sources"
     ],
-    "initial": "library",
+    "initial": "home",
     "navigation": "adaptive",
     "detail": "split"
   }

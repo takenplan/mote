@@ -12,7 +12,7 @@ const repo=resolve(__dirname,'../../..'),web=join(repo,'apps/web/dist'),root=mkd
 mkdirSync(output,{recursive:true});app.setPath('userData',join(root,'browser'));app.on('window-all-closed',()=>{});
 const delay=ms=>new Promise(done=>setTimeout(done,ms));
 const gate=()=>{let release;return {promise:new Promise(done=>release=done),release:()=>release()};};
-const startedAt=Date.now(),deadline=startedAt+28000;
+const startedAt=Date.now(),deadline=startedAt+40000;
 async function until(read,label){const end=Math.min(Date.now()+20000,deadline);while(Date.now()<end){if(await read())return;await delay(40);}throw Error('Timed out: '+label);}
 let server,window;
 const cold=gate(),firstDetail=gate(),ownerRefresh=gate(),otherDetail=gate(),mediaRefresh=gate(),activityRefresh=gate(),recordsRefresh=gate(),gates=[cold,firstDetail,ownerRefresh,otherDetail,mediaRefresh,activityRefresh,recordsRefresh];
@@ -44,6 +44,13 @@ async function run(){
      await delay(500);
      json(res,key==='history'?{items:['A','B'].map(summary),nextCursor:null}:key==='owner'?{items:[],nextCursor:null}:detail(key==='detail'?'A':'B'));
     }finally{pending.delete(req);}return;}
+    if(path==='/api/captures'){json(res,{items:[],nextCursor:null});return;}
+    if(path==='/api/insights'){json(res,{items:[]});return;}
+    if(path==='/api/sources'){json(res,{items:[]});return;}
+    if(path==='/api/connections'){json(res,{items:[],mcp:{enabled:true,writeEnabled:false,writeSourceIds:[]}});return;}
+    if(path==='/api/library/catalog'){json(res,{schemaVersion:1,types:[],sources:[],items:[],nextCursor:null});return;}
+    if(path==='/api/context/search'){json(res,{items:[{ref:'memory:generated-search-result',title:'Generated searchable memory',snippet:'Generated evidence excerpt',kind:'memory'}],nextCursor:null});return;}
+    if(path==='/api/context/read'){json(res,{items:[{id:'generated-search-result',ref:'memory:generated-search-result',kind:'memory',title:'Generated searchable memory',text:'Generated evidence body for retrieval journey',textRange:{offset:0,total:43,nextOffset:null}}],missingRefs:[]});return;}
     if(path==='/api/configuration'){json(res,{profile:'generated-fixture',groups:[]});return;}
     if(path==='/api/status'){json(res,{profile:'generated-fixture',agent:{configured:true,model:'generated-model',provider:'custom',agentTimeoutMs:120000},storage:{captures:0,blobs:0,bytes:0,imageBytes:0,logicalBytes:0,imagesEncrypted:false,indexing:[]},index:{mode:'none',model:null},retentionDays:0,insightIntervalHours:0,serverTime:when});return;}
     if(path==='/api/devices'){json(res,{items:[]});return;}
@@ -134,8 +141,29 @@ async function run(){
  await checkLibraryRefresh({id:'media',selector:'.media-activity-panel',row:'.media-app-row',text:'Generated player',release:mediaRefresh,rolling:true});
  await checkLibraryRefresh({id:'activity',selector:'.activity-panel',row:'.app-row',text:'Generated editor',release:activityRefresh,rolling:true});
  await checkLibraryRefresh({id:'records',selector:'.library-captures',row:'.library-record',text:'Generated archived note',release:recordsRefresh,rolling:false});
+ // Central IA: the built shell keeps retrieval available and opens the complete Ask workspace.
+ await js(`location.hash=''`);
+ await until(()=>js(`document.querySelector('[data-page="overview"][data-session="ready"]')`),'default overview');
+ await until(()=>js(`document.querySelector('[data-page="overview"] h1')?.textContent==='总览'&&document.querySelector('.central-first-steps')`),'overview onboarding content');
+ await delay(80);writeFileSync(join(output,'central-overview.png'),(await wc.capturePage()).toPNG());
+ assert.deepEqual(await js(`[...document.querySelectorAll('.sidebar nav button')].map(node=>node.innerText)`),['总览','资料库','数据来源','AI 接入']);
+ await js(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true,bubbles:true}))`);
+ assert.equal(await js(`document.activeElement===document.querySelector('.global-retrieval input')`),true);
+ await js(`(()=>{const input=document.querySelector('.global-retrieval input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'generated');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ await delay(60);await js(`document.querySelector('.global-retrieval').requestSubmit()`);
+ await until(()=>js(`document.querySelector('[data-page="search"] .library-record')`),'search result');
+ await js(`document.querySelector('[data-page="search"] .library-record').click()`);
+ await until(()=>js(`document.querySelector('.library-detail')?.textContent.includes('Generated evidence body')`),'search evidence');
+ writeFileSync(join(output,'central-search-evidence.png'),(await wc.capturePage()).toPNG());
+ await js(`document.querySelector('.library-back').click()`);
+ assert.equal(await js(`document.querySelector('.library-browser').classList.contains('has-selection')`),false);
+ await js(`[...document.querySelectorAll('.global-retrieval button')].find(node=>node.textContent==='提问').click()`);
+ await js(`document.querySelector('.global-retrieval').requestSubmit()`);
+ await until(()=>js(`document.querySelector('[data-page="ask"] .conversation-history')&&document.querySelector('textarea[aria-label="向 Mote 提问"]')`),'global Ask full workspace');
+ await until(()=>js(`document.querySelector('textarea[aria-label="向 Mote 提问"]')?.value==='generated'`),'global Ask draft handoff without sending');
+ assert.equal(await js(`document.querySelector('[role="dialog"]')===null`),true);
  assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
- writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,generatedOnly:true,actualWebMain:true,hiddenWindow:true,durationMs:Date.now()-startedAt,counts,collectionPaths,checks:['Ask cold history and detail loading','restored completed conversation','capture/file/import/query change refreshes','real five-second empty-question poll','preserved Ask draft, DOM identity and focus','explicit history refresh','first load of another conversation','Media global refresh with advanced rolling URL and stable DOM','Activity global refresh with advanced rolling URL and stable DOM','RecordTimeline global refresh with stable DOM'],liveModel:false,personalNodeRead:false,physicalDevice:false},null,2));
+ writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,generatedOnly:true,actualWebMain:true,hiddenWindow:true,durationMs:Date.now()-startedAt,counts,collectionPaths,checks:['Central default overview and four primary destinations','global Cmd-K search to exact evidence and return','global Ask opens complete conversation workspace','Ask cold history and detail loading','restored completed conversation','capture/file/import/query change refreshes','real five-second empty-question poll','preserved Ask draft, DOM identity and focus','explicit history refresh','first load of another conversation','Media global refresh with advanced rolling URL and stable DOM','Activity global refresh with advanced rolling URL and stable DOM','RecordTimeline global refresh with stable DOM'],liveModel:false,personalNodeRead:false,physicalDevice:false},null,2));
  console.log('PASS: generated frontend refresh journeys through built Web main: Ask cold/background loading, empty-question polling, conversation selection, and Media/Activity/RecordTimeline global refresh stability.');
 }
 async function finish(code){gates.forEach(value=>value.release());if(window&&!window.isDestroyed())window.destroy();if(server){server.closeAllConnections();await new Promise(done=>server.close(done));}rmSync(root,{recursive:true,force:true});app.exit(code);}

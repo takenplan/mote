@@ -1,3 +1,4 @@
+import {SaveConversationRecord} from './SaveConversationRecord';
 import {useResource} from './useResource';
 import {useOperationUpdates} from './useOperationUpdates';
 import {readResource,resources} from './resource-cache';
@@ -19,7 +20,7 @@ interface ConversationSummary {
   createdAt: string;
   updatedAt: string;
   turnCount: number;
-  scope: Range & {timeZone?: string};
+  scope: Range & {timeZone?: string;evidenceIds?:string[]};
   status: 'completed'|'failed';
 }
 interface ConversationTurn {
@@ -60,6 +61,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
 }) {
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
+  const [clearedScope,setClearedScope]=useState<{owner:Api;id:string}|null>(null);
   const [selectedId,setSelectedId]=useState<string|null>(null),[older,setOlder]=useState<OlderTurns|null>(null),[pageRevoked,setPageRevoked]=useState(false);
   const [selectedOwnerQuestion,setSelectedOwnerQuestion]=useState<string|null>(()=>readOwnerQuestion(window.location.hash));
   const detail=useResource<Conversation>(api,selectedId?`/api/conversations/${encodeURIComponent(selectedId)}`:null);
@@ -67,6 +69,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   // A newer revision can withdraw prior evidence. Never merge copied pages from
   // an older revision while their replacement is still being fetched.
   const conversation=detail.data&&!pageRevoked?{...detail.data,turns:[...(currentOlder?.turns??[]).filter(turn=>!detail.data!.turns.some(next=>next.id===turn.id)),...detail.data.turns],...(currentOlder?{nextCursor:currentOlder.nextCursor}:{})}:null;
+  const scopeCleared=clearedScope?.owner===api&&clearedScope.id===conversation?.id;
+  useEffect(()=>setClearedScope(null),[api,selectedId]);
   const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error});
   latestDetail.current={api,selectedId,data:detail.data,error:detail.error};
   const [draft]=useState(createQuestionDraft),setQuestion=draft.set;
@@ -102,7 +106,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   }
   useEffect(()=>{selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
-  useEffect(()=>{const changed=()=>{const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
+  useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');const incoming=draftQuery.get('questionDraft');if(incoming!==null){selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
   useLayoutEffect(()=>{
     olderRequest.current?.abort();olderRequest.current=null;setLoadingOlder(false);setOlder(null);setPageRevoked(false);
@@ -144,6 +148,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
 
   function open(id: string) {
     if (busy) return;
+    setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setError('');setConfirmDelete(false);setQuestion('');setAttachments([]);setPendingQuestion('');
     setOlder(null);setSelectedId(id);setSelectedOwnerQuestion(null);
@@ -162,6 +167,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   }
   function startNew() {
     if (busy) return;
+    setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
     if(readOwnerQuestion(window.location.hash))window.location.hash='#/ask';
@@ -179,7 +185,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
     try {
       const id=crypto.randomUUID();
-      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null}:{})}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
       let accepted:QueryRun;
       try{accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});}
       catch(e){
@@ -240,13 +246,14 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
       <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
+      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
       {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}
       {opening && <p className="loading" role="status"><LoaderCircle size={16} className="spin"/>{moteText("正在打开对话…")}</p>}
       <div className="conversation-messages">
       {conversation?.nextCursor&&<button className="text-button" disabled={opening} onClick={()=>void loadOlderTurns()}>{moteText("加载更早的对话")}</button>}
       {conversation?.turns.map(turn => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}`} key={turn.id}>
         <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}{Boolean(turn.attachments?.length)&&<span className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</span>}</span></div>
-        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.result.modelSelection&&<small className="model-used">{turn.result.modelSelection.profileName} · {turn.result.modelSelection.model}</small>}{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result)}</>}</>}
+        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.result.modelSelection&&<small className="model-used">{turn.result.modelSelection.profileName} · {turn.result.modelSelection.model}</small>}{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result)}<SaveConversationRecord api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} onOpen={onOpen}/></>}</>}
       </article>)}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}
       {run&&<QueryProgress api={api} run={run} error={pollError}/>}

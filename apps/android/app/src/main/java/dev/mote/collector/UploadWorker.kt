@@ -152,7 +152,30 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                     return Result.success()
                 }
                 stage = EventStage.UPLOAD
-                var sent = if (config.packedUpload) events else events.take(1)
+                val prepared = mutableListOf<JSONObject>()
+                var attachmentRetry = false
+                var skippedAttachments = 0
+                for (event in events) {
+                    pendingRecordId = event.getString("id")
+                    try {
+                        prepared.add(RecordAttachmentSync.prepare(applicationContext, config, event))
+                        if (!config.packedUpload) break
+                    } catch (error: SyncConditionsUnavailable) { throw error
+                    } catch (error: java.io.InterruptedIOException) { throw error
+                    } catch (error: Exception) {
+                        skippedAttachments++
+                        Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)
+                        if (error is CentralFailure && error.status == 401) return failed(error.message ?: MoteI18n.text("访问凭据已失效，请重新连接。"), false)
+                        if (error is java.io.FileNotFoundException || error is IllegalArgumentException || error is org.json.JSONException || error is CentralFailure && error.status in setOf(400, 403, 409, 410, 413, 426)) queue.uploadConflict(pendingRecordId!!)
+                        else attachmentRetry = true
+                    }
+                }
+                if (prepared.isEmpty()) {
+                    remaining -= skippedAttachments
+                    if (attachmentRetry) return failed(MoteI18n.text("部分记录未确认"))
+                    continue
+                }
+                var sent: List<JSONObject> = prepared
                 pendingRecordId = sent.first().getString("id")
                 var wireBytes = 0L
                 val individual = !config.packedUpload
@@ -200,7 +223,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                 }
                 if (!individual && acknowledged > 0) SupportEvents.record(applicationContext, EventStage.UPLOAD, EventCode.OK, httpStatus = response.first)
                 pendingRecordId = null
-                remaining -= sent.size
+                remaining -= sent.size + skippedAttachments
+                if (attachmentRetry) return failed(MoteI18n.text("部分记录未确认"))
                 if (retry) return failed(MoteI18n.text("部分记录未确认"), !permanent)
 
             }

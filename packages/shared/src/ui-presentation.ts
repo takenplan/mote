@@ -2,7 +2,7 @@ import {FeatureRegistry} from './feature-packs.js';
 import {linearThemeTokens,linearLightThemeTokens} from './ui-theme.generated.js';
 
 /** Presentation identities describe explicit owner-selected UI, never captured content. */
-export type UiDestination='library'|'ask'|'sources'|'activity';
+export type UiDestination='home'|'library'|'ask'|'sources'|'connections'|'activity';
 export type UiReference={id:string;version:string};
 export type UiThemePack=UiReference & {tokens:Readonly<Record<string,string>>;schemes?:Readonly<Record<'light'|'dark',Readonly<Record<string,string>>>>};
 export type UiLayoutProfile=UiReference & {
@@ -14,7 +14,9 @@ export type UiLayoutProfile=UiReference & {
 export type UiLayoutPack<T>=UiLayoutProfile & {implementation:T};
 export type UiPresentationSnapshot<T>={theme:UiThemePack;layout:UiLayoutPack<T>;fallbackReason?:'theme_removed'|'layout_removed'};
 export const linearUiTheme:UiThemePack=Object.freeze({id:'mote.linear',version:'1',tokens:Object.freeze({...linearThemeTokens}),schemes:Object.freeze({light:Object.freeze({...linearLightThemeTokens}),dark:Object.freeze({...linearThemeTokens})})});
-export const defaultUiLayout:UiLayoutProfile=Object.freeze({id:'mote.workspace',version:'1',primary:Object.freeze(['library','ask','sources','activity'] as UiDestination[]),initial:'library',navigation:'adaptive',detail:'split'});
+export const defaultUiLayout:UiLayoutProfile=Object.freeze({id:'mote.central',version:'1',primary:Object.freeze(['home','library','sources','connections'] as UiDestination[]),initial:'home',navigation:'adaptive',detail:'split'});
+export const desktopUiLayout:UiLayoutProfile=Object.freeze({...defaultUiLayout,id:'mote.desktop',primary:Object.freeze(['home','library','sources','ask'] as UiDestination[])});
+export const androidUiLayout:UiLayoutProfile=Object.freeze({...defaultUiLayout,id:'mote.android',primary:Object.freeze(['home','library','ask','sources'] as UiDestination[])});
 
 function reference(value:UiReference){if(!/^[a-z][a-z0-9.-]*$/.test(value.id)||!/^\d+(?:\.\d+)*$/.test(value.version))throw Error('Invalid presentation identity');return value.id+'@'+value.version;}
 /** Theme data is role values only, never a stylesheet, resource loader or executable UI. */
@@ -32,10 +34,10 @@ export function validateUiTheme(pack:UiThemePack):UiThemePack {
   const schemes=pack.schemes ? Object.freeze({light:validateUiTheme({id:pack.id,version:pack.version,tokens:pack.schemes.light}).tokens,dark:validateUiTheme({id:pack.id,version:pack.version,tokens:pack.schemes.dark}).tokens}) : undefined;
   return Object.freeze({id:pack.id,version:pack.version,tokens:Object.freeze({...pack.tokens}),...(schemes?{schemes}:{})});
 }
-function layout<T>(pack:UiLayoutPack<T>):UiLayoutPack<T>{
+function layout<T>(pack:UiLayoutPack<T>,required:readonly UiDestination[]=pack.primary):UiLayoutPack<T>{
   reference(pack);
-  const required=defaultUiLayout.primary;
-  if(pack.primary.length!==required.length||new Set(pack.primary).size!==required.length||!required.every(id=>pack.primary.includes(id))||!required.includes(pack.initial)||!['sidebar','top','bottom','adaptive'].includes(pack.navigation)||!['split','stack'].includes(pack.detail)||pack.implementation==null)throw Error('Incompatible layout contract');
+  const destinations:UiDestination[]=['home','library','ask','sources','connections','activity'];
+  if(pack.primary.length!==4||required.length!==4||new Set(pack.primary).size!==required.length||!pack.primary.every(id=>destinations.includes(id))||!required.every(id=>pack.primary.includes(id))||!required.includes(pack.initial)||!['sidebar','top','bottom','adaptive'].includes(pack.navigation)||!['split','stack'].includes(pack.detail)||pack.implementation==null)throw Error('Incompatible layout contract');
   return Object.freeze({...pack,primary:Object.freeze([...pack.primary])});
 }
 
@@ -74,7 +76,7 @@ export class UiPresentationHost<T> {
     };
   }
   registerTheme(pack:UiThemePack){return this.register('theme',validateUiTheme(pack));}
-  registerLayout(pack:UiLayoutPack<T>){return this.register('layout',layout(pack));}
+  registerLayout(pack:UiLayoutPack<T>){return this.register('layout',layout(pack,this.defaults.layout.primary));}
   activate(binding:{theme:UiReference;layout:UiReference}){
     const theme=this.registry.get('theme:'+reference(binding.theme)) as UiThemePack|undefined;
     const selected=this.registry.get('layout:'+reference(binding.layout)) as UiLayoutPack<T>|undefined;

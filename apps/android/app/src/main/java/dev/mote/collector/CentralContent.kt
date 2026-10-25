@@ -20,6 +20,9 @@ internal class CentralContent(
     initialPage: String = "ask",
     private val openLocalPage: ((String) -> Unit)? = null,
 ) : ContextWrapper(activity) {
+    fun recordNew() = activity.openRecordEditor()
+    fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
+    fun takeAskEvidence(): String? = activity.intent.getStringExtra("evidenceId")?.also { activity.intent.removeExtra("evidenceId") }
     val root: LinearLayout
     private lateinit var backButton: TextView
     val isDestroyed get() = activity.isDestroyed
@@ -123,7 +126,7 @@ internal class CentralContent(
             actions.addView(item, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
             return item
         }
-        addAction = headerAction("添加", "添加内容", tonal = true) { activity.showMoteAddActions() }
+        addAction = headerAction("记下", "记下", tonal = true) { activity.openRecordEditor() }
         headerAction("设置") { localPage("SETTINGS") }
         headerAction("更多") { more() }
         if (compactHeader) {
@@ -144,6 +147,7 @@ internal class CentralContent(
         scroll.addView(body); shell.content(scroll)
         if (openLocalPage == null) navigation = MotePrimaryNavigation(activity) { destination ->
             when (destination) {
+                MotePrimaryTab.HOME -> activity.openMotePrimary(destination)
                 MotePrimaryTab.ASK -> { pageHistory.clear(); navigate("ask", remember = false) }
                 MotePrimaryTab.LIBRARY -> { pageHistory.clear(); navigate("archive", remember = false) }
                 MotePrimaryTab.SOURCES -> activity.openMotePrimary(destination)
@@ -212,7 +216,7 @@ internal class CentralContent(
     }
     private fun updateBackButton() {
         backButton.visibility = if (openLocalPage != null && page in setOf("ask", "activity") && pageHistory.isEmpty()) View.GONE else View.VISIBLE
-        addAction.visibility = if (MoteNavigation.centralAllowsAdd(page)) View.VISIBLE else View.GONE
+        addAction.visibility = View.GONE
     }
 
     internal fun navigate(next: String, remember: Boolean = true) {

@@ -186,6 +186,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/capture-browser/" + enc(id)) }) { row ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
+            ui.button(MoteI18n.text("基于这条记录提问")) { screens.askAbout(id) }
             val metadata = row.optJSONObject("metadata")
             values(metadata ?: JSONObject(), ui.card())
             val attachments = metadata?.optJSONArray("attachments") ?: JSONArray()

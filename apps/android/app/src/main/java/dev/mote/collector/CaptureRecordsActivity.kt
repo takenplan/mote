@@ -1,5 +1,7 @@
 package dev.mote.collector
 
+import android.content.Intent
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
@@ -463,9 +465,16 @@ class CaptureRecordsActivity : MoteActivity() {
                         return@runOnUiThread
                     }
                     if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), MoteTheme.fontSupport.toFloat())
+                    if (isNote) {
+                        record.optJSONObject("metadata")?.optJSONObject("noteOrigin")?.optString("text")?.takeIf { it.isNotBlank() }?.let { text(content, it, MoteTheme.fontBody.toFloat()).setTextIsSelectable(true) }
+                        content.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text("基于这条记录提问"); setOnClickListener { startActivity(Intent(this@CaptureRecordsActivity, CentralActivity::class.java).putExtra("page", "ask").putExtra("evidenceId", id)) } }))
+                        if (!remote) applicationContext.recordDraftStore().record(id)?.getJSONArray("attachments")?.let { files ->
+                            for (index in 0 until files.length()) { val attachment = files.getJSONObject(index); text(content, attachment.getString("name"), MoteTheme.fontBody.toFloat()).apply { isFocusable = true; setOnClickListener { RecordOriginalPreview.open(this@CaptureRecordsActivity, attachment) } } }
+                        }
+                    }
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", MoteTheme.fontSupport.toFloat()) }
-                        text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) MoteTheme.fontSection.toFloat() else MoteTheme.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
+                        text(content, record.optString("ocrText").ifBlank { if (isNote) "" else MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) MoteTheme.fontSection.toFloat() else MoteTheme.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
                         record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), MoteTheme.fontBody.toFloat()) }
                         return@runOnUiThread
                     }

@@ -31,8 +31,8 @@ test('switching library types preserves direct evidence and other filters', () =
   assert.equal(workspaceHash('today'),'#/today');
 });
 
-test('the default library contains formal materials while explicit raw links retain their meaning',()=>{
-  for(const hash of ['', '#', '#/'])assert.deepEqual(readWorkspaceRoute(hash,readPage,collections),{page:'archive',collection:'materials'});
+test('overview is the default while explicit library and raw links retain their meaning',()=>{
+  for(const hash of ['', '#', '#/'])assert.deepEqual(readWorkspaceRoute(hash,readPage,collections),{page:'overview',collection:'materials'});
   assert.deepEqual(readWorkspaceRoute('#/library',readPage,collections),{page:'archive',collection:'materials'});
   assert.deepEqual(readWorkspaceRoute('#/library?view=records',readPage,collections),{page:'archive',collection:'records'});
 });

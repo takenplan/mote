@@ -1,3 +1,4 @@
+import {NoteOrigin,NoteAttachments} from './NoteOrigin';
 import {StructuredObservation} from './StructuredObservation';
 import {ImageProgress} from './ImageProgress';
 import {formatEvidenceRef} from '@mote/shared';
@@ -257,6 +258,12 @@ export function CaptureCard({
   onOpen: (id: string) => void;
 }) {
   const text = 'textPreview' in capture ? capture.textPreview : capture.ocrText;
+  const metadata='metadata' in capture?capture.metadata:undefined;
+  const origin=metadata?.noteOrigin;
+  const sharedText=origin&&(origin.kind==='conversation'||origin.kind==='share')?(origin.text?.trim()||origin.url?.trim()):undefined;
+  const shortShared=sharedText?Array.from(sharedText).slice(0,160).join('')+(Array.from(sharedText).length>160?'…':''):undefined;
+  const notePreview=capture.source==='note'?(text?.trim()?text:shortShared?<><span className="capture-preview-origin">{moteText(origin!.kind==='conversation'?'对话摘录':'分享内容')}{' · '}</span>{shortShared}</>:metadata?.attachments?.length?<>{moteText('附件')}{' · '}{metadata.attachments.length}</>:undefined):undefined;
+
   const ocr = ocrPresentation('textPreview' in capture ? capture.ocr : captureOcrState(capture), text);
   const media = 'textPreview' in capture ? capture.media : capture.metadata?.media;
   return (
@@ -277,7 +284,7 @@ export function CaptureCard({
           </time>
         </div>
         <p>
-          {('stateSummary' in capture&&capture.stateSummary)?moteText("合并 {0} 次状态观察",capture.stateSummary.count):capture.source==='media'?moteText("媒体播放 · {0}", capture.durationMs>0?moteText("播放采样 {0}", duration(capture.durationMs)):moteText("状态观察 · 不累计时长")):capture.source === 'activity' ? moteText("应用活动 · 本次采样 {0}", duration(capture.durationMs)) : ('summary' in capture && capture.summary) ||
+          {('stateSummary' in capture&&capture.stateSummary)?moteText("合并 {0} 次状态观察",capture.stateSummary.count):capture.source==='media'?moteText("媒体播放 · {0}", capture.durationMs>0?moteText("播放采样 {0}", duration(capture.durationMs)):moteText("状态观察 · 不累计时长")):capture.source === 'activity' ? moteText("应用活动 · 本次采样 {0}", duration(capture.durationMs)) : notePreview || ('summary' in capture && capture.summary) ||
             capture.windowTitle ||
             text ||
             (capture.source === 'screen' ? ocr.description : moteText("此记录没有正文"))}
@@ -472,10 +479,10 @@ export function EvidenceDialog({
               {capture.blobHash && <OriginalImage key={capture.id} api={api} capture={capture}/>}
               <div className="evidence-text"><EvidenceState compact/>
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
-                <h3 className="evidence-body-heading">{presentation?.textLabel}</h3>
+                <NoteOrigin capture={capture}/>{(!capture.metadata?.noteOrigin||capture.metadata.noteOrigin.kind==='manual'||Boolean(readableText))&&<><h3 className="evidence-body-heading">{capture.metadata?.noteOrigin?.kind!==undefined&&capture.metadata.noteOrigin.kind!=='manual'?moteText("我的补充"):presentation?.textLabel}</h3>
                 {capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
-                </pre>}
+                </pre>} </>}
                 <EvidenceProcessingHelp/>
                 <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
                   capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
@@ -515,7 +522,7 @@ export function EvidenceDialog({
                     </dd>
                   </div>
                 </dl>
-                {capture.metadata?.attachments?.map(id=><button className="button subtle" key={id} onClick={()=>onOpen(formatEvidenceRef('capture',id))}>{moteText("查看附件")} · {id.slice(0,8)}</button>)}
+                <NoteAttachments api={api} capture={capture} onOpen={onOpen}/>
                 <Metadata stateSeries={capture.stateSeries} metadata={capture.metadata} source={capture.provenance?.metadata} modifiedAt={capture.provenance?.modifiedAt}/>
                 <SourceDocumentDetails api={api} document={capture.provenance?.document}/>
                 {capture.privacy.reason && (

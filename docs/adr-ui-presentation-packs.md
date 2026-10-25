@@ -1,5 +1,7 @@
 # ADR: replaceable presentation and the default archive workspace
 
+2026-10-25：导航、默认首页及页面职责已由 [UI IA v1](adr-ui-ia-v1.md) 更新。下文更早的导航描述保留为历史；视觉、原生行为与采集安全边界继续适用。
+
 Date: 2026-10-15. Accepted by the owner in this conversation. Executed validation is tracked in [the rollout ledger](design/ui-presentation-rollout-2026-10-15.md).
 
 ## Decision
