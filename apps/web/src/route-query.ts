@@ -17,7 +17,7 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
  const page=pages.find(entry=>(entry.route??entry.id)===route||entry.aliases?.includes(route));
  if(!page)return;
  const query=new URLSearchParams(queryText);
- const allowed=new Set(['view','evidence','source','sourceId','kind','device','after','before','search','asOf','category','setup','provider','tab','work','question']);
+ const allowed=new Set(['view','evidence','source','sourceId','kind','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight']);
  for(const [key,value] of query){
   if(!allowed.has(key)||query.getAll(key).length!==1)return;
   if(key==='view'&&(page.id!=='archive'||!collections.some(entry=>entry.id===value)))return;
@@ -27,6 +27,7 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
   if(key==='provider'&&page.id!=='recordings')return;
   if(key==='work'&&page.id!=='activity')return;
   if(key==='question'&&page.id!=='ask')return;
+  if(key==='insight'&&page.id!=='insights')return;
  }
  return candidate;
 }

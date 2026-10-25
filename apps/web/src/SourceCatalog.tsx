@@ -19,7 +19,7 @@ export function SourceCatalog({ api, onPage }: {
     const registry = useResource<Record<string, RecordingStatus>>(api, recordingAvailability.state==='available'?'/api/connectors/status':null);
     const recorders = Object.entries(registry.data ?? {}).filter(([,status]) => status?.category === 'recordings' && typeof status.provider==='string');
     const cards = [
-        { title: moteText("手机与电脑"), body: moteText("连接 Android / Mac 等设备，汇集你在本机选择的屏幕、文件和记录。"), note: moteText("先从官方发布页安装客户端；采集与隐私范围在本机设置。"), target: {pageId:'connections',href:'#/connections/access?mode=device'}, icon: Monitor },
+        { title: moteText("手机与电脑"), body: moteText("连接 Android / Mac 等设备，汇集你在本机选择的屏幕、文件和记录。"), note: moteText("先从官方发布页安装客户端；采集与隐私范围在本机设置。"), target: {pageId:'deviceConnections',href:'#/connections/pair'}, icon: Monitor },
         { title: moteText("Coding Agent 会话"), body: moteText("汇集本机 Claude Code、Codex 或 Kimi 的编码对话，已发布正文统一进入资料库。"), note: moteText("先安装并连接 Mac 客户端，在客户端「来源 → 连接 Coding Agent」选择实际存在的 Agent 与采集范围。这里打开说明和同步状态。"), action: moteText("查看客户端接入与同步状态"), target: {pageId:'archive',collectionId:'coding-status',href:'#/library?view=coding-status',requires:['http:GET:/api/coding/uploads']}, icon: Monitor },
         { title: moteText("导入文件"), body: moteText("文件、ZIP、文件夹和服务器目录；保留原件，再解析成可找回的资料。"), note: moteText("可靠且无歧义的解析结果自动保存；其余先确认。"), target: {pageId:'imports',href:'#/library/import'}, icon: FolderInput },
         { title: moteText("飞书文档与日历"), body: moteText("自动发现你创建、编辑或打开的文档，归档正文、版本与活动线索；也可持续跟踪指定范围。"), note: moteText("中央节点只读同步，默认回溯 30 天、每 15 分钟检查。与录音授权分开。"), target: {pageId:'lark',href:'#/connections/lark'}, icon: FileText },

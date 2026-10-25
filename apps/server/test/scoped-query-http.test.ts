@@ -7,12 +7,12 @@ import {randomUUID,createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {buildApp,type QueryAgent} from '../src/app.js';
 import type {Config} from '../src/config.js';
-import type {QueryInput} from '@mote/agent';
+import type {ContextReader,QueryInput} from '@mote/agent';
 const headers={authorization:'Bearer generated-scoped-owner-token'};
-async function fixture(t:TestContext,query:QueryAgent['query']){
+async function fixture(t:TestContext,query:QueryAgent['query'],captureReader?:(reader:ContextReader)=>void){
  const dataDir=mkdtempSync(join(tmpdir(),'mote-scoped-query-'));
  const config:Config={dataDir,token:'generated-scoped-owner-token',tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-model',modelBaseUrl:'https://generated.invalid',apiKey:'generated-key',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};
- const build=()=>buildApp(config,{backgroundWorker:false,agent:{configured:true,query,close:async()=>{}}});let current=await build();
+ const build=()=>buildApp(config,{backgroundWorker:false,...(captureReader?{createModelAgent:async(_settings:unknown,reader:ContextReader)=>{captureReader(reader);return {configured:true,query,close:async()=>{}};}}:{agent:{configured:true,query,close:async()=>{}}})});let current=await build();
  t.after(async()=>{await current.app.close();rmSync(dataDir,{recursive:true,force:true});});return {get node(){return current;},restart:async()=>{await current.app.close();current=await build();}};
 }
 async function add(node:Awaited<ReturnType<typeof buildApp>>,deviceId='generated-device'){
@@ -73,4 +73,69 @@ test('A-only scoped follow-up excludes prior B-derived text until image B is exp
  const third=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated A with B explicitly reattached',conversationId,attachmentIds:[attachment]}});assert.equal(third.statusCode,200,third.body);
  assert.deepEqual(seen.at(-1)!.directImages?.map(image=>image.id),[attachment]);
  assert.ok(seen.at(-1)!.conversation?.turns.some(turn=>turn.answer==='Generated B-derived historical prose'),'current explicit B authorization permits the prior A+B turn again');
+});
+
+test('record anchors retain archive retrieval, persist across restart and follow-ups, and transition explicitly to strict scope',async t=>{
+ let reader!:ContextReader,anchorId='',otherId='';const seen:QueryInput[]=[];
+ const f=await fixture(t,async input=>{
+  seen.push(input);
+  const ids=input.evidenceIds??[anchorId,otherId],originals=await reader.evidence({ids});
+  assert.deepEqual(new Set(originals.map(record=>record.id)),new Set(ids),'the production reader permits both the starting record and other authorized originals');
+  input.onEvidence?.(originals);
+  const cited=originals.find(record=>record.id===otherId)!;
+  return {...answer(input),answer:'Generated comparison with another original',citations:[{id:cited.id,capturedAt:cited.capturedAt,appName:cited.appName,excerpt:cited.ocrText}],evidenceDependencies:{version:1,complete:true,ids:[cited.id]}};
+ },value=>{reader=value;});
+ const anchor=await add(f.node),other=await add(f.node,'generated-other');anchorId=anchor.id;otherId=other.id;
+ const id=randomUUID(),payload={id,input:{question:'Compare this record with related context',anchorEvidenceIds:[anchor.id]}};
+ const admitted=await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload});assert.equal(admitted.statusCode,202,admitted.body);
+ const first=await completed(f.node,id);assert.equal(first.status,'completed',JSON.stringify(first));
+ assert.deepEqual(seen[0].anchorEvidenceIds,[anchor.id]);assert.equal(seen[0].evidenceIds,undefined);assert.ok(seen[0].processingEvidence?.[anchor.id]);
+ assert.ok(seen[0].contextEvidenceDependencies?.ids.includes(anchor.id),'the anchor is a revocable dependency even before its body is read');
+ assert.deepEqual(f.node.featureServices.delegation.get('query:'+id).scope.anchorEvidenceIds,[anchor.id]);
+ const conversation=()=>f.node.app.inject({url:'/api/conversations/'+first.conversationId,headers});
+ const saved=(await conversation()).json();assert.deepEqual(saved.scope.anchorEvidenceIds,[anchor.id]);assert.deepEqual(saved.turns[0].scope.anchorEvidenceIds,[anchor.id]);
+ assert.deepEqual(new Set(saved.turns[0].result.evidenceDependencies.ids),new Set([anchor.id,other.id]),'host anchor lineage survives a model receipt listing only its other cited original');
+ assert.equal(saved.turns[0].result.citations[0].id,other.id,'an anchor does not confine citations to itself');
+ assert.equal((await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload})).statusCode,202);assert.equal(seen.length,1);
+ assert.equal((await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id,input:{...payload.input,anchorEvidenceIds:[other.id]}}})).statusCode,409,'an accepted run cannot be rewritten as a different reference selection');assert.equal(seen.length,1);
+ await f.restart();
+ assert.equal((await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload})).statusCode,202);assert.equal(seen.length,1,'restart preserves the completed run receipt');
+ const query=async(input:Record<string,unknown>)=>{const response=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId:first.conversationId,...input}});assert.equal(response.statusCode,200,response.body);return seen.at(-1)!;};
+ const inherited=await query({question:'Continue comparing related originals'});assert.deepEqual(inherited.anchorEvidenceIds,[anchor.id]);assert.equal(inherited.evidenceIds,undefined);assert.equal(inherited.conversation?.turns.length,1);
+ const strict=await query({question:'Only use the other original',evidenceIds:[other.id]});assert.deepEqual(strict.evidenceIds,[other.id]);assert.equal(strict.anchorEvidenceIds,undefined);assert.equal(strict.conversation?.turns.length,0,'strict selection excludes earlier answers using the anchor and other originals');
+ const referenced=await query({question:'Return to automatic context retrieval',anchorEvidenceIds:[anchor.id]});assert.equal(referenced.evidenceIds,undefined);assert.deepEqual(referenced.anchorEvidenceIds,[anchor.id]);
+ const cleared=await query({question:'Clear the reference record',anchorEvidenceIds:null});assert.equal(cleared.anchorEvidenceIds,undefined);assert.equal(cleared.evidenceIds,undefined);assert.equal((await conversation()).json().scope.anchorEvidenceIds,undefined);
+ await query({question:'Use an explicit strict record again',evidenceIds:[other.id]});
+ const onlyAnchorCleared=await query({question:'Clear references without changing my strict selection',anchorEvidenceIds:null});assert.deepEqual(onlyAnchorCleared.evidenceIds,[other.id]);assert.equal(onlyAnchorCleared.anchorEvidenceIds,undefined);
+ const ordinary=await query({question:'Clear the explicit strict selection',evidenceIds:null});assert.equal(ordinary.evidenceIds,undefined);assert.equal(ordinary.anchorEvidenceIds,undefined);
+});
+
+test('invalid, missing, out-of-time, out-of-device and undisclosable record anchors are refused before model admission',async t=>{
+ let calls=0;const f=await fixture(t,async input=>{calls++;return answer(input);});const anchor=await add(f.node);
+ f.node.sources.register({id:'generated-withdrawn-source',name:'Generated source',kind:'custom',deviceId:'generated-device',platform:'import'});
+ const sourceItem={externalId:'event-1',revision:'1',observedAt:'2026-10-01T00:00:00Z',title:'Generated withdrawn original',text:'Generated archived original from a withdrawn source item',kind:'message',layer:'original'};
+ const restricted=(await f.node.sources.upsert('generated-withdrawn-source',sourceItem)).id;
+ await f.node.sources.upsert('generated-withdrawn-source',{...sourceItem,revision:'2',text:'',deleted:true});
+ assert.ok(f.node.store.evidence([restricted]).length,'withdrawal retains owner archive history while revoking model disclosure');
+ for(const scope of [{anchorEvidenceIds:[]},{anchorEvidenceIds:[anchor.id,anchor.id]},{anchorEvidenceIds:Array.from({length:31},()=>randomUUID())},{anchorEvidenceIds:[anchor.id],evidenceIds:[anchor.id]}]){
+  const response=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated invalid anchor request',...scope}});assert.equal(response.statusCode,400,response.body);
+ }
+ for(const scope of [{anchorEvidenceIds:[randomUUID()]},{anchorEvidenceIds:[anchor.id],deviceId:'generated-other'},{anchorEvidenceIds:[anchor.id],after:'2026-10-02T00:00:00Z'},{anchorEvidenceIds:[anchor.id],before:'2026-09-30T00:00:00Z'},{anchorEvidenceIds:[restricted]}]){
+  const response=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated inaccessible anchor request',...scope}});assert.equal(response.statusCode,409,response.body);
+ }
+ assert.equal(calls,0,'knowing an original UUID never grants access or permits a model request');
+ const valid=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated authorized reference',anchorEvidenceIds:[anchor.id]}});assert.equal(valid.statusCode,200,valid.body);assert.equal(calls,1);
+});
+
+test('deleting an anchor or cancelling its run fences a controlled late answer and its conversation publication',async t=>{
+ for(const mode of ['delete','cancel'] as const)await t.test(mode,async sub=>{
+  let entered!:()=>void,release!:()=>void,returned!:()=>void;const started=new Promise<void>(done=>{entered=done;}),gate=new Promise<void>(done=>{release=done;}),modelReturned=new Promise<void>(done=>{returned=done;});
+  const f=await fixture(sub,async input=>{entered();await gate;returned();return {...answer(input),answer:'Generated late anchor answer',evidenceDependencies:{version:1,complete:true,ids:[]}};});sub.after(()=>release());const anchor=await add(f.node),id=randomUUID();
+  const admitted=await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id,input:{question:'Generated controlled reference query',anchorEvidenceIds:[anchor.id]}}});assert.equal(admitted.statusCode,202,admitted.body);await started;
+  const pinned=f.node.store.db.prepare('SELECT 1 FROM delegation_dependencies WHERE work_id=? AND evidence_id=?').get('query:'+id,anchor.id);assert.ok(pinned,'anchor revocation is registered before the waiting model returns');
+  if(mode==='delete')assert.equal((await f.node.app.inject({method:'DELETE',url:'/api/notes/'+anchor.id,headers})).statusCode,200);else assert.equal((await f.node.app.inject({method:'POST',url:'/api/query-runs/'+id+'/cancel',headers,payload:{}})).statusCode,200);
+  release();await modelReturned;await new Promise<void>(resolve=>setImmediate(resolve));const run=await completed(f.node,id);assert.notEqual(run.status,'completed',JSON.stringify(run));assert.equal(run.turnId,undefined,'a retired background run cannot publish a late conversation turn');
+  const history=(await f.node.app.inject({url:'/api/conversations',headers})).json();for(const summary of history.items){const conversation=(await f.node.app.inject({url:'/api/conversations/'+summary.id,headers})).json();assert.ok(!JSON.stringify(conversation).includes('Generated late anchor answer'));}
+  assert.notEqual(f.node.featureServices.delegation.get('query:'+id).status,'succeeded');
+ });
 });

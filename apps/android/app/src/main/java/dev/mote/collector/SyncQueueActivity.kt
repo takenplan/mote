@@ -16,6 +16,10 @@ class SyncQueueActivity : MoteActivity() {
     private lateinit var previous: Button
     private lateinit var paging: LinearLayout
     private lateinit var categories: Spinner
+    private lateinit var currentTab: Button
+    private lateinit var historyTab: Button
+    private var history = false
+    private var refreshPending = false
     private var sources = emptyList<LocalSource>()
     private val pageSize = 10
     private var offset = 0
@@ -26,7 +30,14 @@ class SyncQueueActivity : MoteActivity() {
     override fun onPause() { speedHandler.removeCallbacks(speedTick); super.onPause() }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val body = moteDetailPage(title = MoteI18n.text("待上传队列"))
+        history = state?.getBoolean("history") ?: false
+        offset = state?.getInt("offset") ?: 0
+        val body = moteDetailPage(primary = MotePrimaryTab.SOURCES, title = MoteI18n.text("同步与上传"))
+        val tabs = LinearLayout(this).also(body::addView)
+        currentTab = Button(this).apply { text = MoteI18n.text("当前任务"); tag = "sync-current-tab"; setOnClickListener { selectTab(false) } }
+        historyTab = Button(this).apply { text = MoteI18n.text("上传历史"); tag = "sync-history-tab"; setOnClickListener { selectTab(true) } }
+        tabs.addView(currentTab, LinearLayout.LayoutParams(0, -2, 1f))
+        tabs.addView(historyTab, LinearLayout.LayoutParams(0, -2, 1f))
         summary = TextView(this).also(body::addView)
         speed = TextView(this).apply { MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceItem)) }.also(body::addView)
         categories = Spinner(this).also { body.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
@@ -37,22 +48,41 @@ class SyncQueueActivity : MoteActivity() {
         next = Button(this).apply { text = MoteI18n.text("下一页"); setOnClickListener { offset += pageSize; load() } }.also { paging.addView(it, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = moteDp(6) }) }
         body.addView(Button(this).apply { text = MoteI18n.text("同步与恢复"); setOnClickListener { startActivity(Intent(this@SyncQueueActivity, SyncRecoveryActivity::class.java)) } })
         MoteUi.styleTree(body)
+        updateTabs()
         task.start(MoteI18n.text("正在读取来源…"), { summary.text = it }, { localSources().sources() }) { result ->
             result.onSuccess {
                 sources = it
                 categories.adapter = MoteUi.choiceAdapter(this, listOf(MoteI18n.text("采集与随手记")) + it.map { source -> source.name + if (source.enabled) "" else MoteI18n.text("（已暂停）") })
                 categories.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-                    override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { offset = 0; load() }
+                    override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { if (!history) offset = 0; load() }
                 }
+                updateTabs()
+                // A restored history tab hides the source spinner, which need not dispatch selection.
+                load()
             }.onFailure { summary.text = MoteI18n.text("队列暂不可读，请重试") }
         }
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("history", history); outState.putInt("offset", offset)
+        super.onSaveInstanceState(outState)
+    }
+    private fun selectTab(nextHistory: Boolean) {
+        if (history == nextHistory) return
+        history = nextHistory; offset = 0; updateTabs(); load()
+    }
+    private fun updateTabs() {
+        currentTab.isSelected = !history; historyTab.isSelected = history
+        MoteUi.button(currentTab, primary = !history); MoteUi.button(historyTab, primary = history)
+        categories.visibility = if (history) android.view.View.GONE else android.view.View.VISIBLE
+        speed.visibility = if (history) android.view.View.GONE else android.view.View.VISIBLE
     }
     private fun sourceLabel(source: String) = when (source) {
         "screen" -> MoteI18n.text("屏幕采集"); "note" -> MoteI18n.text("随手记"); "activity" -> MoteI18n.text("应用活动"); "media" -> MoteI18n.text("媒体播放"); "notification" -> MoteI18n.text("通知"); "device_event" -> MoteI18n.text("设备事件"); else -> source
     }
     private fun load() {
-        if (task.busy) return
+        if (task.busy) { refreshPending = true; return }
+        if (history) { loadHistory(); return }
         val source = sources.getOrNull(categories.selectedItemPosition - 1)
         previous.isEnabled = false; next.isEnabled = false; categories.isEnabled = false
         task.start(MoteI18n.text("正在读取队列…"), { summary.text = it }, {
@@ -68,6 +98,7 @@ class SyncQueueActivity : MoteActivity() {
             page to (SyncSchedule.waitingReason(this, Settings(this).read()) ?: Settings(this).uploadStatus())
         }) { result ->
             categories.isEnabled = true
+            if (history) { refreshPending = false; load(); return@start }
             result.onSuccess { (page, reason) ->
                 val total = page.getInt("total")
                 summary.text = MoteI18n.text("共 {0} 条 · 第 {1} 页\n{2}", total, offset / pageSize + 1, reason)
@@ -86,6 +117,41 @@ class SyncQueueActivity : MoteActivity() {
                     }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) })
                 }
             }.onFailure { summary.text = MoteI18n.text("队列读取失败，记录保留。请刷新重试。") }
+            if (refreshPending) { refreshPending = false; load() }
+        }
+    }
+    private fun loadHistory() {
+        previous.isEnabled = false; next.isEnabled = false
+        task.start(MoteI18n.text("正在读取…"), { summary.text = it }, {
+            UploadHistoryPresentation.events(Operations.ledger(applicationContext).read())
+        }) { result ->
+            if (!history) { refreshPending = false; load(); return@start }
+            rows.removeAllViews()
+            result.onSuccess { events ->
+                summary.text = MoteI18n.text("仅显示本机保留的最近上传结果；中央接收不代表已完成处理。")
+                previous.isEnabled = offset > 0; next.isEnabled = offset + pageSize < events.size
+                paging.visibility = if (events.size > pageSize || offset > 0) android.view.View.VISIBLE else android.view.View.GONE
+                if (events.isEmpty()) rows.addView(TextView(this).apply { text = MoteI18n.text("暂无上传历史"); setPadding(0, moteDp(24), 0, moteDp(24)) })
+                events.drop(offset).take(pageSize).forEach { event ->
+                    val kind = OperationKind.valueOf(event.getString("kind"))
+                    rows.addView(MoteUi.button(Button(this).apply {
+                        text = java.time.Instant.ofEpochMilli(event.getLong("atMs")).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")) + " · " + ActivityStatsActivity.kind(kind)
+                        tag = "sync-history-result"
+                        setOnClickListener {
+                            val detail = buildString {
+                                append(ActivityStatsActivity.kind(kind))
+                                append("\n" + ActivityStatsActivity.reason(OperationReason.valueOf(event.getString("reason"))))
+                                append("\n" + MoteI18n.text("记录字节：{0}", event.getLong("bytes")))
+                                if (event.has("elapsedMs")) append("\n" + MoteI18n.text("耗时：{0} ms", event.getLong("elapsedMs")))
+                                if (event.has("httpStatus")) append("\nHTTP " + event.getInt("httpStatus"))
+                            }
+                            MoteDialogBuilder(this@SyncQueueActivity).setTitle(MoteI18n.text("上传结果详情")).setMessage(detail)
+                                .setPositiveButton(MoteI18n.text("关闭"), null).show()
+                        }
+                    }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) })
+                }
+            }.onFailure { summary.text = MoteI18n.text("上传历史暂不可读取，请刷新重试。") }
+            if (refreshPending) { refreshPending = false; load() }
         }
     }
 }

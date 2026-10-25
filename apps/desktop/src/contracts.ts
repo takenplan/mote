@@ -110,7 +110,7 @@ export interface DesktopApi {
   browseCaptures(input: import('./capture-browser').BrowseRequest): Promise<import('./capture-browser').BrowserPage>;
   captureDetail(location: import('./capture-browser').CaptureLocation, id: string): Promise<import('./capture-browser').BrowserDetail>;
   captureImage(location: import('./capture-browser').CaptureLocation, id: string, thumbnail: boolean): Promise<string>;
-  installedApplications(): Promise<{ appId: string; appName: string }[]>;
+  installedApplications(): Promise<{ appId: string; appName: string; appVersion?: string }[]>;
   onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings') => void): () => void;
   previewConnection(input: string): Promise<import('./connection').ConnectionPreview>;
   importConnection(kind: 'json' | 'qr'): Promise<{ canceled: boolean; preview?: import('./connection').ConnectionPreview }>;

@@ -11,7 +11,7 @@ import {combineSourceContextDependencies} from './source-context-lineage.js';
 import {retireBrokenActivityContinuationTrigger} from './activity-memory-index.js';
 export {originalEvidenceReceipt} from '@mote/agent';
 
-export type DelegationScope=Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'contextTime'|'evidenceIds'|'evidenceRanges'|'processingEvidence'>;
+export type DelegationScope=Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'contextTime'|'evidenceIds'|'anchorEvidenceIds'|'evidenceRanges'|'processingEvidence'>;
 export type DelegationUnit={id:string;workId:string;capabilityId:string;capabilityVersion:string;title:string;goal:string;input:Record<string,unknown>;scope:DelegationScope;dependencies:string[];stepId:string;status:ExecutionState;attempts:number;artifactId?:string;error?:string;external?:boolean};
 export type DelegationEvent={id:number;type:string;message?:string;unitId?:string;at:string};
 export type DelegationWork={id:string;operationId:string;profileId:string;goal:string;status:ExecutionState;createdAt:string;updatedAt:string;revision:number;requestHash:string;scope:DelegationScope;allowedCapabilities:string[];evidenceRevision:number;planningComplete?:boolean;plannedUnitIds?:string[];wait?:{unitIds:string[];mode:'any'|'all'};error?:string;failureReceipt?:ExecutionFailureReceipt;units:DelegationUnit[];events:DelegationEvent[]};

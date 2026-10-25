@@ -300,7 +300,7 @@ class NavigationInstrumentedTest {
                 assertEquals("60", editor(activity, "30").text.toString())
             }
             navigate(scenario,"设置")
-            scenario.onActivity { activity -> menu(activity,"按应用配置");tab(activity,"管理应用 · 查看每个应用的记录方式") }
+            scenario.onActivity { activity -> menu(activity,"按应用配置") }
             val appName = instrumentation.targetContext.applicationInfo.loadLabel(instrumentation.targetContext.packageManager).toString()
             val searchDeadline = SystemClock.elapsedRealtime() + 10_000
             var searched = false
@@ -312,8 +312,31 @@ class NavigationInstrumentedTest {
                 }
                 if (!searched) Thread.sleep(25)
             }
-            assertTrue("The installed-app dialog must gain focus before entering a search", searched)
-            clickDialogLabel(appName); clickDialogLabel("修改此应用的记录范围"); clickDialogLabel("仅应用和时长 · 不保存截图"); clickDialogLabel("完成"); clickDialogLabel("完成")
+            assertTrue("The app configuration list must be ready before entering a search", searched)
+            val appDeadline = SystemClock.elapsedRealtime() + 10_000
+            var appOpened = false
+            while (!appOpened && SystemClock.elapsedRealtime() < appDeadline) {
+                instrumentation.runOnMainSync {
+                    dialogViews().firstOrNull { it.isShown && it.tag == "app-capture:${instrumentation.targetContext.packageName}" }?.let {
+                        it.performClick(); appOpened = true
+                    }
+                }
+                if (!appOpened) Thread.sleep(25)
+            }
+            assertTrue("The installed app catalog must finish loading before app selection", appOpened)
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val inherit = dialogViews().filterIsInstance<android.widget.CheckBox>().single { it.isShown && it.tag == "app-inherit:${instrumentation.targetContext.packageName}" }
+                if (inherit.isChecked) inherit.performClick()
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val choices = dialogViews().filterIsInstance<android.widget.CheckBox>().filter { it.isShown }
+                listOf("应用时长" to true, "截图" to false, "结构化内容" to false).forEach { (name, checked) ->
+                    choices.single { it.text.toString() == name }.let { if (it.isChecked != checked) it.performClick() }
+                }
+            }
+            clickDialogLabel("返回应用列表")
             scenario.onActivity { activity ->
                 assertTrue(editor(activity, "com.example.chat=activity\ncom.example.private=off").text.contains("${activity.packageName}=activity"))
                 tab(activity, "遮住顶部 8%"); tab(activity, "遮住底部 12%")

@@ -160,6 +160,8 @@ export interface QueryInput {
   skill?: Exclude<MoteSkillId,'document-import'>;
   /** Initially supplied original IDs for a bounded extraction session. */
   evidenceIds?: string[];
+  /** User-selected starting originals for an open query; never an authorization grant. */
+  anchorEvidenceIds?: string[];
   /** Host-only immutable evidence fingerprints for a bounded background read. */
   processingEvidence?: Record<string,string>;
   /** Host-only named material outputs for a bounded background read. */

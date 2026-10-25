@@ -63,9 +63,14 @@ fun <T : Activity> ActivityScenario<T>.resumeGeneratedTask(): ActivityScenario<T
     return this
 }
 
-/** Follow the product's shared Add menu; direct private-page construction is not an entry-point check. */
+/** Follow visible source configuration for SCREEN; other actions use the shared Add menu. */
 fun Activity.openGeneratedAdd(action: MoteAddAction) {
     fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
+    if (action == MoteAddAction.SCREEN && this is MainActivity) {
+        views(window.decorView).single { it.isShown && it.tag == "primary:SOURCES" }.performClick()
+        views(window.decorView).single { it.isShown && it.tag == "menu:${MoteI18n.text("按应用配置")}" }.performClick()
+        return
+    }
     if (views(window.decorView).filterIsInstance<TextView>().none { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("添加") }) {
         views(window.decorView).single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
     }

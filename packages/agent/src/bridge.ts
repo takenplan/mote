@@ -234,7 +234,7 @@ export async function startBridge(
   bounds: QueryInput,
   maxToolCalls?: number,
 ) {
-  bounds=pinContextTools({...bounds,...(bounds.evidenceIds?{evidenceIds:[...bounds.evidenceIds]}:{}),...(bounds.evidenceRanges?{evidenceRanges:bounds.evidenceRanges.map(range=>({...range}))}:{}),...(bounds.evidenceReadRanges?{evidenceReadRanges:Object.freeze(bounds.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{})},reader);
+  bounds=pinContextTools({...bounds,...(bounds.evidenceIds?{evidenceIds:[...bounds.evidenceIds]}:{}),...(bounds.anchorEvidenceIds?{anchorEvidenceIds:[...bounds.anchorEvidenceIds]}:{}),...(bounds.evidenceRanges?{evidenceRanges:bounds.evidenceRanges.map(range=>({...range}))}:{}),...(bounds.evidenceReadRanges?{evidenceReadRanges:Object.freeze(bounds.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{})},reader);
   const contributions=new Map((bounds.toolContributions??[]).map(tool=>[tool.name,tool]));
   const specialCapabilities=new Map(registeredContextToolDefinitions(bounds).filter(([name])=>dispatchTools(bounds).includes(name)&&!NATIVE_CONTEXT_TOOLS.has(name)&&!name.startsWith('delegation_')).map(([name,description,fields])=>[name,{name,version:contributions.get(name)?.version??'1',description,fields}]));
   const discoveredCapabilities=new Set<string>();
@@ -321,7 +321,9 @@ export async function startBridge(
     const record:ContextRecord={id:image.id,capturedAt:bounds.contextTime??new Date().toISOString(),appName:image.name,ocrText:'',sourceType:'user_attachment',summary:'User attached image',metadata:{mimeType:image.mimeType}};
     directImageRecords.set(image.id,record);
   }
-  const discovered=new Set(records.keys());
+  // Reference locators may be expanded through the normal current-authorized reader.
+  // They contain no delivered text and cannot support citations before a read.
+  const discovered=new Set([...records.keys(),...(!restricted?bounds.anchorEvidenceIds??[]:[])]);
   const pinnedMaterials=new Set<string>();
   let deliveredCharacters=JSON.stringify(seedEvidence).length;
   const deliveredRanges=seedEvidence.flatMap(record=>{const span=record.textRange as {start:number;end:number};return span.end>span.start?[{id:record.id,offset:span.start,length:span.end-span.start}]:[];});

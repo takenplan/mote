@@ -65,6 +65,11 @@ internal class UiTask(
     override fun onActivityPaused(value: Activity) { if (value === activity) { visible = false; handler.removeCallbacks(tick) } }
     override fun onActivityDestroyed(value: Activity) {
         if (value !== activity) return
+        close()
+    }
+    /** A removed page can release its own read task before the Activity is destroyed. */
+    fun close() {
+        if (closed) return
         closed = true; poll = null; handler.removeCallbacks(tick)
         // Already accepted writes finish. Destruction never waits for storage or interrupts a commit.
         if (ownsExecutor) executor.shutdown()

@@ -112,8 +112,8 @@ import { UsageLedger } from './usage.js';
 import { WorkingMemory } from './working-memory.js';
 
 export interface QueryAgent {configured:boolean;configuredFor?(id:string):boolean;query(args:QueryInput):Promise<QueryResult>;close():Promise<void>}
-const querySchema=z.object({modelProfileId:modelProfileIdSchema.optional(),modelOverride:z.string().trim().min(1).max(512).refine(v=>!/[\u0000-\u001f\u007f]/.test(v)).optional(),question:z.string().trim().min(1).max(8000),conversationId:z.string().uuid().optional(),evidenceIds:z.array(z.string().uuid()).min(1).max(30).refine(ids=>new Set(ids).size===ids.length).nullable().optional(),after:scopeFields.after.nullable(),before:scopeFields.before.nullable(),deviceId:scopeFields.deviceId.nullable(),timeZone:scopeFields.timeZone.nullable()}).strict();
-const queryWithAttachmentsSchema=querySchema.extend({attachmentIds:z.array(z.string().uuid()).max(4).refine(ids=>new Set(ids).size===ids.length).optional()});
+const querySchema=z.object({modelProfileId:modelProfileIdSchema.optional(),modelOverride:z.string().trim().min(1).max(512).refine(v=>!/[\u0000-\u001f\u007f]/.test(v)).optional(),question:z.string().trim().min(1).max(8000),conversationId:z.string().uuid().optional(),anchorEvidenceIds:z.array(z.string().uuid()).min(1).max(30).refine(ids=>new Set(ids).size===ids.length).nullable().optional(),evidenceIds:z.array(z.string().uuid()).min(1).max(30).refine(ids=>new Set(ids).size===ids.length).nullable().optional(),after:scopeFields.after.nullable(),before:scopeFields.before.nullable(),deviceId:scopeFields.deviceId.nullable(),timeZone:scopeFields.timeZone.nullable()}).strict();
+const queryWithAttachmentsSchema=querySchema.extend({attachmentIds:z.array(z.string().uuid()).max(4).refine(ids=>new Set(ids).size===ids.length).optional()}).refine(input=>!input.evidenceIds||!input.anchorEvidenceIds,{message:"Choose reference records or a strict evidence selection"});
 const insightSchema=z.object(scopeFields).strict().refine(validRange,{message:'Invalid time range'});
 const insightRequestSchema=z.object({...scopeFields,modelProfileId:modelProfileIdSchema.optional(),prompt:z.string().trim().max(8000).optional()}).strict().refine(validRange,{message:'Invalid time range'});
 function parseCaptureBundle(body:unknown):CaptureInput[] {
@@ -267,10 +267,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   // Exact public selections use the normal current-original exposure policy and
   // retain a content pin across preparation, outbound calls and publication.
   const selectedQueryEvidence=(input:QueryInput)=>{
-    if(input.executionLane!=='interactive'||input.evidenceIds===undefined||input.responseMode==='memory-extraction')return [];
-    if(!evidenceReader.contextDependenciesAllowed(input.evidenceIds,new EvidenceExposurePolicy()))throw contextFailure('context_evidence_restricted');
-    const records=evidenceReader.evidence(input.evidenceIds.map(id=>'capture:'+id),input);
-    if(records.length!==input.evidenceIds.length||input.processingEvidence&&records.some(record=>input.processingEvidence![record.id]!==memoryEvidenceFingerprint(record)))throw contextFailure('context_evidence_restricted');
+    const ids=input.evidenceIds??input.anchorEvidenceIds;
+    if(input.executionLane!=='interactive'||ids===undefined||input.responseMode==='memory-extraction')return [];
+    if(!evidenceReader.contextDependenciesAllowed(ids,new EvidenceExposurePolicy()))throw contextFailure('context_evidence_restricted');
+    const records=evidenceReader.evidence(ids.map(id=>'capture:'+id),input);
+    if(records.length!==ids.length||input.processingEvidence&&records.some(record=>input.processingEvidence![record.id]!==memoryEvidenceFingerprint(record)))throw contextFailure('context_evidence_restricted');
     return records;
   };
   const assertModelEvidence=(input:QueryInput|undefined)=>observeMemory(input,'query_assert',()=>{
@@ -778,12 +779,13 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       if(saved.configurationFingerprint!==current.fingerprint)throw new StoreError('Query model configuration changed',409);
       assertModelEvidence(saved.prepared);return {...saved.prepared,signal,onProgress};
     }
-    const {conversationId,question,modelProfileId,modelOverride,evidenceIds:selectedIds,attachmentIds=[],...selected}=queryWithAttachmentsSchema.parse(body);
+    const {conversationId,question,modelProfileId,modelOverride,evidenceIds:selectedIds,anchorEvidenceIds:anchorIds,attachmentIds=[],...selected}=queryWithAttachmentsSchema.parse(body);
     const previous=conversationId?conversations.get(conversationId):undefined;
     if(previous&&previous.turnCount>=200)throw new StoreError('Conversation has reached its turn limit; start a new conversation',409);
     const scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone'] as const){const value=key==='timeZone'&&selected.timeZone===undefined?previous?.scope.timeZone:selected[key];if(value!==undefined&&value!==null)scope[key]=value;}
     insightSchema.parse(scope);
     if(selectedIds)scope.evidenceIds=selectedIds;
+    if(anchorIds)scope.anchorEvidenceIds=anchorIds;
     const selectedRecords=selectedQueryEvidence({question,...scope,executionLane:'interactive'});
     const profile=modelSettings.select('chat',modelProfileId),model=modelOverride??profile.settings.model,contextTime=work.scope.contextTime!;
     const previousIds=scope.evidenceIds?[]:previous?.turns.slice(-20).flatMap(turn=>turn.attachments?.map(attachment=>attachment.id)??[])??[],previousAvailable=previousIds.filter(id=>{try{return Boolean(files.detail(id).hasOriginal);}catch{return false;}});
@@ -802,7 +804,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       scope.evidenceIds?Promise.resolve({leads:[],evidenceDependencies:{version:1 as const,complete:true,ids:scope.evidenceIds}}):openingMemoryContext(archiveReader,question,{...scope,contextTime}),
       scopedPrevious?Promise.resolve(conversations.context(scopedPrevious,20,Math.max(1000,lifecycle.settings().contextCharacters-question.length))):previous?working.prepare(previous,lifecycle.settings(),question,input=>queryAgent({...input,contextTime,traceContext:{...input.traceContext,operationId:work.operationId},executionLane:'interactive',modelProfileId:profile.id,modelOverride:model,signal},'query','conversations'),{signal,commit}):undefined,
     ]);
-    const prepared:QueryInput={traceContext:{operationId:work.operationId},language:saved.language??'zh-CN',executionLane:'interactive',question,...scope,...(scope.evidenceIds?{processingEvidence:Object.fromEntries(selectedRecords.map(record=>[record.id,memoryEvidenceFingerprint(record)]))}:{}),contextTime,modelProfileId:profile.id,modelOverride:model,directImages,openingMemories:opening.leads,contextEvidenceDependencies:opening.evidenceDependencies,...(conversation?{conversation}:{})};
+    const prepared:QueryInput={traceContext:{operationId:work.operationId},language:saved.language??'zh-CN',executionLane:'interactive',question,...scope,...(selectedRecords.length?{processingEvidence:Object.fromEntries(selectedRecords.map(record=>[record.id,memoryEvidenceFingerprint(record)]))}:{}),contextTime,modelProfileId:profile.id,modelOverride:model,directImages,openingMemories:opening.leads,contextEvidenceDependencies:{...opening.evidenceDependencies,ids:[...new Set([...opening.evidenceDependencies.ids,...(scope.anchorEvidenceIds??[])])]},...(conversation?{conversation}:{})};
     commit(()=>{
       assertModelEvidence(prepared);
       const freshImages=queryImages(directImages.map(image=>image.id));
@@ -841,7 +843,14 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   }
   queryRuns=new DelegatedQueryRuns(store,delegation,{
     contextTime:()=>freezeSemanticContextTime(dependencies?.semanticContextTime),
-    resolveInput:raw=>{const input=queryWithAttachmentsSchema.parse(raw);if(input.evidenceIds!==undefined||!input.conversationId)return input;const ids=conversations.get(input.conversationId).scope.evidenceIds;return ids?{...input,evidenceIds:[...ids]}:input;},
+    resolveInput:raw=>{
+      const input=queryWithAttachmentsSchema.parse(raw);if(!input.conversationId)return input;
+      const previous=conversations.get(input.conversationId).scope;
+      // Freeze resolved selection in the accepted run, before asynchronous preparation.
+      if(input.evidenceIds)return {...input,anchorEvidenceIds:null};
+      if(input.anchorEvidenceIds)return {...input,evidenceIds:null};
+      return {...input,...(input.evidenceIds===undefined&&previous.evidenceIds?{evidenceIds:[...previous.evidenceIds]}:{}),...(input.anchorEvidenceIds===undefined&&previous.anchorEvidenceIds?{anchorEvidenceIds:[...previous.anchorEvidenceIds]}:{})};
+    },
     prepare:prepareDelegatedQuery,
     query:input=>runQueryQualityExperiment(input,dependencies?.queryQualityExperiment??'base',(next,stage)=>queryAgent({...next,traceContext:{...next.traceContext,phase:'quality.'+stage}},'query',stage==='base'?'conversations':'query.'+stage),qualityCheckpoint(input)),
     operationUsage:(operationId,createdAt,finishedAt)=>usageLedger.operation(operationId,createdAt,finishedAt),
@@ -850,11 +859,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       assertModelEvidence(prepared);
       assertSourceContextDependencies(sourceContexts,result.sourceContextDependencies);
       delegation.recordEvidence(work.id,[...(result.evidenceDependencies?.ids??[]),...result.citations.map(citation=>citation.id)]);
-      const previous=conversationId?conversations.get(conversationId):undefined,scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone','evidenceIds'] as const)if(prepared[key]!==undefined)Object.assign(scope,{[key]:prepared[key]});
+      const previous=conversationId?conversations.get(conversationId):undefined,scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone','evidenceIds','anchorEvidenceIds'] as const)if(prepared[key]!==undefined)Object.assign(scope,{[key]:prepared[key]});
       return conversations.append(previous,{question,...scope,attachments:prepared.directImages?.filter(image=>attachmentIds.includes(image.id)).map(({id,name,mimeType})=>({id,name,mimeType}))},result);
     },
     failure:(body,error)=>{
-      const {conversationId,question,evidenceIds,...selected}=queryWithAttachmentsSchema.parse(body),scope:QueryScope={...(evidenceIds?{evidenceIds}:{})};for(const key of ['after','before','deviceId','timeZone'] as const)if(selected[key]!==undefined&&selected[key]!==null)scope[key]=selected[key]!;
+      const {conversationId,question,evidenceIds,anchorEvidenceIds,...selected}=queryWithAttachmentsSchema.parse(body),scope:QueryScope={...(evidenceIds?{evidenceIds}:{}),...(anchorEvidenceIds?{anchorEvidenceIds}:{})};for(const key of ['after','before','deviceId','timeZone'] as const)if(selected[key]!==undefined&&selected[key]!==null)scope[key]=selected[key]!;
       const failure=safeError(error);return conversations.appendFailure(conversationId?conversations.get(conversationId):undefined,{question,...scope},{code:failure.category,message:failure.message});
     },
   });

@@ -31,13 +31,14 @@ export async function readVisibleNotifications(path:string,signal?:AbortSignal):
   if(!Array.isArray(raw.items)||raw.items.length>20)throw new Error('Invalid notification observation');
   return raw.items.map(item=>{if(typeof item.text!=='string'||item.text.length>4000)throw new Error('Invalid notification content');return item.text;});
 }
-export async function readInstalledApplications(path: string): Promise<{ appId: string; appName: string }[]> {
+export async function readInstalledApplications(path: string): Promise<{ appId: string; appName: string; appVersion?: string }[]> {
   const value = await runHelper(path, 'installed-apps') as { applications?: unknown };
   if (!Array.isArray(value?.applications) || value.applications.length > 2048) throw new Error(moteText("无法读取应用列表"));
-  const applications = new Map<string, { appId: string; appName: string }>();
+  const applications = new Map<string, { appId: string; appName: string; appVersion?: string }>();
   for (const item of value.applications) {
     if (!item || typeof item.appId !== 'string' || !item.appId || item.appId.length > 256 || typeof item.appName !== 'string' || !item.appName || item.appName.length > 512) continue;
-    applications.set(item.appId, { appId: item.appId, appName: item.appName });
+    applications.set(item.appId, { appId: item.appId, appName: item.appName,
+      ...(typeof item.appVersion==='string'&&item.appVersion.length>0&&item.appVersion.length<=300?{appVersion:item.appVersion}:{}) });
   }
   return [...applications.values()].sort((a, b) => a.appName.localeCompare(b.appName));
 }

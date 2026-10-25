@@ -708,12 +708,12 @@ export const guideSections:GuideSection[] = [
             "where": "查看设备卡片，展开详细信息。"
           },
           {
-            "pageId": "connections",
-            "href": "#/connections/access",
+            "pageId": "deviceConnections",
+            "href": "#/connections/pair",
             "collectionId": null,
             "categoryId": null,
-            "label": "对外授权",
-            "path": "采集与设备 → 连接设备 → 对外授权 → 连接设备",
+            "label": "连接设备",
+            "path": "数据来源 → 连接设备",
             "where": "选择「连接设备」，填写地址、名称和设备身份。"
           }
         ],
@@ -827,12 +827,12 @@ export const guideSections:GuideSection[] = [
               "取消或重新生成邀请"
             ],
             "target": {
-              "pageId": "connections",
-              "href": "#/connections/access",
+              "pageId": "deviceConnections",
+              "href": "#/connections/pair",
               "collectionId": null,
               "categoryId": null,
-              "label": "对外授权",
-              "path": "采集与设备 → 连接设备 → 对外授权 → 连接设备",
+              "label": "连接设备",
+              "path": "数据来源 → 连接设备",
               "where": "选择「连接设备」，填写地址、名称和设备身份。"
             },
             "otherTargets": [],
@@ -856,15 +856,18 @@ export const guideSections:GuideSection[] = [
               "确认后撤销连接"
             ],
             "target": {
-              "pageId": "connections",
-              "href": "#/connections/access",
+              "pageId": "deviceConnections",
+              "href": "#/connections/pair",
               "collectionId": null,
               "categoryId": null,
-              "label": "对外授权",
-              "path": "采集与设备 → 来源与连接 → 对外授权 → 已授权连接",
+              "label": "连接设备",
+              "path": "数据来源 → 连接设备",
               "where": "页面下方「已授权连接」列表。"
             },
-            "otherTargets": [],
+            "otherTargets": [{
+              "pageId": "connections", "href": "#/connections/access", "collectionId": null, "categoryId": null,
+              "label": "AI 接入", "path": "AI 接入", "where": "页面下方「已授权连接」列表。"
+            }],
             "setup": null,
             "setupTargets": [],
             "caveats": [
@@ -888,9 +891,9 @@ export const guideSections:GuideSection[] = [
               "href": "#/connections/access",
               "collectionId": null,
               "categoryId": null,
-              "label": "对外授权",
-              "path": "采集与设备 → 来源与连接 → 对外授权 → 连接 Chatbot",
-              "where": "切换到「连接 Chatbot」，查看 MCP 访问权限与配置。"
+              "label": "AI 接入",
+              "path": "AI 接入",
+              "where": "生成标准 HTTP MCP 连接 JSON，粘贴到支持 URL 与 Bearer 请求头的客户端。"
             },
             "otherTargets": [],
             "setup": "先在部署配置中启用 MCP、独立令牌；写入还需单独启用及来源允许列表，合并配置后重启。客户端需支持 Streamable HTTP、URL 和 Bearer 请求头。",
