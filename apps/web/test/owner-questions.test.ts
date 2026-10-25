@@ -157,7 +157,7 @@ test('Ask host shows waiting questions in existing history and routes back to an
   if(path.startsWith('/api/owner-questions/'))return generated;
   if(path==='/api/model-settings')return modelView();
   if(path==='/api/conversations?limit=30')return {items:[{id:'fixture-chat',title:'已有合成对话',createdAt:when,updatedAt:when,turnCount:1,scope:{},status:'completed'}]};
-  if(path==='/api/conversations/fixture-chat')return {id:'fixture-chat',title:'已有合成对话',turns:[{id:'turn',question:'合成提问',result:{answer:'合成回答'},status:'completed',createdAt:when}]};
+  if(path==='/api/conversations/fixture-chat')return {id:'fixture-chat',title:'已有合成对话',createdAt:when,updatedAt:when,turnCount:1,scope:{},status:'completed',revision:1,turns:[{id:'turn',question:'合成提问',scope:{},result:{answer:'合成回答',citations:[],trace:[],runId:'generated-run'},status:'completed',createdAt:when}]};
   if(path.startsWith('/api/operations/changes'))return new Promise(()=>{});
   return {items:[]};
  },setAgentTimeout:()=>{}} as Api;
