@@ -53,4 +53,32 @@ class AppPageSetupTest {
             assertEquals(old.appCollectionRules, restored.appCollectionRules)
         }
     }
+    @Test fun appListSeparatesExplicitChoicesFromRulesAndVersionAvailability() {
+        val matching = AppCapturePresentation.App("generated.reader", "Reader", "1.2")
+        val updated = matching.copy(version = "1.3")
+        val inherited = AppCapturePresentation.App("generated.shop", "Shop", "3.4")
+        val rules = JSONArray(UiPageRules.parse(article()) + UiPageRules.parse(product())).toString()
+        val state = AppCapturePresentation.Snapshot(AppCollectionRules(AppCollectionMode.ACTIVITY,
+            mapOf(matching.id to AppCollectionMode.DURATION_STRUCTURED)), setOf("generated.private"), rules, false, false)
+        val apps = listOf(updated, inherited, AppCapturePresentation.App("generated.private", "Private", ""))
+        assertEquals(listOf(updated, apps[2]), AppCapturePresentation.visible(state, apps, AppCapturePresentation.Scope.CONFIGURED, ""))
+        assertEquals(listOf(updated, inherited), AppCapturePresentation.visible(state, apps, AppCapturePresentation.Scope.RULES, ""))
+        assertEquals(listOf(updated), AppCapturePresentation.visible(state, apps, AppCapturePresentation.Scope.ATTENTION, ""))
+        assertEquals(AppCollectionMode.ACTIVITY, AppCapturePresentation.mode(state, inherited.id))
+        assertEquals(AppCollectionMode.OFF, AppCapturePresentation.mode(state, "generated.private"))
+        assertEquals(setOf("title", "author", "body"), AppCapturePresentation.matching(state.ruleCatalog[matching.id].orEmpty(), matching.version).single().fields)
+        assertTrue(AppCapturePresentation.matching(state.ruleCatalog[matching.id].orEmpty(), updated.version).isEmpty())
+        assertEquals(listOf(updated), AppCapturePresentation.visible(state, apps, AppCapturePresentation.Scope.RULES, "READER"))
+    }
+    @Test fun ocrAlternativeDoesNotHideRuleVersionMismatchOrMakeProjectionStructuredAvailable() {
+        val app = AppCapturePresentation.App("generated.reader", "Reader", "1.3")
+        val state = AppCapturePresentation.Snapshot(AppCollectionRules(AppCollectionMode.STRUCTURED, emptyMap()), emptySet(), article(), false, false)
+        val configured = state.ruleCatalog[app.id].orEmpty()
+        assertTrue(AppCapturePresentation.needsAttention(state, app, configured))
+        assertFalse(AppCapturePresentation.needsAttention(state.copy(ocr = true), app, configured))
+        assertTrue(AppCapturePresentation.needsAttention(state.copy(ocr = true, projection = true), app, configured))
+        assertEquals("1.2", configured.single().appVersion)
+        assertTrue(AppCapturePresentation.matching(configured, "").isEmpty())
+        assertEquals(AppCollectionMode.STRUCTURED, state.collection.defaultMode)
+    }
 }

@@ -87,9 +87,6 @@ details.disclosure>.hint:last-child { margin-bottom: 0; }
 .source-card .actions button { padding: 7px 11px; font-size: var(--mote-font-support); }
 .source-rules { margin-top: 22px; padding-block: 17px; }
 .source-rules[open] { padding-block: 21px; }
-.app-rule { display: flex; align-items: center; gap: 9px; margin: 9px 0; }
-.app-rule input { flex: 2; min-width: 0; }
-.app-rule select { flex: 1.25; min-width: 0; }
 .statistics-list p { margin: 0; padding: 17px 0; }
 .statistics-list p:first-child { padding-top: 0; }
 .statistics-list p:last-child { padding-bottom: 0; }
@@ -106,12 +103,8 @@ details.disclosure>.hint:last-child { margin-bottom: 0; }
 .sync-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .policy-steps p:last-child { border-bottom: 0; }
 .custom-value { margin-top: 9px; }
-.app-identity { min-width: 0; gap: 4px; }
-.app-identity>span { font-size: var(--mote-font-support); }
-.app-identity input { font-size: var(--mote-font-meta); }
 .mask-control .section-heading { margin: 14px 0; }
 .mask-control label { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-.app-rule .app-identity { flex: 2; }
 .extension-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
 .records-toolbar label { flex: 1; min-width: 170px; }
 .records-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -587,7 +580,6 @@ progress::-moz-progress-bar { background: var(--mote-accent); }
 #source-list>.helper { padding: 34px 20px; border: 1px dashed var(--mote-border); border-radius: var(--mote-radius-control); text-align: center; font-size: var(--mote-font-support); color: var(--mote-muted); background: var(--mote-background); border-color: var(--mote-border); }
 .source-connect-panel>.actions+.actions { margin-top: var(--mote-space-inline); }
 #local-sources>[data-add] { margin-top: var(--mote-space-item); }
-.app-rule button { align-self: stretch; margin-top: 7px; padding-inline: 10px; border: 1px solid var(--mote-border); background: var(--mote-surface); border-color: var(--mote-control-border); }
 .source-policy-value { display: none; }
 .work-local { padding-bottom: var(--mote-space-panel); border-bottom: 1px solid var(--mote-divider); }
 .work-local-jobs { padding-left: var(--mote-space-panel); font-size: var(--mote-font-support); color: var(--mote-muted); }
@@ -862,7 +854,35 @@ input,select,textarea { accent-color:var(--mote-accent); }
   :root, body { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
 }
 
-.capture-channels{display:flex;flex-wrap:wrap;gap:12px}.capture-channels .checkbox{display:flex;align-items:center;gap:6px;white-space:nowrap}.capture-channels input{width:auto}.app-rule .capture-channels{min-width:260px}
+.capture-channels{display:flex;flex-wrap:wrap;gap:12px}.capture-channels .checkbox{display:flex;align-items:center;gap:6px;white-space:nowrap}.capture-channels input{width:auto}
+.app-capture-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:22px; }
+.app-capture-toolbar>input { flex:1 1 200px; min-width:0; }
+.app-capture-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.app-capture-filters button { padding:6px 9px; font-size:var(--mote-font-support); }
+.app-capture-filters button[aria-pressed=true] { background:var(--mote-tint); color:var(--mote-accent); border-color:var(--mote-accent); }
+.app-capture-split { display:grid; grid-template-columns:minmax(190px,.9fr) minmax(260px,1.2fr); gap:22px; align-items:start; }
+.app-capture-list { min-width:0; }
+.app-capture-app { display:flex; flex-direction:column; align-items:flex-start; gap:8px; width:100%; white-space:normal; text-align:left; border:0; border-bottom:1px solid var(--mote-divider); border-radius:0; background:transparent; padding:14px 10px; color:var(--mote-ink); }
+.app-capture-app:hover:not(:disabled),.app-capture-app[aria-pressed=true] { background:var(--mote-tint); color:var(--mote-ink); border-color:var(--mote-divider); }
+.app-capture-app[aria-pressed=true] { border-radius:var(--mote-radius-control); }
+.app-capture-app-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; width:100%; }
+.app-capture-app strong { font-size:var(--mote-font-row); overflow-wrap:anywhere; }
+.app-capture-app small,.app-capture-selected { color:var(--mote-muted); font-size:var(--mote-font-support); }
+.app-capture-detail { min-width:0; background:var(--mote-surface); padding:18px; border:1px solid var(--mote-border); border-radius:var(--mote-radius-container); }
+.app-capture-detail h3 { margin:0; font-size:var(--mote-font-row); }
+.app-capture-detail h4 { margin:23px 0 10px; font-size:var(--mote-font-section); }
+.app-capture-detail-heading,.app-capture-rule-heading { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+.app-capture-identity { overflow-wrap:anywhere; }
+.app-capture-badges { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.app-capture-badge { display:inline-block; max-width:100%; padding:2px 6px; font-size:var(--mote-font-meta); font-weight:400; color:var(--mote-muted); background:var(--mote-surface-sunken); border-radius:var(--mote-radius-indicator); overflow-wrap:anywhere; text-align:left; }
+.app-capture-badge.warning { color:var(--mote-warning); background:var(--mote-warning-tint); }
+.app-capture-channel { padding:12px 0; border-bottom:1px solid var(--mote-divider); align-items:flex-start; }
+.app-capture-channel small { display:block; }
+.app-capture-warning { padding:10px; font-size:var(--mote-font-support); background:var(--mote-warning-tint); color:var(--mote-warning); border-radius:var(--mote-radius-control); }
+.app-capture-rule { padding:12px 0; border-bottom:1px solid var(--mote-divider); }
+.app-capture-rule strong { font-size:var(--mote-font-support); }
+.app-capture-rule .disclosure { margin:8px 0 0; }
+@media(max-width:760px) { .app-capture-split { grid-template-columns:1fr; } .app-capture-detail { margin-top:8px; } }
 
 .capture-choice{border:0;padding:0;margin:0}.capture-choice legend{margin-bottom:8px}
 

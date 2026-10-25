@@ -342,11 +342,12 @@ app.on('browser-window-created', (_event, window) => {
       await navigate('privacy');
       await js(`document.querySelector('#add-app-rule').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert.equal(await js(`document.querySelector('#installed-app-choice').options[0].textContent`), '合成私密应用 · dev.mote.synthetic.private');
-      await js(`document.querySelector('#use-installed-app').click(); document.querySelectorAll('#app-collection-rules [data-channel]').forEach(input=>input.checked=false); document.querySelector('[data-mask=notification]').click()`);
+      await js(`document.querySelector('#use-installed-app').click(); for(const key of ['duration','screenshots','structured']) { const input=document.querySelector('#app-collection-rules [data-channel='+key+']'); input.checked=false; input.dispatchEvent(new Event('change',{bubbles:true})); } document.querySelector('[data-mask=notification]').click()`);
       assert.equal(await js(`document.querySelectorAll('#mask-editor input[type=range]').length`), 4);
       await js(`const width = document.querySelector('[aria-label="区域 1 宽度"]'); width.value = '25'; width.dispatchEvent(new Event('input', { bubbles: true }));`);
       await js(`document.querySelectorAll('#default-collection [data-channel]').forEach(input=>input.checked=input.dataset.channel==='duration'); document.querySelector('#settings').requestSubmit()`);
       await settingsIdle('save privacy settings');
+      assert.deepEqual((await js('window.mote.status()')).config.appCollectionRules['dev.mote.synthetic.private'],{duration:false,screenshots:false,structured:false},'app detail checkboxes persist the explicit all-off rule');
       await js(`document.querySelector('#gate-text').value = 'synthetic.secret'; document.querySelector('#gate-failure').value = 'hold'; document.querySelector('#settings').requestSubmit()`);
       await settingsIdle('save upload review');
       assert.deepEqual((await js('window.mote.status()')).config.uploadGate, {enabled:true,blockedText:['synthetic.secret'],failureAction:'hold'});

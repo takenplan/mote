@@ -7,15 +7,20 @@ import {nativeStatusSummary} from './native-status';
 import { renderAskAnswer, renderAskCitation } from './ask-presentation';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {builtinUiRules} from '@mote/shared';
+import {createAppCaptureUi} from './app-capture-ui';
+import {normalizeAppCollectionRules} from './app-collection';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
 const desktopApi = window.mote;
-document.getElementById('ui-page-builtins')!.addEventListener('click',()=>{byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(builtinUiRules,null,2);markSettingsDirty();});
+document.getElementById('ui-page-builtins')!.addEventListener('click',()=>{byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(builtinUiRules,null,2);appCaptureUi.refreshRules();markSettingsDirty();});
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let currentStatus: import('./contracts').Status;
 let initialized = false;
 let busy = false;
 const fields = byId<HTMLFieldSetElement>('settings-fields');
 const settingsForm = byId<HTMLFormElement>('settings');
+const appCaptureUi=createAppCaptureUi({root:byId('app-collection-rules'),defaultRoot:byId('default-collection'),rulesEditor:byId<HTMLTextAreaElement>('ui-page-rules'),
+  applications:()=>desktopApi.installedApplications(),changed:markSettingsDirty,permissions:()=>{showPage('permissions');},
+  editRules:appId=>{const editor=byId<HTMLTextAreaElement>(appId==='com.google.Chrome'?'chrome-origins':'ui-page-rules');revealField(editor);editor.focus();}});
 byId('device-name').addEventListener('input', () => markSettingsDirty());
 const pageNames = desktopPages;
 type Page = DesktopPage;
@@ -84,6 +89,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
   if (page === 'ask') void refreshAsk();
   if (page === 'permissions') void refreshPermissions();
+  if (page === 'privacy') void appCaptureUi.refreshApplications();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records') { void loadRecords(); void refreshContent(); }
   if (page === 'overview' && initialized) { void refreshContent(); void refreshSources(); }
@@ -311,8 +317,7 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
   };
   for (const [id, value] of Object.entries(values)) byId<HTMLInputElement>(id).value = String(value);
   byId<HTMLInputElement>('metadata-enabled').checked = config.metadataEnabled;
-  byId('app-collection-rules').replaceChildren();
-  for (const [id, mode] of Object.entries(config.appCollectionRules)) addAppRule(id, mode);
+  appCaptureUi.setConfig(config);
   byId<HTMLInputElement>('diagnostics-enabled').checked = config.diagnosticsEnabled;
   byId<HTMLInputElement>('pause-on-battery').checked = config.pauseOnBattery;
   byId<HTMLInputElement>('login').checked = currentStatus.environment?.defaultProfile === false ? false : config.openAtLogin;
@@ -353,7 +358,7 @@ function render(status: import('./contracts').Status): void {
     recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
-  currentStatus = status; renderStorage();
+  currentStatus = status; renderStorage();appCaptureUi.setStatus(status);
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -475,7 +480,7 @@ byId('settings').addEventListener('submit', event => {
   let appCollectionRules: Record<string, import('./contracts').CollectionMode>;
   try { masks = masksForEditor(); }
   catch { revealField(byId('masks')); feedback(moteText("遮挡区域格式无效，或超出了屏幕范围。请检查高级 JSON。")); return; }
-  try { appCollectionRules = readAppRules(); }
+  try { appCollectionRules = appCaptureUi.readRules(); }
   catch (error) { feedback((error as Error).message); return; }
   void perform(async () => {
     const token = readInput('token').trim();
@@ -866,7 +871,7 @@ void desktopApi.connectionStatus().then(renderConnection).catch(() => {});
 
 function channelControls(mode: import('./contracts').CollectionMode):HTMLElement {
   const controls=document.createElement('div');controls.className='capture-channels';
-  for(const [key,label] of [['duration',moteText('记录时长')],['screenshots',moteText('保存截图')],['structured',moteText('结构化解析')]] as const){
+  for(const [key,label] of [['duration',moteText('应用时长')],['screenshots',moteText('截图')],['structured',moteText('结构化内容')]] as const){
     const field=document.createElement('label');field.className='checkbox';
     const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.dataset.channel=key;checkbox.checked=mode[key];
     const text=document.createElement('span');text.textContent=label;field.append(checkbox,text);controls.append(field);
@@ -879,24 +884,13 @@ function readChannels(target:Element):import('./contracts').CollectionMode{retur
  screenshots:Boolean(target.querySelector<HTMLInputElement>('[data-channel="screenshots"]')?.checked),
  structured:Boolean(target.querySelector<HTMLInputElement>('[data-channel="structured"]')?.checked),
 };}
-function addAppRule(id = '', mode: import('./contracts').CollectionMode = {duration:true,screenshots:false,structured:false}): void {
-  const row = document.createElement('div'); row.className = 'app-rule';
-  const input = document.createElement('input'); input.value = id; input.placeholder = 'com.example.app'; input.maxLength = 256; input.setAttribute('aria-label', moteText("应用 Bundle ID")); input.spellcheck = false;
-  const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = moteText("移除规则"); remove.addEventListener('click', () => { row.remove(); markSettingsDirty(); });
-  const identity = document.createElement('label'); identity.className = 'app-identity'; const name = document.createElement('span'); name.textContent = installedApps.find(app => app.appId === id)?.appName || (id ? moteText("应用规则") : moteText("自定义应用")); identity.append(name, input);
-  row.append(identity, channelControls(mode), remove); byId('app-collection-rules').append(row);
-}
-function readAppRules(): Record<string, import('./contracts').CollectionMode> {
-  const rules: Record<string, import('./contracts').CollectionMode> = {};
-  for (const row of Array.from(byId('app-collection-rules').children)) {
-    const id = row.querySelector('input')!.value.trim(); const mode = readChannels(row);
-    if (!id) { revealField(row.querySelector('input')!); throw new Error(moteText("应用规则需要填写 Bundle ID；不用的规则请移除")); }
-    if (Object.hasOwn(rules, id)) { revealField(row.querySelector('input')!); throw new Error(moteText("同一应用只能设置一条采集规则")); }
-    Object.defineProperty(rules, id, { value: mode, enumerable: true });
-  }
-  return rules;
-}
-byId('add-custom-app-rule').addEventListener('click', () => { addAppRule(); markSettingsDirty(); byId('app-collection-rules').lastElementChild?.querySelector('input')?.focus(); });
+byId('add-custom-app-rule').addEventListener('click', () => {
+  const input=byId<HTMLInputElement>('custom-app-id'),id=input.value.trim();
+  try{normalizeAppCollectionRules({[id]:{duration:true,screenshots:false,structured:false}});}
+  catch{feedback(moteText('请输入有效的应用 Bundle ID'));input.focus();return;}
+  const existing=appCaptureUi.readRules()[id];appCaptureUi.addOverride(id,existing??{duration:true,screenshots:false,structured:false});input.value='';
+});
+byId('chrome-origins').addEventListener('input',()=>appCaptureUi.setOrigins(readInput('chrome-origins').split('\n').map(value=>value.trim()).filter(Boolean)));
 
 // Friendly controls write the same validated configuration as the custom fields.
 const syncModeLabels: Record<import('./contracts').SyncMode, string> = { get realtime() { return moteText("实时"); }, get interval() { return moteText("定时"); }, get batch() { return moteText("积攒一批"); }, get manual() { return moteText("仅手动"); } };
@@ -976,10 +970,11 @@ byId('image-preset').addEventListener('change', () => {
 });
 byId('image-custom').addEventListener('click', () => revealField(byId('jpeg-quality')));
 
-let installedApps: { appId: string; appName: string }[] = [];
+let installedApps: { appId: string; appName: string; appVersion?:string }[] = [];
 byId('add-app-rule').addEventListener('click', () => void perform(async () => {
   byId('app-picker').hidden = false;
-  installedApps = await desktopApi.installedApplications();
+  await appCaptureUi.refreshApplications();
+  installedApps = appCaptureUi.installedApplications();
   const select = byId<HTMLSelectElement>('installed-app-choice');
   select.replaceChildren(...installedApps.map(app => new Option(`${app.appName} · ${app.appId}`, app.appId)));
   byId('app-picker-hint').textContent = installedApps.length ? moteText("找到 {0} 个应用；选择后可调整采集级别。应用列表仅用于本机设置。", installedApps.length) : moteText("暂未找到应用，可在下方“手动输入 ID”中添加。");
@@ -989,9 +984,8 @@ byId('add-app-rule').addEventListener('click', () => void perform(async () => {
 }));
 function useInstalledApp(exclude: boolean): void {
   const id = readInput('installed-app-choice'); if (!id) return;
-  const existing = Array.from(byId('app-collection-rules').children).find(row => row.querySelector('input')?.value === id);
-  if(existing){if(exclude)existing.querySelectorAll<HTMLInputElement>('[data-channel]').forEach(input=>input.checked=false);existing.querySelector<HTMLInputElement>('[data-channel]')?.focus();}
-  else addAppRule(id,{duration:!exclude,screenshots:false,structured:false});
+  const existing=appCaptureUi.readRules()[id];
+  appCaptureUi.addOverride(id,exclude?{duration:false,screenshots:false,structured:false}:existing??{duration:true,screenshots:false,structured:false});
   byId('app-picker-hint').textContent = exclude ? moteText("{0} 已加入完全排除列表，保存设置后生效。",installedApps.find(app=>app.appId===id)?.appName||id) : moteText("已添加为仅记录时长。可在规则中分别选择截图与结构化，保存设置后生效。");
   markSettingsDirty();
 }

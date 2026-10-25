@@ -20,7 +20,7 @@ do {
         // Explicit settings picker only. Return app identities, never windows or screen content.
         let manager = FileManager.default
         let roots = [URL(fileURLWithPath: "/Applications"), URL(fileURLWithPath: "/System/Applications"), manager.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
-        var applications: [String: String] = [:]
+        var applications: [String: [String: String]] = [:]
         let deadline = Date().addingTimeInterval(3)
         for root in roots {
             guard let entries = manager.enumerator(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { continue }
@@ -28,10 +28,12 @@ do {
                 if Date() > deadline || applications.count >= 2048 { break }
                 guard url.pathExtension == "app", let bundle = Bundle(url: url), let id = bundle.bundleIdentifier, !id.isEmpty, id.count <= 256 else { continue }
                 let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? url.deletingPathExtension().lastPathComponent
-                applications[id] = String(name.prefix(512))
+                var entry = ["appId": id, "appName": String(name.prefix(512))]
+                if let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, !version.isEmpty, version.count <= 300 { entry["appVersion"] = version }
+                applications[id] = entry
             }
         }
-        try output(["applications": applications.map { ["appId": $0.key, "appName": $0.value] }])
+        try output(["applications": Array(applications.values)])
     case "calendar-permission", "calendar-list", "calendar-scan", "calendar-create", "calendar-change":
         let command = CommandLine.arguments[1]
         let store = EKEventStore()
