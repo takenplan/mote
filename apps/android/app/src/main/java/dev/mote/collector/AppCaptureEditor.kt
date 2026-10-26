@@ -20,7 +20,7 @@ internal class AppCaptureEditor(
     private val importRules: (String, String) -> Unit,
     private val detailChanged: (Boolean) -> Unit,
 ) : LinearLayout(activity) {
-    data class State(val selected: String? = null, val query: String = "", val scope: AppCapturePresentation.Scope = AppCapturePresentation.Scope.ALL)
+    data class State(val selected: String? = null, val query: String = "", val scope: AppCapturePresentation.Scope = AppCapturePresentation.Scope.ALL, val rulesExpanded: Boolean = false)
     private var state = State()
     private var apps = emptyList<AppCapturePresentation.App>()
     private var ready = false
@@ -71,10 +71,10 @@ internal class AppCaptureEditor(
     }
     fun backToList(): Boolean {
         if (state.selected == null) return false
-        state = state.copy(selected = null); refresh(); return true
+        state = state.copy(selected = null, rulesExpanded = false); refresh(); return true
     }
     fun select(id: String) {
-        state = state.copy(selected = id)
+        state = state.copy(selected = id, rulesExpanded = state.selected == id && state.rulesExpanded)
         search.clearFocus()
         (activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(search.windowToken, 0)
@@ -184,18 +184,30 @@ internal class AppCaptureEditor(
         }
         detailSurface.addView(label(MoteI18n.text("全部取消勾选即不采集。修改形成草稿，保存配置后生效。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
         val ruleSummary = LinearLayout(activity).apply { orientation = VERTICAL; tag = "app-rule-summary" }
-        detailSurface.addView(ruleSummary); refreshRuleSummary(current, app)
+        detailSurface.addView(ruleSummary)
         button(detailSurface, MoteI18n.text("预览此应用的记录格式")) { preview(app.id) }
-        button(detailSurface, MoteI18n.text("配置当前版本的文章或商品字段")) { editRule(app.id, app.version) }
-        button(detailSurface, MoteI18n.text("载入当前版本内置字段规则")) { loadRules(app.id, app.version) }
-        button(detailSurface, MoteI18n.text("导入当前版本的字段规则")) { importRules(app.id, app.version) }
-        detailSurface.addView(label(MoteI18n.text("规则配置与应用内容授权分开。修改只形成草稿，返回后保存生效；保存不会开始采集。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
-        detailSurface.addView(label(MoteI18n.text("字段配置匹配不代表已经通过真机验证。截图按独立选择执行；隐私拒绝时不采集。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
+        val advanced = LinearLayout(activity).apply { orientation = VERTICAL; tag = "app-rule-settings"; visibility = if (state.rulesExpanded) VISIBLE else GONE }
+        button(detailSurface, MoteI18n.text("高级设置") + " · " + MoteI18n.text("结构化规则")) {
+            state = state.copy(rulesExpanded = !state.rulesExpanded)
+            advanced.visibility = if (state.rulesExpanded) VISIBLE else GONE
+            (detailSurface.findViewWithTag<View>("app-rule-settings-toggle")).isSelected = state.rulesExpanded
+        }.apply { tag = "app-rule-settings-toggle"; isSelected = state.rulesExpanded }
+        detailSurface.addView(advanced)
+        val ruleDetails = LinearLayout(activity).apply { orientation = VERTICAL; tag = "app-rule-details" }
+        advanced.addView(ruleDetails)
+        button(advanced, MoteI18n.text("配置当前版本的文章或商品字段")) { editRule(app.id, app.version) }
+        button(advanced, MoteI18n.text("载入当前版本内置字段规则")) { loadRules(app.id, app.version) }
+        button(advanced, MoteI18n.text("导入当前版本的字段规则")) { importRules(app.id, app.version) }
+        advanced.addView(label(MoteI18n.text("规则配置与应用内容授权分开。修改只形成草稿，返回后保存生效；保存不会开始采集。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
+        advanced.addView(label(MoteI18n.text("字段配置匹配不代表已经通过真机验证。截图按独立选择执行；隐私拒绝时不采集。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
+        refreshRuleSummary(current, app)
     }
 
     private fun refreshRuleSummary(current: AppCapturePresentation.Snapshot, app: AppCapturePresentation.App) {
         val host = detailSurface.findViewWithTag<LinearLayout>("app-rule-summary") ?: return
+        val details = detailSurface.findViewWithTag<LinearLayout>("app-rule-details") ?: return
         host.removeAllViews(); host.addView(label(MoteI18n.text("结构化规则"), NativeFontRole.SECTION))
+        details.removeAllViews()
         val mode = AppCapturePresentation.mode(current, app.id)
         if (!mode.structured) host.addView(label(MoteI18n.text("此应用未选择结构化内容，字段规则不会运行"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
         if (current.projection) host.addView(label(MoteI18n.text("投屏模式不支持结构化内容"), NativeFontRole.SUPPORT, NativeColorRole.WARNING))
@@ -206,7 +218,7 @@ internal class AppCaptureEditor(
             val kind = when (rule.kind) { "article" -> MoteI18n.text("文章"); "product" -> MoteI18n.text("商品"); else -> rule.kind }
             host.addView(label(MoteI18n.text("已配置 {0} · {1}；实际页面仍需匹配", kind, rule.fields.joinToString("、") { fieldLabel(it) }), NativeFontRole.SUPPORT))
             host.addView(badge(if (matched) MoteI18n.text("当前版本有规则") else MoteI18n.text("规则版本不符"), !matched))
-            host.addView(label(MoteI18n.text("规则 {0} · 版本 {1}\n适用应用版本：{2}\n来源：本机规则配置", rule.id, rule.version, rule.appVersion), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
+            details.addView(label(MoteI18n.text("规则 {0} · 版本 {1}\n适用应用版本：{2}\n来源：本机规则配置", rule.id, rule.version, rule.appVersion), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
         }
         if (current.ocr && mode.structured && !current.projection) host.addView(label(MoteI18n.text("本机 OCR 补充已选择；字段规则与 OCR 分别记录来源。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
     }
