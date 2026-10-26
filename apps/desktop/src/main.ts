@@ -133,7 +133,7 @@ async function showCentral(page?: string, evidenceId?: string,workId?:string): P
     url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]), url => shell.openExternal(url), evidenceId, code,undefined,workId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
-function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings'): void {
+function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central'): void {
   if (page === 'notes') { void openQuickNote?.(); return; }
   showWindow(); window?.webContents.send('mote:navigate', page);
 }
@@ -157,6 +157,8 @@ function updateUi(status: Status): void {
     { type: 'separator' },
     { label: moteText("打开 Mote"), click: () => showClientPage('overview') },
     { label: moteText("随手记"), click: () => showClientPage('notes') },
+    { label: moteText("打开中央仓库"), click: () => showClientPage('central') },
+    { label: moteText("设置…"), click: () => showClientPage('settings') },
     { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else void serialize(()=>collector.start()).catch(error=>dialog.showErrorBox(moteText("无法开始采集"),(error as Error).message)); } },
     { label: moteText("立即发送"), enabled: !status.config.syncPaused, click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
     { type: 'separator' },

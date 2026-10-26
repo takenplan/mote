@@ -26,7 +26,7 @@ const api: DesktopApi = {
   setupChromeCapture: () => ipcRenderer.invoke('mote:chrome-setup'),
   installedApplications: () => ipcRenderer.invoke('mote:installed-applications'),
   onNavigate: callback => {
-    const handler = (_event: Electron.IpcRendererEvent, page: 'overview' | 'notes' | 'sources' | 'settings') => callback(page);
+    const handler = (_event: Electron.IpcRendererEvent, page: 'overview' | 'notes' | 'sources' | 'settings' | 'central') => callback(page);
     ipcRenderer.on('mote:navigate', handler);
     return () => ipcRenderer.removeListener('mote:navigate', handler);
   },

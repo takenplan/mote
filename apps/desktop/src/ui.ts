@@ -170,7 +170,10 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && currentPage === 'records' && !byId('record-detail').hidden) closeRecordDetail();
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);
 });
-desktopApi.onNavigate?.(page => { if (pageNames.includes(page)) showPage(page); });
+desktopApi.onNavigate?.(page => {
+  if (page === 'central') byId('central').click();
+  else if (pageNames.includes(page)) showPage(page);
+});
 showPage(quickNote ? 'notes' : 'overview', false);
 
 function feedback(message: string, success = false): void {
