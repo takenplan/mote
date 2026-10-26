@@ -774,6 +774,22 @@ export class EvidenceStore {
   }
   deletionRevision() {return Number((this.db.prepare("SELECT COALESCE(MAX(seq),0) AS n FROM changes WHERE operation IN ('delete','supersede')").get() as {n:number}).n);}
   saveInsight(result:unknown,id:string) {this.db.prepare('INSERT INTO insights(id,created_at,json) VALUES(?,?,?)').run(id,new Date().toISOString(),JSON.stringify(result));}
-  insights() {return (this.db.prepare('SELECT id,created_at,json FROM insights ORDER BY created_at DESC LIMIT 30').all() as {id:string;created_at:string;json:string}[]).map(r=>({id:r.id,createdAt:r.created_at,...JSON.parse(r.json)}));}
+  insights(raw:unknown={}) {
+    const {limit,cursor}=z.object({limit:z.coerce.number().int().min(1).max(100).default(30),cursor:z.string().max(2048).optional()}).strict().parse(raw);
+    const revision=this.deletionRevision();let position:{at:string;id:string;revision:number}|undefined;
+    if(cursor){
+      try{position=z.object({at:z.string().datetime(),id:z.string().min(1).max(128),revision:z.number().int().nonnegative()}).strict().parse(JSON.parse(Buffer.from(cursor,'base64url').toString()));}
+      catch{throw new StoreError('Invalid insight cursor');}
+      if(position.revision!==revision)throw new StoreError('Insight history changed; restart browsing',409);
+    }
+    const rows=(position?this.db.prepare('SELECT id,created_at,json FROM insights WHERE created_at<? OR (created_at=? AND id<?) ORDER BY created_at DESC,id DESC LIMIT ?').all(position.at,position.at,position.id,limit+1):this.db.prepare('SELECT id,created_at,json FROM insights ORDER BY created_at DESC,id DESC LIMIT ?').all(limit+1)) as {id:string;created_at:string;json:string}[];
+    const page=rows.slice(0,limit),last=page.at(-1);
+    return {items:page.map(row=>({...JSON.parse(row.json),id:row.id,createdAt:row.created_at})),nextCursor:rows.length>limit&&last?Buffer.from(JSON.stringify({at:last.created_at,id:last.id,revision})).toString('base64url'):null};
+  }
+  insight(id:string) {
+    const row=this.db.prepare('SELECT id,created_at,json FROM insights WHERE id=?').get(id) as {id:string;created_at:string;json:string}|undefined;
+    if(!row)throw new StoreError('Insight not found',404);
+    return {...JSON.parse(row.json),id:row.id,createdAt:row.created_at};
+  }
   close() {this.db.close();}
 }
