@@ -34,4 +34,3 @@ export function PluginConfiguration({api,item,instance,busy,onSave,guided=false}
   <div className="plugin-footer"><button className="button primary" disabled={busy||!name.trim()||!scope.trim()||!configurationValid(fields,values)}>{busy?moteText('正在保存…'):instance||guided?moteText('保存配置'):moteText('创建实例')}</button></div>
  </form>;
 }
-
