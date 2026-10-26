@@ -128,6 +128,93 @@ class CaptureUploadHistoryInstrumentedTest {
         } finally { directory.deleteRecursively() }
     }
 
+    @Test fun centralCommitThen503RemainsUnknownAndReplayHasOneConfirmation() {
+        guard()
+        assumeTrue(InstrumentationRegistry.getArguments().getString("uploadReplayFixture") == "true")
+        val directory = directory()
+        try {
+            val endpoint = "http://127.0.0.1:47888"
+            val event = note().put("ocrText", "Generated replay original").put("platform", "android").put("deviceName", "Generated replay")
+            val cipher = context.secretBox()
+            val queue = DurableQueue(File(directory, "queue"), cipher).apply { archiveOrigin = endpoint }
+            queue.enqueue(event, null, 100000)
+            val file = File(directory, "history.sqlite")
+            val history = CaptureUploadHistory(file, cipher)
+            val batch = UUID.randomUUID().toString(); val scope = CaptureUploadReceipt.scope(endpoint, device)
+            val sender = CaptureUploadAttempts(history, batch, scope, "generated-replay")
+            fun send() = sender.send(listOf(event), event.toString().toByteArray().size.toLong(), true) {
+                val connection = java.net.URL("$endpoint/api/captures").openConnection() as java.net.HttpURLConnection
+                try {
+                    connection.requestMethod = "POST"; connection.doOutput = true
+                    connection.connectTimeout = 10000; connection.readTimeout = 10000
+                    connection.setRequestProperty("content-type", "application/json")
+                    connection.setRequestProperty("authorization", "Bearer generated-upload-history-fixture-token")
+                    connection.outputStream.use { it.write(event.toString().toByteArray()) }
+                    val status = connection.responseCode
+                    val stream = if (status >= 400) connection.errorStream else connection.inputStream
+                    status to JSONObject(stream.bufferedReader().use { it.readText() })
+                } finally { connection.disconnect() }
+            }
+            assertEquals(503, send().first)
+            val reopened = CaptureUploadHistory(file, cipher)
+            assertEquals("unknown", reopened.attempts(scope).single().state)
+            assertEquals(0, reopened.attempts(scope).single().acknowledged)
+            assertEquals(1, queue.pendingSync().count)
+            assertTrue(reopened.page(scope).isEmpty())
+            val replay = send()
+            assertTrue(replay.first in setOf(200, 201))
+            assertTrue(replay.second!!.getJSONObject("receipt").getBoolean("duplicate"))
+            val confirmation = CaptureUploadReceipt.create(endpoint, device, event, event, batch, System.currentTimeMillis(), 30)
+            CaptureReceiptFinalizer(reopened).received(queue, confirmation)
+            CaptureReceiptFinalizer(reopened).received(queue, confirmation)
+            assertEquals(0, queue.pendingSync().count)
+            assertEquals(1, reopened.page(scope).size)
+            assertEquals(setOf("unknown", "received"), reopened.attempts(scope).map { it.state }.toSet())
+            assertEquals(2, reopened.attempts(scope).size)
+            assertEquals(replay.first, reopened.attempts(scope).single { it.state == "received" }.results.getInt(event.getString("id")))
+            assertEquals("Generated replay original", queue.capture(event.getString("id"))!!.getString("ocrText"))
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun unavailableHistoryReportsRecoverableFailureWithoutChangingPendingOriginal() {
+        guard(); val directory = directory()
+        val prefix = "generated-history-" + UUID.randomUUID()
+        val preferences = mutableSetOf<String>()
+        val isolated = object : android.content.ContextWrapper(context) {
+            override fun getApplicationContext(): android.content.Context = this
+            override fun getNoBackupFilesDir() = File(directory, "private").apply { mkdirs() }
+            override fun getFilesDir() = File(directory, "files").apply { mkdirs() }
+            override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
+                val key = "$prefix-$name"; preferences.add(key)
+                return context.getSharedPreferences(key, mode)
+            }
+        }
+        try {
+            LocalDataFormat.requireCurrent(isolated)
+            val event = note(); val settings = Settings(isolated)
+            val queue = DurableQueue(File(directory, "queue"), isolated.secretBox())
+            queue.enqueue(event, null, 100000)
+            val blocked = File(isolated.noBackupFilesDir, "upload-history")
+            blocked.writeText("Generated storage fault")
+            assertFalse(UploadHistoryRecovery.restore(isolated, queue, settings))
+            assertTrue(UploadHistoryRecovery.unavailable)
+            assertEquals("error", settings.syncState())
+            assertTrue(settings.uploadStatus().contains(MoteI18n.text("上传历史")))
+            assertEquals(1, queue.pendingSync().count)
+            assertEquals(event.getString("ocrText"), queue.peek()!!.getString("ocrText"))
+            check(blocked.delete())
+            assertTrue(UploadHistoryRecovery.restore(isolated, queue, settings))
+            assertFalse(UploadHistoryRecovery.unavailable)
+            assertEquals(1, queue.pendingSync().count)
+            assertEquals(event.getString("ocrText"), queue.peek()!!.getString("ocrText"))
+            assertTrue(isolated.captureUploadHistory().page(CaptureUploadReceipt.scope(origin, device)).isEmpty())
+        } finally {
+            UploadHistoryRecovery.available()
+            preferences.forEach { context.deleteSharedPreferences(it) }
+            directory.deleteRecursively()
+        }
+    }
+
     /** Run after the real native FirstDeviceData journey, against that exact generated upload. */
     @Test fun nativeUploadCreatedOnePersistentConfirmationForTheSameOriginal() {
         guard()
