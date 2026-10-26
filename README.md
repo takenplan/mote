@@ -39,7 +39,7 @@ exposure, persistent services, permissions, existing data, or paid AI processing
 Keep secrets out of output and Git.
 ```
 
-The [Agent installation guide](docs/agent-install.md) connects deployment to the UI's first-data journey. You can also follow the manual steps below. Models and external AI access are optional after collection and archiving work.
+The [Agent installation guide](docs/agent-install.md) connects deployment to the UI's first-data journey. You can also follow the manual steps below. Models and external AI access are optional after collection and archiving work. Current `init` includes a Codex model default that can use an existing local login; for an archive-only trial, follow the guide's no-model setup **before starting Central or adding data**. An empty API key alone does not disable it.
 
 ### 1. Start your archive
 

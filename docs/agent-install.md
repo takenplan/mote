@@ -45,11 +45,22 @@ Set `MOTE_INSTALL_HOME` to the new absolute private profile parent you selected;
 
 ```sh
 node scripts/mote.mjs init --profile dev --home "$MOTE_INSTALL_HOME"
+```
+
+Use the same explicit home/profile on every subsequent command. When necessary, choose the free port with `init --port N`. Do not silently switch to prod, import real files, or enable capture to make the installation appear complete.
+
+Before the first `start`, review the new profile's private `mote.yaml` locally. **Current `init` includes a Codex model default and background Memory processing is enabled by default. An empty API-key field does not prevent use of an existing local Codex login.** Do not use that login or start model processing without the user's explicit authorization of data scope and possible usage/cost.
+
+For the new archive-only trial, set only `models.deployment.model` to the empty string `""` before starting. Keep the new profile's model profiles, per-module model overrides and embedding model empty; do not copy them from another installation. Empty deployment models are a supported unconfigured state, not an invalid placeholder. Preserve all other private settings and credentials. Do not apply this edit to an existing installation: inspect its actual assignments and use its existing user-approved controls instead. If any effective processing service can still send content to a model, stop before adding data until that path is disabled or authorized. Memory pause alone does not stop independently configured reviews or other processing.
+
+Then start and verify this selected profile:
+
+```sh
 node scripts/mote.mjs start --profile dev --home "$MOTE_INSTALL_HOME"
 node scripts/mote.mjs status --profile dev --home "$MOTE_INSTALL_HOME"
 ```
 
-Use the same explicit home/profile on every subsequent command. When necessary, choose the free port with `init --port N`. Do not silently switch to prod, import real files, or enable capture to make the installation appear complete.
+Check the actual model/module settings before the first record; unconfigured AI must remain unconfigured. Do not run a provider connection test to establish this, because the test itself may call a paid service. The user can later configure and authorize AI separately in settings.
 
 For Linux/NAS Docker, follow the [Docker path](deployment.md#linux--nas-docker) instead. Check Docker Engine/Compose requirements, use the pinned project build and private profile, and verify the configured volume is new or explicitly selected. Native and Docker are deployment choices for the same Central service; do not run two writers against one archive.
 
