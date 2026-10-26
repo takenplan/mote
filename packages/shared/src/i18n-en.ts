@@ -8657,5 +8657,11 @@ export const english: Readonly<Record<string, string>> = {
   "尚未设为当前记忆方案。": "Not selected as the current memory plan.",
   "查看已安装插件": "View installed plugins",
   "离开此引导不会撤销已登记的安装或核验。": "Leaving this guide does not undo an installation or verification already registered.",
-  "填写连接配置。保存不会运行核验、启用插件或更换记忆方案。": "Enter connection settings. Saving does not run verification, enable the plugin or change the memory plan."
+  "填写连接配置。保存不会运行核验、启用插件或更换记忆方案。": "Enter connection settings. Saving does not run verification, enable the plugin or change the memory plan.",
+  "正在整理自动主题…": "Organizing automatic topics…",
+  "主题是模型整理的浏览视图，不代表新的用户事实。": "Topics are model-organized views, not new facts about you.",
+  "尚无自动主题；仍可浏览全部记忆和已有维度。": "No automatic topics yet. You can still browse all memories and existing views.",
+  "此主题已不可用，请返回全部记忆。": "This topic is no longer available. Return to all memories.",
+  "自动主题整理未完成；已有记忆仍可浏览。": "Automatic topic organization did not finish. Existing memories remain available.",
+  "自动主题服务尚未就绪；已有记忆仍可浏览。": "Automatic topics are not ready. Existing memories remain available."
 };
