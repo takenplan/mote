@@ -31,8 +31,11 @@ class AppCaptureSetupInstrumentedTest {
         val deadline = SystemClock.elapsedRealtime() + 10000
         while (!condition()) { check(SystemClock.elapsedRealtime() < deadline) { "Setup did not finish" }; Thread.sleep(30) }
     }
-    private fun capture(activity: MainActivity, filename: String) {
+    private fun capture(activity: MainActivity, filename: String, focusTag: String? = null) {
         val root = activity.window.decorView
+        focusTag?.let { root.findViewWithTag<View>(it)?.let { view ->
+            view.requestRectangleOnScreen(android.graphics.Rect(0, 0, view.width, view.height), true)
+        } }
         val image = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
         try {
             root.draw(android.graphics.Canvas(image))
@@ -143,8 +146,9 @@ class AppCaptureSetupInstrumentedTest {
             instrumentation.runOnMainSync {
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("安装版本：$version") })
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("已配置 文章") && it.text.contains("正文") })
-                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("不代表已经通过真机验证") })
+                assertFalse(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "配置当前版本的文章或商品字段" })
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "当前版本有规则" })
+                assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("实际页面仍需匹配") })
                 button("预览此应用的记录格式").performClick()
             }
             instrumentation.waitForIdleSync()
@@ -155,7 +159,7 @@ class AppCaptureSetupInstrumentedTest {
             assertFalse(settings.enabled)
         }
     }
-    @Test fun configuringFieldsCreatesSavableDraftWithoutGrantingAppContentAccess() = fixture { settings ->
+    @Test fun advancedFieldSettingsKeepTheirDraftAndExpansionAcrossRecreationWithoutGrantingContentAccess() = fixture { settings ->
         settings.save(settings.read().copy(uiPageMode = "screen_only", appCollectionRules = AppCollectionRules(AppCollectionMode.ACTIVITY, mapOf(context.packageName to AppCollectionMode.ACTIVITY)).json()))
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
             scenario.onActivity { activity ->
@@ -163,7 +167,30 @@ class AppCaptureSetupInstrumentedTest {
             }
             openApp(scenario)
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { button("配置当前版本的文章或商品字段").performClick() }
+            scenario.onActivity { activity ->
+                val current = views(activity.window.decorView)
+                assertFalse(current.single { it.tag == "app-rule-settings" }.isShown)
+                assertFalse(current.filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "配置当前版本的文章或商品字段" })
+                assertTrue(current.filterIsInstance<CheckBox>().single { it.tag == "app-channel:${context.packageName}:0" }.isShown)
+                current.single { it.tag == "app-rule-settings-toggle" }.performClick()
+            }
+            scenario.recreate(); scenario.awaitMainUi()
+            scenario.onActivity { activity ->
+                val current = views(activity.window.decorView)
+                assertTrue(current.single { it.tag == "app-rule-settings" }.isShown)
+                assertTrue(current.single { it.tag == "app-rule-settings-toggle" }.isSelected)
+                capture(activity, "app-capture-advanced.png", "app-rule-settings")
+                button("载入当前版本内置字段规则").performClick()
+                button("导入当前版本的字段规则").performClick()
+            }
+            waitFor { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString()?.endsWith(".documentsui") == true }
+            instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close()
+            waitFor { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == context.packageName }
+            assertEquals("[]", settings.read().uiPageRules)
+            scenario.onActivity { activity ->
+                assertTrue(views(activity.window.decorView).single { it.tag == "app-rule-settings" }.isShown)
+                button("配置当前版本的文章或商品字段").performClick()
+            }
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 val fields = dialogViews().filterIsInstance<EditText>().filter { it.isShown }
@@ -173,7 +200,19 @@ class AppCaptureSetupInstrumentedTest {
             }
             assertEquals("[]", settings.read().uiPageRules)
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { button("返回应用列表").performClick() }
+            scenario.onActivity { activity ->
+                assertTrue(views(activity.window.decorView).single { it.tag == "app-rule-settings" }.isShown)
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.contains("已配置 文章") })
+                views(activity.window.decorView).single { it.tag == "app-rule-settings-toggle" }.performClick()
+                assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "配置当前版本的文章或商品字段" })
+            }
+            scenario.recreate(); scenario.awaitMainUi()
+            scenario.onActivity { activity ->
+                assertFalse(views(activity.window.decorView).single { it.tag == "app-rule-settings" }.isShown)
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.contains("已配置 文章") })
+                capture(activity, "app-capture-daily.png", "app-rule-settings-toggle")
+                button("返回应用列表").performClick()
+            }
             scenario.onActivity { activity ->
                 assertFalse(views(activity.window.decorView).filterIsInstance<Spinner>().any {it.isShown&&it.tag=="uiPageMode"})
                 button("保存并预览").performClick()
@@ -227,6 +266,7 @@ class AppCaptureSetupInstrumentedTest {
             openApp(scenario)
             scenario.onActivity { activity ->
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.contains("规则版本不符") })
+                views(activity.window.decorView).single { it.tag == "app-rule-settings-toggle" }.performClick()
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.contains("适用应用版本：$wrongVersion") })
                 val root = activity.window.decorView
                 capture(activity, "app-capture-detail.png")
