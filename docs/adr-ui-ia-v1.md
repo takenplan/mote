@@ -2,7 +2,7 @@
 
 Accepted 2026-10-25 from the owner's [UI decisions](https://chatgpt.com/share/6add8286-7754-83e9-9c63-de2aab62ec8f). This decision supersedes the navigation, landing page and page responsibilities in the earlier presentation-pack and client-navigation decisions. Their appearance, native interaction and state-preservation rules still apply.
 
-The owner's follow-up decisions and complete module journeys are recorded in [User journeys and UI](ui-user-journeys.md) (2026-10-26). They retain these primary destinations and refine Android home status, sync/history navigation, material/memory views, automatic context retrieval and discovery. MCP setup details, memory correction and notification policy remain deferred; unselected proposals are not accepted decisions.
+The owner's complete A–N decisions, Hold boundaries, journeys and single implementation checklist are recorded in [User journeys and UI](ui-user-journeys.md) (2026-10-26), verified against all 56 rounds of the [complete discussion](https://chatgpt.com/share/6aded7e7-8e04-83ea-86ed-fa36a31fc8e5). That document is the current product baseline and takes precedence over earlier recommendations. It retains these primary destinations, adds first real-data onboarding, manual-first source setup, interface layering, plugin/action and cross-device directions, and Agent-assisted installation. Privacy/deletion lifecycle, MCP details, memory correction, notification algorithms, iOS pages and model routing remain on Hold; direct record editing/version propagation is unconfirmed.
 
 Mote is a personal context center: sources collect originals, Central archives and understands them, and people and authorized Agents use the context. Captured or shared content remains untrusted evidence. A record is a deterministic save; a conversation is an AI interaction. Neither implies the other.
 
@@ -22,7 +22,7 @@ Library has two primary views: **My materials** and **My memories**. Detailed co
 
 ## First use and daily use
 
-Central guides an empty instance through adding a source, seeing collected materials and configuring an AI authorization. An issued authorization is not evidence that an external Agent has connected. Daily Overview shows actual source and processing status, few supported discoveries and recent content.
+Central guides an empty instance through connecting a collector, receiving a real material and opening its original. Model configuration, Ask and external AI authorization are optional next steps, not completion requirements. Pairing alone, aggregate counts or an issued authorization do not establish a completed real-data journey. Daily Overview shows actual source and processing status, few supported discoveries and recent content.
 
 Mac Workbench leads with three tasks: quick note, import file and add source. Normal capture, connection and sending state occupies a compact row. Source problems link directly to their controls. Sources are grouped by screen/app activity, files/folders, Coding Agents, and local calendars/other sources. Completed one-time imports remain in Content.
 
@@ -42,7 +42,7 @@ Mac menu-bar quick recording uses one independent editor backed by the existing 
 
 Retain the warm paper/graphite surfaces, restrained purple accents, existing components and native platform controls. The owner explicitly rejects explanatory prose filling everyday pages. Default surfaces show content, state and actions. Explanations belong in first-use guidance, help, an error or a consequential choice where the information is needed.
 
-iOS remains a proposed product direction in the shared discussion; it has no frozen IA or existing client in this repository. It is outside this implementation.
+iOS is a confirmed complete-client direction with platform-specific collection. Its concrete IA and interactions remain on Hold, and this repository has no iOS client. Do not start one as part of the current UI slices.
 
 ## Validation
 
