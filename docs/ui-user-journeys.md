@@ -181,7 +181,7 @@ E–N 已按上面的冻结表收束，不再将首次使用、行动、插件�
 
 以下以基线代码中的 [功能目录](../apps/web/src/feature-guide-catalog.ts) 78 项能力（42 项 C、36 项 A）作互斥索引，并与 [Web 注册入口](../apps/web/src/features/entries.ts)、[资料集合](../apps/web/src/features/collections.tsx)、[Mac 路由](../apps/desktop/src/navigation.ts) 和 [Android 路由](../apps/android/app/src/main/java/dev/mote/collector/PrimaryNavigation.kt) 交叉核查。目录只是索引，真实注册、权限与消费者决定入口是否可用；原生独有能力另外列在同一矩阵，不能由 Web 目录代替。每个 C/A ID 只归一行，跨旅程复用用旅程引用表达。
 
-**当前全部为代码盘点，各行覆盖验收状态均为待验，尚未构成本轮验收通过。** 每片 PR 记录本行受影响能力、实际执行结果、未执行原因及证据环境；未改动能力在里程碑核对入口与保留语义。状态统一为：待验、通过、失败、受阻、不适用（附原因），不能留白或把任务完成状态当测试结果。负责人沿用第 6 节，不新增另一个台账。
+**矩阵各行是完整覆盖集合，未整体验收关闭。已合入小片只覆盖其 PR 明确列出的子集，不能把它扩写为整行通过。** 每片 PR 记录本行受影响能力、实际执行结果、未执行原因及证据环境；未改动能力在里程碑核对入口与保留语义。状态统一为：待验、通过、失败、受阻、不适用（附原因），不能留白或把任务完成状态当测试结果。负责人沿用第 6 节，不新增另一个台账。
 
 | 能力索引 / 功能 | 端、冻结模块与旅程 | 基线实现与待改差距 | 负责人 / 验收归属 |
 | --- | --- | --- | --- |
@@ -218,13 +218,13 @@ MVP 不要求向前兼容：允许替换旧 API、结构和组件并移除失效
 
 | 切片 / 负责人 | 依赖与范围 | 验收 | PR / 状态 |
 | --- | --- | --- | --- |
-| P0 决策基线 / 协调 | 本篇吸收 A–N，ADR 与旧导航文档去冲突 | 逐轮对照决策、链接与 Markdown、docs-only affected 计划 | [#233](https://github.com/utopiafar/mote/pull/233)，Draft |
-| P1-C Central / Central 负责人 | P0；记忆浏览优先，专业配置与内部执行分层；错误、回执及用户控制可见 | 相关 Web 测试、真实隐藏 renderer 路径与 affected CI | 实施中 |
-| P1-M Mac / Mac 负责人 | P0；既有来源高级表单保留；菜单栏设置/Central 快捷入口复用原导航 | 聚焦桌面测试、隐藏 Electron / IPC、草稿与连接路径 | 实施中 |
-| P1-A Android / Android 负责人 | P0；应用字段规则按需高级展开，保留通道、真实限制、metadata 与开停意图 | 聚焦 JVM、专用模拟器实际 UI/重建与相关 CI | [#234](https://github.com/utopiafar/mote/pull/234)，Draft |
-| P1-F 手动来源引导 / 协调 + 各端 | P1；对照现有来源目录逐类核实范围、资料说明、验证与异常入口，不重做已符合表单 | 文件/Coding/在线/录音/MCP 现有能力入口与状态覆盖，原件去向不变 | 待差距核查 |
+| P0 决策基线 / 协调 | 本篇吸收 A–N，ADR 与旧导航文档去冲突 | 逐轮对照决策、链接与 Markdown、docs-only affected 计划 | [#233](https://github.com/utopiafar/mote/pull/233)，已合入 `e6af1fb5`；78/78 映射与文档验证通过 |
+| P1-C Central / Central 负责人 | P0；记忆浏览优先，专业配置与内部执行分层；错误、回执及用户控制可见 | 相关 Web 测试、真实隐藏 renderer 路径与 affected CI | [#236](https://github.com/utopiafar/mote/pull/236)，Draft；验收中 |
+| P1-M Mac / Mac 负责人 | P0；既有来源高级表单保留；菜单栏设置/Central 快捷入口复用原导航 | 聚焦桌面测试、隐藏 Electron / IPC、草稿与连接路径 | [#235](https://github.com/utopiafar/mote/pull/235)，已合入 `4e96947c`；未验前台菜单/真实 Central 登录 |
+| P1-A Android / Android 负责人 | P0；应用字段规则按需高级展开，保留通道、真实限制、metadata 与开停意图 | 聚焦 JVM、专用模拟器实际 UI/重建与相关 CI | [#234](https://github.com/utopiafar/mote/pull/234)，已合入 `49618efc`；API 37 UI 通过，真机/进程死亡未验 |
+| P1-F 手动来源引导 / 协调 + 各端 | P1；对照现有来源目录逐类核实范围、资料说明、验证与异常入口，不重做已符合表单 | 文件/Coding/在线/录音/MCP 现有能力入口与状态覆盖，原件去向不变 | 164 个目录目标已审查；3 处失效目标修复中，来源流程待核 |
 | P1-K 模型连接与启用 / Central + 协调 | P1-C；统一连接、合理默认和后台一次授权；固定/动态只呈现真实能力 | 未配模型仍录入；费用/数据范围授权、拒绝/暂停、指定模型不越权切换 | 待合同与 UI 审查 |
-| P2-N 安装入口 / 协调 | P0；README Prompt 与 Agent 安装文档复用 CLI | 文档命令核对、隔离 fixture，禁止部署真实环境 | 待实施 |
+| P2-N 安装入口 / 协调 | P0；README Prompt 与 Agent 安装文档复用 CLI | 文档命令/实际路由与链接核对；不运行部署 | 当前文档切片，验收中 |
 | P2-E 首次闭环 / 首次使用负责人 | P0；真实设备连接→资料→ACK→原件，MCP/模型可选 | 生成资料跨端最短链与真实 UI；身份/ACK/可读结果分别核验 | 只读合同已独立批准，实施中 |
 | P3-B 统一资料 / Android + 协调 | P1-A；稳定 ID、位置/状态与离线合同先审查 | 本机/Central 同 ID 合并、无猜测去重、原件与返回路径 | 待合同审查 |
 | P3-A 上传历史 / Android + 协调 | P1-A；真实批次/条目 ACK 持久合同先审查，不改保留政策 | 日期→批次→原件回执、重试不重复、失败/重启/部分 ACK | 待合同审查 |
