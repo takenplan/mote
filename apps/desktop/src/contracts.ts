@@ -111,7 +111,7 @@ export interface DesktopApi {
   captureDetail(location: import('./capture-browser').CaptureLocation, id: string): Promise<import('./capture-browser').BrowserDetail>;
   captureImage(location: import('./capture-browser').CaptureLocation, id: string, thumbnail: boolean): Promise<string>;
   installedApplications(): Promise<{ appId: string; appName: string; appVersion?: string }[]>;
-  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings') => void): () => void;
+  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings' | 'central') => void): () => void;
   previewConnection(input: string): Promise<import('./connection').ConnectionPreview>;
   importConnection(kind: 'json' | 'qr'): Promise<{ canceled: boolean; preview?: import('./connection').ConnectionPreview }>;
   cancelConnection(): Promise<void>;
