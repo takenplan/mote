@@ -25,7 +25,7 @@ const answer=JSON.stringify({memories:[{title:'Generated checklist preference',s
 node.memories.extract({answer,citations:[{id:r.id,capturedAt:at,appName:'Generated source',excerpt:text}],trace:[],runId:'fixture-review'},'fixture',{reviewReceipt:{policy:'bounded-exact-review@1',decision:'independent',draftRunId:'fixture-draft',reviewRunId:'fixture-review',checkedAt:at,resultHash:createHash('sha256').update(answer).digest('hex'),deletionSnapshot:node.memories.deletions.snapshot()}});
 let failDelete=false;node.app.addHook('onRequest',async(req,reply)=>{if(failDelete&&req.method==='DELETE'&&req.url.startsWith('/api/memories/')){failDelete=false;return reply.code(503).send({error:'Generated transient delete failure'});}});
 node.app.post('/api/fixture/fail-delete',async()=>{failDelete=true;return {ok:true};});
-node.app.get('/api/fixture/state',async()=>({originalAvailable:node.memories.readEvidence([r.id]).length===1,jobs:node.memoryPipeline.list()}));
+node.app.get('/api/fixture/state',async()=>({captureId:r.id,originalAvailable:node.memories.readEvidence([r.id]).length===1,jobs:node.memoryPipeline.list()}));
 await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(ready)},String(node.app.server.address().port));process.once('SIGTERM',async()=>{await node.app.close();process.exit(0);});`,{mode:0o600});
  server=spawn(process.env.MOTE_FIXTURE_NODE||process.execPath,[runner],{cwd:repo,env:{...Object.fromEntries(['PATH','HOME','TMPDIR','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]])),ELECTRON_RUN_AS_NODE:'1'},stdio:['ignore','ignore','pipe']});
  let stderr='';server.stderr.on('data',c=>stderr=(stderr+c).slice(-12000));
@@ -44,6 +44,10 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  check('reading appears before optional tools',await js(`!!(document.querySelector('.workspace-layout').compareDocumentPosition(document.querySelector('.memory-management'))&Node.DOCUMENT_POSITION_FOLLOWING)`));
  check('ordinary reading hides model controls and queues',!(await visible('.model-selector'))&&!(await visible('.execution-queue-overview')));
  await screenshot('reading-desktop');
+ const sourceRef='capture:'+(await request('/api/fixture/state')).captureId;await js(`location.hash='#/library?view=memories&'+new URLSearchParams({memorySource:${JSON.stringify(sourceRef)}})`);await until(()=>visible('.memory-source-selection'),'explicit source selection');
+ check('explicit extraction keeps source and opened controls before browsing',await visible('.model-selector')&&await js(`document.querySelector('.memory-management').open&&!!(document.querySelector('.memory-management').compareDocumentPosition(document.querySelector('.workspace-layout'))&Node.DOCUMENT_POSITION_FOLLOWING)`));
+ await click('清除资料选择，恢复时间范围');await until(()=>js(`!document.querySelector('.memory-source-selection')`),'clear source selection');await js(`if(document.querySelector('.memory-management').open)document.querySelector('.memory-management>summary').click()`);
+ check('clearing source selection restores the normal browsing order',await js(`!!(document.querySelector('.workspace-layout').compareDocumentPosition(document.querySelector('.memory-management'))&Node.DOCUMENT_POSITION_FOLLOWING)`));
  await click('高级设置');await until(()=>visible('.model-selector'),'advanced model choice');
  check('advanced settings expose extraction without developer queues',await visible('.memory-actions .primary')&&!(await js(`document.querySelector('.memory-developer-tools').open`)));
  await js(`(()=>{const e=document.querySelector('.model-selector select');e.value=e.options[e.options.length-1].value;e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
