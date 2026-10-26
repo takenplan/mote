@@ -1341,6 +1341,7 @@ class MainActivity : MoteActivity() {
         val action = if (settings.enabled) MoteI18n.text("暂停采集") else MoteI18n.text("开始采集")
         val syncWait = c?.takeIf { it.hasSyncConnection() }?.let { SyncSchedule.waitingReason(this, it) }
         val syncMessage = when {
+            UploadHistoryRecovery.unavailable -> UploadHistoryRecovery.message()
             c == null -> MoteI18n.text("无法读取同步配置")
             !c.hasSyncConnection() -> MoteI18n.text("仅保存在本机 · 尚未连接节点")
             syncWait != null -> syncWait
@@ -1351,8 +1352,8 @@ class MainActivity : MoteActivity() {
         }
         val nativeFacts = NativeStatus.project(org.json.JSONObject().put("pending", pending ?: org.json.JSONObject.NULL)
             .put("lastAcknowledgedAt", settings.lastAcknowledgedAt() ?: org.json.JSONObject.NULL)
-            .put("syncState", when { c == null || !c.hasSyncConnection() -> "unconfigured"; local.error != null || queueStats == null || queueStats.blocked > 0 -> "blocked"; else -> settings.syncState().takeIf { it in setOf("idle", "waiting", "uploading", "error", "paused") } ?: "waiting" })
-            .put("errorCode", when { local.error != null || queueStats == null -> "local_state_unavailable"; queueStats.blocked > 0 -> "retained_conflict"; else -> org.json.JSONObject.NULL }))
+            .put("syncState", when { UploadHistoryRecovery.unavailable -> "error"; c == null || !c.hasSyncConnection() -> "unconfigured"; local.error != null || queueStats == null || queueStats.blocked > 0 -> "blocked"; else -> settings.syncState().takeIf { it in setOf("idle", "waiting", "uploading", "error", "paused") } ?: "waiting" })
+            .put("errorCode", when { UploadHistoryRecovery.unavailable -> "upload_history_unavailable"; local.error != null || queueStats == null -> "local_state_unavailable"; queueStats.blocked > 0 -> "retained_conflict"; else -> org.json.JSONObject.NULL }))
         val syncQueue = "${pending?.let { MoteI18n.text("待同步 {0} 条", it) } ?: MoteI18n.text("队列暂不可读取")}${bytes?.let { " · ${"%.1f".format(it)} MiB" } ?: ""}"
         val syncFacts = NativeStatus.summary(nativeFacts)
         val syncText = "$syncQueue\n$syncMessage\n$syncFacts"
@@ -1361,6 +1362,7 @@ class MainActivity : MoteActivity() {
         val technicalText = MoteI18n.text("{0}\n{1}\n{2}\n{3}\n无障碍 {4} · 使用情况 {5}\n最近采集 {6}", state, totals, syncText, settings.uploadStatus(), if (CaptureAccessibilityService.connected) MoteI18n.text("已连接") else MoteI18n.text("未连接"), if (ForegroundApps.usageAllowed(this)) MoteI18n.text("已授权") else MoteI18n.text("未授权"), settings.lastCapture() ?: MoteI18n.text("无")) + "\n" + MoteI18n.text("屏幕采集：{0}", settings.screenStatus())
         val connectionState = c?.takeIf { it.hasSyncConnection() }?.let { ConnectionClient(this).status() } ?: "unchecked"
         val connectionTitle = when {
+            UploadHistoryRecovery.unavailable -> UploadHistoryRecovery.title()
             c == null || !c.hasSyncConnection() -> MoteI18n.text("未连接中央节点")
             settings.syncState() == "uploading" -> MoteI18n.text("正在同步中央节点")
             settings.syncState() == "error" || connectionState !in setOf("connected", "unchecked") -> MoteI18n.text("连接需要处理")
@@ -1368,6 +1370,7 @@ class MainActivity : MoteActivity() {
             else -> MoteI18n.text("已连接中央节点")
         }
         val connectionText = when {
+            UploadHistoryRecovery.unavailable -> UploadHistoryRecovery.message()
             c == null || !c.hasSyncConnection() -> MoteI18n.text("记录只保存在本机；连接后按你的策略上传。")
             settings.syncState() == "error" -> settings.uploadStatus()
             pending != null && pending > 0 -> MoteI18n.text("待同步 {0} 条 · 节点：{1}", pending, c.server)
