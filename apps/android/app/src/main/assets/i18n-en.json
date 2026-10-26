@@ -1,4 +1,7 @@
 {
+  "发现历史": "Discovery history",
+  "查看依据": "View evidence",
+  "报告暂不可读取，请重试。": "The report could not be read. Please retry.",
   "CLI 由当前中央部署准备，账号凭据由厂商 CLI 管理。": "This central deployment prepares the CLI. The vendor CLI manages account credentials.",
   "授权并连接账号": "Authorize and connect account",
   "缺失或版本不符时，请管理员运行当前部署的 connectors-prepare，再重新检测。": "If the CLI is missing or has the wrong version, ask the administrator to run connectors-prepare for this deployment, then check again.",

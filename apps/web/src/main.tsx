@@ -30,6 +30,7 @@ import { createRoot } from "react-dom/client";
 import type { ArchiveTab } from './Archive';
 import {
 ApiError,
+INSIGHT_HISTORY_PATH,
 createApi,
 errorMessage,
 queryString,
@@ -249,7 +250,7 @@ function App() {
       load<{items: Device[]}>("/api/devices", value => setDevices(value.items)),
       ...(["overview", "activity"].includes(page) ? [load<Activity>(`/api/activity${queryString(range)}`, setActivity)] : []),
       ...(page === "overview" ? [load<{items: Capture[]}>(`/api/captures${queryString(range, {limit: 4})}`, value => setRecent(value.items))] : []),
-      ...(page === "overview" ? [load<{items: Answer[]}>("/api/insights", value => setInsights(value.items))] : []),
+      ...(page === "overview" ? [load<{items: Answer[]}>(INSIGHT_HISTORY_PATH, value => setInsights(value.items))] : []),
     ]).then(results => {
       if (!active) return;
       const failure = results.find(result => result.status === "rejected");
