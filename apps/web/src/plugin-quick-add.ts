@@ -5,11 +5,11 @@ export const quickAddStorageKey='mote.plugin-quick-add';
 export const quickRecipes=[{id:'mem0',name:'Mem0',repository:'mem0ai/mem0',tag:'ts-v3.3.1',package:'mote.mem0'},{id:'hindsight',name:'Hindsight',repository:'vectorize-io/hindsight',tag:'v0.10.2',package:'mote.hindsight'}] as const;
 export type QuickRecipe=typeof quickRecipes[number];
 export type QuickIntent={phase:'install'|'configure'|'check';path:string;method:'POST';body:string};
-export type QuickAdd={version:1;scope:string;recipe:QuickRecipe['id'];preview:PluginReleasePreview;stage:'preview'|'installing'|'configure'|'configured'|'checking'|'verified';packageId?:string;instanceId?:string;pending?:QuickIntent;conflict?:boolean};
+export type QuickAdd={version:1;scope:string;recipe:QuickRecipe['id'];preview:PluginReleasePreview;stage:'preview'|'installing'|'configure'|'configured'|'checking'|'verified';packageId?:string;instanceId?:string;pending?:QuickIntent;conflict?:boolean;viewRevision?:number;instanceSnapshot?:{revision:number;configuration:Record<string,string|number|boolean>}};
 const id=z.string().uuid(),text=z.string().min(1).max(2000),strings=z.array(z.string());
 const previewSchema=z.object({id,name:text,version:text,source:z.object({repository:text,tag:text,commit:z.string().regex(/^[a-f0-9]{40}$/),digest:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),runtime:z.enum(['worker','service']),restartRequired:z.boolean(),capabilities:z.array(z.object({id:text,state:z.enum(['verified','unsupported','unknown']),reason:z.string().optional()}).strict()),dependencies:strings,access:strings,issues:strings,installable:z.boolean()}).strict();
 const intentSchema=z.object({phase:z.enum(['install','configure','check']),path:text,method:z.literal('POST'),body:z.string().max(32000)}).strict();
-const stateSchema=z.object({version:z.literal(1),scope:id,recipe:z.enum(['mem0','hindsight']),preview:previewSchema,stage:z.enum(['preview','installing','configure','configured','checking','verified']),packageId:text.optional(),instanceId:id.optional(),pending:intentSchema.optional(),conflict:z.boolean().optional()}).strict();
+const stateSchema=z.object({version:z.literal(1),scope:id,recipe:z.enum(['mem0','hindsight']),preview:previewSchema,stage:z.enum(['preview','installing','configure','configured','checking','verified']),packageId:text.optional(),instanceId:id.optional(),pending:intentSchema.optional(),conflict:z.boolean().optional(),viewRevision:z.number().int().positive().optional(),instanceSnapshot:z.object({revision:z.number().int().positive(),configuration:z.record(z.string(),z.union([z.string(),z.number(),z.boolean()]))}).strict().optional()}).strict();
 const commandSchema=z.object({expectedRevision:z.number().int().positive(),operationId:id}).strict();
 const endpoint=z.string().url().max(2000).refine(raw=>{const url=new URL(raw);return !url.username&&!url.password&&!url.search&&!url.hash&&(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname));});
 /** Only existing fixed-recipe fields and opaque credential references enter the
@@ -23,6 +23,8 @@ export function quickPackage(value:Pick<QuickAdd,'recipe'|'preview'>){return qui
 function valid(value:unknown):QuickAdd{
  const parsed=stateSchema.parse(value),recipe=quickRecipes.find(recipe=>recipe.id===parsed.recipe)!;
  if(parsed.preview.source.repository!==recipe.repository||parsed.preview.source.tag!==recipe.tag||parsed.packageId&&parsed.packageId!==quickPackage(parsed))throw Error('Invalid fixed recipe identity');
+ if(parsed.instanceSnapshot)quickConfiguration(parsed.recipe,parsed.instanceSnapshot.configuration);
+ if(['configured','checking','verified'].includes(parsed.stage)&&!parsed.instanceSnapshot)throw Error('Missing configuration identity');
  if(parsed.pending){const intent=parsed.pending,body=JSON.parse(intent.body),command=commandSchema.parse({expectedRevision:body.expectedRevision,operationId:body.operationId});
   if(intent.phase==='install'){
    z.object({...commandSchema.shape,previewId:id}).strict().parse(body);

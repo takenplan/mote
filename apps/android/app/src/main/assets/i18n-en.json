@@ -6932,6 +6932,7 @@
   "没有访问声明": "No access declaration",
   "依赖": "Dependencies",
   "无声明依赖": "No declared dependencies",
+  "插件代码可以访问 Central 服务的资源。请只安装你信任的插件；这里列出的访问范围不会自动限制代码。安装完成后仍需配置、启用与绑定。": "Plugin code can access Central service resources. Only install plugins you trust; the access listed here does not automatically restrict the code. After installation, configuration, enabling, and binding are still required.",
   "可信插件代码拥有中央宿主权限；访问声明不是沙箱隔离。安装完成后仍需配置、启用与绑定。": "Trusted plugin code has central host privileges; declared access is not sandbox isolation. Installation still requires configuration, enabling, and binding.",
   "正在安装…": "Installing…",
   "安装此版本": "Install this version",

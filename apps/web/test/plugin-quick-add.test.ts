@@ -91,3 +91,21 @@ test('blocked checkpoint storage sends no installation or configuration request'
  try{await click(ui.element,'添加 Hindsight');assert.ok(ui.element.textContent?.includes('无法保存添加进度'));assert.equal(f.calls.filter(call=>call.path.endsWith('/resolve')).length,1);assert.equal(f.calls.some(call=>call.path.endsWith('/install')),false);}
  finally{prototype.setItem=setItem;await ui.close();}
 });
+
+test('a restored verified checkpoint needs the exact current server instance, configuration, revision and capability',async()=>{
+ for(const change of ['unchanged','configuration','blocked','missing','disabled','package','capability'] as const){
+  sessionStorage.clear();const f=fixture();f.inventory.packages=[f.pkg];const instanceId=randomUUID(),configuration={modelProfileId:'generated-model'};
+  const instance:PluginInstanceView={id:instanceId,packageId:f.pkg.id,name:'Generated',scope:'default',revision:3,configurationSchema:f.pkg.configurationSchema!,configuration,secretStatus:{},capabilities:[{id:'engine',state:'verified'}],desired:false,observed:'ready',issues:[],allowedActions:['configure','check']};
+  const flow:QuickAdd={...checkpoint(),preview:{...preview(),source:f.pkg.source!},stage:'verified',instanceId,viewRevision:3,instanceSnapshot:{revision:3,configuration:{...configuration}}};
+  assert.equal(saveQuickAdd(flow),true);f.inventory.revision=4;f.inventory.instances=[instance];
+  if(change==='configuration'){instance.configuration={modelProfileId:'different-model'};instance.revision++;}
+  if(change==='blocked'){instance.observed='blocked';instance.issues=['Generated unavailable worker'];}
+  if(change==='missing')f.inventory.instances=[];
+  if(change==='disabled'){instance.observed='disabled';instance.revision++;}
+  if(change==='package')instance.packageId='mote.hindsight@'+'c'.repeat(64);
+  if(change==='capability')instance.capabilities=[{id:'engine',state:'unknown'}];
+  const ui=await mount(f);
+  try{assert.equal(ui.element.textContent?.includes('能力已核验。'),change==='unchanged',change);assert.equal(f.calls.length,0,'reload never pays for another check');if(change!=='unchanged'){assert.equal(readQuickAdd(scope)?.conflict,true,change);assert.ok(ui.element.textContent?.includes('配置或方案已变化'));}}
+  finally{await ui.close();}
+ }
+});
