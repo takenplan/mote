@@ -60,4 +60,20 @@ class LibraryCaptureProjectionTest {
         projection.central(record().put("libraryVersion", "metadata-a"), "central")
         assertEquals(LibraryCaptureProjection.Remote.OTHER_VERSION, projection.visible("").single().remote)
     }
+    @Test fun accessLossDropsRemoteBodiesAndClaimsWhileKeepingLocalOriginals() {
+        val projection = LibraryCaptureProjection(); val original = record()
+        projection.local(original, "central", "phone")
+        projection.central(record(), "central")
+        projection.central(record("remote-only"), "central")
+        projection.central(record("other-origin"), "other")
+        projection.clearCentral("central")
+        val local = projection.visible("local").single()
+        assertSame(original, local.item); assertNull(local.central)
+        assertEquals(LibraryCaptureProjection.Remote.UNKNOWN, local.remote)
+        assertEquals(listOf("other-origin"), projection.visible("central").map { it.identity.id })
+        assertFalse(projection.visible("").any { it.identity.id == "remote-only" })
+        projection.central(record(), "central")
+        assertEquals(LibraryCaptureProjection.Remote.READABLE, projection.visible("local").single().remote)
+    }
+
 }

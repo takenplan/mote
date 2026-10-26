@@ -128,7 +128,7 @@ internal class LibraryCaptureView(
             }
             val central = if (readRemote && filter != "file") runCatching {
                 val api = selection.client ?: error(MoteI18n.text("请先登录中央节点，各页面会共用这次登录。"))
-                check(api.get("/api/connections/self").getJSONObject("credential").getString("scope") == "owner") { MoteI18n.text("当前连接没有执行此操作的权限，请检查连接权限。") }
+                if (api.get("/api/connections/self").getJSONObject("credential").getString("scope") != "owner") throw CentralFailure(403, "connection_scope_denied")
                 val body = JSONObject().put("after", after).put("before", until).put("limit", 20).put("candidates", candidates)
                 if (filter.isNotBlank()) body.put("source", filter)
                 nextRemote?.let { body.put("cursor", it) }
@@ -148,6 +148,9 @@ internal class LibraryCaptureView(
                         repeat(matches.length()) { val match = matches.getJSONObject(it); projection.availability(selection.server, match.getString("deviceId"), match.getString("id"), match.getString("state") == "readable", match.optInt("observationCount"), match.optString("libraryVersion")) }
                         remoteCursor = page.optString("nextCursor").takeUnless { it.isBlank() || it == "null" }; remoteMore = remoteCursor != null
                     }?.onFailure {
+                        if (it is CentralFailure && (it.status in setOf(401, 403) || it.code == "connection_revoked")) {
+                            projection.clearCentral(selection.server); remoteCursor = null
+                        }
                         if (it is CentralFailure && it.status == 409) { refreshPending = true; pages = 0; restorePages = 1 }
                         remoteNotice = it.message.orEmpty(); remoteMore = false
                     }

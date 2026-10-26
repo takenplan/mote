@@ -19,6 +19,14 @@ internal class LibraryCaptureProjection {
     }
     private val rows = linkedMapOf<Identity, Row>()
     fun clear() = rows.clear()
+    /** Permission loss invalidates every remote body and availability claim for this origin. */
+    fun clearCentral(scope: String) {
+        rows.keys.filter { it.scope == scope }.forEach { identity ->
+            val row = rows.getValue(identity)
+            if (row.local == null) rows.remove(identity)
+            else rows[identity] = row.copy(central = null, remote = Remote.UNKNOWN)
+        }
+    }
     fun local(item: JSONObject, scope: String, deviceId: String) {
         val identity = Identity(scope.ifBlank { "local:$deviceId" }, item.optString("deviceId").ifBlank { deviceId }, item.getString("id"))
         rows[identity] = (rows[identity] ?: Row(identity)).copy(local = item).let { row ->

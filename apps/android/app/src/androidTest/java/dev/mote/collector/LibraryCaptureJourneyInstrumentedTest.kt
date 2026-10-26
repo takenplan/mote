@@ -176,4 +176,63 @@ class LibraryCaptureJourneyInstrumentedTest {
         }
     }
 
+    @Test fun serverDenialAfterLoadingDropsRemoteRowsWithoutLosingLocalOriginal() {
+        val args = InstrumentationRegistry.getArguments()
+        require(args.getString("libraryDenialFixture") == "true" && Build.FINGERPRINT.contains("emu64a") && context.packageName.endsWith(".dev"))
+        require(!Settings(context).enabled && !ProjectionService.running && CaptureAccessibilityService.instance == null)
+        val server = requireNotNull(args.getString("uiJourneyServer")); val token = requireNotNull(args.getString("uiJourneyToken"))
+        Settings(context).signIn(server, token, 86400000)
+        val api = CentralClient(server, token)
+        val page = context.queue().capturePage("1970-01-01T00:00:00Z", Instant.now().plusSeconds(1).toString(), source = "note")
+        val id = (0 until page.getJSONArray("items").length()).map { page.getJSONArray("items").getJSONObject(it) }.single { it.optString("textPreview") == "My separate generated comment" }.getString("id")
+        repeat(21) { index ->
+            api.post("/api/captures", JSONObject().put("id", UUID.randomUUID().toString()).put("deviceId", "generated-denial-device").put("deviceName", "Generated denial device").put("platform", "android")
+                .put("source", "note").put("capturedAt", Instant.now().minusSeconds(1).toString()).put("durationMs", 0).put("ocrText", "Generated remote denial original $index"))
+        }
+        api.post("/api/fixture/library-denial", JSONObject().put("mode", "none"))
+        try {
+            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).putExtra("page", "LIBRARY")).awaitMainUi().use { scenario ->
+                fun shown(text: String): Boolean { var found = false; scenario.onActivity { activity -> found = views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.contains(text) } }; return found }
+                fun click(label: String) { scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text == MoteI18n.text(label) && it.isClickable }.performClick() } }
+                fun location(position: Int) { scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<Spinner>().single { it.contentDescription == MoteI18n.text("资料位置") }.setSelection(position) } }
+                for (mode in listOf("forbidden", "revoked")) {
+                    api.post("/api/fixture/library-denial", JSONObject().put("mode", "none"))
+                    click("刷新")
+                    waitFor("remote body and exact local/Central availability are initially loaded") { shown("Generated remote denial original") && shown("本机与中央可读") }
+                    val generation = CentralAccess.resolve(context).generation
+                    api.post("/api/fixture/library-denial", JSONObject().put("mode", mode))
+                    // Loading the next page retains the first page until the server denies it.
+                    waitFor("next remote page is actionable") { var enabled = false; scenario.onActivity { activity -> enabled = views(activity.window.decorView).filterIsInstance<TextView>().any { it.text == MoteI18n.text("加载更多") && it.isEnabled } }; enabled }
+                    click("加载更多")
+                    try {
+                        waitFor("server denial clears previously loaded remote bodies and read claims") {
+                            !shown("Generated remote denial original") && !shown("本机与中央可读") && shown("本机可读 · 中央状态未知")
+                        }
+                    } catch (error: Throwable) {
+                        scenario.onActivity { activity -> error.addSuppressed(IllegalStateException(views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.joinToString(" | ") { it.text.toString() })) }
+                        throw error
+                    }
+                    if (mode == "forbidden") assertEquals("403 must clear remote content in the same signed-in session", generation, CentralAccess.resolve(context).generation)
+                    else assertNull("The existing HTTP 401 handler invalidates the revoked session", CentralAccess.resolve(context).client)
+                    location(2)
+                    waitFor("Central filter has no stale readable row after denial") { shown("这里还没有内容") && !shown("My separate generated comment") }
+                    location(0)
+                    waitFor("local original survives server denial") { shown("My separate generated comment") }
+                }
+                val monitor = instrumentation.addMonitor(CaptureRecordsActivity::class.java.name, null, false)
+                try {
+                    scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.tag == "library-record:$id" }.performClick() }
+                    val reader = instrumentation.waitForMonitorWithTimeout(monitor, 15000) as CaptureRecordsActivity
+                    assertFalse(reader.intent.getBooleanExtra("recordRemote", false))
+                    waitFor("local original opens after server denial") {
+                        var found = false; instrumentation.runOnMainSync { found = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>().any { it.isShown && it.text.contains("My separate generated comment") } }; found
+                    }
+                    instrumentation.runOnMainSync { reader.finish() }
+                    waitFor("reader return retains local original") { shown("My separate generated comment") }
+                } finally { instrumentation.removeMonitor(monitor) }
+            }
+        } finally { api.post("/api/fixture/library-denial", JSONObject().put("mode", "none")) }
+        assertEquals("Generated third-party original", context.queue().capture(id)!!.getJSONObject("metadata").getJSONObject("noteOrigin").getString("text"))
+    }
+
 }
