@@ -59,6 +59,8 @@ internal class CentralContent(
     private var browserGeneration = -1L
     private var browserDurationMs = 2592000000L
     private var screens: CentralScreens? = null
+    private var restoredTopicsState = state?.getBundle("memoryTopics")
+    private val restoredTopicsOrigin = state?.getString("memoryTopicsOrigin")
     private var restoredWorkState = state?.getBundle("workActivity")
     private val restoredWorkOrigin = state?.getString("workActivityOrigin")
     private var restoredInsightState = state?.getBundle("insightState")
@@ -71,7 +73,7 @@ internal class CentralContent(
     private var downloadPath: String? = null
     private var downloadOrigin: String? = null
     private var downloadGeneration = -1L
-    private val refreshRun = Runnable { if (resumed) when (page) { "ask" -> screens?.pollAsk(); "activity" -> screens?.pollWorkActivity(); "insights" -> screens?.pollInsight() } }
+    private val refreshRun = Runnable { if (resumed) when (page) { "ask" -> screens?.pollAsk(); "activity" -> screens?.pollWorkActivity(); "memories" -> screens?.pollMemoryTopics(); "insights" -> screens?.pollInsight() } }
 
     private val refreshLogin = object : Runnable {
         override fun run() {
@@ -190,6 +192,8 @@ internal class CentralContent(
             screens = CentralScreens(this, body, File(noBackupFilesDir, "central-native/" + SourceRules.hash(endpoint)))
             if (endpoint == restoredWorkOrigin) restoredWorkState?.let { screens?.restoreWorkState(it) }
             restoredWorkState = null
+            if (endpoint == restoredTopicsOrigin) restoredTopicsState?.let { screens?.restoreMemoryTopics(it) }
+            restoredTopicsState = null
         }
         if (client != null) {
             if (endpoint == restoredInsightOrigin) restoredInsightState?.let { screens?.restoreInsightState(it) }
@@ -213,6 +217,8 @@ internal class CentralContent(
         state.putLong("pickerGeneration", pickerGeneration); state.putString("downloadPath", downloadPath)
         state.putString("pickerInstruction", pickerInstruction)
         state.putString("downloadOrigin", downloadOrigin); state.putLong("downloadGeneration", downloadGeneration)
+        state.putString("memoryTopicsOrigin", server)
+        state.putBundle("memoryTopics", Bundle().also { screens?.saveMemoryTopics(it) })
         state.putString("workActivityOrigin", server)
         state.putBundle("workActivity", Bundle().also { screens?.saveWorkState(it) })
         state.putString("insightId", pendingInsightId); state.putString("insightOrigin", server)
@@ -427,6 +433,7 @@ internal class CentralContent(
         }
     }
     internal fun scheduleAskPoll(delay: Long = 1500) { handler.removeCallbacks(refreshRun); if (resumed && page == "ask") handler.postDelayed(refreshRun, delay) }
+    internal fun scheduleMemoryTopicsPoll() { handler.removeCallbacks(refreshRun); if (resumed && page == "memories") handler.postDelayed(refreshRun, 5000) }
     internal fun scheduleActivityPoll() { handler.removeCallbacks(refreshRun); if (resumed && page == "activity") handler.postDelayed(refreshRun, 3000) }
     internal fun scheduleInsightPoll(delay: Long = 5000) { handler.removeCallbacks(refreshRun); if (resumed && page == "insights") handler.postDelayed(refreshRun, delay) }
     private data class WorkValue<T>(val value: T, val generation: Long)
