@@ -84,7 +84,7 @@ export function PluginQuickAdd({api,viewScope,view,binding,refresh,onManage}:{ap
      {binding&&<p>{binding.activePlan.instanceId===flow.instanceId?moteText('当前记忆方案'):moteText('尚未设为当前记忆方案。')}</p>}
     </>}
    </>}
-   <div className="plugin-footer"><button className="button subtle" disabled={busy} onClick={()=>{if(confirmNavigation())setOpened(false);}}>{moteText('返回')}</button>{installed&&<button className="button subtle" disabled={busy||Boolean(flow.pending)} onClick={manage}>{moteText('查看已安装插件')}</button>}{flow.stage==='preview'&&!flow.pending&&<button className="button subtle" disabled={busy} onClick={clear}>{moteText('取消')}</button>}</div>
+   <div className="plugin-footer"><button className="button subtle" disabled={busy} onClick={()=>{if(confirmNavigation())setOpened(false);}}>{moteText('返回')}</button>{installed&&<button className="button subtle" disabled={busy||Boolean(flow.pending)} onClick={manage}>{moteText('查看已安装插件')}</button>}{(flow.stage==='preview'||flow.conflict)&&!flow.pending&&<button className="button subtle" disabled={busy} onClick={clear}>{moteText('取消')}</button>}</div>
    <small>{moteText('离开此引导不会撤销已登记的安装或核验。')}</small>
   </div>}
  </section>;

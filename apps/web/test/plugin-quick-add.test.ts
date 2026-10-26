@@ -105,7 +105,7 @@ test('a restored verified checkpoint needs the exact current server instance, co
   if(change==='package')instance.packageId='mote.hindsight@'+'c'.repeat(64);
   if(change==='capability')instance.capabilities=[{id:'engine',state:'unknown'}];
   const ui=await mount(f);
-  try{assert.equal(ui.element.textContent?.includes('能力已核验。'),change==='unchanged',change);assert.equal(f.calls.length,0,'reload never pays for another check');if(change!=='unchanged'){assert.equal(readQuickAdd(scope)?.conflict,true,change);assert.ok(ui.element.textContent?.includes('配置或方案已变化'));}}
+  try{assert.equal(ui.element.textContent?.includes('能力已核验。'),change==='unchanged',change);assert.equal(f.calls.length,0,'reload never pays for another check');if(change!=='unchanged'){assert.equal(readQuickAdd(scope)?.conflict,true,change);assert.ok(ui.element.textContent?.includes('配置或方案已变化'));await click(ui.element,'取消');assert.equal(readQuickAdd(scope),undefined);assert.equal(f.calls.length,0,'ending a conflicted guide never rolls back server work');}}
   finally{await ui.close();}
  }
 });
