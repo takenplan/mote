@@ -754,10 +754,10 @@ async function refreshSources(): Promise<void> {
 }
 async function sourceAction(action: () => Promise<void>): Promise<void> {
   if (sourceBusy) return; sourceBusy = true; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
-  for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
+  for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
   try { await action(); byId('source-feedback').textContent = moteText("已处理，下面显示各来源的当前同步状态。"); }
   catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
-  finally { sourceBusy = false; for (const id of ['source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
+  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
 }
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
@@ -777,6 +777,7 @@ byId('source-agent-discover').addEventListener('click', () => void sourceAction(
 byId('source-agent-add').addEventListener('click', () => void sourceAction(() => desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider, sourceOptions())));
 byId('source-calendar-add').addEventListener('click', () => void sourceAction(async () => { await desktopApi.addCalendarSource(readInput('source-calendar-choice'), sourceOptions()); }));
 byId('source-sync').addEventListener('click', () => void sourceAction(() => desktopApi.syncSources()));
+byId('calendar-actions-connect').addEventListener('click', () => void sourceAction(async()=>{await desktopApi.connectActionCalendar();await desktopApi.openCentral('actions');}));
 byId('source-calendar-permissions').addEventListener('click', () => void sourceAction(() => desktopApi.openCalendarPermissions()));
 byId('source-cancel-edit').addEventListener('click', () => editSource());
 byId('source-save-edit').addEventListener('click', () => void sourceAction(async () => {
