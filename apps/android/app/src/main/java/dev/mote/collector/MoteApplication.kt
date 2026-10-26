@@ -71,6 +71,16 @@ class MoteApplication : Application() {
                     // Launch noninteractive consumers after warming current metadata;
                     // they must not race to rebuild the same library under a longer lock.
                     val current = settings.read()
+                    ConnectionGuard.sync {
+                        val latest = settings.read()
+                        val history = captureUploadHistory()
+                        history.prune(UploadHistoryRetention.read(this@MoteApplication))
+                        if (latest.hasSyncConnection()) {
+                            val scope = CaptureUploadReceipt.scope(latest.server, settings.deviceId)
+                            history.recoverInterrupted(scope, LoginProcess.id)
+                            CaptureReceiptFinalizer(history).recover(local, scope)
+                        }
+                    }
                     local.pruneUploaded()
                     RetentionWorker.schedule(this@MoteApplication)
                     UploadWorker.schedule(this@MoteApplication, current)
