@@ -207,8 +207,9 @@ E–N 已按上面的冻结表收束，不再将首次使用、行动、插件�
 2026-10-26 独立验收增量（仅更新以下已执行子集，不关闭 J1–J10）：
 
 - J1/J7：Mac 隐藏 Electron 真实添加按钮→快捷编辑器→明确保存→回工作台；离线本机持久化，未经明确归属确认拒绝绑定，暂停阻止发送，恢复仍保持手动策略。一条记录与一个生成文件经真实队列/HTTP/SQLite ACK 后清队列，first-data 同设备 ready，同 ID 原文逐字匹配。连接、文件选择与暂停动作通过真实 preload/IPC；未验证 OS 采集、进程杀死恢复、Central 浏览器原文页或实体设备。复用 `5a7c84f6` 已有构建，相关源码与 `56aff56e` 无 diff，不冒称最新 main 重新构建。
-- J9：新增 ZIP 取消/重启组合 1/1 通过：真实 buildApp/SQLite/import/archive/executor，ZIP 原包与子件归档后取消正在解析；无凭据 401、collector 403、物理解析未结束时重试 409、晚结果不发布、原件保留；服务重建仍 cancelled，显式 retry→preview→confirm 仅一条记录。解析器合成、HTTP 使用 Fastify inject；浏览器取消→返回→刷新仍待对应 UI 验收。
-- J4/J5/J9：Mac+第二端真实 UI 续聊、共享任务/行动离线恢复、AI/引用/用户补充身份及明确保存仍按对应候选补齐；已有第二 HTTP 客户端测试不能冒充第二端实际 UI。其余已通过且未改变的模块证据复用。
+- J9：新增 ZIP 取消/重启组合 1/1 通过：真实 buildApp/SQLite/import/archive/executor，ZIP 原包与子件归档后取消正在解析；无凭据 401、collector 403、物理解析未结束时重试 409、晚结果不发布、原件保留；服务重建仍 cancelled，显式 retry→preview→confirm 仅一条记录。解析器合成、HTTP 使用 Fastify inject。后续另以 `5a7c84f6` Central 源码与该版本新 Web bundle 跑真实 Chromium ZIP 选择→归属说明→已归档后取消处理→导航返回→reload→明确 retry/confirm；仅 1 job/1 capture，说明保留且原 ZIP 同 ID 字节不变。未上传完的本地 File 刷新仍需重新选择，不宣称已持久化浏览器 File。
+- J4：另以 `5a7c84f6` 源码/既有 Mac 构建及同版本新 Web bundle，实际 Mac UI 续写第 2 轮→Web UI 第 3 轮→Mac 刷新保留草稿再写第 4 轮→Web reload，同 ID 仅 1 个会话/4 轮通过。模型输出合成；不绑定并行新候选或最终 main。Mac `AskConversation`/`renderAsk` 尚未显示继承锚点/严格范围，已交 P3-M owner 补齐；不能因正常续聊通过关闭范围可见性。
+- J5/J9：共享任务/行动离线恢复、AI/引用/用户补充身份及明确保存仍按对应候选补齐。其余已通过且未改变的模块证据复用。
 
 每行都核对以下状态维度，选择不适用必须写原因：**正常、空、加载、错误、离线/未连接、权限拒绝/撤回、重复操作/重试、取消/返回、Activity/窗口/进程中断恢复**。同时核查功能入口、metadata 输入、键盘/窄屏/大字体、未提交输入与附件保留、跨端真实状态，以及无误采集/误授权/误删。不是每个 UI 都有每种状态，但有状态的路径不能因折叠而丢失错误、操作反馈或恢复入口。
 
