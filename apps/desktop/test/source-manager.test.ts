@@ -120,7 +120,7 @@ it('a manual sync overlapping an automatic scan waits for one coalesced forced f
 it('flushes durable pending source versions while watcher scans are still running', async () => {
   const server = await endpoint(true), file = join(directory, 'watcher-rerun.md');
   await writeFile(file, 'Generated pending source body');
-  const app = await manager(server.url);
+  const app = await manager(server.url, undefined, undefined, true);
   await app.addFiles(file, DEFAULT_SOURCE_OPTIONS);
   await app.sync(true);
   expect(app.pendingStats().pendingRecords).toBe(1);
