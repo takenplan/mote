@@ -504,6 +504,16 @@ class DurableQueue(private val dir: File, private val cipher: ByteCipher, create
     }
     private fun metadataWindow(capturedAt: String, minutes: Int): Long =
         java.time.Instant.parse(capturedAt).toEpochMilli() / (minutes * 60_000L)
+    /** A durable confirmation can finish only the exact selected body, never a later stateSeries. */
+    internal fun acknowledgeReceivedVersion(id: String, version: String, origin: String, uploadedBytes: Long, retentionDays: Int, now: Long): Boolean = guarded {
+        val file = File(dir, "${UUID.fromString(id)}.event")
+        if (!file.exists()) return@guarded false
+        val record = read(file)
+        if (!matchesOrigin(record) || origin.trim().trimEnd('/') != archiveOrigin.trim().trimEnd('/') ||
+            CaptureUploadVersion.of(record) != version) return@guarded false
+        acknowledge(id, uploadedBytes, retentionDays, now)
+        true
+    }
     fun acknowledge(id: String, uploadedBytes: Long = 0, retentionDays: Int = 0, now: Long = System.currentTimeMillis(), observations: Int? = null): Unit = guarded {
         val file = File(dir, "${UUID.fromString(id)}.event")
         if (!file.exists()) return
