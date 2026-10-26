@@ -123,6 +123,11 @@ it('flushes durable pending source versions while watcher scans are still runnin
   expect(app.pendingStats().pendingRecords).toBe(1);
   const sourceId = app.status()[0]!.source.id;
 
+  // This case injects the wakeup while controlling both scans. Native watchers
+  // can also deliver a delayed event for setup writes and add an unrelated scan.
+  // Real filesystem delivery is exercised separately in file-watcher.test.ts.
+  (app as any).watcher.close();
+
   let releaseFirst!: () => void, releaseSecond!: () => void;
   let firstStarted!: () => void, secondStarted!: () => void;
   const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
