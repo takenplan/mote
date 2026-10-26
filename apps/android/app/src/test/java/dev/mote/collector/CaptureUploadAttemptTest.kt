@@ -34,8 +34,11 @@ class CaptureUploadAttemptTest {
         val store = Store(); val sender = CaptureUploadAttempts(store, batch, "scope", "process")
         sender.send(events, 30, false) { 200 to JSONObject().put("results", JSONArray().put(receipt(events[0].getString("id")))) }
         assertEquals("partial", store.rows.values.last().state); assertEquals(1, store.rows.values.last().acknowledged)
+        assertEquals(201, store.rows.values.last().results.getInt(events[0].getString("id")))
         sender.send(events, 30, false) { 401 to JSONObject().put("error", "unauthorized") }
-        assertEquals("rejected", store.rows.values.last().state); assertEquals(401, store.rows.values.last().status)
+        assertEquals("unknown", store.rows.values.last().state); assertEquals(401, store.rows.values.last().status)
+        sender.send(events, 30, false) { 503 to JSONObject().put("error", "response_unavailable") }
+        assertEquals("unknown", store.rows.values.last().state); assertEquals(0, store.rows.values.last().acknowledged)
         sender.send(events, 30, false) { 200 to JSONObject().put("results", JSONArray()) }
         assertEquals("unknown", store.rows.values.last().state); assertEquals(0, store.rows.values.last().acknowledged)
     }

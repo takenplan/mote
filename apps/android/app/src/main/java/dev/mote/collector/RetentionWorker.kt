@@ -7,10 +7,12 @@ import java.util.concurrent.TimeUnit
 class RetentionWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
     override fun doWork(): Result = try {
         ConnectionGuard.sync {
-            applicationContext.captureUploadHistory().prune(UploadHistoryRetention.read(applicationContext))
+            val historyAvailable = runCatching { applicationContext.captureUploadHistory().prune(UploadHistoryRetention.read(applicationContext)) }
+                .onFailure { UploadHistoryRecovery.report(applicationContext) }.isSuccess
             applicationContext.queue().pruneUploaded()
             applicationContext.recordDraftStore().prune { applicationContext.queue().capture(it) != null }
-        }?.let { Result.success() } ?: Result.retry()
+            historyAvailable
+        }?.let { if (it) Result.success() else Result.retry() } ?: Result.retry()
     } catch (_: Exception) {
         SupportEvents.record(applicationContext, EventStage.QUEUE, EventCode.STORAGE)
         Result.retry()

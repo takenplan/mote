@@ -66,7 +66,8 @@ class CaptureUploadHistoryInstrumentedTest {
                 override fun open(bytes: ByteArray) = cipher.open(bytes)
             }
             val row = receipt(event)
-            assertThrows(java.io.IOException::class.java) { CaptureReceiptFinalizer(CaptureUploadHistory(file, failing)).received(queue, row) }
+            val failure = assertThrows(UploadHistoryUnavailable::class.java) { CaptureReceiptFinalizer(CaptureUploadHistory(file, failing)).received(queue, row) }
+            assertTrue(failure.cause is java.io.IOException)
             val reopened = CaptureUploadHistory(file, cipher)
             assertTrue(reopened.page(row.scope, now = now).isEmpty()); assertTrue(reopened.pending(row.scope).isEmpty())
             assertEquals(event.getString("ocrText"), queue.peek()!!.getString("ocrText"))

@@ -109,6 +109,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
         return try {
             val config = settings.read()
             val explicit = inputData.getBoolean("manual", false)
+            if (UploadHistoryRecovery.unavailable && !UploadHistoryRecovery.restore(applicationContext, applicationContext.queue(), settings))
+                return if (config.syncMode == "manual") Result.failure() else Result.retry()
             if (config.syncPaused) { settings.syncStatus("paused", MoteI18n.text("已暂停全部发送 · 本机继续保存")); return Result.success() }
             if (!config.hasSyncConnection()) { settings.syncStatus("unconfigured", MoteI18n.text("仅保存在本机 · 尚未配置完整连接")); return Result.success() }
             if (config.syncMode == "manual" && !explicit) { settings.syncStatus("manual", MoteI18n.text("手动同步 · 记录持续保存在本机")); return Result.success() }
@@ -129,6 +131,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
             history.prune(UploadHistoryRetention.read(applicationContext))
             history.recoverInterrupted(CaptureUploadReceipt.scope(config.server, settings.deviceId), LoginProcess.id, includeCurrentProcess = true)
             finalizer.recover(queue, CaptureUploadReceipt.scope(config.server, settings.deviceId))
+            UploadHistoryRecovery.available()
             // Each actual worker execution has its own batch identity, including a WorkManager retry.
             val batchId = java.util.UUID.randomUUID().toString()
             val attempts = CaptureUploadAttempts(history, batchId, CaptureUploadReceipt.scope(config.server, settings.deviceId), LoginProcess.id)
@@ -255,7 +258,10 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
         } catch (error: Exception) {
             SupportEvents.failure(applicationContext, stage, error)
             if (error !is RecordedHeartbeatFailure) Operations.record(applicationContext, OperationKind.UPLOAD_RETRY, Operations.failure(error, stage), recordId = pendingRecordId)
-            failed(MoteI18n.text("同步失败，请检查连接"))
+            if (error is UploadHistoryUnavailable) {
+                UploadHistoryRecovery.report(applicationContext)
+                if (manualOnly) Result.failure() else Result.retry()
+            } else failed(MoteI18n.text("同步失败，请检查连接"))
         }
     }
     private fun finishStatus() = SyncHealth.finish(applicationContext)

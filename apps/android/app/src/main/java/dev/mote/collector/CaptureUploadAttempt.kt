@@ -6,10 +6,10 @@ import java.util.UUID
 
 internal data class CaptureUploadAttempt(val id: String, val batchId: String, val scope: String, val process: String,
     val startedAt: Long, val bodyBytes: Long, val captures: JSONArray, val state: String = "sending", val status: Int = 0,
-    val acknowledged: Int = 0, val reason: String = "") {
+    val acknowledged: Int = 0, val reason: String = "", val results: JSONObject = JSONObject()) {
     fun json() = JSONObject().put("kind", "capture").put("id", id).put("batchId", batchId).put("scope", scope).put("process", process)
         .put("startedAt", startedAt).put("bodyBytes", bodyBytes).put("captures", captures).put("state", state)
-        .put("status", status).put("acknowledged", acknowledged).put("reason", reason)
+        .put("status", status).put("acknowledged", acknowledged).put("reason", reason).put("results", results)
     companion object {
         fun create(batchId: String, scope: String, process: String, events: List<JSONObject>, bytes: Long, now: Long): CaptureUploadAttempt {
             require(events.isNotEmpty() && bytes >= 0 && now > 0); UUID.fromString(batchId)
@@ -17,7 +17,7 @@ internal data class CaptureUploadAttempt(val id: String, val batchId: String, va
                 JSONArray(events.map { JSONObject().put("id", it.getString("id")).put("version", CaptureUploadVersion.of(it)) }))
         }
         fun parse(value: JSONObject) = CaptureUploadAttempt(value.getString("id"), value.getString("batchId"), value.getString("scope"), value.getString("process"),
-            value.getLong("startedAt"), value.getLong("bodyBytes"), value.getJSONArray("captures"), value.getString("state"), value.getInt("status"), value.getInt("acknowledged"), value.getString("reason"))
+            value.getLong("startedAt"), value.getLong("bodyBytes"), value.getJSONArray("captures"), value.getString("state"), value.getInt("status"), value.getInt("acknowledged"), value.getString("reason"), value.getJSONObject("results"))
     }
 }
 
@@ -46,11 +46,11 @@ internal class CaptureUploadAttempts(private val store: CaptureAttemptStore, pri
             val state = when {
                 count == events.size -> "received"
                 count > 0 -> "partial"
-                status !in 200..299 || receipts.size == events.size && receipts.values.all { it in 400..599 } -> "rejected"
+                status == 413 || receipts.size == events.size && receipts.values.all { it in 400..499 } -> "rejected"
                 else -> "unknown"
             }
             validated = true
-            store.saveAttempt(attempt.copy(state = state, status = status, acknowledged = count))
+            store.saveAttempt(attempt.copy(state = state, status = status, acknowledged = count, reason = if (state == "unknown") "http_unconfirmed" else "", results = JSONObject(receipts)))
             return response
         } catch (error: Exception) {
             val cancelled = error is SyncConditionsUnavailable

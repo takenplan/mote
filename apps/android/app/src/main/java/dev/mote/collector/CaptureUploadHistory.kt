@@ -9,7 +9,7 @@ import java.io.File
 /** Current-format private metadata, independent of original retention and the bounded operation log. */
 internal class CaptureUploadHistory(private val file: File, private val cipher: ByteCipher) : CaptureReceiptStore, CaptureAttemptStore {
     companion object { private val lock = Any() }
-    private fun <T> database(action: (SQLiteDatabase) -> T): T = synchronized(lock) {
+    private fun <T> database(action: (SQLiteDatabase) -> T): T = try { synchronized(lock) {
         check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs())
         SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
             // Expired ciphertext must also leave free database pages, journals and WAL files.
@@ -30,7 +30,7 @@ internal class CaptureUploadHistory(private val file: File, private val cipher: 
             }
             action(db)
         }
-    }
+    } } catch (error: Exception) { throw if (error is UploadHistoryUnavailable) error else UploadHistoryUnavailable(error) }
     override fun received(receipt: CaptureUploadReceipt): CaptureUploadCompletion = database { db ->
         db.beginTransaction()
         try {
