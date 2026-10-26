@@ -25,6 +25,22 @@ Mote has two parts: **Central**, your archive and web interface, and optional **
 
 > **Development preview:** Central, macOS, and Android have separate releases and use manual updates. Dev builds and Prod Beta/stable builds have separate installation identities. If you already use Mote, read the [upgrade guide](docs/updating.md) first: older archive formats are rejected rather than migrated automatically.
 
+### Ask your Agent to install Mote
+
+Copy this into Codex, Claude Code, or your existing Coding Agent:
+
+```text
+Help me install https://github.com/utopiafar/mote. Read docs/agent-install.md
+first, inspect my environment and existing installations, and use the project
+CLI for an isolated local trial. Preserve existing data and credentials. Verify
+authenticated health, give me the actual Central URL, then guide me to connect
+a collector and open its first received original. Ask before changing network
+exposure, persistent services, permissions, existing data, or paid AI processing.
+Keep secrets out of output and Git.
+```
+
+The [Agent installation guide](docs/agent-install.md) connects deployment to the UI's first-data journey. You can also follow the manual steps below. Models and external AI access are optional after collection and archiving work.
+
 ### 1. Start your archive
 
 Install **Node.js 24** and npm, then run:
@@ -63,7 +79,7 @@ To collect from your devices, download the matching Prod app from [Releases](htt
 | macOS 13.3+ | Download the Mac ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
 | Android 10+ | Install the Android APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
 
-In Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, and confirm. Invitations expire after 10 minutes and can be used once. Each app receives its own revocable credential with full owner access; only pair devices you trust.
+In Central, open **Data sources → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, and confirm. Invitations expire after 10 minutes and can be used once. Each app receives its own revocable credential with full owner access; only pair devices you trust.
 
 A phone's `127.0.0.1` points to the phone itself. Cross-device use needs a reachable **HTTPS** address and a strong access token; generating a QR code does not create a tunnel. See [connection setup](docs/connections.md).
 
