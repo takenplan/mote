@@ -34,11 +34,11 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  window=new BrowserWindow({width:1280,height:1000,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  const wc=window.webContents,js=s=>wc.executeJavaScript(s);
  const visible=s=>js(`(()=>{const e=document.querySelector(${JSON.stringify(s)});return !!e&&!!e.getClientRects().length&&e.checkVisibility();})()`);
- const click=text=>until(()=>js(`(()=>{const e=[...document.querySelectorAll('button,summary')].find(e=>e.checkVisibility()&&e.textContent.trim()===${JSON.stringify(text)});if(!e||e.disabled)return false;e.click();return true;})()`),'visible control '+text);
+ const click=text=>until(()=>js(`(()=>{const e=[...document.querySelectorAll('button,summary')].find(e=>e.checkVisibility()&&e.textContent.trim()===${JSON.stringify(text)});if(!e||e.disabled)return false;e.scrollIntoView({block:'center',behavior:'instant'});e.click();return true;})()`),'visible control '+text);
  const screenshot=async name=>{check('no horizontal overflow: '+name,await js('document.documentElement.scrollWidth<=innerWidth'));writeFileSync(join(out,name+'.png'),(await wc.capturePage()).toPNG());};
  await window.loadURL(url);await click('登录 Mote');await until(()=>visible('.connect-modal input[type=password]'),'login field');
  await js(`(()=>{const e=document.querySelector('.connect-modal input[type=password]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(token)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
- await until(()=>js(`(()=>{const e=document.querySelector('.connect-modal form .button.primary');if(!e||e.disabled)return false;e.click();return true;})()`),'login submit');
+ await until(()=>js(`(()=>{const e=document.querySelector('.connect-modal form .button.primary');if(!e||e.disabled)return false;e.scrollIntoView({block:'center',behavior:'instant'});e.click();return true;})()`),'login submit');
  await until(()=>js(`document.querySelector('.content')?.dataset.session==='ready'&&!document.querySelector('.connect-modal')`),'authenticated session');
  await click('资料库');await click('我的记忆');await until(()=>visible('.workspace-select'),'generated memory');
  check('reading appears before optional tools',await js(`!!(document.querySelector('.workspace-layout').compareDocumentPosition(document.querySelector('.memory-management'))&Node.DOCUMENT_POSITION_FOLLOWING)`));
@@ -64,11 +64,11 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  await js(`(()=>{const e=[...document.querySelectorAll('.workspace-select')].find(e=>e.checkVisibility()&&e.querySelector('strong')?.textContent==='Generated checklist preference');if(!e)throw Error('Missing visible generated memory');e.click();})()`);await until(()=>visible('.memory-detail'),'memory detail');
  check('source evidence and existing data controls stay in reading view',await visible('.memory-evidence')&&await js(`[...document.querySelectorAll('.memory-detail button')].some(e=>e.textContent==='删除记忆'&&e.checkVisibility())`));
  await click('删除记忆');await request('/api/fixture/fail-delete',{});await click('确认删除');
- await until(()=>js(`document.querySelector('.memories-page>[role=alert]')?.textContent.includes('中央服务暂不可用')`),'visible failed deletion');
- check('deletion failure remains visible with both tool sections closed',await visible('.memories-page>[role=alert]')&&await js(`!document.querySelector('.memory-management').open&&!document.querySelector('.memory-developer-tools').open`));
+ await until(()=>js(`document.querySelector('.memory-feedback>[role=alert]')?.textContent.includes('中央服务暂不可用')`),'visible failed deletion');
+ check('deletion failure remains visible with both tool sections closed',await visible('.memory-feedback>[role=alert]')&&await js(`!document.querySelector('.memory-management').open&&!document.querySelector('.memory-developer-tools').open`));
  check('failed deletion retains memory and confirmation controls',await visible('.memory-detail')&&await js(`[...document.querySelectorAll('.memory-detail button')].some(e=>e.textContent==='确认删除'&&!e.disabled)`));
- await screenshot('delete-failure-visible');await click('确认删除');await until(()=>js(`!document.querySelector('.memory-detail')&&!!document.querySelector('.memories-page>.notice')`),'visible deletion receipt');
- check('deletion receipt stays visible without opening technical controls',await visible('.memories-page>.notice')&&await js(`!document.querySelector('.memory-management').open&&!document.querySelector('.memory-developer-tools').open`));
+ await until(()=>js(`(()=>{const r=document.querySelector('.memory-feedback').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})()`),'mutation failure in viewport');check('explicit mutation failure scrolls into view',true);await screenshot('delete-failure-visible');await click('确认删除');await until(()=>js(`!document.querySelector('.memory-detail')&&!!document.querySelector('.memory-feedback>.notice')`),'visible deletion receipt');
+ check('deletion receipt stays visible without opening technical controls',await visible('.memory-feedback>.notice')&&await js(`!document.querySelector('.memory-management').open&&!document.querySelector('.memory-developer-tools').open`));
  check('existing deletion semantics retain original evidence',(await request('/api/fixture/state')).originalAvailable);
  check('empty reading state is visible after the only memory is removed',await visible('.workspace-list .muted')&&await js(`!document.querySelector('.workspace-select')`));
  for(const width of [390,320]){window.setSize(width,1000);await until(()=>js(`innerWidth===${width}`),'narrow viewport');await screenshot('reading-'+width);check('both tool entrypoints remain discoverable at '+width,await visible('.memory-management>summary')&&await visible('.memory-developer-tools>summary'));}
