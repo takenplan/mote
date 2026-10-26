@@ -51,24 +51,7 @@ class CalendarActions(private val context: Context, private val foreground: Bool
         } ?: error(MoteI18n.text("无法读取已有日历"))
         return result
     }
-    private fun declareCapability(available: JSONArray?) {
-        val identity = request("/api/connections/self").optJSONObject("credential")
-        // An unbound owner session can still review manually, but cannot attest this device.
-        if (identity?.optString("deviceId", "").isNullOrEmpty()) return
-        require(identity!!.getString("deviceId") == settings.deviceId)
-        val current = request("/api/device-action-capabilities")
-        val declaration = current.optJSONObject("declaration")
-        val permission = if (available == null) "required" else "granted"
-        fun canonical(items: JSONArray): String = (0 until items.length()).map { items.getJSONObject(it) }
-            .sortedBy { it.getString("id") }.joinToString("|") { JSONObject().put("id", it.getString("id")).put("title", it.getString("title")).toString() }
-        val calendars = available ?: JSONArray()
-        if (declaration != null && declaration.optBoolean("connectionActive") && declaration.optString("connectionId") == current.getString("connectionId") &&
-            declaration.optString("permission") == permission && canonical(declaration.getJSONArray("calendars")) == canonical(calendars)) return
-        request("/api/device-action-capabilities", JSONObject().put("operationId", UUID.randomUUID().toString())
-            .put("expectedRevision", declaration?.getLong("revision") ?: 0).put("deviceId", settings.deviceId)
-            .put("capability", JSONObject().put("id", "calendar.create").put("version", 1))
-            .put("permission", permission).put("calendars", calendars))
-    }
+    private fun declareCapability(available: JSONArray?) = CalendarCapabilityPublisher(settings.deviceId, ::request).publish(available)
     fun connect(): JSONArray = ConnectionGuard.sync {
         val calendars = calendars()
         declareCapability(calendars)
