@@ -71,19 +71,23 @@ test('composer keeps current controlled input, IME, Shift+Enter, submit, pending
  await act(async()=>poll.resolve({...run,status:'completed',conversationId:'A'}));assert.equal(f.input().value,'');assert.equal(f.input().disabled,false);
 });
 
-test('Enter in the folded per-request model field finishes the choice without sending the drafted question',async t=>{
+test('the folded per-request model field cannot submit the drafted question and keeps Enter for its suggestions',async t=>{
  const f=await fixture(t),posts:any[]=[];
- const api=apiWith((path,init)=>{if(path==='/api/query-runs'&&init?.method==='POST'){posts.push(JSON.parse(String(init.body)));return new Promise(()=>{});}return {items:[]};});
+ const api=apiWith((path,init)=>{if(path==='/api/query-runs'&&init?.method==='POST'){posts.push(JSON.parse(String(init.body)));throw Error('Generated admission stop');}return {items:[]};});
  await f.render(api);await f.type('Generated 草稿');
  const options=f.d.querySelector<HTMLDetailsElement>('.chat-model-options')!,field=f.d.querySelector<HTMLInputElement>('input[aria-label="临时模型 ID"]')!;
- // The field shares the composer form, so a browser would submit it implicitly unless Enter is cancelled.
- assert.equal(field.closest('form'),f.input().closest('form'));
  await act(async()=>{options.open=true;});
- const key=async(init:KeyboardEventInit)=>{const event=new f.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,...init});await act(async()=>field.dispatchEvent(event));return event;};
- assert.equal((await key({isComposing:true})).defaultPrevented,false);
- assert.equal((await key({})).defaultPrevented,true);
- assert.equal(posts.length,0);assert.equal(f.input().value,'Generated 草稿');
- assert.equal((await f.press('Enter')).defaultPrevented,true);assert.equal(posts.length,1);
+ const enter=new f.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});await act(async()=>field.dispatchEvent(enter));
+ const afterField={posts:posts.length,draft:f.input().value};
+ const sent=await f.press('Enter');
+ // Interactions finish before asserting so a regression fails fast instead of unmounting mid-request.
+ // The field sits visually inside the composer but has no form owner, so a browser has nothing to submit implicitly.
+ // Compare a boolean: an assertion diff that inspects a jsdom form element takes minutes.
+ assert.ok(options.closest('form'));assert.equal(field.form===null,true,'model ID field must have no form owner');assert.ok(field.list,'suggestions stay attached');
+ // Enter keeps its default action, which a highlighted datalist suggestion needs.
+ assert.equal(enter.defaultPrevented,false);assert.deepEqual(afterField,{posts:0,draft:'Generated 草稿'});
+ // Sending from the question box itself is unchanged (a failed admission may retry, so check the first request).
+ assert.equal(sent.defaultPrevented,true);assert.ok(posts.length>=1);assert.equal(posts[0].input.question,'Generated 草稿');
 });
 test('failed admission, failed run and cancellation preserve the existing draft and retry behavior',async t=>{
  const f=await fixture(t),poll=deferred(),posts:any[]=[];let mode='admission-failure',run:any;
