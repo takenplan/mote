@@ -135,7 +135,7 @@ test('actual app records native text handoff only after prepare succeeds, before
  generatedNativeAdapter(node,{prepare:async input=>{nativeCalls++;assert.equal(input.phase,'integrate');assert.deepEqual(input.relatedMemories?.map(card=>card.id),[memory.id]);entered();await accepted;return {answer:'{"memories":[]}',citations:[],trace:[],runId:input.opId};}});
  await node.app.ready();
  node.lifecycle.retirePending('extraction',Number(node.store.db.prepare('SELECT coalesce(max(seq),0) n FROM artifact_events').get()!.n));
- node.memoryPipeline.assertNewManualWork();node.memoryPipeline.assertAdmissibleEvidence([original.id]);assert.equal(memory.admission?.layer,'memory');assert.notEqual(memory.status,'stale');
+ node.memoryPipeline.assertNewManualWork();node.memoryPipeline.inputs.assert([original.id]);assert.equal(memory.admission?.layer,'memory');assert.notEqual(memory.status,'stale');
  const request=await node.app.inject({method:'POST',url:'/api/memory-integrations',headers:{authorization:'Bearer '+token},payload:{recipe:{id:'mote.memory-integration',version:'2'},inputs:[{id:memory.id,version:memory.version,fingerprint:memory.fingerprint}]}});assert.equal(request.statusCode,202,request.body);
  await preparing;
  const pending=JSON.parse(String(node.store.db.prepare('SELECT json FROM memory_integration_deliveries').get()!.json));assert.deepEqual(pending.memoryIds,[]);assert.deepEqual(pending.evidenceIds,[],'local native arguments are not delivered originals');assert.equal(reviewCalls,0);

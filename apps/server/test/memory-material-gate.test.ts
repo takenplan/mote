@@ -27,8 +27,8 @@ async function fixture(t:TestContext,query:()=>Promise<ReturnType<typeof empty>>
   sources.register({id:sourceId,name:'Generated source',kind:'custom',deviceId:'generated-device',platform:'import'});
   const raw=(await sources.upsert(sourceId,{externalId,revision:'1',observedAt:'2026-09-20T00:00:00Z',kind:'message',layer:'original',text:body})).id;
   const memories=new MemoryStore(store,ids=>[...store.evidence(ids),...materials.evidence(ids)],id=>materials.isCurrentEvidence(id)||store.isCurrentEvidence(id));
-  const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query,
-    materialAllowedForMemory:ref=>work.readyForMemory(ref),evidenceAllowedForMemory});
+  const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query,admission:{
+    materialAllowedForMemory:ref=>work.readyForMemory(ref),evidenceAllowedForMemory}});
   t.after(async()=>{await pipeline.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const id=materialId(sourceId,externalId);
   const publish=(text:string,extracted:'pending'|'failed'|'ready')=>{
@@ -110,10 +110,10 @@ test('Memory deletion review reads authorized historical roots without admitting
  const anchor=f.materials.evidenceIds(material.ref)[0],record=f.memories.readEvidence([anchor])[0];
  const draft={answer:JSON.stringify({memories:[{title:'Generated decision',statement:`Generated conclusion [${anchor}]`,uncertainty:'Fixture',admission:{layer:'memory',reason:'Generated decision',scope:'Fixture',attribution:'user'},evidenceIds:[anchor],evidence:[{id:anchor,quote:body}]}]}),citations:[{id:anchor,capturedAt:record.capturedAt,appName:'Fixture',excerpt:body}],trace:[],runId:randomUUID()};
  const card=f.memories.extract(fixtureMemoryResult(f.memories,draft),'fixture').items[0];f.memories.delete(card.id);
- assert.throws(()=>f.pipeline.assertAdmissibleEvidence([f.raw]),{statusCode:409});assert.doesNotThrow(()=>f.pipeline.assertAdmissibleEvidence([anchor]));assert.doesNotThrow(()=>f.pipeline.assertDeletionEvidenceAllowed([f.raw]));
- let comparisons=0;const result=await reviewMemory({question:'Generated extraction',skill:'memory-extraction'},draft,async input=>{if(input.question.startsWith('Host Memory deletion review.')){comparisons++;return {...draft,answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]})};}return draft;},{deletions:f.memories.deletions,authorizeDeletionEvidence:ids=>f.pipeline.assertDeletionEvidenceAllowed(ids)});
+ assert.throws(()=>f.pipeline.inputs.assert([f.raw]),{statusCode:409});assert.doesNotThrow(()=>f.pipeline.inputs.assert([anchor]));assert.doesNotThrow(()=>f.pipeline.inputs.assertDeletion([f.raw]));
+ let comparisons=0;const result=await reviewMemory({question:'Generated extraction',skill:'memory-extraction'},draft,async input=>{if(input.question.startsWith('Host Memory deletion review.')){comparisons++;return {...draft,answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]})};}return draft;},{deletions:f.memories.deletions,authorizeDeletionEvidence:ids=>f.pipeline.inputs.assertDeletion(ids)});
  assert.equal(comparisons,1);assert.equal(f.memories.extract(fixtureMemoryResult(f.memories,result),'fixture',{reviewReceipt:memoryReviewReceipt(result)}).items.length,0);
- allowed=false;assert.throws(()=>f.pipeline.assertDeletionEvidenceAllowed([f.raw]),{statusCode:409});assert.throws(()=>f.pipeline.assertAdmissibleEvidence([anchor]),{statusCode:409});
+ allowed=false;assert.throws(()=>f.pipeline.inputs.assertDeletion([f.raw]),{statusCode:409});assert.throws(()=>f.pipeline.inputs.assert([anchor]),{statusCode:409});
 });
 
 

@@ -127,19 +127,19 @@ export function registerMemoryRoutes(app:FastifyInstance,{ownerPublication,model
     const records=memories.readEvidence(selected.evidenceIds),expectedFingerprints=Object.fromEntries(records.map(record=>[record.id,memoryEvidenceFingerprint(record)]));
     const evidenceRanges=records.map(record=>({id:record.id,offset:0,length:record.ocrText.length}));
     const input:QueryInput={...scope,evidenceRanges,evidenceIds:selected.evidenceIds,modelProfileId:profile.id,modelOverride:profile.settings.model,skill:'memory-extraction',responseMode:'memory-extraction',question:MEMORY_EXTRACTION_PROMPT};
-    input.validateOutput=result=>{try{memoryPipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id),profile.id);memories.extract(result,profile.settings.model,{requireAdmission:true,validateOnly:true,expectedFingerprints});}catch(error){if(!(error instanceof MemoryOutputValidationError))throw error;return {code:error.code,feedback:error.repairInstruction};}};
-    const context={phase:'extract' as const,opId:operationId,evidenceIds:selected.evidenceIds,assertAuthority:()=>memoryPipeline.assertAdmissibleEvidence(selected.evidenceIds,profile.id)};
+    input.validateOutput=result=>{try{memoryPipeline.inputs.assert(result.citations.map(c=>c.id),profile.id);memories.extract(result,profile.settings.model,{requireAdmission:true,validateOnly:true,expectedFingerprints});}catch(error){if(!(error instanceof MemoryOutputValidationError))throw error;return {code:error.code,feedback:error.repairInstruction};}};
+    const context={phase:'extract' as const,opId:operationId,evidenceIds:selected.evidenceIds,assertAuthority:()=>memoryPipeline.inputs.assert(selected.evidenceIds,profile.id)};
     try{
     const native=await memoryPipeline.nativeStages.prepare(input,context),draft=native??await query(input);
-    memoryPipeline.assertAdmissibleEvidence(draft.citations.map(c=>c.id),profile.id);
+    memoryPipeline.inputs.assert(draft.citations.map(c=>c.id),profile.id);
     if(!native)memories.extract(draft,profile.settings.model,{requireAdmission:true,validateOnly:true,expectedFingerprints});
     const result=await reviewExtraction(input,draft,undefined,native?'native-engine':'mote');
     const options={requireAdmission:true,expectedFingerprints,reviewRunId:memoryReviewReceipt(result)?.reviewRunId,reviewReceipt:memoryReviewReceipt(result)};
-    const assert=()=>memoryPipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id),profile.id);
+    const assert=()=>memoryPipeline.inputs.assert(result.citations.map(c=>c.id),profile.id);
     assert();memoryPipeline.publication?.retainOutput(operationId,{result,reviewReceipt:memoryReviewReceipt(result)},{evidenceIds:selected.evidenceIds});
     if(native&&memoryPipeline.publication?.retainedOutput(operationId))await memoryPipeline.nativeStages.settle(context);
     const publication=await memoryPipeline.publication?.stageExtract(operationId,result,profile.settings.model,options,assert);
-    return memoryPipeline.withAdmissibleEvidence(result.citations.map(c=>c.id),()=>{
+    return memoryPipeline.inputs.withCurrent(result.citations.map(c=>c.id),()=>{
       memoryPipeline.publication?.assert(publication,result);const saved=memories.extract(result,profile.settings.model,{...options,prepared:publication?.prepared});memoryPipeline.publication?.committed(publication);return saved;
     },profile.id);
     }catch(error){memoryPipeline.nativeStages.abandon(context);throw error;}

@@ -29,7 +29,7 @@ export function requestMemoryIntegration(raw:unknown,{lifecycle,memories,pipelin
   const db=memories.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
   try{
     let binding;try{binding=pipeline.strategies.resolveIntegration(input.recipe).binding;}catch{throw new StoreError('Memory integration recipe is unavailable',409);}
-    const inputs=input.inputs.map(selected=>{const m=memories.get(selected.id);if(m.version!==selected.version||m.fingerprint!==selected.fingerprint)throw new MemoryIntegrationSelectionError();if(m.status==='stale'||m.supersededBy||m.admission?.layer!=='memory')throw new StoreError('Integration requires current selected Memory',409);pipeline.assertAdmissibleEvidence(m.evidenceIds);return {id:selected.id,hash:sha256(JSON.stringify(m))};});
+    const inputs=input.inputs.map(selected=>{const m=memories.get(selected.id);if(m.version!==selected.version||m.fingerprint!==selected.fingerprint)throw new MemoryIntegrationSelectionError();if(m.status==='stale'||m.supersededBy||m.admission?.layer!=='memory')throw new StoreError('Integration requires current selected Memory',409);pipeline.inputs.assert(m.evidenceIds);return {id:selected.id,hash:sha256(JSON.stringify(m))};});
     const saved={selection:{activation:randomUUID(),afterSequence:0,binding},model:pipeline.modelSnapshot(),inputs,completed:[]};
     const id=lifecycle.request('consolidation',inputs.map(item=>item.id),JSON.stringify(saved));if(own)db.exec('COMMIT');return {id,operationId:'workflow:lifecycle:'+id};
   }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
@@ -75,7 +75,7 @@ export function registerMemoryIntegration({lifecycle,memories,pipeline,settings,
       const selected=assertInputs(),evidence=[...new Set(candidates.flatMap(m=>m.evidenceIds))];
       let nativeContext:MemoryEngineDraftContext|undefined;
       try{
-      pipeline.assertAdmissibleEvidence(evidence);
+      pipeline.inputs.assert(evidence);
       const assertReadable=()=>{try{assertInputs();pipeline.assertIntegrationReadable(candidates);}catch{throw new ExecutionFailure('blocked','memory_integration_unreadable');}};
       assertReadable();
       const readInput=pipeline.integrationReadInput(candidates),readInputIdentity=JSON.stringify(readInput);
@@ -95,24 +95,24 @@ export function registerMemoryIntegration({lifecycle,memories,pipeline,settings,
       const generationModel=state.model.model,contract='This integration output uses domain='+profile+' and admission.layer=memory. Every output must declare relatedMemoryIds chosen only from the supplied input cards; each chosen parent must contribute direct original proof. Relations may use contradicts or supersedes with an exact retrieved memoryId, fingerprint and version. Preserve applicability and owner corrections. Reviewed relationships apply automatically and atomically after host validation, without owner confirmation. Read the originals before relying on either a card or a relationship target. Host-supplied card IDs (untrusted derived navigation, not original evidence):\n'+JSON.stringify(candidates.map(m=>m.id));
       const validation={integration:binding,profile,tier:'consolidated' as const,relatedMemoryIds:candidates.map(m=>m.id),requireAdmission:true,expectedFingerprints:expected};
       const input:QueryInput={...readInput,...(execution?{signal:execution.signal,traceContext:{operationId:execution.operationId,jobId:execution.jobId,phase:'extract'}}:{}),contextTime:window.contextTime,modelProfileId:state.model.configuration?.profileId,modelOverride:generationModel,skill:'memory-integration',responseMode:'memory-extraction',question:selected.integrate.prompt+'\n'+MEMORY_CANDIDATE_OUTPUT_CONTRACT+'\n'+contract,
-        assertContextAuthority:()=>{assertInputs();pipeline.assertAdmissibleEvidence(evidence);assertReadInput();},
+        assertContextAuthority:()=>{assertInputs();pipeline.inputs.assert(evidence);assertReadInput();},
         onMemoryBodies:cards=>{for(const card of cards)if(candidates.some(selected=>selected.id===card.id&&selected.version===card.version&&selected.fingerprint===card.fingerprint)&&!delivery.memoryIds.includes(card.id))delivery.memoryIds.push(card.id);persistDelivery();},
         onEvidence:records=>{for(const record of records)if(evidence.includes(record.id)&&record.ocrText.length>0&&!delivery.evidenceIds.includes(record.id))delivery.evidenceIds.push(record.id);persistDelivery();},
       };
-      input.validateOutput=result=>{try{assertInputs();pipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id));memories.extract(result,generationModel,{...validation,validateOnly:true});}catch(error){if(!(error instanceof MemoryOutputValidationError))throw error;return {code:error.code,feedback:error.repairInstruction};}};
+      input.validateOutput=result=>{try{assertInputs();pipeline.inputs.assert(result.citations.map(c=>c.id));memories.extract(result,generationModel,{...validation,validateOnly:true});}catch(error){if(!(error instanceof MemoryOutputValidationError))throw error;return {code:error.code,feedback:error.repairInstruction};}};
       const operationId=`${execution?.operationId??window.id}:integration:${profile}`;
       const retained=pipeline.publication?.retainedOutput<{result:QueryResult;reviewReceipt?:MemoryReviewReceipt;engineDraft?:MemoryEngineDraftPin;delivery?:typeof delivery}>(operationId);
       let result:QueryResult,receipt:MemoryReviewReceipt|undefined;
       let nativePin=retained?.engineDraft;
       if(retained){
         result=retained.result;receipt=retained.reviewReceipt;assertDelivered(retained.delivery);Object.assign(delivery,retained.delivery);
-        assertInputs();pipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id));memories.extract(result,generationModel,{...validation,validateOnly:true});
+        assertInputs();pipeline.inputs.assert(result.citations.map(c=>c.id));memories.extract(result,generationModel,{...validation,validateOnly:true});
       }else{
         persistDelivery();
-        const context:MemoryEngineDraftContext=nativeContext={phase:'integrate',opId:operationId,evidenceIds:evidence,relatedMemories:candidates,assertAuthority:()=>{const check=()=>{assertInputs();pipeline.assertAdmissibleEvidence(evidence);};if(execution)execution.commit(check);else check();}};
-        const native=await pipeline.nativeStages.prepare(input,context),draft=native??await query(input);if(native)nativePin=memoryEngineDraftPin(context);assertInputs();pipeline.assertAdmissibleEvidence(draft.citations.map(c=>c.id));if(!native)memories.extract(draft,generationModel,{...validation,validateOnly:true});
+        const context:MemoryEngineDraftContext=nativeContext={phase:'integrate',opId:operationId,evidenceIds:evidence,relatedMemories:candidates,assertAuthority:()=>{const check=()=>{assertInputs();pipeline.inputs.assert(evidence);};if(execution)execution.commit(check);else check();}};
+        const native=await pipeline.nativeStages.prepare(input,context),draft=native??await query(input);if(native)nativePin=memoryEngineDraftPin(context);assertInputs();pipeline.inputs.assert(draft.citations.map(c=>c.id));if(!native)memories.extract(draft,generationModel,{...validation,validateOnly:true});
         assertDelivered(delivery);
-        result=await reviewMemory(input,draft,query,{draftOrigin:native?'native-engine':'mote',strategy:selected.review,taskInstructions:contract,deletions:memories.deletions,authorizeDeletionEvidence:ids=>pipeline.assertDeletionEvidenceAllowed(ids,state.model.configuration?.profileId)});
+        result=await reviewMemory(input,draft,query,{draftOrigin:native?'native-engine':'mote',strategy:selected.review,taskInstructions:contract,deletions:memories.deletions,authorizeDeletionEvidence:ids=>pipeline.inputs.assertDeletion(ids,state.model.configuration?.profileId)});
         receipt=memoryReviewReceipt(result);
       }
       const completed=[...state.completed,profile];let refreshedInputs=state.inputs;
@@ -123,7 +123,7 @@ export function registerMemoryIntegration({lifecycle,memories,pipeline,settings,
       // Staging may write to the provider, but never grants publication. Each
       // boundary retains the same lifecycle lease, exact input and privacy proof.
       const assertAuthority=()=>{
-        const assert=()=>{pipeline.assertIntegrationAuthority();assertInputs();pipeline.assertAdmissibleEvidence(evidenceIds);assertReadInput();};
+        const assert=()=>{pipeline.assertIntegrationAuthority();assertInputs();pipeline.inputs.assert(evidenceIds);assertReadInput();};
         if(execution)execution.commit(assert);else assert();
       };
       assertAuthority();assertReadInput();assertDelivered(delivery);
@@ -132,7 +132,7 @@ export function registerMemoryIntegration({lifecycle,memories,pipeline,settings,
       const publication=await pipeline.publication?.stageExtract(operationId,result,generationModel,extractOptions,assertAuthority,!window.manual);
       const commit=()=>{
         pipeline.assertIntegrationAuthority();assertInputs();assertReadInput();
-        pipeline.withAdmissibleEvidence(evidenceIds,()=>{
+        pipeline.inputs.withCurrent(evidenceIds,()=>{
           pipeline.publication?.assert(publication,result);
           memories.extract(result,generationModel,{
             ...extractOptions,prepared:publication?.prepared,
