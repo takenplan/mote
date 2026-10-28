@@ -6,7 +6,8 @@ import { moteText, cjkLocale } from '@mote/shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, FolderInput, Layers3, Plus, X } from 'lucide-react';
 import type { SourceConnection, SourceItemRecord } from '@mote/shared';
-import { ApiError, type Api, errorMessage, dateTime } from './api';
+import { type Api, errorMessage, dateTime } from './api';
+import {archivePageWithdrawn,currentArchivePages,mergeArchivePage,reconcileArchivePages,type ArchivePage,type ArchivePages} from './archive-pages';
 import { sourceMetadataSchema } from '@mote/shared';
 import { Gmail } from './Gmail';
 import { AttributionEditor } from './AttributionContext';
@@ -31,27 +32,24 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
     const selected=selectedChoice??'';
     const activeApi=useRef(api);activeApi.current=api;
     const [mutationError, setError] = useState(''), [busy, setBusy] = useState(false), [historyKey, setHistoryKey] = useState<string | null>(null);
-    const [pages, setPages] = useState<{api:Api;scope:string;cursor:string;previous:SourceItemRecord[]}>();
-    const listScope = JSON.stringify([mode, selected]), currentPages = pages?.api === api && pages.scope === listScope ? pages : undefined, cursor = currentPages?.cursor;
+    const [pages, setPages] = useState<ArchivePages<SourceItemRecord>>();
+    const listScope = JSON.stringify([mode, selected]), currentPages = currentArchivePages(pages,api,listScope), cursor = currentPages?.cursor;
     const [requestedSetup,chooseSetup]=useHashChoice('setup',readSetup);
     const [adding,setAdding]=useState(Boolean(requestedSetup)),[addKind,setAddKind]=useState<'files'|'reference'|'connectors'>(requestedSetup==='reference'?'reference':requestedSetup?'connectors':'files');
     useEffect(()=>{setAdding(Boolean(requestedSetup));if(requestedSetup)setAddKind(requestedSetup==='reference'?'reference':'connectors');},[requestedSetup]);
     const sourceList = useResource<{
         items: SourceConnection[];
     }>(api, '/api/sources');
-    const page = useResource<{
-        items: SourceItemRecord[];
-        nextCursor: string | null;
-    }>(api, mode === 'library' ? '/api/source-items?' + new URLSearchParams({ limit: '30', ...(selected ? { sourceId: selected } : {}), ...(cursor ? { cursor } : {}) }) : null);
+    const page = useResource<ArchivePage<SourceItemRecord>>(api, mode === 'library' ? '/api/source-items?' + new URLSearchParams({ limit: '30', ...(selected ? { sourceId: selected } : {}), ...(cursor ? { cursor } : {}) }) : null);
     const versions = useResource<{
         items: SourceItemRecord[];
     }>(api, historyKey);
     const connectorStatus = useResource<Record<string, unknown>>(api, '/api/connectors/status');
     useOperationUpdates(api);
-    const withdrawn = page.error instanceof ApiError && [401, 403, 404, 410].includes(page.error.status), previous = withdrawn ? [] : currentPages?.previous ?? [];
-    useEffect(() => { setPages(value => !value ? value : value.api !== api || value.scope !== listScope ? undefined : withdrawn ? {...value, previous:[]} : value); }, [api, listScope, withdrawn]);
+    const withdrawn = archivePageWithdrawn(page.error);
+    useEffect(() => { setPages(value => reconcileArchivePages(value,api,listScope,withdrawn)); }, [api, listScope, withdrawn]);
     useEffect(() => { setBusy(false);setError(''); }, [api]);
-    const sources = sourceList.data?.items ?? [], items = [...previous, ...(page.data?.items ?? []).filter(item => !previous.some(old => old.captureId === item.captureId))], nextCursor = page.data?.nextCursor, history = versions.data?.items ?? null, catalog = connectorStatus.data ?? null, loading = sourceList.loading || page.loading;
+    const sources = sourceList.data?.items ?? [], items = mergeArchivePage(currentPages,page.data?.items??[],withdrawn), nextCursor = page.data?.nextCursor, history = versions.data?.items ?? null, catalog = connectorStatus.data ?? null, loading = sourceList.loading || page.loading;
     const initialLoading = page.loading && page.data === undefined;
     const readError = sourceList.error || page.error || versions.error || connectorStatus.error, error = mutationError || (readError ? errorMessage(readError) : '');
     async function refresh(source = selected) { if(activeApi.current!==api)return;setError(''); setHistoryKey(null); setPages(undefined); resources(api).invalidate(key => /^\/api\/(sources|source-items|connectors\/status)([/?]|$)/.test(key)); }
