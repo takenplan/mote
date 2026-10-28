@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {Store} from '../src/store.js';
+import {SourceStore} from '../src/sources.js';
+import {MemoryStore} from '../src/memory.js';
+import {MemoryPipeline} from '../src/memory-pipeline.js';
+import {MemoryLifecycle} from '../src/memory-lifecycle.js';
+import {MemoryAutomation} from '../src/memory-automation.js';
+import {MemoryInputAuthorization,DEFAULT_MEMORY_INPUT_SCOPE} from '../src/memory-input-authorization.js';
+import {ExecutionEngine} from '../src/execution-engine.js';
+import {createMemoryControl} from '../src/memory-control.js';
+
+test('Memory control counts real receipt claims separately from manual queued jobs and stop preserves the manual tail',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-memory-control-')),store=new Store(directory),executor=new ExecutionEngine(store),automation=new MemoryAutomation(store);
+ let automatic=true;
+ const grants=new MemoryInputAuthorization(store,()=>automatic),sources=new SourceStore(store,undefined,grants),memories=new MemoryStore(store);
+ const pipeline=new MemoryPipeline({store,memories,executor,models:{model:()=> 'generated',configured:()=>true},phases:{query:async()=>{throw Error('Control projections must not start models');}}}),lifecycle=new MemoryLifecycle(store,()=>true,Date.now,executor);
+ t.after(async()=>{await lifecycle.close();await pipeline.close();await executor.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ const control=createMemoryControl({store,pipeline,lifecycle,executor,publication:{pending:()=>0}});
+ automation.onStop=control.stop;automation.onResume=control.resume;automation.counts=control.counts;
+ sources.register({id:'generated',name:'Generated originals',kind:'custom',deviceId:'generated-device',platform:'import'});
+ const receive=(id:string)=>sources.upsert('generated',{externalId:id,revision:'1',observedAt:'2026-09-15T01:00:00Z',text:'Generated original '+id,kind:'message',layer:'original'});
+ await receive('unclaimed');const admitted=await receive('admitted');automatic=false;const historical=await receive('manual');automatic=true;
+ const job=pipeline.create({evidenceIds:[admitted.id],automaticGrant:{sourceId:'generated',inputKey:admitted.id,scope:DEFAULT_MEMORY_INPUT_SCOPE}}),manual=pipeline.create({evidenceIds:[historical.id]});
+ store.db.exec('BEGIN IMMEDIATE');assert.equal(grants.claim('generated',admitted.id,job.id),true);store.db.exec('COMMIT');
+ assert.deepEqual(control.counts(),{queued:2,running:0,checkpointed:0,resultUnknown:0});
+ assert.equal(control.pendingTail(),2,'the binding tail retains both durable jobs, not unclaimed receipt count');
+ const stop={expectedRevision:automation.state().revision,operationId:randomUUID()};
+ assert.equal(automation.command('stop',stop).state,'paused');
+ assert.equal(pipeline.get(job.id).status,'cancelled');assert.equal(pipeline.get(job.id).cancellationCause,'authority');
+ assert.equal(pipeline.get(manual.id).status,'queued','automatic stop must retain independent manual work');
+ assert.deepEqual(control.counts(),{queued:0,running:0,checkpointed:0,resultUnknown:0});assert.equal(control.pendingTail(),1);
+ const revision=automation.state().revision;automation.command('stop',stop);assert.equal(automation.state().revision,revision);assert.equal(pipeline.get(manual.id).status,'queued');
+});
