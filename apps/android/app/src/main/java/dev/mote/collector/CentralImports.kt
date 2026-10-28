@@ -35,7 +35,7 @@ internal class CentralImports(private val directory: File, private val cipher: B
             return JSONObject().put("manifest", manifest).put("requestId", UUID.randomUUID().toString()).put("instruction", instruction).also(state::write)
         } catch (error: Throwable) { discard(); throw error }
     }
-    fun send(client: CentralClient, progress: (Int, Int) -> Unit): JSONObject {
+    fun send(client: CentralUploadClient, progress: (Int, Int) -> Unit): JSONObject {
         val saved = pending(); val manifest = saved.getJSONObject("manifest")
         val upload = client.post("/api/import-uploads", manifest)
         val id = manifest.getString("id"); UUID.fromString(id)
