@@ -109,6 +109,17 @@ object SourceRules {
 
 data class SourceScan(val items: List<JSONObject>, val complete: Boolean, val observedAt: String, val from: Long? = null, val until: Long? = null, val skipped: Int = 0)
 
+/** A process-local permission to publish work for one exact source configuration. */
+class SourceLease internal constructor(internal val hostKey: String, val source: LocalSource, val revision: Long)
+// Both stores use this one metadata lock: config validation and queue publication
+// cannot race, and there is no source-lock/archive-lock inversion. Provider I/O
+// must never hold it. Configuration remains the durable authority after restart.
+internal object SourceRuntime {
+    val lock = Any()
+    val revisions = mutableMapOf<String, Long>()
+}
+internal class SourceLeaseRevoked : IllegalStateException("Source configuration changed or was disabled")
+
 /** Local snapshots plus immutable pending revisions. State changes are atomic and ACKs target-specific. */
 class LocalSourceStore(private val directory: File, private val cipher: ByteCipher) {
     internal var onMutation: (() -> Unit)? = null
@@ -117,8 +128,21 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         val array = read(File(directory, "config.enc")).optJSONArray("sources") ?: JSONArray()
         (0 until array.length()).map { LocalSource.from(array.getJSONObject(it)) }
     }
+    private fun runtimeKey(id: String) = directory.absolutePath + ":" + id
+    internal fun lease(source: LocalSource): SourceLease? = synchronized(lock) {
+        if (!source.enabled || sources().none { it == source }) null
+        else SourceLease(runtimeKey(source.id), source, SourceRuntime.revisions[runtimeKey(source.id)] ?: 0L)
+    }
+    internal fun current(lease: SourceLease): Boolean = synchronized(lock) {
+        lease.hostKey == runtimeKey(lease.source.id) && lease.source.enabled && sources().any { it == lease.source } &&
+            (SourceRuntime.revisions[runtimeKey(lease.source.id)] ?: 0L) == lease.revision
+    }
+    private fun invalidate(id: String) {
+        val key = runtimeKey(id); SourceRuntime.revisions[key] = (SourceRuntime.revisions[key] ?: 0L) + 1
+    }
     fun save(source: LocalSource) = synchronized(lock) {
         source.validate(); val all = sources().toMutableList(); val old = all.find { it.id == source.id }
+        if (old != source) invalidate(source.id)
         // Explicit selection/filter/retention edits discard old unsent material before the new scan.
         if (old != null && old.copy(enabled = source.enabled, intervalMinutes = source.intervalMinutes, name = source.name, initialSync = source.initialSync, syncContinuously = source.syncContinuously,
                 description = source.description, contextVersion = source.contextVersion, contextDirty = source.contextDirty, contextTarget = source.contextTarget).json().toString() != source.json().toString()) file(source.id).delete()
@@ -139,15 +163,17 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         next
     }
     fun contextConflict(id: String, snapshot: SourceContextSnapshot) = synchronized(lock) {
+        if (sources().none { it.id == id && it.enabled }) return@synchronized
         val state = state(id); state.put("contextConflict", snapshot.json()).put("status", "context-conflict"); write(file(id), state)
     }
     fun remove(id: String) = synchronized(lock) {
+        invalidate(id)
         write(File(directory, "config.enc"), JSONObject().put("sources", JSONArray(sources().filterNot { it.id == id }.map { it.json() })))
         file(id).delete()
     }
     fun state(id: String): JSONObject = synchronized(lock) { read(file(id)) }
-    fun status(id: String, code: String, at: String = Instant.now().toString()) = synchronized(lock) {
-        if (sources().none { it.id == id }) return@synchronized
+    fun status(id: String, code: String, at: String = Instant.now().toString(), lease: SourceLease? = null) = synchronized(lock) {
+        if (sources().none { it.id == id } || lease != null && (lease.source.id != id || !current(lease))) return@synchronized
         require(code in setOf("ready", "scanned", "partial", "synced", "offline", "permission", "paused", "configuration", "storage", "provider", "http", "ack", "consent", "context-conflict", "context-http"))
         val state = state(id); state.put("status", code).put("statusAt", at); write(file(id), state)
     }
@@ -186,6 +212,7 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         all.forEach { if (file(it.id).exists()) { check(file(it.id).delete()); onMutation?.invoke() } }
     }
     fun selectTarget(id: String, target: String) = synchronized(lock) {
+        if (sources().none { it.id == id && it.enabled }) return@synchronized
         val state = state(id)
         if (state.optString("target") != target) {
             state.put("target", target).put("registered", false).remove("lastAcknowledgedAt")
@@ -197,13 +224,13 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         }
     }
     fun registered(id: String, target: String) = synchronized(lock) {
+        if (sources().none { it.id == id && it.enabled }) return@synchronized
         val state = state(id); check(state.optString("target") == target); state.put("registered", true)
         if ((state.optJSONArray("pending")?.length() ?: 0) == 0) state.remove("pendingSince")
         write(file(id), state)
     }
-    fun scan(source: LocalSource, result: SourceScan, maxBytes: Long = 64L * 1024 * 1024) = synchronized(lock) {
-        val active = sources().find { it.id == source.id } ?: return@synchronized
-        if (!active.enabled || active != source) return@synchronized
+    fun scan(source: LocalSource, result: SourceScan, maxBytes: Long = 64L * 1024 * 1024, lease: SourceLease? = lease(source)) = synchronized(lock) {
+        if (lease == null || lease.source != source || !current(lease)) return@synchronized
         result.items.forEach { SourcePrivacyGate.validate(source, it) }
         val state = state(source.id); val current = state.optJSONObject("current") ?: JSONObject(); val pending = state.optJSONArray("pending") ?: JSONArray()
         val baseline = state.optJSONArray("baseline") ?: JSONArray()
@@ -281,5 +308,5 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         val temp = File(directory, "${UUID.randomUUID()}.tmp")
         try { FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }; check(temp.renameTo(file)) { MoteI18n.text("无法保存来源状态") }; onMutation?.invoke() } finally { temp.delete() }
     }
-    companion object { private val lock = Any() }
+    companion object { private val lock = SourceRuntime.lock }
 }

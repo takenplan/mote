@@ -10,14 +10,21 @@ import java.time.Instant
 import java.util.UUID
 
 /** Local per-file journal. A pending manifest and its bytes never change during retry. */
-class FileArchiveQueue(private val directory: File, private val cipher: ByteCipher) {
-    companion object { const val PART_BYTES = 4 * 1024 * 1024; const val MAX_BYTES = 512L * 1024 * 1024; private val lock = Any(); private val progressEntries = mutableMapOf<String, MutableMap<String, FileSyncEntry>>() }
-    init { directory.mkdirs() }
-    private fun root(id: String): File { require(id.matches(Regex("[A-Za-z0-9_.:-]{1,128}"))); return File(directory, id).apply { mkdirs() } }
+class FileArchiveQueue(private val directory: File, private val cipher: ByteCipher, private val sourceHost: LocalSourceStore? = null) {
+    companion object { const val PART_BYTES = 4 * 1024 * 1024; const val MAX_BYTES = 512L * 1024 * 1024; private val lock = SourceRuntime.lock; private val preparations = mutableMapOf<String, String>(); private val stagingReservations = mutableMapOf<String, Long>(); private val progressEntries = mutableMapOf<String, MutableMap<String, FileSyncEntry>>() }
+    init {
+        synchronized(lock) {
+            directory.mkdirs()
+            // Abandoned attempts have no manifest; active attempts own their cleanup.
+            directory.listFiles()?.filter { it.name.startsWith(".staging-") && it.name.removePrefix(".staging-") !in preparations.values }?.forEach { it.deleteRecursively() }
+        }
+    }
+    private fun root(id: String): File { require(id.matches(Regex("[A-Za-z0-9_.:-]{1,128}"))); return File(directory, id) }
     private fun stateFile(id: String) = File(root(id), "state.enc")
     private fun itemFile(id: String, external: String) = File(root(id), "item-${SourceRules.hash(external)}.enc")
     private fun read(file: File) = if (file.exists()) JSONObject(String(cipher.open(file.readBytes()), Charsets.UTF_8)) else JSONObject()
     private fun write(file: File, value: JSONObject) {
+        file.parentFile!!.mkdirs()
         val temp = File(file.parentFile, UUID.randomUUID().toString() + ".tmp")
         try { FileOutputStream(temp).use { it.write(cipher.seal(value.toString().toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(file)) } finally { temp.delete() }
     }
@@ -58,6 +65,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
     }
     internal fun transferKey(id: String) = root(id).absolutePath
     internal fun recordFailure(source: LocalSource, observed: JSONObject, phase: String, httpStatus: Int? = null, blocked: Boolean = false) = synchronized(lock) {
+        if (!permitted(source, sourceLease(source))) return@synchronized
         val path = itemFile(source.id, observed.getJSONObject("candidate").getString("externalId"))
         if (!path.exists()) return@synchronized
         val row = read(path)
@@ -81,7 +89,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
     private fun markers(id: String) = root(id).listFiles()?.filter { it.name.matches(Regex("todo-[a-f0-9]{64}")) } ?: emptyList()
     private fun mark(id: String, row: JSONObject) {
         val marker = File(root(id), "todo-" + SourceRules.hash(row.getJSONObject("candidate").getString("externalId")))
-        if (dirty(row)) { if (!marker.exists()) FileOutputStream(marker).use { it.fd.sync() } } else marker.delete()
+        if (dirty(row)) { marker.parentFile!!.mkdirs(); if (!marker.exists()) FileOutputStream(marker).use { it.fd.sync() } } else marker.delete()
     }
     fun saveRow(id: String, row: JSONObject) = synchronized(lock) {
         val external = row.getJSONObject("candidate").getString("externalId"); val state = state(id); val key = SourceRules.hash(external)
@@ -109,13 +117,29 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         File(root(id), "todo-" + SourceRules.hash(external)).delete()
         if (row.has("pending")) File(root(id), "spool").deleteRecursively()
     }
+    private fun permitted(source: LocalSource, lease: SourceLease?): Boolean = source.enabled &&
+        (sourceHost == null || lease != null && lease.source == source && sourceHost.current(lease))
+    internal fun sourceLease(source: LocalSource) = sourceHost?.lease(source)
+    private fun scanCurrent(source: LocalSource, generation: String, lease: SourceLease?) =
+        permitted(source, lease) && state(source.id).optString("generation") == generation
+    fun checkpoint(source: LocalSource, snapshot: JSONObject, generation: String, lease: SourceLease? = sourceLease(source)) = synchronized(lock) {
+        if (scanCurrent(source, generation, lease)) {
+            // A traversal snapshot must not replace concurrent transport/ACK state.
+            val current = state(source.id).put("scanComplete", false)
+            current.put("stack", snapshot.getJSONArray("stack")); saveState(source.id, current)
+        }
+    }
+    fun captured(source: LocalSource, lease: SourceLease? = sourceLease(source)) = synchronized(lock) {
+        if (permitted(source, lease)) saveState(source.id, state(source.id).put("importCaptured", true))
+    }
     fun assertCurrent(source: LocalSource, row: JSONObject) = synchronized(lock) {
+        check(permitted(source, sourceLease(source))) { "Source configuration changed or was disabled" }
         check(allowed(source, row.getJSONObject("candidate"))) { "File excluded by current source policy" }
         val current = read(itemFile(source.id, row.getJSONObject("candidate").getString("externalId")))
         check(current.optJSONObject("pending")?.toString() == row.optJSONObject("pending")?.toString() && current.has("pending")) { "File policy or pending revision changed" }
     }
-    fun configure(source: LocalSource): JSONObject = synchronized(lock) {
-        state(source.id)
+    fun configure(source: LocalSource, lease: SourceLease? = sourceLease(source)): JSONObject = synchronized(lock) {
+        if (!permitted(source, lease)) throw SourceLeaseRevoked()
         val state = state(source.id)
         val policy = SourceRules.hash(listOf(source.uri, source.tree, source.maxFileMiB, source.extensions, source.excluded, source.retention, source.allowRead, "central-snapshot-v1").joinToString("\u0000"))
         if (state.optString("policy") != policy) {
@@ -157,7 +181,8 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         }
     }
     fun signature(item: JSONObject) = SourceRules.fileSignature(item)
-    fun observe(source: LocalSource, item: JSONObject, generation: String, now: Long = System.currentTimeMillis()) = synchronized(lock) {
+    fun observe(source: LocalSource, item: JSONObject, generation: String, now: Long = System.currentTimeMillis(), lease: SourceLease? = sourceLease(source)) = synchronized(lock) {
+        if (!scanCurrent(source, generation, lease)) return@synchronized
         require(allowed(source, item)) { "File excluded by current source policy" }
         SourcePrivacyGate.validate(source, item)
         val path = itemFile(source.id, item.getString("externalId")); val row = read(path)
@@ -169,16 +194,25 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (source.initialSync == "new_only" && !state(source.id).optBoolean("initialized")) row.put("baseline", true)
         saveRow(source.id, row)
     }
-    fun finish(source: LocalSource, generation: String, absent: (String) -> Boolean) = synchronized(lock) {
-        rows(source.id).filter { it.optString("seen") != generation && !it.optBoolean("baseline") }.forEach { row ->
-            val item = row.getJSONObject("candidate")
-            if (!item.optBoolean("deleted") && absent(item.getString("externalId"))) {
-                item.put("deleted", true).put("observedAt", Instant.now().toString())
-                row.put("candidate", item); saveRow(source.id, row)
-            }
+    fun finish(source: LocalSource, generation: String, lease: SourceLease? = sourceLease(source), absent: (String) -> Boolean) {
+        val candidates = synchronized(lock) {
+            if (!scanCurrent(source, generation, lease)) return
+            rows(source.id).filter { it.optString("seen") != generation && !it.optBoolean("baseline") && !it.getJSONObject("candidate").optBoolean("deleted") }.map { it.toString() }
         }
-        val state = state(source.id).put("initialized", true).put("scanComplete", true).put("lastScan", Instant.now().toString()).put("generation", UUID.randomUUID().toString())
-        state.remove("stack"); saveState(source.id, state)
+        // Absence probes can block in a provider, just like opening a stream.
+        val missing = candidates.filter { absent(JSONObject(it).getJSONObject("candidate").getString("externalId")) }
+        synchronized(lock) {
+            if (!scanCurrent(source, generation, lease)) return
+            missing.forEach { selected ->
+                val row = JSONObject(selected); val item = row.getJSONObject("candidate")
+                if (read(itemFile(source.id, item.getString("externalId"))).toString() == selected) {
+                    item.put("deleted", true).put("observedAt", Instant.now().toString())
+                    row.put("candidate", item); saveRow(source.id, row)
+                }
+            }
+            val state = state(source.id).put("initialized", true).put("scanComplete", true).put("lastScan", Instant.now().toString()).put("generation", UUID.randomUUID().toString())
+            state.remove("stack"); saveState(source.id, state)
+        }
     }
     fun pendingPage(id: String, offset: Int, limit: Int = 30, source: LocalSource? = null): JSONObject = synchronized(lock) {
         require(offset >= 0 && limit in 1..60); state(id)
@@ -197,7 +231,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
     }
     fun pendingSync(): PendingSync = synchronized(lock) {
         var count = 0; var oldest: Long? = null
-        directory.listFiles()?.filter { it.isDirectory }?.forEach { dir -> val n = pendingCount(dir.name); count += n; if (n > 0) oldest = minOf(oldest ?: Long.MAX_VALUE, dir.lastModified()) }
+        directory.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".staging-") }?.forEach { dir -> val n = pendingCount(dir.name); count += n; if (n > 0) oldest = minOf(oldest ?: Long.MAX_VALUE, dir.lastModified()) }
         PendingSync(count, oldest)
     }
     fun next(id: String): JSONObject? = synchronized(lock) {
@@ -207,51 +241,64 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (row.has("pending")) row else { state.remove("activeKey"); saveState(id, state); null }
     }
     /** Open is called for archive or transient snapshot bytes, after stability and baseline checks. */
-    fun prepare(source: LocalSource, open: (JSONObject) -> InputStream, unchanged: (JSONObject) -> Boolean, now: Long = System.currentTimeMillis(), anchor: ((String) -> String?)? = null, captureImmediately: Boolean = false, onSelected: ((JSONObject) -> Unit)? = null): JSONObject? {
+    fun prepare(source: LocalSource, open: (JSONObject) -> InputStream, unchanged: (JSONObject) -> Boolean, now: Long = System.currentTimeMillis(), anchor: ((String) -> String?)? = null, captureImmediately: Boolean = false, onSelected: ((JSONObject) -> Unit)? = null, lease: SourceLease? = sourceLease(source), cancelled: () -> Boolean = { false }): JSONObject? {
+        val attempt = UUID.randomUUID().toString()
+        val preparationKey = root(source.id).absolutePath
+        if (cancelled()) return null
         val selected = synchronized(lock) {
-        configure(source)
-        next(source.id)?.let { assertCurrent(source, it); return it }
-        val row = markers(source.id).asSequence().mapNotNull { marker ->
-            val file = File(root(source.id), "item-${marker.name.removePrefix("todo-")}.enc")
-            if (!file.exists()) { marker.delete(); null } else read(file).let { row ->
-                if (!allowed(source, row.getJSONObject("candidate"))) { discard(source.id, row); null }
-                else row.also { if (!dirty(it)) marker.delete() }
-            }
-        }.firstOrNull { dirty(it) && now >= it.optLong("nextPrepareAt") && (source.retention == "reference" || it.getJSONObject("candidate").optBoolean("deleted") || (captureImmediately && !source.tree && !source.syncContinuously) || now - it.optLong("stableSince", now) >= 60000) } ?: return null
-        val state = state(source.id)
-        Triple(row.toString(), state.getString("policy"), state.getString("generation"))
+            if (!permitted(source, lease)) return null
+            configure(source, lease)
+            next(source.id)?.let { assertCurrent(source, it); return it }
+            val row = markers(source.id).asSequence().mapNotNull { marker ->
+                val file = File(root(source.id), "item-${marker.name.removePrefix("todo-")}.enc")
+                if (!file.exists()) { marker.delete(); null } else read(file).let { row ->
+                    if (!allowed(source, row.getJSONObject("candidate"))) { discard(source.id, row); null }
+                    else row.also { if (!dirty(it)) marker.delete() }
+                }
+            }.firstOrNull { dirty(it) && now >= it.optLong("nextPrepareAt") && (source.retention == "reference" || it.getJSONObject("candidate").optBoolean("deleted") || (captureImmediately && !source.tree && !source.syncContinuously) || now - it.optLong("stableSince", now) >= 60000) } ?: return null
+            val state = state(source.id)
+            if (preparations.containsKey(preparationKey)) return null
+            preparations[preparationKey] = attempt
+            Triple(row.toString(), state.getString("policy"), state.getString("generation"))
         }
         val selectedRow = JSONObject(selected.first)
-        onSelected?.invoke(selectedRow)
-        // This callback may query central state and read configuration. Never run
-        // external code under the archive lock; Settings.save checks this queue.
-        val anchoredRevision = if (!selectedRow.has("revision")) anchor?.invoke(selectedRow.getJSONObject("candidate").getString("externalId")) else null
-        return synchronized(lock) {
-        val state = state(source.id)
-        if (state.optString("policy") != selected.second || state.optString("generation") != selected.third) return@synchronized null
-        val currentFile = itemFile(source.id, selectedRow.getJSONObject("candidate").getString("externalId"))
-        if (!currentFile.exists()) return@synchronized null
-        val row = read(currentFile)
-        if (row.toString() != selected.first) return@synchronized null
-        anchoredRevision?.let { row.put("revision", it); saveRow(source.id, row) }
-        val candidate = row.getJSONObject("candidate"); val item = JSONObject(candidate.toString()).apply { remove("_relativePath") }; SourcePrivacyGate.validate(source, item); val spool = File(root(source.id), "spool")
-        spool.deleteRecursively(); spool.mkdirs()
-        var size = candidate.optJSONObject("metadata")?.optJSONObject("file")?.optLong("sizeBytes", 0) ?: 0L
-        var hash: String? = null
+        val spool = File(directory, ".staging-$attempt")
+        fun currentLocked(): Boolean = permitted(source, lease) && preparations[preparationKey] == attempt &&
+                state(source.id).optString("policy") == selected.second && state(source.id).optString("generation") == selected.third &&
+                read(itemFile(source.id, selectedRow.getJSONObject("candidate").getString("externalId"))).toString() == selected.first
+        fun current(): Boolean = !cancelled() && synchronized(lock) { currentLocked() }
+        val row = JSONObject(selected.first)
+        val candidate = row.getJSONObject("candidate")
+        val item = JSONObject(candidate.toString()).apply { remove("_relativePath") }
         try {
+            onSelected?.invoke(selectedRow)
+            // All callbacks and provider operations run outside the shared metadata lock.
+            val anchoredRevision = if (!row.has("revision")) anchor?.invoke(candidate.getString("externalId")) else null
+            if (!current()) return null
+            anchoredRevision?.let { row.put("revision", it) }
+            SourcePrivacyGate.validate(source, item)
+            check(spool.mkdirs())
+            var size = candidate.optJSONObject("metadata")?.optJSONObject("file")?.optLong("sizeBytes", 0) ?: 0L
+            var hash: String? = null
             if (source.retention in setOf("archive", "snapshot") && !item.optBoolean("deleted")) {
                 check(unchanged(candidate)) { MoteI18n.text("文件正在变化，稍后重新扫描") }
                 val digest = MessageDigest.getInstance("SHA-256"); size = 0; var part = 0
                 open(candidate).use { input ->
                     while (true) {
                         val buffer = ByteArray(PART_BYTES); var length = 0
-                        while (length < buffer.size) { val n = input.read(buffer, length, buffer.size - length); if (n < 0) break; if (n == 0) continue; length += n }
+                        while (length < buffer.size) { if (!current()) throw SourceLeaseRevoked(); val n = input.read(buffer, length, buffer.size - length); if (n < 0) break; if (n == 0) continue; length += n }
                         if (length == 0) break
                         size += length; check(size <= minOf(MAX_BYTES, source.maxFileMiB * 1024L * 1024)) { MoteI18n.text("文件超过此来源的大小上限") }
-                        val used = directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-                        check(used + length + 64 < 1024L * 1024 * 1024) { MoteI18n.text("文件暂存达到 1 GiB 上限") }
                         val bytes = buffer.copyOf(length); digest.update(bytes)
-                        FileOutputStream(File(spool, part.toString())).use { it.write(cipher.seal(bytes)); it.fd.sync() }; part++
+                        synchronized(lock) {
+                            val used = directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                            val reserved = length + 64L
+                            check(used + stagingReservations.values.sum() + reserved < 1024L * 1024 * 1024) { MoteI18n.text("文件暂存达到 1 GiB 上限") }
+                            stagingReservations[attempt] = reserved
+                        }
+                        try {
+                            FileOutputStream(File(spool, part.toString())).use { it.write(cipher.seal(bytes)); it.fd.sync() }; part++
+                        } finally { synchronized(lock) { stagingReservations.remove(attempt) } }
                     }
                 }
                 check(unchanged(candidate)) { MoteI18n.text("复制期间文件已变化，保留原文件并稍后重试") }
@@ -266,15 +313,42 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
                 .put("item", item).put("relativePath", candidate.optString("_relativePath", item.optString("title"))).put("sizeBytes", size)
             hash?.let { manifest.put("sha256", it) }
             val recovery = row.optJSONObject("snapshotRecovery")
-            val matchesRecovery = recovery != null && recovery.optString("candidateSignature") == signature(candidate) && row.optString("contentPolicy") == state(source.id).optString("policy") && source.retention == "snapshot" && !item.optBoolean("deleted") && hash == recovery.getString("sha256") && size == recovery.getLong("sizeBytes") && row.optString("revision") == recovery.getString("revision")
+            val matchesRecovery = recovery != null && recovery.optString("candidateSignature") == signature(candidate) && row.optString("contentPolicy") == selected.second && source.retention == "snapshot" && !item.optBoolean("deleted") && hash == recovery.getString("sha256") && size == recovery.getLong("sizeBytes") && row.optString("revision") == recovery.getString("revision")
             item.put("revision", if (matchesRecovery) recovery!!.getString("revision") else SourceRules.hash(SourceRules.canonical(manifest)))
             if (matchesRecovery) item.put("observedAt", recovery!!.getString("observedAt"))
             row.put("pending", JSONObject().put("manifest", manifest).put("signature", signature(candidate)).apply { if (matchesRecovery) put("recoveryCaptureId", recovery!!.getString("captureId")) })
-            row.remove("nextPrepareAt"); row.remove("syncFailure"); row.remove("snapshotRecovery"); row.put("contentPolicy", state(source.id).getString("policy"))
-            saveRow(source.id, row)
-            if (!source.syncContinuously && !source.tree) saveState(source.id, state(source.id).put("importCaptured", true))
-            row
-        } catch (error: Exception) { spool.deleteRecursively(); row.put("nextPrepareAt", now + 60000).put("syncFailure", JSONObject().put("phase", "prepare").put("blocked", false)); saveRow(source.id, row); throw error }
+            row.remove("nextPrepareAt"); row.remove("syncFailure"); row.remove("snapshotRecovery"); row.put("contentPolicy", selected.second)
+            if (!current()) return null
+            return synchronized(lock) {
+                if (!currentLocked()) return@synchronized null
+                // Publish complete staged bytes before the immutable manifest journal.
+                val published = File(root(source.id), "spool")
+                published.deleteRecursively(); root(source.id).mkdirs()
+                check(spool.renameTo(published))
+                try {
+                    saveRow(source.id, row)
+                    if (!source.syncContinuously && !source.tree) captured(source, lease)
+                    row
+                } catch (error: Exception) {
+                    // The row may have committed before a later marker failed. Retain
+                    // its bytes whenever the durable manifest references this attempt.
+                    if (read(itemFile(source.id, candidate.getString("externalId"))).optJSONObject("pending")?.toString() != row.optJSONObject("pending")?.toString()) published.deleteRecursively()
+                    throw error
+                }
+            }
+        } catch (error: Exception) {
+            val stillCurrent = current()
+            synchronized(lock) {
+                if (stillCurrent && currentLocked()) {
+                    val failed = JSONObject(selected.first).put("nextPrepareAt", now + 60000).put("syncFailure", JSONObject().put("phase", "prepare").put("blocked", false))
+                    saveRow(source.id, failed)
+                }
+            }
+            if (error is SourceLeaseRevoked) return null
+            throw error
+        } finally {
+            spool.deleteRecursively()
+            synchronized(lock) { if (preparations[preparationKey] == attempt) preparations.remove(preparationKey) }
         }
     }
     fun part(id: String, part: Int): ByteArray = synchronized(lock) { require(part >= 0); cipher.open(File(File(root(id), "spool"), part.toString()).readBytes()) }
@@ -324,5 +398,5 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         output.flush()
     }
     fun resetSynced() = synchronized(lock) { check(pendingSync().count == 0); directory.listFiles()?.filter { it.isDirectory }?.forEach { progressEntries.remove(it.absolutePath); it.deleteRecursively() }; Unit }
-    fun remove(id: String) = synchronized(lock) { progressEntries.remove(root(id).absolutePath); root(id).deleteRecursively(); LocalStateChanges.changed(records = true, storage = false) }
+    fun remove(id: String) = synchronized(lock) { preparations.remove(root(id).absolutePath); progressEntries.remove(root(id).absolutePath); root(id).deleteRecursively(); LocalStateChanges.changed(records = true, storage = false) }
 }
