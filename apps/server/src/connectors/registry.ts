@@ -65,6 +65,7 @@ export class ConnectorRegistry {
   private addedKinds:string[]=[];
   private started=false;
   private closed=false;
+  private closing?:Promise<void>;
   constructor(private app:FastifyInstance,private context:ConnectorContext){}
 
   register(value:unknown){
@@ -117,7 +118,7 @@ export class ConnectorRegistry {
       this.mount();
       for(const {instance} of this.instances)await instance.mountTransport?.(this.app);
       return this;
-    }catch(error){await this.close().catch(()=>{});throw error;}
+    }catch(error){try{await this.close();}catch(cleanup){throw new AggregateError([error,cleanup],'Connector initialization and disposal failed',{cause:error});}throw error;}
   }
 
   private addOwnerRoute(route:OwnerRoute){
@@ -169,12 +170,11 @@ export class ConnectorRegistry {
     config.syncIntervalMs=intervalMs;
     for(const {instance} of this.instances)instance.configureSyncInterval?.(intervalMs);
   }
-  async close(){
-    if(this.closed)return;
+  close(){return this.closing??=(async()=>{
     this.closed=true;
-    let failure:unknown,failed=false;
-    for(const {instance} of [...this.instances].reverse())try{await instance.close?.();}catch(error){if(!failed){failure=error;failed=true;}}
-    for(const kind of this.addedKinds)this.context.sources.capabilities.unregister(kind);
-    if(failed)throw failure;
-  }
+    const errors:unknown[]=[];
+    for(const {instance} of [...this.instances].reverse())try{await instance.close?.();}catch(error){errors.push(error);}
+    for(const kind of this.addedKinds)try{this.context.sources.capabilities.unregister(kind);}catch(error){errors.push(error);}
+    if(errors.length)throw new AggregateError(errors,'Connector disposal failed');
+  })();}
 }

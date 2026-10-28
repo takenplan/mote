@@ -81,21 +81,32 @@ test('app.close preserves 180 model waits, queues, retry deadlines and explicit 
 });
 
 test('app.close interrupts a child, keeps completed extraction and unknown requests, and fences late results across restart',async t=>{
- const entered=deferred(),response=deferred<unknown>();let asrCalls=0,diarizeCalls=0,signal!:AbortSignal;
+ const entered=deferred(),response=deferred<unknown>();let asrCalls=0,diarizeCalls=0,signal!:AbortSignal,transportSettled=false,lateResponse:Promise<void>|undefined;
  const f=await fixture(t,[
   {id:'fixture.dialogue',name:'Generated dialogue',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,dialogue:true,mediaTypes:['audio/'],async process(){asrCalls++;return transcript;}},
-  {id:'fixture.diarize',name:'Generated diarization',version:'1',stage:'diarize',localOnly:true,mediaTypes:['audio/'],async process(input){signal=input.signal;if(++diarizeCalls===1){entered.resolve();return response.promise;}return {durationMs:1000,engine:'fixture',expectedSpeakers:null,observedSpeakers:1,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'}],samples:[],warnings:[]};}},
+  {id:'fixture.diarize',name:'Generated diarization',version:'1',stage:'diarize',localOnly:true,mediaTypes:['audio/'],async process(input){signal=input.signal;if(++diarizeCalls===1){
+    // Aborting a transport ends its local operation without proving that the
+    // remote processor stopped. A late response still reaches its captured host
+    // callbacks, which must deny admission and original reads after disposal.
+    lateResponse=response.promise.then(async()=>{
+     assert.throws(()=>input.authorizeModel!(),/abort|interrupted/i);
+     await assert.rejects(async()=>{for await(const _bytes of input.readOriginal())assert.fail('Late response cannot read the original');},/abort|interrupted/i);
+    });
+    let abort!:()=>void;const stopped=new Promise<never>((_resolve,reject)=>abort=()=>reject(input.signal.reason));
+    input.signal.addEventListener('abort',abort,{once:true});entered.resolve();
+    try{return await Promise.race([response.promise,stopped]);}finally{transportSettled=true;input.signal.removeEventListener('abort',abort);}
+   }return {durationMs:1000,engine:'fixture',expectedSpeakers:null,observedSpeakers:1,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'}],samples:[],warnings:[]};}},
  ]);
  const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>true;return node;};
  const node=await start();await configure(node,{audioProcessor:'fixture.dialogue',diarizationProcessor:'fixture.diarize'});await authorizeFixtureModels(node);const id=await upload(node,'checkpoint.wav'),run=node.processing.tick();await entered.promise;
  const extraction=node.files.detail(id).artifacts.find((artifact:any)=>artifact.kind==='transcript')!;
  await node.app.close();await run;
- assert.equal(signal.aborted,true);assert.equal(fileStep(node,id).state,'waiting');assert.equal(fileStep(node,id).error,'interrupted');assert.equal(node.files.detail(id).job.state,'waiting');
+ assert.equal(signal.aborted,true);assert.equal(transportSettled,true,'global shutdown joins the aborted local transport, while the remote outcome remains unknown');assert.equal(fileStep(node,id).state,'waiting');assert.equal(fileStep(node,id).error,'interrupted');assert.equal(node.files.detail(id).job.state,'waiting');
  const steps=node.executor.list({operationId:'file:'+id,limit:100}).items;
  assert.equal(steps.find(step=>step.input.name==='extract')!.state,'succeeded');assert.equal(steps.find(step=>step.input.name==='diarize')!.state,'waiting');
  assert.equal(f.store.db.prepare('SELECT state FROM file_processor_waits WHERE capture_id=?').get(id)!.state,'unknown');
  const next=await start();await next.processing.tick();assert.equal(diarizeCalls,1);assert.equal(next.processing.cancellation(id).wait,'unknown');assert.throws(()=>next.processing.retry(id,'diarize'),{statusCode:409});
- response.resolve({...transcript,segments:[{startMs:0,endMs:1000,text:'Late generated result must not publish'}]});await yieldTurn();
+ assert.ok(lateResponse,'the issued request retains its late host callback handler');response.resolve({...transcript,segments:[{startMs:0,endMs:1000,text:'Late generated result must not publish'}]});await lateResponse;await yieldTurn();
  assert.equal(next.processing.cancellation(id).wait,'unknown','a disposed runtime must not clear a durable unknown request');
  await withFixtureOwnerModelWork(next,async()=>next.processing.retry(id,'diarize',false,true),{identities:['capture:'+id]});await next.processing.tick();assert.equal(next.files.detail(id).job.state,'succeeded');
  assert.equal(asrCalls,1);assert.equal(diarizeCalls,2);assert.ok(next.files.detail(id).artifacts.some((artifact:any)=>artifact.id===extraction.id));assert.doesNotMatch(JSON.stringify(next.files.chunks(id)),/Late generated/);

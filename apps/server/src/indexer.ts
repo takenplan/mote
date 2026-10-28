@@ -23,7 +23,7 @@ export class Indexer {
   private current?:Promise<void>;
   private closing=false;
   private abort=new AbortController();
-  readonly engine:ExecutionEngine;private owned:boolean;private unregister:(()=>void)[]=[];
+  readonly engine:ExecutionEngine;private owned:boolean;private unregister:(()=>Promise<void>)[]=[];private closePromise?:Promise<void>;private requests=new Set<Promise<unknown>>();
   constructor(private store:Store,private config:Pick<Config,'embeddingModel'|'embeddingBaseUrl'|'embeddingApiKey'>,private diagnostics?:ServerDiagnostics,private files?:FileStore,private admission?:(input:{bytes:number;operationId?:string})=>{finish:(usage?:TokenUsage,failed?:boolean)=>void},private options:{executor?:ExecutionEngine;operationId?:()=>string|undefined;authorize?:<T>(evidenceId:string,signal:AbortSignal,task:(signal:AbortSignal)=>Promise<T>)=>Promise<T>;assertModel?:()=>void}={}) {
     this.engine=options.executor??new ExecutionEngine(store);this.owned=!options.executor;
     for(const kind of ['capture','file'] as const)this.unregister.push(this.engine.register({kind:'embedding.'+kind,pool:'embedding',concurrency:()=>2,policy:EXECUTION_POLICIES.modelCall,timeoutMs:300000,
@@ -54,7 +54,12 @@ export class Indexer {
   retry(){const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{const result=this.store.retryIndex();for(const row of db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state!='running'").all())this.engine.retry(String(row.id),true);if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}}
   get configured() {return Boolean(this.config.embeddingModel&&this.config.embeddingBaseUrl);}
   private queryCache=new Map<string,{at:number;vector:number[]}>();
-  async embed(text:string,timeoutMs=45000,signal?:AbortSignal,operationId?:string):Promise<number[]> {
+  embed(text:string,timeoutMs=45000,signal?:AbortSignal,operationId?:string):Promise<number[]> {
+    if(this.closing)return Promise.reject(new Error('Indexer is closed'));
+    const task=this.embedRequest(text,timeoutMs,signal,operationId);this.requests.add(task);
+    void task.finally(()=>this.requests.delete(task)).catch(()=>{});return task;
+  }
+  private async embedRequest(text:string,timeoutMs:number,signal?:AbortSignal,operationId?:string):Promise<number[]> {
     const id='embedding-query:'+randomUUID(),selectedParent=operationId??this.options.operationId?.(),parent=selectedParent??'embedding:'+randomUUID(),external=AbortSignal.any([this.abort.signal,...(signal?[signal]:[])]);let value:number[]|undefined,deadline:AbortSignal|undefined;
     try{return await this.engine.runStep({id,operationId:parent,kind:'embedding.query',pool:'embedding.query',optional:!!selectedParent,input:{requestHash:sha256(text),modelFingerprint:this.modelFingerprint()},signal:external,policy:EXECUTION_POLICIES.modelCall,maxAttempts:1,timeoutMs,
       validate:()=>!this.closing&&!external.aborted,
@@ -112,7 +117,7 @@ export class Indexer {
     const ids=this.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN ('embedding.capture','embedding.file') AND state IN ('waiting','running') ORDER BY rowid LIMIT 200").all().map(row=>String(row.id));await this.engine.drain(ids);for(const id of ids)this.engine.project(id);
     const counts=this.store.indexCounts();this.diagnostics?.record('queue.snapshot',{pending:counts.pending,failed:counts.failed});
   }
-  async close() {this.closing=true;this.abort.abort();if(this.owned)await this.engine.close();await this.current;for(const unregister of this.unregister)unregister();this.unregister=[];}
+  close() {return this.closePromise??=(async()=>{this.closing=true;this.abort.abort();const results=await Promise.allSettled(this.unregister.splice(0).map(stop=>stop()));if(this.owned)await this.engine.close();await Promise.allSettled([this.current,...this.requests]);const errors=results.flatMap(result=>result.status==='rejected'?[result.reason]:[]);if(errors.length)throw new AggregateError(errors,'Indexer disposal failed');})();}
   async search(args:Range&{query?:string;signal?:AbortSignal}) {
     args.signal?.throwIfAborted();
     // A completed vector scan is not full-text semantic coverage. Preserve this

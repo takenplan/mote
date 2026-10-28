@@ -5,6 +5,7 @@ import {collectorIngressWrite} from './ingress.js';
 
 export class ServerFeatureScope {
   private disposers:Array<()=>unknown|Promise<unknown>>=[];
+  private retiring:Array<()=>unknown|Promise<unknown>>=[];
   private timers=new Set<ReturnType<typeof setInterval>>();
   private pending=new Set<Promise<unknown>>();
   private closing?:Promise<void>;
@@ -16,6 +17,8 @@ export class ServerFeatureScope {
     void task.catch(error=>this.onError(error)).finally(()=>this.pending.delete(task));return task;
   }
   defer(dispose:()=>unknown|Promise<unknown>){if(!this.active)throw Error('Feature is closed');this.disposers.push(dispose);}
+  /** Retire capabilities only after runtime disposal and scheduled work settle. */
+  retire(dispose:()=>unknown|Promise<unknown>){if(!this.active)throw Error('Feature is closed');this.retiring.push(dispose);}
   every(ms:number,work:()=>unknown|Promise<unknown>){
     let running=false;
     const timer=setInterval(()=>{if(!this.active||running)return;running=true;void this.run(work).catch(()=>{}).finally(()=>{running=false;});},ms);
@@ -24,9 +27,11 @@ export class ServerFeatureScope {
   /** Stop admission and timers before the executor drains; keep resources alive. */
   stop(){this.active=false;for(const timer of this.timers)clearInterval(timer);this.timers.clear();}
   close(){return this.closing??=(async()=>{this.stop();
-    const closed=await Promise.allSettled(this.disposers.reverse().map(dispose=>Promise.resolve().then(dispose)));
+    const errors:unknown[]=[];
+    for(const dispose of this.disposers.reverse())try{await dispose();}catch(error){errors.push(error);}
     await Promise.allSettled([...this.pending]);
-    const errors=closed.flatMap(result=>result.status==='rejected'?[result.reason]:[]);if(errors.length)throw new AggregateError(errors,'Feature disposal failed');
+    for(const dispose of this.retiring.reverse())try{await dispose();}catch(error){errors.push(error);}
+    if(errors.length)throw new AggregateError(errors,'Feature disposal failed');
   })();}
 }
 
@@ -34,14 +39,20 @@ export class ServerFeatureScope {
  * Cordis disposal revokes dispatch and registrations, never stored materials. */
 export class ServerFeatureHost {
   readonly registry=new FeatureRegistry<unknown>();
-  private installed=new Map<string,{dispose():Promise<void>}>();
+  private installed=new Map<string,{fiber:{dispose():Promise<void>};closeScope:()=>Promise<void>|undefined}>();
+  private disposals=new Map<string,Promise<void>>();
   private scopes=new Set<ServerFeatureScope>();
+  private closing?:Promise<void>;
   constructor(private root:Context,private app:FastifyInstance,private onError:(error:unknown)=>void=()=>{}){}
   async install(manifest:FeatureManifest,entry:(app:FastifyInstance,scope:ServerFeatureScope)=>void){
+    if(this.closing)throw Error('Feature host is closed');
+    await this.disposals.get(manifest.id);this.disposals.delete(manifest.id);
+    if(this.closing)throw Error('Feature host is closed');
     const registry=this.registry,app=this.app,onError=this.onError;
+    let installedScope:ServerFeatureScope|undefined;
     const fiber=this.root.plugin((ctx:Context)=>{
       ctx.effect(()=>registry.install(manifest,{completeTrustedTopology:manifest.components.length===0}));
-      const scope=new ServerFeatureScope(onError);ctx.effect(()=>{this.scopes.add(scope);return()=>{this.scopes.delete(scope);return scope.close();};});
+      const scope=new ServerFeatureScope(onError);installedScope=scope;ctx.effect(()=>{this.scopes.add(scope);return()=>{this.scopes.delete(scope);return scope.close();};});
       app.register(async child=>{
         child.addHook('onRequest',async(_req,reply)=>{if(!scope.active)return reply.code(503).send({error:'feature_unavailable'});});
         child.addHook('onRoute',route=>{
@@ -53,10 +64,23 @@ export class ServerFeatureHost {
         entry(child,scope);
       });
     });
-    try{await fiber;this.installed.set(manifest.id,fiber);return fiber;}catch(error){await fiber.dispose();throw error;}
+    this.installed.set(manifest.id,{fiber,closeScope:()=>installedScope?.close()});
+    try{await fiber;return fiber;}catch(error){try{await this.dispose(manifest.id);}catch(cleanup){throw new AggregateError([error,cleanup],'Feature initialization and disposal failed',{cause:error});}throw error;}
   }
-  async dispose(id:string){const fiber=this.installed.get(id);if(fiber){this.installed.delete(id);await fiber.dispose();}}
+  dispose(id:string){
+    const previous=this.disposals.get(id);if(previous)return previous;
+    const installed=this.installed.get(id);if(!installed)return Promise.resolve();this.installed.delete(id);
+    const task=(async()=>{
+      const errors:unknown[]=[];
+      // Cordis logs effect cleanup errors. Join our owned scope explicitly so
+      // callers receive disposal failures as well as revoked registrations.
+      try{await installed.closeScope();}catch(error){errors.push(error);}
+      try{await installed.fiber.dispose();}catch(error){errors.push(error);}
+      if(errors.length)throw new AggregateError(errors,'Feature disposal failed');
+    })();
+    this.disposals.set(id,task);return task;
+  }
   stop(){for(const scope of this.scopes)scope.stop();}
-  async close(){await Promise.all([...this.installed.keys()].map(id=>this.dispose(id)));}
+  close(){return this.closing??=(async()=>{this.stop();const results=await Promise.allSettled([...new Set([...this.installed.keys(),...this.disposals.keys()])].map(id=>this.dispose(id)));const errors=results.flatMap(result=>result.status==='rejected'?[result.reason]:[]);if(errors.length)throw new AggregateError(errors,'Feature host disposal failed');})();}
 
 }

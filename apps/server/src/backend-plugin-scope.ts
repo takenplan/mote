@@ -11,6 +11,7 @@ export class BackendPluginScope {
   private readonly plugins:Array<{dispose():Promise<void>}>=[];
   private readonly services:Array<()=>Promise<void>|void>=[];
   private closed=false;
+  private closing?:Promise<void>;
 
   constructor(root?:Context){
     this.context=root??new Context();
@@ -29,8 +30,9 @@ export class BackendPluginScope {
     await fiber;
   }
 
-  async close(){
-    if(this.closed)return;
+  close(){return this.closing??=this.dispose();}
+
+  private async dispose(){
     this.closed=true;
     if(this.ownsRoot){await this.context.fiber.dispose();return;}
     const errors:unknown[]=[];

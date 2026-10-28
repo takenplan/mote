@@ -28,7 +28,7 @@ type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 /** Host-owned durable proposals and execution receipts. The query agent has only a read-only comparison catalog, never mutation tools. */
 export class Actions {
   private running?:Promise<void>;private closed=false;private abort=new AbortController();
-  readonly engine:ExecutionEngine;private owned:boolean;private unregister:()=>void;
+  readonly engine:ExecutionEngine;private owned:boolean;private unregister:()=>Promise<void>;private closing?:Promise<void>;
   private runtimeSettings:ActionsRuntimeSettings;
   private settingsTail:Promise<void>=Promise.resolve();
   constructor(readonly store:Store,private files:FileStore,private query:(input:QueryInput)=>Promise<QueryResult>,private configured:()=>boolean,private options:{executor?:ExecutionEngine;semanticArtifacts?:(ids:string[],operationId?:string)=>Promise<string[]>;configService?:ConfigService}={}){
@@ -320,7 +320,7 @@ export class Actions {
       for(const a of [...merges,...proposals])this.save(a);checkpointShared();
       };
   }
-  async close(){this.closed=true;this.abort.abort();await this.settingsTail;if(this.owned)await this.engine.close();await this.running;this.unregister();}
+  close(){return this.closing??=(async()=>{this.closed=true;this.abort.abort();await this.settingsTail;await this.unregister();if(this.owned)await this.engine.close();await this.running;})();}
 
 }
 export function registerActions(app:FastifyInstance,actions:Actions,connections:Connections,credential:(req:FastifyRequest)=>ConnectionCredential|undefined){
