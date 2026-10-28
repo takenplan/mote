@@ -7,6 +7,7 @@ import type {MemoryBindings} from './memory-bindings.js';
 import type {MemoryRecipeBinding} from './memory-strategy-contract.js';
 import type {ManualMemoryInputPlanRequest} from './memory-input-plans.js';
 import type {EvidenceExposurePolicy, EvidenceOperation} from './evidence-exposure.js';
+import type {browseSourceCatalog} from './source-catalog.js';
 
 /** Host archive reads. These are not Agent/MCP disclosure capabilities: those
  * audiences must use the ContextReader adapter and its EvidenceExposure checks. */
@@ -15,6 +16,19 @@ export interface CaptureRead {
   archivedEvidence(refs:string[], scope?:Range):CaptureRecord[];
   imageReference(ref:string, scope?:Range):(NonNullable<ReturnType<Store['imageReference']>> & {id:string;source:CaptureRecord['source']}) | undefined;
   context(records:CaptureRecord[]):CaptureRecord[];
+}
+
+/** Owner context browsing and exact expansion. Query audiences still require
+ * the ContextReader adapter and its disclosure checks. */
+export interface CaptureContextRead extends Pick<CaptureRead,'evidence'> {
+  records(args:Range & {query?:string}, search?:boolean):{items:CaptureRecord[];more:boolean;scanned:number};
+  search(args:Range & {query?:string}):Promise<CaptureRecord[] & {retrieval:{mode:string;degraded:boolean}}>;
+  artifact(ref:string, scope?:Range):{id:string;ref:string;text:string;members:string[]} | undefined;
+}
+
+/** Source catalog reads do not grant capture, Material or Memory bodies. */
+export interface SourceFileCatalogRead {
+  fileCatalog(sourceId:string, args:Parameters<typeof browseSourceCatalog>[2]):ReturnType<typeof browseSourceCatalog>;
 }
 
 /** Formal Material reads keep their existing scoped, revision-pinned identity. */

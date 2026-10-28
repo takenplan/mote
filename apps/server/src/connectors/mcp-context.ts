@@ -1,6 +1,7 @@
 import type {ContextReader} from '@mote/agent';
 import {EvidenceReader} from '../evidence-reader.js';
-import {ContextQuery} from '../context-query.js';
+import type {ContextQuery} from '../context-query.js';
+import {createContextQuery} from '../context-query-composition.js';
 import {ServerDiagnostics} from '../diagnostics.js';
 import type {SourceStore} from '../sources.js';
 import type {Store} from '../store.js';
@@ -34,7 +35,7 @@ export interface McpContext {
 export function mcpContext(context:ConnectorContext):McpContext {
  const {store,sources,files,materials,sourcePipelines,materialOrganizers,config}=context;
  const reader=context.evidenceReader??new EvidenceReader(store,sources,files,undefined,undefined,materials,sourcePipelines,materialOrganizers?.sourceItemRecipes);
- const query=context.contextQuery??new ContextQuery(store,sources,files,reader);
+ const query=context.contextQuery??createContextQuery(store,sources,reader);
  const diagnostics=new ServerDiagnostics({directory:config.dataDir,enabled:false});
  const read:McpReadContext={sources:{getSource:sources.getSource.bind(sources),getItem:sources.getItem.bind(sources),listSources:sources.listSources.bind(sources)},
   reader:{queryPage:reader.queryPage.bind(reader),fileCatalog:reader.fileCatalog.bind(reader),memorySnapshot:reader.memorySnapshot.bind(reader),retainMemorySnapshot:reader.retainMemorySnapshot.bind(reader),releaseMemorySnapshot:reader.releaseMemorySnapshot.bind(reader)},

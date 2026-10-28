@@ -8,14 +8,16 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
-import {ContextQuery} from '../src/context-query.js';
+import {createContextQuery} from '../src/context-query-composition.js';
+import {EvidenceReader} from '../src/evidence-reader.js';
 
 const captured=(minutes:number)=>new Date(Date.parse('2026-09-18T00:00:00.000Z')+minutes*60000).toISOString();
 async function fixture(t:any){
   const directory=await mkdtemp(join(tmpdir(),'mote-context-query-')),store=new Store(join(directory,'vault')),sources=new SourceStore(store);
   sources.register({id:'coding',name:'Generated coding source',kind:'coding-agent',deviceId:'fixture-device',platform:'import'});
   t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
-  return {store,sources,query:new ContextQuery(store,sources)};
+  const reader=new EvidenceReader(store,sources);
+  return {store,sources,reader,query:createContextQuery(store,sources,reader)};
 }
 async function coding(store:Store,minutes:number,projectKey:string,sessionId:string,text:string,provider:'codex'|'claude'='codex'){
   const id=randomUUID();await store.ingest({id,deviceId:sessionId==='s-a'?'device-a':'device-b',deviceName:'Generated device',platform:'import',capturedAt:captured(minutes),durationMs:0,appId:'generated.agent',appName:'Generated Agent',windowTitle:'Generated coding turn',ocrText:text,source:'message',provenance:{sourceId:'coding',externalId:id,revision:'1',layer:'snapshot',document:{contentRole:'transcript',coding:{version:1,provider,sessionId,projectKey,eventId:id,role:'user',part:0,parts:1}}},privacy:{excluded:false,redacted:false,mode:'none'}});return id;
@@ -132,7 +134,7 @@ test('navigation references survive reader reconstruction and intersect the orig
  const scope={sourceId:'nav-0',after:'2024-06-01T00:00:00.000Z',before:'2024-12-01T00:00:00.000Z'};
  const cards=[...query.browse(scope).items,...query.context({...scope,includeMemories:false,maxCharacters:24000,limit:10}).recentSessions];
  assert.ok(cards.some(c=>c.kind==='session'));assert.ok(cards.some(c=>c.kind==='project-candidate'));
- const restored=new ContextQuery(store,sources);
+ const restoredReader=new EvidenceReader(store,sources),restored=createContextQuery(store,sources,restoredReader);
  for(const card of cards){
   assert.ok(card.ref.length<=4096);
   const item=restored.read([card.ref]).items[0];assert.equal(item.text,'');assert.equal(item.evidenceRefs,undefined);
@@ -147,7 +149,7 @@ test('navigation references survive reader reconstruction and intersect the orig
  while(store.archive.stats().pendingGroups)store.archive.aggregate(100);
  const expected=sources.listItems({...scope,limit:200}).items.length,seen=new Set<string>();let cursor:string|undefined;
  for(let page=0;page<60;page++){
-  const result=restored.reader.segments({...scope,limit:10,cursor});
+  const result=restoredReader.segments({...scope,limit:10,cursor});
   for(const item of result.items){
    assert.equal(seen.has(item.id),false);seen.add(item.id);
    const expanded=restored.read([item.ref],0,4000,scope).items[0];assert.equal(expanded.kind,'artifact');assert.equal(expanded.evidenceRefs!.length,1);

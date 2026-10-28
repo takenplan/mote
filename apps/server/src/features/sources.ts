@@ -10,5 +10,5 @@ export function register(app:FastifyInstance,{sourcePipelines,connections,creden
  scope?.every(5000,()=>sourcePipelines.tick());scope?.defer(()=>sourcePipelines.close());
 app.addHook('onReady',async()=>{void scope?.run(()=>sourcePipelines.tick());});
 registerLibrarySourceView(app,{store,sources,materials,evidenceReader,credential});
-registerSourceRoutes(app,{layers:new LayersReadModel(sources,memories),sources,evidenceReader,ingress,connections,credential,sourceOwner});
+registerSourceRoutes(app,{layers:new LayersReadModel(sources,memories),sources,evidenceReader:{fileCatalog:evidenceReader.fileCatalog.bind(evidenceReader)},ingress,connections,credential,sourceOwner});
 }
