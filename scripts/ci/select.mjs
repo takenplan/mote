@@ -15,6 +15,7 @@ const documentation = path => path.startsWith('docs/') || path.startsWith('relea
 // upload contract. Unrelated Server/Android modules keep their existing scopes.
 const androidContractInputs = new Set([
   ...['app', 'auth', 'connections', 'source-routes', 'sources', 'source-schema', 'file-routes', 'files', 'file-schema', 'ingress',
+    'store', 'evidence-store', 'sqlite-database', 'capture-schema', 'vault-schema', 'vault-schema-installation',
     'features/sources', 'features/files', 'features/connections'].map(name => `apps/server/src/${name}.ts`),
   ...['CentralClient', 'CentralUploadClient', 'CentralNotes', 'FileUploadConfirmation', 'IngressV2Protocol', 'LocalSources']
     .map(name => `apps/android/app/src/main/java/dev/mote/collector/${name}.kt`),

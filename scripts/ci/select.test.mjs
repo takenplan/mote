@@ -44,7 +44,8 @@ test('PR selection is modular, main runs affected light contracts, neither start
   assert.deepEqual(automaticTasks(changed('docs/ci.md')).tasks, []);
 });
 test('real Kotlin intake consumers follow exact wire inputs on PRs and main without expanding unrelated modules', () => {
-  for (const path of ['apps/server/src/app.ts', 'apps/server/src/connections.ts', 'apps/server/src/source-routes.ts', 'apps/server/src/file-routes.ts', 'apps/server/src/ingress.ts', 'apps/server/src/files.ts', 'apps/server/src/features/sources.ts', 'apps/server/src/features/files.ts']) {
+  const storage = ['store', 'evidence-store', 'sqlite-database', 'capture-schema', 'vault-schema', 'vault-schema-installation'].map(name => `apps/server/src/${name}.ts`);
+  for (const path of [...storage, 'apps/server/src/app.ts', 'apps/server/src/connections.ts', 'apps/server/src/source-routes.ts', 'apps/server/src/file-routes.ts', 'apps/server/src/ingress.ts', 'apps/server/src/files.ts', 'apps/server/src/features/sources.ts', 'apps/server/src/features/files.ts']) {
     const selection = changed(path);
     assert.equal(selection.androidContract, true, path);
     for (const event of ['pull_request', 'push', 'local']) {
