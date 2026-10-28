@@ -140,12 +140,26 @@ export class ExecutionEngine {
   return {items:rows.slice(0,limit).map(view),nextCursor:rows.length>limit?rows[limit-1].rowid:null};
  }
  project(id:string){const step=this.get(id);if(step)this.handlers.get(step.kind)?.project?.(step);}
+ private deferredLocalEffects?:Array<()=>void>;
+ /** Collect synchronous cancellation effects while the caller writes its
+  * transaction. Discard the returned callback on rollback; call it after commit.
+  * Nested participants contribute to the outer transaction's collection. */
+ deferLocalEffects(write:()=>void):()=>void {
+  const parent=this.deferredLocalEffects,effects:Array<()=>void>=[];
+  this.deferredLocalEffects=effects;
+  try{write();}finally{this.deferredLocalEffects=parent;}
+  if(parent){parent.push(...effects);return ()=>{};}
+  let applied=false;
+  return ()=>{if(applied)return;applied=true;const errors:unknown[]=[];for(const effect of effects)try{effect();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Execution local cleanup failed');};
+ }
+ /** A participant's local notification follows its transaction owner's scope. */
+ localEffect(effect:()=>void){if(this.deferredLocalEffects)this.deferredLocalEffects.push(effect);else effect();}
  /** Transactional callers may defer local abort; lease renewal observes committed revocation. */
  cancel(id:string,abortLocal=true,reason='cancelled'){
   if(!/^[a-z][a-z0-9_]{0,80}$/.test(reason))throw new StoreError('Invalid cancellation reason',400);
   const alias=this.store.db.prepare('SELECT step_id FROM execution_cancellation_aliases WHERE alias_id=?').get(id);
   if(alias){this.store.db.prepare('UPDATE execution_cancellation_aliases SET cancelled=1 WHERE alias_id=?').run(id);id=String(alias.step_id);}
-  const db=this.store.db;db.prepare("UPDATE execution_steps SET state='cancelled',fence=NULL,error=?,updated_at=? WHERE id=? AND state!='succeeded'").run(reason,this.now(),id);if(abortLocal)this.active.get(id)?.controller.abort();this.project(id);
+  const db=this.store.db;db.prepare("UPDATE execution_steps SET state='cancelled',fence=NULL,error=?,updated_at=? WHERE id=? AND state!='succeeded'").run(reason,this.now(),id);if(abortLocal)this.abortLocal(id);this.project(id);
  }
  /** Stable operation identities can revoke the currently active resumable
   * fragment from another host without depending on its revision number. */
@@ -176,7 +190,7 @@ export class ExecutionEngine {
   return Boolean(this.store.db.prepare("UPDATE execution_steps SET attempts=max(attempts,?),updated_at=? WHERE id=? AND input=? AND state IN ('waiting','blocked')").run(issuedAttempt,this.now(),id,JSON.stringify(expectedInput)).changes);
  }
  /** Stop only this host's work after another writer revoked its durable grant. */
- abortLocal(id:string){this.active.get(id)?.controller.abort();}
+ abortLocal(id:string){const controller=this.active.get(id)?.controller;if(controller)this.localEffect(()=>controller.abort());}
  isCurrentGrant(id:string,fence:string){return Boolean(this.store.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}
  /** A child publication must retain both its parent's lease and input authority. */
  isCurrentInputGrant(id:string,fence:string){const step=this.get(id),handler=step&&this.handlers.get(step.kind);return Boolean(step&&handler&&this.isCurrentGrant(id,fence)&&handler.validate(step)&&(handler.validateGrant?.(step)??true));}

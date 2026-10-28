@@ -9,7 +9,8 @@ export type MemoryAutomaticWorkCounts={queued:number;running:number;checkpointed
  * separate. A normal pause never invalidates an already persisted receipt. */
 export class MemoryAutomation {
   onResume?:()=>void;
-  onStop?:()=>void;
+  /** Durable writes return local cleanup for command() to run after commit. */
+  onStop?:()=>void|(()=>void);
   counts:()=>MemoryAutomaticWorkCounts=()=>({queued:0,running:0,checkpointed:0,resultUnknown:0});
   constructor(readonly store:Store,private readonly now=Date.now){
     store.db.exec(`CREATE TABLE IF NOT EXISTS memory_automation(id INTEGER PRIMARY KEY CHECK(id=1),json TEXT NOT NULL);
@@ -24,6 +25,7 @@ export class MemoryAutomation {
   private save(state:MemoryAutomationState){this.store.db.prepare('UPDATE memory_automation SET json=? WHERE id=1').run(JSON.stringify(state));}
   command(kind:'pause'|'resume'|'stop',raw:unknown){
     const input=memoryControlCommandSchema.parse(raw),fingerprint=sha256(JSON.stringify({kind,...input})),db=this.store.db;
+    let afterCommit:void|(()=>void)=undefined;
     db.exec('BEGIN IMMEDIATE');
     try{
       const prior=db.prepare('SELECT fingerprint FROM memory_control_commands WHERE operation_id=?').get(input.operationId);
@@ -34,11 +36,13 @@ export class MemoryAutomation {
         if(!state.desired){this.onResume?.();state.desired=true;state.generation++;}delete state.stopRequested;
       }else{
         if(state.desired){state.desired=false;state.cutoff=this.now();}
-        if(kind==='stop'){this.onStop?.();state.stopRequested=true;}
+        if(kind==='stop'){afterCommit=this.onStop?.();state.stopRequested=true;}
       }
       state.revision++;this.save(state);this.store.reserveMetadata(256);
-      db.prepare('INSERT INTO memory_control_commands VALUES(?,?,?)').run(input.operationId,fingerprint,this.now());db.exec('COMMIT');return this.view();
+      db.prepare('INSERT INTO memory_control_commands VALUES(?,?,?)').run(input.operationId,fingerprint,this.now());db.exec('COMMIT');
     }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+    try{afterCommit?.();}catch(error){throw new Error('Memory command committed; local cleanup failed',{cause:error});}
+    return this.view();
   }
   /** Only the host switch coordinator may establish/release this durable fence. */
   freeze(operationId:string){const state=this.state();if(state.barrier&&state.barrier!==operationId)throw new StoreError('Another Memory switch owns admission',409);state.barrier=operationId;state.revision++;this.save(state);}

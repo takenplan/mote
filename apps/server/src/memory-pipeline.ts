@@ -94,7 +94,7 @@ export class MemoryPipeline {
   abandonEngineDraft(context:MemoryEngineDraftContext|MemoryEngineDraftPin){if(!this.options.settleEngineDraft||!context.provider)return;const {id,prior}=this.recordEngineStageCleanup(context);if(prior?.state!=='acknowledged')this.queueEngineStageCleanup(id);}
   private recordEngineStageCleanup(context:MemoryEngineDraftContext|MemoryEngineDraftPin){const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),prior=this.store.db.prepare('SELECT state FROM memory_engine_stage_cleanups WHERE id=?').get(id);if(!prior){const json=JSON.stringify(pin);this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare("INSERT INTO memory_engine_stage_cleanups VALUES(?,?,'pending')").run(id,json);}return {id,prior};}
   private finalizeEngineStep(step:ExecutionStep){if(!['succeeded','failed','cancelled','stale'].includes(step.state))return;for(const row of this.store.db.prepare('SELECT json FROM memory_engine_stage_drafts WHERE checkpoint_id=?').all(step.id))this.abandonEngineDraft(JSON.parse(String(row.json)));}
-  private queueEngineStageCleanup(id:string){const operationId='memory-engine-stage-cleanup:'+id,prior=this.engine.get(operationId);if(!prior)this.engine.enqueue(operationId,'memory.engine-stage-cleanup',{id},{id:operationId});else if(['failed','stale','cancelled','blocked'].includes(prior.state)&&!this.engine.isActiveStep(operationId))this.engine.retry(operationId);void this.engine.tick().catch(()=>{});}
+  private queueEngineStageCleanup(id:string){const operationId='memory-engine-stage-cleanup:'+id,prior=this.engine.get(operationId);if(!prior)this.engine.enqueue(operationId,'memory.engine-stage-cleanup',{id},{id:operationId});else if(['failed','stale','cancelled','blocked'].includes(prior.state)&&!this.engine.isActiveStep(operationId))this.engine.retry(operationId);this.engine.localEffect(()=>{void this.engine.tick().catch(()=>{});});}
   private phaseOutputs!:MemoryPhaseOutputs;
   private ownerQuestions?:MemoryOwnerQuestionHandler;
   setOwnerQuestionHandler(handler?:MemoryOwnerQuestionHandler){this.ownerQuestions=handler;}
@@ -166,7 +166,7 @@ export class MemoryPipeline {
   private completions=new Map<string,{resolve:(job:MemoryJobDetail)=>void;reject:(error:unknown)=>void}>();
   private scheduled=false;
   /** Notify completion observers and ask the shared engine to fill available slots. */
-  wake(){if(this.scheduled)return;this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;this.settle();if(!this.closed)void this.engine.tick().catch(error=>{for(const done of this.completions.values())done.reject(error);this.completions.clear();this.active.clear();});});}
+  wake(){this.engine.localEffect(()=>{if(this.scheduled)return;this.scheduled=true;queueMicrotask(()=>{this.scheduled=false;this.settle();if(!this.closed)void this.engine.tick().catch(error=>{for(const done of this.completions.values())done.reject(error);this.completions.clear();this.active.clear();});});});}
   private settle(){
     for(const id of this.active.keys()){
       this.refreshJob(id);const job=this.storedJob(id),counts=this.counts(id);
@@ -183,18 +183,22 @@ export class MemoryPipeline {
   cancel(id:string,options?:{cause:'authority'}){
     const cause=options?.cause??'owner',pending=[id],seen=new Set<string>(),stopped:string[]=[],db=this.store.db,own=!db.isTransaction;
     if(own)db.exec('BEGIN IMMEDIATE');
+    let afterCommit:()=>void;
     try{
-      while(pending.length){
-        const current=pending.pop()!;if(seen.has(current))continue;seen.add(current);const job=this.storedJob(current);
-        if(!['completed','cancelled'].includes(job.status)){job.status='cancelled';job.cancellationCause=cause;this.saveJob(job);stopped.push(current);}
-        else if(cause==='owner'&&job.cancellationCause!=='owner'){job.cancellationCause='owner';this.saveJob(job);}
-        // An owner's explicit stop covers admitted children of this operation.
-        // Original grant withdrawal never revokes a later explicit owner reply.
-        if(cause==='owner')for(const child of db.prepare("SELECT id FROM memory_jobs WHERE json_extract(json,'$.continuationOf')=?").all(current))pending.push(String(child.id));
-      }
+      afterCommit=this.engine.deferLocalEffects(()=>{
+        while(pending.length){
+          const current=pending.pop()!;if(seen.has(current))continue;seen.add(current);const job=this.storedJob(current);
+          if(!['completed','cancelled'].includes(job.status)){job.status='cancelled';job.cancellationCause=cause;this.saveJob(job);stopped.push(current);}
+          else if(cause==='owner'&&job.cancellationCause!=='owner'){job.cancellationCause='owner';this.saveJob(job);}
+          // An owner's explicit stop covers admitted children of this operation.
+          // Original grant withdrawal never revokes a later explicit owner reply.
+          if(cause==='owner')for(const child of db.prepare("SELECT id FROM memory_jobs WHERE json_extract(json,'$.continuationOf')=?").all(current))pending.push(String(child.id));
+        }
+        for(const current of stopped){for(const step of this.steps(current))this.engine.cancel(step,true,options?.cause==='authority'?'authority_changed':'cancelled');this.feedbackCancel?.(current);}this.wake();
+      });
       if(own)db.exec('COMMIT');
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
-    for(const current of stopped){for(const step of this.steps(current))this.engine.cancel(step,true,options?.cause==='authority'?'authority_changed':'cancelled');this.feedbackCancel?.(current);}this.wake();return this.get(id);
+    afterCommit();return this.get(id);
   }
 
   private closed=false;

@@ -52,3 +52,11 @@ test('paused integration drains an admitted window, resume skips the gap without
   await lifecycle.tick();assert.equal(calls,1,'resume did not create integration for the paused gap');assert.equal(working,1,'independent working lane is preserved');
   event('memory');await lifecycle.tick();assert.equal(calls,2,'later authorized increment is handled');
 });
+
+test('a failing post-commit cleanup preserves the command receipt and retry cannot repeat its effects',t=>{
+  const control=new MemoryAutomation(fixture(t)),stop=command(control);let cleanups=0;
+  control.onStop=()=>()=>{cleanups++;assert.equal(control.store.db.isTransaction,false);throw Error('Generated local cleanup failure');};
+  assert.throws(()=>control.command('stop',stop),error=>error instanceof Error&&error.message==='Memory command committed; local cleanup failed'&&error.cause instanceof Error&&error.cause.message==='Generated local cleanup failure');
+  assert.equal(control.accepting(),false);assert.equal(control.state().revision,2);assert.equal(cleanups,1);
+  assert.equal(control.command('stop',stop).state,'paused');assert.equal(control.state().revision,2);assert.equal(cleanups,1);
+});

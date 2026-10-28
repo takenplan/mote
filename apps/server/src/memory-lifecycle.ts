@@ -88,10 +88,19 @@ export class MemoryLifecycle {
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   cancel(id:LifecycleExtension['id'],windowId:string,options?:{cause:'authority'}){
-    const state=this.state(id);if(state.active?.id!==windowId)throw new StoreError('Active lifecycle task not found',404);
-    const cause=options?.cause??'owner';state.cancelled=true;state.cancellationCause=cause;delete state.retryAt;this.saveState(id,state);
-    this.extensions.get(id)?.cancel?.(structuredClone(state.active),cause);
-    this.executor?.cancel('lifecycle:'+windowId);return this.view();
+    const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+    let afterCommit=()=>{};
+    try{
+      const write=()=>{
+        const state=this.state(id);if(state.active?.id!==windowId)throw new StoreError('Active lifecycle task not found',404);
+        const cause=options?.cause??'owner';state.cancelled=true;state.cancellationCause=cause;delete state.retryAt;this.saveState(id,state);
+        this.extensions.get(id)?.cancel?.(structuredClone(state.active),cause);
+        this.executor?.cancel('lifecycle:'+windowId);
+      };
+      if(this.executor)afterCommit=this.executor.deferLocalEffects(write);else write();
+      if(own)db.exec('COMMIT');
+    }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+    afterCommit();return this.view();
   }
   retry(id:LifecycleExtension['id'],windowId:string,prepare?:(window:LifecycleWindow)=>void){
     const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
