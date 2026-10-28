@@ -280,9 +280,9 @@ test('cancelling extraction or review fences late models and saves no memory or 
   let enter!:()=>void,release!:(value:ReturnType<typeof result>)=>void,signal:AbortSignal|undefined;
   const entered=new Promise<void>(r=>{enter=r;}),held=new Promise<ReturnType<typeof result>>(r=>{release=r;});
   const pipeline=new MemoryPipeline({store,memories,
-   ...(phase==='review'?{review:async()=>{enter();return held;}}:{}),models:{model:()=> 'fixture',configured:()=>true},phases:{
+   models:{model:()=> 'fixture',configured:()=>true},phases:{...(phase==='review'?{review:async()=>{enter();return held;}}:{}),
    query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return fixtureMemoryWorkResult(input,{...draft,answer:JSON.stringify(value)});}}});
-  const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;
+  const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);t.after(()=>pipeline.close());await Promise.race([entered,running.then(()=>assert.fail(phase+' completed without entering its selected callback'))]);
   pipeline.cancel(job.id);release(result(a.id));const done=await running;
   assert.equal(done.status,'cancelled');assert.equal(memories.list().length,0,phase+' saved a late candidate');
   assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
