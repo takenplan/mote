@@ -21,6 +21,7 @@ export function materialIndexRuntime(materials:MaterialStore,engine:ExecutionEng
 }
 export class MaterialIndexRuntime {
   private closed=false;
+  private closing?:Promise<void>;
   private unregister:()=>Promise<void>;
   constructor(readonly materials:MaterialStore,readonly engine:ExecutionEngine){
     this.unregister=engine.register({kind:KIND,pool:'material.index',concurrency:()=>2,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
@@ -94,5 +95,5 @@ export class MaterialIndexRuntime {
     const step=this.enqueue(row);if(this.engine.get(step)?.state!=='running')this.engine.retry(step,true);
     return this.materials.indexStatus(id);
   }
-  async close(){if(this.closed)return;this.closed=true;await this.unregister();}
+  close(){return this.closing??=(async()=>{this.closed=true;await this.unregister();})();}
 }

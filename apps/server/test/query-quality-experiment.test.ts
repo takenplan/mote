@@ -5,11 +5,13 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {AgentYieldError,type QueryInput} from '@mote/agent';
 import {runQueryQualityExperiment,type QueryQualityStrategy} from '../src/query-quality-experiment.js';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
-import {Store} from '../src/store.js';
+import {Store,StoreError} from '../src/store.js';
+import {ConfigService} from '../src/config-service.js';
 
 const result=(answer='Generated grounded answer')=>({answer,citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1 as const,complete:true,ids:[]}});
 const controls={} as NonNullable<QueryInput['hostControlChannel']>;
@@ -28,18 +30,39 @@ test('delegated readers are not recursively wrapped and yielded research does no
 });
 
 const config=(dataDir:string):Config=>({dataDir,token:'generated-quality-owner-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false});
-test('formal startup upgrades an existing source journal despite the previous invalid continuation trigger',async t=>{
- const directory=mkdtempSync(join(tmpdir(),'mote-quality-old-schema-')),cfg=config(directory),store=new Store(directory),nodes:Awaited<ReturnType<typeof buildApp>>[]=[];
- const start=async()=>{const node=await buildApp(cfg,{store,queryQualityExperiment:'base',backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async()=>result()}});nodes.push(node);await node.app.ready();return node;};
- t.after(async()=>{for(const node of nodes)await node.app.close();store.close();rmSync(directory,{recursive:true,force:true});});
- const first=await start();await first.app.close();
+for(const borrowed of [true,false])test(`formal startup rejects a retired source journal without mutation (${borrowed?'borrowed':'owned'} Store)`,async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-quality-retired-schema-')),cfg=config(directory),store=new Store(directory);let fixtureClosed=false;
+ const first=await buildApp(cfg,{store,queryQualityExperiment:'base',backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async()=>result()}});
+ t.after(async()=>{await first.app.close();if(!fixtureClosed)store.close();rmSync(directory,{recursive:true,force:true});});
+ await first.app.close();
  const sql=String(store.db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='activity_memory_continuation_update'").get()!.sql).replace('UPDATE activity_memory_items SET','UPDATE activity_memory_items AS i SET').replace('WHERE activity_memory_items.ref IN','WHERE i.ref IN');
  store.db.exec('DROP TRIGGER activity_memory_continuation_update');store.db.exec(sql);
  store.db.exec('DROP TABLE delegation_source_context_dependencies; CREATE TABLE delegation_source_context_dependencies(work_id TEXT NOT NULL REFERENCES delegation_works(id) ON DELETE CASCADE,unit_id TEXT NOT NULL,source_id TEXT NOT NULL,version INTEGER NOT NULL,fingerprint TEXT NOT NULL,PRIMARY KEY(work_id,unit_id,source_id,version,fingerprint))');
- const second=await start();assert.ok(store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all().some(row=>row.name==='kind'));
+ store.db.prepare('INSERT INTO delegation_works VALUES(?,?)').run('generated-retained-work','{"goal":"Generated retained work"}');
+ store.db.prepare('INSERT INTO delegation_source_context_dependencies VALUES(?,?,?,?,?)').run('generated-retained-work','','generated-source',7,'a'.repeat(64));
+ const snapshot=(value:Pick<Store,'db'>)=>({schema:value.db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name').all(),works:value.db.prepare('SELECT * FROM delegation_works ORDER BY id').all(),dependencies:value.db.prepare('SELECT * FROM delegation_source_context_dependencies').all()});
+ const before=snapshot(store);if(!borrowed){store.close();fixtureClosed=true;}
+ let closedStore:Store|undefined,configClosed=false,modelCreated=false;
+ const storeClose=Store.prototype.close,configClose=ConfigService.prototype.close;
+ t.mock.method(Store.prototype,'close',function(this:Store){closedStore=this;return storeClose.call(this);});
+ t.mock.method(ConfigService.prototype,'close',async function(this:ConfigService){await configClose.call(this);configClosed=true;});
+ await assert.rejects(buildApp(cfg,{...(borrowed?{store}:{}),queryQualityExperiment:'base',backgroundWorker:false,createModelAgent:async()=>{modelCreated=true;return {configured:true,close:async()=>{},query:async()=>result()};}}),error=>{
+  assert.ok(error instanceof StoreError);assert.equal(error.statusCode,409);assert.match(error.message,/unsupported delegation source-context schema/i);return true;
+ });
+ assert.equal(modelCreated,false,'rejection precedes model runtime construction');assert.equal(configClosed,true,'failed startup releases its configuration watcher');
+ if(borrowed){assert.equal(closedStore,undefined);assert.equal(store.db.prepare('SELECT 1 AS current').get()!.current,1,'the caller retains its borrowed Store');assert.deepEqual(snapshot(store),before);}
+ else {assert.ok(closedStore);assert.throws(()=>closedStore!.db.prepare('SELECT 1').get(),/not open/,'failed startup releases its owned Store');const reopened=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});try{const actual=snapshot({db:reopened}),journal=(value:typeof before)=>({...value,schema:value.schema.filter(row=>String(row.name).startsWith('delegation_')||row.name==='activity_memory_continuation_update')});assert.deepEqual(journal(actual),journal(before));}finally{reopened.close();}}
+});
+test('formal repeated current startup preserves the source journal and supports Ask HTTP',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-quality-current-schema-')),cfg=config(directory),store=new Store(directory),nodes:Awaited<ReturnType<typeof buildApp>>[]=[];
+ const start=async()=>{const node=await buildApp(cfg,{store,queryQualityExperiment:'base',backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async()=>result()}});nodes.push(node);await node.app.ready();return node;};
+ t.after(async()=>{for(const node of nodes)await node.app.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ const first=await start();await first.app.close();
+ const columns=store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all();assert.ok(columns.some(row=>row.name==='kind'));
+ const second=await start();assert.deepEqual(store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all(),columns);
  assert.ok(!String(store.db.prepare("SELECT sql FROM sqlite_master WHERE name='activity_memory_continuation_update'").get()!.sql).includes(' AS i SET'));
  store.db.exec('ALTER TABLE delegation_source_context_dependencies RENAME TO generated_dependency_rename; ALTER TABLE generated_dependency_rename RENAME TO delegation_source_context_dependencies');
- const answer=await second.app.inject({method:'POST',url:'/api/query',headers:{authorization:'Bearer '+cfg.token},payload:{question:'Generated recovered startup'}});assert.equal(answer.statusCode,200,answer.body);
+ const answer=await second.app.inject({method:'POST',url:'/api/query',headers:{authorization:'Bearer '+cfg.token},payload:{question:'Generated repeated current startup'}});assert.equal(answer.statusCode,200,answer.body);assert.equal(answer.json().answer,'Generated grounded answer');
 });
 for(const strategy of ['base','review','research-writer','both'] as QueryQualityStrategy[])test(`Ask HTTP ${strategy} continuation reports all operation fragments rather than the last model usage`,async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-quality-http-')),cfg=config(directory),calls:QueryInput[]=[];

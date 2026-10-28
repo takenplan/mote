@@ -1,3 +1,5 @@
+import {createServer} from 'node:http';
+import type {AddressInfo} from 'node:net';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -48,4 +50,21 @@ test('a standalone lookup records its deadline as failure and external cancellat
  assert.equal(row.state,'failed');assert.equal(row.error,'embedding_timeout');assert.equal(f.store.db.prepare('SELECT state FROM operation_progress WHERE id=?').get(row.operation_id)!.state,'failed');
  const controller=new AbortController(),pending=f.indexer.embed('Generated cancelled question',1000,controller.signal);controller.abort();await assert.rejects(pending);
  row=f.store.db.prepare("SELECT id,operation_id,state,error FROM execution_steps WHERE kind LIKE 'embedding.query.%' ORDER BY rowid DESC").get()!;assert.equal(row.state,'cancelled');assert.equal(row.error,'cancelled');
+});
+
+
+test('a module-only Indexer close drains real HTTP requests and leaves sibling execution available',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-indexer-http-close-')),store=new Store(directory,{embeddingEnabled:true}),engine=new ExecutionEngine(store),sources=new SourceStore(store);
+ const entered=deferred(),disconnected=deferred(),responses:Array<()=>void>=[];let requests=0,disconnections=0;const respond=()=>{for(const response of responses)response();};
+ const provider=createServer((_request,response)=>{responses.push(()=>response.end(JSON.stringify({data:[{embedding:[1,0]}]})));response.once('close',()=>{if(++disconnections===2)disconnected.resolve();});if(++requests===2)entered.resolve();});
+ await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const indexer=new Indexer(store,{...config,embeddingBaseUrl:`http://127.0.0.1:${(provider.address() as AddressInfo).port}`},undefined,undefined,undefined,{executor:engine});
+ t.after(async()=>{respond();await indexer.close();await engine.close();await new Promise<void>(resolve=>{provider.close(()=>resolve());provider.closeAllConnections();});store.close();rmSync(directory,{recursive:true,force:true});});
+ sources.register({id:'fixture-http',name:'Generated HTTP',kind:'custom',deviceId:'fixture',platform:'import'});
+ const record=await sources.upsert('fixture-http',{externalId:'one',revision:'1',observedAt:'2026-01-01T00:00:00Z',kind:'message',layer:'original',text:'Generated real HTTP embedding fixture'});
+ const running=indexer.tick(),query=assert.rejects(indexer.embed('Generated active query cancellation'));await entered.promise;const closing=indexer.close();assert.equal(indexer.close(),closing);await closing;await Promise.all([running,query]);await disconnected.promise;
+ respond();assert.equal(store.db.prepare('SELECT embedding FROM captures WHERE id=?').get(record.id)!.embedding,null);
+ let result=0;engine.register({kind:'fixture.indexer-sibling',pool:'fixture.indexer-sibling',concurrency:()=>1,validate:()=>true,execute:async()=>7,commit:(_step,value)=>{result=Number(value);}});
+ const id=engine.enqueue('fixture:indexer-sibling','fixture.indexer-sibling',{});await engine.drain([id]);assert.equal(result,7);
+ await assert.rejects(indexer.embed('Generated closed request'),/Indexer is closed/);
 });

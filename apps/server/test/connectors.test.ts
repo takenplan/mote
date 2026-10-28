@@ -587,3 +587,23 @@ test('MCP context pages every published memory under a small serialized budget',
  }
  assert.equal(cursor,undefined);assert.equal(seen.length,expected.size);assert.deepEqual(new Set(seen),expected);
 });
+
+
+test('connector initialization retains its cause and aggregates every failed cleanup',async t=>{
+ const {ctx}=await fixture(t),app=Fastify(),registry=new ConnectorRegistry(app,ctx),events:string[]=[];
+ t.after(()=>app.close());
+ const failure=Error('Generated init failure'),first=Error('Generated first close failure'),second=Error('Generated second close failure');
+ registry.register({apiVersion:1,id:'generated-first',sourceKinds:['custom'],create:()=>({close:()=>{events.push('first');throw first;}})});
+ registry.register({apiVersion:1,id:'generated-second',sourceKinds:['custom'],create:()=>({init:async()=>{throw failure;},close:()=>{events.push('second');throw second;}})});
+ await assert.rejects(registry.start(),(error:unknown)=>{assert.ok(error instanceof AggregateError);assert.equal(error.cause,failure);assert.equal(error.errors[0],failure);assert.ok(error.errors[1] instanceof AggregateError);assert.deepEqual(error.errors[1].errors,[second,first]);return true;});
+ assert.deepEqual(events,['second','first']);await assert.rejects(registry.close(),AggregateError);assert.deepEqual(events,['second','first']);
+});
+
+test('concurrent connector closes await the same in-progress transport shutdown',async t=>{
+ const {ctx}=await fixture(t),app=Fastify(),registry=new ConnectorRegistry(app,ctx);let release!:()=>void,closed=0;
+ const held=new Promise<void>(resolve=>release=resolve);t.after(async()=>{release();await registry.close();await app.close();});
+ registry.register({apiVersion:1,id:'generated-held',sourceKinds:['custom'],create:()=>({close:async()=>{closed++;await held;}})});await registry.start();
+ const closing=registry.close();assert.equal(registry.close(),closing);let settled=false;void closing.then(()=>settled=true);
+ await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(closed,1);
+ release();await closing;assert.equal(closed,1);
+});

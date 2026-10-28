@@ -54,7 +54,9 @@ const lanes=WORKFLOW_LANES;
 export class ProcessingRuntime {
   readonly registry=new ContextProcessorRegistry();readonly consumers=new MaterialConsumerRegistry();
   consumerAllowed:(sourceId:string,bindingId:string)=>boolean=()=>false;readonly context:Context;private readonly pluginScope:BackendPluginScope;
-  readonly ready:Promise<void>;readonly engine:ExecutionEngine;private owned:boolean;private stopping=false;
+  readonly ready:Promise<void>;readonly engine:ExecutionEngine;private owned:boolean;private stopping=false;private closing?:Promise<void>;
+  // Logical execution cancellation can finish before an async plugin returns.
+  private tasks=new Set<Promise<unknown>>();
   private unregister:Array<()=>Promise<void>>=[];private policy:WorkflowConfiguration;private policyEpoch=Object.fromEntries(WORKFLOW_LANES.map(lane=>[lane,0])) as Record<ProcessingLane,number>;
   constructor(readonly store:Store,plugins:Plugin[]=[],private limits:Partial<Record<ProcessingLane,{concurrency:number;enabled?:boolean}>>={},private now=Date.now,engine?:ExecutionEngine,private materials?:MaterialStore,root?:Context,private configService?:ConfigService){
     this.policy=workflowConfigurationSchema.parse(configService?.current('workflows')??defaultWorkflowConfiguration(limits));
@@ -67,7 +69,7 @@ export class ProcessingRuntime {
     if(materials)store.archive.enableMaterialLineage();
     this.engine=engine??new ExecutionEngine(store,now);this.owned=!engine;
     for(const lane of lanes)this.unregister.push(this.engine.register({kind:'context-dag.'+lane,pool:lane,concurrency:()=>this.settings()[lane].concurrency,
-      policy:lane==='semantic'?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,timeoutMs:lane==='semantic'?null:900000,validate:step=>this.valid(this.job(step.id)),admit:step=>this.admit(this.job(step.id)),execute:(step,signal)=>this.process(this.job(step.id),signal,step),commit:(step,result)=>this.commit(this.job(step.id),result),project:step=>this.project(step),
+      policy:lane==='semantic'?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,timeoutMs:lane==='semantic'?null:900000,validate:step=>this.valid(this.job(step.id)),admit:step=>this.admit(this.job(step.id)),execute:(step,signal)=>{const task=this.process(this.job(step.id),signal,step);this.tasks.add(task);void task.finally(()=>this.tasks.delete(task)).catch(()=>{});return task;},commit:(step,result)=>this.commit(this.job(step.id),result),project:step=>this.project(step),
       classify:error=>{const category=error instanceof ProcessingFailure?error.category:error instanceof z.ZodError?'permanent':error instanceof StoreError?(error.statusCode===409?'blocked':'permanent'):'permanent';return new ExecutionFailure(category,category);},
     }));
     this.unregister.push(this.engine.register({kind:'material-consumer.plan',pool:'material-consumer.plan',concurrency:()=>2,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
@@ -223,5 +225,13 @@ export class ProcessingRuntime {
     if(declarations)job.products=Object.fromEntries(outputs.map((output,index)=>[String(output.metadata.productKey),job.outputs[index]]));
     this.store.db.prepare('UPDATE processing_jobs SET json=? WHERE id=?').run(JSON.stringify(job),job.id);
   }
-  async close(){if(this.owned)await this.engine.close();this.stopping=true;await Promise.all(this.unregister.splice(0).map(stop=>stop()));await this.ready.catch(()=>{});await this.pluginScope.close();}
+  close(){return this.closing??=(async()=>{
+    this.stopping=true;await this.ready.catch(()=>{});
+    const stopped=await Promise.allSettled(this.unregister.splice(0).map(stop=>stop()));
+    const errors=stopped.flatMap(result=>result.status==='rejected'?[result.reason]:[]);
+    await Promise.allSettled([...this.tasks]);
+    try{if(this.owned)await this.engine.close();}catch(error){errors.push(error);}
+    try{await this.pluginScope.close();}catch(error){errors.push(error);}
+    if(errors.length)throw new AggregateError(errors,'Processing runtime disposal failed');
+  })();}
 }

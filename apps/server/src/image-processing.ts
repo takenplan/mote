@@ -39,7 +39,7 @@ import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configurat
 export class ImageProcessing {
  readonly engine:ExecutionEngine;readonly inputs:ImageInputRegistry;
  private unregister:Array<()=>Promise<void>>=[];private disposeInputs:()=>void;
- private attachments:ImageAttachmentIntake;private closed=false;private workerReady=false;private checkedAt=0;private probe?:Promise<void>;
+ private attachments:ImageAttachmentIntake;private closed=false;private closing?:Promise<void>;private workerReady=false;private checkedAt=0;private probe?:Promise<void>;
  private readonly processorAdmission:ProcessorAdmission;
  private prepareCursor=0;private readonly media:MediaRuntimeSettings;private savedSettings:PerceptionConfiguration;
  private previews=new Map<string,{expires:number;watermark:number;query:z.infer<typeof historicalSchema>;captureIds?:string[]}>();
@@ -404,5 +404,5 @@ export class ImageProcessing {
    }db.prepare('UPDATE image_backfills SET cursor=?,queued=queued+?,state=? WHERE id=?').run(rows.at(-1)?.position??batch.watermark,queued,rows.length<200?'succeeded':'waiting',batch.id);db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
   }
  }
- async close(){if(this.closed)return;this.closed=true;this.processing.imageControl=undefined;await this.attachments.close();await Promise.all(this.unregister.splice(0).map(dispose=>dispose()));this.disposeInputs();await this.probe;}
+ close(){return this.closing??=(async()=>{this.closed=true;this.processing.imageControl=undefined;await this.attachments.close();await Promise.all(this.unregister.splice(0).map(dispose=>dispose()));this.disposeInputs();await this.probe;})();}
 }

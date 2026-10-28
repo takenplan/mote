@@ -53,7 +53,7 @@ async function fixture(t:any,options:any={}){
  const instances:FileProcessing[]=[];const createProcessing=(executor?:ExecutionEngine)=>{const instance=new FileProcessing(files,{transcribe:async input=>{asrCalls++;return options.transcribe?options.transcribe(input):raw;}},async()=>{summaries++;throw Error('Unexpected cloud summary');},{executor,plugins:[plugin],analyze:options.analyze,diagnostics,configuration:instances.at(-1)?.configurationSnapshot()});instances.push(instance);return instance;};const processing=createProcessing();
  await processing.runtime.ready;
  processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true,audioProcessor:'audio.local-dialogue',diarizationProcessor:'fixture.diarize',speakerCount:2,summarize:false,...options.settings},policy:fixtureFilePolicy({...processing.view().settings,enabled:true,audioProcessor:'audio.local-dialogue',diarizationProcessor:'fixture.diarize',speakerCount:2,summarize:false,...options.settings},processing.runtime.registry)});
- t.after(async()=>{for(const instance of instances)await instance.close();await diagnostics.close();store.close();rmSync(dir,{recursive:true,force:true});});
+ t.after(async()=>{for(const instance of instances)await instance.close();await diagnostics.close();if(store.db.isOpen)store.close();rmSync(dir,{recursive:true,force:true});});
  return {dir,store,sources,files,processing,createProcessing,diagnostics,id:ack.id,counts:()=>({asrCalls,diaryCalls,summaries,disposed})};
 }
 
@@ -803,4 +803,48 @@ test('a failed summary page keeps successful file processing and its canonical f
  assert.equal(detail.job.state,'succeeded');assert.equal(detail.job.execution.status,'succeeded');assert.equal(detail.job.error,null);
  assert.equal(detail.job.summary_state,'failed');assert.equal(detail.job.summaryExecution.status,'failed');assert.equal(detail.job.summaryExecution.failure.code,'processing_limit');
  assert.ok(!detail.artifacts.some((artifact:any)=>artifact.kind==='summary'));await f.processing.tick();assert.equal(calls,1,'unchanged deterministic summary failure is not reopened');
+});
+
+
+for(const outcome of ['success','busy','failure'] as const)test(`closed file provider ${outcome} and late execution headers cannot touch the retired Store`,async t=>{
+ let entered!:()=>void,release!:()=>void;const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ let request:import('../src/file-processors.js').MediaRequestIdentity|undefined;
+ const f=await fixture(t,{settings:{localWorkerApiKey:'generated-held-provider-token'},transcribe:async(input:any)=>{
+   request=input.request;assert.ok(request);request!.onRequest();entered();await held;
+   request!.onExecutionFacts?.(true);assert.throws(()=>request!.onRequest(),/interrupted/);await assert.rejects(async()=>{for await(const _bytes of input.body){assert.fail('Closed provider cannot read original bytes');}});
+   if(outcome==='busy')throw new ProviderFailure({category:'transient',code:'rate_limited',executionStarted:false,retryAfterMs:5000});
+   if(outcome==='failure')throw new TypeError('Generated late provider failure');
+   return raw;
+ }});
+ t.after(()=>release());const running=f.processing.tick();await started;await f.processing.close();await running;
+ assert.equal(f.counts().disposed,false,'issued call retains its plugin resources after logical close');assert.throws(()=>f.processing.retry(f.id),/interrupted/);
+ const before=f.store.db.prepare('SELECT token,state FROM file_processor_waits').all();assert.equal(before.length,1);
+ f.store.close();let reads=0;const prepare=f.store.db.prepare;
+ t.mock.method(f.store.db,'prepare',function(this:typeof f.store.db,...args:Parameters<typeof prepare>){reads++;return prepare.apply(this,args);});
+ release();await f.processing.settle();await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(reads,0,'late success, failure, facts and admission must not access SQLite');assert.equal(f.counts().disposed,true);
+});
+
+
+test('a delayed recipe stage cannot invoke builtins against a Store retired after logical close',async t=>{
+ const f=await fixture(t);let entered!:()=>void,release!:()=>void;
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ t.after(()=>release());
+ f.processing.runtime.recipes.registerStage({id:'fixture.held-builtin',version:'1',async run(context){
+   entered();await held;
+   for(const operation of ['diarize','align','turns'] as const)await assert.rejects(context.builtin(operation),/interrupted/);
+   return 'generated-unpublished-stage-result';
+ }});
+ const recipe={id:'fixture.held-builtin-recipe',version:'1'};
+ f.processing.runtime.recipes.registerRecipe({...recipe,steps:[
+   {name:'extract',stage:{id:'mote.extract',version:'1'},dependsOn:[]},
+   {name:'diarize',stage:{id:'mote.diarize',version:'1'},dependsOn:['extract']},
+   {name:'align',stage:{id:'mote.align',version:'2'},dependsOn:['extract','diarize']},
+   {name:'held',stage:{id:'fixture.held-builtin',version:'1'},dependsOn:['extract','diarize','align']},
+ ],output:'held'});
+ f.processing.runtime.registry.get('audio.local-dialogue').recipe=recipe;f.processing.retry(f.id);
+ const running=f.processing.tick();await Promise.race([started,running.then(()=>assert.fail('Generated delayed recipe stage did not start'))]);
+ await f.processing.close();await running;assert.equal(f.counts().disposed,false);
+ f.store.close();let reads=0;const prepare=f.store.db.prepare;t.mock.method(f.store.db,'prepare',function(this:typeof f.store.db,...args:Parameters<typeof prepare>){reads++;return prepare.apply(this,args);});
+ release();await f.processing.settle();assert.equal(reads,0);assert.equal(f.counts().disposed,true);
 });

@@ -59,7 +59,9 @@ declare module '@deepseek-ai/cordis' {interface Context {moteSourcePipelines:Sou
  * There is one work row per logical group, never one SQL row per raw event. */
 export class SourcePipelineRuntime {
   readonly registry=new SourcePipelineRegistry();readonly recipes=new SourceRecipeExecutor();readonly context:Context;readonly archive:SourceArchive;private readonly pluginScope:BackendPluginScope;
-  readonly engine:ExecutionEngine;private readonly ownsEngine:boolean;private readonly unregisterHandler:()=>void;
+  readonly engine:ExecutionEngine;private readonly ownsEngine:boolean;private readonly unregisterHandler:()=>Promise<void>;private closing?:Promise<void>;private stopped=false;
+  // Engine cancellation fences publication before an uncooperative plugin exits.
+  private tasks=new Set<Promise<unknown>>();
   readonly memoryWork:MaterialMemoryWork;
   readonly ready:Promise<void>;
   private productConsumer?:{observeProducts:(ref:string,bindingIds:readonly string[])=>void};
@@ -77,7 +79,7 @@ export class SourcePipelineRuntime {
     this.unregisterHandler=this.engine.register({kind:STEP_KIND,pool:'source.archive',concurrency:()=>2,policy:EXECUTION_POLICIES.orchestration,
       resourceKeys:step=>[`source.archive:${(step.input as unknown as GroupInput).workId}`],
       validate:step=>this.validWork(step),admit:step=>this.admitWork(step),
-      execute:(step,signal)=>this.organizeGroup(step,signal),commit:(step,result)=>this.publishGroup(step,result as PreparedGroup),
+      execute:(step,signal)=>{const task=this.organizeGroup(step,signal);this.tasks.add(task);void task.finally(()=>this.tasks.delete(task)).catch(()=>{});return task;},commit:(step,result)=>this.publishGroup(step,result as PreparedGroup),
       project:step=>this.projectWork(step),classify:()=>new ExecutionFailure('permanent','organization_failed')});
     const pluginScope=this.pluginScope;
     this.ready=(async()=>{for(const plugin of plugins)await pluginScope.install(plugin);})();
@@ -255,6 +257,7 @@ export class SourcePipelineRuntime {
     }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   async tick(limit=10){
+    if(this.stopped)return 0;
     const db=this.store.db,superseded:string[]=[];
     db.exec('BEGIN IMMEDIATE');
     let rows:WorkRow[]=[];
@@ -381,7 +384,7 @@ export class SourcePipelineRuntime {
     this.archive.forget(sourceId);return {erased:true,sourcePaused:true};
   }
   status(){return {pipelines:this.registry.list(),work:this.store.db.prepare('SELECT state,count(*) count FROM source_pipeline_work GROUP BY state').all()};}
-  async close(){await this.ready.catch(()=>{});if(this.ownsEngine)await this.engine.close();this.unregisterHandler();await this.pluginScope.close();}
+  close(){return this.closing??=(async()=>{this.stopped=true;await this.ready.catch(()=>{});try{await this.unregisterHandler();await Promise.allSettled([...this.tasks]);}finally{try{if(this.ownsEngine)await this.engine.close();}finally{await this.pluginScope.close();}}})();}
 }
 
 const configuration=z.object({pipelineId:z.string().regex(/^[a-z0-9.-]+$/).optional(),index:z.boolean().optional(),memoryDependencies:z.array(z.string().regex(/^[a-z0-9][a-z0-9._/-]*$/).max(128)).min(1).max(16).optional(),consumers:z.array(z.string().regex(/^[a-zA-Z0-9_.-]{1,100}$/)).max(32).refine(values=>new Set(values).size===values.length).default([]),settleSeconds:z.number().int().min(0).max(86400).default(300)}).strict();

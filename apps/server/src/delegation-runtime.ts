@@ -61,6 +61,12 @@ export const DELEGATION_CONTROL_DEFINITIONS:readonly HostControlDefinition[]=Obj
  definition('delegation_yield','Save an optional bounded query workspace atomically with the wait, then release this fragment until executable children finish. Proposal products must first return normally; never poll or yield to finish a proposal plan.',{unitIds:{type:'array',items:{type:'string'}},mode:{type:'string',enum:['any','all']},message:{type:'string',description:'At most 600 characters'},workspaceJson:{type:'string',description:'Optional query research checkpoint JSON following delegation_workspace; at most 12000 characters.'}}),
 ]);
 
+/** Reject retired storage before startup creates runtimes or rewrites derived indexes. */
+export function assertCurrentDelegationSchema(store:Store):void {
+ const columns=store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all();
+ if(columns.length&&!columns.some(row=>row.name==='kind'))throw new StoreError('Unsupported delegation source-context schema; existing data was not changed',409);
+}
+
 /** One-level delegation built on the existing lease/fence scheduler. The model
  * chooses strategy; the host owns bounds, identity, state and durable wakeups. */
 export class DelegationRuntime {
@@ -71,8 +77,7 @@ export class DelegationRuntime {
  private timer?:ReturnType<typeof setInterval>;
  private closed=false;
  constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean;observePump?:()=>void}={}){
-  const sourceDependencyColumns=store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all();
-  if(sourceDependencyColumns.length&&!sourceDependencyColumns.some(row=>row.name==='kind'))throw new StoreError('Unsupported delegation source-context schema; existing data was not changed',409);
+  assertCurrentDelegationSchema(store);
   this.journal=new DelegationStore(store);
   const sourceDependencyTable=`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
     work_id TEXT NOT NULL REFERENCES delegation_works(id) ON DELETE CASCADE,unit_id TEXT NOT NULL,
