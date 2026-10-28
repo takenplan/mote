@@ -7,7 +7,8 @@ import {resources} from './resource-cache';
 import {useOperationUpdates} from './useOperationUpdates';
 import { getLocale, moteText, cjkLocale } from '@mote/shared/i18n';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {ApiError,type Api,type Capture,bytes,dateTime,errorMessage} from './api';
+import {type Api,type Capture,bytes,dateTime,errorMessage} from './api';
+import {archivePageWithdrawn,currentArchivePages,mergeArchivePage,reconcileArchivePages,type ArchivePage,type ArchivePages} from './archive-pages';
 import {FileReview} from './FileReview';
 import {AnswerMarkdown} from './AnswerMarkdown';
 import {FileProcessingControls} from './FileProcessingControls';
@@ -19,14 +20,14 @@ const filePosition=(startMs:number)=>{const seconds=Math.floor(startMs/1000);ret
 
 export function Files({api,onOpen}:{api:Api;onOpen:(id:string)=>void}){
  const [query,setQuery]=useState(''),[sourceId,setSourceId]=useState(''),[mimePrefix,setMimePrefix]=useState('');
- const [applied,setApplied]=useState({query:'',sourceId:'',mimePrefix:''}),[pages,setPages]=useState<{api:Api;scope:string;cursor:string;previous:FileRow[]}>();
- const listScope=JSON.stringify(applied),currentPages=pages?.api===api&&pages.scope===listScope?pages:undefined,cursor=currentPages?.cursor;
+ const [applied,setApplied]=useState({query:'',sourceId:'',mimePrefix:''}),[pages,setPages]=useState<ArchivePages<FileRow>>();
+ const listScope=JSON.stringify(applied),currentPages=currentArchivePages(pages,api,listScope),cursor=currentPages?.cursor;
  const path='/api/files?'+new URLSearchParams({query:applied.query,...(applied.sourceId?{sourceId:applied.sourceId}:{}),...(applied.mimePrefix?{mimePrefix:applied.mimePrefix}:{}),...(cursor?{cursor}:{})});
- const page=useResource<{items:FileRow[];nextCursor:string|null}>(api,path),sourceList=useResource<{items:{id:string;name:string;deviceId:string}[]}>(api,'/api/sources');
+ const page=useResource<ArchivePage<FileRow>>(api,path),sourceList=useResource<{items:{id:string;name:string;deviceId:string}[]}>(api,'/api/sources');
  useOperationUpdates(api);
- const withdrawn=page.error instanceof ApiError&&[401,403,404,410].includes(page.error.status),previous=withdrawn?[]:currentPages?.previous??[];
- useEffect(()=>{setPages(value=>!value?value:value.api!==api||value.scope!==listScope?undefined:withdrawn?{...value,previous:[]}:value);},[api,listScope,withdrawn]);
- const items=[...previous,...(page.data?.items??[]).filter(item=>!previous.some(old=>old.captureId===item.captureId))],nextCursor=page.data?.nextCursor,sources=sourceList.data?.items??[],busy=page.loading;
+ const withdrawn=archivePageWithdrawn(page.error);
+ useEffect(()=>{setPages(value=>reconcileArchivePages(value,api,listScope,withdrawn));},[api,listScope,withdrawn]);
+ const items=mergeArchivePage(currentPages,page.data?.items??[],withdrawn),nextCursor=page.data?.nextCursor,sources=sourceList.data?.items??[],busy=page.loading;
  const error=page.error?errorMessage(page.error):sourceList.error?errorMessage(sourceList.error):'';
  function load(more=false){if(more){if(busy||!nextCursor)return;setPages({api,scope:listScope,previous:items,cursor:nextCursor});}else{setApplied({query,sourceId,mimePrefix});setPages(undefined);resources(api).invalidate(key=>key.startsWith('/api/files?'));}}
 

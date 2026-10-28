@@ -35,6 +35,44 @@ function apiWith(view:View,read:(path:string,init?:RequestInit)=>unknown,withSou
  }} as Api;}
 
 for(const view of ['sources','files'] as const){
+ test(view+' overlapping cursor pages retain first-seen records and continue once while a page is pending',async t=>{
+  const f=await fixture(t,view),last=deferred(),paths:string[]=[],overlap=row(view,'A');
+  if(overlap.item)overlap.item.title='Generated overlapping replacement';else overlap.title='Generated overlapping replacement';
+  const api=apiWith(view,path=>{paths.push(path);return path.includes('cursor=last')?last.promise:path.includes('cursor=older')?{items:[overlap,row(view,'B')],nextCursor:'last'}:page(view,'A','older');});
+  await f.render(api);await act(async()=>f.next().click());
+  assert.deepEqual(f.rows().map(row=>row.querySelector('strong')!.textContent),['Generated A','Generated B']);
+  await act(async()=>{f.next().click();f.next().click();});
+  assert.equal(paths.filter(path=>path.includes('cursor=last')).length,1,'two clicks cannot dispatch duplicate cursor reads');
+  await act(async()=>last.resolve({items:[row(view,'B'),row(view,'C')],nextCursor:null}));
+  assert.deepEqual(f.rows().map(row=>row.querySelector('strong')!.textContent),['Generated A','Generated B','Generated C']);
+  assert.equal(f.next(),undefined,'the null continuation ends the accumulated list');
+ });
+
+ test(view+' background refresh keeps accumulated row identity, focus and local browsing drafts',async t=>{
+  const f=await fixture(t,view),pending=deferred(),paths:string[]=[];let refreshing=false;
+  const api=apiWith(view,path=>{paths.push(path);return path.includes('cursor=older')?(refreshing?pending.promise:page(view,'B')):page(view,'A','older');},true),read=api.request;
+  api.request=async(path,init)=>path.includes('/history?')?{items:[row(view,'Historical')]} as any:read(path,init);
+  await f.render(api);await act(async()=>f.next().click());const rows=f.rows();assert.equal(rows.length,2);
+  let focused:HTMLElement,historyPanel:Element|null=null;
+  if(view==='files'){
+   const select=f.d.querySelector<HTMLSelectElement>('[aria-label="文件来源"]')!;
+   await act(async()=>{select.value='generated-filter';select.dispatchEvent(new window.Event('change',{bubbles:true}));});
+   focused=select;
+  }else{
+   const history=rows[0].querySelectorAll('button')[1];await act(async()=>history.click());
+   historyPanel=f.d.querySelector('.source-history');assert.ok(historyPanel);focused=history;
+  }
+  focused.focus();assert.equal(f.d.activeElement,focused);
+  refreshing=true;await act(async()=>resources(api).invalidate(path=>path.startsWith(prefix(view))&&path.includes('cursor=older')));
+  assert.deepEqual(f.rows(),rows);assert.equal(f.d.activeElement,focused);
+  await act(async()=>pending.resolve(page(view,'B')));
+  assert.deepEqual(f.rows(),rows);assert.equal(f.d.activeElement,focused);
+  if(view==='files'){
+   assert.equal((focused as HTMLSelectElement).value,'generated-filter','the unapplied file filter draft survives refresh');
+   assert.ok(paths.every(path=>!path.includes('sourceId=generated-filter')),'background reads stay on the applied filter');
+  }else{assert.equal(f.d.querySelector('.source-history'),historyPanel,'the opened version history stays selected');assert.equal(historyPanel!.querySelectorAll('p').length,1);}
+ });
+
  for(const status of [401,403,404,410])test(view+' copied pages are withdrawn after '+status+' and do not return on a same-revision retry',async t=>{
   const f=await fixture(t,view);let denied=false;
   const api=apiWith(view,path=>{if(denied)throw new ApiError('Generated revoked archive',status);return path.includes('cursor=older')?page(view,'B'):page(view,'A','older');});
