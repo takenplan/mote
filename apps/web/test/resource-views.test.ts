@@ -82,8 +82,8 @@ test('manual consolidation uses one fresh selected card and feature default, nev
 test('a concurrent correction between the selected-card GET and POST cannot silently become the integration input',async t=>{
  const {root,document:d}=await fixture(t),db=new DatabaseSync(':memory:');t.after(()=>db.close());
  const selected={...memory(ids[0]),version:2,fingerprint:'a'.repeat(64),admission:{layer:'memory'}},changed={...selected,title:'Generated owner correction',version:3,fingerprint:'b'.repeat(64)};
- let current=selected,queued=0,race=true;const writes:any[]=[];
- const lifecycle={request:()=>{assert.equal(db.isTransaction,true);queued++;return ids[1];}},memories={store:{db},get:()=>current},pipeline={strategies:{resolveIntegration:()=>({binding:{}})},assertNewManualWork:()=>{},assertAdmissibleEvidence:()=>{},modelSnapshot:()=>({model:'generated-model'})};
+ let current=selected,queued=0,race=true;const writes:any[]=[],admissions:string[][]=[];
+ const lifecycle={request:()=>{assert.equal(db.isTransaction,true);queued++;return ids[1];}},memories={store:{db},get:()=>current},pipeline={strategies:{resolveIntegration:()=>({binding:{}})},assertNewManualWork:()=>{},inputs:{assert:(evidenceIds:string[])=>{assert.equal(db.isTransaction,true);admissions.push([...evidenceIds]);}},modelSnapshot:()=>({model:'generated-model'})};
  const api=apiWith((path,init)=>{
   if(path==='/api/memory-settings')return {settings:{consolidation:{enabled:false,maxItems:3}},extensions:[{id:'consolidation',status:'pending',failures:0}]};
   if(path==='/api/memory-integration-recipes')return {items:[{id:'mote.memory-integration',version:'2',available:true}]};
@@ -96,9 +96,9 @@ test('a concurrent correction between the selected-card GET and POST cannot sile
  });
  await act(async()=>root.render(React.createElement(MemoryIntegration,{api,candidate:selected})));
  const start=()=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent==='整理这条记忆')!;
- await act(async()=>start().click());assert.deepEqual(writes[0].inputs,[{id:selected.id,version:selected.version,fingerprint:selected.fingerprint}]);assert.equal(queued,0);assert.equal(db.isTransaction,false);assert.match(d.body.textContent!,/所选记忆已变化/);
+ await act(async()=>start().click());assert.deepEqual(writes[0].inputs,[{id:selected.id,version:selected.version,fingerprint:selected.fingerprint}]);assert.equal(queued,0);assert.deepEqual(admissions,[],'a concurrently replaced selection cannot reach input admission');assert.equal(db.isTransaction,false);assert.match(d.body.textContent!,/所选记忆已变化/);
  await act(async()=>root.render(React.createElement(MemoryIntegration,{api,candidate:changed})));
- await act(async()=>start().click());assert.equal(queued,1);assert.deepEqual(writes[1].inputs,[{id:changed.id,version:changed.version,fingerprint:changed.fingerprint}]);assert.equal(db.isTransaction,false);
+ await act(async()=>start().click());assert.equal(queued,1);assert.deepEqual(writes[1].inputs,[{id:changed.id,version:changed.version,fingerprint:changed.fingerprint}]);assert.deepEqual(admissions,[changed.evidenceIds],'only the fresh current selection reaches the input admission port');assert.equal(db.isTransaction,false);
 });
 test('cancelled consolidation hides its obsolete failure code while failed and retry-wait retain diagnostics',async t=>{
  const {root,document:d}=await fixture(t);let status='failed';
