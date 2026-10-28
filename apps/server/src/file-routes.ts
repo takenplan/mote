@@ -30,7 +30,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   };
   app.addContentTypeParser('application/octet-stream',{parseAs:'buffer',bodyLimit:FILE_PART_BYTES},(_req,body,done)=>done(null,body));
   app.get('/api/file-sync/v1/capabilities',async()=>files.capabilities());
-  app.get('/api/file-sync/v1/head',async req=>{const q=z.object({sourceId:z.string().min(1).max(128),externalId:z.string().min(1).max(1000)}).strict().parse(req.query);authorize(req,q.sourceId);return {revision:files.sources.getItem(q.sourceId,q.externalId)?.revision??null,forgotten:!!files.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(q.sourceId,q.externalId)};});
+  app.get('/api/file-sync/v1/head',async req=>{const q=z.object({sourceId:z.string().min(1).max(128),externalId:z.string().min(1).max(1000)}).strict().parse(req.query);authorize(req,q.sourceId);return files.syncHead(q.sourceId,q.externalId);});
   app.get('/api/file-sync/v1/recovery',async req=>{const q=z.object({sourceId:z.string().min(1).max(128)}).strict().parse(req.query);authorize(req,q.sourceId);return files.snapshotRecovery(q.sourceId);});
   app.post('/api/file-sync/v1/recovery/:id/uploads',{bodyLimit:1024},async req=>{z.object({}).strict().parse(req.body??{});return ingress.fileRecovery(fileId(req),check(req));});
   app.post('/api/file-sync/v1/manifests',{bodyLimit:8*1024*1024},async req=>measure('file_revision',()=>ingress.fileManifests(req.body,check(req))));
@@ -63,7 +63,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   // Owner-only routes are excluded from the collector route allowlist.
   app.post('/api/records/:id/attachments/:attachmentId/processing',{bodyLimit:1024},async req=>attachments.prepare(id(req),(req.params as {attachmentId:string}).attachmentId,req.body,check(req)));
   app.delete('/api/files/:id',async req=>files.forget(fileId(req)));
-  app.post('/api/files/:id/allow-again',async req=>{const q=z.object({sourceId:z.string(),externalId:z.string()}).strict().parse(req.body);files.store.db.prepare('DELETE FROM file_forgotten WHERE source_id=? AND external_id=?').run(q.sourceId,q.externalId);return {allowed:true};});
+  app.post('/api/files/:id/allow-again',async req=>{const q=z.object({sourceId:z.string(),externalId:z.string()}).strict().parse(req.body);return files.allowAgain(q.sourceId,q.externalId);});
   app.post('/api/files/:id/cancel',async req=>{if(device(req))throw new StoreError('Owner access required',403);z.object({}).strict().parse(req.body??{});file(req);return processing.cancel(fileId(req));});
   app.post('/api/files/:id/retry',async req=>{if(device(req))throw new StoreError('Owner access required',403);const q=z.object({stage:z.enum(['transcribe','diarize','summary']).default('transcribe'),confirmUnknown:z.boolean().default(false),diarization:z.object({artifactId:z.string().uuid(),options:fileDiarizationOptionsSchema.nullable()}).strict().optional()}).strict().parse(req.body??{});file(req);return withOwnerIntent(fileId(req),()=>processing.retry(fileId(req),q.stage,false,q.confirmUnknown,q.diarization));});
   app.get('/api/files/:id/export',async(req,reply)=>{file(req);return reply.header('Content-Disposition',`attachment; filename="mote-recording-${fileId(req)}.tar.gz"`).type('application/gzip').send(exportTar(fileExportEntries(files,fileId(req))));});

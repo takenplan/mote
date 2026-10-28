@@ -11,6 +11,7 @@ import {isStateExtension,samples as stateSamples} from '@mote/shared/state-serie
 import { moteText } from './i18n.js';
 import {textSearch} from './text-search.js';
 import {fileSchema} from './file-schema.js';
+import {sourceSchema} from './source-schema.js';
 import {systemEventText,sourceContentTime,resolveFileRule,type FilePolicy} from '@mote/shared';
 import {MemoryDeletions} from './memory-deletions.js';
 import {notificationEvidenceText} from './notification-evidence.js';
@@ -105,12 +106,8 @@ export class EvidenceStore {
       CREATE TABLE IF NOT EXISTS changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, operation TEXT NOT NULL, changed_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS changes_entity_operation ON changes(id,operation);
       CREATE TABLE IF NOT EXISTS capture_ocr_receipts (id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE, original_fingerprint TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS source_connections (id TEXT PRIMARY KEY,json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS source_versions (source_id TEXT NOT NULL,external_id TEXT NOT NULL,revision TEXT NOT NULL,capture_id TEXT NOT NULL UNIQUE,hash TEXT NOT NULL,PRIMARY KEY(source_id,external_id,revision));
       CREATE TABLE IF NOT EXISTS file_evidence_links(parent_id TEXT NOT NULL,capture_id TEXT NOT NULL,PRIMARY KEY(parent_id,capture_id));
       CREATE INDEX IF NOT EXISTS file_evidence_links_capture ON file_evidence_links(capture_id,parent_id);
-      CREATE TABLE IF NOT EXISTS source_heads (source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL,observed_at TEXT NOT NULL,deleted INTEGER NOT NULL,PRIMARY KEY(source_id,external_id));
-      CREATE INDEX IF NOT EXISTS source_head_capture ON source_heads(capture_id);
       CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS memory_provider_evidence_revocations(id TEXT PRIMARY KEY,generation INTEGER NOT NULL,json TEXT NOT NULL,state TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS memory_dependencies (memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,evidence_id TEXT NOT NULL,PRIMARY KEY(memory_id,evidence_id));
@@ -125,6 +122,8 @@ export class EvidenceStore {
       CREATE VIRTUAL TABLE IF NOT EXISTS captures_fts USING fts5(id UNINDEXED, text, tokenize='unicode61');
       PRAGMA user_version=4;`);
     this.db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('backend_epoch','4')").run();
+    // Captures precede source identities; file versions and catalog triggers depend on both.
+    sourceSchema(this.db);
     fileSchema(this.db);
     // Materialized browsing projection: album navigation never reads OCR/metadata JSON or blobs.
     this.db.exec(`
@@ -671,19 +670,28 @@ export class EvidenceStore {
     if(Buffer.byteLength(JSON.stringify(archive))>maxBytes)throw new StoreError('Expanded archive exceeds the export limit; use npm run backup',413);
     return archive;
   }
+  /** SQL-only participant in the caller's deletion transaction. All visibility,
+   * lineage and provider revocation outbox changes commit or roll back together. */
+  deleteInTransaction(id:string) {
+    if(!this.db.isTransaction)throw new StoreError('Evidence deletion requires a transaction');
+    // Resolve lineage before capture cascades erase its formal anchors.
+    if(this.db.prepare('SELECT 1 FROM captures WHERE id=?').get(id))this.invalidateMemoryEvidence(id,true);
+    const result=this.db.prepare('DELETE FROM captures WHERE id=?').run(id);this.db.prepare('DELETE FROM captures_fts WHERE rowid=(SELECT rowid FROM captures WHERE id=?)').run(id);
+    if(result.changes)this.db.prepare('INSERT INTO changes(id,operation,changed_at) VALUES(?,?,?)').run(id,'delete',new Date().toISOString());
+    if(result.changes)this.db.prepare('UPDATE source_heads SET deleted=1 WHERE capture_id=?').run(id);
+    return {deleted:Number(result.changes)};
+  }
+  /** Physical reclamation is allowed only after the deletion transaction commits. */
+  collectDeletedEvidence() {
+    if(this.db.isTransaction)throw new StoreError('Evidence collection requires a committed transaction');
+    this.sweep();this.archive.collect();
+  }
   delete(id:string) {
     this.db.exec('BEGIN IMMEDIATE');
-    try {
-      // Resolve lineage while formal anchors still exist. Deleting the capture
-      // cascades through materials and would otherwise erase these links before
-      // their Memory, checkpoint and private draft dependents can be revoked.
-      if(this.db.prepare('SELECT 1 FROM captures WHERE id=?').get(id))this.invalidateMemoryEvidence(id,true);
-      const result=this.db.prepare('DELETE FROM captures WHERE id=?').run(id);this.db.prepare('DELETE FROM captures_fts WHERE rowid=(SELECT rowid FROM captures WHERE id=?)').run(id);
-      if(result.changes)this.db.prepare('INSERT INTO changes(id,operation,changed_at) VALUES(?,?,?)').run(id,'delete',new Date().toISOString());
-      // Derived retrospectives can refer to removed evidence; invalidate, rather than retain stale personal facts.
-      if(result.changes)this.db.prepare('UPDATE source_heads SET deleted=1 WHERE capture_id=?').run(id);
-      this.db.exec('COMMIT');this.sweep();this.archive.collect();return {deleted:Number(result.changes)};
-    }catch(e){this.db.exec('ROLLBACK');throw e;}
+    let result:{deleted:number};
+    try{result=this.deleteInTransaction(id);this.db.exec('COMMIT');}
+    catch(error){if(this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}
+    this.collectDeletedEvidence();return result;
   }
   prune(before:string) {
     this.db.exec('BEGIN IMMEDIATE');
