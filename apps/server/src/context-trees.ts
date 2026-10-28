@@ -1,12 +1,13 @@
 import {z} from 'zod';
-import {AutomaticTopics} from './automatic-topics.js';
+import {AutomaticTopics,type TopicMemoryRead} from './automatic-topics.js';
 import type {Store} from './store.js';
 import {moteText} from './i18n.js';
 import type {FastifyInstance} from 'fastify';
-import type {EvidenceReader} from './evidence-reader.js';
+import type {MemoryRead,MemoryReadSnapshots} from './evidence-read-ports.js';
 import type {Memory} from './memory-schema.js';
 import {navigationScopeSchema} from './context-navigation.js';
 import {StoreError,sha256} from './store.js';
+type TreeMemoryRead=Pick<MemoryRead,'memoryPageAsync'> & Pick<MemoryReadSnapshots,'memoryBindings'>;
 
 const identity=z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/);
 const selector=z.object({domain:z.enum(['personal','coding']).optional(),kind:z.enum(['episodic','semantic','procedural']).optional(),codingKind:z.enum(['pitfall','decision','principle','preference']).optional(),memoryIds:z.array(z.string().uuid()).max(20000).optional()}).strict();
@@ -22,7 +23,7 @@ export class ContextTreeRegistry {
   private readonly trees=new Map<string,ContextTree>();
   private revision=0;
   automatic?:AutomaticTopics;
-  initializeAutomatic(store:Store,reader:EvidenceReader){return this.automatic??=new AutomaticTopics(store,reader);}
+  initializeAutomatic(store:Store,reader:TopicMemoryRead){return this.automatic??=new AutomaticTopics(store,reader);}
   register(raw:ContextTree){
     const tree=treeSchema.parse(raw);if(tree.id.startsWith('auto.'))throw new StoreError('Automatic topic namespace is reserved');const ids=new Set(tree.nodes.map(node=>node.id));
     if(this.trees.has(tree.id)||ids.size!==tree.nodes.length)throw new StoreError('Duplicate context tree identity');
@@ -34,7 +35,7 @@ export class ContextTreeRegistry {
     return ()=>{if(!removed){removed=true;this.trees.delete(tree.id);this.revision++;}};
   }
   async catalog(){return {classification:this.automatic?.state()??{state:'unavailable'},items:[...(await this.automatic?.trees()??[]),...this.trees.values()].map(tree=>({...tree,label:moteText(tree.label),nodes:tree.nodes.map(({select:_,...node})=>({...node,label:moteText(node.label)}))}))};}
-  async page(reader:EvidenceReader,treeId:string,nodeId:string,raw:unknown,ownerArchive=true){
+  async page(reader:TreeMemoryRead,treeId:string,nodeId:string,raw:unknown,ownerArchive=true){
     const automatic=treeId.startsWith('auto.');
     const tree=automatic?(await this.automatic?.trees())?.find(tree=>tree.id===treeId):this.trees.get(treeId),node=tree?.nodes.find(value=>value.id===nodeId);
     if(!tree||!node)throw new StoreError('Context tree node not found',404);
@@ -74,7 +75,7 @@ export function createContextTrees(){
   registry.register({id:'use',version:'1',label:'使用场景',nodes:[{id:'personal',label:'个人助理',select:{domain:'personal'}},{id:'coding',label:'Coding Agent',select:{domain:'coding'}}]});
   return registry;
 }
-export function registerContextTreeRoutes(app:FastifyInstance,reader:EvidenceReader,trees:ContextTreeRegistry){
+export function registerContextTreeRoutes(app:FastifyInstance,reader:TreeMemoryRead,trees:ContextTreeRegistry){
   app.get('/api/context-trees',async()=>trees.catalog());
   app.get('/api/context-trees/:treeId/nodes/:nodeId',async req=>{const {treeId,nodeId}=z.object({treeId:identity,nodeId:identity}).parse(req.params);return trees.page(reader,treeId,nodeId,req.query);});
 }

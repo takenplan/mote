@@ -1,4 +1,4 @@
-import type {EvidenceReader} from './evidence-reader.js';
+import type {MaterialRead} from './evidence-read-ports.js';
 import {createHash} from 'node:crypto';
 import type {InsightSnapshot} from '@mote/shared';
 import type {Store} from './store.js';
@@ -7,7 +7,7 @@ const current="(NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=c.
 function selection(scope:Scope){return {where:current+(scope.after?' AND c.context_end>=?':'')+(scope.before?" AND (c.context_at<? OR (json_extract(c.json,'$.source') IN ('screen','activity') AND (unixepoch(c.captured_at,'subsec')*1000-json_extract(c.json,'$.durationMs')<? OR EXISTS(SELECT 1 FROM json_each(c.json,'$.stateSeries.samples') sample WHERE unixepoch(json_extract(sample.value,'$.at'),'subsec')*1000-json_extract(sample.value,'$.durationMs')<?))))":'')+(scope.deviceId?' AND c.device_id=?':''),args:[...(scope.after?[scope.after]:[]),...(scope.before?[scope.before,Date.parse(scope.before),Date.parse(scope.before)]:[]),...(scope.deviceId?[scope.deviceId]:[])]};}
 /** Start-of-run provenance for later report versions, never a commit fence.
  * No original prose, screenshots, credentials or inferred categories enter it. */
-function evidenceFingerprint(store:Store,scope:Scope,reader?:Pick<EvidenceReader,'materialCatalog'>){
+function evidenceFingerprint(store:Store,scope:Scope,reader?:Pick<MaterialRead,'materialCatalog'>){
  const {where,args}=selection(scope),hash=createHash('sha256');let records=0,referenceOnlyRecords=0,pendingProcessing=0;
  for(const row of store.db.prepare(`SELECT c.id,c.fingerprint,c.context_at,c.context_end,json_extract(c.json,'$.stateSeries.samples') samples,CASE WHEN json_type(c.json,'$.stateSeries') IS NOT NULL THEN json_remove(c.json,'$.stateSeries') END state,json_extract(c.json,'$.provenance.layer') layer,
   (SELECT group_concat(id,',') FROM (SELECT id FROM perception_results WHERE capture_id=c.id AND kind='ocr' AND current=1 ORDER BY id)) perception,
@@ -47,7 +47,7 @@ function measuredCoverage(store:Store,scope:Scope):InsightSnapshot['coverage']['
  for(const row of rows){const at=Date.parse(String(row.at)),start=Math.max(lower,at-Number(row.duration)),finish=Math.min(upper,at);if(finish<=start)continue;observedDurationMs+=Math.max(0,finish-Math.max(start,end));end=Math.max(end,finish);}
  return {observedDurationMs,deviceDurationMs:activity.totalDurationMs,overlapDurationMs:Math.max(0,activity.totalDurationMs-observedDurationMs),unobservedDurationMs:Number.isFinite(lower)&&Number.isFinite(upper)?Math.max(0,upper-lower-observedDurationMs):null,accounting:'union_across_devices',coverage:'observed_intervals_only'};
 }
-export function createInsightSnapshot(store:Store,id:string,input:Scope&{prompt?:string},reader?:Pick<EvidenceReader,'materialCatalog'>):InsightSnapshot{
+export function createInsightSnapshot(store:Store,id:string,input:Scope&{prompt?:string},reader?:Pick<MaterialRead,'materialCatalog'>):InsightSnapshot{
  const asOf=new Date().toISOString(),scope={...(input.after?{after:new Date(input.after).toISOString()}:{}),before:input.before?new Date(input.before).toISOString():asOf,...(input.deviceId?{deviceId:input.deviceId}:{}),timeZone:input.timeZone??'UTC'};
  const seriesId=createHash('sha256').update(JSON.stringify([input.after??null,input.before??null,input.deviceId??null,input.timeZone??'UTC',input.prompt??''])).digest('hex');
  const previous=store.db.prepare("SELECT id,json_extract(json,'$.snapshot.version') version FROM insight_runs WHERE json_extract(json,'$.snapshot.seriesId')=? ORDER BY CAST(json_extract(json,'$.snapshot.version') AS INTEGER) DESC LIMIT 1").get(seriesId);

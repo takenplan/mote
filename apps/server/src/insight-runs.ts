@@ -1,4 +1,4 @@
-import type {EvidenceReader} from './evidence-reader.js';
+import type {MaterialRead} from './evidence-read-ports.js';
 import {ProviderFailure} from '@mote/shared';
 import { moteText } from './i18n.js';
 import {createHash} from 'node:crypto';
@@ -22,7 +22,7 @@ export interface InsightRun {
 export class InsightRuns {
   private execution:RunExecution;
   private commitGuards=new Map<string,()=>void>();
-  constructor(private readonly store:Store,private readonly options:RunExecutionOptions&{evidenceReader?:Pick<EvidenceReader,'materialCatalog'>}={}){
+  constructor(private readonly store:Store,private readonly options:RunExecutionOptions&{evidenceReader?:Pick<MaterialRead,'materialCatalog'>}={}){
     store.db.exec('CREATE TABLE IF NOT EXISTS insight_runs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,json TEXT NOT NULL)');
     this.execution=new RunExecution(store,'insight',{
       exists:id=>Boolean(store.db.prepare('SELECT 1 FROM insight_runs WHERE id=?').get(id)),
