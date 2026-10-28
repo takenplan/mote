@@ -44,7 +44,7 @@ async function fixture(t:TestContext){
         return {runId:randomUUID(),answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Are you the speaker describing the generated telescope?',choices:[],reason:'The generated original does not establish owner correspondence.',evidence:[{id:member.id,quote:record.ocrText}]}})),...fixtureMemoryCapacity(input)}),citations:[{id:originalId,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[]};
       },{draftOrigin:origin})}});
     questions=new OwnerQuestions(store);
-    disposeQuestions=installMemoryOwnerQuestions({questions,pipeline,materials:new MaterialStore(store),store,query:async()=>{throw Error('No owner question or reply can be created without its published Material');}});
+    disposeQuestions=installMemoryOwnerQuestions({questions,continuations:pipeline.ownerContinuations,materials:new MaterialStore(store),store,query:async()=>{throw Error('No owner question or reply can be created without its published Material');}});
   }
   async function close(){disposeQuestions();await pipeline.close();await publication.close();store.close();}
   open();originalId=randomUUID();
