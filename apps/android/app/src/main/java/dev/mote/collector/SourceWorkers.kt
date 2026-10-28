@@ -17,29 +17,30 @@ class SourceScanWorker(context: Context, params: WorkerParameters) : Worker(cont
         return try {
             for (source in store.sources().filter { it.enabled && (inputData.getString("sourceId") == null || it.id == inputData.getString("sourceId")) }) {
                 if (isStopped) return Result.retry()
+                val lease = store.lease(source) ?: continue
                 val adapter = SourceAdapters.default.forKind(source.kind)
                 if (!source.syncContinuously && source.binaryFiles() && applicationContext.fileArchives().configure(source).optBoolean("importCaptured")) continue
-                if (source.kind == "local-files" && source.retention == "snapshot" && !source.centralProcessingConsent) { store.status(source.id, "consent"); continue }
-                if (!(source.binaryFiles() && !source.syncContinuously && applicationContext.fileArchives().configure(source).optBoolean("importCaptured")) && !SourceAccess.available(applicationContext, source)) { store.status(source.id, "permission"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.CONFIGURATION); continue }
+                if (source.kind == "local-files" && source.retention == "snapshot" && !source.centralProcessingConsent) { store.status(source.id, "consent", lease = lease); continue }
+                if (!(source.binaryFiles() && !source.syncContinuously && applicationContext.fileArchives().configure(source).optBoolean("importCaptured")) && !SourceAccess.available(applicationContext, source)) { store.status(source.id, "permission", lease = lease); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.CONFIGURATION); continue }
                 val last = adapter.lastScan(applicationContext, source)
                 if (!inputData.getBoolean("manual", false) && last.isNotEmpty() && Instant.parse(last).plusSeconds(source.intervalMinutes * 60L).isAfter(Instant.now())) continue
                 try {
                     when (val emission = SourceAdapters.default.scan(applicationContext, source, cancellation)) {
                         is SourceEmission.Archived -> {
-                            store.status(source.id, if (emission.complete) "scanned" else "partial")
+                            store.status(source.id, if (emission.complete) "scanned" else "partial", lease = lease)
                             if (emission.complete && !source.syncContinuously && !source.tree) {
                                 FileSources(applicationContext, cancellation).prepare(source)
                                 val files = applicationContext.fileArchives()
-                                if (files.pendingCount(source.id) == 0) files.saveState(source.id, files.state(source.id).put("importCaptured", true))
+                                if (files.pendingCount(source.id) == 0) files.captured(source, lease)
                             }
                             if (!emission.complete) SourceWork.continueScan(applicationContext, source.id, inputData.getBoolean("syncExplicit", false))
                         }
-                        is SourceEmission.Indexed -> store.scan(source, emission.scan, minOf(64L, settings.read().maxQueueMiB.toLong()) * 1024 * 1024)
+                        is SourceEmission.Indexed -> store.scan(source, emission.scan, minOf(64L, settings.read().maxQueueMiB.toLong()) * 1024 * 1024, lease)
                     }
                     SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.OK, sourceId = source.id)
-                } catch (_: SecurityException) { store.status(source.id, "permission"); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, sourceId = source.id) }
+                } catch (_: SecurityException) { store.status(source.id, "permission", lease = lease); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.PERMISSION, sourceId = source.id) }
                 catch (_: android.os.OperationCanceledException) { return Result.retry() }
-                catch (e: Exception) { store.status(source.id, "provider"); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e), sourceId = source.id) }
+                catch (e: Exception) { store.status(source.id, "provider", lease = lease); Operations.record(applicationContext, OperationKind.SOURCE_FAILED, OperationReason.STORAGE); SupportEvents.record(applicationContext, EventStage.SOURCE, EventCode.STORAGE, errorName = EventJournal.errorName(e), sourceId = source.id) }
             }
             SourceWork.upload(applicationContext, inputData.getBoolean("syncExplicit", false))
             Result.success()
