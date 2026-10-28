@@ -9,7 +9,7 @@ import {Insights} from '../src/Insights';
 import {Conversations} from '../src/Conversations';
 import {Connections} from '../src/Connections';
 import {webFeatures} from '../src/features/registry';
-import {featuresReady} from '../src/features/runtime';
+import { featuresReady } from '../src/features/bootstrap.js';
 import {readPage} from '../src/navigation';
 import {primaryDestination} from '../src/WorkspaceNavigation';
 import {ApiError, type Api, type Answer, type Status} from '../src/api';

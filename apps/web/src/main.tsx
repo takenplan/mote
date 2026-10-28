@@ -43,7 +43,9 @@ type Range,
 type Status
 } from "./api";
 import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
-import { FeaturePage,featuresReady,webFeatures } from './features/runtime';
+import { FeaturePage } from './features/runtime';
+import { featuresReady } from './features/bootstrap';
+import { webFeatures } from './features/registry';
 import { PresentationSurface } from './presentation';
 import { GlobalRetrieval } from './GlobalRetrieval';
 import { WorkspaceSidebar } from './WorkspaceSidebar';

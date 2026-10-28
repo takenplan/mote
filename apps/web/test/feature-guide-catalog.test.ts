@@ -8,7 +8,8 @@ import {FeatureGuide} from '../src/FeatureGuide.js';
 import {english} from '../../../packages/shared/src/i18n-en.js';
 import {guideSections,quickLinks,type GuideTarget} from '../src/feature-guide-catalog.js';
 import {settingsCategoryFromHash,validatedReturnTarget} from '../src/route-query.js';
-import {featuresReady,webFeatures} from '../src/features/runtime.js';
+import { featuresReady } from '../src/features/bootstrap.js';
+import { webFeatures } from '../src/features/registry.js';
 import {readWorkspaceRoute} from '../src/workspace-route.js';
 
 const groups=guideSections.flatMap(section=>section.groups);

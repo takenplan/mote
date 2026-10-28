@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { ApiError, duration, dateTime, errorMessage, queryString, type Activity, type Api, type Device, type Range } from "./api";
 import { captureDateRange, localDateInput, ocrPresentation } from './capture-presentation';
 import { CollectionContent } from './features/runtime';
-import { webFeatures } from './features/runtime';
+import { webFeatures } from './features/registry';
 import { LibraryBrowseLayout } from './LibraryBrowse';
 const CaptureSessions = React.lazy(() => import('./CaptureSessions').then(module => ({ default: module.CaptureSessions })));
 import { sourceLabels } from './Metadata';
