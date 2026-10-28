@@ -28,6 +28,7 @@ const sharedBuild = () => npm('build', '-w', '@mote/shared');
 const agentBuild = () => npm('build', '-w', '@mote/agent');
 const libs = () => [sharedBuild(), agentBuild()];
 export function taskPlan(task, root = '.', selectedServer = ['all']) {
+  if (task === 'architecture') return [node('scripts/ci/architecture.mjs')];
   if (task === 'central-units') return [
     npm('test', '-w', '@mote/shared', '-w', '@mote/agent', '-w', '@mote/web'),
     ...[1, 2, 3, 4].map(shard => server(serverFiles(shard, root), '--test-skip-pattern', automaticSkipPattern)),
