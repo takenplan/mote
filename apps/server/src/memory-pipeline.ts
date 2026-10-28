@@ -37,6 +37,7 @@ import {memoryReadRanges,assertMemoryTargetSupport,mergeMemoryReadRanges,retaine
 import type {MemoryStagePublication,MemoryPublicationReceipt} from './memory-publication-contract.js';
 import {MemoryProviderError} from './memory-provider-contract.js';
 import {MemoryNativeStages} from './memory-native-stages.js';
+import type {MemoryOwnerContinuationPort,MemoryOwnerContinuationView,MemoryOwnerQuestionHandler} from './memory-owner-continuation.js';
 import {memoryEngineDraftPin,type MemoryEngineDraftContext,type MemoryEngineDraftPin,type MemoryNativeStageAdapter,type MemoryNativeStagePort} from './memory-native-stage-contract.js';
 
 export type MemoryValidationFailure={at:string;code:string;phase:'extract'|'review';attempt?:number;runId?:string;details?:MemoryValidationDetails};
@@ -65,10 +66,19 @@ export interface MemoryPhasePorts {
 export type MemoryPipelineOptions={models:MemoryModelSelection;phases:MemoryPhasePorts;onPublished?:(step:ExecutionStep,memories:readonly import('./memory-schema.js').Memory[],job:MemoryJob)=>void;assertIntegrationAuthority?:()=>void;withIntegrationAuthority?:<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>)=>Promise<T>;integrationReadInput?:(cards:readonly Memory[])=>Pick<QueryInput,'processingImages'|'processingMaterialInputs'|'processingEvidence'>;assertIntegrationReadable?:(cards:readonly Memory[])=>void;assertNewManualWork?:()=>void;admission?:MemoryInputAdmissionOptions;nativeStages?:MemoryNativeStageAdapter;publication?:MemoryStagePublication;strategies?:MemoryStrategies;executor?:ExecutionEngine;concurrency?:()=>number;requireAdmission?:boolean;store:Store;memories:MemoryStore;batchCharacters?:number|(()=>number)};
 
 type BatchOutput={contextReadChunks?:Chunk[];workContract?:MemoryWorkContract;engineDrafts?:MemoryEngineDraftPin[];publication?:MemoryPublicationReceipt;feedbackPlan?:MemoryFeedbackPlan;coverage?:MemoryWorkCoverage;strategy?:MemoryRecipeBinding;result:QueryResult;reviewReceipt?:MemoryReviewReceipt;model:string;profile:'personal'|'coding';skillVersion:string;ranges:EvidenceRange[];chunks:Chunk[]};
-export type MemoryOwnerQuestionHandler={create:(input:{job:MemoryJob;batchId:string;member:MemoryWorkMember;question:MemoryOwnerQuestion})=>string;pending:(jobId:string)=>boolean};
 
 /** Jobs reference originals. Validated drafts have a separate private, dependency-bound stage store. */
 export class MemoryPipeline {
+  readonly ownerContinuations:MemoryOwnerContinuationPort={
+    read:id=>{const job=this.get(id);return {id:job.id,status:job.status,batches:job.batches.map(({id,evidenceRanges})=>({id,evidenceRanges}))};},
+    scope:(jobId,batchId,key)=>{const {job,member,strategy}=this.ownerQuestionScope(jobId,batchId,key),{id,modelProfileId,modelOverride,recipes,contextTime,timeZone,batchCharacters}=job;return {job:{id,modelProfileId,modelOverride,recipes,contextTime,timeZone,batchCharacters},member,strategy};},
+    assertCurrent:(jobId,ref,ids)=>this.assertOwnerContinuationCurrent(jobId,ref,ids),
+    create:input=>{const job=this.create(input);return {id:job.id,batches:job.batches.map(({id,evidenceRanges})=>({id,evidenceRanges}))};},
+    link:(jobId,batchId,continuation,key)=>this.continuedOwnerQuestion(jobId,batchId,continuation,key),
+    closeGap:(jobId,batchId,key)=>this.closeOwnerQuestion(jobId,batchId,key),
+    dependencies:ids=>this.evidenceDependencies(ids),
+    setQuestions:handler=>this.setOwnerQuestionHandler(handler),
+  };
   get publication(){return this.options.publication;}
   assertNewManualWork(){this.options.assertNewManualWork?.();}
   assertIntegrationReadable(cards:readonly Memory[]){this.options.assertIntegrationReadable?.(cards);}
@@ -117,7 +127,7 @@ export class MemoryPipeline {
     queueMicrotask(()=>{if(!this.closed&&this.store.db.prepare('SELECT 1 FROM memory_jobs WHERE id=?').get(jobId)){this.refreshJob(jobId);this.wake();}});
   }
   /** The old execution stays immutable; a user-authorized current snapshot replaces its gap. */
-  continuedOwnerQuestion(jobId:string,batchId:string,continuation:MemoryJobDetail,memberKey:string){
+  continuedOwnerQuestion(jobId:string,batchId:string,continuation:MemoryOwnerContinuationView,memberKey:string){
     const batch=this.batch(batchId),member=batch.coverage?.find(value=>value.key===memberKey);
     if(!member)throw new StoreError('Memory owner question range changed',409);
     const materialId=this.store.db.prepare('SELECT material_id FROM material_evidence WHERE id=?').get(member.id)?.material_id;
