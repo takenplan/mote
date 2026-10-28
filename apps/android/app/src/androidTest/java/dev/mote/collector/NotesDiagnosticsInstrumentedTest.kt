@@ -26,12 +26,10 @@ class NotesDiagnosticsInstrumentedTest {
             if (view is android.view.ViewGroup) for (index in 0 until view.childCount) editor(view.getChildAt(index))?.let { return it }
             return null
         }
-        androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { activity ->
+        // Add opens RecordEditorActivity; this fixture exercises the retained local NOTES page.
+        val intent = android.content.Intent(context, MainActivity::class.java).putExtra("page", "NOTES")
+        androidx.test.core.app.ActivityScenario.launch<MainActivity>(intent).awaitMainUi().use { activity ->
             try {
-                activity.onActivity { a ->
-                    fun views(v: android.view.View): List<android.view.View> = listOf(v) + if (v is android.view.ViewGroup) (0 until v.childCount).flatMap { views(v.getChildAt(it)) } else emptyList()
-                    a.openGeneratedAdd(MoteAddAction.NOTE)
-                }
                 val deadline=System.currentTimeMillis()+10000; var ready=false
                 while(!ready && System.currentTimeMillis()<deadline){activity.onActivity { ready=editor(it.window.decorView)?.isEnabled==true };if(!ready)Thread.sleep(25)}
                 assertTrue(ready)
