@@ -5,10 +5,10 @@ import {moteText} from './i18n.js';
 import {ConnectionError,type Connections,type ConnectionCredential} from './connections.js';
 import type {Store} from './store.js';
 import type {SourceStore} from './sources.js';
-import type {EvidenceReader} from './evidence-reader.js';
+import type {SourceFileCatalogRead} from './evidence-read-ports.js';
 import type {IngressService} from './ingress.js';
 /** Collector authorization is checked again inside transactional source writes. */
-export function registerSourceRoutes(app:FastifyInstance,{store,sources,evidenceReader,ingress,connections,credential,sourceOwner}:{store:Store;sources:SourceStore;evidenceReader:EvidenceReader;ingress:IngressService;connections:Connections;credential:(request:FastifyRequest)=>ConnectionCredential|undefined;sourceOwner:(request:FastifyRequest,id:string)=>void}){
+export function registerSourceRoutes(app:FastifyInstance,{store,sources,evidenceReader,ingress,connections,credential,sourceOwner}:{store:Store;sources:SourceStore;evidenceReader:SourceFileCatalogRead;ingress:IngressService;connections:Connections;credential:(request:FastifyRequest)=>ConnectionCredential|undefined;sourceOwner:(request:FastifyRequest,id:string)=>void}){
   const present=(req:FastifyRequest,source:SourceConnection)=>{
     if(!credential(req))return source;
     const {ownerRelation,ownerRelationVersion,sourceContext,...intake}=source;

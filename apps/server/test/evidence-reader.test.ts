@@ -71,6 +71,16 @@ test('shared read grants agree across HTTP MCP and Agent while owner archive acc
  const mcp=await call('mote_evidence',{ids:[ref],deviceId:'generated-device'}),agent=await ownerRead(()=>agentReader.evidence({ids:[original.id],deviceId:'generated-device'}));
  assert.deepEqual(mcp.map((record:any)=>({id:record.id,text:record.text})),[{id:original.id,text:owner.json().ocrText}]);
  assert.deepEqual(agent.map(record=>({id:record.id,text:record.ocrText})),[{id:original.id,text:item.text}]);
+ const contextRead=async(ref:string,deviceId?:string)=>{
+  const response=await app.inject({method:'POST',url:'/api/context/read',headers,payload:{refs:[ref],...(deviceId?{deviceId}:{})}});
+  assert.equal(response.statusCode,200,response.body);return response.json();
+ };
+ const commonContext=await contextRead(ref,'generated-device');
+ assert.equal(commonContext.items[0].text,item.text);
+ assert.deepEqual(await call('mote_read',{refs:[ref],deviceId:'generated-device'}),commonContext,
+  'the composed owner ContextQuery and MCP query adapter agree on the common grant');
+ assert.deepEqual((await contextRead(ref,'outside')).items,[]);
+ assert.deepEqual((await call('mote_read',{refs:[ref],deviceId:'outside'})).items,[]);
  assert.equal((await app.inject({url:'/api/captures/'+original.id+'?deviceId=outside',headers})).statusCode,404);
  assert.deepEqual(await call('mote_evidence',{ids:[ref],deviceId:'outside'}),[]);
  assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[original.id],deviceId:'outside'})),[]);
@@ -79,14 +89,43 @@ test('shared read grants agree across HTTP MCP and Agent while owner archive acc
  await store.ingest({id:screen,deviceId:'generated-device',deviceName:'Generated device',platform:'macos',source:'screen',capturedAt:'2026-09-20T02:00:00.000Z',durationMs:1000,ocrText:'Generated undisclosed screen body'});
  const ownerScreen=await app.inject({url:'/api/captures/'+screen,headers});
  assert.equal(ownerScreen.statusCode,200,ownerScreen.body);assert.equal(ownerScreen.json().ocrText,'Generated undisclosed screen body');
+ assert.equal((await contextRead('capture:'+screen)).items[0].text,ownerScreen.json().ocrText,
+  'owner ContextQuery preserves its archive audience for an undisclosed raw original');
+ assert.deepEqual((await call('mote_read',{refs:['capture:'+screen]})).items,[],
+  'MCP cannot reuse the owner ContextQuery archive authority');
  assert.deepEqual(await call('mote_evidence',{ids:['capture:'+screen]}),[],'MCP has no trusted original-expansion grant for a known screen UUID');
  assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[screen]})),[],'the internal Agent also needs its own current Material or segment expansion grant');
 
  await sources.upsert('generated-port-source',{...item,revision:'2',observedAt:'2026-09-20T03:00:00.000Z',text:'',deleted:true});
  const retained=await app.inject({url:'/api/captures/'+original.id,headers});
  assert.equal(retained.statusCode,200,retained.body);assert.equal(retained.json().ocrText,item.text,'owner history retains the exact immutable original');
+ assert.equal((await contextRead(ref)).items[0].text,item.text,'owner ContextQuery retains the immutable archived original');
+ assert.deepEqual((await call('mote_read',{refs:[ref]})).items,[],'MCP rechecks withdrawal after ContextQuery resolves the archived ref');
  assert.deepEqual(await call('mote_evidence',{ids:[ref]}),[],'a source tombstone revokes external model disclosure');
  assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[original.id]})),[],'a source tombstone also revokes internal model disclosure');
+});
+
+test('source catalog route pages current file entries through the catalog-only read capability',async t=>{
+ const {app,sources}=await fixture(t),sourceId='generated-catalog-source';
+ sources.register({id:sourceId,name:'Generated catalog source',kind:'custom',deviceId:'catalog-device',platform:'import'});
+ const items=Array.from({length:3},(_,index)=>({externalId:'file-'+index,revision:'1',observedAt:'2026-09-20T00:00:00.000Z',
+  title:'Generated file '+index,text:'Generated catalog text '+index,kind:'file',layer:'snapshot',uri:`nas://generated/docs/${index}.txt`}));
+ const receipts=await sources.upsertBatch(sourceId,items);
+ const url='/api/sources/'+sourceId+'/catalog';
+ assert.equal((await app.inject({url})).statusCode,401);
+ const directories=await app.inject({url,headers});assert.equal(directories.statusCode,200,directories.body);
+ assert.equal(directories.json().directories[0].files,3);
+ const parent=directories.json().directories[0].parent,seen:Array<{id:string;evidenceId:string}>=[];let cursor:string|null=null;
+ do{
+  const response=await app.inject({url:url+'?'+new URLSearchParams({parent,limit:'1',...(cursor?{cursor}:{})}),headers});
+  assert.equal(response.statusCode,200,response.body);const page=response.json();seen.push(...page.items);cursor=page.nextCursor;
+ }while(cursor);
+ assert.deepEqual(seen.map(item=>item.id),items.map(item=>item.externalId));
+ assert.deepEqual(seen.map(item=>item.evidenceId),receipts.receipts.map(item=>item.id));
+ await sources.upsert(sourceId,{...items[0],revision:'2',observedAt:'2026-09-20T01:00:00.000Z',deleted:true,text:''});
+ const current=await app.inject({url:url+'?'+new URLSearchParams({parent}),headers});
+ assert.equal(current.statusCode,200,current.body);assert.deepEqual(current.json().items.map((item:{id:string})=>item.id),['file-1','file-2']);
+ assert.equal((await app.inject({url:'/api/sources/generated-missing/catalog',headers})).statusCode,404);
 });
 
 test('Web, MCP and Agent share ranked refs and scoped expansions across 400 generated days',async t=>{

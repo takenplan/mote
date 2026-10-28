@@ -9,7 +9,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {Store,StoreError} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {EvidenceReader} from '../src/evidence-reader.js';
-import {ContextQuery} from '../src/context-query.js';
+import {createContextQuery} from '../src/context-query-composition.js';
 import {registerContextRoutes} from '../src/context-routes.js';
 import {registerEvidenceRoutes} from '../src/evidence-routes.js';
 import {Mem0MemoryProvider} from '../src/mem0-memory-provider.js';
@@ -38,7 +38,7 @@ async function fixture(t:any){
  bindings.providerFactory=()=>provider;
  const namespace:MemoryProviderNamespace={ownerId:'generated-owner',instanceId:'generated-mem0',bindingRevision:1};
  const bind=(ns=namespace)=>store.db.prepare('UPDATE memory_plan_binding SET json=? WHERE id=1').run(JSON.stringify({planId:'instance:'+ns.instanceId,generation:ns.bindingRevision,namespace:ns}));
- const app=Fastify();app.setErrorHandler((error,_req,reply)=>reply.code(error instanceof StoreError?error.statusCode:500).send({error:error.message}));registerEvidenceRoutes(app,reader);registerContextRoutes(app,new ContextQuery(store,sources,undefined,reader));
+ const app=Fastify();app.setErrorHandler((error,_req,reply)=>reply.code(error instanceof StoreError?error.statusCode:500).send({error:error.message}));registerEvidenceRoutes(app,reader);registerContextRoutes(app,createContextQuery(store,sources,reader));
  const diagnostics=new ServerDiagnostics({directory:join(directory,'logs'),enabled:false});await diagnostics.init();
  t.after(async()=>{await app.close();await diagnostics.close();await bindings.close();await plugins.close();await executor.close();await provider.close();store.close();endpoint.closeAllConnections();await new Promise<void>(resolve=>endpoint.close(()=>resolve()));await rm(directory,{recursive:true,force:true});});
  let index=0;
