@@ -7,6 +7,7 @@ import {moteText} from '../i18n.js';
 import {ConnectorRegistry,type ConnectorManifest,type OwnerRoute} from './registry.js';
 import {registerMcp,RemoteMcp} from './mcp.js';
 import {GoogleCalendarConnector,type GoogleDependencies} from './google.js';
+import {googleCalendarContext} from './google-context.js';
 import {GmailConnector} from './gmail.js';
 import {LarkConnector} from './lark.js';
 import type {LarkRunner} from './lark-cli.js';
@@ -37,7 +38,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
     };
   }},
   {apiVersion:1,id:'google-calendar',sourceKinds:['google-calendar'],statusKey:'google',create:ctx=>{
-    const google=new GoogleCalendarConnector(ctx,testing?.google);
+    const google=new GoogleCalendarConnector(googleCalendarContext(ctx),testing?.google);
     return {
       init:()=>google.init(),status:()=>google.status(),configureSyncInterval:interval=>google.configureSyncInterval(interval),
       configure:host=>{
