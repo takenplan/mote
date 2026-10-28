@@ -1,9 +1,16 @@
+import {fixtureFilePolicy} from './fixtures/file-policy.js';
+import {sha256} from '../src/store.js';
+import {parseConfigDocument,serializeConfigDocument} from '@mote/shared/config-file';
+import {Connections} from '../src/connections.js';
+import {ConfigService} from '../src/config-service.js';
+import {Store} from '../src/store.js';
+import {SourcePipelineRuntime} from '../src/source-pipelines.js';
 import {withFixtureOwnerModelWork} from './fixtures/model-authorization.js';
 import {randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {existsSync,mkdirSync,mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import Fastify from 'fastify';
@@ -150,4 +157,112 @@ test('Import scope disposes a running binary-upload worker and retains resumable
  assert.equal(node.store.db.prepare('SELECT count(*) n FROM asset_pins').get()!.n,0);
  assert.equal(node.store.db.prepare('SELECT count(*) n FROM import_upload_parts').get()!.n,2);
  assert.equal((await node.app.inject({url:'/api/import-uploads',method:'POST',headers,payload:{name:'new.bin',sizeBytes:0}})).statusCode,503);
+});
+
+
+test('feature close waits for work, retires capabilities last, and attempts every failing disposer',async()=>{
+ const scope=new ServerFeatureScope(),events:string[]=[];
+ let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);
+ const work=scope.run(async()=>{events.push('running');await held;events.push('settled');});await Promise.resolve();
+ scope.defer(()=>{events.push('first');throw Error('generated first cleanup failure');});
+ scope.defer(()=>{events.push('second');throw Error('generated second cleanup failure');});
+ scope.retire(()=>{events.push('retired');});
+ let closed=false;const closing=scope.close();void closing.finally(()=>{closed=true;}).catch(()=>{});
+ assert.equal(scope.close(),closing);await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(closed,false);assert.deepEqual(events,['running','second','first']);
+ release();await work;await assert.rejects(closing,(error:unknown)=>error instanceof AggregateError&&error.errors.length===2);
+ assert.deepEqual(events,['running','second','first','settled','retired']);
+});
+
+const startupConfig=(directory:string):Config=>({dataDir:directory,token:'generated-startup-token',tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:10_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent'});
+for(const boundary of ['connections','connector','feature','watcher'] as const)test(`startup reclaims acquired SQLite, plugins, and watcher after ${boundary} initialization fails`,async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-startup-cleanup-')),config=startupConfig(directory),failure=Error('Generated '+boundary+' startup failure');
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ let closedStore:Store|undefined,closedPipelines=0,closedConfig=0;
+ const storeClose=Store.prototype.close,pipelineClose=SourcePipelineRuntime.prototype.close,configClose=ConfigService.prototype.close;
+ t.mock.method(Store.prototype,'close',function(this:Store){closedStore=this;return storeClose.call(this);});
+ t.mock.method(SourcePipelineRuntime.prototype,'close',function(this:SourcePipelineRuntime){closedPipelines++;return pipelineClose.call(this);});
+ t.mock.method(ConfigService.prototype,'close',function(this:ConfigService){closedConfig++;return configClose.call(this);});
+ if(boundary==='connections')t.mock.method(Connections.prototype,'init',async()=>{throw failure;});
+ if(boundary==='connector'){
+   const module=join(directory,'generated-failing-connector.mjs');
+   writeFileSync(module,`export const events=[];export default {apiVersion:1,id:'generated-failure',sourceKinds:['custom'],create(){return {init:async()=>{throw Error('Generated connector startup failure')},close:()=>{events.push('closed')}}}};`);
+   config.connectors={directory:join(directory,'connectors'),modules:[module]};
+ }
+ if(boundary==='feature'){
+   const install=ServerFeatureHost.prototype.install;let count=0;
+   t.mock.method(ServerFeatureHost.prototype,'install',async function(this:ServerFeatureHost,...args:Parameters<typeof install>){if(++count===3)throw failure;return install.apply(this,args);});
+ }
+ if(boundary==='watcher'){
+   const watch=ConfigService.prototype.startWatching;
+   t.mock.method(ConfigService.prototype,'startWatching',async function(this:ConfigService){await watch.call(this);throw failure;});
+ }
+ await assert.rejects(buildApp(config),error=>{assert.match(String(error instanceof AggregateError?error.cause:error),/Generated .* startup failure/);return true;});
+ assert.ok(closedStore);assert.throws(()=>closedStore!.db.prepare('SELECT 1').get(),/not open/);assert.ok(closedPipelines>0);assert.ok(closedConfig>0);
+ if(boundary==='connector'){const module=await import(join(directory,'generated-failing-connector.mjs'));assert.deepEqual(module.events,['closed']);}
+ // Reopen the same generated vault and diagnostics lock through the actual HTTP entrypoint.
+ t.mock.restoreAll();if(config.connectors){const {savedDocument:saved}=parseConfigDocument(readFileSync(join(directory,'mote.yaml'),'utf8'));saved.connectors={...saved.connectors,modules:[]};writeFileSync(join(directory,'mote.yaml'),serializeConfigDocument(saved));}const restarted=await buildApp(config);
+ assert.equal((await restarted.app.inject('/api/health')).statusCode,200);await restarted.app.close();await restarted.app.close();
+});
+
+test('startup preserves its cause and closes other resources after a disposer fails',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-startup-cleanup-error-')),failure=Error('Generated connection startup failure'),cleanup=Error('Generated connection cleanup failure');
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ t.mock.method(Connections.prototype,'init',async()=>{throw failure;});
+ const close=Connections.prototype.close;t.mock.method(Connections.prototype,'close',async function(this:Connections){await close.call(this);throw cleanup;});
+ let storeClosed=false;const storeClose=Store.prototype.close;t.mock.method(Store.prototype,'close',function(this:Store){storeClose.call(this);storeClosed=true;});
+ await assert.rejects(buildApp(startupConfig(directory)),(error:unknown)=>{assert.ok(error instanceof AggregateError);assert.equal(error.cause,failure);assert.equal(error.errors[0],failure);assert.ok(error.errors.slice(1).some(item=>item instanceof AggregateError&&item.errors.includes(cleanup)));return true;});
+ assert.equal(storeClosed,true);
+});
+
+
+test('server shutdown reports disposer failures after closing SQLite and every remaining resource',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-shutdown-errors-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const node=await buildApp(startupConfig(directory));await node.app.ready();
+ const close=node.connections.close.bind(node.connections),failure=Error('Generated close failure');
+ t.mock.method(node.connections,'close',async()=>{await close();throw failure;});
+ await assert.rejects(node.app.close(),(error:unknown)=>error instanceof AggregateError&&error.errors.includes(failure));
+ assert.throws(()=>node.store.db.prepare('SELECT 1').get(),/not open/);assert.equal(existsSync(join(directory,'logs','central.lock')),false);
+});
+
+
+const containsFailure=(error:unknown,failure:Error):boolean=>error===failure||error instanceof AggregateError&&error.errors.some(item=>containsFailure(item,failure));
+for(const method of ['dispose','close'] as const)test(`feature host ${method} reports scope failures that Cordis effect cleanup would otherwise swallow`,async t=>{
+ const app=Fastify(),root=new Context(),host=new ServerFeatureHost(root,app),events:string[]=[],failure=Error('Generated feature cleanup failure');
+ t.after(async()=>{await Promise.allSettled([host.close(),app.close()]);await root.fiber.dispose();});
+ await host.install({id:'fixture.failing-scope',version:'1',components:[]},(child,scope)=>{
+   scope.defer(()=>{events.push('released');});scope.defer(()=>{events.push('failed');throw failure;});child.get('/failing-scope',async()=>({ok:true}));
+ });
+ assert.equal((await app.inject('/failing-scope')).statusCode,200);
+ const closing=method==='dispose'?host.dispose('fixture.failing-scope'):host.close();
+ assert.equal(method==='dispose'?host.dispose('fixture.failing-scope'):host.close(),closing);
+ await assert.rejects(closing,error=>containsFailure(error,failure));assert.deepEqual(events,['failed','released']);
+ assert.equal((await app.inject('/failing-scope')).statusCode,503);assert.equal(host.registry.inventory().capabilities.length,0);
+});
+
+test('app close reports an installed feature scope cleanup failure and still releases SQLite and diagnostics',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-feature-cleanup-failure-')),failure=Error('Generated installed feature cleanup failure');
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));const node=await buildApp(startupConfig(directory));
+ await node.featureHost.install({id:'fixture.app-close-failure',version:'1',components:[]},(child,scope)=>{scope.defer(()=>{throw failure;});child.get('/fixture-close',async()=>({ok:true}));});
+ assert.equal((await node.app.inject({url:'/fixture-close',headers:{authorization:'Bearer '+startupConfig(directory).token}})).statusCode,200);
+ await assert.rejects(node.app.close(),error=>containsFailure(error,failure));
+ assert.throws(()=>node.store.db.prepare('SELECT 1').get(),/not open/);assert.equal(existsSync(join(directory,'logs','central.lock')),false);
+});
+
+
+test('final app shutdown joins an issued file provider before retiring its plugins and Store',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-file-final-close-'));let entered!:()=>void,release!:()=>void,disposed=0;
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ const node=await buildApp(startupConfig(directory),{transcriptionProvider:{transcribe:async()=>{entered();await held;assert.equal(disposed,0);assert.ok(node.store.db.prepare('SELECT 1').get());return {durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated held host provider'}]};}}});
+ t.after(async()=>{release();await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ await node.processing.runtime.ready;node.processing.runtime.context.effect(()=>()=>{disposed++;});
+ const settings={...node.processing.currentSettings(),enabled:true,audioProcessor:'audio.http',endpoint:'http://127.0.0.1:9009/transcribe',summarize:false};
+ await node.processing.save({revision:node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,node.processing.runtime.registry)});
+ node.sources.register({id:'fixture-final-provider',name:'Generated provider',kind:'local-files',deviceId:'fixture',platform:'import',retention:'archive'});
+ const bytes=Buffer.alloc(32044);bytes.write('RIFF');bytes.writeUInt32LE(bytes.length-8,4);bytes.write('WAVEfmt ',8);bytes.writeUInt32LE(16,16);bytes.writeUInt16LE(1,20);bytes.writeUInt16LE(1,22);bytes.writeUInt32LE(16000,24);bytes.writeUInt32LE(32000,28);bytes.writeUInt16LE(2,32);bytes.writeUInt16LE(16,34);bytes.write('data',36);bytes.writeUInt32LE(32000,40);
+ const upload=node.files.begin({sourceId:'fixture-final-provider',item:{externalId:'generated.wav',revision:'1',observedAt:'2026-10-01T00:00:00Z',kind:'file',layer:'original',text:'',mimeType:'audio/wav',deleted:false},sizeBytes:bytes.length,sha256:sha256(bytes)},()=>{});node.files.part(upload.uploadId,0,bytes,()=>{});const receipt=await node.files.commit(upload.uploadId,()=>{});
+ await node.app.ready();const running=node.featureServices.withMediaOwnerIntent(receipt.id,async()=>{node.processing.retry(receipt.id);await node.processing.tick();});await Promise.race([started,running.then(()=>assert.fail('Generated provider did not start: '+JSON.stringify(node.files.detail(receipt.id).job))) ]);
+ let closed=false;const closing=node.app.close();void closing.then(()=>closed=true);
+ await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(closed,false);assert.equal(disposed,0);assert.ok(node.store.db.prepare('SELECT 1').get());
+ release();await Promise.all([closing,running]);assert.equal(disposed,1);assert.throws(()=>node.store.db.prepare('SELECT 1').get(),/not open/);
 });

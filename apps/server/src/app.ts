@@ -1,3 +1,4 @@
+import {ServerResources} from './server-resources.js';
 import {MemoryTopicsHost} from './memory-topics-host.js';
 import {createContextTrees} from './context-trees.js';
 import type {ProcessingConfiguration} from './processing-configuration.js';
@@ -24,7 +25,7 @@ import staticFiles from '@fastify/static';
 import { AgentNotConfiguredError,AgentYieldError,originalEvidenceReceipt,createImportAgent,skillCatalog,type AgentTraceEvent,type ContextReader,type QueryInput } from '@mote/agent';
 import { ProviderFailure,captureSchema,type CaptureInput,type CaptureRecord,type QueryResult } from '@mote/shared';
 import { negotiateLocale } from '@mote/shared/i18n';
-import Fastify,{ type FastifyReply,type FastifyRequest } from 'fastify';
+import Fastify,{ type FastifyInstance,type FastifyReply,type FastifyRequest } from 'fastify';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID,timingSafeEqual } from 'node:crypto';
 import {setImmediate as yieldEventLoop} from 'node:timers/promises';
@@ -135,9 +136,13 @@ function parseCaptureBundle(body:unknown):CaptureInput[] {
 }
 const serverVersion=(JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')) as {version:string}).version;
 export async function buildApp(config:Config,dependencies?:{configService?:ConfigService;queryQualityExperiment?:QueryQualityStrategy;webRoot?:string;connectorTesting?:import('./connectors/index.js').ConnectorTestDependencies;semanticContextTime?:()=>string;backgroundWorker?:boolean;memoryExtensions?:LifecycleExtension[];store?:Store;agent?:QueryAgent;connections?:Connections;createModelAgent?:ModelAgentFactory;transcriptionProvider?:TranscriptionProvider;prepareImport?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;observeImport?:(workspace:string,event:unknown)=>void}) {
+  const resources=new ServerResources();
+  let startupApp:FastifyInstance|undefined;
+  try{
   config={...config};
   const suppliedConfigService=dependencies?.configService??config.configService;
   const configService=suppliedConfigService??new ConfigService({path:config.configuration?.configFile??join(config.dataDir,'mote.yaml'),initialDocument:documentFromConfig(config)});
+  resources.beforeClose(()=>configService.close());
   if(!suppliedConfigService)registerBuiltinDomains(configService,config);
   await configService.initialize();
   {
@@ -146,25 +151,30 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   }
   const actualOwnerToken=config.token;
   configService.setValidator(document=>validateResolvedConfigDocument(document,actualOwnerToken));
-  const eventLoop=monitorEventLoopDelay({resolution:20});eventLoop.enable();
+  const eventLoop=monitorEventLoopDelay({resolution:20});eventLoop.enable();resources.defer(()=>eventLoop.disable());
   // A foreground node must not block listen() on a full orphan-blob sweep. When
   // the background worker is enabled, let that worker perform maintenance after
   // the HTTP service is available instead of making startup scan the whole vault.
   const store=dependencies?.store??new Store(config.dataDir,{dataKey:config.dataKey,contentEncryptionEnabled:config.contentEncryptionEnabled,maxStorageBytes:config.maxStorageBytes,embeddingEnabled:Boolean(config.embeddingModel),maintenance:Boolean(dependencies?.backgroundWorker)});
+  if(!dependencies?.store)resources.defer(()=>store.close());
   let availableModelConnections=():ModelConnection[]=>[];
   const modelAuthorization=new BackgroundModelAuthorization(store,()=>availableModelConnections());
+  resources.defer(()=>modelAuthorization.close());
   // MVP cut-over is explicit: never silently keep the old Coding event indexes live.
-  if(store.db.prepare("SELECT 1 FROM captures WHERE json_extract(json,'$.provenance.document.coding') IS NOT NULL LIMIT 1").get()){eventLoop.disable();if(!dependencies?.store)store.close();throw new Error('Legacy Coding event vault: back up and use a fresh data directory for the source-pipeline architecture. No automatic migration is performed.');}
+  if(store.db.prepare("SELECT 1 FROM captures WHERE json_extract(json,'$.provenance.document.coding') IS NOT NULL LIMIT 1").get()){throw new Error('Legacy Coding event vault: back up and use a fresh data directory for the source-pipeline architecture. No automatic migration is performed.');}
   projectMemoryLifecycleSettings(store,configService.current<LifecycleSettings>('memory'));
   const materials=new MaterialStore(store);
+  resources.defer(()=>materials.index?.close());
   // One service tree owns backend plugins. Each runtime installs into its own
   // managed scope below this root, so closing one cannot dispose a sibling.
   const backendContext=new Context();
+  resources.defer(()=>backendContext.fiber.dispose());
   backendContext.provide('moteMaterials',materials);
   backendContext.provide('moteConfig',configService);
   const runtimeSettings=new ExecutionSettings(configService),execution=runtimeSettings.execution(),providerAdmission=new ProviderAdmission(store);
   const agentGate=new ConcurrencyGate(execution.agentConcurrency),llmGate=new ConcurrencyGate(execution.llmConcurrency);
   const interactiveGate=new ConcurrencyGate(execution.interactiveConcurrency),interactiveModelGate=new ConcurrencyGate(execution.interactiveConcurrency);
+  resources.defer(()=>{agentGate.close();llmGate.close();interactiveGate.close();interactiveModelGate.close();});
   const modelContext=new AsyncLocalStorage<QueryInput>();
   const modelOperation=new AsyncLocalStorage<string>();
   // Accounting observes trusted admission boundaries, independently of model
@@ -185,13 +195,16 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     },signal??input?.signal,input?.traceContext?.operationId??modelOperation.getStore());
   };
   const diagnostics=new ServerDiagnostics({...runtimeSettings.diagnostics(),directory:config.logDirectory??join(config.dataDir,'logs'),maxBytes:config.logMaxBytes??defaultLogMaxBytes(config.profile),maxFiles:config.logMaxFiles,maxEntries:config.logMaxEntries});
+  resources.defer(async()=>{diagnostics.record('server.stopping');await diagnostics.close();});
   await diagnostics.init();
   const executionObserver=executionObservability(diagnostics)!;
+  resources.defer(()=>executionObserver.close());
   const observationIdentity=(input:QueryInput):ObservationIdentity=>({jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId,attempt:input.traceContext?.attempt,
     phase:input.traceContext?.phase==='coding-understanding'?'coding_understanding':input.traceContext?.phase==='review'?'review':'extract'});
   const observeMemory=<T>(input:QueryInput|undefined,name:ObservationName,work:()=>T):T=>input?.responseMode==='memory-extraction'?executionObserver.sync(name,observationIdentity(input),work):work();
   const observeMemoryAsync=<T>(input:QueryInput|undefined,name:ObservationName,work:()=>Promise<T>):Promise<T>=>input?.responseMode==='memory-extraction'?executionObserver.async(name,observationIdentity(input),work):work();
   const executor=new ExecutionEngine(store);
+  resources.beforeClose(()=>executor.close());
   executor.bindModelAuthority(modelAuthorization);
   executor.bindObserver(value=>executionObserver.lease(value),()=>executionObserver.enabled());
   backendContext.provide('moteExecution',executor);
@@ -200,8 +213,10 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   let memoryBindings:MemoryBindings|undefined;
   backendContext.provide('moteMemoryStrategies',memoryStrategies);
   const materialMemoryWork=new MaterialMemoryWork(store,materials,Date.now,()=>true,memoryRecipeSettings,()=>memoryBindings?.accepting()??memoryAutomation.accepting());
-  const sourcePipelines=new SourcePipelineRuntime(store,materials,[codingSourcePlugin],backendContext,executor,materialMemoryWork);await sourcePipelines.ready;
-  const sources=new SourceStore(store,sourcePipelines),files=new FileStore(store,sources),ingress=new IngressService(store,sources,files);const fileEvidence=new FileEvidence(sources);
+  const sourcePipelines=new SourcePipelineRuntime(store,materials,[codingSourcePlugin],backendContext,executor,materialMemoryWork);resources.defer(()=>sourcePipelines.close());await sourcePipelines.ready;
+  const sources=new SourceStore(store,sourcePipelines),files=new FileStore(store,sources);
+  resources.defer(()=>files.close());
+  const ingress=new IngressService(store,sources,files),fileEvidence=new FileEvidence(sources);
   const modelAuthorizationHost=new ModelAuthorizationHost(modelAuthorization,store,materials,files);
   materialMemoryWork.inputs.onOriginalInput=(input,automatic)=>modelAuthorizationHost.source(input,automatic);
   const mediaAssets=new MediaAssets(config.media?.modelDirectory??join(store.directory,'media-models'));
@@ -236,7 +251,9 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       return modelAuthorizationHost.automatic(work,'embedding',roots,authorizedSignal=>{modelAuthorizationHost.assertEvidence([id]);return task(authorizedSignal);},signal);
     },
   });
+  resources.defer(()=>indexer.close());
   const materialOrganizer=new MaterialOrganizerRuntime(store,materials,[],executor,materialMemoryWork);
+  resources.defer(()=>materialOrganizer.close());
   backendContext.provide('moteMaterialOrganizers',materialOrganizer.registry);
   const evidenceReader=new EvidenceReader(store,sources,files,indexer,fileEvidence,materials,sourcePipelines,materialOrganizer.sourceItemRecipes,
     ref=>materialMemoryWork.readyForMemory(ref));
@@ -247,13 +264,16 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   conversations.onTurnReceived=turnId=>modelAuthorizationHost.conversation(turnId);
   const sourceContexts=new SourceContextStore(store);
   const pluginCenter=new PluginCenter(store,executor,new GitHubPluginReleases(join(config.dataDir,'plugins','packages')));
+  resources.beforeClose(()=>pluginCenter.close());
   memoryBindings=new MemoryBindings(store,memories,memoryAutomation,pluginCenter,executor);
+  resources.defer(()=>memoryBindings!.close());
   evidenceReader.memoryBindings=memoryBindings;
   const ownerQuestions=new OwnerQuestions(store);
   backendContext.provide('moteOwnerQuestions',ownerQuestions);
   const archivedFiles=new ArchivedFileStore(store);
   const contentStorage=new ContentStorageService(store,files,archivedFiles,configService,enabled=>{config.contentEncryptionEnabled=enabled;maintenanceWorker?.configureContentEncryption(enabled);});
-  const connections=dependencies?.connections??new Connections(store,sources);await connections.init();
+  resources.defer(()=>contentStorage.close());
+  const connections=dependencies?.connections??new Connections(store,sources);resources.defer(()=>connections.close());await connections.init();
   const identities=new WeakMap<FastifyRequest,ConnectionCredential>();
   const connectionIdentity=(req:FastifyRequest)=>identities.get(req);
   // Device metadata does not narrow a human client's owner permissions.
@@ -392,6 +412,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     return {id,name:detail.item.title||'Attached image',mimeType:mimeType!,hash:version.object_hash,sizeBytes:detail.sizeBytes};
   });
   const agent=new ReloadableAgent(()=>diagnostics.record('agent.failed',{category:'internal'},'error'));
+  resources.defer(()=>agent.close());
   const codex={executable:config.codexBin,home:config.codexHome};
   const pinProcessingEvidence=(input:QueryInput):QueryInput=>{
     const supplied=input as QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt};
@@ -441,7 +462,8 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       return {...candidate,query:input=>modelAuthorizationHost.manual('model-probe:'+id,[connection],signal=>candidate.query({...input,signal}),input.signal,'probe')};
     }),
   });
-  try{await modelSettings.initialize();}catch(error){await configService.close();await executor.close();await agent.close();await connections.close();await indexer.close();await sourcePipelines.close();await backendContext.fiber.dispose();if(!dependencies?.store)store.close();await diagnostics.close();throw error;}
+  resources.defer(()=>modelSettings.close());
+  await modelSettings.initialize();
   let additionalModelConnections=():ModelConnection[]=>[];
   availableModelConnections=()=>{
     const models=[...modelSettings.profiles(),...MODEL_FEATURES.map(feature=>modelSettings.select(feature))].map(profile=>agentModelConnection({kind:'profile',id:profile.id},profile.settings));
@@ -456,6 +478,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     onUsage:(_settings,usage,request)=>hindsightMeters.get(request.requestId)?.update(usage),
     onRequestFinished:request=>{hindsightMeters.get(request.requestId)?.finish(request.status);hindsightMeters.delete(request.requestId);},
   });
+  resources.beforeClose(()=>memoryAdapters.close());
   memoryBindings.providerFactory=(id,namespace)=>memoryAdapters.provider(id,namespace);
   pluginCenter.probe=(id,signal)=>memoryAdapters.probe(id,signal);
   pluginCenter.configurationAllowed=(field,value)=>memoryAdapters.configurationAllowed(field.type,value);
@@ -498,7 +521,9 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   };
   let queryRuns:DelegatedQueryRuns;
   const insightRuns=new InsightRuns(store,{executor,evidenceReader});
+  resources.defer(()=>insightRuns.close());
   const workflows=new ProcessingRuntime(store,[],{},Date.now,executor,materials,backendContext,configService);
+  resources.defer(()=>workflows.close());
   sourcePipelines.setProductConsumer(workflows);workflows.consumerAllowed=(sourceId,bindingId)=>sourcePipelines.options(sourceId).consumers.includes(bindingId);
   const memoryConfiguration=(id?:string,model?:string)=>{const selected=modelSettings.select('memory',id);return modelConfiguration(selected.id,{...selected.settings,...(model?{model}:{})},modelSettings.view().revision);};
   const mediaModelAuthority:ModelProcessingAuthority=async(request,signal,task)=>{
@@ -522,9 +547,12 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const processing:FileProcessing=new FileProcessing(files,dependencies?.transcriptionProvider,undefined,{modelAuthority:mediaModelAuthority,configService,executor,modules:[...new Set([...(config.backendPluginModules??[]),...(config.fileProcessorModules??[])])],analyze:analyzeFile,analysisSnapshot:resolveFileModel,analysisRevision:()=>modelSettings.view().revision,diagnostics,contextProcessors:workflows.registry,pluginContext:backendContext,mediaAssets,media:config.media,contextForEvidence:record=>materials.contextForEvidence(record)});
   const previousSourceContextChanged=materials.onSourceContextChanged;
   materials.onSourceContextChanged=id=>{previousSourceContextChanged?.(id);processing.invalidateSourceContext(id);};
-  try{await processing.initializeConfiguration();}catch(error){await configService.close();await executor.close();await processing.close();await workflows.close();await sourcePipelines.close();await backendContext.fiber.dispose();await modelSettings.close();await agent.close();await connections.close();await indexer.close();if(!dependencies?.store)store.close();await diagnostics.close();throw error;}
+  resources.defer(()=>processing.settle());
+  resources.defer(()=>processing.close());
+  await processing.initializeConfiguration();
 
   const disposeCaptureMemoryIntake=installCaptureMemoryIntake(store,materialMemoryWork,input=>modelAuthorizationHost.capture(input));
+  resources.defer(disposeCaptureMemoryIntake);
   const perception=new ImageProcessing(store,processing,executor,{modelAuthority:mediaModelAuthority,configService,materials,mediaAssets,media:config.media,understanding:imageUnderstanding({factory,metered:async(settings,attribution,task)=>{
     const meter=admittedUsage(settings.provider,settings.model,'image-understanding',{agentId:'image-understanding',moduleId:'images',skillId:null,...attribution});
     return meter.run(async()=>{try{const output=await task(meter.update);meter.completed();return output;}catch(error){meter.failed(error);throw error;}});
@@ -532,6 +560,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const selected=modelSettings.select('file'),resolved=resolveFileModel({...processing.currentSettings(),analysisModel:service}),settings=resolved.settings,configuration=modelConfiguration(service?.id??selected.id,settings,modelSettings.view().revision);
     return {identity:resolved.identity,fingerprint:configuration.fingerprint,configured:service?Boolean(service.apiKey||service.execution==='local'):agent.configuredFor(selected.id),settings,receipt:{profileId:service?.id??selected.id,provider:settings.provider,model:settings.model,revision:modelSettings.view().revision}};
   }})});
+  resources.defer(()=>perception.close());
   additionalModelConnections=()=>[...processing.modelConnections(),...configService.current<ProcessingConfiguration>('processing').policy.services.filter(service=>service.kind==='model').map(service=>{const resolved=resolveFileModel({...processing.currentSettings(),analysisModel:service});return agentModelConnection(resolved.identity,resolved.settings);})];
   const semanticSelection=()=>{const selected=modelSettings.select('memory');return {...modelConfiguration(selected.id,selected.settings,modelSettings.view().revision),configured:agent.configuredFor(selected.id)};};
   workflows.registry.register(semanticProcessor({store,memories,query:input=>{const selected=modelSettings.select('memory',input.modelProfileId),traceContext={...input.traceContext,traceId:randomUUID(),operation:'query' as const,moduleId:'memories',profileId:selected.id,provider:selected.settings.provider,protocol:selected.settings.protocol,model:input.modelOverride??selected.settings.model};return withQueryModelAuthority(input,'semantic',signal=>agent.query({...input,signal,onTrace:event=>{diagnostics.agentTrace(event,traceContext);input.onTrace?.(event);}}));},records:ids=>store.evidence(ids),selection:semanticSelection,usage:usageLedger}));
@@ -576,6 +605,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       },
     },
     frameworkErrors:(_error,_req,reply)=>{const requestId=randomUUID();diagnostics.record('request.failed',{requestId,route:'unknown',category:'validation',statusCode:400},'warn');(reply as FastifyReply).header('X-Request-Id',requestId).code(400).send({error:'validation',message:moteText("请求格式无效。"),requestId});}});
+  startupApp=app;
   app.addContentTypeParser(['application/gzip','application/x-ndjson+gzip'],{parseAs:'buffer'},(_req,body,done)=>done(null,body));
   const routeName=(url:string|undefined)=>{
     if(!url)return 'unknown';if(!url.startsWith('/api/'))return 'web';if(url.endsWith('/image'))return 'image';
@@ -616,10 +646,13 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   });
   const actions=new Actions(store,files,input=>queryAgent({...input,language:requestLocale.getStore()??'zh-CN'},'query','actions'),()=>agent.configured,{semanticArtifacts,executor,configService});
 
+  resources.defer(()=>actions.close());
   const connectors=await registerConnectors(app,{memoryRecipeSettings,diagnostics,memoryStrategies,files,sources,store,evidenceReader,materials,sourcePipelines,materialOrganizers:materialOrganizer,processing:workflows,config,ownerAuthorization:header=>{if(validBearer({headers:{authorization:header}}))return true;const c=connections.authenticate(header);return !!c&&connections.isOwner(c);},mcpAuthorization:header=>connections.mcpAuthorization(header,config.connectors)},dependencies?.connectorTesting);
 
+  resources.defer(()=>connectors.close());
   const softwareUpdate=createUpdateService({currentVersion:serverVersion,profile:config.profile,runtime:config.configuration?.runtime,profileHome:config.configuration?.hostConfigFile?dirname(dirname(config.configuration.hostConfigFile)):undefined,repository:config.updateRepository,channel:config.updateChannel});
 
+  resources.defer(()=>softwareUpdate.close());
   // Bounded transport batch with independent durable acknowledgements. Validate the
   // entire envelope and credential scope before writing any member of the batch.
 
@@ -635,6 +668,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
 
   let closing=false;
   const activeQueries=new Set<Promise<QueryResult>>();
+  resources.defer(async()=>{closing=true;await Promise.allSettled([...activeQueries]);});
   function withQueryModelAuthority<T>(input:QueryInput,moduleId:string,task:(signal:AbortSignal)=>Promise<T>){
     const row=input.traceContext?.jobId?store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(input.traceContext.jobId):undefined;
     const job=row?JSON.parse(String(row.json)) as import('./memory-pipeline.js').MemoryJob:undefined;
@@ -735,7 +769,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     }),result=>({citations:result.citations.length,toolCalls:result.trace.length,activeQueries:activeQueries.size}));
     activeQueries.add(promise);void promise.finally(()=>{deadline.dispose();clearInterval(heartbeat);activeQueries.delete(promise);}).catch(()=>{});return promise;
   }
-  const memoryReviews=new MemoryReviewCache();
+  const memoryReviews=new MemoryReviewCache();resources.defer(()=>memoryReviews.clear());
   const reviewExtraction=(input:QueryInput,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:import('./memory-review.js').MemoryDraftOrigin)=>reviewMemory(input,result,next=>queryAgent(next,'query','memories'),{
     draftOrigin,strategy,deletions:memories.deletions,authorizeDeletionEvidence:ids=>memoryPipeline.assertDeletionEvidenceAllowed(ids,input.modelProfileId),cache:memoryReviews,snapshot:()=>{
       const ids=input.evidenceReadRanges?[...new Set([...(input.evidenceIds??[]),...memoryReadRanges(result,input.evidenceRanges??[],input.evidenceReadRanges).map(range=>range.id)])]:input.evidenceIds??[];
@@ -769,6 +803,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     });
   };
   const memoryPublication=new MemoryPublication(store,memories,memoryBindings,executor);
+  resources.defer(()=>memoryPublication.close());
   memoryPublication.revokeEvidence=ids=>memoryAdapters.erasePreparedEvidence(ids);
   let memoryTopics:MemoryTopicsHost|undefined;
   const memoryPipeline=new MemoryPipeline({onPublished:(step,items,job)=>memoryTopics?.enqueue(step,items,job.configuration?.profileId??job.modelProfileId,job.configuration?.model??job.modelOverride),assertIntegrationAuthority:()=>modelAuthorization.assertCurrent(),withIntegrationAuthority:(id,manual,evidenceIds,task)=>manual?modelAuthorization.run('owner-integration:'+id,task):modelAuthorizationHost.automatic('automatic-integration:'+id,'integration',modelAuthorizationHost.evidenceTriggers(evidenceIds),task),integrationReadInput:cards=>memoryIntegrationImageInputs(store,materials,cards.flatMap(card=>card.evidence)),assertIntegrationReadable:cards=>evidenceReader.assertMemoryReadable(cards),publication:memoryPublication,settleEngineDraft:async context=>{if(!context.provider)throw new StoreError('Native Memory cleanup has no pinned provider configuration',503);await memoryAdapters.discardPrepared({...context.provider,opId:context.opId,phase:context.phase});},assertNewManualWork:()=>memoryBindings.assertNewManualWork(),engineDraft:async(input,context)=>withQueryModelAuthority(input,'memories',async signal=>{input={...input,signal};const binding=memoryBindings.binding();if(memoryBindings.view().mode!=='engine')return;const namespace=binding.namespace!;context.provider={instanceId:namespace.instanceId,namespace,configurationIdentity:memoryAdapters.configurationIdentity(namespace.instanceId,namespace)};input.signal?.throwIfAborted();const originals=memories.readEvidence(context.evidenceIds);if(originals.length!==new Set(context.evidenceIds).size)throw new StoreError('Engine originals are unavailable',409);const evidence=input.evidenceRanges?.map(range=>{const record=originals.find(record=>record.id===range.id);if(!record)throw new StoreError('Engine original range is unavailable',409);return {record,offset:range.offset,length:range.length};})??originals;
@@ -778,10 +813,13 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const assert=()=>{assertAuthority();input.signal?.throwIfAborted();context.assertAuthority?.();assertModelEvidence(input);if(JSON.stringify(memoryBindings.binding())!==bindingIdentity)throw new StoreError('Native Memory binding changed',409);for(const [id,fingerprint] of pins){const current=memories.readEvidence([id])[0];if(!current||!memories.isCurrentEvidence(id)||memoryEvidenceFingerprint(current)!==fingerprint||!evidenceReader.deletionContextAllowed(id,new EvidenceExposurePolicy()))throw new StoreError('Native Memory originals were changed or revoked',409);}};
     assert();const transportAssert=(settings:import('@mote/shared/models').ModelSettings)=>{if(agentModelConnection({kind:'profile',id:engineProfile},settings).fingerprint!==engineConnection.fingerprint)throw new StoreError('Native Memory model snapshot changed',409);assert();};hindsightAuthorities.set(context.opId,transportAssert);
     try{const result=await memoryAdapters.engine(namespace.instanceId,namespace).prepare({namespace,opId:context.opId,phase:context.phase,evidence,relatedMemories:context.relatedMemories,signal:input.signal});assert();input.onEvidence?.(originals);if(context.relatedMemories?.length)input.onMemoryBodies?.(context.relatedMemories);return result;}finally{if(hindsightAuthorities.get(context.opId)===transportAssert)hindsightAuthorities.delete(context.opId);}}),understand:understandConversation,materialSourceCurrent:(pin,id)=>evidenceReader.materialSourceCurrent(pin,id),materialPlanAllowed:id=>evidenceReader.materialPlanAllowed(id,new EvidenceExposurePolicy()),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:ref=>materialMemoryWork.sourceRequirements(ref),batchCharacters:()=>storedMemoryLifecycleSettings(store).batchCharacters,automaticAllowed:job=>materialMemoryWork.authorized(job)&&[...(job.automaticGrants??[]),...(job.automaticGrant?[job.automaticGrant]:[])].every(grant=>sourcePipelines.memoryAllowed(grant.sourceId)),strategies:memoryStrategies,executor,store,memories,deletionEvidenceAllowedForMemory:id=>evidenceReader.deletionContextAllowed(id,new EvidenceExposurePolicy()),materialAllowedForMemory:(ref,profileId,required)=>evidenceReader.materialAllowedForMemory(ref,new EvidenceExposurePolicy(),required),configuration:memoryConfiguration,concurrency:()=>runtimeSettings.execution().memoryConcurrency,requireAdmission:true,onValidationFailure:event=>diagnostics.record('agent.memory_validation_failed',{jobId:event.jobId,batchId:event.batchId,batchIndex:event.batchIndex,attempt:event.attempt,runId:event.runId,validationCode:event.code,validationPhase:event.phase,...event.details},'warn'),review:reviewExtraction,query:input=>queryAgent(input,'query','memories'),model:id=>modelSettings.select('memory',id).settings.model,configured:id=>{try{return agent.configuredFor(modelSettings.select('memory',id).id);}catch{return false;}},skillVersion:`memory-extraction@${skillCatalog().find(s=>s.id==='memory-extraction')!.version}`});
+  resources.defer(()=>memoryPipeline.close());
   memoryRecipeSettings.onChange=()=>materialMemoryWork.inputs.revokeDisabled();
   memoryRecipeSettings.onApplied=()=>materialMemoryWork.reconcile(memoryPipeline);
   materialMemoryWork.reconcile(memoryPipeline);
-  const lifecycle=new MemoryLifecycle(store,()=>agent.configured,Date.now,executor,dependencies?.semanticContextTime,configService),working=new WorkingMemory(store,conversations);
+  const lifecycle=new MemoryLifecycle(store,()=>agent.configured,Date.now,executor,dependencies?.semanticContextTime,configService);
+  resources.defer(()=>lifecycle.close());
+  const working=new WorkingMemory(store,conversations);
   lifecycle.automaticAdmission=id=>!['extraction','consolidation'].includes(id)||memoryBindings!.accepting();
   memoryBindings.onReleased=()=>lifecycle.skipAutomaticBacklog();
   pluginCenter.admissionChanged=(id,enabled)=>{if(memoryBindings!.binding().namespace?.instanceId===id){if(enabled)lifecycle.skipAutomaticBacklog();memoryAutomation.touch();}};
@@ -823,6 +861,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   for(const extension of dependencies?.memoryExtensions??[])lifecycle.replace(extension);
 
   const importAgents=new Set<ReturnType<typeof createImportAgent>>(),importTasks=new Map<string,Promise<unknown>>();
+  resources.defer(async()=>{await Promise.allSettled([...importAgents].map(runtime=>runtime.close()));await Promise.allSettled([...importTasks.values()]);});
   const sourcePacks=new Map((config.importPythonPacks??[]).map(spec=>{
     const executor=new PythonSourcePackExecutor<PythonImportOutput>({...spec,outputSchema:pythonImportOutputSchema});
     return [spec.id,{revision:sha256(JSON.stringify(spec)),prepare:pythonImportPreparation(executor)}] as const;
@@ -843,6 +882,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     // enter the shared rolling queue; import completion must not create a second job.
     onImported:async()=>({}),
   });
+  resources.defer(()=>imports.stop());
   const launchOwnerImport=(id:string,task:()=>Promise<unknown>)=>{const work='owner-import:'+randomUUID();modelAuthorization.manual(work,'manual',['import:'+id],availableModelConnections());launchImport(id,()=>modelAuthorization.run(work,task));};
   const withMediaOwnerBatch=async<T>(ids:readonly string[],task:()=>T)=>modelAuthorization.manualCommand('owner-media-batch:'+randomUUID(),ids.map(captureModelIdentity),availableModelConnections(),task);
   function launchImport(id:string,task:()=>Promise<unknown>){
@@ -865,6 +905,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       return originals;
     },
   });
+  resources.defer(()=>delegation.close());
   type SavedQuery={hostRequest:unknown;language?:QueryInput['language'];prepared?:QueryInput;configurationFingerprint?:string;qualityStrategy?:QueryQualityStrategy;qualityStages?:Partial<Record<QueryQualityStage,QueryResult>>};
   async function prepareDelegatedQuery(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress']):Promise<QueryInput>{
     signal.throwIfAborted();if(!agent.configured)throw new AgentNotConfiguredError();
@@ -962,11 +1003,14 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       const failure=safeError(error);return conversations.appendFailure(conversationId?conversations.get(conversationId):undefined,{question,...scope},{code:failure.category,message:failure.message});
     },
   });
+  resources.defer(()=>queryRuns.close());
   const memoryDelegation=registerMemoryDelegation({runtime:delegation,pipeline:memoryPipeline,work:materialMemoryWork,sourcePipelines,configuration:()=>memoryConfiguration(),allowCandidate:(candidate,input)=>evidenceReader.materialAllowedForMemory(candidate.ref,new EvidenceExposurePolicy(),input.required),query:input=>queryAgent(input,'query','memories'),sample:async(candidate,offset,length)=>{
     const input=materialMemoryWork.planningInput(candidate);
     if(!input?.ready||input.fingerprint!==candidate.fingerprint||!materialMemoryWork.inputs.available(candidate.sourceId,candidate.inputKey,undefined,candidate.scope)||!sourcePipelines.memoryAllowed(candidate.sourceId))throw new StoreError('Memory sample authorization changed',409);
     const records=await archiveReader.evidence({ids:input.evidenceIds.slice(0,8)});return records.flatMap(record=>offset<record.ocrText.length?[originalEvidenceReceipt(record,offset,Math.min(length,record.ocrText.length-offset))]:[]);
   }});
+
+  resources.defer(()=>memoryDelegation.close());
 
   async function insight(range:QueryScope&{prompt?:string;modelProfileId?:string},onProgress?:QueryInput['onProgress'],signal?:AbortSignal,operationId='insight:'+randomUUID(),snapshot?:import('@mote/shared').InsightSnapshot) {
     if(!agent.configured)throw new AgentNotConfiguredError();
@@ -1002,6 +1046,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     });
   } else app.setNotFoundHandler((req,reply)=>reply.code(404).send({error:'not_found',message:moteText("未找到所请求的资料。"),requestId:req.id}));
   const maintenanceWorker=dependencies?.backgroundWorker?new MaintenanceWorker(config):undefined;
+  resources.defer(()=>maintenanceWorker?.close());
   const activity=new ActivityProjection(store,new Operations(store),{delegation});
   const applyExecution=(value:ExecutionSettingsValue)=>{
     interactiveGate.configure(value.interactiveConcurrency);interactiveModelGate.configure(value.interactiveConcurrency);
@@ -1011,42 +1056,34 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   configService.setHandler<DiagnosticsSettingsValue>('diagnostics',next=>diagnostics.prepareConfiguration(next));
   configService.setHandler<{syncIntervalMs:number}>('connectors',(next,previous)=>({apply:()=>{},publish:()=>connectors.configureSyncInterval(next.syncIntervalMs),rollback:()=>connectors.configureSyncInterval(previous.syncIntervalMs)}));
   const automaticActivity=new AutomaticActivity(store,materials,executor,configService,{query:input=>queryAgent(input,'query','activity'),selection:profileId=>{const selected=modelSettings.select('chat',profileId);return {...modelConfiguration(selected.id,selected.settings,modelSettings.view().revision),configured:agent.configuredFor(selected.id)};},lane:()=>workflows.settings().semantic});
+  resources.defer(()=>automaticActivity.close());
   const featureServices={pluginCenter,withMediaOwnerBatch,launchOwnerImport,withMediaOwnerIntent,modelAuthorization,modelAuthorizationHost,availableModelConnections:()=>availableModelConnections(),contextTrees,automaticActivity,configService,memoryBindings,memoryPublication,ownerQuestions,automaticMemoryScheduling:dependencies?.backgroundWorker!==false,activity,delegation,memoryDelegation,connectionIdentity,assertRequestActive,memoryIntegrationSettings,memoryRecipeSettings,setPlaybackAuthorization:(authorize:ReturnType<typeof registerFileRoutes>)=>{playbackAuthorization=authorize;},connectors,processing,executor,agentFeatures,archiveReader,isClosing:()=>closing,actions,agent,agentGate,archivedFiles,codex,config,connections,contentStorage,conversations,credential,diagnosticSnapshot,diagnostics,eventLoop,evidenceReader,fileEvidence,files,importTasks,imports,indexer,ingress,insight,insightRequestSchema,insightRuns,interactiveGate,interactiveModelGate,jobId,launchImport,lifecycle,llmGate,maintenanceWorker,materialOrganizer,materialMemoryWork,materials,mediaAssets,mediaRange,memories,memoryPipeline,modelSettings,parseCaptureBundle,perception,providerAdmission,queryAgent,queryRuns,queryWithAttachmentsSchema,reviewExtraction,runtimeSettings,semanticSelection,serverVersion,softwareUpdate,sourceOwner,sourcePipelines,sources,store,usageLedger,webVersion,workflows};
   const featureHost=new ServerFeatureHost(backendContext,app,()=>diagnostics.record('request.failed',{category:'internal'},'error'));
+  resources.defer(()=>featureHost.close());
   registerPluginRoutes(app,{plugins:pluginCenter,bindings:memoryBindings,automation:memoryAutomation,owner:request=>{assertRequestActive(request);if(credential(request))throw new StoreError('Owner authorization is required for plugin control',403);}});
   await installServerFeatures(featureHost,featureServices);
   memoryTopics=new MemoryTopicsHost({store,memories,executor,control:modelAuthorization,host:modelAuthorizationHost,topics:contextTrees.initializeAutomatic(store,evidenceReader),assertReadable:cards=>evidenceReader.assertMemoryReadable(cards),select:(profileId,model)=>{const selected=modelSettings.select('memory',profileId),settings={...selected.settings,...(model?{model}:{})};return {profileId:selected.id,model:settings.model,connection:agentModelConnection({kind:'profile',id:selected.id},settings)};},query:input=>queryAgent(input,'query','memories')});
+  resources.defer(()=>memoryTopics?.close());
   await configService.startWatching();
   diagnostics.record('server.started');
   app.addHook('onReady',async()=>{
     for(const row of store.db.prepare("SELECT id FROM import_jobs WHERE json_extract(json,'$.status')='queued'").all() as {id:string}[])launchImport(row.id,()=>imports.prepare(row.id));
   });
   app.addHook('preClose',async()=>{
-    await configService.close();
     closing=true;executionObserver.close();executor.bindObserver(undefined);eventLoop.disable();queryRuns.interrupt();
-    featureHost.stop();automaticActivity.stop();
-    memoryPublication.stop();
-    // Interrupt execution while its handlers, checkpoints and storage remain
-    // available. Fastify then drains HTTP requests before resource disposal.
-    // Provider transports must be interrupted while the executor drains. A
-    // blocked SDK request cannot wait for onClose to reach its own close method.
-    await Promise.allSettled([executor.close(),memoryAdapters.close(),pluginCenter.close()]);
+    featureHost.stop();automaticActivity.stop();memoryPublication.stop();
+    // Interrupt transports while handlers, checkpoints and storage remain live.
+    await resources.stop();
     agentGate.close();llmGate.close();interactiveGate.close();interactiveModelGate.close();
   });
-  app.addHook('onClose',async()=>{
-    await memoryTopics?.close();
-    modelAuthorization.close();
-    disposeCaptureMemoryIntake();
-    await featureHost.close();await delegation.close();
-    await backendContext.fiber.dispose();
-    await Promise.allSettled([...importAgents].map(runtime=>runtime.close()));
-    await modelSettings.close();
-    await contentStorage.close();
-    try{await agent.close();}catch(error){diagnostics.record('agent.failed',{category:safeError(error).category},'error');}
-    await Promise.allSettled([...activeQueries,...importTasks.values()]);await insightRuns.close();await queryRuns.close();await connectors.close();await softwareUpdate.close();await connections.close();
-    await memoryPublication.close();await memoryBindings!.close();await pluginCenter.close();await memoryAdapters.close();
-    memoryReviews.clear();
-    try{if(!dependencies?.store)store.close();}finally{diagnostics.record('server.stopping');await diagnostics.close();}
-  });
+  app.addHook('onClose',async()=>resources.close());
   return {app,modelAuthorization,modelAuthorizationHost,automaticActivity,configService,featureServices,featureHost,pluginCenter,memoryBindings,memoryAdapters,memoryPublication,memoryAutomation,memoryIntegrationSettings,memoryRecipeSettings,memoryStrategies,sourcePipelines,executor,workflows,perception,actions,store,sources,files,processing,materials,materialMemoryWork,materialOrganizer,memories,archivedFiles,imports,memoryPipeline,indexer,agent,diagnostics,connections,modelSettings,insightRuns,lifecycle,working};
+  }catch(error){
+    const failures:unknown[]=[];
+    await resources.stop();
+    if(startupApp)try{await startupApp.close();}catch(cleanup){failures.push(cleanup);}
+    try{await resources.close();}catch(cleanup){failures.push(cleanup);}
+    if(failures.length)throw new AggregateError([error,...failures],'Server initialization and disposal failed',{cause:error});
+    throw error;
+  }
 }

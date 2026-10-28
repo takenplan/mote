@@ -1,3 +1,4 @@
+import {ExecutionEngine} from '../src/execution-engine.js';
 import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import {fixtureMemoryPipeline} from './fixtures/memory-result.js';
 import test from 'node:test';
@@ -227,4 +228,26 @@ test('Coding recipe upgrade reuses the common queue without paying for historica
   assert.equal(await runtime.drainMemory(memory,true),1);
   const next=String(store.db.prepare('SELECT job_id FROM material_memory_requests').get()!.job_id);
   await memory.run(next);assert.equal(calls,3,'new raw input retains automatic intake behavior');
+});
+
+
+test('closing a source runtime waits for its plugin work before retirement and leaves the shared executor live',async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-source-module-close-'));
+  const store=new Store(directory),materials=new MaterialStore(store),engine=new ExecutionEngine(store);
+  let retired=0;
+  const plugin=(ctx:Context)=>{codingSourcePlugin(ctx);ctx.effect(()=>()=>{retired++;});};
+  const runtime=new SourcePipelineRuntime(store,materials,[plugin],undefined,engine);await runtime.ready;
+  const entered=deferred(),release=deferred(),snapshot=runtime.recipes.snapshot.bind(runtime.recipes);
+  runtime.recipes.snapshot=(async(...args:Parameters<typeof snapshot>)=>{const result=await snapshot(...args);entered.resolve();await release.promise;assert.equal(retired,0,'worker retains its installed plugin until it exits');return result;}) as unknown as typeof snapshot;
+  t.after(async()=>{release.resolve();await runtime.close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
+  const sources=new SourceStore(store,runtime);sources.register({id:'coding',name:'Generated',kind:'coding-agent',deviceId:'fixture',platform:'macos'});
+  await sources.upsert('coding',event('one','Generated interrupted source work'));
+  const running=runtime.tick();void running.catch(()=>{});await entered.promise;
+  let closed=false;const closing=runtime.close().then(()=>{closed=true;});const repeated=runtime.close();
+  await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(closed,false);assert.equal(retired,0);
+  let otherResult=0;engine.register({kind:'fixture.sibling',pool:'fixture.sibling',concurrency:()=>1,validate:()=>true,execute:async()=>42,commit:(_step,result)=>{otherResult=Number(result);}});
+  const sibling=engine.enqueue('fixture:sibling','fixture.sibling',{});await engine.drain([sibling]);assert.equal(otherResult,42);
+  release.resolve();await Promise.all([closing,repeated]);await Promise.allSettled([running]);assert.equal(retired,1);assert.equal(materials.list().items.length,0,'late work cannot publish');
+  const work=store.db.prepare("SELECT state,error FROM execution_steps WHERE kind='source.archive-group'").get()!;assert.equal(work.state,'waiting');assert.equal(work.error,'interrupted');
+  await runtime.tick();assert.equal(materials.list().items.length,0,'closed module admits no replacement work');
 });

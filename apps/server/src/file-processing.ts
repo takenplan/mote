@@ -53,6 +53,8 @@ export class FileProcessing {
   private mediaLastProbe=new Map<string,number>();
   private programRuns=new Map<string,number>();
   private closing?:Promise<void>;
+  private physicalTasks=new Set<Promise<unknown>>();
+  private retirement?:Promise<void>;
   private reconciledEpoch?:string;private configurationEpoch?:string;private configurationCache=new Map<string,{fingerprint:string;receipt:Record<string,unknown>}>();
   readonly runtime:FileProcessorRuntime;
   private unregister:Array<()=>Promise<void>>=[];
@@ -94,7 +96,7 @@ export class FileProcessing {
         const connection=phase==='pipeline'?this.mediaConnection(processor,applied,effective):undefined;
         const execute=async(authorizedSignal:AbortSignal):Promise<unknown>=>this.execution.run({step,signal:authorizedSignal},()=>phase==='pipeline'?this.runFile(step,authorizedSignal):this.runSummary(step,authorizedSignal));
         return phase==='summary'||connection?this.runModelStage({operationId:step.operationId,captureId:id,stage:phase==='summary'?'file-summary':processorId==='image.http'?'ocr':'asr',dataKind:phase==='summary'?'text':processorId==='image.http'?'image':'audio',connection,ownerIntentId:this.modelIntent(id,phase)},signal,execute):execute(signal);
-      };return this.options.diagnostics?this.options.diagnostics.run(randomUUID(),run):run();},
+      };return this.trackPhysical(this.options.diagnostics?this.options.diagnostics.run(randomUUID(),run):run());},
       commit:(step,result)=>{if(phase==='summary'){const id=String(step.input.captureId);this.saveArtifact(id,'summary',result,String(step.input.revision));this.invalidate(id);}},
       project:step=>this.project(step,phase),classify:error=>error instanceof StoreError&&error.statusCode===409?new ExecutionFailure('blocked','processor_not_configured'):error instanceof StoreError&&error.statusCode===422?new ExecutionFailure('permanent','unsupported_format'):error instanceof StoreError&&error.statusCode===413?new ExecutionFailure('permanent','processing_limit'):new ExecutionFailure('permanent','step_failed'),
     }));
@@ -129,6 +131,8 @@ export class FileProcessing {
     this.files.store.db.prepare('INSERT INTO media_model_intents VALUES(?,?,?) ON CONFLICT(capture_id,phase) DO UPDATE SET intent_id=excluded.intent_id').run(id,phase,intent);
     return true;
   }
+  private assertOpen(){if(this.stopping||this.closing)throw new ExecutionFailure('waiting','interrupted');}
+  private trackPhysical<T>(task:Promise<T>){this.physicalTasks.add(task);void task.finally(()=>this.physicalTasks.delete(task)).catch(()=>{});return task;}
   modelAuthorityEnabled(){return Boolean(this.options.modelAuthority);}
   ownerCanConfirmUnknown(id:string,authority=this.options.modelAuthority){return !authority||Boolean(authority.ownerIntent?.(id));}
   async runModelStage<T>(request:ModelProcessingRequest,signal:AbortSignal,task:(signal:AbortSignal,assertCurrent:()=>void)=>Promise<T>,authority=this.options.modelAuthority):Promise<T>{
@@ -287,8 +291,8 @@ export class FileProcessing {
   private requestForMedia(token:string,input:{step:ExecutionStep;generation:string;endpoint:string;apiKey:string;stage:MediaStage;assert:()=>void}):MediaRequestIdentity|undefined{
     const address=this.mediaAddress(input.stage,input.endpoint,input.apiKey);if(!address)return;
     return {requestId:token,requestScope:this.mediaCalls.scope(input.step.id,input.generation,token),onRequest:()=>{
-      input.assert();this.mediaCalls.begin({requestId:token,captureId:String(input.step.input.captureId),step:input.step,generation:input.generation,configuration:sha256(JSON.stringify(address)),stage:input.stage});
-    },onExecutionFacts:supported=>this.mediaCalls.support(token,supported)};
+      this.assertOpen();input.assert();this.mediaCalls.begin({requestId:token,captureId:String(input.step.input.captureId),step:input.step,generation:input.generation,configuration:sha256(JSON.stringify(address)),stage:input.stage});
+    },onExecutionFacts:supported=>{if(!this.stopping&&!this.closing)this.mediaCalls.support(token,supported);}};
   }
   /** Called only inside the engine's successful artifact transaction. */
   completeMediaStep(stepId:string){
@@ -351,15 +355,16 @@ export class FileProcessing {
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   /** Reuse the durable issued-call ledger across all accepted image adapters. */
-  async runImageProcessor<T>(id:string,key:string,signal:AbortSignal,execute:(request?:MediaRequestIdentity)=>Promise<T>,media?:{step:ExecutionStep;generation:string;endpoint:string;apiKey:string;assert:()=>void}):Promise<T>{
+  runImageProcessor<T>(id:string,key:string,signal:AbortSignal,execute:(request?:MediaRequestIdentity)=>Promise<T>,media?:{step:ExecutionStep;generation:string;endpoint:string;apiKey:string;assert:()=>void}):Promise<T>{return this.trackPhysical((async()=>{
+    this.assertOpen();
     if(this.imageProcessorWait(id,key))throw new ExecutionFailure('blocked',this.imageProcessorWait(id,key)==='unknown'?'processor_response_unknown':'processor_still_running');
     const db=this.files.store.db,token=randomUUID();db.prepare("INSERT INTO file_processor_waits VALUES(?,?,?,'running')").run(key,id,token);this.activeProcessorCalls.add(token);
     const unknown=()=>{if(!this.stopping)db.prepare("UPDATE file_processor_waits SET state='unknown' WHERE resource_key=? AND token=?").run(key,token);};signal.addEventListener('abort',unknown,{once:true});
     const request=media?this.requestForMedia(token,{...media,stage:'ocr'}):undefined;
-    try{const result=await execute(request);if(!this.stopping&&!this.mediaCalls.get(token))db.prepare('DELETE FROM file_processor_waits WHERE resource_key=? AND token=?').run(key,token);return result;}
-    catch(error){const tracked=this.mediaCalls.get(token),notIssued=request&&!tracked,known=error instanceof z.ZodError||error instanceof StoreError&&[400,409,413,415,422].includes(error.statusCode)||error instanceof ProviderFailure&&(error.details.executionStarted===false||!['provider_timeout','provider_unavailable'].includes(error.details.code));if(notIssued||!tracked&&known&&!signal.aborted)db.prepare('DELETE FROM file_processor_waits WHERE resource_key=? AND token=?').run(key,token);else if(error instanceof ProviderFailure&&error.details.executionStarted===false){db.prepare('DELETE FROM file_processor_waits WHERE token=?').run(token);this.mediaCalls.cleanup(token);this.mediaCalls.erased(token);}else unknown();if(tracked&&!(error instanceof ProviderFailure&&error.details.executionStarted===false)&&!signal.aborted)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}
+    try{const result=await execute(request);this.assertOpen();if(!this.stopping&&!this.mediaCalls.get(token))db.prepare('DELETE FROM file_processor_waits WHERE resource_key=? AND token=?').run(key,token);return result;}
+    catch(error){this.assertOpen();const tracked=this.mediaCalls.get(token),notIssued=request&&!tracked,known=error instanceof z.ZodError||error instanceof StoreError&&[400,409,413,415,422].includes(error.statusCode)||error instanceof ProviderFailure&&(error.details.executionStarted===false||!['provider_timeout','provider_unavailable'].includes(error.details.code));if(notIssued||!tracked&&known&&!signal.aborted)db.prepare('DELETE FROM file_processor_waits WHERE resource_key=? AND token=?').run(key,token);else if(error instanceof ProviderFailure&&error.details.executionStarted===false){db.prepare('DELETE FROM file_processor_waits WHERE token=?').run(token);this.mediaCalls.cleanup(token);this.mediaCalls.erased(token);}else unknown();if(tracked&&!(error instanceof ProviderFailure&&error.details.executionStarted===false)&&!signal.aborted)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}
     finally{signal.removeEventListener('abort',unknown);this.activeProcessorCalls.delete(token);}
-  }
+  })());}
   private processorWaits(id:string){return this.files.store.db.prepare('SELECT resource_key,capture_id,token,state FROM file_processor_waits WHERE capture_id=? OR resource_key IN (?,?)').all(id,this.workerKey(id),this.workerKey(id,'summary'));}
   cancellation(id:string){
     if(this.imageControl?.owns(id))return this.imageControl.cancellation(id);
@@ -379,7 +384,8 @@ export class FileProcessing {
     this.files.releaseSnapshotInput(id);this.log('file.cancelled',id,{operation:'file_process'});return {state:'cancelled',...this.cancellation(id)};
   }
   /** Publication is cancelled immediately; an issued processor may still finish remotely. */
-  private async waitForProcessor<T>(id:string,execute:(signal:AbortSignal,request?:MediaRequestIdentity)=>Promise<T>,preserveCancellation=false,timeoutMs:number|null=this.saved.settings.timeoutMs,media?:{step:ExecutionStep;generation:string;endpoint:string;apiKey:string;stage:MediaStage;assert:()=>void}):Promise<T>{
+  private waitForProcessor<T>(id:string,execute:(signal:AbortSignal,request?:MediaRequestIdentity)=>Promise<T>,preserveCancellation=false,timeoutMs:number|null=this.saved.settings.timeoutMs,media?:{step:ExecutionStep;generation:string;endpoint:string;apiKey:string;stage:MediaStage;assert:()=>void}):Promise<T>{return this.trackPhysical((async()=>{
+    this.assertOpen();
     const active=this.execution.getStore();active?.signal.throwIfAborted();
     const phase=active?.step.kind==='files.summary'?'summary':'pipeline',key=this.workerKey(id,phase),db=this.files.store.db;
     if(this.processorWaits(id).length)throw new StoreError(moteText("当前处理尚未结束，请稍后再试。"),409);
@@ -396,15 +402,16 @@ export class FileProcessing {
     signal.addEventListener('abort',unknown,{once:true});
     if(signal.aborted)unknown();
     const request=media?this.requestForMedia(token,media):undefined;
-    try{const result=await execute(signal,request);if(!this.mediaCalls.get(token))clear();return result;}
+    try{const result=await execute(signal,request);this.assertOpen();if(!this.mediaCalls.get(token))clear();return result;}
     catch(error){
+      this.assertOpen();
       // Explicit rejection / local validation is distinguishable from a lost response.
       const known=error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&(error.details.executionStarted===false||!['provider_timeout','provider_unavailable'].includes(error.details.code))||error instanceof StoreError&&[400,409,413,415,422].includes(error.statusCode)||error instanceof z.ZodError;
       if(request&&!this.mediaCalls.get(token)||!this.mediaCalls.get(token)&&known&&!signal.aborted)clear();
       else if(error instanceof ProviderFailure&&error.details.executionStarted===false){clear();this.mediaCalls.cleanup(token);this.mediaCalls.erased(token);}
       else unknown();if(this.mediaCalls.get(token)&&!signal.aborted)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;
     }finally{signal.removeEventListener('abort',unknown);active?.signal.removeEventListener('abort',forward);this.activeProcessorCalls.delete(token);}
-  }
+  })());}
   /** Source descriptions change interpretation, never authorize historical model work. */
   invalidateSourceContext(sourceId:string){
     const db=this.files.store.db;
@@ -444,6 +451,7 @@ export class FileProcessing {
   }
   private semanticContextFingerprint(id:string){const sourceId=this.files.version(id).source_id,pin=this.files.sources.contexts.identity(sourceId);return pin?sha256(JSON.stringify(pin)):undefined;}
   retry(id:string,stage:'transcribe'|'diarize'|'summary'='transcribe',reuseMatchingSteps=false,confirmUnknown=false,override?:{artifactId:string;options:FileDiarizationOptions|null}){
+    this.assertOpen();
     if(this.imageControl?.owns(id))return this.imageControl.retry(id,!reuseMatchingSteps,confirmUnknown);
     this.files.version(id);const db=this.files.store.db,waits=this.processorWaits(id);
     if(waits.some(row=>this.activeProcessorCalls.has(String(row.token))))throw new StoreError(moteText("当前处理尚未结束，请稍后再试。"),409);
@@ -578,7 +586,7 @@ export class FileProcessing {
     const jobs=this.files.store.db.prepare("SELECT capture_id,state FROM file_jobs WHERE auto_eligible=1 AND (state='waiting' OR (state='succeeded' AND summary_state='waiting')) AND available_at<=? ORDER BY rowid LIMIT 100").all(Date.now());
     return jobs.filter(job=>!this.imageControl?.owns(String(job.capture_id))).map(job=>this.enqueue(String(job.capture_id),job.state==='succeeded'?'summary':'pipeline')).filter((id):id is string=>Boolean(id));
   }
-  async tick(){await this.runtime.ready;await this.imageControl?.tick();const revision=this.saved.revision,first=this.prepare();await this.engine.drain(first);if(revision!==this.saved.revision)return;const summaries=first.flatMap(id=>{const step=this.engine.get(id);return step?this.engine.list({operationId:step.operationId,kind:'files.summary',limit:100}).items.map(s=>s.id):[];});await this.engine.drain([...this.prepare(),...summaries]);}
+  async tick(){await this.runtime.ready;if(this.stopping||this.closing)return;await this.imageControl?.tick();if(this.stopping||this.closing)return;const revision=this.saved.revision,first=this.prepare();await this.engine.drain(first);if(this.stopping||this.closing||revision!==this.saved.revision)return;const summaries=first.flatMap(id=>{const step=this.engine.get(id);return step?this.engine.list({operationId:step.operationId,kind:'files.summary',limit:100}).items.map(s=>s.id):[];});await this.engine.drain([...this.prepare(),...summaries]);}
   private exists(id:string,revision:string,phase:'pipeline'|'summary'='pipeline'){
     if(this.stopping||!this.files.store.db.prepare('SELECT 1 FROM file_versions WHERE capture_id=?').get(id)||!fileAttachmentAvailable(this.files.store,id))return false;
     const version=this.files.version(id),file=JSON.parse(version.manifest);if(file.item.layer==='snapshot'&&((!this.files.sources.getSource(file.sourceId).enabled||this.files.sources.getSource(file.sourceId).retention==='reference')||this.files.sources.getItem(file.sourceId,file.item.externalId)?.revision!==file.item.revision))return false;
@@ -601,6 +609,7 @@ export class FileProcessing {
     return artifactId;
   }
   private async step(id:string,name:string,processor:string,version:string,key:unknown,revision:string,execute:(signal:AbortSignal,request?:MediaRequestIdentity)=>Promise<unknown>,save:(value:any)=>string,reuseByContent=false,issuedCall=true,callPolicy:ExecutionPolicy=EXECUTION_POLICIES.localProcessing){
+    this.assertOpen();
     const installationEpoch=this.runtime.registry.epochs.get(processor),stageKey=processor+'@'+version,stageEpoch=this.runtime.recipes.epochs.get(stageKey);
     const db=this.files.store.db,fingerprint=sha256(JSON.stringify(key)),old=db.prepare('SELECT fingerprint,state,artifact_id,attempts FROM file_steps WHERE capture_id=? AND step=?').get(id,name) as Step|undefined;
     const cached=old?.state==='succeeded'&&old.fingerprint===fingerprint&&old.artifact_id&&db.prepare('SELECT 1 FROM file_artifacts WHERE id=?').get(old.artifact_id);
@@ -679,16 +688,18 @@ export class FileProcessing {
     if(applied)db.prepare('UPDATE file_jobs SET policy_json=? WHERE capture_id=?').run(JSON.stringify(applied),id);
     const outputType=this.runtime.outputs.get(defaultFileOutput(processor));
     const decodeOutput=(value:unknown)=>{const payload=outputType.parse(value);return {payload,transcript:transcriptSchema.parse(outputType.project(payload)),kind:outputType.kind};};
-    const input:ProcessorInput={parameters,file:{id,title:file.item.title,mimeType:mime,sizeBytes:file.sizeBytes},settings:effective,signal,maxAudioMs:Math.max(1,budget),readOriginal:()=>ReadableAsync(this.files.processingBytes(id))};
+    const input:ProcessorInput={parameters,file:{id,title:file.item.title,mimeType:mime,sizeBytes:file.sizeBytes},settings:effective,signal,maxAudioMs:Math.max(1,budget),readOriginal:()=>this.guardedOriginal(id,signal,()=>this.assertOpen())};
     const started=performance.now();this.log('file.started',id,{operation:'file_process',attempt:job.attempts+1,bytes:file.sizeBytes});
     try{
       const outputArtifact=await this.runtime.recipes.run(defaultFileRecipe(processor),{semanticTurns:settings.semanticTurns},(stage,dependencies)=>{
+        this.assertOpen();signal.throwIfAborted();
         const read=(name:string)=>{const artifactId=dependencies[name];if(!artifactId)throw new StoreError('File stage input is missing',409);return artifactId;};
-        const context:FileRecipeContext={input,dependencies,readArtifact:artifactId=>{if(!Object.values(dependencies).includes(artifactId))throw new StoreError('Artifact is outside stage inputs',409);return this.artifact(artifactId);},
+        const context:FileRecipeContext={input,dependencies,readArtifact:artifactId=>{this.assertOpen();signal.throwIfAborted();if(!Object.values(dependencies).includes(artifactId))throw new StoreError('Artifact is outside stage inputs',409);return this.artifact(artifactId);},
           transform:(type,execute)=>this.step(id,stage.name,stage.stage.id,stage.stage.version,[file.sha256,dependencies,type,revision],revision,execute,value=>{
             const decoded=this.runtime.outputs.decode(type,value);return this.saveArtifact(id,decoded.kind,{transcript:decoded.transcript,output:{type,payload:decoded.payload},complete:decoded.transcript.coverage!=='partial',coverage:decoded.transcript.coverage??'full',inputArtifacts:Object.values(dependencies),snapshot:file.item.layer==='snapshot'},revision,decoded.transcript);
           }),
           builtin:async operation=>{
+            this.assertOpen();signal.throwIfAborted();
             if(operation==='extract')return this.step(id,stage.name,processor.id,processor.version,[file.sha256,processor.id,processor.version,stage.stage,defaultFileOutput(processor),processorSettingsFingerprint(processor,effective,parameters),this.modelVersion(processor,effective)],revision,
               async (processorSignal,request)=>{
                 const connection=this.mediaConnection(processor,applied,effective),invoke=(authorizedSignal:AbortSignal,assertCurrent:()=>void)=>processor.process({...input,signal:authorizedSignal,request,authorizeModel:assertCurrent,readOriginal:()=>this.guardedOriginal(id,authorizedSignal,assertCurrent)});
@@ -737,7 +748,8 @@ export class FileProcessing {
             },result=>{if(contextFingerprint!==this.semanticContextFingerprint(id)||db.prepare('SELECT 1 FROM file_semantic_withdrawals WHERE capture_id=?').get(id))throw new ExecutionFailure('stale','attribution_context_changed');return this.saveArtifact(id,'dialogue',{transcript:result,complete:true,uncorrected:true,semanticGrouping:true,inputArtifacts:[alignId],sourceContextFingerprint:contextFingerprint,snapshot:file.item.layer==='snapshot'},revision,result);},false,true,EXECUTION_POLICIES.modelCall);
           },
         };return context;
-      },artifactId=>{if(!db.prepare('SELECT 1 FROM file_artifacts WHERE id=? AND capture_id=?').get(artifactId,id))throw new StoreError('File stage returned an unpublished artifact',422);if(!this.exists(id,revision))throw new ExecutionFailure('stale','input_changed');});
+      },artifactId=>{this.assertOpen();signal.throwIfAborted();if(!db.prepare('SELECT 1 FROM file_artifacts WHERE id=? AND capture_id=?').get(artifactId,id))throw new StoreError('File stage returned an unpublished artifact',422);if(!this.exists(id,revision))throw new ExecutionFailure('stale','input_changed');});
+      this.assertOpen();signal.throwIfAborted();
       if(!this.exists(id,revision))throw new ExecutionFailure('stale','input_changed');
       if(file.item.layer==='snapshot'){
         const transcript=this.transcript(outputArtifact),text=transcript.segments.map(segment=>segment.text).join('\n');
@@ -749,7 +761,7 @@ export class FileProcessing {
         this.files.releaseSnapshotInput(id);
       }
       this.log('file.completed',id,{operation:'file_process',durationMs:performance.now()-started,attempt:job.attempts+1});
-    }catch(error){const cancelled=!this.exists(id,revision);if(this.cancellation(id).wait==='unknown'&&!cancelled)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}
+    }catch(error){this.assertOpen();const cancelled=!this.exists(id,revision);if(this.cancellation(id).wait==='unknown'&&!cancelled)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}
   }
   private async runSummary(step:ExecutionStep,signal:AbortSignal){
     const id=String(step.input.captureId),{revision,settings,effective,processorId}=this.executionSettings(id,'summary');
@@ -778,16 +790,23 @@ export class FileProcessing {
           if(!this.validStep(step,'summary'))throw new ExecutionFailure('stale','input_changed');summaries.push(page);
         }
         signal.throwIfAborted();if(!this.validStep(step,'summary'))throw new ExecutionFailure('stale','input_changed');this.log('file.step.completed',id,{operation:'summary',durationMs:performance.now()-summaryStarted});return {sections:summaries,complete:true,inputFingerprint:step.input.inputFingerprint};
-      }catch(error){if(this.cancellation(id).wait==='unknown')throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}  }
+      }catch(error){this.assertOpen();if(this.cancellation(id).wait==='unknown')throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}  }
   private invalidate(id:string){const db=this.files.store.db;invalidateRetiredFileEvidence(this.files.store,id);this.files.store.invalidateConversationAnswers([id]);db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'supersede',?)").run(id,new Date().toISOString());}
   private analysisHost(id:string){const step=this.execution.getStore()?.step;return {operationId:step?.operationId??'file:'+id,jobId:id,requestId:randomUUID()};}
-  async analyze(id:string,records:ContextRecord[],prompt:string){if(!this.options.analyze)throw new StoreError('Analysis model is unavailable',409);const job=this.files.store.db.prepare('SELECT policy_json FROM file_jobs WHERE capture_id=?').get(id);const settings=job?.policy_json?effectiveFileSettings(JSON.parse(String(job.policy_json)),this.policy(),this.saved.settings,this.runtime.registry):this.currentSettings();return this.options.analyze(records,prompt,settings,undefined,this.analysisHost(id));}
+  async analyze(id:string,records:ContextRecord[],prompt:string){this.assertOpen();if(!this.options.analyze)throw new StoreError('Analysis model is unavailable',409);const job=this.files.store.db.prepare('SELECT policy_json FROM file_jobs WHERE capture_id=?').get(id);const settings=job?.policy_json?effectiveFileSettings(JSON.parse(String(job.policy_json)),this.policy(),this.saved.settings,this.runtime.registry):this.currentSettings();return this.options.analyze(records,prompt,settings,undefined,this.analysisHost(id));}
   close(){return this.closing??=(async()=>{
     if(this.owned)await this.engine.close();
     // Unregister stops this module's claims and interrupts its local work while
     // keeping queued tasks, admission blocks and completed substeps durable.
     await Promise.all(this.unregister.splice(0).map(stop=>stop()));
-    this.stopping=true;this.abort.abort();await Promise.allSettled(this.mediaReconciliations.values());await this.runtime.close();
+    this.stopping=true;this.abort.abort();await Promise.allSettled(this.mediaReconciliations.values());
+    // Restart may proceed while an issued provider is still returning. Keep its
+    // plugins alive; closed callbacks cannot read or mutate the old Store.
+    const pending=this.physicalTasks.size>0;
+    this.retirement=(async()=>{while(this.physicalTasks.size)await Promise.allSettled([...this.physicalTasks]);await this.runtime.close();})();
+    void this.retirement.catch(()=>this.log('file.step.failed','shutdown',{category:'plugin_cleanup_failed'},'error'));
+    if(!pending)await this.retirement;
   })();}
+  /** Final host shutdown joins physical calls before disposing the shared root. */
+  async settle(){await this.close();await this.retirement;}
 }
-async function* ReadableAsync(chunks:Iterable<Buffer>){yield* chunks;}

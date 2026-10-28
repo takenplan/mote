@@ -7,7 +7,8 @@ import {join} from 'node:path';
 import {Store} from '../src/store.js';
 import {ProcessingRuntime,type ProcessingLane} from '../src/processing-runtime.js';
 import {EXECUTION_POLICIES} from '../src/execution-policy.js';
-import {ExecutionFailure} from '../src/execution-engine.js';
+import {ExecutionEngine,ExecutionFailure} from '../src/execution-engine.js';
+import type {Context} from '@deepseek-ai/cordis';
 import {UsageLedger} from '../src/usage.js';
 import {linkOperationParent} from '../src/operation-projection.js';
 import {SourceStore} from '../src/sources.js';
@@ -57,4 +58,31 @@ test('parent re-entry preserves a failed semantic child until an explicit retry'
  }
  fail=false;runtime.retry(id);await runtime.tick();assert.equal(calls,2);assert.equal(runtime.engine.get(id)?.state,'succeeded');
  runtime.enqueue(steps,{stepId:parent,fence:'generated-next-grant'});await runtime.tick();assert.equal(calls,2,'completed semantic output is reused');
+});
+
+
+test('module close waits for a held async processor before plugin retirement while sibling execution continues',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-processing-module-close-')),store=new Store(directory),engine=new ExecutionEngine(store);
+ let entered!:()=>void,release!:()=>void,retired=0,observedSignal:AbortSignal|undefined;
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ const plugin=(ctx:Context)=>{
+   ctx.effect(()=>ctx.moteContextProcessors.register({id:'fixture.held-close',version:'1',lane:'extract',async process(input){
+     observedSignal=input.signal;entered();await held;assert.equal(retired,0,'plugin stays installed through processor exit');
+     assert.equal(store.db.prepare('SELECT count(*) n FROM captures').get()!.n,1,'owned SQLite remains usable through processor exit');
+     return [{kind:'generated',text:'Generated late processor output',metadata:{}}];
+   }}));
+   ctx.effect(()=>()=>{retired++;});
+ };
+ const runtime=new ProcessingRuntime(store,[plugin],{},Date.now,engine);await runtime.ready;
+ t.after(async()=>{release();await runtime.close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ const record=observation('Generated held processor source');await store.ingest(record);
+ const id=runtime.enqueue([{name:'held',processor:'fixture.held-close',inputs:[record.id]}]).held;
+ const running=runtime.tick();await started;const closing=runtime.close();assert.equal(runtime.close(),closing);
+ let closed=false;void closing.then(()=>closed=true);await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(observedSignal?.aborted,true);assert.equal(closed,false);assert.equal(retired,0);
+ let siblingResult=0;engine.register({kind:'fixture.processing-sibling',pool:'fixture.processing-sibling',concurrency:()=>1,validate:()=>true,execute:async()=>17,commit:(_step,value)=>{siblingResult=Number(value);}});
+ const sibling=engine.enqueue('fixture:processing-sibling','fixture.processing-sibling',{});await engine.drain([sibling]);assert.equal(siblingResult,17);
+ release();await Promise.all([closing,running]);assert.equal(retired,1);assert.equal(engine.closed,false);
+ assert.equal(engine.get(id)?.state,'waiting');assert.equal(engine.get(id)?.error,'interrupted');
+ assert.deepEqual(runtime.view().jobs.find(job=>job.id===id)?.outputs,[]);assert.equal(store.db.prepare("SELECT count(*) n FROM context_artifacts WHERE json_extract(json,'$.processor')='fixture.held-close'").get()!.n,0);
 });
