@@ -71,9 +71,6 @@ import { confirmNavigation } from './unsaved';
 
 installGlobalErrorLogging(window);
 
-declare global {
-  interface Window { moteCentralSession?: {close: () => void} }
-}
 const periodNames: Record<string, string> = {
   today: moteText("今天"),
   week: moteText("过去 7 天"),
@@ -173,7 +170,6 @@ function App() {
     if(connection)void createApi(connection).request('/api/login/logout',{method:'POST',body:'{}'}).catch(()=>{});
     clearConnection();
     setEvidenceId(null);
-    window.moteCentralSession?.close();
   }, [clearConnection, setEvidenceId,connection]);
   const unauthorized = useCallback(() => {
     log('auth.session_rejected','warn');
