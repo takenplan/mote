@@ -8,7 +8,6 @@ import {queryWorkspace,type QueryWorkspace} from './delegation-protocol.js';
 import {StoreError,type Store} from './store.js';
 import {sourceContextDeclarationSchema,type SourceContextDeclaration} from '@mote/shared';
 import {combineSourceContextDependencies} from './source-context-lineage.js';
-import {retireBrokenActivityContinuationTrigger} from './activity-memory-index.js';
 export {originalEvidenceReceipt} from '@mote/agent';
 
 export type DelegationScope=Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'contextTime'|'evidenceIds'|'anchorEvidenceIds'|'evidenceRanges'|'processingEvidence'>;
@@ -72,19 +71,14 @@ export class DelegationRuntime {
  private timer?:ReturnType<typeof setInterval>;
  private closed=false;
  constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean;observePump?:()=>void}={}){
-  retireBrokenActivityContinuationTrigger(store);
+  const sourceDependencyColumns=store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all();
+  if(sourceDependencyColumns.length&&!sourceDependencyColumns.some(row=>row.name==='kind'))throw new StoreError('Unsupported delegation source-context schema; existing data was not changed',409);
   this.journal=new DelegationStore(store);
   const sourceDependencyTable=`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
     work_id TEXT NOT NULL REFERENCES delegation_works(id) ON DELETE CASCADE,unit_id TEXT NOT NULL,
     source_id TEXT NOT NULL,version INTEGER NOT NULL,fingerprint TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'description',
     PRIMARY KEY(work_id,unit_id,kind,source_id,version,fingerprint));`;
   store.db.exec(sourceDependencyTable);
-  if(!store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all().some(row=>row.name==='kind')){
-   const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');
-   try{store.db.exec('ALTER TABLE delegation_source_context_dependencies RENAME TO delegation_source_context_dependencies_previous');store.db.exec(sourceDependencyTable);
-    store.db.exec("INSERT INTO delegation_source_context_dependencies(work_id,unit_id,source_id,version,fingerprint,kind) SELECT work_id,unit_id,source_id,version,fingerprint,'description' FROM delegation_source_context_dependencies_previous; DROP TABLE delegation_source_context_dependencies_previous");if(own)store.db.exec('COMMIT');
-   }catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}
-  }
   engine.configurePool('delegated-agents',{concurrency:{background:options.concurrency??(()=>4),interactive:options.interactiveConcurrency??options.concurrency??(()=>2)},lane:step=>{
    // Existing work/profile identity is sufficient for restart. The model's
    // payload, capability arguments and captured content cannot elevate a lane.

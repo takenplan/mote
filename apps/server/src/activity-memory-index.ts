@@ -38,14 +38,6 @@ const refreshOutputs=(jobId:string)=>`DELETE FROM activity_memory_outputs WHERE 
  INSERT OR IGNORE INTO activity_memory_outputs SELECT ${jobId},value FROM memory_jobs j,json_each(j.json,'$.memoryIds') WHERE j.id=${jobId};
  INSERT OR IGNORE INTO activity_memory_outputs SELECT b.job_id,value FROM memory_batches b,json_each(b.json,'$.memoryIds') WHERE b.job_id=${jobId} AND EXISTS(SELECT 1 FROM activity_memory_jobs current WHERE current.id=b.job_id);`;
 
-/** The previous trigger's UPDATE alias cannot be resolved by SQLite when
- * ALTER TABLE revalidates the schema. Retire that exact broken definition
- * before a schema upgrade; ActivityMemoryIndex installs and replays its fix. */
-export function retireBrokenActivityContinuationTrigger(store:Store){
- const row=store.db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='activity_memory_continuation_update'").get();
- if(typeof row?.sql==='string'&&row.sql.includes('UPDATE activity_memory_items AS i'))store.db.exec('DROP TRIGGER activity_memory_continuation_update');
-}
-
 /** Small relational metadata is maintained when products change. Activity pages
  * never parse complete historic job or batch payloads to find the newest goals. */
 export class ActivityMemoryIndex {
