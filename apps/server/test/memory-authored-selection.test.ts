@@ -59,12 +59,12 @@ test('current built-in authored Material is admitted once, without a second raw 
   // The fake executor is never run. Creating the durable job verifies that
   // planning and batch admission agree without contacting a model.
   const pipeline=fixtureMemoryPipeline({store:f.store,memories:f.reader.memories,
+    model:()=>'',configured:()=>false,query:async()=>{throw Error('Fake model must not run');},
+    review:async()=>{throw Error('Fake review must not run');},admission:{
     materialSourceCurrent:(pin,id)=>f.reader.materialSourceCurrent(pin,id),
     materialPlanAllowed:id=>f.reader.materialPlanAllowed(id),
     materialInput:(ref,required)=>f.materials.input(ref,required),
-    materialAllowedForMemory:(ref,_profileId,required)=>f.reader.materialAllowedForMemory(ref,undefined,required),
-    model:()=>'',configured:()=>false,query:async()=>{throw Error('Fake model must not run');},
-    review:async()=>{throw Error('Fake review must not run');}});
+    materialAllowedForMemory:(ref,_profileId,required)=>f.reader.materialAllowedForMemory(ref,undefined,required)}});
   f.pipelines.push(pipeline);
   const job=pipeline.create({manualPlans:selected.manualPlans,recipes:[{id:'mote.personal-memory',version:'2'}],evidenceIds:[]});
   assert.equal(job.inputPlans?.total,1);
@@ -111,10 +111,6 @@ async function historicalDuplicate(t:TestContext){
   const configuration=()=>({owner:'models' as const,fingerprint:control.fingerprint,revision:1,
     profileId:'generated-profile',provider:'generated',model:'generated-model'});
   const pipeline=fixtureMemoryPipeline({store:f.store,memories:f.reader.memories,requireAdmission:true,
-    materialSourceCurrent:(pin,id)=>f.reader.materialSourceCurrent(pin,id),
-    materialPlanAllowed:id=>control.allowed&&f.reader.materialPlanAllowed(id),
-    materialInput:(ref,required)=>f.materials.input(ref,required),
-    materialAllowedForMemory:(ref,_profileId,required)=>control.allowed&&f.reader.materialAllowedForMemory(ref,undefined,required),
     model:()=>configuration().model,configured:()=>true,configuration,
     query:async input=>{control.extracts++;const proofId=input.evidenceIds[0],quote=f.reader.memories.readEvidence([proofId])[0].ocrText;return {answer:JSON.stringify({memories:[{
       domain:'personal',title:'Generated rescheduling',statement:`The generated meeting moved [${proofId}]`,
@@ -123,7 +119,11 @@ async function historicalDuplicate(t:TestContext){
       evidenceIds:[proofId],evidence:[{id:proofId,quote}]}]}),
       citations:[{id:proofId,capturedAt:'2026-09-20T00:00:00.000Z',appName:'Notes',excerpt:quote}],
       trace:[],runId:'generated-extract-'+control.extracts};},
-    review:(input,result,strategy)=>reviewMemory(input,result,async()=>({...result,runId:'generated-review-'+ ++control.reviews}),{strategy})});
+    review:(input,result,strategy)=>reviewMemory(input,result,async()=>({...result,runId:'generated-review-'+ ++control.reviews}),{strategy}),admission:{
+    materialSourceCurrent:(pin,id)=>f.reader.materialSourceCurrent(pin,id),
+    materialPlanAllowed:id=>control.allowed&&f.reader.materialPlanAllowed(id),
+    materialInput:(ref,required)=>f.materials.input(ref,required),
+    materialAllowedForMemory:(ref,_profileId,required)=>control.allowed&&f.reader.materialAllowedForMemory(ref,undefined,required)}});
   f.pipelines.push(pipeline);
   // Separate raw intake and pinned Material inputs require their own model reads.
   const job=pipeline.create({manualPlans:selected.manualPlans,recipes:[{id:'mote.personal-memory',version:'2'}],

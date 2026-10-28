@@ -78,8 +78,8 @@ test('a manual composition retains default dependencies without blocking an inde
   const memories=new MemoryStore(store,ids=>materials.evidence(ids),id=>materials.isCurrentEvidence(id));
   const calls:string[][]=[];
   const pipeline=fixtureMemoryPipeline({store,memories,strategies,configured:()=>true,model:()=> 'fixture',
-    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready),
-    query:async input=>{calls.push((input.processingMaterialInputs??[]).flatMap(pin=>pin.required));return {answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-independent-body'};},review:async(_input,result)=>result});
+    query:async input=>{calls.push((input.processingMaterialInputs??[]).flatMap(pin=>pin.required));return {answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-independent-body'};},review:async(_input,result)=>result,admission:{
+    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)}});
   try{
     const job=pipeline.create({evidenceIds:body.evidenceIds,recipes:[{id:recipe.id,version:recipe.version},{id:'mote.personal-memory',version:'2'}]});
     assert.deepEqual(job.materialInputs!.map(pin=>pin.required),[['body'],['material']]);
@@ -112,8 +112,8 @@ test('body feedback retains its recipe pin when the same originals also belong t
     return {runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:work.members.map(member=>({key:member.key,state:needs?'needs_context':'no_candidates',candidateIndexes:[],...(needs?{reason:'The generated target needs the separately selected earlier body entry.',contextRefs:[backgroundId]}:{})})),capacity:{saturated:false}})};
   };
   const pipeline=fixtureMemoryPipeline({store,memories,strategies,configured:()=>true,model:()=> 'fixture',batchCharacters:256,
-    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready),
-    query:async input=>output(input,'generated-body-extract-'+calls.length),review:(input,result,strategy)=>reviewMemory(input,result,async next=>output(next,'generated-body-review-'+calls.length),{strategy})});
+    query:async input=>output(input,'generated-body-extract-'+calls.length),review:(input,result,strategy)=>reviewMemory(input,result,async next=>output(next,'generated-body-review-'+calls.length),{strategy}),admission:{
+    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)}});
   pipeline.setFeedbackPlanner(async request=>{
     feedbackCalls++;
     assert.equal(request.round,1);assert.equal(request.targets.length,1);assert.equal(request.targets[0].id,targetId);
