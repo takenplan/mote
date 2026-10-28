@@ -37,7 +37,7 @@ import { z } from 'zod';
 import { Actions } from './actions.js';
 import { ActivityProjection } from './activity.js';
 import { Operations } from './operations.js';
-import { DelegationRuntime,type DelegationWork } from './delegation-runtime.js';
+import { assertCurrentDelegationSchema,DelegationRuntime,type DelegationWork } from './delegation-runtime.js';
 import { DelegatedQueryRuns } from './delegated-query-runs.js';
 import {runQueryQualityExperiment,type QueryQualityStrategy,type QueryQualityStage,type QueryQualityCheckpoint} from './query-quality-experiment.js';
 import { registerMemoryDelegation } from './memory-delegation.js';
@@ -157,6 +157,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   // the HTTP service is available instead of making startup scan the whole vault.
   const store=dependencies?.store??new Store(config.dataDir,{dataKey:config.dataKey,contentEncryptionEnabled:config.contentEncryptionEnabled,maxStorageBytes:config.maxStorageBytes,embeddingEnabled:Boolean(config.embeddingModel),maintenance:Boolean(dependencies?.backgroundWorker)});
   if(!dependencies?.store)resources.defer(()=>store.close());
+  assertCurrentDelegationSchema(store);
   let availableModelConnections=():ModelConnection[]=>[];
   const modelAuthorization=new BackgroundModelAuthorization(store,()=>availableModelConnections());
   resources.defer(()=>modelAuthorization.close());
