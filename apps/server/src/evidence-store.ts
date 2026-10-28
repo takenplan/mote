@@ -1,17 +1,13 @@
+import {installVaultSchema} from './vault-schema-installation.js';
 import {centralOcrState} from './central-ocr-state.js';
 import {CAPTURE_BATCH_MAX_RECORDS,CAPTURE_BATCH_MAX_BYTES} from './capture-limits.js';
 import {AssetStore} from './assets.js';
-import {ensureTodoSchema} from './todo-schema.js';
 import {archivedTodoSchema} from './todos.js';
-import {initializeReadModels} from './read-models.js';
-import {initializeSourceCatalog} from './source-catalog.js';
 import {EvidenceArchive} from './evidence-archive.js';
 import {StorageLedger} from './storage-ledger.js';
 import {isStateExtension,samples as stateSamples} from '@mote/shared/state-series';
 import { moteText } from './i18n.js';
 import {textSearch} from './text-search.js';
-import {fileSchema} from './file-schema.js';
-import {sourceSchema} from './source-schema.js';
 import {systemEventText,sourceContentTime,resolveFileRule,type FilePolicy} from '@mote/shared';
 import {MemoryDeletions} from './memory-deletions.js';
 import {notificationEvidenceText} from './notification-evidence.js';
@@ -74,83 +70,17 @@ export class EvidenceStore {
         throw new StoreError('Unsupported Mote vault epoch. Backend epoch 4 requires a new empty data directory; existing data is retained.',409);
       }
     }
-    ensureTodoSchema(this.db);
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
-      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS captures (
-        id TEXT PRIMARY KEY, device_id TEXT NOT NULL, captured_at TEXT NOT NULL, received_at TEXT NOT NULL,
-        json TEXT NOT NULL, fingerprint TEXT NOT NULL, blob_hash TEXT, mime TEXT, index_status TEXT NOT NULL, context_at TEXT, context_end TEXT,
-        summary TEXT, embedding TEXT, embedding_model TEXT, index_error TEXT, attempts INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS perception_jobs(capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,kind TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,requested INTEGER NOT NULL DEFAULT 0,auto_eligible INTEGER NOT NULL DEFAULT 1,error TEXT,PRIMARY KEY(capture_id,kind));
-      CREATE TABLE IF NOT EXISTS perception_results(id TEXT PRIMARY KEY,capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,kind TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,current INTEGER NOT NULL DEFAULT 1);
-      CREATE INDEX IF NOT EXISTS perception_cache ON perception_results(fingerprint);
-      CREATE TRIGGER IF NOT EXISTS perception_ingest AFTER INSERT ON captures WHEN new.blob_hash IS NOT NULL AND json_extract(new.json,'$.source')='screen' BEGIN
-        INSERT INTO perception_jobs(capture_id,kind,state,created_at) VALUES(new.id,'ocr','waiting',CAST(strftime('%s','now') AS INTEGER)*1000);
-      END;
-      CREATE INDEX IF NOT EXISTS captures_vectors ON captures(embedding_model,captured_at DESC,id) WHERE embedding IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS captures_time ON captures(captured_at DESC,id DESC);
-      CREATE INDEX IF NOT EXISTS captures_device ON captures(device_id,captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_device_source_time ON captures(device_id,json_extract(json,'$.source'),captured_at DESC,id DESC);
-      CREATE INDEX IF NOT EXISTS captures_app ON captures(json_extract(json,'$.appId'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_source ON captures(json_extract(json,'$.source'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_collection ON captures(COALESCE(json_extract(json,'$.privacy.collection'),'content'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_ui_page_scope ON captures(device_id,json_extract(json,'$.appId'),json_extract(json,'$.metadata.uiPage.objects[0].kind'),captured_at DESC,id DESC) WHERE json_extract(json,'$.source')='ui_page' AND json_extract(json,'$.metadata.uiPage.version')=3;
-      CREATE INDEX IF NOT EXISTS captures_coding_repository ON captures(json_extract(json,'$.provenance.document.coding.repositoryKey'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_coding_project ON captures(json_extract(json,'$.provenance.document.coding.projectKey'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_coding_session ON captures(json_extract(json,'$.provenance.document.coding.sessionId'),captured_at DESC);
-      CREATE INDEX IF NOT EXISTS captures_coding_provider ON captures(json_extract(json,'$.provenance.document.coding.provider'),captured_at DESC);
-      CREATE TABLE IF NOT EXISTS blobs (hash TEXT PRIMARY KEY, bytes INTEGER NOT NULL, mime TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS insights (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, operation TEXT NOT NULL, changed_at TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS changes_entity_operation ON changes(id,operation);
-      CREATE TABLE IF NOT EXISTS capture_ocr_receipts (id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE, original_fingerprint TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS file_evidence_links(parent_id TEXT NOT NULL,capture_id TEXT NOT NULL,PRIMARY KEY(parent_id,capture_id));
-      CREATE INDEX IF NOT EXISTS file_evidence_links_capture ON file_evidence_links(capture_id,parent_id);
-      CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS memory_provider_evidence_revocations(id TEXT PRIMARY KEY,generation INTEGER NOT NULL,json TEXT NOT NULL,state TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS memory_dependencies (memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,evidence_id TEXT NOT NULL,PRIMARY KEY(memory_id,evidence_id));
-      CREATE INDEX IF NOT EXISTS memory_dependencies_evidence ON memory_dependencies(evidence_id);
-      CREATE TABLE IF NOT EXISTS memory_jobs (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS memory_batches (id TEXT PRIMARY KEY,job_id TEXT NOT NULL REFERENCES memory_jobs(id) ON DELETE CASCADE,idx INTEGER NOT NULL,json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS memory_batch_dependencies (batch_id TEXT NOT NULL REFERENCES memory_batches(id) ON DELETE CASCADE,evidence_id TEXT NOT NULL,PRIMARY KEY(batch_id,evidence_id));
-      CREATE INDEX IF NOT EXISTS memory_batch_dependencies_evidence ON memory_batch_dependencies(evidence_id);
-      CREATE TABLE IF NOT EXISTS memory_checkpoints (key TEXT PRIMARY KEY,evidence_id TEXT NOT NULL,completed_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY,title TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,json TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS conversations_updated ON conversations(updated_at DESC,id DESC);
-      CREATE VIRTUAL TABLE IF NOT EXISTS captures_fts USING fts5(id UNINDEXED, text, tokenize='unicode61');
-      PRAGMA user_version=4;`);
-    this.db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('backend_epoch','4')").run();
-    // Captures precede source identities; file versions and catalog triggers depend on both.
-    sourceSchema(this.db);
-    fileSchema(this.db);
-    // Materialized browsing projection: album navigation never reads OCR/metadata JSON or blobs.
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS capture_gallery (
-        id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE,
-        device_id TEXT NOT NULL, captured_at TEXT NOT NULL, app_id TEXT NOT NULL, app_name TEXT NOT NULL, has_image INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS gallery_device_time ON capture_gallery(device_id,captured_at DESC,id DESC);
-      CREATE INDEX IF NOT EXISTS gallery_app_time ON capture_gallery(device_id,app_id,captured_at DESC,id DESC);
-      CREATE TRIGGER IF NOT EXISTS gallery_insert AFTER INSERT ON captures WHEN json_extract(NEW.json,'$.source')='screen' BEGIN
-        INSERT INTO capture_gallery VALUES(NEW.id,NEW.device_id,NEW.captured_at,COALESCE(json_extract(NEW.json,'$.appId'),''),COALESCE(json_extract(NEW.json,'$.appName'),''),NEW.blob_hash IS NOT NULL);
-      END;
-    `);
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000');
     this.db.function('mote_central_ocr_status',{deterministic:true},(state,error,enabled)=>centralOcrState({state:String(state),error:error===null?null:String(error)},enabled!==0).status);
     this.db.function('mote_ocr_status',{deterministic:true},json=>captureOcrState(JSON.parse(String(json))).status);
     this.db.function('mote_context_end',{deterministic:true},json=>{const c=JSON.parse(String(json));return new Date(c.stateSeries?.samples?.at(-1)?.at??sourceContentTime(c)).toISOString();});
     this.db.function('mote_context_time',{deterministic:true},json=>new Date(sourceContentTime(JSON.parse(String(json)))).toISOString());
+    this.db.function('mote_search_text',{deterministic:true},json=>searchText(JSON.parse(String(json))));
+    installVaultSchema(this.db);
+    this.db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('backend_epoch','4')").run();
+    this.db.exec('PRAGMA user_version=4');
     try{this.contentEncryption=new ContentEncryption(directory,this.db,options);}catch(error){this.db.close();throw error;}
     this.assets=new AssetStore(this);
-    this.db.function('mote_search_text',{deterministic:true},json=>searchText(JSON.parse(String(json))));
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS captures_trigram USING fts5(id UNINDEXED,text,tokenize='trigram');
-      CREATE TRIGGER IF NOT EXISTS captures_trigram_insert AFTER INSERT ON captures BEGIN INSERT INTO captures_trigram(rowid,id,text) VALUES(new.rowid,new.id,mote_search_text(new.json)); END;
-      CREATE TRIGGER IF NOT EXISTS captures_trigram_delete AFTER DELETE ON captures BEGIN DELETE FROM captures_trigram WHERE rowid=old.rowid; END;
-      CREATE TRIGGER IF NOT EXISTS captures_trigram_update AFTER UPDATE OF json ON captures WHEN new.json!=old.json BEGIN DELETE FROM captures_trigram WHERE rowid=old.rowid; INSERT INTO captures_trigram(rowid,id,text) VALUES(new.rowid,new.id,mote_search_text(new.json)); END;`);
-    this.db.exec('CREATE TRIGGER IF NOT EXISTS captures_words_delete BEFORE DELETE ON captures BEGIN DELETE FROM captures_fts WHERE rowid=old.rowid; END;');
-    initializeReadModels(this.db);
-    initializeSourceCatalog(this.db);
     this.archive=new EvidenceArchive(this);
     this.ledger=new StorageLedger(this.db);
     this.ledger.bytes();

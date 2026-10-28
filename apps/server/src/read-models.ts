@@ -5,7 +5,6 @@ export function initializeReadModels(db:DatabaseSync){
   db.exec(`CREATE INDEX IF NOT EXISTS captures_context ON captures(context_at DESC,id DESC);
     CREATE INDEX IF NOT EXISTS captures_context_device ON captures(device_id,context_at DESC,id DESC);
     CREATE INDEX IF NOT EXISTS captures_index_status ON captures(index_status);
-    CREATE INDEX IF NOT EXISTS memory_batches_job ON memory_batches(job_id,idx);
     CREATE TABLE IF NOT EXISTS capture_counts(source TEXT NOT NULL,index_status TEXT NOT NULL,has_image INTEGER NOT NULL,n INTEGER NOT NULL,PRIMARY KEY(source,index_status,has_image));
     CREATE TABLE IF NOT EXISTS blob_counts(id INTEGER PRIMARY KEY CHECK(id=1),n INTEGER NOT NULL,bytes INTEGER NOT NULL);
     INSERT OR IGNORE INTO blob_counts VALUES(1,0,0);

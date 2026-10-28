@@ -3,12 +3,12 @@ import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {z} from 'zod';
 import {moteText} from './i18n.js';
 import {ConnectionError,type Connections,type ConnectionCredential} from './connections.js';
-import type {Store} from './store.js';
+import type {LayersReadModel} from './layers-read-model.js';
 import type {SourceStore} from './sources.js';
 import type {SourceFileCatalogRead} from './evidence-read-ports.js';
 import type {IngressService} from './ingress.js';
 /** Collector authorization is checked again inside transactional source writes. */
-export function registerSourceRoutes(app:FastifyInstance,{store,sources,evidenceReader,ingress,connections,credential,sourceOwner}:{store:Store;sources:SourceStore;evidenceReader:SourceFileCatalogRead;ingress:IngressService;connections:Connections;credential:(request:FastifyRequest)=>ConnectionCredential|undefined;sourceOwner:(request:FastifyRequest,id:string)=>void}){
+export function registerSourceRoutes(app:FastifyInstance,{layers,sources,evidenceReader,ingress,connections,credential,sourceOwner}:{layers:Pick<LayersReadModel,'summary'>;sources:SourceStore;evidenceReader:SourceFileCatalogRead;ingress:IngressService;connections:Connections;credential:(request:FastifyRequest)=>ConnectionCredential|undefined;sourceOwner:(request:FastifyRequest,id:string)=>void}){
   const present=(req:FastifyRequest,source:SourceConnection)=>{
     if(!credential(req))return source;
     const {ownerRelation,ownerRelationVersion,sourceContext,...intake}=source;
@@ -28,6 +28,6 @@ export function registerSourceRoutes(app:FastifyInstance,{store,sources,evidence
   app.post('/api/sources/:id/items/batch',{bodyLimit:32*1024*1024},async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);const body=z.object({items:z.array(z.unknown()).min(1).max(500)}).strict().parse(req.body);return ingress.sourceBatch(id,body.items,()=>sourceOwner(req,id));});
   app.get('/api/sources/:id/item',async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);const {externalId}=z.object({externalId:z.string().min(1).max(1000)}).strict().parse(req.query);return {item:sources.getItem(id,externalId)??null};});
   app.get('/api/sources/:id/history',async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);const {externalId}=z.object({externalId:z.string().min(1).max(1000)}).strict().parse(req.query);return {items:sources.history(id,externalId)};});
-  app.get('/api/layers',async()=>({...sources.summary(),memories:Number((store.db.prepare('SELECT COUNT(*) AS n FROM memories').get() as {n:number}).n)}));
+  app.get('/api/layers',async()=>layers.summary());
   app.get('/api/sources/:id/catalog',async req=>{const id=(req.params as {id:string}).id;sourceOwner(req,id);sources.getSource(id);return evidenceReader.fileCatalog(id,z.object({parent:z.string().optional(),cursor:z.string().optional(),limit:z.coerce.number().int().min(1).max(100).optional()}).parse(req.query));});
 }
