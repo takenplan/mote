@@ -3,9 +3,9 @@ import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {OAuth2Client,type Credentials} from 'google-auth-library';
 import type {SourceItem} from '@mote/shared';
 import sanitizeHtml from 'sanitize-html';
-import {ArchivedFileStore} from '../archived-files.js';
+import type {GmailContext} from './gmail-context.js';
 import {PrivateFile} from './private-file.js';
-import {ConnectorError,type ConnectorContext} from './types.js';
+import {ConnectorError} from './types.js';
 import type {GoogleDependencies} from './google.js';
 
 export const gmailScope='https://www.googleapis.com/auth/gmail.readonly';
@@ -57,27 +57,26 @@ export function gmailItems(message:Message,observedAt:string,reference=false):So
 export class GmailConnector {
   private saved:State={version:1,tokens:{}};
   private file:PrivateFile<State>;
-  private archives:ArchivedFileStore;
+  private archives:GmailContext['archives'];
   private pending=new Map<string,{verifier:string;expires:number}>();
   private sequence:Promise<unknown>=Promise.resolve();
   private running?:Promise<{imported:number;duplicates:number;hasMore:boolean}>;
   private abort=new AbortController();private closed=false;private timer?:ReturnType<typeof setInterval>;
   private initialized=false;private syncIntervalMs?:number;
   private state:'idle'|'syncing'|'error'|'permission_required'='idle';private code?:string;private lastSyncAt?:string;
-  constructor(private ctx:ConnectorContext,private dependencies:GoogleDependencies={}){
-    this.archives=new ArchivedFileStore(ctx.store);
-    this.file=new PrivateFile(ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`,'gmail.json');
-    ctx.store.db.exec('CREATE TABLE IF NOT EXISTS gmail_sync_members(source_id TEXT NOT NULL,message_id TEXT NOT NULL,epoch TEXT NOT NULL,PRIMARY KEY(source_id,message_id))');
+  constructor(private ctx:GmailContext,private dependencies:GoogleDependencies={}){
+    this.archives=ctx.archives;
+    this.file=new PrivateFile(ctx.directory,'gmail.json');
   }
   private get clock(){return this.dependencies.clock??Date.now;}
-  get configured(){const c=this.ctx.config.connectors;return Boolean(c?.googleClientId&&c.googleClientSecret&&c.googleRedirectUri);}
+  get configured(){const c=this.ctx.configuration;return Boolean(c?.googleClientId&&c.googleClientSecret&&c.googleRedirectUri);}
   private get sourceId(){return `gmail-${hash(this.saved.account??'').slice(0,24)}`;}
   status(){return {configured:this.configured,connected:Boolean(this.saved.account&&this.saved.tokens.refresh_token),account:this.saved.account,state:this.state,code:this.code,lastSyncAt:this.lastSyncAt,hasMore:Boolean(this.saved.full||this.saved.deltaPage),readOnly:true,attachmentsCollected:false};}
   private serialize<T>(fn:()=>Promise<T>){const result=this.sequence.catch(()=>{}).then(()=>{this.check();return fn();});this.sequence=result.catch(()=>{});return result;}
   private check(){if(this.closed||this.abort.signal.aborted)throw new ConnectorError('connector_closed',503);}
-  private oauth(){if(!this.configured)throw new ConnectorError('google_not_configured',503);const c=this.ctx.config.connectors!;return this.dependencies.oauthFactory?.()??new OAuth2Client({clientId:c.googleClientId,clientSecret:c.googleClientSecret,redirectUri:c.googleRedirectUri,transporterOptions:{timeout:20000}});}
+  private oauth(){if(!this.configured)throw new ConnectorError('google_not_configured',503);const c=this.ctx.configuration!;return this.dependencies.oauthFactory?.()??new OAuth2Client({clientId:c.googleClientId,clientSecret:c.googleClientSecret,redirectUri:c.googleRedirectUri,transporterOptions:{timeout:20000}});}
   async init(){const saved=await this.file.read();if(saved){if(saved.version!==1||!saved.tokens)throw new ConnectorError('gmail_credentials_invalid',503);this.saved=saved;}
-    this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);}
+    this.initialized=true;this.configureSyncInterval(this.ctx.configuration?.syncIntervalMs??300000);}
   configureSyncInterval(intervalMs:number){
     const interval=Math.max(60000,intervalMs);
     if(this.timer&&this.syncIntervalMs===interval)return;
@@ -116,9 +115,9 @@ export class GmailConnector {
     this.check();try{return JSON.parse(Buffer.concat(chunks).toString()) as T;}catch{throw new ConnectorError('gmail_response_invalid',502);}
   }
   private async removeMessage(id:string){
-    const rows=this.ctx.store.db.prepare('SELECT external_id FROM source_heads WHERE source_id=? AND substr(external_id,1,?)=? AND deleted=0').all(this.sourceId,id.length+1,`${id}:`) as {external_id:string}[];
-    for(const row of rows){const prior=this.ctx.sources.getItem(this.sourceId,row.external_id);if(prior){const {captureId,sourceId,receivedAt,current,...item}=prior;await this.ctx.sources.upsert(this.sourceId,{...item,text:'',deleted:true,observedAt:new Date(this.clock()).toISOString(),revision:hash(`deleted:${prior.revision}`)});}}
-    this.ctx.store.db.prepare('DELETE FROM gmail_sync_members WHERE source_id=? AND message_id=?').run(this.sourceId,id);
+    const partIds=this.ctx.syncState.partIds(this.sourceId,id);
+    for(const partId of partIds){const prior=this.ctx.sources.getItem(this.sourceId,partId);if(prior){const {captureId,sourceId,receivedAt,current,...item}=prior;await this.ctx.sources.upsert(this.sourceId,{...item,text:'',deleted:true,observedAt:new Date(this.clock()).toISOString(),revision:hash(`deleted:${prior.revision}`)});}}
+    this.ctx.syncState.forgetMember(this.sourceId,id);
   }
   private async collect(id:string,epoch:string){
     if(!/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new ConnectorError('gmail_message_invalid',502);
@@ -136,8 +135,8 @@ export class GmailConnector {
     for(const item of items){const prior=this.ctx.sources.getItem(this.sourceId,item.externalId);const semantic=(v:SourceItem)=>({title:v.title,text:v.text,layer:v.layer,deleted:v.deleted,document:v.document,uri:v.uri});item.revision=prior&&isDeepStrictEqual(semantic(prior),semantic(item))?prior.revision:hash(`${item.revision}:${prior?.revision??''}`);}
     const result=await this.ctx.sources.upsertBatch(this.sourceId,items,()=>{this.check();if(!this.ctx.sources.getSource(this.sourceId).enabled)throw new ConnectorError('gmail_source_paused',409);},receipt=>{if(original)this.archives.attach(receipt.id,[original.id]);});
     // Remove obsolete tail chunks when a provider revision becomes shorter.
-    for(const row of this.ctx.store.db.prepare('SELECT external_id FROM source_heads WHERE source_id=? AND substr(external_id,1,?)=? AND deleted=0').all(this.sourceId,id.length+1,`${id}:`) as {external_id:string}[]){if(!items.some(i=>i.externalId===row.external_id)){const prior=this.ctx.sources.getItem(this.sourceId,row.external_id)!;const {captureId,sourceId,receivedAt,current,...item}=prior;await this.ctx.sources.upsert(this.sourceId,{...item,text:'',deleted:true,revision:hash(`deleted:${prior.revision}`)});}}
-    this.ctx.store.db.prepare('INSERT INTO gmail_sync_members VALUES(?,?,?) ON CONFLICT(source_id,message_id) DO UPDATE SET epoch=excluded.epoch').run(this.sourceId,id,epoch);
+    for(const partId of this.ctx.syncState.partIds(this.sourceId,id)){if(!items.some(i=>i.externalId===partId)){const prior=this.ctx.sources.getItem(this.sourceId,partId)!;const {captureId,sourceId,receivedAt,current,...item}=prior;await this.ctx.sources.upsert(this.sourceId,{...item,text:'',deleted:true,revision:hash(`deleted:${prior.revision}`)});}}
+    this.ctx.syncState.touchMember(this.sourceId,id,epoch);
     return {imported:result.receipts.filter(r=>!r.duplicate).length,duplicates:result.receipts.filter(r=>r.duplicate).length};
   }
   sync(){if(this.running)return this.running;this.running=this.serialize(()=>this.performSync()).finally(()=>{this.running=undefined;});return this.running;}
@@ -154,8 +153,8 @@ export class GmailConnector {
         for(const {id}of result.messages??[]){const counts=await this.collect(id,full.epoch);imported+=counts.imported;duplicates+=counts.duplicates;}
         if(result.nextPageToken)full.pageToken=result.nextPageToken;
         else{
-          const stale=this.ctx.store.db.prepare('SELECT message_id FROM gmail_sync_members WHERE source_id=? AND epoch!=?').all(this.sourceId,full.epoch) as {message_id:string}[];
-          for(const {message_id}of stale)await this.removeMessage(message_id);
+          const stale=this.ctx.syncState.staleMembers(this.sourceId,full.epoch);
+          for(const messageId of stale)await this.removeMessage(messageId);
           this.saved.historyId=full.anchor;delete this.saved.full;
         }
       }else{
