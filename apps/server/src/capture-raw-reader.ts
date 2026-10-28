@@ -1,3 +1,4 @@
+import {parseRawPageCursor,encodeRawPageCursor} from './raw-page-cursor.js';
 import {createHash} from 'node:crypto';
 import {sourceItemSchema,type CaptureRecord,type SourceItem,type SourceItemRecord} from '@mote/shared';
 import type {Store} from './store.js';
@@ -11,7 +12,6 @@ const collectionPrefix='raw-capture-collection:v1:';
 const sourceKinds=['calendar','file','event','message','metric','memory'] as const;
 type SourceKind=SourceItem['kind'];
 type CurrentRow={source_id:string;external_id:string;capture_id:string;observed_at:string;revision:string;hash:string;json:string;received_at:string};
-type Cursor={collectionRef:string;snapshot:string;offset:number};
 
 export type CaptureRawAccess={
   mayReadSource:(sourceId:string)=>boolean;
@@ -37,15 +37,6 @@ function parseCollection(ref:string):{sourceId:string;kind:SourceKind}|undefined
     const value=JSON.parse(Buffer.from(ref.slice(collectionPrefix.length),'base64url').toString()) as unknown;
     if(!Array.isArray(value)||value.length!==2||typeof value[0]!=='string'||!value[0]||value[0].length>128||!sourceKinds.includes(value[1] as SourceKind))return;
     return {sourceId:value[0],kind:value[1] as SourceKind};
-  }catch{return;}
-}
-
-function parseCursor(cursor:string):Cursor|undefined {
-  if(cursor.length>12000)return;
-  try {
-    const value=JSON.parse(Buffer.from(cursor,'base64url').toString()) as Partial<Cursor>;
-    if(typeof value.collectionRef!=='string'||typeof value.snapshot!=='string'||!/^[a-f0-9]{64}$/.test(value.snapshot)||!Number.isSafeInteger(value.offset)||value.offset!<0)return;
-    return value as Cursor;
   }catch{return;}
 }
 
@@ -125,7 +116,7 @@ export class CaptureRawReader implements RawReader {
     const collection=parseCollection(request.collectionRef);
     if(!collection||!this.sourceExists(collection.sourceId)||!this.permitted(()=>this.access.mayReadSource(collection.sourceId))||
       !this.permitted(()=>this.access.mayListKind(collection.sourceId,collection.kind)))return {status:'unavailable'};
-    const cursor=request.cursor?parseCursor(request.cursor):undefined;
+    const cursor=request.cursor?parseRawPageCursor(request.cursor):undefined;
     if(request.cursor&&!cursor||cursor&&cursor.collectionRef!==request.collectionRef)return {status:'invalid_cursor'};
     const offset=cursor?.offset??0,items:{ref:RawRef;observedAt:string}[]=[],hash=createHash('sha256').update(request.collectionRef);let total=0;
     const rows=this.store.db.prepare(`SELECT h.source_id,h.external_id,h.capture_id,h.observed_at,v.revision,v.hash,c.json,c.received_at
@@ -142,6 +133,6 @@ export class CaptureRawReader implements RawReader {
     if(cursor&&cursor.snapshot!==snapshot)return {status:'stale_cursor'};
     if(offset>total)return {status:'invalid_cursor'};
     const nextOffset=offset+items.length;
-    return {status:'available',items,nextCursor:nextOffset<total?Buffer.from(JSON.stringify({collectionRef:request.collectionRef,snapshot,offset:nextOffset})).toString('base64url'):null,snapshot,total};
+    return {status:'available',items,nextCursor:nextOffset<total?encodeRawPageCursor(request.collectionRef,snapshot,nextOffset):null,snapshot,total};
   }
 }
