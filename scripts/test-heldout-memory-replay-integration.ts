@@ -109,7 +109,7 @@ export async function runIntegration(options:{manifest:IntegrationManifest;manif
     await cloneClosed(m.parent.path,vault);const initial=new DatabaseSync(join(vault,'mote.sqlite'),{readOnly:true});try{inherited=new Set(initial.prepare('SELECT id FROM model_usage').all().map(row=>String(row.id)));}finally{initial.close();}
     if(plan.inputs.length){
       ({node}=await openNode(vault,root.model,m.task.contextTime,options.stub,m.normalContinuation?600000:300000));equal(hashObject(settings(node)),plan.settingsHash,'integration_settings_changed');if(m.normalContinuation){const {assertRecoveryESettings}=await import('./test-heldout-memory-replay-recovery.js');equal(assertRecoveryESettings(node,root.settingsHash),readNormalPlan(m.normalContinuation.plan).effectiveSettingsHash,'normal_integration_settings_changed');report.effectiveAgentTimeoutMs=node.modelSettings.select('memory').settings.agentTimeoutMs;}equal(hashObject(bindings(node)),plan.bindingsHash,'integration_bindings_changed');equal(integrationSelection(node.store.db,m.task.contextTime),selectionFields(plan),'integration_open_changed_selection');
-      for(const input of plan.inputs){check(hashObject(node.memories.get(input.id))===input.hash,'integration_input_changed');node.memoryPipeline.assertAdmissibleEvidence(node.memories.get(input.id).evidenceIds);}
+      for(const input of plan.inputs){check(hashObject(node.memories.get(input.id))===input.hash,'integration_input_changed');node.memoryPipeline.inputs.assert(node.memories.get(input.id).evidenceIds);}
       options.mechanicalHook?.(node);const query=node.agent.query.bind(node.agent);
       node.agent.query=async input=>{
         let callId:string|undefined,requests=0,repairs=0;const traces:unknown[]=[];
