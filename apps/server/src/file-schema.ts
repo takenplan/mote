@@ -1,6 +1,9 @@
 import type {DatabaseSync} from 'node:sqlite';
 
+/** Files own immutable versions, processing state and links to their evidence. */
 export function fileSchema(db:DatabaseSync){db.exec(`
+ CREATE TABLE IF NOT EXISTS file_evidence_links(parent_id TEXT NOT NULL,capture_id TEXT NOT NULL,PRIMARY KEY(parent_id,capture_id));
+      CREATE INDEX IF NOT EXISTS file_evidence_links_capture ON file_evidence_links(capture_id,parent_id);
  CREATE TABLE IF NOT EXISTS file_objects(hash TEXT PRIMARY KEY,bytes INTEGER NOT NULL,parts INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS file_versions(capture_id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE,source_id TEXT NOT NULL,external_id TEXT NOT NULL,revision TEXT NOT NULL,manifest TEXT NOT NULL,object_hash TEXT REFERENCES file_objects(hash));
  CREATE TABLE IF NOT EXISTS file_snapshot_inputs(capture_id TEXT PRIMARY KEY REFERENCES file_versions(capture_id) ON DELETE CASCADE,object_hash TEXT NOT NULL,expires INTEGER NOT NULL);
