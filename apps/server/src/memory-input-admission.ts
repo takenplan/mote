@@ -75,7 +75,7 @@ export class MemoryInputAdmission implements MemoryInputAdmissionPort {
   }
   withCurrent<T>(ids:readonly string[],run:()=>T,profileId?:string):T {
     const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
-    try{this.assert(ids,profileId);const value=run();if(own)db.exec('COMMIT');return value;}catch(error){if(own)db.exec('ROLLBACK');throw error;}
+    try{this.assert(ids,profileId);const value=run();if(own)db.exec('COMMIT');return value;}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   evaluatePlan(plan:ManualMemoryInputPlanRequest,profileId?:string):{state:'ready';scope:MemoryReadyInputScope;pin:MaterialInputPin}|{state:'waiting'|'blocked'|'stale';code:string}{
     if(!this.sourceCurrent(plan.sourcePin,plan.materialId))return {state:'stale',code:'evidence_changed'};
