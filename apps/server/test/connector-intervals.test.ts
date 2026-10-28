@@ -1,3 +1,4 @@
+import {larkContext} from '../src/connectors/lark-context.js';
 import {gmailContext} from '../src/connectors/gmail-context.js';
 import {googleCalendarContext} from '../src/connectors/google-context.js';
 import test,{type TestContext} from 'node:test';
@@ -63,7 +64,7 @@ for(const kind of ['google-calendar','gmail','lark','recordings'] as const)test(
     await save('gmail.json',{version:1,tokens:{},account:'generated@example.invalid'});
     const gmail=new GmailConnector(gmailContext(ctx));t.mock.method(gmail,'sync',async()=>{polls++;return gmailResult;});connector=gmail;
   }else if(kind==='lark'){
-    const lark=new LarkConnector(ctx,generatedLark);authorize=async()=>{await authorizeLark(lark);t.mock.method(lark,'startSync',()=>{polls++;return larkJob;});};connector=lark;
+    const lark=new LarkConnector(larkContext(ctx),generatedLark);authorize=async()=>{await authorizeLark(lark);t.mock.method(lark,'startSync',()=>{polls++;return larkJob;});};connector=lark;
   }else{
     const recordings=new RecordingConnector(ctx,generatedRecording());t.mock.method(recordings,'tick',async()=>{polls++;});connector=recordings;
   }
@@ -83,7 +84,7 @@ test('registry applies intervals to built-ins and opt-in deployment plugins thro
   const {ctx,save}=await fixture(t);t.mock.timers.enable({apis:['setInterval']});
   await save('google-calendar.json',{version:1,tokens:{},calendars:[{id:'generated-calendar',summary:'Generated calendar'}],checkpoints:{}});
   await save('gmail.json',{version:1,tokens:{},account:'generated@example.invalid'});
-  const approvedLark=new LarkConnector(ctx,generatedLark);await approvedLark.init();await authorizeLark(approvedLark);await approvedLark.close();
+  const approvedLark=new LarkConnector(larkContext(ctx),generatedLark);await approvedLark.init();await authorizeLark(approvedLark);await approvedLark.close();
   const counts={google:0,gmail:0,lark:0,feishu:0,dingtalk:0},intervals:number[]=[];
   t.mock.method(GoogleCalendarConnector.prototype,'sync',async()=>{counts.google++;return googleResult;});
   t.mock.method(GmailConnector.prototype,'sync',async()=>{counts.gmail++;return gmailResult;});
