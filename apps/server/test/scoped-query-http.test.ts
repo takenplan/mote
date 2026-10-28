@@ -139,3 +139,16 @@ test('deleting an anchor or cancelling its run fences a controlled late answer a
   assert.notEqual(f.node.featureServices.delegation.get('query:'+id).status,'succeeded');
  });
 });
+
+
+test('query preparation rolls back dependency pins when saving its prepared checkpoint fails',async t=>{
+ let calls=0;const f=await fixture(t,async input=>{calls++;return answer(input);}),selected=await add(f.node),id=randomUUID();
+ f.node.store.db.exec(`CREATE TEMP TRIGGER fixture_prepared_checkpoint_failure BEFORE INSERT ON delegation_payloads
+   WHEN instr(NEW.json,'"prepared":')>0 BEGIN SELECT RAISE(ABORT,'Generated prepared checkpoint failure'); END;`);
+ const accepted=await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id,input:{question:'Generated checkpoint rollback',evidenceIds:[selected.id]}}});assert.equal(accepted.statusCode,202,accepted.body);
+ const failed=await completed(f.node,id);assert.equal(failed.status,'failed',JSON.stringify(failed));assert.equal(calls,0,'failed preparation must never reach the model');
+ assert.equal(f.node.store.db.prepare('SELECT count(*) n FROM delegation_dependencies WHERE work_id=?').get('query:'+id)!.n,0,'dependency writes and prepared checkpoint share one transaction');
+ const saved=f.node.featureServices.delegation.journal.payload<{prepared?:unknown}>('query:'+id);assert.equal(saved.prepared,undefined);
+ f.node.store.db.exec('DROP TRIGGER fixture_prepared_checkpoint_failure');
+ const retry=await f.node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated valid subsequent preparation',evidenceIds:[selected.id]}});assert.equal(retry.statusCode,200,retry.body);assert.equal(calls,1);
+});

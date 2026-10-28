@@ -1,7 +1,7 @@
 import { createAgent, AgentNotConfiguredError, AgentTimeoutError, AgentResponseError, type ContextReader, type AgentOptions } from '@mote/agent';
 import { modelProvider, DEPLOYMENT_MODEL_PROFILE_ID, type ModelSettings, type ModelTestResult, type ModelProfile } from '@mote/shared/models';
 import type { Config } from './config.js';
-import type { QueryAgent } from './app.js';
+import type { QueryAgent } from './query-agent.js';
 import {deploymentModelSettingsSchema,type PreparedModelSettings} from './model-settings.js';
 
 /** Trusted adapters must retain the host's admission and fresh transport fence. */

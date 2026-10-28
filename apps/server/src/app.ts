@@ -1,3 +1,8 @@
+import {createQueryPreparation,type SavedQuery} from './query-preparation.js';
+import {createModelEvidenceAuthority,contextFailure} from './model-evidence-authority.js';
+import type {QueryAgent} from './query-agent.js';
+import type {FeatureServices} from './feature-services.js';
+import {queryWithAttachmentsSchema,insightRequestSchema} from './query-request.js';
 import {ServerResources} from './server-resources.js';
 import {MemoryTopicsHost} from './memory-topics-host.js';
 import {createContextTrees} from './context-trees.js';
@@ -37,9 +42,9 @@ import { z } from 'zod';
 import { Actions } from './actions.js';
 import { ActivityProjection } from './activity.js';
 import { Operations } from './operations.js';
-import { assertCurrentDelegationSchema,DelegationRuntime,type DelegationWork } from './delegation-runtime.js';
+import { assertCurrentDelegationSchema,DelegationRuntime } from './delegation-runtime.js';
 import { DelegatedQueryRuns } from './delegated-query-runs.js';
-import {runQueryQualityExperiment,type QueryQualityStrategy,type QueryQualityStage,type QueryQualityCheckpoint} from './query-quality-experiment.js';
+import {runQueryQualityExperiment,type QueryQualityStrategy,type QueryQualityCheckpoint} from './query-quality-experiment.js';
 import { registerMemoryDelegation } from './memory-delegation.js';
 import { agentDeadline } from './agent-deadline.js';
 import { installAgentFeatures } from './agent-feature-host.js';
@@ -56,7 +61,7 @@ import { combineDependencies,resolveDependencies } from './conversation-lineage.
 import {SourceContextStore} from './source-context.js';
 import {assertSourceContextDependencies,combineSourceContextDependencies} from './source-context-lineage.js';
 import { ServerDiagnostics,safeError,type AgentTraceContext } from './diagnostics.js';
-import { EvidenceReader,type MemoryCatalogMetadataReceipt } from './evidence-reader.js';
+import { EvidenceReader } from './evidence-reader.js';
 import { EvidenceExposurePolicy } from './evidence-exposure.js';
 import { ExecutionEngine,ExecutionFailure } from './execution-engine.js';
 import { ExecutionSettings,type ExecutionSettingsValue,type DiagnosticsSettingsValue } from './execution-settings.js';
@@ -99,15 +104,14 @@ import { reviewMemory } from './memory-review.js';
 import { ReloadableAgent,applyModelSettings,createModelAgent,createModelRegistry,modelSettingsFromConfig,testModelConnection,type ModelAgentFactory,type ModelAgentIdentity } from './model-agent.js';
 import { ModelCatalogError } from './model-catalog.js';
 import { modelConfiguration } from './model-configuration.js';
-import { ModelSettingsError,ModelSettingsStore,modelProfileIdSchema } from './model-settings.js';
-import { openingMemoryContext } from './opening-memory.js';
+import { ModelSettingsError,ModelSettingsStore } from './model-settings.js';
 import { linkOperationParent } from './operation-projection.js';
 import {ImageProcessing} from './image-processing.js';
 import {imageUnderstanding} from './image-understanding.js';
 import { ProcessingRuntime } from './processing-runtime.js';
 import { ProviderAdmission } from './provider-admission.js';
 import { PythonSourcePackExecutor,pythonImportOutputSchema,pythonImportPreparation,type PythonImportOutput } from './python-source-pack-executor.js';
-import { scopeFields,validRange,type QueryScope } from './query-scope.js';
+import type {QueryScope} from './query-scope.js';
 import { MAX_RAW_READ_BYTES } from './raw-reader.js';
 import { semanticProcessor } from './semantic-extraction.js';
 import { conversationUnderstandingProcessor } from './conversation-understanding.js';
@@ -118,11 +122,6 @@ import { createUpdateService } from './updates.js';
 import { UsageLedger } from './usage.js';
 import { WorkingMemory } from './working-memory.js';
 
-export interface QueryAgent {configured:boolean;configuredFor?(id:string):boolean;query(args:QueryInput):Promise<QueryResult>;close():Promise<void>}
-const querySchema=z.object({modelProfileId:modelProfileIdSchema.optional(),modelOverride:z.string().trim().min(1).max(512).refine(v=>!/[\u0000-\u001f\u007f]/.test(v)).optional(),question:z.string().trim().min(1).max(8000),conversationId:z.string().uuid().optional(),anchorEvidenceIds:z.array(z.string().uuid()).min(1).max(30).refine(ids=>new Set(ids).size===ids.length).nullable().optional(),evidenceIds:z.array(z.string().uuid()).min(1).max(30).refine(ids=>new Set(ids).size===ids.length).nullable().optional(),after:scopeFields.after.nullable(),before:scopeFields.before.nullable(),deviceId:scopeFields.deviceId.nullable(),timeZone:scopeFields.timeZone.nullable()}).strict();
-const queryWithAttachmentsSchema=querySchema.extend({attachmentIds:z.array(z.string().uuid()).max(4).refine(ids=>new Set(ids).size===ids.length).optional()}).refine(input=>!input.evidenceIds||!input.anchorEvidenceIds,{message:"Choose reference records or a strict evidence selection"});
-const insightSchema=z.object(scopeFields).strict().refine(validRange,{message:'Invalid time range'});
-const insightRequestSchema=z.object({...scopeFields,modelProfileId:modelProfileIdSchema.optional(),prompt:z.string().trim().max(8000).optional()}).strict().refine(validRange,{message:'Invalid time range'});
 function parseCaptureBundle(body:unknown):CaptureInput[] {
   if(!Buffer.isBuffer(body))throw new StoreError('Capture bundle body must be gzip bytes');
   let inflated:Buffer;
@@ -134,6 +133,7 @@ function parseCaptureBundle(body:unknown):CaptureInput[] {
   try{return lines.map(line=>captureSchema.parse(JSON.parse(line)));}
   catch(error){if(error instanceof z.ZodError)throw error;throw new StoreError('Invalid capture bundle JSONL');}
 }
+export type {QueryAgent} from './query-agent.js';
 const serverVersion=(JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')) as {version:string}).version;
 export async function buildApp(config:Config,dependencies?:{configService?:ConfigService;queryQualityExperiment?:QueryQualityStrategy;webRoot?:string;connectorTesting?:import('./connectors/index.js').ConnectorTestDependencies;semanticContextTime?:()=>string;backgroundWorker?:boolean;memoryExtensions?:LifecycleExtension[];store?:Store;agent?:QueryAgent;connections?:Connections;createModelAgent?:ModelAgentFactory;transcriptionProvider?:TranscriptionProvider;prepareImport?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;observeImport?:(workspace:string,event:unknown)=>void}) {
   const resources=new ServerResources();
@@ -282,81 +282,12 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const assertRequestActive=(req:FastifyRequest)=>{const c=connectionIdentity(req);if(c)connections.assertActive(c);};
   const sourceOwner=(req:FastifyRequest,id:string)=>{assertRequestActive(req);const c=credential(req);if(c)connections.assertOwnSource(c,id);};
   const context=(records:CaptureRecord[])=>evidenceReader.context(records);
-  const contextDependencies=(input:QueryInput|undefined)=>resolveDependencies(store,combineDependencies([
-    ...(input?.conversation?[input.conversation.evidenceDependencies??{version:1 as const,complete:false,ids:[]}]:[]),
-    ...(input?.contextEvidenceDependencies?[input.contextEvidenceDependencies]:[]),
-    ...(input?.derivedContextEvidenceIds?[{version:1 as const,complete:true,ids:[...input.derivedContextEvidenceIds]}]:[]),
-  ]));
-  const contextFailure=(code:'context_lineage_incomplete'|'context_evidence_restricted')=>Object.assign(new StoreError(code,409),{code});
-  const sourceContextDependencies=(input:QueryInput|undefined)=>combineSourceContextDependencies([input?.conversation?.sourceContextDependencies,input?.contextSourceContextDependencies]);
-  const modelContextGroups=(input:QueryInput|undefined)=>{
-    const historicalIds=new Set(input?.conversation?.historyContext?input.conversation.evidenceDependencies?.ids:[]);
-    return [
-    ...(input?.conversation?[{ids:(input.conversation.historyContext?.evidenceDependencies??input.conversation.evidenceDependencies)?.ids??[],historical:Boolean(input.conversation.historyContext)}]:[]),
-    ...(input?.contextEvidenceDependencies?[{ids:input.historyContext?input.historyContext.evidenceDependencies.ids:input.contextEvidenceDependencies.ids.filter(id=>!historicalIds.has(id)),historical:Boolean(input.historyContext)}]:[]),
-    ...(input?.derivedContextEvidenceIds?[{ids:input.derivedContextEvidenceIds,historical:false}]:[]),
-    ].map(group=>({...group,ids:resolveDependencies(store,{version:1,complete:true,ids:[...group.ids]})!.ids}));
-  };
-  const assertModelContext=(input:QueryInput|undefined)=>{
-    for(const snapshot of [input?.historyContext,input?.conversation?.historyContext])if(snapshot){conversations.assertHistoryContext(snapshot);if(!snapshot.evidenceDependencies.complete)throw contextFailure('context_lineage_incomplete');}
-    assertSourceContextDependencies(sourceContexts,sourceContextDependencies(input));
-    if(input?.derivedContextEvidenceIds?.some(id=>!evidenceReader.deletionContextAllowed(id,new EvidenceExposurePolicy())))throw new StoreError('Derived context evidence is no longer permitted for this model',409);
-    const conversationText=Boolean(input?.conversation?.workingMemory?.text||input?.conversation?.turns.some(turn=>!turn.evidenceDeleted&&turn.answer));
-    const taskText=Boolean(input?.taskContext?.previousSummary||input?.taskContext?.turns?.length);
-    if((conversationText&&input?.conversation?.evidenceDependencies?.complete!==true)||((taskText||input?.openingMemories?.length)&&input?.contextEvidenceDependencies?.complete!==true)||input?.openingMemories?.length&&!input?.contextEvidenceDependencies?.ids.length)throw contextFailure('context_lineage_incomplete');
-  };
-  // Exact public selections use the normal current-original exposure policy and
-  // retain a content pin across preparation, outbound calls and publication.
-  const selectedQueryEvidence=(input:QueryInput)=>{
-    const ids=input.evidenceIds??input.anchorEvidenceIds;
-    if(input.executionLane!=='interactive'||ids===undefined||input.responseMode==='memory-extraction')return [];
-    if(!evidenceReader.contextDependenciesAllowed(ids,new EvidenceExposurePolicy()))throw contextFailure('context_evidence_restricted');
-    const records=evidenceReader.evidence(ids.map(id=>'capture:'+id),input);
-    if(records.length!==ids.length||input.processingEvidence&&records.some(record=>input.processingEvidence![record.id]!==memoryEvidenceFingerprint(record)))throw contextFailure('context_evidence_restricted');
-    return records;
-  };
-  const assertModelEvidence=(input:QueryInput|undefined)=>observeMemory(input,'query_assert',()=>{
-    if(modelAuthorization.currentId){
-      modelAuthorizationHost.assertEvidence([...(input?.evidenceIds??[]),...modelContextGroups(input).flatMap(group=>group.ids)]);
-      modelAuthorization.assertDisclosure(sourceContextDependencies(input).map(pin=>({sourceId:pin.sourceId,dataKind:'text'})));
-      const catalog=(input as QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt}|undefined)?.memoryCatalogMetadata;
-      if(catalog)modelAuthorization.assertDisclosure(catalog.members.flatMap(member=>member.sourceId?[{sourceId:member.sourceId,dataKind:'text' as const}]:[]));
-      if((input?.taskContext as {turns?:unknown[]}|undefined)?.turns?.length)modelAuthorization.assertDisclosure([{sourceId:'mote.conversations',dataKind:'conversation'}]);
-    }
-    if(input)selectedQueryEvidence(input);
-    input?.assertContextAuthority?.();
-    const catalog=(input as (QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt})|undefined)?.memoryCatalogMetadata;
-    if(catalog&&!evidenceReader.memoryCatalogMetadataAllowed(catalog,new EvidenceExposurePolicy()))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
-    assertModelContext(input);
-    if(input?.processingImages?.length){
-      assertMemoryImageGrants(store,input.processingMaterialInputs??[],input.processingImages);
-      if(!evidenceReader.processingEvidenceAllowed(input.processingImages.map(image=>image.id),input.processingEvidence,input.processingMaterialInputs,new EvidenceExposurePolicy()))throw contextFailure('context_evidence_restricted');
-    }
-    // Derived nodes remain in the fence alongside every original ancestor.
-    // Private metadata checks never disclose bodies or grant raw reads.
-    for(const group of modelContextGroups(input))if(!evidenceReader.contextDependenciesAllowed(group.ids,new EvidenceExposurePolicy(),group.historical))throw contextFailure('context_evidence_restricted');
-    // The bridge may already hold restricted originals while deletion or a
-    // Formal input/owner declaration changes. Check the frozen Memory grant at
-    // every outbound request as well as before entering the agent; publication
-    // validation alone cannot recall a seed already sent to the provider.
-    if(input?.responseMode==='memory-extraction'&&input.evidenceIds!==undefined&&!evidenceReader.processingEvidenceAllowed(
-      [...input.evidenceIds,...((input as QueryInput&{processingDisclosedEvidenceIds?:string[]}).processingDisclosedEvidenceIds??[])],input.processingEvidence,input.processingMaterialInputs,new EvidenceExposurePolicy(),
-    ))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
-  });
-  const assertModelEvidenceAsync=(input:QueryInput)=>observeMemoryAsync(input,'query_assert',async()=>{
-    selectedQueryEvidence(input);
-    input.assertContextAuthority?.();
-    assertModelContext(input);
-    const policy=new EvidenceExposurePolicy();
-    // This is scheduling granularity, not a scope or processing limit. Inspect
-    // every dependency while allowing lease renewal, cancellation and intake.
-    for(const group of modelContextGroups(input))for(let offset=0;offset<group.ids.length;offset+=256){
-      input.signal?.throwIfAborted();
-      if(!evidenceReader.contextDependenciesAllowed(group.ids.slice(offset,offset+256),policy,group.historical))throw contextFailure('context_evidence_restricted');
-      await yieldEventLoop();
-    }
-    input.signal?.throwIfAborted();
-  });
+  const modelEvidenceAuthority=createModelEvidenceAuthority({resolveLineage:value=>resolveDependencies(store,value),
+    assertImageGrants:(materialInputs,images)=>assertMemoryImageGrants(store,materialInputs,images),reader:evidenceReader,conversations,sourceContexts,
+    authorization:modelAuthorization,host:modelAuthorizationHost,readEvidence:ids=>memories.readEvidence(ids)});
+  const {contextDependencies,sourceContextDependencies,pinProcessingEvidence}=modelEvidenceAuthority;
+  const assertModelEvidence=(input:QueryInput|undefined)=>observeMemory(input,'query_assert',()=>modelEvidenceAuthority.assert(input));
+  const assertModelEvidenceAsync=(input:QueryInput)=>observeMemoryAsync(input,'query_assert',()=>modelEvidenceAuthority.assertAsync(input));
   // Owner inspection and external read-only clients do not send to our model.
   // The same reader enforces model disclosure scope inside an admitted model run.
   const readingForModel=()=>Boolean(modelContext.getStore()||modelAuthorization.currentId);
@@ -407,21 +338,9 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     ...(baseReader.readImage?{readImage:observeRead('reader_image',baseReader.readImage)}:{}),
     ...(baseReader.memories?{memories:observeRead('reader_memories',baseReader.memories)}:{}),
   };
-  const queryImages=(ids:string[])=>ids.map(id=>{
-    const detail=files.detail(id),version=files.version(id),mimeType=detail.item.mimeType;
-    if(!detail.hasOriginal||!version.object_hash||!['image/png','image/jpeg','image/webp'].includes(mimeType??'')||detail.sizeBytes<1||detail.sizeBytes>8*1024*1024)throw new StoreError('Query attachment must be an archived image up to 8 MiB',400);
-    return {id,name:detail.item.title||'Attached image',mimeType:mimeType!,hash:version.object_hash,sizeBytes:detail.sizeBytes};
-  });
   const agent=new ReloadableAgent(()=>diagnostics.record('agent.failed',{category:'internal'},'error'));
   resources.defer(()=>agent.close());
   const codex={executable:config.codexBin,home:config.codexHome};
-  const pinProcessingEvidence=(input:QueryInput):QueryInput=>{
-    const supplied=input as QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt};
-    if(!supplied.memoryCatalogMetadata){const receipt=evidenceReader.memoryCatalogMetadata(input.taskContext);if(receipt)input={...input,memoryCatalogMetadata:receipt,contextSourceContextDependencies:combineSourceContextDependencies([input.contextSourceContextDependencies,receipt.sourceContextDependencies])} as QueryInput;}
-    if(!input.evidenceIds||input.executionLane==='interactive')return input;
-    const missing=input.evidenceIds.filter(id=>!input.processingEvidence?.[id]);
-    return missing.length?{...input,processingEvidence:{...Object.fromEntries(memories.readEvidence(missing).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}}:input;
-  };
   // Order admitted preparation starts across event-loop turns, without waiting
   // for a query to finish or changing either lane's in-flight concurrency.
   let preparationTurn=Promise.resolve();
@@ -907,51 +826,9 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     },
   });
   resources.defer(()=>delegation.close());
-  type SavedQuery={hostRequest:unknown;language?:QueryInput['language'];prepared?:QueryInput;configurationFingerprint?:string;qualityStrategy?:QueryQualityStrategy;qualityStages?:Partial<Record<QueryQualityStage,QueryResult>>};
-  async function prepareDelegatedQuery(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress']):Promise<QueryInput>{
-    signal.throwIfAborted();if(!agent.configured)throw new AgentNotConfiguredError();
-    const saved=delegation.journal.payload<SavedQuery>(work.id);
-    if(saved.prepared){
-      const selected=modelSettings.select('chat',saved.prepared.modelProfileId),current=modelConfiguration(selected.id,{...selected.settings,model:saved.prepared.modelOverride??selected.settings.model},modelSettings.view().revision);
-      if(saved.configurationFingerprint!==current.fingerprint)throw new StoreError('Query model configuration changed',409);
-      assertModelEvidence(saved.prepared);return {...saved.prepared,signal,onProgress};
-    }
-    const {conversationId,question,modelProfileId,modelOverride,evidenceIds:selectedIds,anchorEvidenceIds:anchorIds,attachmentIds=[],...selected}=queryWithAttachmentsSchema.parse(body);
-    const previous=conversationId?conversations.get(conversationId):undefined;
-    if(previous&&previous.turnCount>=200)throw new StoreError('Conversation has reached its turn limit; start a new conversation',409);
-    const scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone'] as const){const value=key==='timeZone'&&selected.timeZone===undefined?previous?.scope.timeZone:selected[key];if(value!==undefined&&value!==null)scope[key]=value;}
-    insightSchema.parse(scope);
-    if(selectedIds)scope.evidenceIds=selectedIds;
-    if(anchorIds)scope.anchorEvidenceIds=anchorIds;
-    const selectedRecords=selectedQueryEvidence({question,...scope,executionLane:'interactive'});
-    const profile=modelSettings.select('chat',modelProfileId),model=modelOverride??profile.settings.model,contextTime=work.scope.contextTime!;
-    const previousIds=scope.evidenceIds?[]:previous?.turns.slice(-20).flatMap(turn=>turn.attachments?.map(attachment=>attachment.id)??[])??[],previousAvailable=previousIds.filter(id=>{try{return Boolean(files.detail(id).hasOriginal);}catch{return false;}});
-    const directImages=queryImages([...new Set([...attachmentIds,...previousAvailable.slice(-4)])]);
-    const stepId=work.id+':coordinator:'+work.revision,fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
-    const commit=<T>(write:()=>T):T=>{signal.throwIfAborted();const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');try{if(!fence||!executor.isCurrentGrant(stepId,fence))throw new StoreError('Query preparation grant expired',409);const result=write();if(own)store.db.exec('COMMIT');return result;}catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}};
-    const allowedHistoryIds=new Set([...(scope.evidenceIds??[]),...attachmentIds]);
-    const selectedScope=JSON.stringify([...(scope.evidenceIds??[])].sort());
-    const scopedPrevious=previous&&scope.evidenceIds?{...previous,turns:previous.turns.filter(turn=>
-      JSON.stringify([...(turn.scope.evidenceIds??[])].sort())===selectedScope&&
-      (turn.attachments??[]).every(attachment=>allowedHistoryIds.has(attachment.id))&&
-      turn.result?.evidenceDependencies?.complete===true&&turn.result.evidenceDependencies.ids.every(id=>allowedHistoryIds.has(id))&&
-      turn.historyEvidenceDependencies?.complete===true&&turn.historyEvidenceDependencies.ids.every(id=>allowedHistoryIds.has(id))
-    )}:undefined;
-    const [opening,conversation]=await Promise.all([
-      scope.evidenceIds?Promise.resolve({leads:[],evidenceDependencies:{version:1 as const,complete:true,ids:scope.evidenceIds}}):openingMemoryContext(archiveReader,question,{...scope,contextTime}),
-      scopedPrevious?Promise.resolve(conversations.context(scopedPrevious,20,Math.max(1000,lifecycle.settings().contextCharacters-question.length))):previous?working.prepare(previous,lifecycle.settings(),question,input=>queryAgent({...input,contextTime,traceContext:{...input.traceContext,operationId:work.operationId},executionLane:'interactive',modelProfileId:profile.id,modelOverride:model,signal},'query','conversations'),{signal,commit}):undefined,
-    ]);
-    const prepared:QueryInput={traceContext:{operationId:work.operationId},language:saved.language??'zh-CN',executionLane:'interactive',question,...scope,...(selectedRecords.length?{processingEvidence:Object.fromEntries(selectedRecords.map(record=>[record.id,memoryEvidenceFingerprint(record)]))}:{}),contextTime,modelProfileId:profile.id,modelOverride:model,directImages,openingMemories:opening.leads,contextEvidenceDependencies:{...opening.evidenceDependencies,ids:[...new Set([...opening.evidenceDependencies.ids,...(scope.anchorEvidenceIds??[])])]},...(conversation?{conversation}:{})};
-    commit(()=>{
-      assertModelEvidence(prepared);
-      const freshImages=queryImages(directImages.map(image=>image.id));
-      if(freshImages.some((image,index)=>image.hash!==directImages[index].hash||image.mimeType!==directImages[index].mimeType||image.sizeBytes!==directImages[index].sizeBytes))throw new StoreError('Query attachment changed during preparation',409);
-      for(const image of directImages){const version=files.version(image.id);if(!store.evidence([image.id]).length||!fileAttachmentAvailable(store,image.id)||store.db.prepare('SELECT deleted FROM source_heads WHERE source_id=? AND external_id=?').get(version.source_id,version.external_id)?.deleted)throw new StoreError('Query attachment is no longer available',409);}
-      delegation.recordEvidence(work.id,[...(contextDependencies(prepared)?.ids??[]),...directImages.map(image=>image.id)]);
-      delegation.journal.savePayload(work.id,{...saved,prepared,configurationFingerprint:modelConfiguration(profile.id,{...profile.settings,model},modelSettings.view().revision).fingerprint,...(dependencies?.queryQualityExperiment?{qualityStrategy:dependencies.queryQualityExperiment}:{})});
-    });
-    return {...prepared,signal,onProgress};
-  }
+  const {prepare:prepareDelegatedQuery}=createQueryPreparation({store,files,conversations,delegation,executor,modelSettings,working,
+    lifecycleSettings:()=>lifecycle.settings(),archiveReader,configured:()=>agent.configured,authority:modelEvidenceAuthority,
+    query:input=>queryAgent(input,'query','conversations'),qualityStrategy:dependencies?.queryQualityExperiment});
   function qualityCheckpoint(input:QueryInput):QueryQualityCheckpoint|undefined{
     if(!dependencies?.queryQualityExperiment||!input.hostControlChannel)return;
     const work=delegation.get(input.traceContext!.operationId!),stepId=work.id+':coordinator:'+work.revision,fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
@@ -1058,7 +935,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   configService.setHandler<{syncIntervalMs:number}>('connectors',(next,previous)=>({apply:()=>{},publish:()=>connectors.configureSyncInterval(next.syncIntervalMs),rollback:()=>connectors.configureSyncInterval(previous.syncIntervalMs)}));
   const automaticActivity=new AutomaticActivity(store,materials,executor,configService,{query:input=>queryAgent(input,'query','activity'),selection:profileId=>{const selected=modelSettings.select('chat',profileId);return {...modelConfiguration(selected.id,selected.settings,modelSettings.view().revision),configured:agent.configuredFor(selected.id)};},lane:()=>workflows.settings().semantic});
   resources.defer(()=>automaticActivity.close());
-  const featureServices={pluginCenter,withMediaOwnerBatch,launchOwnerImport,withMediaOwnerIntent,modelAuthorization,modelAuthorizationHost,availableModelConnections:()=>availableModelConnections(),contextTrees,automaticActivity,configService,memoryBindings,memoryPublication,ownerQuestions,automaticMemoryScheduling:dependencies?.backgroundWorker!==false,activity,delegation,memoryDelegation,connectionIdentity,assertRequestActive,memoryIntegrationSettings,memoryRecipeSettings,setPlaybackAuthorization:(authorize:ReturnType<typeof registerFileRoutes>)=>{playbackAuthorization=authorize;},connectors,processing,executor,agentFeatures,archiveReader,isClosing:()=>closing,actions,agent,agentGate,archivedFiles,codex,config,connections,contentStorage,conversations,credential,diagnosticSnapshot,diagnostics,eventLoop,evidenceReader,fileEvidence,files,importTasks,imports,indexer,ingress,insight,insightRequestSchema,insightRuns,interactiveGate,interactiveModelGate,jobId,launchImport,lifecycle,llmGate,maintenanceWorker,materialOrganizer,materialMemoryWork,materials,mediaAssets,mediaRange,memories,memoryPipeline,modelSettings,parseCaptureBundle,perception,providerAdmission,queryAgent,queryRuns,queryWithAttachmentsSchema,reviewExtraction,runtimeSettings,semanticSelection,serverVersion,softwareUpdate,sourceOwner,sourcePipelines,sources,store,usageLedger,webVersion,workflows};
+  const featureServices={pluginCenter,withMediaOwnerBatch,launchOwnerImport,withMediaOwnerIntent,modelAuthorization,modelAuthorizationHost,availableModelConnections:()=>availableModelConnections(),contextTrees,automaticActivity,configService,memoryBindings,memoryPublication,ownerQuestions,automaticMemoryScheduling:dependencies?.backgroundWorker!==false,activity,delegation,memoryDelegation,connectionIdentity,assertRequestActive,memoryIntegrationSettings,memoryRecipeSettings,setPlaybackAuthorization:(authorize:ReturnType<typeof registerFileRoutes>)=>{playbackAuthorization=authorize;},connectors,processing,executor,agentFeatures,archiveReader,isClosing:()=>closing,actions,agent,agentGate,archivedFiles,codex,config,connections,contentStorage,conversations,credential,diagnosticSnapshot,diagnostics,eventLoop,evidenceReader,fileEvidence,files,importTasks,imports,indexer,ingress,insight,insightRequestSchema,insightRuns,interactiveGate,interactiveModelGate,jobId,launchImport,lifecycle,llmGate,maintenanceWorker,materialOrganizer,materialMemoryWork,materials,mediaAssets,mediaRange,memories,memoryPipeline,modelSettings,parseCaptureBundle,perception,providerAdmission,queryAgent,queryRuns,queryWithAttachmentsSchema,reviewExtraction,runtimeSettings,semanticSelection,serverVersion,softwareUpdate,sourceOwner,sourcePipelines,sources,store,usageLedger,webVersion,workflows} satisfies FeatureServices;
   const featureHost=new ServerFeatureHost(backendContext,app,()=>diagnostics.record('request.failed',{category:'internal'},'error'));
   resources.defer(()=>featureHost.close());
   registerPluginRoutes(app,{plugins:pluginCenter,bindings:memoryBindings,automation:memoryAutomation,owner:request=>{assertRequestActive(request);if(credential(request))throw new StoreError('Owner authorization is required for plugin control',403);}});
