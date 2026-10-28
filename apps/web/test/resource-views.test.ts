@@ -6,7 +6,8 @@ import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {Memories} from '../src/Memories.js';
 import {MemoryIntegration} from '../src/MemoryIntegration.js';
-import {FeaturePage,featuresReady} from '../src/features/runtime.js';
+import { featuresReady } from '../src/features/bootstrap.js';
+import { FeaturePage } from '../src/features/runtime.js';
 import {Files,FileDetail} from '../src/Files.js';
 import {Sources} from '../src/Sources.js';
 import {ReferenceDetail} from '../src/ReferenceDetail.js';
@@ -236,7 +237,7 @@ test('source presentation pages decoded text, preserves raw fallback, escapes co
  await click('返回阅读视图');pending=true;await act(async()=>resources(api).invalidate(()=>true));assert.match(d.body.textContent!,/正在重新整理/);assert.doesNotMatch(d.body.textContent!,/Generated first page/);
 });
 test('the source plugin renders imported messages and distinguishes recorded, occurred and collected times',async t=>{
- const {featuresReady}=await import('../src/features/runtime.js');await featuresReady;
+ const {featuresReady}=await import('../src/features/bootstrap.js');await featuresReady;
  const {root,document:d}=await fixture(t),opened:string[]=[];
  const material:Material={id:'mat_'+'c'.repeat(64),ref:'material:mat_'+'c'.repeat(64)+'@'+'d'.repeat(64),revision:'d'.repeat(64),kind:'mote.message',schemaVersion:1,title:'Generated diary',sequence:1,textLength:40,blockCount:1,coverage:{state:'complete'},origin:{sourceId:'generated'},retention:{original:'retained'}};
  const item={blockId:'source-record',type:'source',sourceType:'message',sourceRef:'capture:'+ids[0],text:'Readable generated diary',appName:'Generated archive',recordedAt:'2026-05-07T00:15:00+08:00',occurredAt:'2026-05-01T12:00:00+08:00',capturedAt:'2026-09-27T02:00:00+08:00',offset:0,total:24,continued:false};

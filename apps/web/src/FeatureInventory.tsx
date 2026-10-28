@@ -3,7 +3,7 @@ import type {FeatureInventory as Inventory} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import {type Api,errorMessage} from './api';
 import {useResource} from './useResource';
-import {webFeatures} from './features/runtime';
+import {webFeatures} from './features/registry';
 export function FeatureInventory({api,embedded=false}:{api:Api;embedded?:boolean}){
   const server=useResource<Inventory>(api,'/api/features');
   useSyncExternalStore(webFeatures.registry.subscribe,webFeatures.registry.getRevision,webFeatures.registry.getRevision);
