@@ -36,8 +36,8 @@ async function fixture(t:TestContext){
     publication=new MemoryPublication(store,memories,bindings);
     pipeline=new MemoryPipeline({store,memories,publication,model:()=> 'generated-model',configured:()=>true,requireAdmission:true,
       query:async()=>{modelCalls++;throw Error('Built-in extraction must not run beside the native fixture');},
-      engineDraft:async(_input,context)=>{nativeCalls++;context.provider={instanceId:namespace.instanceId,configurationIdentity:'generated-fixed-configuration',namespace};return {runId:context.opId,answer:'{"memories":[]}',citations:[],trace:[]};},
-      settleEngineDraft:async()=>{},
+      nativeStages:{prepare:async(_input,context)=>{nativeCalls++;context.provider={instanceId:namespace.instanceId,configurationIdentity:'generated-fixed-configuration',namespace};return {runId:context.opId,answer:'{"memories":[]}',citations:[],trace:[]};},
+      settle:async()=>{}},
       review:async(input,draft,_strategy,origin)=>reviewMemory(input,draft,async reviewInput=>{
         reviewCalls++;assert.equal(reviewInput.traceContext?.phase,'review');
         const members=(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members,record=memories.readEvidence([originalId])[0];

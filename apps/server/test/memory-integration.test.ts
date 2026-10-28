@@ -182,7 +182,7 @@ test('an integration that actually received originals may complete with no new r
 
 test('unsupported native input remains an explicit integration failure without automatic model replay after restart',async t=>{
  const f=await fixture(t),{products}=await f.add('generated-native-unsupported');let preparations=0;
- f.node.memoryPipeline.engineDraft=async()=>{preparations++;throw new MemoryProviderError('unsupported_input','Generated unsupported native visual parent');};
+ f.node.memoryPipeline.nativeStages.prepare=async()=>{preparations++;throw new MemoryProviderError('unsupported_input','Generated unsupported native visual parent');};
  await f.queue(products.map(memory=>memory.id));await f.node.lifecycle.tick();
  assert.equal(preparations,1);assert.equal(f.calls.length,0);assert.equal(f.view().error,'memory_provider_unsupported_input');assert.equal(f.view().manualRetryRequired,true);assert.equal(f.view().retryAt,undefined);assert.equal(f.products().length,0);
  assert.equal(f.node.executor.get('lifecycle:'+f.view().active!.id)?.error,'memory_provider_unsupported_input','the executor keeps the same typed cause');

@@ -232,3 +232,40 @@ test('shared lifecycle counts each failed invocation once and retains three-atte
   await lifecycle.close();await engine.close();engine=new ExecutionEngine(store,()=>now);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register();await lifecycle.tick();assert.equal(calls,3);assert.equal(lifecycle.view().extensions[0].failures,3);
  }finally{await lifecycle.close();await engine.close();}
 });
+
+test('a committed failure receipt survives a failed window accounting write and restart without duplicate counting or a fourth attempt',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-lifecycle-receipt-gap-'));
+ let now=Date.now(),calls=0,store!:Store,engine!:ExecutionEngine,lifecycle!:MemoryLifecycle;
+ const open=()=>{
+  store=new Store(directory);engine=new ExecutionEngine(store,()=>now);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);
+  lifecycle.register({id:'consolidation',version:'receipt-gap-fixture',stream:'memory',maxAttempts:3,async run(_window,checkpoint){calls++;checkpoint('retained-receipt-gap-input');throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:200000});}});
+  lifecycle.configure({...lifecycle.settings(),consolidation:{...lifecycle.settings().consolidation,minChanges:1}});
+ };
+ const restart=async()=>{await lifecycle.close();await engine.close();store.close();open();};
+ open();t.after(async()=>{await lifecycle.close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ store.db.prepare("INSERT INTO memory_events(stream,entity) VALUES('memory',?)").run(randomUUID());
+ store.db.exec("CREATE TEMP TRIGGER generated_window_accounting_failure BEFORE INSERT ON memory_lifecycle_state WHEN new.id='consolidation' AND json_extract(new.json,'$.countedFailure') IS NOT NULL BEGIN SELECT RAISE(ABORT,'Generated window accounting failure'); END");
+ await assert.rejects(lifecycle.tick(),/Generated window accounting failure/);
+ const before=lifecycle.view().extensions[0],stepId='lifecycle:'+before.active!.id,step=engine.get(stepId)!,receipt=engine.failure(stepId)!;
+ assert.equal(calls,1);assert.equal(before.failures,0);assert.equal(before.retryAt,undefined);assert.equal(before.active!.checkpoint,'retained-receipt-gap-input');
+ assert.equal(step.state,'waiting');assert.equal(step.attempts,1);assert.equal(receipt.attempt,1);assert.equal(receipt.category,'transient');assert.equal(receipt.code,'provider_network');
+ const expectedRetryAt=now+200000;assert.equal(receipt.availableAt,expectedRetryAt);
+ now+=10000;await restart();
+ assert.deepEqual(engine.failure(stepId),receipt,'restart sees the exact committed executor receipt');
+ await lifecycle.tick();const accounted=lifecycle.view().extensions[0];
+ assert.equal(calls,1,'account the retained receipt before dispatching another invocation');assert.equal(accounted.failures,1);assert.equal(accounted.retryAt,expectedRetryAt,'recovery keeps the failure time, not the restart time');
+ assert.equal(accounted.active!.id,before.active!.id);assert.equal(accounted.active!.checkpoint,before.active!.checkpoint);
+ const counted=String(store.db.prepare("SELECT json_extract(json,'$.countedFailure') counted FROM memory_lifecycle_state WHERE id='consolidation'").get()!.counted);assert.match(counted,/^[a-f0-9]{64}$/);
+ await lifecycle.tick();await restart();await lifecycle.tick();
+ assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].failures,1);assert.equal(lifecycle.view().extensions[0].retryAt,expectedRetryAt);
+ assert.equal(store.db.prepare("SELECT json_extract(json,'$.countedFailure') counted FROM memory_lifecycle_state WHERE id='consolidation'").get()!.counted,counted);
+ now=expectedRetryAt-1;await lifecycle.tick();assert.equal(calls,1);
+ for(let attempt=2;attempt<=3;attempt++){
+  now=lifecycle.view().extensions[0].retryAt!;await lifecycle.tick();
+  assert.equal(calls,attempt);assert.equal(lifecycle.view().extensions[0].failures,attempt);assert.equal(engine.get(stepId)!.attempts,attempt);
+  await lifecycle.tick();assert.equal(calls,attempt);assert.equal(lifecycle.view().extensions[0].failures,attempt);
+ }
+ assert.equal(lifecycle.view().extensions[0].manualRetryRequired,true);assert.equal(engine.get(stepId)!.state,'failed');
+ now+=86400000;await restart();await lifecycle.tick();await lifecycle.tick();
+ assert.equal(calls,3);assert.equal(lifecycle.view().extensions[0].failures,3);assert.equal(engine.get(stepId)!.attempts,3);
+});

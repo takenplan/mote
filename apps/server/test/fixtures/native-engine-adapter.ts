@@ -2,7 +2,7 @@ import type {buildApp} from '../../src/app.js';
 import type {HindsightEngine} from '../../src/hindsight-engine.js';
 
 /** Replace plugin discovery/native transport only. Actual app admission,
- * engineDraft observers, integration lifecycle and durable receipts still run. */
+ * native-stage observers, integration lifecycle and durable receipts still run. */
 export function generatedNativeAdapter(node:Awaited<ReturnType<typeof buildApp>>,engine:Pick<HindsightEngine,'prepare'>){
   const bindings=node.memoryBindings!,view=bindings.view(),binding=bindings.binding();
   const namespace={ownerId:'mote-owner',instanceId:'generated-native-input-handoff',bindingRevision:binding.generation};

@@ -37,7 +37,8 @@ import {MemoryExtractionDrafts} from './memory-extraction-drafts.js';
 import {memoryReadRanges,assertMemoryTargetSupport,mergeMemoryReadRanges,retainedMemoryReadReceipt} from './memory-read-context.js';
 import type {MemoryPublication,MemoryPublicationReceipt} from './memory-publication.js';
 import {MemoryProviderError} from './memory-provider-contract.js';
-import type {MemoryProviderNamespace} from './memory-provider-contract.js';
+import {MemoryNativeStages} from './memory-native-stages.js';
+import {memoryEngineDraftPin,type MemoryEngineDraftContext,type MemoryEngineDraftPin,type MemoryNativeStageAdapter,type MemoryNativeStagePort} from './memory-native-stage-contract.js';
 
 export type MemoryValidationFailure={at:string;code:string;phase:'extract'|'review';attempt?:number;runId?:string;details?:MemoryValidationDetails};
 export type MemoryValidationFailureEvent=MemoryValidationFailure&{jobId:string;batchId:string;batchIndex:number};
@@ -50,10 +51,7 @@ export type MemoryJob={failureReceipt?:ExecutionFailureReceipt;priorValidationFa
 export type MemoryJobDetail=MemoryJob&{batches:MemoryBatch[]};
 export type MemoryPipelineQuery={processingImages?:QueryInput['processingImages'];memoryReviewQuestion?:string;memoryReviewRepair?:string;taskContext?:QueryInput['taskContext'];processingMaterialInputs?:QueryInput['processingMaterialInputs'];processingEvidence?:QueryInput['processingEvidence'];contextTime?:string;signal?:AbortSignal;language?:Locale;modelProfileId?:string;modelOverride?:string;question:string;skill:'memory-extraction'|'coding-memory'|'memory-strategy';responseMode:'memory-extraction';evidenceIds:string[];evidenceRanges:EvidenceRange[];evidenceReadRanges?:EvidenceRange[];timeZone?:string;validateOutput?:QueryInput['validateOutput'];onProgress?:QueryInput['onProgress'];onTrace?:QueryInput['onTrace'];traceContext?:QueryInput['traceContext']};
 export type ConversationPreparation={generationContract:string;memoryWork?:{package:{goal:string;instruction:string};members:MemoryWorkMember[];contextMembers:MemoryWorkMember[];authorizedMembers:MemoryWorkMember[];history:MemoryWorkInspection[];workContract?:MemoryWorkContract;maxCandidates?:number;instruction:string};candidatePolicy?:{prompt:string;profile:'personal'|'coding';fingerprint:string};job:MemoryJob;ranges:EvidenceRange[];materialRefs:Record<string,string>;materialInputs:MaterialInputPin[];signal:AbortSignal;parentGrant:{stepId:string;fence:string}};
-export type MemoryEngineDraftContext={phase:'extract'|'integrate';opId:string;evidenceIds:string[];checkpointId?:string;cleanupGeneration?:string;relatedMemories?:Memory[];assertAuthority?:()=>void;provider?:{instanceId:string;configurationIdentity:string;namespace:MemoryProviderNamespace}};
-export type MemoryEngineDraftPin=Omit<MemoryEngineDraftContext,'relatedMemories'|'assertAuthority'>;
-export function memoryEngineDraftPin(context:MemoryEngineDraftContext):MemoryEngineDraftPin{const {relatedMemories:_,assertAuthority:__,...pin}=context;return structuredClone(pin);}
-export type MemoryPipelineOptions={onPublished?:(step:ExecutionStep,memories:readonly import('./memory-schema.js').Memory[],job:MemoryJob)=>void;assertIntegrationAuthority?:()=>void;withIntegrationAuthority?:<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>)=>Promise<T>;integrationReadInput?:(cards:readonly Memory[])=>Pick<QueryInput,'processingImages'|'processingMaterialInputs'|'processingEvidence'>;assertIntegrationReadable?:(cards:readonly Memory[])=>void;settleEngineDraft?:(context:MemoryEngineDraftPin)=>Promise<void>;assertNewManualWork?:()=>void;engineDraft?:(input:QueryInput,context:MemoryEngineDraftContext)=>Promise<QueryResult|undefined>;publication?:MemoryPublication;understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;materialSourceCurrent?:(pin:MaterialSourcePin,materialId:string)=>boolean;materialPlanAllowed?:(materialId:string,profileId?:string)=>boolean;deletionEvidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;materialInput?:(ref:string,required:readonly string[])=> (MaterialInputPin&{ready:boolean;dependencies?:MaterialDependencyStatus[]})|undefined;materialRequirements?:(ref:string)=>string[]|undefined;automaticAllowed?:(job:MemoryJob)=>boolean;strategies?:MemoryStrategies;configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;executor?:ExecutionEngine;concurrency?:()=>number;onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;requireAdmission?:boolean;review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:MemoryDraftOrigin)=>Promise<QueryResult>;materialAllowedForMemory?:(ref:string,profileId?:string,required?:readonly string[])=>boolean;evidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;store:Store;memories:MemoryStore;query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;model:(profileId?:string)=>string;configured:(profileId?:string)=>boolean;skillVersion?:string;batchCharacters?:number|(()=>number)};
+export type MemoryPipelineOptions={onPublished?:(step:ExecutionStep,memories:readonly import('./memory-schema.js').Memory[],job:MemoryJob)=>void;assertIntegrationAuthority?:()=>void;withIntegrationAuthority?:<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>)=>Promise<T>;integrationReadInput?:(cards:readonly Memory[])=>Pick<QueryInput,'processingImages'|'processingMaterialInputs'|'processingEvidence'>;assertIntegrationReadable?:(cards:readonly Memory[])=>void;assertNewManualWork?:()=>void;nativeStages?:MemoryNativeStageAdapter;publication?:MemoryPublication;understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;materialSourceCurrent?:(pin:MaterialSourcePin,materialId:string)=>boolean;materialPlanAllowed?:(materialId:string,profileId?:string)=>boolean;deletionEvidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;materialInput?:(ref:string,required:readonly string[])=> (MaterialInputPin&{ready:boolean;dependencies?:MaterialDependencyStatus[]})|undefined;materialRequirements?:(ref:string)=>string[]|undefined;automaticAllowed?:(job:MemoryJob)=>boolean;strategies?:MemoryStrategies;configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;executor?:ExecutionEngine;concurrency?:()=>number;onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;requireAdmission?:boolean;review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:MemoryDraftOrigin)=>Promise<QueryResult>;materialAllowedForMemory?:(ref:string,profileId?:string,required?:readonly string[])=>boolean;evidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;store:Store;memories:MemoryStore;query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;model:(profileId?:string)=>string;configured:(profileId?:string)=>boolean;skillVersion?:string;batchCharacters?:number|(()=>number)};
 
 type ReadyInputScope={strategy?:MemoryRecipeBinding;ids:string[];inputs:MaterialInputPin[];refs:Record<string,string>;planIds?:string[]};
 type BatchOutput={contextReadChunks?:Chunk[];workContract?:MemoryWorkContract;engineDrafts?:MemoryEngineDraftPin[];publication?:MemoryPublicationReceipt;feedbackPlan?:MemoryFeedbackPlan;coverage?:MemoryWorkCoverage;strategy?:MemoryRecipeBinding;result:QueryResult;reviewReceipt?:MemoryReviewReceipt;model:string;profile:'personal'|'coding';skillVersion:string;ranges:EvidenceRange[];chunks:Chunk[]};
@@ -67,34 +65,8 @@ export class MemoryPipeline {
   assertIntegrationAuthority(){this.options.assertIntegrationAuthority?.();}
   withIntegrationAuthority<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>){return this.options.withIntegrationAuthority?.(id,manual,evidenceIds,task)??task();}
   integrationReadInput(cards:readonly Memory[]){return this.options.integrationReadInput?.(cards)??{};}
-  async engineDraft(input:QueryInput,context:MemoryEngineDraftContext){
-    // A retry may reuse the upstream idempotency operation after its former
-    // failed stage was cleaned. Keep distinct cleanup receipts for each new
-    // preparation invocation; a cached draft retains its original pin.
-    context.cleanupGeneration??=randomUUID();
-    const pending=this.options.engineDraft?.(input,context);
-    // The host adapter pins its configuration synchronously, before native
-    // transport/model work begins. Keep that reference even when prepare is
-    // cancelled or fails before returning a candidate.
-    const remember=()=>{if(!context.provider)return;const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),json=JSON.stringify(pin);if(!this.store.db.prepare('SELECT 1 FROM memory_engine_stage_drafts WHERE id=?').get(id)){this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare('INSERT INTO memory_engine_stage_drafts VALUES(?,?,?)').run(id,json,context.checkpointId??null);}};
-    remember();try{return await pending;}finally{remember();}
-  }
-  /** Call only after durable reviewed output or a final host checkpoint. Native
-   * cleanup has its own durable receipt and never reruns semantic generation. */
-  async settleEngineDraft(context:MemoryEngineDraftContext|MemoryEngineDraftPin){
-    if(!this.options.settleEngineDraft)return;
-    const {id,prior}=this.recordEngineStageCleanup(context);
-    if(prior?.state==='acknowledged')return;
-    const pin=memoryEngineDraftPin(context);
-    try{await this.options.settleEngineDraft(pin);this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(id);}catch{this.queueEngineStageCleanup(id);}
-  }
-  /** A rejected/cancelled native stage has no remaining publication path. This
-   * durable host checkpoint queues transport cleanup without another model or
-   * review, and does not block an independently reviewed canonical result. */
-  abandonEngineDraft(context:MemoryEngineDraftContext|MemoryEngineDraftPin){if(!this.options.settleEngineDraft||!context.provider)return;const {id,prior}=this.recordEngineStageCleanup(context);if(prior?.state!=='acknowledged')this.queueEngineStageCleanup(id);}
-  private recordEngineStageCleanup(context:MemoryEngineDraftContext|MemoryEngineDraftPin){const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),prior=this.store.db.prepare('SELECT state FROM memory_engine_stage_cleanups WHERE id=?').get(id);if(!prior){const json=JSON.stringify(pin);this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare("INSERT INTO memory_engine_stage_cleanups VALUES(?,?,'pending')").run(id,json);}return {id,prior};}
-  private finalizeEngineStep(step:ExecutionStep){if(!['succeeded','failed','cancelled','stale'].includes(step.state))return;for(const row of this.store.db.prepare('SELECT json FROM memory_engine_stage_drafts WHERE checkpoint_id=?').all(step.id))this.abandonEngineDraft(JSON.parse(String(row.json)));}
-  private queueEngineStageCleanup(id:string){const operationId='memory-engine-stage-cleanup:'+id,prior=this.engine.get(operationId);if(!prior)this.engine.enqueue(operationId,'memory.engine-stage-cleanup',{id},{id:operationId});else if(['failed','stale','cancelled','blocked'].includes(prior.state)&&!this.engine.isActiveStep(operationId))this.engine.retry(operationId);this.engine.localEffect(()=>{void this.engine.tick().catch(()=>{});});}
+  readonly nativeStages:MemoryNativeStagePort;
+  private nativeRuntime:MemoryNativeStages;
   private phaseOutputs!:MemoryPhaseOutputs;
   private ownerQuestions?:MemoryOwnerQuestionHandler;
   setOwnerQuestionHandler(handler?:MemoryOwnerQuestionHandler){this.ownerQuestions=handler;}
@@ -202,6 +174,7 @@ export class MemoryPipeline {
   }
 
   private closed=false;
+  private closing?:Promise<void>;
   private batchBudget(){
     const value=typeof this.options.batchCharacters==='function'?this.options.batchCharacters():this.options.batchCharacters??12000;
     if(!Number.isSafeInteger(value)||value<256||value>12000)throw new StoreError('Memory batch budget must be 256–12000 characters');
@@ -221,13 +194,7 @@ export class MemoryPipeline {
     this.engine=options.executor??new ExecutionEngine(this.store);this.owned=!options.executor;
     this.phaseOutputs=new MemoryPhaseOutputs(this.store,this.engine);
     this.engine.configurePool('memory.phase',{concurrency:{background:options.concurrency??(()=>1),interactive:options.concurrency??(()=>1)},lane:()=> 'background'});
-    this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_cleanups(id TEXT PRIMARY KEY,json TEXT NOT NULL,state TEXT NOT NULL);');
-    this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_drafts(id TEXT PRIMARY KEY,json TEXT NOT NULL,checkpoint_id TEXT); CREATE INDEX IF NOT EXISTS memory_engine_stage_checkpoint ON memory_engine_stage_drafts(checkpoint_id);');
-    if(options.settleEngineDraft){
-      this.unregister.push(this.engine.register({kind:'memory.engine-stage-cleanup',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,validate:()=>true,execute:async step=>{const row=this.store.db.prepare('SELECT json,state FROM memory_engine_stage_cleanups WHERE id=?').get(String(step.input.id));if(row?.state==='pending')try{await options.settleEngineDraft!(JSON.parse(String(row.json)));}catch{throw new ExecutionFailure('waiting','memory_engine_cleanup_pending',5000);}},commit:step=>{this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(String(step.input.id));}}));
-      for(const row of this.store.db.prepare("SELECT id FROM memory_engine_stage_cleanups WHERE state='pending'").all())this.queueEngineStageCleanup(String(row.id));
-      for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
-    }
+    this.nativeRuntime=new MemoryNativeStages(this.store,this.engine,options.nativeStages);this.nativeStages=this.nativeRuntime;
     this.recover();
     this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
@@ -245,7 +212,7 @@ export class MemoryPipeline {
         const output=await this.execute(job.id,batch.id,signal,current);
         if(!output)return output;
         const assertAuthority=()=>{signal.throwIfAborted();if(!current()||!this.validateStep(step))throw new ExecutionFailure('stale','memory_publication_revoked');const job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId));this.assertAutomatic(job);this.assertConfiguration(job);this.assertStrategies(batch);this.admitBatch(job,batch);this.assertContextReadScope(job,batch,output.contextReadChunks??[]);};
-        assertAuthority();for(const pin of output.engineDrafts??[])await this.settleEngineDraft(pin);
+        assertAuthority();for(const pin of output.engineDrafts??[])await this.nativeStages.settle(pin);
         if(output.feedbackPlan)return output;
         this.assertOwnerQuestionMaterials(this.storedJob(String(step.input.jobId)),this.batch(String(step.input.batchId)),output);
         output.publication=await publication?.stageExtract(step.id,output.result,output.model,{workContract:output.workContract,maxCandidates:output.coverage&&!output.workContract?memoryWorkCandidateLimit(output.chunks.length):undefined,strategy:output.strategy,profile:output.profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?output.result.runId:undefined,skillVersion:output.skillVersion,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[]),...(output.contextReadChunks??[])].map(chunk=>[chunk.id,chunk.fingerprint]))},assertAuthority,Boolean(this.storedJob(String(step.input.jobId)).automaticGrant||this.storedJob(String(step.input.jobId)).automaticGrants?.length));
@@ -826,7 +793,7 @@ export class MemoryPipeline {
     return batch.status!=='invalidated'&&this.validMany([...batch.chunks,...(batch.contextChunks??[])])&&(batch.artifactRefs??[]).every(ref=>this.store.archive.revision(ref.id)===ref.revision);
   }
   private projectStep(step:ExecutionStep){
-    this.finalizeEngineStep(step);
+    this.nativeRuntime.finalize(step);
     const id=String(step.input.jobId),batchId=String(step.input.batchId);
     if(!this.store.db.prepare('SELECT 1 FROM memory_batches WHERE id=?').get(batchId))return;
     const batch=this.batch(batchId),job=this.storedJob(id);
@@ -1052,7 +1019,7 @@ export class MemoryPipeline {
           if(!observeCurrent(()=>{batch.phase='extract';this.saveBatch(batch);if(this.options.review&&generation===0)cached=this.drafts.get(batch.id,draftKey,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
           const nativeContext:MemoryEngineDraftContext={phase:'extract',opId:batch.id+':draft:'+generation,evidenceIds:phaseInput.evidenceIds,checkpointId:batch.id,assertAuthority:validateArtifacts};
           const cachedNative=Boolean(cached&&batch.nativeDraft?.key===draftKey&&cached.runId===batch.nativeDraft.context.opId);
-          const native=cachedNative?cached:cached?undefined:await this.engineDraft(phaseInput,nativeContext);
+          const native=cachedNative?cached:cached?undefined:await this.nativeStages.prepare(phaseInput,nativeContext);
           if(native&&!cachedNative){const pin=memoryEngineDraftPin(nativeContext);if(!observeCurrent(()=>{batch.nativeDraft={key:draftKey,context:pin};batch.engineDrafts=[...(batch.engineDrafts??[]).filter(item=>item.opId!==pin.opId),pin];this.saveBatch(batch);} ))throw new ExecutionFailure('waiting','interrupted');}
           let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates,contract):undefined)??await withExecutionCancellation(stageSignal,()=>this.options.query(phaseInput));
           attempted=result;
@@ -1140,9 +1107,15 @@ export class MemoryPipeline {
       throw retainFailureContext(error instanceof ExecutionFailure||error instanceof ProviderFailure?error:new ExecutionFailure(error instanceof StoreError&&error.statusCode===409?'stale':'permanent',signal.aborted?'cancelled':error instanceof StoreError&&error.statusCode===409?'evidence_changed':error instanceof StoreError&&error.statusCode===507?'storage_full':(error instanceof StoreError&&error.statusCode===502)||error instanceof AgentResponseError?'invalid_model_output':'model_failed'),failureContext(error));
     }
   }
-  async close(){
-    this.closed=true;
-    if(this.owned)await this.engine.close();else if(!this.engine.closed){for(const id of this.active.keys())for(const step of this.steps(id))this.engine.cancel(step);}
-    this.settle();await Promise.allSettled([...this.active.values()]);await Promise.all(this.unregister.splice(0).map(stop=>stop()));
+  close(){return this.closing??=this.dispose();}
+  private async dispose(){
+    this.closed=true;this.nativeRuntime.stop();
+    try{
+      if(this.owned)await this.engine.close();else if(!this.engine.closed){for(const id of this.active.keys())for(const step of this.steps(id))this.engine.cancel(step);}
+      this.settle();await Promise.allSettled([...this.active.values()]);
+      const stopped=await Promise.allSettled(this.unregister.splice(0).map(stop=>stop()));
+      const errors=stopped.flatMap(result=>result.status==='rejected'?[result.reason]:[]);
+      if(errors.length)throw new AggregateError(errors,'Memory handler disposal failed');
+    }finally{await this.nativeRuntime.close();}
   }
 }
