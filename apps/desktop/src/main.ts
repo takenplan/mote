@@ -6,9 +6,10 @@ import { connectionToken, loginRequest, loginVerifier } from './login-session';
 import { SyncHistory, type SyncHistoryQuery, type SyncHistoryContentQuery } from './sync-history';
 import { localContentPage, localContentDetail, centralContentPage } from './content-library';
 import { randomUUID } from 'node:crypto';
-import { basename } from 'node:path';
 import { syncContent, readCentralContent } from './sync-content';
-import { AskClient } from './ask';
+import { AskController } from './ask-controller';
+import { ConnectionController } from './connection-controller';
+import { SourceSelectionController } from './source-selection';
 import {storageStatistics} from '@mote/shared/storage-statistics';
 import { moteText, statusMessage, configureLocale, getLocale, negotiateLocale, languagePreference, locales, type LanguagePreference } from '@mote/shared/i18n';
 import {discoverCodingAgents} from './coding-agents';
@@ -345,24 +346,13 @@ else {
         return { canceled: false, preview: onboarding.preview(input) };
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
-    handle('mote:connection-confirm', (id, origin, deviceName) => serialize(async () => { await connectionChange(async () => {
-      if (!secrets.available()) throw new Error(moteText("系统加密存储不可用，不能交换并保存凭据"));
-      if (typeof deviceName !== 'string') throw new Error('Invalid device name');
-      const named = updateConfig(settings, { ...settings, deviceName });
-      const result = await onboarding.redeem(id, origin, named, currentPlatform);
-      const updated = { ...updateConfig(settings, { ...named, serverUrl: result.serverUrl, token: result.token }), credentialScope: result.scope, authSignedOut:false, authExpiresAt:undefined, authSessionOnly:false };
-      const identity = await testConnection(updated);
-      if (identity.credential.id !== result.credentialId || identity.credential.scope !== 'owner') throw new Error(moteText("中央凭据身份确认不一致，原连接未修改；请重新生成邀请"));
-      await commitConnection(updated, origin === settings.serverUrl, true);
-      connectionState = { state: 'connected', message: moteText("登录成功，可使用所有中央功能。"), checkedAt: new Date().toISOString(), identity };
-    }, origin === settings.serverUrl, true); return clientStatus(); }));
-    handle('mote:connection-test', async () => {
-      if (connectionState.state === 'checking') return connectionState;
-      const requested = settings; connectionState = { state: 'checking', message: moteText("正在验证已保存连接与权限…") };
-      try { const identity = await testConnection(requested); if (settings === requested) connectionState = { state: 'connected', message: moteText("管理员连接正常 · 可访问完整中央仓库"), checkedAt: new Date().toISOString(), identity }; }
-      catch (error) { if (settings === requested) connectionState = { state: 'error', message: error instanceof ConnectionError ? error.message : moteText("连接检查失败；已保存配置未改变"), checkedAt: new Date().toISOString() }; }
-      return connectionState;
+    const connectionController = new ConnectionController({
+      settings: () => settings, status: () => connectionState, installStatus: value => { connectionState = value; },
+      secretStorageAvailable: () => secrets.available(), platform: currentPlatform,
+      coordinator: settingsCoordinator, onboarding,
     });
+    handle('mote:connection-confirm', (id, origin, deviceName) => serialize(async () => { await connectionController.confirm(id, origin, deviceName); return clientStatus(); }));
+    handle('mote:connection-test', () => connectionController.test());
     handle('mote:sync-paused', paused => serialize(async () => {
       if(typeof paused!=='boolean')throw new Error('Invalid paused sync setting');
       const previous=settings,updated=updateConfig(settings,{...settings,syncPaused:paused});
@@ -425,24 +415,16 @@ else {
     handle('mote:calendar-authorize', () => serialize(() => localSources!.authorizeCalendar()));
     handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); await localSources!.addCalendar(id, options); }));
     handle('mote:source-update', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("来源选择无效")); await localSources!.update(id, options); }));
-    const sourceSelections = new Map<string,string[]>();
+    const sourceSelections = new SourceSelectionController((path, options) => localSources!.addFiles(path, options));
     handle('mote:source-select', mode => serialize(async () => {
       if (mode !== 'files' && mode !== 'directory') throw new Error(moteText("文件选择方式无效"));
       const result = await dialog.showOpenDialog(window!, {title:mode==='directory'?moteText("同步文件夹"):moteText("导入文件"),properties:mode==='directory'?['openDirectory']:['openFile','multiSelections']});
       if (result.canceled || !result.filePaths.length) return {canceled:true};
       // Paths remain in the privileged process; the renderer can confirm only this native selection.
-      sourceSelections.clear(); const selectionId=randomUUID(); sourceSelections.set(selectionId,result.filePaths);
-      return {canceled:false,selectionId,names:result.filePaths.map(path=>basename(path))};
+      return sourceSelections.select(result.filePaths);
     }));
-    handle('mote:source-cancel', id => { if (typeof id === 'string') sourceSelections.delete(id); });
-    handle('mote:source-confirm', (id,input) => serialize(async () => {
-      const paths=typeof id==='string'?sourceSelections.get(id):undefined;
-      if (!paths) throw new Error(moteText("文件选择已失效，请重新选择"));
-      const options=normalizeSourceOptions(input);
-      // Remove successful members individually: a retry after a partial failure never duplicates them.
-      while(paths.length) { await localSources!.addFiles(paths[0],options); paths.shift(); }
-      sourceSelections.delete(id as string);
-    }));
+    handle('mote:source-cancel', id => sourceSelections.cancel(id));
+    handle('mote:source-confirm', (id, input) => serialize(() => sourceSelections.confirm(id, input)));
     handle('mote:memory-topics',()=>browseWithConnection(centralMemoryTopics));
     handle('mote:memory-topic-page',input=>browseWithConnection(config=>centralMemoryTopicPage(config,input as import('./memory-topics').TopicQuery)));
     handle('mote:memory-topic-evidence',(memoryId,evidenceId)=>browseWithConnection(config=>centralMemoryTopicEvidence(config,memoryId as string,evidenceId as string,()=>{if(settings!==config)throw Error(moteText('连接已改变，请刷新采集记录'));})));
@@ -527,7 +509,6 @@ else {
     handle('mote:review-reject', async (id:unknown) => { if(typeof id!=='string')throw Error('Invalid review ID');await queue!.rejectReview(id); });
     handle('mote:review-approve', async (id:unknown) => { if(typeof id!=='string')throw Error('Invalid review ID');await queue!.approveReview(id); });
     handle('mote:retry', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); return clientStatus(); });
-    const askClient = new AskClient(config=>config.serverUrl===settings.serverUrl&&config.token===settings.token&&config.authSignedOut===settings.authSignedOut&&config.authExpiresAt===settings.authExpiresAt);
     let loginGeneration=0;
     const endLogin=()=>serialize(async()=>{
       loginGeneration++;
@@ -579,13 +560,8 @@ else {
       if(connectionToken(settings)&&Date.now()>=nextAuthCheck&&!authCheck){const selected=settings;nextAuthCheck=Date.now()+15000;authCheck=testConnection(selected).catch(error=>{if(settings===selected&&error instanceof ConnectionError&&error.code==='AUTH')return endLogin();}).finally(()=>{authCheck=undefined;});}
       if(settings.token&&!settings.authSignedOut&&settings.authExpiresAt&&settings.authExpiresAt<=Date.now())void endLogin().catch(()=>{});
     },1000);authTimer.unref();app.once('before-quit',()=>clearInterval(authTimer));
-    handle('mote:ask', async (command,input) => {
-      if(command==='login'){const value=input as {token?:string;durationMs?:number};if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的中央所有者令牌'));await installLogin(value.token.trim(),value.durationMs);return {};}
-      if(command==='logout'){await endLogin();return {};}
-      if(command==='login-browser'){await browserLogin!(undefined,undefined,(input as {durationMs?:number})?.durationMs);return {};}
-      try{return await askClient.request(settings,command as import('./ask').AskCommand,input as Parameters<AskClient['request']>[2]);}
-      catch(error){if(error instanceof Error&&error.message===moteText('令牌无效或已失效，请检查后重新登录。'))await endLogin();throw error;}
-    });
+    const askController = new AskController({ settings: () => settings, installLogin, endLogin, browserLogin });
+    handle('mote:ask', (command, input) => askController.request(command, input));
     handle('mote:permission-status', async () => ({
       appPath: bundlePath ?? app.getPath('exe'),
       canDrag: process.platform === 'darwin' && Boolean(bundlePath),

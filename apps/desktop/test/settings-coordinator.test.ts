@@ -12,6 +12,10 @@ import { NoteDraftStore } from '../src/note-draft';
 import { SettingsCoordinator, type SettingsDependencies } from '../src/settings-coordinator';
 import type { Config } from '../src/contracts';
 import { event, image } from './fixtures';
+import { ConnectionController } from '../src/connection-controller';
+import { ConnectionOnboarding } from '../src/connection';
+import type { ConnectionStatus } from '../src/contracts/connection';
+import { MOTE_PROTOCOL_RANGE } from '@mote/shared';
 
 // Only the unavailable Electron system boundary is replaced; transactions, drafts,
 // source checkpoints, queue bindings and the collector's settings lifecycle are real.
@@ -132,5 +136,68 @@ it('releases the real collector hold after source acquisition failure so a repea
     await expect(f.coordinator.paused(operation)).rejects.toThrow('source hold failure'); expect(operation).not.toHaveBeenCalled();
     expect(await f.coordinator.paused(operation)).toBe('completed'); expect(operation).toHaveBeenCalledTimes(1);
     expect(f.collector.status().running).toBe(false); expect(f.recovery()).toBeUndefined();
+  } finally { await f.close(); }
+});
+
+function connectionEntry(f: Awaited<ReturnType<typeof fixture>>) {
+  let status: ConnectionStatus = { state: 'unchecked', message: 'Generated unchecked connection' };
+  const onboarding = new ConnectionOnboarding((...args) => fetch(...args));
+  const dependencies = {
+    settings: f.settings, status: () => status, installStatus: (value: ConnectionStatus) => { status = value; },
+    secretStorageAvailable: () => true, platform: 'macos' as const, coordinator: f.coordinator, onboarding,
+  };
+  const identity = (id = 'generated-granted-credential') => ({
+    credential: { id, scope: 'owner', label: 'Generated owner client', deviceId: f.settings().deviceId },
+    node: { version: '0.0.90', profile: 'test', protocol: MOTE_PROTOCOL_RANGE },
+    capabilities: { ingest: true, ingressVersion: 2, ownSources: true, archiveRead: true },
+  });
+  const preview = () => onboarding.preview(JSON.stringify({ format: 'mote.connection', version: 1, code: 'x'.repeat(43), serverUrl: f.settings().serverUrl, expiresAt: new Date(Date.now() + 60_000).toISOString() }));
+  return { controller: new ConnectionController(dependencies), dependencies, identity, preview, status: () => status };
+}
+
+it('confirms an invitation through the actual onboarding consumer and settings transaction without losing pending identities', async () => {
+  const f = await fixture();
+  try {
+    const { draft } = await f.addPending(), pending = structuredClone(f.sources.pendingContent());
+    const entry = connectionEntry(f), preview = entry.preview(), token = 'generated-invitation-owner-token-123456789';
+    const fetcher = vi.fn(async (url: string) => Response.json(url.endsWith('/redeem') ? { serverUrl: preview.serverUrl, token, credentialId: 'generated-granted-credential', scope: 'owner' } : entry.identity()));
+    vi.stubGlobal('fetch', fetcher);
+    await entry.controller.confirm(preview.id, preview.serverUrl, 'Generated renamed Mac');
+    expect(f.settings().token).toBe(token); expect((await f.store.load()).deviceName).toBe('Generated renamed Mac');
+    expect(f.queue.binding.matches(f.settings())).toBe(true); expect(f.sources.nodeBinding.matches(f.settings())).toBe(true);
+    expect(f.sources.pendingContent()).toEqual(pending); expect(f.notes.get()).toMatchObject({ ...draft, prepared: true }); expect(entry.status().state).toBe('connected');
+    await expect(entry.controller.confirm(preview.id, preview.serverUrl, 'Generated repeated click')).rejects.toThrow('确认');
+    expect(fetcher).toHaveBeenCalledTimes(2); expect(f.settings().deviceName).toBe('Generated renamed Mac');
+  } finally { await f.close(); }
+});
+
+it('leaves the saved connection untouched after invitation identity mismatch or unavailable secret storage', async () => {
+  const f = await fixture();
+  try {
+    const previous = f.settings(), entry = connectionEntry(f), preview = entry.preview();
+    const fetcher = vi.fn(async (url: string) => Response.json(url.endsWith('/redeem') ? { serverUrl: preview.serverUrl, token: 'generated-rejected-owner-token-123456789', credentialId: 'generated-granted-credential', scope: 'owner' } : entry.identity('generated-other-credential')));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(entry.controller.confirm(preview.id, preview.serverUrl, 'Generated failed name')).rejects.toThrow('身份确认不一致');
+    expect(f.settings()).toBe(previous); expect(await f.store.load()).toEqual(previous); expect(f.queue.binding.matches(previous)).toBe(true);
+    entry.dependencies.secretStorageAvailable = () => false;
+    const next = entry.preview();
+    await expect(entry.controller.confirm(next.id, next.serverUrl, 'Generated blocked name')).rejects.toThrow('加密存储不可用');
+    expect(fetcher).toHaveBeenCalledTimes(2); expect(f.settings()).toBe(previous);
+  } finally { await f.close(); }
+});
+
+it('ignores an old connection check after settings change, deduplicates a running check and recovers from a current failure', async () => {
+  const f = await fixture();
+  try {
+    const entry = connectionEntry(f); let release!: (response: Response) => void;
+    const fetcher = vi.fn().mockImplementationOnce(async () => new Promise<Response>(resolve => { release = resolve; })).mockResolvedValueOnce(Response.json({ error: 'unauthorized' }, { status: 401 })).mockImplementationOnce(async () => Response.json(entry.identity()));
+    vi.stubGlobal('fetch', fetcher);
+    const pending = entry.controller.test(); expect((await entry.controller.test()).state).toBe('checking'); expect(fetcher).toHaveBeenCalledTimes(1);
+    f.dependencies.installSettings({ ...f.settings(), token: 'generated-new-check-token-123456789' });
+    entry.dependencies.installStatus({ state: 'unchecked', message: 'Generated new connection' });
+    release(Response.json(entry.identity()));
+    expect((await pending).state).toBe('unchecked'); expect(entry.status().message).toBe('Generated new connection');
+    expect((await entry.controller.test()).state).toBe('error');
+    expect((await entry.controller.test()).state).toBe('connected'); expect(fetcher).toHaveBeenCalledTimes(3);
   } finally { await f.close(); }
 });
