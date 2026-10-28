@@ -8,6 +8,15 @@ import java.util.UUID
 
 object QuickNotes {
     internal val io = java.util.concurrent.Executors.newSingleThreadExecutor()
+    internal fun controller(context: Context): NoteDraftController {
+        val app = context.applicationContext
+        return NoteDraftController(object : NoteDraftOperations {
+            override fun read() = draft(app).read()
+            override fun update(text: String, mood: String) = draft(app).update(text, mood)
+            override fun clear() = draft(app).clear()
+            override fun save(text: String, mood: String) = QuickNotes.save(app, text, mood)
+        }, io)
+    }
     fun draft(context: Context): NoteDraftStore {
         LocalDataFormat.requireCurrent(context)
         return NoteDraftStore(File(context.noBackupFilesDir, "note-draft"), context.localContentCipher())

@@ -689,6 +689,7 @@ class MainActivity : MoteActivity() {
         pageContent.addView(draft); content = draft
         val app = applicationContext
         val io = QuickNotes.io
+        val controller = QuickNotes.controller(app)
         val task = UiTask(this, io, ownsExecutor = false)
         val note = field(MoteI18n.text("正在想什么"), "", MoteI18n.text("记下此刻的想法…"), multiline = true)
         fieldLabels[note]?.visibility = View.GONE
@@ -700,12 +701,6 @@ class MainActivity : MoteActivity() {
         val progress = text(MoteI18n.text("正在读取草稿…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         var changingDraft = false
         var readable = false
-        var editRevision = 0
-        val persisted = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
-        val writer = LatestWriter<Pair<Int, Pair<String, String>>>(io) { (revision, value) ->
-            val result = runCatching { QuickNotes.draft(app).update(value.first, value.second) }
-            persisted.set(revision to result.isSuccess)
-        }
         fun replace(value: NoteDraft) {
             changingDraft = true; note.setText(value.text); changingDraft = false
         }
@@ -715,7 +710,7 @@ class MainActivity : MoteActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 if (!changingDraft && readable) {
-                    writer.submit(++editRevision to (note.text.toString() to ""))
+                    controller.autosave(note.text.toString(), "")
                     progress.text = MoteI18n.text("正在保存草稿…")
                 }
             }
@@ -725,15 +720,15 @@ class MainActivity : MoteActivity() {
         val draftPoll = object : Runnable {
             override fun run() {
                 if (isDestroyed) return
-                if (resumed && !task.busy) persisted.get()?.takeIf { it.first == editRevision }?.let {
-                    progress.text = if (it.second) MoteI18n.text("草稿已保存") else MoteI18n.text("草稿保存失败，请保持页面打开并检查可用空间")
+                if (resumed && !task.busy) controller.persistence()?.let {
+                    progress.text = if (it.succeeded) MoteI18n.text("草稿已保存") else MoteI18n.text("草稿保存失败，请保持页面打开并检查可用空间")
                 }
                 handler.postDelayed(this, 500)
             }
         }
         notePoll = draftPoll; if (resumed) handler.post(draftPoll)
         editable(false)
-        task.start(MoteI18n.text("正在读取草稿…"), { progress.text = it }, { QuickNotes.draft(app).read() }) { result ->
+        task.start(MoteI18n.text("正在读取草稿…"), { progress.text = it }, { controller.read() }) { result ->
             result.onSuccess { replace(it); readable = true; editable(true); progress.text = MoteI18n.text("草稿已载入") }
                 .onFailure { progress.text = MoteI18n.text("草稿读取失败，原文件保留。明确点击新建才清除旧草稿。") }
         }
@@ -741,9 +736,9 @@ class MainActivity : MoteActivity() {
             if (!task.busy && readable) {
                 val value = note.text.toString() to ""
                 editable(false)
-                task.start(MoteI18n.text("正在保存随手记…"), { progress.text = it }, { QuickNotes.save(app, value.first, value.second) }) { result ->
-                    editable(true); persisted.set(null)
-                    result.onSuccess { replace(NoteDraft()); persisted.set(null); progress.text = MoteI18n.text("随手记已保存；同步按你的设置运行"); refreshStatus() }
+                task.start(MoteI18n.text("正在保存随手记…"), { progress.text = it }, { controller.save(value.first, value.second) }) { result ->
+                    editable(true); controller.clearPersistence()
+                    result.onSuccess { replace(NoteDraft()); controller.clearPersistence(); progress.text = MoteI18n.text("随手记已保存；同步按你的设置运行"); refreshStatus() }
                         .onFailure { progress.text = it.message ?: MoteI18n.text("随手记保存失败，草稿已保留") }
                 }
             }
@@ -753,8 +748,8 @@ class MainActivity : MoteActivity() {
                 .setNegativeButton(MoteI18n.text("继续编辑"), null).setPositiveButton(MoteI18n.text("清除并新建")) { _, _ ->
                     if (!task.busy) {
                         editable(false)
-                        task.start(MoteI18n.text("正在清除草稿…"), { progress.text = it }, { QuickNotes.draft(app).clear() }) { result ->
-                            result.onSuccess { replace(NoteDraft()); persisted.set(null); readable = true; progress.text = MoteI18n.text("可以开始新随手记") }
+                        task.start(MoteI18n.text("正在清除草稿…"), { progress.text = it }, { controller.clear() }) { result ->
+                            result.onSuccess { replace(NoteDraft()); controller.clearPersistence(); readable = true; progress.text = MoteI18n.text("可以开始新随手记") }
                                 .onFailure { progress.text = MoteI18n.text("草稿清除失败") }
                             editable(readable)
                         }
