@@ -1,3 +1,4 @@
+import {mcpContext,remoteMcpContext} from '../src/connectors/mcp-context.js';
 import {googleCalendarContext} from '../src/connectors/google-context.js';
 import {fixtureCaptureRefs} from './fixtures/evidence-refs.js';
 import {memorySchema} from '../src/memory-schema.js';
@@ -139,7 +140,7 @@ test('shared OAuth callback paths dispatch declared state prefixes and keep call
 test('MCP rejects unauthorized bodies before parsing and preserves authenticated requests',async t=>{
   const {ctx}=await fixture(t),app=Fastify({bodyLimit:12*1024*1024});let parsed=0;
   app.addHook('preParsing',async(_req,_reply,payload)=>{parsed++;return payload;});
-  const connectors=registerMcp(app,ctx);t.after(async()=>{await connectors.close();await app.close();});
+  const connectors=registerMcp(app,mcpContext(ctx));t.after(async()=>{await connectors.close();await app.close();});
   const malformed={method:'POST' as const,url:'/mcp',payload:'{"',headers:{'content-type':'application/json'}};
   for(const token of [undefined,owner]){
     const reply=await app.inject({...malformed,headers:{...malformed.headers,...(token?{authorization:`Bearer ${token}`}:{})}});
@@ -156,7 +157,7 @@ test('MCP rejects unauthorized bodies before parsing and preserves authenticated
 });
 
 test('MCP context continues visible records with its scoped cursor',async t=>{
-  const {ctx,sources}=await fixture(t),app=Fastify(),connector=registerMcp(app,ctx);
+  const {ctx,sources}=await fixture(t),app=Fastify(),connector=registerMcp(app,mcpContext(ctx));
   t.after(async()=>{await connector.close();await app.close();});
   for(let i=0;i<3;i++)await sources.upsert('allowed',{...item(`Generated page ${i}`),externalId:`page-${i}`,
     observedAt:`2026-09-20T00:00:0${i}.000Z`});
@@ -182,7 +183,7 @@ test('MCP material tools expose bounded formal revisions without original member
   const original=await sources.upsert('allowed',{...item('Generated evidence body'),externalId:'synthetic-material'});
   const id=materialId('allowed','synthetic-material');
   const saved=materials.publish({id,kind:'document',schemaVersion:1,title:'Generated note',origin:{sourceId:'allowed',externalId:'synthetic-material'},blocks:[{id:'body',kind:'text',format:'plain',text:'Generated evidence body',memberIds:[original.id]}],members:[{id:original.id,kind:'capture',ref:`capture:${original.id}`,locator:{line:1}}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
-  const app=Fastify(),connector=registerMcp(app,ctx);t.after(async()=>{await connector.close();await app.close();});
+  const app=Fastify(),connector=registerMcp(app,mcpContext(ctx));t.after(async()=>{await connector.close();await app.close();});
   const call=async(token:string,id:number,method:string,params:Record<string,unknown>={})=>{
     const result=await app.inject({method:'POST',url:'/mcp',headers:{authorization:`Bearer ${token}`,'content-type':'application/json',accept:'application/json, text/event-stream'},payload:{jsonrpc:'2.0',id,method,params}});
     assert.equal(result.statusCode,200);return result.json().result;
@@ -222,7 +223,7 @@ test('MCP model reads cannot discover or expand generated screen and Coding orig
   const segment=store.archive.save('generated-screen-segment','generated-screen-segment','1',
     {kind:'segment',text:'Generated processed screen segment',metadata:{complete:true,citations:[screenId]}},
     [{id:screenId,fingerprint:store.archive.fingerprint(screenId)!}],'fixture','1','fixture');
-  const app=Fastify(),connector=registerMcp(app,ctx);t.after(async()=>{await connector.close();await app.close();});
+  const app=Fastify(),connector=registerMcp(app,mcpContext(ctx));t.after(async()=>{await connector.close();await app.close();});
   let sequence=0;
   const call=async(name:string,args:Record<string,unknown>={})=>{
     const response=await app.inject({method:'POST',url:'/mcp',headers:{authorization:`Bearer ${readToken}`,'content-type':'application/json',accept:'application/json, text/event-stream'},
@@ -285,7 +286,7 @@ test('MCP pages ordinary, screen and Coding Materials with one raw pending fallb
     fidelity:{state:'derived',limitations:['tool_bodies_omitted','host_context_omitted']},retention:{original:'retained',policy:'keep'}});
   materials.setSearchable(coding.id,true);expected.add(materials.evidenceIds(coding.ref)[0]);
   await materials.index!.tick();
-  const app=Fastify(),connector=registerMcp(app,ctx);t.after(async()=>{await connector.close();await app.close();});
+  const app=Fastify(),connector=registerMcp(app,mcpContext(ctx));t.after(async()=>{await connector.close();await app.close();});
   let sequence=0;
   const call=async(name:string,args:Record<string,unknown>)=>{
     const response=await app.inject({method:'POST',url:'/mcp',headers:{authorization:`Bearer ${readToken}`,'content-type':'application/json',accept:'application/json, text/event-stream'},
@@ -380,7 +381,7 @@ test('remote MCP uses official HTTP SDK, selected resources, explicit readonly t
     server.registerTool('unsafe-write',{annotations:{readOnlyHint:false}},async()=>{mutations++;return {content:[]};});
     const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});await server.connect(transport);reply.hijack();try{await transport.handleRequest(req.raw,reply.raw,req.body);}finally{await server.close();}
   });
-  await remoteApp.listen({host:'127.0.0.1',port:0});const remote=new RemoteMcp(ctx);t.after(async()=>{await remote.close();await remoteApp.close();});
+  await remoteApp.listen({host:'127.0.0.1',port:0});const remote=new RemoteMcp(remoteMcpContext(ctx));t.after(async()=>{await remote.close();await remoteApp.close();});
   const target={url:remoteApp.listeningOrigin+'/mcp',token:'synthetic-remote-token'};
   const discovery=await remote.discover(target);assert.equal(discovery.resources.length,1);assert.equal(discovery.tools.find(t=>t.name==='unsafe-write')?.readOnly,false);
   const input={...target,sourceId:'remote',resourceUris:['fixture://document']};
@@ -409,13 +410,13 @@ test('remote MCP reconciles complete resource membership across shrink, empty, f
     server.registerResource('document','fixture://membership',{},async()=>{if(fail)throw Error('Generated read failure');return {contents:parts.map(text=>({uri:'fixture://membership',text,mimeType:'text/plain'}))};});
     const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});await server.connect(transport);reply.hijack();try{await transport.handleRequest(req.raw,reply.raw,req.body);}finally{await server.close();}
   });
-  await remoteApp.listen({host:'127.0.0.1',port:0});let remote=new RemoteMcp(ctx);t.after(async()=>{await remote.close();await remoteApp.close();});
+  await remoteApp.listen({host:'127.0.0.1',port:0});let remote=new RemoteMcp(remoteMcpContext(ctx));t.after(async()=>{await remote.close();await remoteApp.close();});
   const input={url:remoteApp.listeningOrigin+'/mcp',sourceId:'manifest',resourceUris:['fixture://membership']};
   await remote.import(input);assert.equal(sources.listItems({sourceId:'manifest'}).items.length,3);
   const old=sources.listItems({sourceId:'manifest'}).items;
   parts=['Generated revised'];fail=true;await assert.rejects(remote.import(input));
   assert.equal(sources.listItems({sourceId:'manifest'}).items.length,3,'failed read cannot retract members');fail=false;
-  await remote.close();remote=new RemoteMcp(ctx);await remote.import(input);
+  await remote.close();remote=new RemoteMcp(remoteMcpContext(ctx));await remote.import(input);
   assert.deepEqual(sources.listItems({sourceId:'manifest'}).items.map(item=>item.text),['Generated revised']);
   assert.equal(sources.listItems({sourceId:'manifest',includeDeleted:true}).items.filter(item=>item.deleted).length,2);
   for(const prior of old.filter(item=>item.text!=='Generated first'))assert.equal(sources.getItem('manifest',prior.externalId)?.deleted,true);
@@ -575,7 +576,7 @@ test('Google real provider timestamps remain distinct from observation and metad
 });
 
 test('MCP context pages every published memory under a small serialized budget',async t=>{
- const {ctx,store,sources}=await fixture(t),app=Fastify(),connector=registerMcp(app,ctx);t.after(async()=>{await connector.close();await app.close();});
+ const {ctx,store,sources}=await fixture(t),app=Fastify(),connector=registerMcp(app,mcpContext(ctx));t.after(async()=>{await connector.close();await app.close();});
  const expected=new Set<string>();
  for(let i=0;i<7;i++){
    const original=await sources.upsert('allowed',{...item('Generated memory evidence '+i),externalId:'memory-page-'+i});const id=randomUUID(),at=new Date().toISOString();expected.add(id);
@@ -618,4 +619,19 @@ test('calendar adapter receives working source capabilities without owner token,
  assert.equal(projected.sources.getItem('generated-calendar-projection','generated-event')?.text,'Generated calendar projection fixture');
  projected.sources.update('generated-calendar-projection',{enabled:false});assert.equal(sources.getSource('generated-calendar-projection').enabled,false);
  const connector=new GoogleCalendarConnector(projected);await connector.init();await connector.close();
+});
+
+test('MCP projection separates read tools and scoped writes without global Store, owner token or unrelated connector settings',async t=>{
+ const {ctx,sources}=await fixture(t),local=mcpContext(ctx),remote=remoteMcpContext(ctx);
+ for(const object of [local,local.read,local.read.reader,local.read.sources,local.read.context,local.read.activity,local.write,remote,remote.sources,remote.manifests]){
+  assert.equal('store' in object,false);assert.equal('db' in object,false);assert.equal('config' in object,false);assert.equal('token' in object,false);assert.equal('capabilities' in object,false);
+ }
+ assert.equal('upsert' in local.read.sources,false);assert.equal('putItem' in local.read,false);assert.equal('reader' in local.write,false);
+ assert.deepEqual(Object.keys(local.configuration()).sort(),['mcpEnabled','mcpReadToken','mcpWriteEnabled','mcpWriteSourceIds','mcpWriteToken']);
+ assert.equal(JSON.stringify(local.configuration()).includes(owner),false);assert.equal(JSON.stringify(local.configuration()).includes('synthetic-secret'),false);
+ const record=await sources.upsert('allowed',item('Generated projected MCP evidence'));
+ const records=await local.read.queryReader(()=>undefined).evidence({ids:[record.id]});
+ assert.deepEqual(records.map(value=>value.id),[record.id]);assert.equal(records[0].ocrText,'Generated projected MCP evidence');
+ ctx.config.connectors!.mcpEnabled=false;assert.equal(local.configuration().mcpEnabled,false,'selected configuration remains live for transport admission');
+ assert.equal(remote.sources.getItem('allowed','synthetic-item')?.captureId,record.id);
 });
