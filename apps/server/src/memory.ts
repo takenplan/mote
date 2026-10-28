@@ -49,6 +49,8 @@ const initializedStores=new WeakSet<Store>();
 export class MemoryStore {
   readonly deletions:MemoryDeletions;
   constructor(public store:Store,public readEvidence:(ids:string[])=>MemoryRecord[]=ids=>store.evidence(ids),private currentEvidence:(id:string)=>boolean=id=>store.isCurrentEvidence(id)){this.deletions=new MemoryDeletions(store,this.readEvidence);if(!initializedStores.has(store)){this.ensureIndex();this.ensureCatalog();initializedStores.add(store);}}
+  /** Native card inventory, including stale cards retained in the owner archive. */
+  count(){return Number(this.store.db.prepare('SELECT COUNT(*) AS n FROM memories').get()!.n);}
   private ensureIndex(){
     this.store.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED,text,tokenize='trigram');
       CREATE TRIGGER IF NOT EXISTS memories_fts_insert AFTER INSERT ON memories BEGIN INSERT INTO memories_fts(id,text) VALUES(new.id,json_extract(new.json,'$.title')||' '||json_extract(new.json,'$.statement')||' '||json_extract(new.json,'$.uncertainty')); END;
