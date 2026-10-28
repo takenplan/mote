@@ -122,7 +122,7 @@ test('repository candidates span devices while expansion and memories keep exact
 });
 
 test('navigation references survive reader reconstruction and intersect the original view with later scopes',async t=>{
- const {store,sources,reader,query}=await fixture(t);
+ const {store,sources,query}=await fixture(t);
  const repositoryKey='b'.repeat(64),batches=new Map<string,any[]>([['nav-0',[]],['nav-1',[]]]);
  for(let i=0;i<400;i++){
   const sourceId=`nav-${i%2}`,deviceId=`nav-device-${i%2}`;
@@ -134,7 +134,7 @@ test('navigation references survive reader reconstruction and intersect the orig
  const scope={sourceId:'nav-0',after:'2024-06-01T00:00:00.000Z',before:'2024-12-01T00:00:00.000Z'};
  const cards=[...query.browse(scope).items,...query.context({...scope,includeMemories:false,maxCharacters:24000,limit:10}).recentSessions];
  assert.ok(cards.some(c=>c.kind==='session'));assert.ok(cards.some(c=>c.kind==='project-candidate'));
- const restored=createContextQuery(store,sources,reader);
+ const restoredReader=new EvidenceReader(store,sources),restored=createContextQuery(store,sources,restoredReader);
  for(const card of cards){
   assert.ok(card.ref.length<=4096);
   const item=restored.read([card.ref]).items[0];assert.equal(item.text,'');assert.equal(item.evidenceRefs,undefined);
@@ -149,7 +149,7 @@ test('navigation references survive reader reconstruction and intersect the orig
  while(store.archive.stats().pendingGroups)store.archive.aggregate(100);
  const expected=sources.listItems({...scope,limit:200}).items.length,seen=new Set<string>();let cursor:string|undefined;
  for(let page=0;page<60;page++){
-  const result=reader.segments({...scope,limit:10,cursor});
+  const result=restoredReader.segments({...scope,limit:10,cursor});
   for(const item of result.items){
    assert.equal(seen.has(item.id),false);seen.add(item.id);
    const expanded=restored.read([item.ref],0,4000,scope).items[0];assert.equal(expanded.kind,'artifact');assert.equal(expanded.evidenceRefs!.length,1);
