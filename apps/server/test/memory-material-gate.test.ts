@@ -27,8 +27,8 @@ async function fixture(t:TestContext,query:()=>Promise<ReturnType<typeof empty>>
   sources.register({id:sourceId,name:'Generated source',kind:'custom',deviceId:'generated-device',platform:'import'});
   const raw=(await sources.upsert(sourceId,{externalId,revision:'1',observedAt:'2026-09-20T00:00:00Z',kind:'message',layer:'original',text:body})).id;
   const memories=new MemoryStore(store,ids=>[...store.evidence(ids),...materials.evidence(ids)],id=>materials.isCurrentEvidence(id)||store.isCurrentEvidence(id));
-  const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query,admission:{
-    materialAllowedForMemory:ref=>work.readyForMemory(ref),evidenceAllowedForMemory}});
+  const pipeline=fixtureMemoryPipeline({store,memories,admission:{
+    materialAllowedForMemory:ref=>work.readyForMemory(ref),evidenceAllowedForMemory},models:{configured:()=>true,model:()=> 'fixture'},phases:{query}});
   t.after(async()=>{await pipeline.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const id=materialId(sourceId,externalId);
   const publish=(text:string,extracted:'pending'|'failed'|'ready')=>{

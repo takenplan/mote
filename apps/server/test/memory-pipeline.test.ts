@@ -25,7 +25,7 @@ const result=(id:string,quote?:{offset:number;quote:string})=>({answer:JSON.stri
 const empty=()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-empty'});
 test('job summaries count distinct surviving batch memories without exposing their IDs',async t=>{
  const {store,sources,memories}=fixture(t),record=await sources.upsert('generated',item());
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(record.id)});t.after(()=>pipeline.close());
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(record.id)}});t.after(()=>pipeline.close());
  const completed=await pipeline.run(pipeline.create({evidenceIds:[record.id]}).id),id=completed.memoryIds[0];
  assert.ok(id);const summary=()=>pipeline.list().find(job=>job.id===completed.id)!;
  assert.deepEqual(summary().evidenceIds,[]);assert.deepEqual(summary().memoryIds,[]);
@@ -40,7 +40,7 @@ test('job summaries count distinct surviving batch memories without exposing the
 });
 test('model deadlines remain typed and retryable without committing a checkpoint',async t=>{
  const {store,sources,memories}=fixture(t),record=await sources.upsert('generated',item());let calls=0;
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{if(++calls===1)throw new AgentTimeoutError();return empty();}});t.after(()=>pipeline.close());
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{if(++calls===1)throw new AgentTimeoutError();return empty();}}});t.after(()=>pipeline.close());
  const job=pipeline.create({evidenceIds:[record.id]}),failed=await pipeline.run(job.id);
  assert.equal(failed.status,'failed');assert.equal(failed.batches[0].errorCode,'provider_timeout');assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
  await assert.rejects(pipeline.retry(job.id));await new Promise(resolve=>setTimeout(resolve,Math.max(0,failed.availableAt!-Date.now())+10));
@@ -51,8 +51,8 @@ test('manual timeout retry keeps exact ranges across restart and concurrent retr
  for(let i=0;i<20;i++)ids.push((await sources.upsert('generated',item(String(i),'前缀🌱合成原文内容'))).id);
  const ranges=ids.map(id=>({id,offset:2,length:6}));let fail=true;
  const query=async(input:MemoryPipelineQuery)=>{assert.deepEqual(input.evidenceRanges,ranges);if(fail)throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});seen.push(...input.evidenceIds);return empty();};
- let pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query});
- try{const job=pipeline.create({evidenceIds:ids,evidenceRanges:ranges});assert.equal((await pipeline.run(job.id)).failedBatches,1);await pipeline.close();pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query});fail=false;
+ let pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query}});
+ try{const job=pipeline.create({evidenceIds:ids,evidenceRanges:ranges});assert.equal((await pipeline.run(job.id)).failedBatches,1);await pipeline.close();pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query}});fail=false;
  const [done,duplicate]=await Promise.all([pipeline.retry(job.id),pipeline.retry(job.id)]);assert.equal(done.status,'completed');assert.equal(done.totalBatches,1);assert.equal(duplicate.totalBatches,1);assert.deepEqual(new Set(seen),new Set(ids));assert.equal(seen.length,20);
  assert.equal((await pipeline.retry(job.id)).totalBatches,1);assert.equal(seen.length,20);
  }finally{await pipeline.close();}
@@ -61,7 +61,7 @@ test('manual timeout retry keeps exact ranges across restart and concurrent retr
 test('late progress and validation from a failed attempt cannot overwrite its reclaimed exact batch',async t=>{
  const {store,sources,memories}=fixture(t),ids:string[]=[];for(let i=0;i<4;i++)ids.push((await sources.upsert('generated',item(String(i)))).id);
  let oldInput!:MemoryPipelineQuery,calls=0,release!:()=>void,entered!:()=>void;const started=new Promise<void>(resolve=>entered=resolve);
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{if(++calls===1){oldInput=input;throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});}if(calls===2){entered();await new Promise<void>(resolve=>release=resolve);}return empty();}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{if(++calls===1){oldInput=input;throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});}if(calls===2){entered();await new Promise<void>(resolve=>release=resolve);}return empty();}}});
  try{const job=pipeline.create({evidenceIds:ids});await pipeline.run(job.id);const retry=pipeline.retry(job.id);await started;
  const before=store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(job.batches[0].id)!.json;
  oldInput.onProgress?.({stage:'model',message:'Generated late callback'});oldInput.onTrace?.({type:'generated.late'});
@@ -99,7 +99,7 @@ test('source revisions and privacy deletion affect only dependent memory cards',
 
 test('pipeline covers all long-text segments within a character budget, checkpoints zero results and replays imports idempotently',async t=>{
   const {store,sources,memories}=fixture(t),text='🌱'.repeat(430),a=await sources.upsert('generated',item('long',text)),b=await sources.upsert('generated',item('short','合成短文'));
-  const calls:MemoryPipelineQuery[]=[];const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:257,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input);return empty();}});
+  const calls:MemoryPipelineQuery[]=[];const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:257,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{calls.push(input);return empty();}}});
   t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id,b.id],importJobId:'generated-import'});
   assert.equal(pipeline.create({evidenceIds:[a.id,b.id],importJobId:'generated-import'}).id,job.id);
@@ -114,7 +114,7 @@ test('pipeline covers all long-text segments within a character budget, checkpoi
 test('unconfigured models stay retryable, and retry reruns only failed batches',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('long','文'.repeat(600)));
   let configured=false,failed=false;const calls:number[]=[];
-  const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:256,model:()=> 'fixture',configured:()=>configured,query:async input=>{const offset=input.evidenceRanges[0].offset;calls.push(offset);if(offset===256&&!failed){failed=true;throw new Error('generated transport failure');}return empty();}});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:256,models:{model:()=> 'fixture',configured:()=>configured},phases:{query:async input=>{const offset=input.evidenceRanges[0].offset;calls.push(offset);if(offset===256&&!failed){failed=true;throw new Error('generated transport failure');}return empty();}}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id]});assert.equal((await pipeline.run(job.id)).status,'waiting_for_model');assert.deepEqual(calls,[]);
   configured=true;const partial=await pipeline.retry(job.id);assert.equal(partial.status,'failed');assert.equal(partial.completedBatches,2);assert.equal(partial.failedBatches,1);
   const done=await pipeline.retry(job.id);assert.equal(done.status,'completed');assert.deepEqual(calls,[0,256,512,256]);
@@ -123,11 +123,11 @@ test('unconfigured models stay retryable, and retry reruns only failed batches',
 test('memory batches retain the selected profile through recovery and wait if it disappears',async t=>{
   const {store,sources,memories}=fixture(t),record=await sources.upsert('generated',item('long','文'.repeat(600)));
   let available=true;const calls:string[]=[];
-  const options={store,memories,batchCharacters:256,model:(id?:string)=>{assert.equal(id,'selected');if(!available)throw Error('deleted profile');return 'fixture';},configured:(id?:string)=>id==='selected'&&available,query:async(input:MemoryPipelineQuery)=>{calls.push(input.modelProfileId!);available=false;return empty();}};
+  const options={store,memories,batchCharacters:256,models:{model:(id?:string)=>{assert.equal(id,'selected');if(!available)throw Error('deleted profile');return 'fixture';},configured:(id?:string)=>id==='selected'&&available},phases:{query:async(input:MemoryPipelineQuery)=>{calls.push(input.modelProfileId!);available=false;return empty();}}};
   let pipeline=fixtureMemoryPipeline(options);
   const job=pipeline.create({evidenceIds:[record.id],modelProfileId:'selected'});
   const paused=await pipeline.run(job.id);assert.equal(paused.status,'waiting_for_model');assert.equal(paused.completedBatches,1);assert.equal(paused.batches[1].status,'pending');
-  await pipeline.close();pipeline=fixtureMemoryPipeline({...options,query:async(input)=>{calls.push(input.modelProfileId!);return empty();}});t.after(()=>pipeline.close());
+  await pipeline.close();pipeline=fixtureMemoryPipeline({...options,phases:{...options.phases,query:async(input)=>{calls.push(input.modelProfileId!);return empty();}}});t.after(()=>pipeline.close());
   assert.equal(pipeline.get(job.id).modelProfileId,'selected');assert.equal((await pipeline.retry(job.id)).status,'waiting_for_model');
   available=true;assert.equal((await pipeline.retry(job.id)).status,'completed');assert.deepEqual(calls,['selected','selected','selected']);
 });
@@ -135,14 +135,14 @@ test('memory batches retain the selected profile through recovery and wait if it
 test('privacy deletion during a model run cannot resurrect memory or create a completed checkpoint',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());
   let enter!:()=>void,finish!:(value:ReturnType<typeof result>)=>void;const entered=new Promise<void>(resolve=>enter=resolve);
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{enter();return new Promise(resolve=>finish=resolve);}});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{enter();return new Promise(resolve=>finish=resolve);}}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;store.delete(a.id);finish(result(a.id));
   const done=await running;assert.equal(done.status,'failed');assert.equal(done.batches[0].status,'invalidated');assert.equal(memories.list({includeStale:true}).length,0);assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM memory_checkpoints').get()!.n,0);
 });
 
 test('recovery retries interrupted batches and commits memory with its checkpoint atomically',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());
-  let pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(a.id)});
+  let pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(a.id)}});
   assert.throws(()=>pipeline.create({evidenceIds:[a.id],timeZone:'generated/invalid-zone'}));
   const job=pipeline.create({evidenceIds:[a.id],timeZone:'Asia/Shanghai'});
   const batch=JSON.parse(String(store.db.prepare('SELECT json FROM memory_batches WHERE job_id=?').get(job.id)!.json));
@@ -151,7 +151,7 @@ test('recovery retries interrupted batches and commits memory with its checkpoin
   store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status','running') WHERE id=?").run(job.id);
   store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','running') WHERE job_id=?").run(job.id);
   store.db.prepare("UPDATE execution_steps SET state='running',lease_until=1,fence='generated-crashed-grant',recovery_deadline=0 WHERE id=?").run(batch.id);
-  pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{assert.equal(input.timeZone,'Asia/Shanghai');return result(a.id);}});t.after(()=>pipeline.close());
+  pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{assert.equal(input.timeZone,'Asia/Shanghai');return result(a.id);}}});t.after(()=>pipeline.close());
   assert.equal(pipeline.get(job.id).timeZone,'Asia/Shanghai');
   await pipeline.engine.tick();assert.equal(pipeline.get(job.id).status,'queued');assert.equal(pipeline.get(job.id).batches[0].status,'pending');assert.equal(pipeline.engine.get(batch.id)?.error,'awaiting_activation');
   const completed=await pipeline.run(job.id);assert.equal(completed.status,'completed');assert.equal(completed.memoryIds.length,1);assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM memory_checkpoints').get()!.n,1);
@@ -161,7 +161,7 @@ test('recovery retries interrupted batches and commits memory with its checkpoin
 
 test('new revisions are queued and completed old batches become visibly invalidated',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>empty()});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>empty()}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id]});await pipeline.run(job.id);
   const b=await sources.upsert('generated',item('a','新的合成版本','2','2026-09-15T02:00:00Z'));
   const invalid=pipeline.get(job.id);assert.equal(invalid.status,'failed');assert.equal(invalid.outcome,'input_invalidated');assert.equal(invalid.failedBatches,0);assert.equal(invalid.invalidatedBatches,1);assert.equal(invalid.execution?.status,'skipped');
@@ -181,11 +181,11 @@ test('document metadata and source receipts survive roundtrip; throwing receipt 
 test('invalid inner memory schema regenerates once with trusted feedback and unchanged evidence scope',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());const calls:MemoryPipelineQuery[]=[];
   const untrusted='UNTRUSTED_BAD_OUTPUT_DO_NOT_REPLAY_AS_INSTRUCTIONS';
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{
     calls.push(input);assert.equal(memories.list().length,0);assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM memory_checkpoints').get()!.n,0);
     if(calls.length===1)return {...result(a.id),answer:JSON.stringify({memories:[{title:'合成',statement:untrusted,evidenceIds:[a.id]}]})};
     assert.match(input.question,/Host validation rejected/);assert.match(input.question,/string uncertainty/);assert.ok(!input.question.includes(untrusted));return result(a.id);
-  }});t.after(()=>pipeline.close());
+  }}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id],timeZone:'Asia/Shanghai'}),done=await pipeline.run(job.id);
   assert.equal(done.status,'completed');assert.equal(done.batches[0].attempts,2);assert.equal(calls.length,2);assert.equal(done.memoryIds.length,1);
   for(const key of ['evidenceIds','evidenceRanges','skill','timeZone'] as const)assert.deepEqual(calls[1][key],calls[0][key]);
@@ -195,9 +195,9 @@ test('quote offset errors are model validation failures and repair keeps exact U
   const {store,sources,memories}=fixture(t),text='🌱开头\n合成原文：我计划学习。',a=await sources.upsert('generated',item('quote',text));
   const offset=text.indexOf('我计划'),quote=text.slice(offset),calls:MemoryPipelineQuery[]=[];
   assert.throws(()=>memories.extract(fixtureMemoryResult(memories,result(a.id,{offset:offset+1,quote})),'fixture'),error=>error instanceof MemoryOutputValidationError&&error.code==='quote_offset_mismatch'&&error.statusCode===502);
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{
     calls.push(input);if(calls.length===1)return result(a.id,{offset:offset+1,quote});assert.equal(memories.list().length,0);assert.match(input.question,/absolute UTF-16 offset/);return result(a.id,{offset,quote});
-  }});t.after(()=>pipeline.close());
+  }}});t.after(()=>pipeline.close());
   const done=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(done.status,'completed');assert.equal(done.batches[0].attempts,2);assert.deepEqual(calls[1].evidenceRanges,calls[0].evidenceRanges);
   assert.equal(done.batches[0].validationFailures?.[0].code,'quote_offset_mismatch');assert.equal(done.batches[0].validationFailures?.[0].details?.spanIndex,0);
   const saved=memories.get(done.memoryIds[0]);assert.equal(saved.evidence![0].offset,offset);assert.equal(saved.evidence![0].quote,quote);
@@ -205,15 +205,15 @@ test('quote offset errors are model validation failures and repair keeps exact U
 
 test('schema repair is bounded and final invalid output remains visible without partial memories',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());let calls=0;
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{calls++;return {...empty(),answer:'not valid inner JSON'};}});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{calls++;return {...empty(),answer:'not valid inner JSON'};}}});t.after(()=>pipeline.close());
   const done=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(done.status,'failed');assert.equal(done.errorCode,'invalid_model_output');assert.equal(done.batches[0].attempts,2);assert.equal(calls,2);assert.equal(memories.list().length,0);assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM memory_checkpoints').get()!.n,0);
 });
 
 test('source changes prevent a second model call even when the first inner output is malformed',async t=>{
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());let calls=0;
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{
     calls++;await sources.upsert('generated',item('a','已变更的合成资料','2','2026-09-15T02:00:00Z'));return {...empty(),answer:'malformed output'};
-  }});t.after(()=>pipeline.close());
+  }}});t.after(()=>pipeline.close());
   const done=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(done.status,'failed');assert.equal(done.batches[0].status,'invalidated');assert.equal(done.batches[0].errorCode,'evidence_changed');assert.equal(done.batches[0].attempts,1);assert.equal(calls,1);assert.equal(memories.list().length,0);
 });
 
@@ -243,11 +243,10 @@ test('review quote failure persists run and attempt locations and emits an ordin
   const {ServerDiagnostics}=await import('../src/diagnostics.js');
   const diagnostics=new ServerDiagnostics({directory:join(directory,'logs'),traceEnabled:false});await diagnostics.init();t.after(()=>diagnostics.close());
   const runId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{
     query:async()=>{const draft=result(a.id,{offset:0,quote:'synthetic exact source'}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return {...draft,answer:JSON.stringify(value)};},
     review:async()=>({...result(a.id,{offset:1,quote:'synthetic exact source'}),runId}),
-    onValidationFailure:event=>diagnostics.record('agent.memory_validation_failed',{jobId:event.jobId,batchId:event.batchId,batchIndex:event.batchIndex,runId:event.runId,attempt:event.attempt,validationCode:event.code,validationPhase:event.phase,...event.details},'warn'),
-  });t.after(()=>pipeline.close());
+    onValidationFailure:event=>diagnostics.record('agent.memory_validation_failed',{jobId:event.jobId,batchId:event.batchId,batchIndex:event.batchIndex,runId:event.runId,attempt:event.attempt,validationCode:event.code,validationPhase:event.phase,...event.details},'warn')}});t.after(()=>pipeline.close());
   const done=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);
   assert.equal(done.status,'failed');assert.equal(done.errorCode,'invalid_model_output');
   assert.deepEqual(done.batches[0].validationFailures?.map(f=>[f.phase,f.code,f.attempt,f.runId]),[['review','quote_offset_mismatch',1,runId],['review','quote_offset_mismatch',2,runId]]);
@@ -261,7 +260,7 @@ test('review quote failure persists run and attempt locations and emits an ordin
 test('independent memory batches overlap; same evidence is serialized and pause finishes only in-flight work',async t=>{
  const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('parallel-a','a'.repeat(600))),b=await sources.upsert('generated',item('parallel-b','b'.repeat(300)));
  const running=new Set<string>(),releases:(()=>void)[]=[];let peak=0;
- const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:256,concurrency:()=>3,model:()=> 'fixture',configured:()=>true,query:async input=>{const id=input.evidenceIds[0];assert.ok(!running.has(id));running.add(id);peak=Math.max(peak,running.size);await new Promise<void>(r=>releases.push(r));running.delete(id);return empty();}});t.after(()=>pipeline.close());
+ const pipeline=fixtureMemoryPipeline({store,memories,batchCharacters:256,concurrency:()=>3,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{const id=input.evidenceIds[0];assert.ok(!running.has(id));running.add(id);peak=Math.max(peak,running.size);await new Promise<void>(r=>releases.push(r));running.delete(id);return empty();}}});t.after(()=>pipeline.close());
  const job=pipeline.create({evidenceIds:[a.id,b.id]}),done=pipeline.run(job.id);await new Promise(r=>setImmediate(r));assert.equal(peak,2);assert.equal(pipeline.get(job.id).runningBatches,2);
  assert.equal(pipeline.pause(job.id).status,'pausing');for(const release of releases.splice(0))release();const paused=await done;assert.equal(paused.status,'paused');assert.equal(paused.completedBatches,2);assert.ok(paused.pendingBatches!>0);
  pipeline.resume(job.id);await new Promise(r=>setImmediate(r));pipeline.cancel(job.id);for(const release of releases.splice(0))release();await pipeline.run(job.id);assert.equal(pipeline.get(job.id).status,'cancelled');
@@ -269,10 +268,10 @@ test('independent memory batches overlap; same evidence is serialized and pause 
 
 test('host quote feedback is delivered before query session closes and successful repair does not restart extraction',async t=>{
  const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item()),failures:unknown[]=[];let calls=0;
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,onValidationFailure:e=>failures.push(e),query:async input=>{
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{onValidationFailure:e=>failures.push(e),query:async input=>{
    calls++;const bad=fixtureMemoryResult(memories,result(a.id,{offset:0,quote:'不存在的合成引文'})),issue=await input.validateOutput!(bad);assert.equal(issue?.code,'quote_not_found');assert.match(issue!.feedback,/quote/);assert.equal(memories.list({}).length,0);
    const fixed=empty();assert.equal(await input.validateOutput!(fixed),undefined);return fixed;
- }});t.after(()=>pipeline.close());const job=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(calls,1);assert.equal(job.status,'completed');assert.equal(job.batches[0].attempts,1);assert.equal(failures.length,1);
+ }}});t.after(()=>pipeline.close());const job=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(calls,1);assert.equal(job.status,'completed');assert.equal(job.batches[0].attempts,1);assert.equal(failures.length,1);
 });
 
 test('cancelling extraction or review fences late models and saves no memory or checkpoint',async t=>{
@@ -280,9 +279,9 @@ test('cancelling extraction or review fences late models and saves no memory or 
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('cancel-'+phase));
   let enter!:()=>void,release!:(value:ReturnType<typeof result>)=>void,signal:AbortSignal|undefined;
   const entered=new Promise<void>(r=>{enter=r;}),held=new Promise<ReturnType<typeof result>>(r=>{release=r;});
-  const pipeline=new MemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
-   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return fixtureMemoryWorkResult(input,{...draft,answer:JSON.stringify(value)});},
-   ...(phase==='review'?{review:async()=>{enter();return held;}}:{})});
+  const pipeline=new MemoryPipeline({store,memories,
+   ...(phase==='review'?{review:async()=>{enter();return held;}}:{}),models:{model:()=> 'fixture',configured:()=>true},phases:{
+   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return fixtureMemoryWorkResult(input,{...draft,answer:JSON.stringify(value)});}}});
   const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;
   pipeline.cancel(job.id);release(result(a.id));const done=await running;
   assert.equal(done.status,'cancelled');assert.equal(memories.list().length,0,phase+' saved a late candidate');
@@ -296,12 +295,12 @@ test('closing a memory pipeline releases an uncooperative model and restart can 
  const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('uncooperative'));
  let enter!:()=>void,release!:(value:ReturnType<typeof result>)=>void;
  const entered=new Promise<void>(r=>{enter=r;}),held=new Promise<ReturnType<typeof result>>(r=>{release=r;});
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{enter();return held;}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{enter();return held;}}});
  const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;
  try{await Promise.race([pipeline.close(),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Shutdown waited on an uncooperative model')),1000);timer.unref();})]);}
  finally{release(result(a.id));}
  await running;await new Promise(r=>setImmediate(r));assert.equal(memories.list().length,0);
- const restarted=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(a.id)});t.after(()=>restarted.close());
+ const restarted=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(a.id)}});t.after(()=>restarted.close());
  assert.equal((await restarted.run(job.id)).status,'completed');assert.equal(memories.list().length,1);
 });
 
@@ -321,7 +320,7 @@ test('400 generated days imported individually and in batches share one durable 
   for(const input of inputs.slice(0,200)){const record=await sources.upsert('generated',input);t.signal.throwIfAborted();ids.push(record.id);}
   for(let offset=200;offset<400;offset+=100){await sources.upsertBatch('generated',inputs.slice(offset,offset+100));t.signal.throwIfAborted();for(const input of inputs.slice(offset,offset+100))ids.push(sources.getItem('generated',input.externalId)!.captureId);}
   engine=new ExecutionEngine(store);const calls:string[]=[];let peak=0,active=0;
-  pipeline=fixtureMemoryPipeline({executor:engine,store,memories,batchCharacters:256,concurrency:()=>3,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input.traceContext!.jobId!);active++;peak=Math.max(peak,active);await new Promise(r=>setImmediate(r));active--;return empty();}});
+  pipeline=fixtureMemoryPipeline({executor:engine,store,memories,batchCharacters:256,concurrency:()=>3,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{calls.push(input.traceContext!.jobId!);active++;peak=Math.max(peak,active);await new Promise(r=>setImmediate(r));active--;return empty();}}});
   const a=pipeline.create({evidenceIds:ids.slice(0,200)}),b=pipeline.create({evidenceIds:ids.slice(200)});
   const completed=await Promise.all([pipeline.run(a.id),pipeline.run(b.id)]);t.signal.throwIfAborted();assert.ok(completed.every(job=>job.status==='completed'));
   assert.equal(calls.length,800);assert.equal(peak,3);assert.ok(calls.slice(0,6).includes(a.id)&&calls.slice(0,6).includes(b.id));
@@ -334,7 +333,7 @@ test('400 generated days imported individually and in batches share one durable 
 
 test('memory, checkpoint and engine success commit roll back together when the host commit fails',async t=>{
  const {store,sources,memories}=fixture(t),ack=await sources.upsert('generated',item('commit-rollback'));
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(ack.id)});t.after(()=>pipeline.close());
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(ack.id)}});t.after(()=>pipeline.close());
  store.db.exec("CREATE TRIGGER generated_checkpoint_failure BEFORE INSERT ON memory_checkpoints BEGIN SELECT RAISE(ABORT,'generated checkpoint failure'); END");
  const job=pipeline.create({evidenceIds:[ack.id]}),failed=await pipeline.run(job.id);
  assert.equal(failed.status,'failed');assert.equal(memories.list().length,0);assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
@@ -345,7 +344,7 @@ test('memory, checkpoint and engine success commit roll back together when the h
 
 test('shared engine cannot bypass explicit lifecycle activation after recovery',async t=>{
  const {store,sources,memories}=fixture(t),ack=await sources.upsert('generated',item('activation'));
- const options={store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>empty()};
+ const options={store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>empty()}};
  const initial=fixtureMemoryPipeline(options),job=initial.create({evidenceIds:[ack.id]});await initial.close();
  const engine=new ExecutionEngine(store),pipeline=fixtureMemoryPipeline({...options,executor:engine});
  const batchId=job.batches[0].id;
@@ -359,7 +358,7 @@ test('shared engine cannot bypass explicit lifecycle activation after recovery',
 
 test('typed provider authentication failures remain actionable without hanging or saving checkpoints',async t=>{
  const {ProviderFailure}=await import('@mote/shared');const {store,sources,memories}=fixture(t);const capture=await sources.upsert('generated',item());let calls=0,repaired=false;
- const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;if(!repaired)throw new ProviderFailure({category:'blocked',code:'provider_authentication'});return empty();}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{configured:()=>true,model:()=> 'fixture'},phases:{query:async()=>{calls++;if(!repaired)throw new ProviderFailure({category:'blocked',code:'provider_authentication'});return empty();}}});
  try{const job=pipeline.create({evidenceIds:[capture.id]}),blocked=await pipeline.run(job.id);assert.equal(blocked.status,'waiting_for_model');assert.equal(blocked.errorCode,'provider_authentication');assert.equal(calls,1);assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
  repaired=true;const complete=await pipeline.retry(job.id);assert.equal(complete.status,'completed');assert.equal(calls,2);
  }finally{await pipeline.close();}
@@ -367,14 +366,14 @@ test('typed provider authentication failures remain actionable without hanging o
 
 test('memory keeps provider retry deadlines and refuses premature manual retry',async t=>{
  const {ProviderFailure}=await import('@mote/shared');const {store,sources,memories}=fixture(t),capture=await sources.upsert('generated',item());let calls=0;
- const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;throw new ProviderFailure({category:'permanent',code:'rate_limited',retryAfterMs:12000});}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{configured:()=>true,model:()=> 'fixture'},phases:{query:async()=>{calls++;throw new ProviderFailure({category:'permanent',code:'rate_limited',retryAfterMs:12000});}}});
  try{const job=pipeline.create({evidenceIds:[capture.id]}),failed=await pipeline.run(job.id);assert.equal(failed.status,'failed');assert.equal(failed.errorCode,'rate_limited');assert.ok(failed.availableAt!>Date.now());assert.ok(failed.execution!.failure!.retryAfterMs!>0);await assert.rejects(pipeline.retry(job.id),error=>error instanceof ProviderFailure&&error.details.code==='rate_limited');assert.equal(calls,1);assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);}finally{await pipeline.close();}
 });
 
 
 test('Memory count migration separates invalidated batches without changing scheduling or replaying model work',async t=>{
  const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());let calls=0;
- const options={store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{calls++;return empty();}};
+ const options={store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{calls++;return empty();}}};
  let pipeline=fixtureMemoryPipeline(options);const job=pipeline.create({evidenceIds:[a.id]});await pipeline.run(job.id);
  await sources.upsert('generated',item('a','Generated changed evidence','2'));
  await pipeline.close();

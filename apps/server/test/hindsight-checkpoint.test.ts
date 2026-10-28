@@ -60,8 +60,7 @@ async function fixture(t: TestContext, sharedEngine=false) {
       CREATE TABLE IF NOT EXISTS memory_provider_receipts(id TEXT PRIMARY KEY,json TEXT NOT NULL);`);
     store.db.prepare('INSERT OR IGNORE INTO memory_plan_binding VALUES(1,?)').run(JSON.stringify(binding));
     publication = new MemoryPublication(store, memories, bindings);
-    pipeline = fixtureMemoryPipeline({store, memories, publication,executor:sharedEngine?new ExecutionEngine(store):undefined, model: () => 'generated-model', configured: () => true,
-      query: async () => {modelCalls++; throw new Error('Built-in generation must not run for a native draft');},
+    pipeline = fixtureMemoryPipeline({store, memories, publication,executor:sharedEngine?new ExecutionEngine(store):undefined,
       nativeStages:{prepare: async (_input, context) => {
         nativeSignal=_input.signal;
         context.provider = structuredClone(providerPin);
@@ -76,7 +75,8 @@ async function fixture(t: TestContext, sharedEngine=false) {
         cleanupPins.push(structuredClone(pin));
         if(control.holdCleanup){cleanupEntered();await heldCleanup;}
         if (control.failCleanup) throw new Error('Generated transient native cleanup failure');
-      }},
+      }},models:{ model: () => 'generated-model', configured: () => true},phases:{
+      query: async () => {modelCalls++; throw new Error('Built-in generation must not run for a native draft');},
       review: async (input, draft, _strategy, origin) => {
         assert.equal(origin, 'native-engine', 'host keeps native origin through the fixture wrapper and cached retry');
         return reviewMemory(input, draft, async reviewInput => {
@@ -87,9 +87,7 @@ async function fixture(t: TestContext, sharedEngine=false) {
         const reviewed: QueryResult = {answer: JSON.stringify({memories: [{title: 'Generated reviewed memory', statement: `The generated owner uses a silver telescope [${originalId}]`, uncertainty: 'Generated fixture only', evidenceIds: [originalId]}]}), citations: [{id: originalId, capturedAt: evidence.capturedAt, appName: evidence.appName, excerpt: evidence.ocrText}], trace: [], runId: randomUUID()};
         return fixtureMemoryResult(memories, reviewed);
         }, {draftOrigin: origin});
-      },
-
-    });
+      }}});
   }
   open();
   const sources = new SourceStore(store);

@@ -76,8 +76,8 @@ try{
   catch(error){call.status='failed';call.error={name:error instanceof Error?error.name:'UnknownError',message:error instanceof Error?error.message:String(error)};throw error;}
   finally{call.durationMs=Date.now()-Date.parse(call.startedAt);await save();progress('model-finished',{number:call.number,phase:call.phase,status:call.status,durationMs:call.durationMs,tools:call.toolCalls?.map(tool=>tool.tool)??[]});}
  };
- pipeline=new MemoryPipeline({store:vault,memories,strategies,configured:()=>true,model:()=>model,concurrency:()=>1,requireAdmission:true,query,
-  review:(input,draft,strategy)=>reviewMemory(input,draft,query,{strategy}),admission:{materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['source-body'],materialAllowedForMemory:ref=>Boolean(materials.input(ref,['source-body'])?.ready)}});
+ pipeline=new MemoryPipeline({store:vault,memories,strategies,concurrency:()=>1,requireAdmission:true,admission:{materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['source-body'],materialAllowedForMemory:ref=>Boolean(materials.input(ref,['source-body'])?.ready)},models:{configured:()=>true,model:()=>model},phases:{query,
+  review:(input,draft,strategy)=>reviewMemory(input,draft,query,{strategy})}});
  const job=pipeline.create({evidenceIds:[evidenceId],recipes:[{id:'mote.personal-memory',version:'4'}],batchCharacters:512,timeZone:'Asia/Shanghai',contextTime:observedAt,workPackage:{id:randomUUID(),goal:'Independently inspect each generated diary target range',instruction:'Preserve each original narrator, temporal frame, quoted participant, action status and uncertainty; only target ranges are completion targets.'}});
  assert.equal(job.totalBatches,2);assert.equal(job.contextReadVersion,1);
  report.status='running';await save();progress('live-launch',{directory,batches:job.totalBatches,maximumQueries,maximumModelTurns,reasoningEffort});

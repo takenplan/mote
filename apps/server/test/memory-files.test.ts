@@ -52,7 +52,7 @@ test('typed file chunks retain traceable references and reject arbitrary derived
   const summary=artifact(store,parent.id,'summary','模型摘要不是独立原文');
   assert.equal(files.isCurrentEvidence(summary.chunkId),false);
   assert.throws(()=>memories.extract(fixtureMemoryResult(memories,result(summary.chunkId)),'fixture'),{statusCode:409});
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(chunk.chunkId)});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(chunk.chunkId)}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[chunk.chunkId]});assert.equal(job.totalBatches,1);assert.equal((await pipeline.run(job.id)).status,'completed');
   assert.throws(()=>pipeline.create({evidenceIds:[summary.chunkId]}),{statusCode:409});
   const amended={...record,fileEvidence:{...record.fileEvidence as object,startMs:1001}};
@@ -65,7 +65,7 @@ test('typed file chunks retain traceable references and reject arbitrary derived
 test('preferred corrected transcript supersedes old chunks and invalidates only the dependent file memories and checkpoints',async t=>{
   const {store,files,memories}=fixture(t),a=await upload(files),b=await upload(files,manifest('other')),first=artifact(store,a.id),other=artifact(store,b.id);
   const unrelated=memories.extract(fixtureMemoryResult(memories,result(other.chunkId)),'fixture').items[0];memories.publish(unrelated.id);
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>result(first.chunkId)});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>result(first.chunkId)}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[first.chunkId]}),done=await pipeline.run(job.id),memoryId=done.memoryIds[0];
   assert.equal(store.db.prepare('SELECT COUNT(*) n FROM memory_checkpoints').get()!.n,1);
   const corrected=artifact(store,a.id,'corrected-dialogue','人工确认校正后的合成转写。');
@@ -84,7 +84,7 @@ test('preferred corrected transcript supersedes old chunks and invalidates only 
 test('privacy removal of a parent file while extracting a chunk cannot resurrect memories or checkpoints',async t=>{
   const {store,files,memories}=fixture(t),parent=await upload(files),first=artifact(store,parent.id),prior=memories.extract(fixtureMemoryResult(memories,result(first.chunkId)),'fixture').items[0];
   let enter!:()=>void,finish!:(value:ReturnType<typeof result>)=>void;const entered=new Promise<void>(r=>enter=r);
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{enter();return new Promise(r=>finish=r);}});t.after(()=>pipeline.close());
+  const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{enter();return new Promise(r=>finish=r);}}});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[first.chunkId]}),running=pipeline.run(job.id);await entered;
   files.forget(parent.id);assert.equal(files.evidence([first.chunkId]).length,0);assert.throws(()=>memories.get(prior.id),{statusCode:404});
   finish(result(first.chunkId));const done=await running;

@@ -35,7 +35,7 @@ const item=(id:string,session='s1',coding=true)=>({externalId:id,revision:'1',ob
 function fixture(t:any){const dir=mkdtempSync(join(tmpdir(),'mote-coding-memory-')),store=new Store(dir),sources=new SourceStore(store),memories=new MemoryStore(store);sources.register({id:'coding',name:'Generated coding',kind:'coding-agent',deviceId:'fixture',platform:'macos'});t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});return {store,sources,memories};}
 test('profiles isolate personal material and different coding sessions, zero results checkpoint and origin replay is idempotent',async t=>{
  const {store,sources,memories}=fixture(t),ids=[];for(const input of [item('a'),item('b','s2'),item('c','s1',false)])ids.push((await sources.upsert('coding',input)).id);
- const calls:MemoryPipelineQuery[]=[];const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input);return empty;}});
+ const calls:MemoryPipelineQuery[]=[];const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{calls.push(input);return empty;}}});
  const job=pipeline.create({evidenceIds:ids,originKey:'coding-fixture'});assert.equal(job.totalBatches,3);assert.equal((await pipeline.run(job.id)).status,'completed');assert.deepEqual(calls.map(c=>c.skill),['coding-memory','coding-memory','memory-extraction']);assert.equal(pipeline.create({evidenceIds:ids}).totalBatches,0);assert.equal(pipeline.create({evidenceIds:ids,originKey:'coding-fixture'}).id,job.id);await pipeline.close();
 });
 test('coding candidates require exact original quotes, typed applicability and host-owned scope references',async t=>{
@@ -48,7 +48,7 @@ test('coding candidates require exact original quotes, typed applicability and h
 });
 test('a queued coding batch from an older profile cannot checkpoint the new extraction policy',async t=>{
  const {store,sources,memories}=fixture(t),ack=await sources.upsert('coding',item('a'));let calls=0;
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{calls++;return empty;}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>{calls++;return empty;}}});
  const job=pipeline.create({evidenceIds:[ack.id]});
  const row=store.db.prepare('SELECT json FROM memory_batches WHERE job_id=?').get(job.id) as {json:string};
  const batch=JSON.parse(row.json);batch.chunks[0].profileVersion='coding-memory@0';
@@ -69,7 +69,7 @@ test('host addresses unique exact coding quotes only inside authorized ranges, w
 });
 test('coding uploads share durable threshold-or-maximum-wait admission; legacy queued originals and replay remain safe',async t=>{
  const {store,sources,memories}=fixture(t);let configured=false,now=0;const calls:MemoryPipelineQuery[]=[];
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>configured,query:async input=>{calls.push(input);assert.equal(input.responseMode,'memory-extraction');return empty;}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>configured},phases:{query:async input=>{calls.push(input);assert.equal(input.responseMode,'memory-extraction');return empty;}}});
  const a=await sources.upsert('coding',item('a'));
  store.db.exec('CREATE TABLE coding_memory_inbox(evidence_id TEXT PRIMARY KEY,group_key TEXT,ready_at INTEGER)');
  store.db.prepare('INSERT INTO coding_memory_inbox VALUES(?,?,?)').run(a.id,'legacy-session',0);
@@ -92,7 +92,7 @@ test('consolidation retains coding contracts and checkpoints each domain across 
  const {store,sources,memories}=fixture(t);let now=0,failCoding=true;const calls:string[]=[];
  const personal=(await sources.upsert('coding',item('personal','s1',false))).id,coding=(await sources.upsert('coding',item('coding'))).id;
  const result=(id:string,isCoding:boolean,consolidated=false)=>({...empty,answer:JSON.stringify({memories:[{admission:{layer:'memory',reason:'Reusable transaction invariant',scope:'Generated project',attribution:'user'},...(consolidated?{relatedMemoryIds:[originals.find(m=>m.evidenceIds.includes(id))!.id]}:{}),title:consolidated?'Consolidated':'Episode',statement:`${consolidated?'Consolidated':'Observed'} transaction [${id}]`,uncertainty:'Generated evidence only',evidenceIds:[id],evidence:[{id,offset:0,quote:item('a').text}],...(isCoding?{coding:{kind:'pitfall',scope:'project',applicability:'Atomic writes',validation:'tested'}}:{})}]}),citations:[{id,capturedAt:'2026-09-15T01:00:00Z',appName:'Generated',excerpt:item('a').text}]});
- const lifecycle=new MemoryLifecycle(store,()=>true,()=>now),pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>empty});
+ const lifecycle=new MemoryLifecycle(store,()=>true,()=>now),pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async()=>empty}});
  const files=new FileStore(store,sources),working=new WorkingMemory(store,new Conversations(store));
  registerMemoryExtensions({lifecycle,store,files,memories,pipeline,working,model:()=> 'fixture',query:async input=>{assert.equal(input.responseMode,'memory-extraction');const selected=JSON.parse(input.question.slice(input.question.lastIndexOf('\n')+1)) as string[];assert.equal(selected.length,1);const isCoding=memories.get(selected[0]).domain==='coding';calls.push(isCoding?'coding':'personal');if(isCoding&&failCoding)throw new ProviderFailure({category:'transient',code:'provider_unavailable',executionStarted:false,retryAfterMs:120000});input.onEvidence?.(memories.readEvidence([isCoding?coding:personal]));return result(isCoding?coding:personal,isCoding,true);}});
  const settings=lifecycle.settings();for(const key of ['working','insights'] as const)settings[key].enabled=false;settings.consolidation.minChanges=2;lifecycle.configure(settings);
@@ -111,7 +111,7 @@ test('identical project and session labels on different sources and devices neve
  for(const [id,deviceId] of [['other-source','fixture'],['other-device','fixture-2']])sources.register({id,name:id,kind:'coding-agent',deviceId,platform:'macos'});
  const evidenceIds=[];for(const source of ['coding','other-source','other-device'])evidenceIds.push((await sources.upsert(source,item(source))).id);
  const calls:MemoryPipelineQuery[]=[];
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{calls.push(input);return empty;}});
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{calls.push(input);return empty;}}});
  const job=pipeline.create({evidenceIds});assert.equal(job.totalBatches,3);await pipeline.run(job.id);
  assert.equal(calls.length,3);assert.ok(calls.every(call=>call.evidenceIds.length===1));await pipeline.close();
 });

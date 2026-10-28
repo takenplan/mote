@@ -17,7 +17,7 @@ const agent=createAgent({provider:'codex',protocol:'codex-app-server',model,reas
   reader:{search:async()=>[],timeline:async()=>({items:([]),nextCursor:null}),evidence:async({ids})=>store.evidence(ids),activity:async()=>({}),devices:async()=>[]}});
 let calls=0;const reports:unknown[]=[];
 async function query(input:QueryInput){assert.ok(++calls<=12,'Live call budget exceeded');console.log(JSON.stringify({stage:'model-start',call:calls}));return agent.query(input);}
-const pipeline=new MemoryPipeline({store,memories,configured:()=>true,model:()=>model,requireAdmission:true,query,review:(input,result)=>reviewMemory(input,result,query)});
+const pipeline=new MemoryPipeline({store,memories,requireAdmission:true,models:{configured:()=>true,model:()=>model},phases:{query,review:(input,result)=>reviewMemory(input,result,query)}});
 async function run(name:string,events:{role:'user'|'tool_result';text:string;at:string}[]){
   const ids=[];
   for(const [index,event] of events.entries())ids.push((await sources.upsert('generated',{externalId:name+index,revision:'1',observedAt:event.at,kind:'message',layer:'snapshot',text:event.text,

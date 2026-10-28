@@ -18,10 +18,10 @@ async function fixture(t:any){
  const inputs=()=>[{id:first.id,fingerprint:store.archive.fingerprint(first.id)!}],id='a'.repeat(64),group='generated-group',output={kind:'semantic',text:'Generated contextual interpretation',metadata:{evidenceRanges:[{id:first.id,offset:0,length:21}]}};
  const publish=(revision='1'.repeat(64),text=output.text)=>store.archive.save(id,group,revision,{...output,text},inputs(),'generated-processor','1','generated-config');
  const artifact=publish();
- const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'generated-model',review:async(input,draft)=>{calls++;return reviewMemory(input,draft,async()=>({...draft,runId:randomUUID()}));},query:async input=>{
+ const pipeline=fixtureMemoryPipeline({store,memories,models:{configured:()=>true,model:()=> 'generated-model'},phases:{review:async(input,draft)=>{calls++;return reviewMemory(input,draft,async()=>({...draft,runId:randomUUID()}));},query:async input=>{
   calls++;const work=(input.taskContext as any)?.memoryWork,members=work?.members??[];
   return {answer:JSON.stringify({memories:[{title:'Generated preference',statement:`Prefers a blue bowl [${first.id}]`,uncertainty:'Generated only',evidenceIds:[first.id]}],coverage:members.map((member:any)=>({key:member.key,state:'checked',candidateIndexes:[0]})),capacity:{saturated:false}}),citations:[{id:first.id,capturedAt:'2026-10-01T00:00:00Z',appName:'Generated',excerpt:'I prefer a blue bowl.'}],trace:[],runId:randomUUID()};
- }});
+ }}});
  let pipelineClosed=false;t.after(async()=>{if(!pipelineClosed)await pipeline.close();store.close();await rm(directory,{recursive:true,force:true});});
  const job=pipeline.create({evidenceIds:[first.id],artifactRefs:[{id,revision:artifact.revision}],recipes:[{id:'mote.personal-memory',version:'2'}],workPackage:{id:'generated-package',goal:'Inspect the generated original',instruction:'Preserve original provenance'}});
  const done=await pipeline.run(job.id);assert.equal(done.status,'completed',JSON.stringify(done.priorValidationFailure??{errorCode:done.errorCode}));assert.equal(done.memoryIds.length,1);

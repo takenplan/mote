@@ -15,7 +15,7 @@ const directory=resolve(root),db=new DatabaseSync(join(directory,'mote.sqlite'),
 function digest(db:DatabaseSync){const h=createHash('sha256');let count=0;for(const row of db.prepare('SELECT id,json FROM captures ORDER BY id').iterate()){h.update(String(row.id));h.update(String(row.json));count++;}return {count,sha256:h.digest('hex')};}
 const before=digest(db);db.close();
 const started=performance.now(),store=new Store(directory),memories=new MemoryStore(store),conversations=new Conversations(store);
-const pipeline=new MemoryPipeline({store,memories,configured:()=>false,model:()=>'',query:async()=>{throw Error('No model calls permitted in read benchmark');}});
+const pipeline=new MemoryPipeline({store,memories,models:{configured:()=>false,model:()=>''},phases:{query:async()=>{throw Error('No model calls permitted in read benchmark');}}});
 const migrationMs=Math.round(performance.now()-started),after=digest(store.db);
 if(JSON.stringify(before)!==JSON.stringify(after))throw Error('Migration changed original observations');
 let rawReads=0;memories.readEvidence=()=>{rawReads++;throw Error('Overview attempted to read original evidence');};

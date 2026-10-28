@@ -21,7 +21,7 @@ import {ServerDiagnostics} from '../src/diagnostics.js';
 test('batch Memory guards reuse formal metadata while preserving exact originals and fresh revocation',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-memory-read-batch-')),store=new Store(directory),sources=new SourceStore(store),materials=new MaterialStore(store),reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials),engine=new ExecutionEngine(store);
  engine.tick=async()=>{};
- const pipeline=new MemoryPipeline({store,memories:reader.memories,executor:engine,configured:()=>false,model:()=> 'disabled',query:async()=>{throw Error('No models in this generated guard fixture');}});
+ const pipeline=new MemoryPipeline({store,memories:reader.memories,executor:engine,models:{configured:()=>false,model:()=> 'disabled'},phases:{query:async()=>{throw Error('No models in this generated guard fixture');}}});
  t.after(async()=>{await pipeline.close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
  sources.register({id:'generated-batch-source',name:'Generated source',kind:'custom',deviceId:'generated',platform:'import'});
  const publish=async(key:string,count:number)=>{

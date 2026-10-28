@@ -206,7 +206,7 @@ test('a persisted legacy job resumes its private draft after restart without gra
  const dataDir=mkdtempSync(join(tmpdir(),'mote-legacy-context-draft-'));let store=new Store(dataDir),sources=new SourceStore(store),memories=new MemoryStore(store),extracts=0,reviews=0,failReview=true;
  sources.register({id:'generated-legacy',name:'Generated legacy diary',kind:'custom',deviceId:'generated',platform:'import'});
  const source=await sources.upsert('generated-legacy',{externalId:'entry',revision:'1',kind:'file',layer:'original',observedAt:'2025-02-03T12:45:27Z',text:repair});
- const options=()=>({store,memories,model:()=> 'generated',configured:()=>true,requireAdmission:true,query:async(input:QueryInput):Promise<QueryResult>=>{
+ const options=()=>({store,memories,requireAdmission:true,models:{model:()=> 'generated',configured:()=>true},phases:{query:async(input:QueryInput):Promise<QueryResult>=>{
   extracts++;assert.equal(input.evidenceReadRanges,undefined,'legacy execution keeps its original restricted read contract');
   const member=(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members[0];
   return {answer:JSON.stringify({memories:[{title:'Generated legacy repair',statement:`The narrator reported repairing a blue bicycle [${member.id}]`,uncertainty:'The generated legacy source only.',admission:{layer:'observation',reason:'A generated concrete event',scope:'This source only',attribution:'observed'},evidenceIds:[member.id],evidence:[{id:member.id,quote:repair,offset:0}]}],coverage:[{key:member.key,state:'checked',candidateIndexes:[0]}],capacity:{saturated:false}}),citations:[{id:member.id,capturedAt:'2025-02-03T12:45:27Z',appName:'Generated',excerpt:repair}],trace:[],runId:'generated-legacy-extraction-'+extracts};
@@ -214,7 +214,7 @@ test('a persisted legacy job resumes its private draft after restart without gra
   reviews++;assert.equal(reviewed.evidenceReadRanges,undefined);
   if(failReview)throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});
   return {...draft,runId:'generated-legacy-review-'+reviews};
- })});
+ })}});
  let pipeline=new MemoryPipeline(options());
  t.after(async()=>{await pipeline.close();store.close();rmSync(dataDir,{recursive:true,force:true});});
  const job=pipeline.create({evidenceIds:[source.id],workPackage:{id:'generated-existing-job',goal:'Inspect the supplied generated original',instruction:'Preserve source attribution and uncertainty'}});
