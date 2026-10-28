@@ -77,9 +77,9 @@ test('a manual composition retains default dependencies without blocking an inde
   const first=materials.publish(initial),body=materials.input(first.ref,['body'])!;
   const memories=new MemoryStore(store,ids=>materials.evidence(ids),id=>materials.isCurrentEvidence(id));
   const calls:string[][]=[];
-  const pipeline=fixtureMemoryPipeline({store,memories,strategies,configured:()=>true,model:()=> 'fixture',
-    query:async input=>{calls.push((input.processingMaterialInputs??[]).flatMap(pin=>pin.required));return {answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-independent-body'};},review:async(_input,result)=>result,admission:{
-    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)}});
+  const pipeline=fixtureMemoryPipeline({store,memories,strategies,admission:{
+    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)},models:{configured:()=>true,model:()=> 'fixture'},phases:{
+    query:async input=>{calls.push((input.processingMaterialInputs??[]).flatMap(pin=>pin.required));return {answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-independent-body'};},review:async(_input,result)=>result}});
   try{
     const job=pipeline.create({evidenceIds:body.evidenceIds,recipes:[{id:recipe.id,version:recipe.version},{id:'mote.personal-memory',version:'2'}]});
     assert.deepEqual(job.materialInputs!.map(pin=>pin.required),[['body'],['material']]);
@@ -111,9 +111,9 @@ test('body feedback retains its recipe pin when the same originals also belong t
     const needs=work.members[0].id===targetId&&!work.contextMembers?.some(member=>member.id===backgroundId);
     return {runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:work.members.map(member=>({key:member.key,state:needs?'needs_context':'no_candidates',candidateIndexes:[],...(needs?{reason:'The generated target needs the separately selected earlier body entry.',contextRefs:[backgroundId]}:{})})),capacity:{saturated:false}})};
   };
-  const pipeline=fixtureMemoryPipeline({store,memories,strategies,configured:()=>true,model:()=> 'fixture',batchCharacters:256,
-    query:async input=>output(input,'generated-body-extract-'+calls.length),review:(input,result,strategy)=>reviewMemory(input,result,async next=>output(next,'generated-body-review-'+calls.length),{strategy}),admission:{
-    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)}});
+  const pipeline=fixtureMemoryPipeline({store,memories,strategies,batchCharacters:256,admission:{
+    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready)},models:{configured:()=>true,model:()=> 'fixture'},phases:{
+    query:async input=>output(input,'generated-body-extract-'+calls.length),review:(input,result,strategy)=>reviewMemory(input,result,async next=>output(next,'generated-body-review-'+calls.length),{strategy})}});
   pipeline.setFeedbackPlanner(async request=>{
     feedbackCalls++;
     assert.equal(request.round,1);assert.equal(request.targets.length,1);assert.equal(request.targets[0].id,targetId);

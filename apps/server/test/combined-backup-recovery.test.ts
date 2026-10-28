@@ -51,7 +51,7 @@ test('current epoch 4 backup restores original identities, Memory history and in
  const attach=archived.attach.bind(archived);let interrupt=true;archived.attach=(id,ids)=>{if(interrupt&&original.evidence([id])[0].provenance?.externalId==='two'){interrupt=false;throw Error('Generated interrupted confirmation');}attach(id,ids);};
  const partialResult=await imports.confirm(partial.id);archived.attach=attach;assert.equal(partialResult.progress.processed,1);
  const long=await sources.upsert('generated-source',{...record('v1','x'.repeat(600)),externalId:'generated-long'});let configured=true;
- const pipeline=fixtureMemoryPipeline({store:original,memories,executor:engine,batchCharacters:256,model:()=> 'fixture',configured:()=>configured,query:async()=>{configured=false;return empty();}});pipelines.push(pipeline);
+ const pipeline=fixtureMemoryPipeline({store:original,memories,executor:engine,batchCharacters:256,models:{model:()=> 'fixture',configured:()=>configured},phases:{query:async()=>{configured=false;return empty();}}});pipelines.push(pipeline);
  const memoryJob=pipeline.create({evidenceIds:[long.id]});const pausedMemory=await pipeline.run(memoryJob.id);assert.equal(pausedMemory.completedBatches,1);await pipeline.close();
  const interruptedBatch=pausedMemory.batches.find(batch=>batch.status==='pending')!;
  original.db.prepare("UPDATE execution_steps SET state='running',attempts=1,lease_until=?,fence='generated-memory-fence' WHERE id=?").run(Date.now()+3600000,interruptedBatch.id);
@@ -84,7 +84,7 @@ test('current epoch 4 backup restores original identities, Memory history and in
  const restoredImport=new ImportStore(restored,restoredFiles,restoredSources,{executor,prepare:parser});assert.equal(restoredImport.get(partial.id).status,'queued');executor.project(obsoleteImportStep);assert.equal(restoredImport.get(partial.id).status,'queued','obsolete phase projection cannot overwrite the new preview generation');assert.deepEqual(restoredImport.get(partial.id).captureIds,partialResult.captureIds);await assert.rejects(restoredImport.confirm(partial.id),{statusCode:409});
  assert.equal((await restoredImport.confirm(completed.id)).status,'completed');assert.deepEqual(restored.db.prepare('SELECT id,attempts,state FROM execution_steps WHERE operation_id=?').all('import:'+completed.id),completeImportSteps);
  await restoredImport.retry(partial.id);const resumed=await restoredImport.confirm(partial.id);assert.equal(resumed.status,'completed');assert.equal(resumed.progress.duplicates,1);assert.equal(resumed.progress.imported,1);
- const offsets:number[]=[];const resumedPipeline=fixtureMemoryPipeline({store:restored,memories:restoredMemory,executor,batchCharacters:256,model:()=> 'fixture',configured:()=>true,query:async input=>{offsets.push(input.evidenceRanges[0].offset);return empty();}});pipelines.push(resumedPipeline);
+ const offsets:number[]=[];const resumedPipeline=fixtureMemoryPipeline({store:restored,memories:restoredMemory,executor,batchCharacters:256,models:{model:()=> 'fixture',configured:()=>true},phases:{query:async input=>{offsets.push(input.evidenceRanges[0].offset);return empty();}}});pipelines.push(resumedPipeline);
  assert.equal((await resumedPipeline.retry(memoryJob.id)).status,'completed');assert.deepEqual(offsets,[256,512]);assert.equal(new Operations(restored).detail('memory:'+memoryJob.id).operation.state,'succeeded');
  assert.equal(new Operations(restored).detail('import:'+completed.id).operation.state,'succeeded');
  // Restore an earlier current snapshot into a separate empty destination.

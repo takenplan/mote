@@ -145,9 +145,9 @@ test('Cordis uninstall blocks archive work, ordinary records stay supported, ind
 test('model extraction first reads the assembled conversation, never raw upload records',async t=>{
   const {store,materials,runtime,sources,reader}=await fixture(t);runtime.configure('coding',{settleSeconds:0});
   await sources.upsertBatch('coding',[item(1),item(2,'session-a','Second generated message.')]);await runtime.tick();
-  let calls=0;const pipeline=fixtureMemoryPipeline({store,memories:reader.memories,review:(input,draft)=>reviewMemory(input,draft,async()=>({...draft,runId:'fixture-independent-review'})),configured:()=>true,model:()=> 'fixture',query:async input=>{
+  let calls=0;const pipeline=fixtureMemoryPipeline({store,memories:reader.memories,admission:{automaticAllowed:job=>runtime.memoryWork.authorized(job),materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)},models:{configured:()=>true,model:()=> 'fixture'},phases:{review:(input,draft)=>reviewMemory(input,draft,async()=>({...draft,runId:'fixture-independent-review'})),query:async input=>{
     calls++;assert.equal(input.skill,'coding-memory');const records=reader.evidence(fixtureCaptureRefs(input.evidenceIds));assert.ok(records[0].ocrText.includes('Second generated message.'));assert.ok(records[0].ocrText.includes('Generated user requirement'));return {answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as {members:{key:string}[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)}),citations:[],trace:[],runId:'fixture'};
-  },admission:{automaticAllowed:job=>runtime.memoryWork.authorized(job),materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)}});
+  }}});
   await runtime.drainMemory(pipeline,true);const job=store.db.prepare('SELECT job_id FROM material_memory_requests').get()!;assert.ok(job.job_id);await pipeline.run(String(job.job_id));assert.ok(calls>0);await pipeline.close();
   const material=materials.list().items[0];materials.forget(material.id);assert.equal(materials.list({query:'Generated'}).items.length,0);assert.equal(store.db.prepare('SELECT count(*) n FROM material_evidence').get()!.n,0);
 });

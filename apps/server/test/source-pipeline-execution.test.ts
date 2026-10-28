@@ -189,9 +189,9 @@ test('Coding recipe upgrade reuses the common queue without paying for historica
   let sources=new SourceStore(store,runtime);sources.register({id:'coding',name:'Generated',kind:'coding-agent',deviceId:'device',platform:'macos'});
   let calls=0;
   const pipeline=()=>{const reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials,runtime);
-    return fixtureMemoryPipeline({store,memories:reader.memories,review:(input,draft)=>reviewMemory(input,draft,async()=>({...draft,runId:'fixture-independent-review'})),configured:()=>true,model:()=> 'fixture',query:async input=>{
+    return fixtureMemoryPipeline({store,memories:reader.memories,admission:{automaticAllowed:job=>runtime.memoryWork.authorized(job),materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)},models:{configured:()=>true,model:()=> 'fixture'},phases:{review:(input,draft)=>reviewMemory(input,draft,async()=>({...draft,runId:'fixture-independent-review'})),query:async input=>{
       calls++;return {answer:JSON.stringify({memories:[],...(input.taskContext?.memoryWork?{coverage:(input.taskContext.memoryWork as {members:{key:string}[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)}:{})}),citations:[],trace:[],runId:'fixture'};
-    },admission:{automaticAllowed:job=>runtime.memoryWork.authorized(job),materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)}});};
+    }}});};
   let memory=pipeline();
   t.after(async()=>{await memory.close();await runtime.close();store.close();rmSync(directory,{recursive:true,force:true});});
   runtime.configure('coding',{settleSeconds:0});

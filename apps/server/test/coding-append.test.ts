@@ -118,8 +118,8 @@ test('append reads only new refs, reuses prefix blocks and anchors, and keeps th
   const currentIds=materials.evidenceIds(after.ref);
   assert.equal(reader.memories.isCurrentEvidence(oldIds[0]!),true,'reused prefix stays admissible to Memory');
   assert.equal(reader.memories.isCurrentEvidence(oldIds.at(-1)!),false,'replaced tail cannot support Memory');
-  const pipeline=fixtureMemoryPipeline({store,memories:reader.memories,model:()=> 'fixture-model',configured:()=>true,query:async()=>{throw Error('No model request expected');},admission:{
-    materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)}});
+  const pipeline=fixtureMemoryPipeline({store,memories:reader.memories,admission:{
+    materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref)},models:{model:()=> 'fixture-model',configured:()=>true},phases:{query:async()=>{throw Error('No model request expected');}}});
   t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[oldIds[0]!,currentIds.at(-1)!],originKey:after.ref});
   assert.equal(job.evidenceIds.length,2);

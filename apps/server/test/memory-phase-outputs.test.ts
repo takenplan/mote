@@ -16,7 +16,7 @@ async function fixture(t:import('node:test').TestContext,storageOptions:{maxStor
  const directory=mkdtempSync(join(tmpdir(),'mote-phase-output-')),store=new Store(directory,storageOptions),sources=new SourceStore(store),memories=new MemoryStore(store);
  sources.register({id:'generated',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});
  const record=await sources.upsert('generated',{externalId:'one',revision:'1',observedAt:'2026-10-01T00:00:00Z',title:'Generated',kind:'file',layer:'original',text:'Generated original for phase recovery.'});
- const pipeline=new MemoryPipeline({store,memories,model:()=> 'generated',configured:()=>true,query:async()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:'generated'})});
+ const pipeline=new MemoryPipeline({store,memories,models:{model:()=> 'generated',configured:()=>true},phases:{query:async()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:'generated'})}});
  const job=pipeline.create({evidenceIds:[record.id]}),batch=job.batches[0],engine=pipeline.engine,outputs=new MemoryPhaseOutputs(store,engine);
  t.after(async()=>{await pipeline.close();store.close();rmSync(directory,{recursive:true,force:true});});
  return {store,engine,outputs,pipeline,jobId:job.id,batchId:batch.id,record};
@@ -78,13 +78,13 @@ for(const boundary of ['before-commit','after-commit'] as const)test(`actual pro
  const store=new Store(${JSON.stringify(directory)}),sources=new SourceStore(store),memories=new MemoryStore(store);
  sources.register({id:'generated',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});
  const record=await sources.upsert('generated',{externalId:'one',revision:'1',observedAt:'2026-10-01T00:00:00Z',title:'Generated',kind:'file',layer:'original',text:'Generated process recovery original.'});
- const pipeline=new MemoryPipeline({store,memories,configured:()=>true,model:()=> 'generated',query:async()=>({answer:'{}',citations:[],trace:[],runId:'unused'})});
+ const pipeline=new MemoryPipeline({store,memories,models:{configured:()=>true,model:()=> 'generated'},phases:{query:async()=>({answer:'{}',citations:[],trace:[],runId:'unused'})}});
  const job=pipeline.create({evidenceIds:[record.id]}),outputs=new MemoryPhaseOutputs(store,pipeline.engine);
  await outputs.run({batchId:job.batches[0].id,jobId:job.id,phase:'extract',inputHash:'generated-crash',generation:'frozen',signal:new AbortController().signal,validate:()=>true,assertCommit:()=>{},execute:async()=>{appendFileSync(${JSON.stringify(callsFile)},'call\\n');if(${JSON.stringify(boundary)}==='before-commit')process.exit(23);return {answer:'Complete committed response',runId:'generated-original'};}});
  process.exit(24);`;
  const child=spawnSync(process.execPath,['--import','tsx','--input-type=module','--eval',source],{encoding:'utf8',timeout:15000});
  assert.equal(child.status,boundary==='before-commit'?23:24,child.stderr);
- const store=new Store(directory),memories=new MemoryStore(store),pipeline=new MemoryPipeline({store,memories,configured:()=>true,model:()=> 'generated',query:async()=>({answer:'{}',citations:[],trace:[],runId:'unused'})});
+ const store=new Store(directory),memories=new MemoryStore(store),pipeline=new MemoryPipeline({store,memories,models:{configured:()=>true,model:()=> 'generated'},phases:{query:async()=>({answer:'{}',citations:[],trace:[],runId:'unused'})}});
  t.after(async()=>{await pipeline.close();store.close();});
  const batch=store.db.prepare('SELECT id,job_id FROM memory_batches').get()!,outputs=new MemoryPhaseOutputs(store,pipeline.engine);let recoveryCalls=0;
  // The elapsed lease is controlled after the actual process has exited.
@@ -96,7 +96,7 @@ for(const boundary of ['before-commit','after-commit'] as const)test(`actual pro
 
 test('retiring a sibling original preserves an independently authorized successful checkpoint through storage restart',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-phase-siblings-'));let store:Store,pipeline:MemoryPipeline,outputs:MemoryPhaseOutputs,calls=0;
- const open=()=>{store=new Store(directory);pipeline=new MemoryPipeline({store,memories:new MemoryStore(store),configured:()=>true,model:()=> 'generated',query:async()=>{throw Error('Checkpoint replay must not call a model');},review:async()=>{throw Error('Checkpoint replay must not call independent review');}});outputs=new MemoryPhaseOutputs(store,pipeline.engine);};
+ const open=()=>{store=new Store(directory);pipeline=new MemoryPipeline({store,memories:new MemoryStore(store),models:{configured:()=>true,model:()=> 'generated'},phases:{query:async()=>{throw Error('Checkpoint replay must not call a model');},review:async()=>{throw Error('Checkpoint replay must not call independent review');}}});outputs=new MemoryPhaseOutputs(store,pipeline.engine);};
  open();t.after(async()=>{await pipeline.close();store.close();rmSync(directory,{recursive:true,force:true});});
  const sources=new SourceStore(store);sources.register({id:'generated',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});
  const originals=[];for(const externalId of ['retained','retired'])originals.push(await sources.upsert('generated',{externalId,revision:'1',text:('Generated independent '+externalId+' original. ').padEnd(240,'x'),observedAt:'2026-10-01T00:00:00Z',kind:'file',layer:'original'}));

@@ -31,13 +31,13 @@ test('strict admission requires exact provenance; missing admission is refused a
 
 test('independent review can reject a valid draft without saving it; empty completion still checkpoints',async t=>{
  const {sources,memories,store}=fixture(t),a=await original(sources);let reviews=0;
- const pipeline=new MemoryPipeline({store,memories,requireAdmission:true,configured:()=>true,model:()=> 'fixture',query:async input=>fixtureMemoryWorkResult(input,result(a.id)),review:async(input,draft)=>reviewMemory(input,draft,async request=>{reviews++;assert.ok(request.taskContext?.untrustedMemoryDraft);return fixtureMemoryWorkResult(request,{answer:'{"memories":[]}',citations:[],trace:[],runId:'review-rejected'});})});t.after(()=>pipeline.close());
+ const pipeline=new MemoryPipeline({store,memories,requireAdmission:true,models:{configured:()=>true,model:()=> 'fixture'},phases:{query:async input=>fixtureMemoryWorkResult(input,result(a.id)),review:async(input,draft)=>reviewMemory(input,draft,async request=>{reviews++;assert.ok(request.taskContext?.untrustedMemoryDraft);return fixtureMemoryWorkResult(request,{answer:'{"memories":[]}',citations:[],trace:[],runId:'review-rejected'});})}});t.after(()=>pipeline.close());
  const job=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(job.status,'completed');assert.equal(reviews,1);assert.equal(memories.list().length,0);assert.equal(pipeline.create({evidenceIds:[a.id]}).totalBatches,0);
 });
 
 test('review cannot escape ranges; failed validation details survive successful retry',async t=>{
  const {sources,memories,store}=fixture(t),a=await original(sources),b=await original(sources,'b');let reviews=0;
- const pipeline=fixtureMemoryPipeline({store,memories,requireAdmission:true,configured:()=>true,model:()=> 'actual-model',query:async()=>result(a.id),review:async()=>result(++reviews===1?b.id:a.id)});t.after(()=>pipeline.close());
+ const pipeline=fixtureMemoryPipeline({store,memories,requireAdmission:true,models:{configured:()=>true,model:()=> 'actual-model'},phases:{query:async()=>result(a.id),review:async()=>result(++reviews===1?b.id:a.id)}});t.after(()=>pipeline.close());
  const job=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(job.status,'completed');assert.equal(job.batches[0].validationFailures?.[0].phase,'review');assert.equal(job.batches[0].validationFailures?.[0].code,'scope');
  const m=memories.get(job.memoryIds[0]);assert.equal(m.model,'actual-model');assert.ok(m.reviewRunId);assert.deepEqual(m.evidenceIds,[a.id]);
 });

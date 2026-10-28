@@ -50,7 +50,19 @@ export type MemoryJob={failureReceipt?:ExecutionFailureReceipt;priorValidationFa
 export type MemoryJobDetail=MemoryJob&{batches:MemoryBatch[]};
 export type MemoryPipelineQuery={processingImages?:QueryInput['processingImages'];memoryReviewQuestion?:string;memoryReviewRepair?:string;taskContext?:QueryInput['taskContext'];processingMaterialInputs?:QueryInput['processingMaterialInputs'];processingEvidence?:QueryInput['processingEvidence'];contextTime?:string;signal?:AbortSignal;language?:Locale;modelProfileId?:string;modelOverride?:string;question:string;skill:'memory-extraction'|'coding-memory'|'memory-strategy';responseMode:'memory-extraction';evidenceIds:string[];evidenceRanges:EvidenceRange[];evidenceReadRanges?:EvidenceRange[];timeZone?:string;validateOutput?:QueryInput['validateOutput'];onProgress?:QueryInput['onProgress'];onTrace?:QueryInput['onTrace'];traceContext?:QueryInput['traceContext']};
 export type ConversationPreparation={generationContract:string;memoryWork?:{package:{goal:string;instruction:string};members:MemoryWorkMember[];contextMembers:MemoryWorkMember[];authorizedMembers:MemoryWorkMember[];history:MemoryWorkInspection[];workContract?:MemoryWorkContract;maxCandidates?:number;instruction:string};candidatePolicy?:{prompt:string;profile:'personal'|'coding';fingerprint:string};job:MemoryJob;ranges:EvidenceRange[];materialRefs:Record<string,string>;materialInputs:MaterialInputPin[];signal:AbortSignal;parentGrant:{stepId:string;fence:string}};
-export type MemoryPipelineOptions={onPublished?:(step:ExecutionStep,memories:readonly import('./memory-schema.js').Memory[],job:MemoryJob)=>void;assertIntegrationAuthority?:()=>void;withIntegrationAuthority?:<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>)=>Promise<T>;integrationReadInput?:(cards:readonly Memory[])=>Pick<QueryInput,'processingImages'|'processingMaterialInputs'|'processingEvidence'>;assertIntegrationReadable?:(cards:readonly Memory[])=>void;assertNewManualWork?:()=>void;admission?:MemoryInputAdmissionOptions;nativeStages?:MemoryNativeStageAdapter;publication?:MemoryStagePublication;understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;strategies?:MemoryStrategies;configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;executor?:ExecutionEngine;concurrency?:()=>number;onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;requireAdmission?:boolean;review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:MemoryDraftOrigin)=>Promise<QueryResult>;store:Store;memories:MemoryStore;query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;model:(profileId?:string)=>string;configured:(profileId?:string)=>boolean;skillVersion?:string;batchCharacters?:number|(()=>number)};
+export interface MemoryModelSelection {
+  configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;
+  model:(profileId?:string)=>string;
+  configured:(profileId?:string)=>boolean;
+}
+export interface MemoryPhasePorts {
+  understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;
+  onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;
+  review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:MemoryDraftOrigin)=>Promise<QueryResult>;
+  query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;
+  skillVersion?:string;
+}
+export type MemoryPipelineOptions={models:MemoryModelSelection;phases:MemoryPhasePorts;onPublished?:(step:ExecutionStep,memories:readonly import('./memory-schema.js').Memory[],job:MemoryJob)=>void;assertIntegrationAuthority?:()=>void;withIntegrationAuthority?:<T>(id:string,manual:boolean,evidenceIds:string[],task:()=>Promise<T>)=>Promise<T>;integrationReadInput?:(cards:readonly Memory[])=>Pick<QueryInput,'processingImages'|'processingMaterialInputs'|'processingEvidence'>;assertIntegrationReadable?:(cards:readonly Memory[])=>void;assertNewManualWork?:()=>void;admission?:MemoryInputAdmissionOptions;nativeStages?:MemoryNativeStageAdapter;publication?:MemoryStagePublication;strategies?:MemoryStrategies;executor?:ExecutionEngine;concurrency?:()=>number;requireAdmission?:boolean;store:Store;memories:MemoryStore;batchCharacters?:number|(()=>number)};
 
 type BatchOutput={contextReadChunks?:Chunk[];workContract?:MemoryWorkContract;engineDrafts?:MemoryEngineDraftPin[];publication?:MemoryPublicationReceipt;feedbackPlan?:MemoryFeedbackPlan;coverage?:MemoryWorkCoverage;strategy?:MemoryRecipeBinding;result:QueryResult;reviewReceipt?:MemoryReviewReceipt;model:string;profile:'personal'|'coding';skillVersion:string;ranges:EvidenceRange[];chunks:Chunk[]};
 export type MemoryOwnerQuestionHandler={create:(input:{job:MemoryJob;batchId:string;member:MemoryWorkMember;question:MemoryOwnerQuestion})=>string;pending:(jobId:string)=>boolean};
@@ -205,8 +217,8 @@ export class MemoryPipeline {
         if(job.status==='cancelled'||this.closed)return new ExecutionFailure('blocked','cancelled');
         if(job.activationRequired&&!this.active.has(job.id))return new ExecutionFailure('blocked','awaiting_activation');
         // Lifecycle recovery must still honor its saved retry window and enablement.
-        if(!this.options.configured(job.modelProfileId))return new ExecutionFailure('blocked','model_unconfigured');
-        if(this.options.configuration){const current=this.options.configuration(job.modelProfileId,job.modelOverride);if(job.configuration&&job.configuration.fingerprint!==current.fingerprint)return new ExecutionFailure('blocked','configuration_changed');if(!job.configuration){job.configuration=structuredClone(current);this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(current)));this.saveJob(job);}}
+        if(!this.options.models.configured(job.modelProfileId))return new ExecutionFailure('blocked','model_unconfigured');
+        if(this.options.models.configuration){const current=this.options.models.configuration(job.modelProfileId,job.modelOverride);if(job.configuration&&job.configuration.fingerprint!==current.fingerprint)return new ExecutionFailure('blocked','configuration_changed');if(!job.configuration){job.configuration=structuredClone(current);this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(current)));this.saveJob(job);}}
       },
       execute:async(step,signal)=>{const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence,current=()=>typeof fence==='string'&&this.engine.isCurrentGrant(step.id,fence);
         const publication=this.options.publication,job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId));
@@ -216,7 +228,7 @@ export class MemoryPipeline {
         assertAuthority();for(const pin of output.engineDrafts??[])await this.nativeStages.settle(pin);
         if(output.feedbackPlan)return output;
         this.assertOwnerQuestionMaterials(this.storedJob(String(step.input.jobId)),this.batch(String(step.input.batchId)),output);
-        output.publication=await publication?.stageExtract(step.id,output.result,output.model,{workContract:output.workContract,maxCandidates:output.coverage&&!output.workContract?memoryWorkCandidateLimit(output.chunks.length):undefined,strategy:output.strategy,profile:output.profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?output.result.runId:undefined,skillVersion:output.skillVersion,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[]),...(output.contextReadChunks??[])].map(chunk=>[chunk.id,chunk.fingerprint]))},assertAuthority,Boolean(this.storedJob(String(step.input.jobId)).automaticGrant||this.storedJob(String(step.input.jobId)).automaticGrants?.length));
+        output.publication=await publication?.stageExtract(step.id,output.result,output.model,{workContract:output.workContract,maxCandidates:output.coverage&&!output.workContract?memoryWorkCandidateLimit(output.chunks.length):undefined,strategy:output.strategy,profile:output.profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.phases.review?output.result.runId:undefined,skillVersion:output.skillVersion,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[]),...(output.contextReadChunks??[])].map(chunk=>[chunk.id,chunk.fingerprint]))},assertAuthority,Boolean(this.storedJob(String(step.input.jobId)).automaticGrant||this.storedJob(String(step.input.jobId)).automaticGrants?.length));
         return output;
       },
       classify:error=>error instanceof MemoryProviderError?new ExecutionFailure(error.code==='unknown_result'||error.code==='unavailable'?'blocked':'permanent','memory_provider_'+error.code):new ExecutionFailure('permanent','memory_publication_failed'),
@@ -268,9 +280,9 @@ export class MemoryPipeline {
   private get store(){return this.options.store;}
   /** Manual extraction and consolidation use the same source-item boundary. */
   modelSnapshot(){
-    if(!this.options.configured())throw new StoreError('Memory model is unavailable',409);
-    const configuration=this.options.configuration?.();
-    return {model:configuration?.model??this.options.model(),...(configuration?{configuration}: {})};
+    if(!this.options.models.configured())throw new StoreError('Memory model is unavailable',409);
+    const configuration=this.options.models.configuration?.();
+    return {model:configuration?.model??this.options.models.model(),...(configuration?{configuration}: {})};
   }
   evidenceDependencies(ids:readonly string[]):string[]{return [...new Set(ids.flatMap(id=>this.options.memories.dependencyIds(id)))];}
   /** The artifact lifecycle handles current screenshots and authored
@@ -360,10 +372,10 @@ export class MemoryPipeline {
     const input=z.object({manualPlans:z.array(manualMemoryInputPlanSchema).min(1).max(2000).optional(),automaticGrant:automaticMemoryGrantSchema.optional(),automaticGrants:z.array(automaticMemoryGrantSchema).min(1).max(8).optional(),workPackage:memoryWorkPackageSchema.optional(),contextTime:z.string().datetime({offset:true}).optional(),recipes:z.array(memoryStrategyRefSchema).min(1).max(10).refine(values=>new Set(values.map(v=>v.id+'@'+v.version)).size===values.length,'Duplicate Memory recipe').optional(),artifactRefs:z.array(z.object({id:z.string().length(64),revision:z.string().length(64)})).max(2000).optional(),evidenceRanges:z.array(z.object({id:z.string().uuid(),offset:z.number().int().min(0),length:z.number().int().min(1).max(12000)})).max(10000).optional(),contextEvidenceRanges:z.array(z.object({id:z.string().uuid(),offset:z.number().int().min(0),length:z.number().int().min(1).max(12000)})).max(10000).optional(),modelProfileId:modelProfileIdSchema.optional(),modelOverride:z.string().trim().min(1).max(512).refine(v=>!/[\u0000-\u001f\u007f]/.test(v)).optional(),originKey:z.string().max(200).optional(),batchCharacters:z.number().int().min(256).max(12000).optional(),evidenceIds:z.array(z.string().uuid()).max(20000),importJobId:z.string().max(200).optional(),timeZone:z.string().max(100).refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true;}catch{return false;}},'Invalid time zone').optional()}).strict().parse(raw);
     if(input.contextEvidenceRanges&&(input.manualPlans||input.automaticGrant||input.automaticGrants||!input.evidenceRanges?.length||input.contextEvidenceRanges.some(range=>!input.evidenceIds.includes(range.id))))throw new StoreError('Context-only reads require an explicit manual target selection within the selected originals');
     if(input.manualPlans)return this.createManual(input);
-    if(input.workPackage&&!this.options.review)throw new StoreError('Memory work packages require independent review',409);
+    if(input.workPackage&&!this.options.phases.review)throw new StoreError('Memory work packages require independent review',409);
     if(!input.evidenceIds.length)throw new StoreError('No evidence in this range',409);
     const selectedRecipes=input.recipes?.map(ref=>{try{return this.strategies.resolve(ref);}catch{throw new StoreError('Memory recipe is unavailable',409);}});
-    if(selectedRecipes&&!this.options.review)throw new StoreError('Memory recipes require the host review executor',409);
+    if(selectedRecipes&&!this.options.phases.review)throw new StoreError('Memory recipes require the host review executor',409);
     const plans=(selectedRecipes??[undefined]).map(recipe=>{
       const pins=new Map<string,MaterialInputPin>();
       const selections=new Map<string,MaterialInputPin&{ready:boolean}>();
@@ -392,7 +404,7 @@ export class MemoryPipeline {
     if(input.originKey){const prior=this.store.db.prepare("SELECT id FROM memory_jobs WHERE json_extract(json,'$.originKey')=?").get(input.originKey) as {id:string}|undefined;if(prior)return this.get(prior.id);}
     const jobTime=new Date().toISOString(),evaluationTime=input.contextTime??jobTime;
     const budget=input.batchCharacters??this.batchBudget(),evidenceIds=[...new Set(plans.flatMap(plan=>plan.ids))],now=jobTime;
-    const job:MemoryJob={contextReadVersion:1,...(!selectedRecipes&&this.options.review?{workContract:'range-evaluation@1' as const}:{}),activationRequired:true,inputPlanVersion:1,inputPlans:{total:0,waiting:0,blocked:0,stale:0,completed:0},recipeProgress:[],memoryCount:0,materialInputs,batchCharacters:budget,automaticGrant:input.automaticGrant,automaticGrants:input.automaticGrants,workPackage:input.workPackage,contextTime:evaluationTime,recipes:input.recipes,artifactRefs:input.artifactRefs,materialRefs,language:requestLocale.getStore()??'zh-CN',id:randomUUID(),modelProfileId:input.modelProfileId,modelOverride:input.modelOverride,importJobId:input.importJobId,originKey:input.originKey,timeZone:input.timeZone,status:'queued',createdAt:now,updatedAt:now,evidenceIds,skillVersion:this.options.skillVersion??MEMORY_SKILL_VERSION,totalBatches:0,completedBatches:0,failedBatches:0,skippedChunks:0,memoryIds:[]};
+    const job:MemoryJob={contextReadVersion:1,...(!selectedRecipes&&this.options.phases.review?{workContract:'range-evaluation@1' as const}:{}),activationRequired:true,inputPlanVersion:1,inputPlans:{total:0,waiting:0,blocked:0,stale:0,completed:0},recipeProgress:[],memoryCount:0,materialInputs,batchCharacters:budget,automaticGrant:input.automaticGrant,automaticGrants:input.automaticGrants,workPackage:input.workPackage,contextTime:evaluationTime,recipes:input.recipes,artifactRefs:input.artifactRefs,materialRefs,language:requestLocale.getStore()??'zh-CN',id:randomUUID(),modelProfileId:input.modelProfileId,modelOverride:input.modelOverride,importJobId:input.importJobId,originKey:input.originKey,timeZone:input.timeZone,status:'queued',createdAt:now,updatedAt:now,evidenceIds,skillVersion:this.options.phases.skillVersion??MEMORY_SKILL_VERSION,totalBatches:0,completedBatches:0,failedBatches:0,skippedChunks:0,memoryIds:[]};
     const {batches,skippedChunks,authorizedChunks}=this.makeBatches(job,plans.map(plan=>({...plan,strategy:plan.recipe?.binding})),input.evidenceRanges,0,input.contextEvidenceRanges);
     if(job.contextReadVersion||job.workPackage||job.workContract||this.ownerQuestions)job.authorizedChunks=authorizedChunks;
     job.status=batches.length?'queued':'completed';job.totalBatches=batches.length;job.skippedChunks=skippedChunks;
@@ -425,7 +437,7 @@ export class MemoryPipeline {
         for(let offset=range.offset;offset<range.offset+range.length;){let end=Math.min(offset+budget,range.offset+range.length);
           if((plan.strategy?plan.strategy.workContract:job.workContract)&&end<range.offset+range.length){const boundary=record.ocrText.lastIndexOf('\n',end-1);if(boundary>=offset)end=boundary+1;}
           if(end<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[end-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[end]))end--;
-          const reviewFingerprint=this.options.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined,strategy=plan.strategy;
+          const reviewFingerprint=this.options.phases.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined,strategy=plan.strategy;
           const materialInputFingerprints=plan.inputs.filter(pin=>pin.evidenceIds.includes(id)).map(pin=>pin.fingerprint);
           const chunk:Chunk={...(materialInputFingerprints.length?{materialInputFingerprints}:{}),id,profile:profile.id,profileVersion:profile.version,strategy,reviewFingerprint:strategy?undefined:reviewFingerprint,group:JSON.stringify([strategy??null,profile.group]),offset,length:end-offset,fingerprint,key:sha256(JSON.stringify([id,fingerprint,offset,end-offset,strategy??(profile.id==='coding'?profile.version:job.skillVersion),strategy?[job.contextTime,job.timeZone??'UTC',job.language??'zh-CN']:reviewFingerprint]))};
           if(!strategy&&job.workContract)chunk.key=sha256(JSON.stringify([chunk.key,job.workContract]));
@@ -497,7 +509,7 @@ export class MemoryPipeline {
     this.inputAdmission.admit(ids,Object.fromEntries(Object.entries(job.materialRefs??{}).filter(([id])=>ids.includes(id))),job.modelProfileId,this.contextReadMaterialInputs(job,chunks));
   }
   private preparationContext(job:MemoryJob,batch:StoredBatch,chunks:Chunk[]):Pick<ConversationPreparation,'memoryWork'|'candidatePolicy'>{
-    const contract=this.workContract(job,batch),members=contract||job.workPackage||this.ownerQuestions&&this.options.review?this.workMembers(job,batch,chunks):undefined;
+    const contract=this.workContract(job,batch),members=contract||job.workPackage||this.ownerQuestions&&this.options.phases.review?this.workMembers(job,batch,chunks):undefined;
     const limit=members&&!contract?memoryWorkCandidateLimit(members.length):undefined,policy=chunks[0].strategy?this.strategies.resolvePinned(chunks[0].strategy):undefined;
     const rawPolicy=contract&&!policy?memoryRangeSelectionProfile(this.options.memories.readEvidence([chunks[0].id])[0]):undefined;
     return {candidatePolicy:policy?{prompt:policy.extract.prompt+'\n'+memoryCandidateOutputContract(contract),profile:'personal',fingerprint:policy.binding.extract.fingerprint}:rawPolicy?{prompt:rawPolicy.prompt+'\n'+memoryCandidateOutputContract(contract),profile:rawPolicy.id,fingerprint:sha256(rawPolicy.prompt+'\n'+memoryCandidateOutputContract(contract))}:undefined,
@@ -524,7 +536,7 @@ export class MemoryPipeline {
     const members=this.workMembers(job,batch,chunks).map(({scope:_scope,state:_state,memoryIds:_ids,...member})=>member).sort((a,b)=>a.key.localeCompare(b.key));
     const context=this.workMembers(job,batch,batch.contextChunks??[]).map(({scope:_scope,state:_state,memoryIds:_ids,...member})=>member).sort((a,b)=>a.key.localeCompare(b.key));
     const readScope=this.contextReadScope(job,batch),readContract=job.contextReadVersion?[job.contextReadVersion,readScope.ranges.sort((a,b)=>a.id.localeCompare(b.id)||a.offset-b.offset),readScope.chunks.map(({id,fingerprint})=>({id,fingerprint})).sort((a,b)=>a.id.localeCompare(b.id))]:[];
-    return sha256(JSON.stringify(['memory-generation@2',...readContract,SYSTEM_PROMPT,profile,skillCatalog().find(skill=>skill.id===(selected||contract?'memory-strategy':memoryProfile(this.options.memories.readEvidence([chunks[0].id])[0]).skill))?.version,batch.skillVersion??job.skillVersion,job.configuration?.fingerprint??this.options.configuration?.(job.modelProfileId,job.modelOverride)?.fingerprint,job.modelOverride??this.options.model(job.modelProfileId),job.language,job.timeZone,members,context,batch.workerGoal??job.workPackage?.goal,batch.workerInstruction??job.workPackage?.instruction,this.options.memories.readEvidence([...new Set([...chunks,...(batch.contextChunks??[])].map(chunk=>chunk.id))]).sort((a,b)=>a.id.localeCompare(b.id)),Boolean(this.options.requireAdmission),this.inspectionHistory(job,batch).map(({targets,contextMembers})=>({targets:targets.sort((a,b)=>a.key.localeCompare(b.key)),contextMembers:contextMembers.sort((a,b)=>a.key.localeCompare(b.key))})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),this.authorizedMembers(job,batch).map(({scope:_scope,state:_state,memoryIds:_ids,...member})=>member).sort((a,b)=>a.key.localeCompare(b.key)),contract||job.workPackage||this.ownerQuestions&&this.options.review?memoryWorkInstruction(this.workMembers(job,batch,chunks),contract?undefined:memoryWorkCandidateLimit(chunks.length),contract):undefined]));
+    return sha256(JSON.stringify(['memory-generation@2',...readContract,SYSTEM_PROMPT,profile,skillCatalog().find(skill=>skill.id===(selected||contract?'memory-strategy':memoryProfile(this.options.memories.readEvidence([chunks[0].id])[0]).skill))?.version,batch.skillVersion??job.skillVersion,job.configuration?.fingerprint??this.options.models.configuration?.(job.modelProfileId,job.modelOverride)?.fingerprint,job.modelOverride??this.options.models.model(job.modelProfileId),job.language,job.timeZone,members,context,batch.workerGoal??job.workPackage?.goal,batch.workerInstruction??job.workPackage?.instruction,this.options.memories.readEvidence([...new Set([...chunks,...(batch.contextChunks??[])].map(chunk=>chunk.id))]).sort((a,b)=>a.id.localeCompare(b.id)),Boolean(this.options.requireAdmission),this.inspectionHistory(job,batch).map(({targets,contextMembers})=>({targets:targets.sort((a,b)=>a.key.localeCompare(b.key)),contextMembers:contextMembers.sort((a,b)=>a.key.localeCompare(b.key))})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),this.authorizedMembers(job,batch).map(({scope:_scope,state:_state,memoryIds:_ids,...member})=>member).sort((a,b)=>a.key.localeCompare(b.key)),contract||job.workPackage||this.ownerQuestions&&this.options.phases.review?memoryWorkInstruction(this.workMembers(job,batch,chunks),contract?undefined:memoryWorkCandidateLimit(chunks.length),contract):undefined]));
   }
   private authorizedMembers(job:MemoryJob,batch:StoredBatch):MemoryWorkMember[]{
     const compatible=(chunk:Chunk)=>JSON.stringify([chunk.strategy??null,chunk.profile,chunk.profileVersion,chunk.reviewFingerprint])===JSON.stringify([batch.chunks[0]?.strategy??null,batch.chunks[0]?.profile,batch.chunks[0]?.profileVersion,batch.chunks[0]?.reviewFingerprint]);
@@ -583,9 +595,9 @@ export class MemoryPipeline {
   }
   private createManual(input:Parameters<MemoryPipeline['create']>[0]):MemoryJobDetail {
     if(input.automaticGrant||input.automaticGrants||input.workPackage||input.artifactRefs||input.evidenceRanges)throw new StoreError('Manual input plans cannot change another processing grant',409);
-    if(!this.options.review)throw new StoreError('Memory recipes require the host review executor',409);
-    const now=new Date().toISOString(),job:MemoryJob={contextReadVersion:1,workContract:'range-evaluation@1',activationRequired:false,inputPlanVersion:1,inputPlans:{total:0,waiting:0,blocked:0,stale:0,completed:0},recipeProgress:[],memoryCount:0,materialInputs:[],materialRefs:{},id:randomUUID(),modelProfileId:input.modelProfileId,modelOverride:input.modelOverride,contextTime:input.contextTime??now,recipes:input.recipes,batchCharacters:input.batchCharacters??this.batchBudget(),language:requestLocale.getStore()??'zh-CN',timeZone:input.timeZone,status:'queued',createdAt:now,updatedAt:now,evidenceIds:[],skillVersion:this.options.skillVersion??MEMORY_SKILL_VERSION,totalBatches:0,completedBatches:0,failedBatches:0,skippedChunks:0,memoryIds:[]};
-    if(this.options.configuration)job.configuration=structuredClone(this.options.configuration(job.modelProfileId,job.modelOverride));
+    if(!this.options.phases.review)throw new StoreError('Memory recipes require the host review executor',409);
+    const now=new Date().toISOString(),job:MemoryJob={contextReadVersion:1,workContract:'range-evaluation@1',activationRequired:false,inputPlanVersion:1,inputPlans:{total:0,waiting:0,blocked:0,stale:0,completed:0},recipeProgress:[],memoryCount:0,materialInputs:[],materialRefs:{},id:randomUUID(),modelProfileId:input.modelProfileId,modelOverride:input.modelOverride,contextTime:input.contextTime??now,recipes:input.recipes,batchCharacters:input.batchCharacters??this.batchBudget(),language:requestLocale.getStore()??'zh-CN',timeZone:input.timeZone,status:'queued',createdAt:now,updatedAt:now,evidenceIds:[],skillVersion:this.options.phases.skillVersion??MEMORY_SKILL_VERSION,totalBatches:0,completedBatches:0,failedBatches:0,skippedChunks:0,memoryIds:[]};
+    if(this.options.models.configuration)job.configuration=structuredClone(this.options.models.configuration(job.modelProfileId,job.modelOverride));
     const plans=input.manualPlans!.map(request=>({...request,id:randomUUID(),jobId:job.id} as ManualMemoryInputPlan)),seen=new Set<string>();
     for(const plan of plans){const key=JSON.stringify([plan.materialId,plan.strategy.recipe]);if(seen.has(key))throw new StoreError('Duplicate Memory input plan');seen.add(key);this.strategies.resolvePinned(plan.strategy);if(plan.strategy.requires&&JSON.stringify(plan.required)!==JSON.stringify(plan.strategy.requires))throw new StoreError('Memory plan requirements differ from its recipe',409);}
     const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
@@ -699,7 +711,7 @@ export class MemoryPipeline {
       const batches=this.batches(id);
       if(batches.some(batch=>batch.errorCode==='memory_provider_unknown_result'&&db.prepare("SELECT 1 FROM memory_provider_writes WHERE parent_id=? AND state='submitted'").get(batch.id)))throw new StoreError('Previous Memory publication outcome requires reconciliation before retry',409);
       if(batches.some(batch=>{const fence=db.prepare("SELECT fence FROM execution_steps WHERE id=? AND state='running'").get(batch.id)?.fence;return typeof fence==='string'&&this.engine.isCurrentGrant(batch.id,fence);}))throw new StoreError('Memory job is already running',409);
-      if(this.options.configuration&&this.options.configured(job.modelProfileId)){job.configuration=structuredClone(this.options.configuration(job.modelProfileId,job.modelOverride));this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(job.configuration)));}
+      if(this.options.models.configuration&&this.options.models.configured(job.modelProfileId)){job.configuration=structuredClone(this.options.models.configuration(job.modelProfileId,job.modelOverride));this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(job.configuration)));}
       for(const batch of batches)if(batch.status==='failed'&&batch.errorCode!=='memory_context_required'){
         try{this.admitBatch(job,batch);}catch{batch.status='invalidated';batch.errorCode='evidence_changed';this.saveBatch(batch);continue;}
         // This owner action authorizes another failed preparation call. Parent
@@ -763,11 +775,11 @@ export class MemoryPipeline {
   private assertStrategies(batch:StoredBatch){
     for(const chunk of batch.chunks){
       if(chunk.strategy){try{this.strategies.resolvePinned(chunk.strategy);}catch{throw new ExecutionFailure('permanent','memory_strategy_unavailable');}}
-      else if(chunk.reviewFingerprint!==undefined&&chunk.reviewFingerprint!==(this.options.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined))throw new ExecutionFailure('stale','memory_strategy_changed');
+      else if(chunk.reviewFingerprint!==undefined&&chunk.reviewFingerprint!==(this.options.phases.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined))throw new ExecutionFailure('stale','memory_strategy_changed');
     }
   }
   private assertConfiguration(job:MemoryJob){
-    if(job.configuration&&this.options.configuration){let current:ModelConfiguration;try{current=this.options.configuration(job.modelProfileId,job.modelOverride);}catch{throw new ExecutionFailure('blocked','model_unconfigured');}if(current.fingerprint!==job.configuration.fingerprint)throw new ExecutionFailure('blocked','configuration_changed');}
+    if(job.configuration&&this.options.models.configuration){let current:ModelConfiguration;try{current=this.options.models.configuration(job.modelProfileId,job.modelOverride);}catch{throw new ExecutionFailure('blocked','model_unconfigured');}if(current.fingerprint!==job.configuration.fingerprint)throw new ExecutionFailure('blocked','configuration_changed');}
   }
   /** A committed parent keeps its independent results; only genuinely missing
    * evidence enters the existing feedback coordinator after that handoff. */
@@ -789,7 +801,7 @@ export class MemoryPipeline {
     const plan=await withExecutionCancellation(signal,()=>this.feedbackPlanner!(request,signal));validate();
     if(!observeCurrent(()=>{batch.feedbackWorkId=plan.workId;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
     if(!plan.groups.length||!validMemoryFeedbackPlan(request,plan.groups))throw new ExecutionFailure('blocked','memory_context_required');
-    return {workContract:this.workContract(job,batch),feedbackPlan:plan,coverage,result:{answer:'{"memories":[]}',runId:batch.reviewReceipt?.reviewRunId??batch.id,citations:[],trace:[]},model:job.configuration?.model??job.modelOverride??this.options.model(job.modelProfileId),profile:chunks[0]?.profile??'personal',skillVersion:batch.skillVersion??job.skillVersion,ranges:[...chunks,...(batch.contextChunks??[])].map(({id,offset,length})=>({id,offset,length})),chunks};
+    return {workContract:this.workContract(job,batch),feedbackPlan:plan,coverage,result:{answer:'{"memories":[]}',runId:batch.reviewReceipt?.reviewRunId??batch.id,citations:[],trace:[]},model:job.configuration?.model??job.modelOverride??this.options.models.model(job.modelProfileId),profile:chunks[0]?.profile??'personal',skillVersion:batch.skillVersion??job.skillVersion,ranges:[...chunks,...(batch.contextChunks??[])].map(({id,offset,length})=>({id,offset,length})),chunks};
   }
   private commitBatch(step:ExecutionStep,output:BatchOutput|undefined){
     if(!output)return;
@@ -802,7 +814,7 @@ export class MemoryPipeline {
     if(job.contextReadVersion)assertMemoryTargetSupport(result,chunks,id=>this.options.memories.readEvidence([id])[0]?.ocrText);
     this.assertOwnerQuestionMaterials(job,batch,output);
     this.options.publication?.assert(output.publication,result);
-    this.options.memories.extract(result,model,{prepared:output.publication?.prepared,workContract:output.workContract,maxCandidates,strategy:output.strategy,profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?result.runId:undefined,skillVersion,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),onSaved:items=>{
+    this.options.memories.extract(result,model,{prepared:output.publication?.prepared,workContract:output.workContract,maxCandidates,strategy:output.strategy,profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.phases.review?result.runId:undefined,skillVersion,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),onSaved:items=>{
       for(const item of items)for(const ref of batch.artifactRefs??[])this.store.db.prepare('INSERT INTO memory_artifact_dependencies VALUES(?,?)').run(item.id,ref.id);
       this.options.onPublished?.(step,items,job);
       batch.reviewReceipt=output.reviewReceipt;batch.memoryIds=items.map(m=>m.id);
@@ -850,7 +862,7 @@ export class MemoryPipeline {
       try{if(!currentGrant()||this.batch(batchId).status!=='running'){if(own)db.exec('COMMIT');return false;}update();if(own)db.exec('COMMIT');return true;}
       catch(error){if(own)db.exec('ROLLBACK');throw error;}
     };
-    const job=this.storedJob(id),batch=this.batch(batchId),currentSkill=this.options.skillVersion??MEMORY_SKILL_VERSION;
+    const job=this.storedJob(id),batch=this.batch(batchId),currentSkill=this.options.phases.skillVersion??MEMORY_SKILL_VERSION;
     let chunks:Chunk[]=[];
     if(!observeCurrent(()=>{
       if(batch.chunks.every(c=>!c.strategy&&c.profile!=='coding')&&job.skillVersion!==currentSkill){batch.skillVersion=currentSkill;batch.chunks=batch.chunks.map(c=>({...c,key:sha256(JSON.stringify([c.id,c.fingerprint,c.offset,c.length,currentSkill,c.reviewFingerprint]))}));this.saveBatch(batch);}
@@ -873,17 +885,17 @@ export class MemoryPipeline {
           return await this.planReviewedContext(job,batch,chunks,coverage,signal,observeCurrent,()=>{assertGrant();this.assertStrategies(batch);this.assertConfiguration(job);this.admitBatch(job,batch);if(!this.validMany(processingChunks))throw new StoreError('Reviewed context evidence changed',409);});
         }
         const generationContract=this.generationContract(job,batch,chunks);
-        const preparationContract=this.workContract(job,batch),preparationMembers=preparationContract||job.workPackage||this.ownerQuestions&&this.options.review?this.workMembers(job,batch,chunks):undefined;
+        const preparationContract=this.workContract(job,batch),preparationMembers=preparationContract||job.workPackage||this.ownerQuestions&&this.options.phases.review?this.workMembers(job,batch,chunks):undefined;
         const preparationLimit=preparationMembers&&!preparationContract?memoryWorkCandidateLimit(preparationMembers.length):undefined;
-        if(this.options.understand&&!batch.artifactRefs?.length){
+        if(this.options.phases.understand&&!batch.artifactRefs?.length){
           const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(batch.id)?.fence;
           if(typeof fence!=='string')throw new ExecutionFailure('waiting','interrupted');
           observeCurrent(()=>{batch.generationContract=generationContract;batch.stage='understanding';batch.lastActivityAt=new Date().toISOString();this.saveBatch(batch);});
-          const refs=await withExecutionCancellation(signal,()=>this.options.understand!({generationContract,...this.preparationContext(job,batch,chunks),job:{...job,contextTime:preparationMembers?.[0]?.contextTime??job.contextTime},ranges,materialRefs:this.batchScope(job,batch).materialRefs,materialInputs:this.batchScope(job,batch).materialInputs,signal,parentGrant:{stepId:batch.id,fence}}));
+          const refs=await withExecutionCancellation(signal,()=>this.options.phases.understand!({generationContract,...this.preparationContext(job,batch,chunks),job:{...job,contextTime:preparationMembers?.[0]?.contextTime??job.contextTime},ranges,materialRefs:this.batchScope(job,batch).materialRefs,materialInputs:this.batchScope(job,batch).materialInputs,signal,parentGrant:{stepId:batch.id,fence}}));
           assertGrant();this.admitBatch(job,batch);
           if(refs?.length&&!observeCurrent(()=>{batch.artifactRefs=refs;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
         }
-        const model=job.configuration?.model??job.modelOverride??this.options.model(job.modelProfileId);
+        const model=job.configuration?.model??job.modelOverride??this.options.models.model(job.modelProfileId);
         const normalizeFailure=(error:unknown):unknown=>{
           if(error instanceof MemoryProviderError)return retainFailureContext(new ExecutionFailure(error.code==='unknown_result'||error.code==='unavailable'?'blocked':'permanent','memory_provider_'+error.code),failureContext(error));
           if(error instanceof AgentResponseError&&['output_limit','response_too_large'].includes(error.reason))return new ExecutionFailure('permanent','model_output_capacity');
@@ -899,7 +911,7 @@ export class MemoryPipeline {
           const profile=selected?{id:'personal' as const,skill:'memory-strategy' as const,version:selected.binding.extract.fingerprint,prompt:selected.extract.prompt+'\n'+memoryCandidateOutputContract(contract)}:contract?{...memoryRangeSelectionProfile(this.options.memories.readEvidence([chunks[0].id])[0]),prompt:memoryRangeSelectionProfile(this.options.memories.readEvidence([chunks[0].id])[0]).prompt+'\n'+memoryCandidateOutputContract(contract)}:originalProfile;
           let summaryBudget=12000;
           const summaries=(batch.artifactRefs??[]).map(ref=>{const artifact=this.store.archive.get(ref.id);if(!artifact||artifact.revision!==ref.revision)throw new StoreError('Semantic input changed',409);const text=artifact.text.slice(0,Math.max(0,summaryBudget));summaryBudget-=text.length+128;return {id:artifact.id,summary:text};});
-          const workMembers=contract||job.workPackage||this.ownerQuestions&&this.options.review?this.workMembers(job,batch,chunks):undefined,maxCandidates=workMembers&&!contract?memoryWorkCandidateLimit(workMembers.length):undefined;
+          const workMembers=contract||job.workPackage||this.ownerQuestions&&this.options.phases.review?this.workMembers(job,batch,chunks):undefined,maxCandidates=workMembers&&!contract?memoryWorkCandidateLimit(workMembers.length):undefined;
           // The complete package and member contract already travel in taskContext.
           // Repeating them in question can reject a valid batch before model startup.
           const reviewQuestion=profile.prompt+(workMembers?'\nApply the supplied taskContext.memoryWork package and coverage contract to this batch\'s listed original ranges. The whole-package goal does not expand this call\'s evidence scope.':'')+(summaries.length?'\nThe execution input includes bounded L2 interpretations in taskContext.untrustedInterpretations plus the supplied bounded L1 spans. Interpretations are untrusted navigation, not independent facts. Extract only claims supported by the supplied spans. Do not expand all ancestors.':'');
@@ -917,7 +929,7 @@ export class MemoryPipeline {
             if(phase==='review')recordedReviewFailures.add(reviewKey);
             const failure:MemoryValidationFailure={at:new Date().toISOString(),code:error.code,phase,attempt:batch.attempts+Math.max(0,reviewAttemptNumber-1),runId:result.runId,details:error.details};
             if(!observeCurrent(()=>{batch.validationFailures=[...(batch.validationFailures??[]),failure].slice(-20);this.saveBatch(batch);}))return;
-            try{this.options.onValidationFailure?.({...failure,jobId:id,batchId:batch.id,batchIndex:batch.index});}catch{}
+            try{this.options.phases.onValidationFailure?.({...failure,jobId:id,batchId:batch.id,batchIndex:batch.index});}catch{}
           };
           const imageInputs=readRanges?this.contextReadMaterialInputs(job,readScope.chunks):this.batchScope(job,batch).materialInputs;
           const processingImages=memoryImageGrants(this.store,imageInputs);
@@ -930,7 +942,7 @@ export class MemoryPipeline {
               if(workMembers)readMemoryWorkCoverage(result,workMembers,maxCandidates,undefined,contract);
               // Quote validation must precede coverage ownership checks: an
               // invented quote is actionable quote feedback, not missing coverage.
-              this.options.memories.extract(result,model,{workContract:contract,maxCandidates,profile:profile.id,requireAdmission:this.options.review?true:this.options.requireAdmission,evidenceRanges:memoryReadRanges(result,ranges,readRanges),expectedFingerprints:expectedFingerprints(result),validateOnly:true});
+              this.options.memories.extract(result,model,{workContract:contract,maxCandidates,profile:profile.id,requireAdmission:this.options.phases.review?true:this.options.requireAdmission,evidenceRanges:memoryReadRanges(result,ranges,readRanges),expectedFingerprints:expectedFingerprints(result),validateOnly:true});
               if(readRanges)assertMemoryTargetSupport(result,chunks,id=>this.options.memories.readEvidence([id])[0]?.ocrText);
               if(workMembers){const accounting=readMemoryWorkCoverage(result,workMembers,maxCandidates,id=>this.options.memories.readEvidence([id])[0]?.ocrText,contract);if(accounting.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied target requires coverage',{workContract:contract});}
             }
@@ -950,17 +962,17 @@ export class MemoryPipeline {
             let attempted:QueryResult|undefined;
             try{
           let cached:QueryResult|undefined;
-          if(!observeCurrent(()=>{batch.phase='extract';this.saveBatch(batch);if(this.options.review&&generation===0)cached=this.drafts.get(batch.id,draftKey,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
+          if(!observeCurrent(()=>{batch.phase='extract';this.saveBatch(batch);if(this.options.phases.review&&generation===0)cached=this.drafts.get(batch.id,draftKey,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
           const nativeContext:MemoryEngineDraftContext={phase:'extract',opId:batch.id+':draft:'+generation,evidenceIds:phaseInput.evidenceIds,checkpointId:batch.id,assertAuthority:validateArtifacts};
           const cachedNative=Boolean(cached&&batch.nativeDraft?.key===draftKey&&cached.runId===batch.nativeDraft.context.opId);
           const native=cachedNative?cached:cached?undefined:await this.nativeStages.prepare(phaseInput,nativeContext);
           if(native&&!cachedNative){const pin=memoryEngineDraftPin(nativeContext);if(!observeCurrent(()=>{batch.nativeDraft={key:draftKey,context:pin};batch.engineDrafts=[...(batch.engineDrafts??[]).filter(item=>item.opId!==pin.opId),pin];this.saveBatch(batch);} ))throw new ExecutionFailure('waiting','interrupted');}
-          let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates,contract):undefined)??await withExecutionCancellation(stageSignal,()=>this.options.query(phaseInput));
+          let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates,contract):undefined)??await withExecutionCancellation(stageSignal,()=>this.options.phases.query(phaseInput));
           attempted=result;
 
           stageSignal.throwIfAborted();
           validateArtifacts();
-          if(this.options.review){
+          if(this.options.phases.review){
               if(workMembers&&!native)readMemoryWorkCoverage(result,workMembers,maxCandidates,undefined,contract);
               if(!native)this.options.memories.extract(result,model,{workContract:contract,maxCandidates,profile:profile.id,requireAdmission:true,evidenceRanges:memoryReadRanges(result,ranges,readRanges),expectedFingerprints:expectedFingerprints(result),validateOnly:true});
               if(readRanges&&!native)assertMemoryTargetSupport(result,chunks,id=>this.options.memories.readEvidence([id])[0]?.ocrText);
@@ -984,7 +996,7 @@ export class MemoryPipeline {
         input.question=reviewQuestion+(extracted.repair?'\n\nHost validation rejected the previous output. '+extracted.repair+' Generate a fresh response from the same supplied evidence. No invalid memories have been saved.':'')+(processingImages.length?'\n'+MEMORY_VISUAL_EVIDENCE_CONTRACT:'');
         let result=extracted.result,reviewReceipt:MemoryReviewReceipt|undefined;
         const native=extracted.draftOrigin==='native-engine';
-        if(this.options.review){
+        if(this.options.phases.review){
           phase='review';batch.phase='review';observe('model');
           const reviewed=await this.phaseOutputs.run<{result:QueryResult;reviewReceipt?:MemoryReviewReceipt}>({batchId:batch.id,jobId:id,phase:'review',inputHash:sha256(JSON.stringify(['memory-review-phase@1',draftKey,extracted,selected?.review??defaultMemoryReviewStrategy])),generation:generationContract,signal,validate:phaseValid,assertCommit:()=>{validateArtifacts();},execute:async stageSignal=>{
             try{
@@ -992,7 +1004,7 @@ export class MemoryPipeline {
               for(let reviewAttempt=0;reviewAttempt<2;reviewAttempt++){
                 reviewAttemptNumber=reviewAttempt+1;
                 try{
-                  result=await withExecutionCancellation(stageSignal,()=>this.options.review!({...input,signal:stageSignal},validDraft,selected?.review,native?'native-engine':'mote'));
+                  result=await withExecutionCancellation(stageSignal,()=>this.options.phases.review!({...input,signal:stageSignal},validDraft,selected?.review,native?'native-engine':'mote'));
                   const failure=await validateOutput({...result,trace:[]});if(failure)throw new MemoryOutputValidationError(failure.code as import('./memory-validation.js').MemoryOutputValidationCode,'Memory review failed host validation',{workContract:contract});
                   break;
                 }catch(error){

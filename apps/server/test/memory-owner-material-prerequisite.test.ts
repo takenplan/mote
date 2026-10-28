@@ -34,16 +34,15 @@ async function fixture(t:TestContext){
     store.db.exec(`CREATE TABLE IF NOT EXISTS memory_plan_binding(id INTEGER PRIMARY KEY CHECK(id=1),json TEXT NOT NULL);CREATE TABLE IF NOT EXISTS memory_provider_receipts(id TEXT PRIMARY KEY,json TEXT NOT NULL);`);
     store.db.prepare('INSERT OR IGNORE INTO memory_plan_binding VALUES(1,?)').run(JSON.stringify(binding));
     publication=new MemoryPublication(store,memories,bindings);
-    pipeline=new MemoryPipeline({store,memories,publication,model:()=> 'generated-model',configured:()=>true,requireAdmission:true,
-      query:async()=>{modelCalls++;throw Error('Built-in extraction must not run beside the native fixture');},
+    pipeline=new MemoryPipeline({store,memories,publication,requireAdmission:true,
       nativeStages:{prepare:async(_input,context)=>{nativeCalls++;context.provider={instanceId:namespace.instanceId,configurationIdentity:'generated-fixed-configuration',namespace};return {runId:context.opId,answer:'{"memories":[]}',citations:[],trace:[]};},
-      settle:async()=>{}},
+      settle:async()=>{}},models:{model:()=> 'generated-model',configured:()=>true},phases:{
+      query:async()=>{modelCalls++;throw Error('Built-in extraction must not run beside the native fixture');},
       review:async(input,draft,_strategy,origin)=>reviewMemory(input,draft,async reviewInput=>{
         reviewCalls++;assert.equal(reviewInput.traceContext?.phase,'review');
         const members=(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members,record=memories.readEvidence([originalId])[0];
         return {runId:randomUUID(),answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Are you the speaker describing the generated telescope?',choices:[],reason:'The generated original does not establish owner correspondence.',evidence:[{id:member.id,quote:record.ocrText}]}})),...fixtureMemoryCapacity(input)}),citations:[{id:originalId,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[]};
-      },{draftOrigin:origin}),
-    });
+      },{draftOrigin:origin})}});
     questions=new OwnerQuestions(store);
     disposeQuestions=installMemoryOwnerQuestions({questions,pipeline,materials:new MaterialStore(store),store,query:async()=>{throw Error('No owner question or reply can be created without its published Material');}});
   }
