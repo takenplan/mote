@@ -1,3 +1,4 @@
+import {parseRawPageCursor,encodeRawPageCursor} from './raw-page-cursor.js';
 import {createHash} from 'node:crypto';
 import type {RawCollectionRef,RawPageRequest,RawPageResult,RawReadRequest,RawReadResult,RawReader,RawRef} from './raw-reader.js';
 import {MAX_RAW_PAGE_ITEMS,MAX_RAW_READ_BYTES} from './raw-reader.js';
@@ -34,15 +35,6 @@ export type FileRawAccess={
   mayListSourceFiles:(sourceId:string)=>boolean;
   mayListArchivedFiles:()=>boolean;
 };
-type Cursor={collectionRef:string;snapshot:string;offset:number};
-function parseCursor(value:string):Cursor|undefined {
-  if(value.length>12000)return;
-  try {
-    const parsed=JSON.parse(Buffer.from(value,'base64url').toString()) as Partial<Cursor>;
-    if(typeof parsed.collectionRef!=='string'||typeof parsed.snapshot!=='string'||!digest.test(parsed.snapshot)||!Number.isSafeInteger(parsed.offset)||parsed.offset!<0)return;
-    return parsed as Cursor;
-  }catch{return;}
-}
 function parseCollection(value:string):{kind:'source';sourceId:string}|{kind:'archived'}|undefined {
   if(value===archivedCollection)return {kind:'archived'};
   if(!value.startsWith(sourceCollectionPrefix)||value.length>500)return;
@@ -116,7 +108,7 @@ export class FileRawReader implements RawReader {
     if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_RAW_PAGE_ITEMS)return {status:'limit_exceeded',maxItems:MAX_RAW_PAGE_ITEMS};
     const collection=parseCollection(request.collectionRef);if(!collection)return {status:'unavailable'};
     if(collection.kind==='source'&&!this.permitted(()=>this.access.mayListSourceFiles(collection.sourceId))||collection.kind==='archived'&&!this.permitted(()=>this.access.mayListArchivedFiles()))return {status:'unavailable'};
-    const cursor=request.cursor?parseCursor(request.cursor):undefined;
+    const cursor=request.cursor?parseRawPageCursor(request.cursor):undefined;
     if(request.cursor&&!cursor||cursor&&cursor.collectionRef!==request.collectionRef)return {status:'invalid_cursor'};
     const offset=cursor?.offset??0,items:{ref:RawRef;observedAt:string}[]=[],hash=createHash('sha256').update(request.collectionRef);let total=0;
     if(collection.kind==='source'){
@@ -136,6 +128,6 @@ export class FileRawReader implements RawReader {
     if(cursor&&cursor.snapshot!==snapshot)return {status:'stale_cursor'};
     if(offset>total)return {status:'invalid_cursor'};
     const nextOffset=offset+items.length;
-    return {status:'available',items,nextCursor:nextOffset<total?Buffer.from(JSON.stringify({collectionRef:request.collectionRef,snapshot,offset:nextOffset})).toString('base64url'):null,snapshot,total};
+    return {status:'available',items,nextCursor:nextOffset<total?encodeRawPageCursor(request.collectionRef,snapshot,nextOffset):null,snapshot,total};
   }
 }
