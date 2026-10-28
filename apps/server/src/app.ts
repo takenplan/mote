@@ -799,11 +799,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     const windows=lifecycle.view().extensions.filter(extension=>['extraction','consolidation'].includes(extension.id)&&extension.active&&extension.status!=='cancelled').length;return jobs+windows+memoryPublication.pending()+cancelledMemoryWork();
   };
   memoryAutomation.onResume=()=>lifecycle.skipAutomaticBacklog();
-  memoryAutomation.onStop=()=>{
+  memoryAutomation.onStop=()=>executor.deferLocalEffects(()=>{
     store.db.prepare('UPDATE memory_input_authorizations SET revoked_at=? WHERE authorized=1 AND revoked_at IS NULL').run(Date.now());
     for(const row of store.db.prepare("SELECT id FROM memory_jobs WHERE (json_extract(json,'$.automaticGrant') IS NOT NULL OR json_array_length(json_extract(json,'$.automaticGrants'))>0) AND json_extract(json,'$.status') NOT IN ('completed','cancelled')").all())memoryPipeline.cancel(String(row.id),{cause:'authority'});
     for(const extension of lifecycle.view().extensions)if(['extraction','consolidation'].includes(extension.id)&&extension.active&&!extension.active.manual)lifecycle.cancel(extension.id,extension.active.id,{cause:'authority'});
-  };
+  });
   memoryAutomation.counts=()=>{
     const counts={queued:0,running:0,checkpointed:0,resultUnknown:0};
     const jobs=new Set<string>();

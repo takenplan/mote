@@ -10,6 +10,7 @@ import {SourceStore} from '../src/sources.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryPublication} from '../src/memory-publication.js';
 import {MemoryPhaseOutputs} from '../src/memory-phase-outputs.js';
+import {MemoryAutomation} from '../src/memory-automation.js';
 import {reviewMemory} from '../src/memory-review.js';
 import type {MemoryBindings} from '../src/memory-bindings.js';
 import {type MemoryEngineDraftPin} from '../src/memory-pipeline.js';
@@ -187,4 +188,27 @@ for (const state of ['failed', 'stale', 'cancelled', 'blocked']) test(`restart r
   assert.equal(f.store.db.prepare("SELECT count(*) n FROM memory_engine_stage_cleanups WHERE state='pending'").get()!.n, 0);
   assert.equal(JSON.stringify(f.memories.get(completed.memoryIds[0])), canonical);
   assert.deepEqual(f.calls(), {nativeCalls: 1, reviewCalls: 1, modelCalls: 0});
+});
+
+
+test('native stop cleanup wakes only after commit and a tail SQL failure leaves its stage pinned', async t => {
+  const f = await fixture(t); f.control.holdNative = true;
+  const job = f.create(), run = f.pipeline.run(job.id); await f.started;
+  const control = new MemoryAutomation(f.store), engine = f.pipeline.engine, db = f.store.db;
+  control.onStop = () => engine.deferLocalEffects(() => {f.pipeline.cancel(job.id, {cause: 'authority'});});
+  const command = {operationId: randomUUID(), expectedRevision: control.state().revision};
+  const before = db.prepare('SELECT * FROM memory_engine_stage_drafts').all(); assert.equal(before.length, 1);
+  let wakes = 0; const tick = engine.tick.bind(engine);
+  engine.tick = () => {wakes++; return tick();};
+  db.exec("CREATE TEMP TRIGGER generated_native_stop_tail BEFORE INSERT ON memory_control_commands BEGIN SELECT RAISE(ABORT,'Generated native stop tail failure'); END");
+  assert.throws(() => control.command('stop', command), /Generated native stop tail failure/);
+  assert.equal(wakes, 0, 'native stage cancellation cannot wake executor recovery inside the rollback transaction');
+  assert.deepEqual(db.prepare('SELECT * FROM memory_engine_stage_drafts').all(), before);
+  assert.equal(db.prepare('SELECT count(*) n FROM memory_engine_stage_cleanups').get()!.n, 0);
+  assert.equal(f.pipeline.get(job.id).status, 'running'); assert.equal(f.cleanupPins.length, 0);
+  db.exec('DROP TRIGGER generated_native_stop_tail'); f.control.failCleanup = false;
+  control.command('stop', command); assert.ok(wakes > 0); assert.equal(f.pipeline.get(job.id).status, 'cancelled');
+  f.release(); await run; await f.finishCleanup();
+  assert.ok(f.cleanupPins.length); assert.equal(f.memories.list().length, 0);
+  assert.deepEqual(f.calls(), {nativeCalls: 1, reviewCalls: 0, modelCalls: 0});
 });

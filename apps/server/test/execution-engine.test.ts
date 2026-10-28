@@ -149,3 +149,35 @@ test('a locally expired lease waits for its old physical task to settle before r
  }finally{release();}
  await running;await engine.drain([id]);assert.equal(calls,2);assert.deepEqual(commits,[2]);assert.equal(engine.get(id)!.state,'succeeded');assert.equal(engine.get(id)!.attempts,1);
 });
+
+test('nested stop effects follow the outer commit once, discard rollback wakes and finish cleanup after one effect fails',async t=>{
+ const {engine,store}=await fixture(t);let entered!:()=>void,release!:()=>void,signal!:AbortSignal,commits=0,wakes=0;
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ t.after(()=>release());
+ engine.register({...base,execute:async(_step,current)=>{signal=current;entered();await held;return null;},commit:()=>{commits++;}});
+ const id=engine.enqueue('generated-stop-effects','fixture',{}),running=engine.drain([id]);await started;
+ const db=store.db,before=engine.get(id);
+ db.exec('BEGIN IMMEDIATE');
+ assert.throws(()=>engine.deferLocalEffects(()=>{
+  engine.localEffect(()=>wakes++);
+  const inner=engine.deferLocalEffects(()=>engine.cancel(id));inner();
+  assert.equal(signal.aborted,false);throw Error('Generated transaction tail failure');
+ }),/Generated transaction tail failure/);
+ db.exec('ROLLBACK');
+ await new Promise<void>(resolve=>queueMicrotask(resolve));
+ assert.equal(signal.aborted,false);assert.equal(wakes,0);assert.deepEqual(engine.get(id),before);
+ // A caught nested error must discard its notifications even when its parent
+ // later succeeds. Here the nested participant has no durable write to undo.
+ db.exec('BEGIN IMMEDIATE');
+ const afterCommit=engine.deferLocalEffects(()=>{
+  assert.throws(()=>engine.deferLocalEffects(()=>{engine.localEffect(()=>wakes+=100);throw Error('Generated rejected participant');}),/Generated rejected participant/);
+  engine.localEffect(()=>{throw Error('Generated local failure');});
+  const inner=engine.deferLocalEffects(()=>{engine.cancel(id);engine.localEffect(()=>{assert.equal(db.isTransaction,false);wakes++;});});
+  inner();assert.equal(signal.aborted,false);
+ });
+ assert.equal(engine.get(id)!.state,'cancelled');assert.equal(wakes,0);db.exec('COMMIT');
+ assert.throws(afterCommit,error=>error instanceof AggregateError&&error.errors.length===1);
+ assert.equal(signal.aborted,true);assert.equal(wakes,1,'one failing cleanup cannot skip later cleanup');
+ afterCommit();assert.equal(wakes,1,'the returned cleanup is consumed once');
+ release();await running;assert.equal(commits,0);assert.equal(engine.get(id)!.state,'cancelled');
+});
