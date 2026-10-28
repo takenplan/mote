@@ -1,3 +1,4 @@
+import {createMemoryModelAuthorityJobReader} from './memory-model-authority.js';
 import {createQueryPreparation,type SavedQuery} from './query-preparation.js';
 import {createModelEvidenceAuthority,contextFailure} from './model-evidence-authority.js';
 import type {QueryAgent} from './query-agent.js';
@@ -158,6 +159,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const store=dependencies?.store??new Store(config.dataDir,{dataKey:config.dataKey,contentEncryptionEnabled:config.contentEncryptionEnabled,maxStorageBytes:config.maxStorageBytes,embeddingEnabled:Boolean(config.embeddingModel),maintenance:Boolean(dependencies?.backgroundWorker)});
   if(!dependencies?.store)resources.defer(()=>store.close());
   assertCurrentDelegationSchema(store);
+  const memoryModelAuthorityJobs=createMemoryModelAuthorityJobReader(store);
   let availableModelConnections=():ModelConnection[]=>[];
   const modelAuthorization=new BackgroundModelAuthorization(store,()=>availableModelConnections());
   resources.defer(()=>modelAuthorization.close());
@@ -590,9 +592,8 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const activeQueries=new Set<Promise<QueryResult>>();
   resources.defer(async()=>{closing=true;await Promise.allSettled([...activeQueries]);});
   function withQueryModelAuthority<T>(input:QueryInput,moduleId:string,task:(signal:AbortSignal)=>Promise<T>){
-    const row=input.traceContext?.jobId?store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(input.traceContext.jobId):undefined;
-    const job=row?JSON.parse(String(row.json)) as import('./memory-pipeline.js').MemoryJob:undefined;
-    const grants=job?.automaticGrants??(job?.automaticGrant?[job.automaticGrant]:[]);
+    const job=input.traceContext?.jobId?memoryModelAuthorityJobs.modelAuthorityJob(input.traceContext.jobId):undefined;
+    const grants=job?.automaticGrants??[];
     const candidates=()=>grants.length?grants.map(grant=>sourceModelIdentity(grant.sourceId,grant.inputKey)):job?modelAuthorizationHost.evidenceTriggers(job.evidenceIds):modelAuthorizationHost.queryTriggers(input);
     // Each owner-selected recipe is an independent prospective consumer. Its
     // immutable input grant scope prevents one sibling from consuming another's
