@@ -60,6 +60,35 @@ test('direct Agent expansion preserves the source protocol through bounded evide
  assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[id],deviceId:'another-device'})),[]);
 });
 
+test('shared read grants agree across HTTP MCP and Agent while owner archive access retains unexposed and withdrawn originals',async t=>{
+ const {app,store,sources,materialOrganizer,agentReader,call,ownerRead}=await fixture(t);
+ materialOrganizer.tick=async()=>0;
+ sources.register({id:'generated-port-source',name:'Generated read-port source',kind:'custom',deviceId:'generated-device',platform:'import'});
+ const item={externalId:'generated-port-item',revision:'1',observedAt:'2026-09-20T01:00:00.000Z',title:'Generated common original',text:'Generated common-grant body',kind:'message',layer:'original'};
+ const original=await sources.upsert('generated-port-source',item),ref='capture:'+original.id;
+ const owner=await app.inject({url:'/api/captures/'+original.id+'?deviceId=generated-device',headers});
+ assert.equal(owner.statusCode,200,owner.body);
+ const mcp=await call('mote_evidence',{ids:[ref],deviceId:'generated-device'}),agent=await ownerRead(()=>agentReader.evidence({ids:[original.id],deviceId:'generated-device'}));
+ assert.deepEqual(mcp.map((record:any)=>({id:record.id,text:record.text})),[{id:original.id,text:owner.json().ocrText}]);
+ assert.deepEqual(agent.map(record=>({id:record.id,text:record.ocrText})),[{id:original.id,text:item.text}]);
+ assert.equal((await app.inject({url:'/api/captures/'+original.id+'?deviceId=outside',headers})).statusCode,404);
+ assert.deepEqual(await call('mote_evidence',{ids:[ref],deviceId:'outside'}),[]);
+ assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[original.id],deviceId:'outside'})),[]);
+
+ const screen=randomUUID();
+ await store.ingest({id:screen,deviceId:'generated-device',deviceName:'Generated device',platform:'macos',source:'screen',capturedAt:'2026-09-20T02:00:00.000Z',durationMs:1000,ocrText:'Generated undisclosed screen body'});
+ const ownerScreen=await app.inject({url:'/api/captures/'+screen,headers});
+ assert.equal(ownerScreen.statusCode,200,ownerScreen.body);assert.equal(ownerScreen.json().ocrText,'Generated undisclosed screen body');
+ assert.deepEqual(await call('mote_evidence',{ids:['capture:'+screen]}),[],'MCP has no trusted original-expansion grant for a known screen UUID');
+ assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[screen]})),[],'the internal Agent also needs its own current Material or segment expansion grant');
+
+ await sources.upsert('generated-port-source',{...item,revision:'2',observedAt:'2026-09-20T03:00:00.000Z',text:'',deleted:true});
+ const retained=await app.inject({url:'/api/captures/'+original.id,headers});
+ assert.equal(retained.statusCode,200,retained.body);assert.equal(retained.json().ocrText,item.text,'owner history retains the exact immutable original');
+ assert.deepEqual(await call('mote_evidence',{ids:[ref]}),[],'a source tombstone revokes external model disclosure');
+ assert.deepEqual(await ownerRead(()=>agentReader.evidence({ids:[original.id]})),[],'a source tombstone also revokes internal model disclosure');
+});
+
 test('Web, MCP and Agent share ranked refs and scoped expansions across 400 generated days',async t=>{
  const {app,store,sources,materialOrganizer,agentReader,call,client,ownerRead}=await fixture(t);
  // This test pages raw source items. Keep the timer from replacing that corpus

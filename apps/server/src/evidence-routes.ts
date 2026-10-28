@@ -1,15 +1,17 @@
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {z} from 'zod';
 import {evidenceRefId,formatEvidenceRef} from '@mote/shared';
-import type {EvidenceReader} from './evidence-reader.js';
+import type {CaptureRead,MemoryRead} from './evidence-read-ports.js';
+import type {Store} from './store.js';
 import {navigationScopeSchema} from './context-navigation.js';
 import {StoreError} from './store.js';
 import type {Memory} from './memory-schema.js';
+type OwnerEvidenceRead=Pick<CaptureRead,'archivedEvidence'|'imageReference'> & Pick<MemoryRead,'memoryAsync'|'memoryPageAsync'> & {readonly store:Pick<Store,'image'>};
 
 function memoryText(m:Memory){return `# ${m.title}\n\n${m.statement}\n\n## Uncertainty\n\n${m.uncertainty}\n\n## Provenance\n\nStatus: ${m.status}\nTier: ${m.tier??'episode'}\nKind: ${m.kind??'episodic'}\nModel: ${m.model}\nSkill: ${m.skillVersion??'unknown'}\n\n${(m.evidence??[]).map(e=>`- ${e.id} (${e.occurredAt??e.recordedAt??e.capturedAt})${e.quote?'\n  '+e.quote.replaceAll('\n','\n  '):''}`).join('\n')}\n`;}
 
 /** Owner authorization remains in the app hook; query filters can only narrow a read. */
-export function registerEvidenceRoutes(app:FastifyInstance,reader:EvidenceReader){
+export function registerEvidenceRoutes(app:FastifyInstance,reader:OwnerEvidenceRead){
  const capture=(req:FastifyRequest)=>{
   const value=reader.archivedEvidence([formatEvidenceRef('capture',z.string().uuid().parse((req.params as {id:string}).id))],navigationScopeSchema.parse(req.query))[0];
   if(!value)throw new StoreError('Capture not found',404);return value;

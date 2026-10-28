@@ -68,6 +68,23 @@ test('owner HTTP reads use real external bodies; provider failure cannot become 
  await assert.rejects(exportBoundMemories(f.bindings),{statusCode:502});
 });
 
+test('owner HTTP rejects changed provider bodies, revisions and retrieval namespaces while the SQL copy stays readable',async t=>{
+ const f=await fixture(t),{memory}=await f.add();f.bind();
+ const read=f.provider.read.bind(f.provider),search=f.provider.search.bind(f.provider);
+ for(const change of [(value:Memory)=>({...value,statement:'Generated corrupt transport body'}),(value:Memory)=>({...value,version:value.version+1})]){
+  const intercepted=t.mock.method(f.provider,'read',async(input:Parameters<typeof read>[0])=>{const body=await read(input);assert.ok(body);return change(body);});
+  const response=await f.app.inject({url:'/api/memories/'+memory.id});
+  assert.equal(response.statusCode,502,response.body);
+  assert.deepEqual(f.reader.memories.get(memory.id),memory,'a valid SQL body must not mask an invalid external result');
+  intercepted.mock.restore();
+ }
+ const intercepted=t.mock.method(f.provider,'search',async(input:Parameters<typeof search>[0])=>(await search(input)).map(hit=>({...hit,namespace:{...hit.namespace,ownerId:'generated-other-owner'}})));
+ const crossed=await f.app.inject({url:'/api/memories?query=observatory&level=detail'});
+ assert.equal(crossed.statusCode,502,crossed.body);intercepted.mock.restore();
+ const verified=await f.app.inject({url:'/api/memories/'+memory.id});
+ assert.equal(verified.statusCode,200,verified.body);assert.deepEqual(verified.json(),memory);
+});
+
 test('one query pins namespace and body revision across cutover but rechecks a late source deletion',async t=>{
  const f=await fixture(t),{memory,evidenceId}=await f.add();f.bind();const context={},agent=f.reader.agent({diagnostics:f.diagnostics,currentGrantContext:()=>context});f.reader.retainMemorySnapshot(context);t.after(()=>f.reader.releaseMemorySnapshot(context));
  const originalRead=f.provider.read.bind(f.provider);let entered!:()=>void,release!:()=>void;const waiting=new Promise<void>(resolve=>entered=resolve),barrier=new Promise<void>(resolve=>release=resolve);

@@ -31,11 +31,8 @@ import type {MemoryBindings} from './memory-bindings.js';
 import {MemoryProviderError,memoryProviderKey,memoryProviderRecordSchema,memoryProviderNamespaceSchema,memoryBodyDigest,withMemoryHostState} from './memory-provider-contract.js';
 import {memorySchema,type Memory} from './memory-schema.js';
 import {combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
-export type MemoryReadSnapshot=ReturnType<MemoryBindings['retainSnapshot']>;
-type MemoryExposure={policy:EvidenceExposurePolicy;operation:EvidenceOperation};
-/** Host-only disclosure receipt. Catalog metadata is neither a body read nor
- * an extraction target, and its fingerprints never reach model transport. */
-export type MemoryCatalogMetadataReceipt={complete:boolean;members:{id:string;materialId?:string;sourceId?:string;attribution?:string}[];sourceContextDependencies:SourceContextDeclaration[]};
+import type {CaptureRead,MaterialRead,MemoryRead,MemoryReadSnapshots,MemoryInputSelection,MemoryReadSnapshot,MemoryReadExposure as MemoryExposure,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
+export type {MemoryReadSnapshot,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
 const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,...metadata}=context;return JSON.stringify(metadata);};
 
 export {parseEvidenceRef} from '@mote/shared';
@@ -52,7 +49,7 @@ export function withinEvidenceScope(record:CaptureRecord,scope:Range={}) {
 }
 
 /** Long-lived read-only service. Never stores credentials or a previous request's scope. */
-export class EvidenceReader {
+export class EvidenceReader implements CaptureRead,MaterialRead,MemoryRead,MemoryReadSnapshots,MemoryInputSelection {
   readonly memories:MemoryStore;
   memoryBindings?:MemoryBindings;
   private readonly memorySnapshots=new WeakMap<object,MemoryReadSnapshot>();

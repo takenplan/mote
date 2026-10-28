@@ -1,13 +1,13 @@
 import {formatEvidenceRef,type CaptureRecord} from '@mote/shared';
 import type {Store} from './store.js';
 import type {FileStore} from './files.js';
-import type {EvidenceReader} from './evidence-reader.js';
+import type {CaptureRead} from './evidence-read-ports.js';
 
 const DEVICE_LIMIT=8,RECORD_LIMIT=4;
 type Candidate={id:string;deviceId:string;deviceName:string;source:string;capturedAt:string;receivedAt:string};
 /** A bounded, rebuildable owner view over existing ingress and original identities.
  * It does not attest checksum verification, model readiness or tutorial completion. */
-export function firstDeviceData(store:Store,files:FileStore,reader:EvidenceReader){
+export function firstDeviceData(store:Store,files:FileStore,reader:Pick<CaptureRead,'evidence'|'archivedEvidence'|'imageReference'>){
  const devices=store.db.prepare(`SELECT id,json FROM devices
   WHERE json_extract(json,'$.platform') IN ('android','macos')
   ORDER BY json_extract(json,'$.lastSeenAt') DESC,id DESC LIMIT ?`).all(DEVICE_LIMIT+1);
