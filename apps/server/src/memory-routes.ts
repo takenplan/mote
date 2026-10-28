@@ -129,19 +129,19 @@ export function registerMemoryRoutes(app:FastifyInstance,{modelAuthorizationHost
     input.validateOutput=result=>{try{memoryPipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id),profile.id);memories.extract(result,profile.settings.model,{requireAdmission:true,validateOnly:true,expectedFingerprints});}catch(error){if(!(error instanceof MemoryOutputValidationError))throw error;return {code:error.code,feedback:error.repairInstruction};}};
     const context={phase:'extract' as const,opId:operationId,evidenceIds:selected.evidenceIds,assertAuthority:()=>memoryPipeline.assertAdmissibleEvidence(selected.evidenceIds,profile.id)};
     try{
-    const native=await memoryPipeline.engineDraft(input,context),draft=native??await query(input);
+    const native=await memoryPipeline.nativeStages.prepare(input,context),draft=native??await query(input);
     memoryPipeline.assertAdmissibleEvidence(draft.citations.map(c=>c.id),profile.id);
     if(!native)memories.extract(draft,profile.settings.model,{requireAdmission:true,validateOnly:true,expectedFingerprints});
     const result=await reviewExtraction(input,draft,undefined,native?'native-engine':'mote');
     const options={requireAdmission:true,expectedFingerprints,reviewRunId:memoryReviewReceipt(result)?.reviewRunId,reviewReceipt:memoryReviewReceipt(result)};
     const assert=()=>memoryPipeline.assertAdmissibleEvidence(result.citations.map(c=>c.id),profile.id);
     assert();memoryPipeline.publication?.retainOutput(operationId,{result,reviewReceipt:memoryReviewReceipt(result)},{evidenceIds:selected.evidenceIds});
-    if(native&&memoryPipeline.publication?.retainedOutput(operationId))await memoryPipeline.settleEngineDraft(context);
+    if(native&&memoryPipeline.publication?.retainedOutput(operationId))await memoryPipeline.nativeStages.settle(context);
     const publication=await memoryPipeline.publication?.stageExtract(operationId,result,profile.settings.model,options,assert);
     return memoryPipeline.withAdmissibleEvidence(result.citations.map(c=>c.id),()=>{
       memoryPipeline.publication?.assert(publication,result);const saved=memories.extract(result,profile.settings.model,{...options,prepared:publication?.prepared});memoryPipeline.publication?.committed(publication);return saved;
     },profile.id);
-    }catch(error){memoryPipeline.abandonEngineDraft(context);throw error;}
+    }catch(error){memoryPipeline.nativeStages.abandon(context);throw error;}
     };return modelAuthorizationHost.manual('owner-extract:'+randomUUID(),availableModelConnections(),()=>memoryPipeline.publication?memoryPipeline.publication.withOwnerWork(execute):execute());
   });
 }
