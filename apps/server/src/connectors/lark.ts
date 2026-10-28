@@ -2,7 +2,8 @@ import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {FILE_PART_BYTES,type LarkStatus,type LarkSelection,type LarkJob,type LarkCalendar,type SourceItem,type SourceItemRecord} from '@mote/shared';
 import {PrivateFile} from './private-file.js';
-import {ConnectorError,type ConnectorContext} from './types.js';
+import {ConnectorError} from './types.js';
+import type {LarkContext} from './lark-context.js';
 import {createLarkRunner,larkJson,authorizationUrl,type LarkRunner,type LarkCommand} from './lark-cli.js';
 import {LarkDocumentSync,documentSelectionSchema,documentScope,hasDocumentSelection,larkReference} from './lark-documents.js';
 import {calendarBoundary} from './google.js';
@@ -59,8 +60,8 @@ export class LarkConnector{
   private disconnecting=false;
   private reading?:Promise<{calendars:LarkCalendar[]}>;
   private readController?:AbortController;
-  constructor(private ctx:ConnectorContext,runner?:LarkRunner){const dir=ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`;this.file=new PrivateFile(dir,'lark.json');this.runner=runner??createLarkRunner(dir);}
-  async init(){const saved=await this.file.read();if(saved)this.saved=savedSchema.parse(saved);this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??900000);}
+  constructor(private ctx:LarkContext,runner?:LarkRunner){const dir=ctx.directory;this.file=new PrivateFile(dir,'lark.json');this.runner=runner??createLarkRunner(dir);}
+  async init(){const saved=await this.file.read();if(saved)this.saved=savedSchema.parse(saved);this.initialized=true;this.configureSyncInterval(this.ctx.syncIntervalMs??900000);}
   configureSyncInterval(intervalMs:number){
     const interval=Math.max(60000,intervalMs);
     if(this.timer&&this.syncIntervalMs===interval)return;
@@ -139,7 +140,7 @@ export class LarkConnector{
     // Lock mutations through the same job gate, including validation reads.
     this.start('selection',async signal=>{
       await this.requireConnected();if(input.calendarIds.length){const allowed=new Set((await this.listCalendars(signal)).map(c=>c.id));if(input.calendarIds.some(id=>!allowed.has(id)))throw new ConnectorError('lark_calendar_not_available',400);}
-      if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);const previous=[...(hasDocumentSelection(this.saved.selection)?[this.sourceId('docs')]:[]),...this.saved.selection.calendarIds.map(id=>this.sourceId('calendar',id))];const next={...this.saved,selection:input,selectionAuthorized:true};await this.file.write(next);this.saved=next;this.snapshot.missingScopes=missingScopes(input,this.grantedScopes);this.registerSources();const retained=new Set([...(hasDocumentSelection(input)?[this.sourceId('docs')]:[]),...input.calendarIds.map(id=>this.sourceId('calendar',id))]);for(const id of previous)if(!retained.has(id)&&this.ctx.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(id))this.ctx.sources.update(id,{enabled:false});
+      if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);const previous=[...(hasDocumentSelection(this.saved.selection)?[this.sourceId('docs')]:[]),...this.saved.selection.calendarIds.map(id=>this.sourceId('calendar',id))];const next={...this.saved,selection:input,selectionAuthorized:true};await this.file.write(next);this.saved=next;this.snapshot.missingScopes=missingScopes(input,this.grantedScopes);this.registerSources();const retained=new Set([...(hasDocumentSelection(input)?[this.sourceId('docs')]:[]),...input.calendarIds.map(id=>this.sourceId('calendar',id))]);for(const id of previous)if(!retained.has(id)&&this.ctx.read.sourceExists(id))this.ctx.sources.update(id,{enabled:false});
     });
     await this.active;if(this.job?.state==='failed'||this.job?.state==='cancelled')throw new ConnectorError(this.job.error??'lark_operation_failed',400);return this.status();
   }
@@ -153,7 +154,7 @@ export class LarkConnector{
   private documents(signal?:AbortSignal){
     const account=this.saved.account??'',selection=structuredClone(this.saved.selection),scope=documentScope(selection),sourceId=this.sourceId('docs');
     const authorize=()=>{if(signal?.aborted)throw new ConnectorError('lark_operation_cancelled',409);if(!this.saved.enabled||this.saved.account!==account||documentScope(this.saved.selection)!==scope)throw new ConnectorError('lark_document_scope_changed',409);if(!this.ctx.sources.getSource(sourceId).enabled)throw new ConnectorError('lark_source_paused',409);};
-    return new LarkDocumentSync(this.ctx,account,sourceId,selection,command=>this.run(command,signal??new AbortController().signal),async()=>{
+    return new LarkDocumentSync({documentState:this.ctx.documentState,sources:{getItem:this.ctx.sources.getItem}},account,sourceId,selection,command=>this.run(command,signal??new AbortController().signal),async()=>{
       authorize();const data=larkJson(await this.run({kind:'status'},signal??new AbortController().signal)),user=data.identities?.user;
       if(user?.available!==true||hash(`${data.appId}:${user.openId}`)!==account)throw new ConnectorError('lark_account_changed',409);
       authorize();
@@ -167,7 +168,7 @@ export class LarkConnector{
     await this.requireConnected();if(this.snapshot.missingScopes.length)throw new ConnectorError('lark_permission_required',403);this.registerSources();this.reportSources('syncing',undefined,Boolean(reference));const result:NonNullable<LarkJob['result']>={imported:0,duplicates:0};job.result=result;
     const write=async(sourceId:string,item:SourceItem,bytes?:Buffer)=>{
       if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);
-      const authorize=()=>{if(signal.aborted||!this.saved.enabled||!this.ctx.sources.getSource(sourceId).enabled)throw new ConnectorError('lark_operation_cancelled',409);const documentId=item.document?.activity?.documentId??item.externalId;if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,documentId))throw new ConnectorError('lark_document_forgotten',410);};
+      const authorize=()=>{if(signal.aborted||!this.saved.enabled||!this.ctx.sources.getSource(sourceId).enabled)throw new ConnectorError('lark_operation_cancelled',409);const documentId=item.document?.activity?.documentId??item.externalId;if(this.ctx.read.forgotten(sourceId,documentId))throw new ConnectorError('lark_document_forgotten',410);};
       let ack:{duplicate:boolean};
       if(bytes){
         if(!this.ctx.files)throw new ConnectorError('lark_file_archive_unavailable',503);if(this.ctx.sources.getSource(sourceId).retention!=='archive')throw new ConnectorError('lark_document_archive_required',409);

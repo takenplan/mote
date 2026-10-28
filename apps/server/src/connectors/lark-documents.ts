@@ -1,7 +1,9 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type {LarkSelection,LarkDocumentSyncStatus,SourceItem,SourceItemRecord,SourceDocument} from '@mote/shared';
-import {ConnectorError,type ConnectorContext} from './types.js';
+import {ConnectorError} from './types.js';
+import type {LarkDocumentContext} from './lark-context.js';
+import type {LarkDocumentState} from './lark-state.js';
 import {authorizationUrl,larkJson,type LarkCommand} from './lark-cli.js';
 
 export const larkHash=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -52,26 +54,22 @@ const wikiNodeSchema=z.object({node_token:z.string().min(1),obj_token:z.string()
  * remain queued independently. The archive remains the authoritative evidence. */
 export class LarkDocumentSync {
   readonly scope:string;
-  constructor(private ctx:ConnectorContext,readonly account:string,readonly sourceId:string,readonly selection:LarkSelection,
+  private state:LarkDocumentState;
+  constructor(private ctx:LarkDocumentContext,readonly account:string,readonly sourceId:string,readonly selection:LarkSelection,
     private run:(command:LarkCommand)=>Promise<string>,private fence:()=>Promise<void>,private authorize:()=>void) {
     this.scope=documentScope(selection);
-    ctx.store.db.exec('CREATE TABLE IF NOT EXISTS lark_document_sync(account TEXT NOT NULL,scope TEXT NOT NULL,key TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(account,scope,key));');
+    this.state=ctx.documentState(account,sourceId,this.scope);
   }
-  private get<T>(key:string):T|undefined {const row=this.ctx.store.db.prepare('SELECT json FROM lark_document_sync WHERE account=? AND scope=? AND key=?').get(this.account,(key.startsWith('alias:')||key.startsWith('signal:'))?'identity':this.scope,key) as {json:string}|undefined;return row?JSON.parse(row.json) as T:undefined;}
-  private set(key:string,value:unknown){this.ctx.store.db.prepare('INSERT INTO lark_document_sync VALUES(?,?,?,?) ON CONFLICT(account,scope,key) DO UPDATE SET json=excluded.json').run(this.account,(key.startsWith('alias:')||key.startsWith('signal:'))?'identity':this.scope,key,JSON.stringify(value));}
-  private drop(key:string){this.ctx.store.db.prepare('DELETE FROM lark_document_sync WHERE account=? AND scope=? AND key=?').run(this.account,this.scope,key);}
-  private rows<T>(prefix:string,limit=-1,errorOnly=false):Array<{key:string;value:T}>{return (this.ctx.store.db.prepare(`SELECT key,json FROM lark_document_sync WHERE account=? AND scope=? AND key LIKE ?${errorOnly?" AND json_extract(json,'$.error') IS NOT NULL":''} ORDER BY key LIMIT ?`).all(this.account,prefix.startsWith('signal:')?'identity':this.scope,`${prefix}%`,limit) as {key:string;json:string}[]).map(row=>({key:row.key,value:JSON.parse(row.json) as T}));}
-  private count(prefix:string,errorOnly=false){return Number((this.ctx.store.db.prepare(`SELECT COUNT(*) AS count FROM lark_document_sync WHERE account=? AND scope=? AND key LIKE ?${errorOnly?" AND json_extract(json,'$.error') IS NOT NULL":''}`).get(this.account,this.scope,`${prefix}%`) as {count:number}).count);}
+  private get<T>(key:string):T|undefined{return this.state.get<T>(key);}
+  private set(key:string,value:unknown){this.state.set(key,value);}
+  private drop(key:string){this.state.drop(key);}
+  private rows<T>(prefix:string,limit=-1,errorOnly=false){return this.state.rows<T>(prefix,limit,errorOnly);}
+  private count(prefix:string,errorOnly=false){return this.state.count(prefix,errorOnly);}
   confirmed(){return this.get<boolean>('confirmed')===true;}
   confirm(){this.set('confirmed',true);}
-  private forgotten(id:string){return Boolean(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(this.sourceId,id));}
+  private forgotten(id:string){return this.state.forgotten(id);}
   private suppressed(reference:string,id?:string){return this.forgotten(id??this.get<string>(`alias:${larkToken(reference)}`)??larkToken(reference));}
-  private sweepForgotten(){
-    const rows=this.ctx.store.db.prepare('SELECT external_id FROM file_forgotten WHERE source_id=?').all(this.sourceId) as {external_id:string}[];
-    for(const row of rows){const aliases=this.ctx.store.db.prepare("SELECT key FROM lark_document_sync WHERE account=? AND scope='identity' AND key LIKE 'alias:%' AND json=?").all(this.account,JSON.stringify(row.external_id)) as {key:string}[];
-      for(const token of [row.external_id,...aliases.map(alias=>alias.key.slice(6))])for(const prefix of ['pending:','found:'])this.ctx.store.db.prepare('DELETE FROM lark_document_sync WHERE account=? AND key=?').run(this.account,prefix+token);
-    }
-  }
+  private sweepForgotten(){this.state.sweepForgotten();}
   private excluded(reference:string,id?:string){const alias=this.get<string>(`alias:${larkToken(reference)}`);return (this.selection.excludedDocuments??[]).some(ref=>larkToken(ref)===larkToken(reference)||larkToken(ref)===id||this.get<string>(`alias:${larkToken(ref)}`)===(id??alias)&&Boolean(id??alias));}
   private enqueue(reference:string,title?:string,activity?:Activity){
     reference=larkReference(reference);
@@ -84,8 +82,8 @@ export class LarkDocumentSync {
   status():LarkDocumentSyncStatus {
     this.sweepForgotten();
     const errors=this.rows<Pending>('pending:',100,true).map(row=>({reference:row.value.reference,code:row.value.error!})),found=this.rows<{reference:string;title?:string}>('found:',50);
-    const counts=this.ctx.store.db.prepare("SELECT json_extract(c.json,'$.source') AS kind,COUNT(*) AS count FROM source_heads h JOIN captures c ON c.id=h.capture_id WHERE h.source_id=? AND h.deleted=0 GROUP BY kind").all(this.sourceId) as {kind:string;count:number}[];
-    return {...(this.ctx.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(this.sourceId)?{sourceId:this.sourceId}:{}),confirmed:this.confirmed(),documents:counts.find(row=>row.kind==='file')?.count??0,activities:counts.find(row=>row.kind==='event')?.count??0,failed:this.count('pending:',true),pending:this.count('pending:'),errors,...(this.get<string>('attempt')?{lastAttemptAt:this.get<string>('attempt')}:{}),...(this.get<string>('previewAt')?{preview:found.map(row=>row.value),previewTotal:this.count('found:'),previewAt:this.get<string>('previewAt')}:{})};
+    const counts=this.state.currentKinds();
+    return {...(this.state.sourceExists()?{sourceId:this.sourceId}:{}),confirmed:this.confirmed(),documents:counts.find(row=>row.kind==='file')?.count??0,activities:counts.find(row=>row.kind==='event')?.count??0,failed:this.count('pending:',true),pending:this.count('pending:'),errors,...(this.get<string>('attempt')?{lastAttemptAt:this.get<string>('attempt')}:{}),...(this.get<string>('previewAt')?{preview:found.map(row=>row.value),previewTotal:this.count('found:'),previewAt:this.get<string>('previewAt')}:{})};
   }
   async discover(){
     this.authorize();this.set('attempt',new Date().toISOString());const discovery=this.selection.documentDiscovery;
@@ -156,7 +154,7 @@ export class LarkDocumentSync {
           // The first observation is immutable. Repeated overlapping searches
           // neither replace its observedAt nor imply another human action.
           const signalKey=`signal:${activity.action}:${larkHash(documentId)}:${larkHash(JSON.stringify([activity.start,activity.end]))}`;
-          if(this.ctx.store.db.prepare('SELECT 1 FROM source_versions WHERE source_id=? AND external_id=?').get(this.sourceId,externalId)){this.set(signalKey,{start:activity.start,end:activity.end});continue;}
+          if(this.state.versionExists(externalId)){this.set(signalKey,{start:activity.start,end:activity.end});continue;}
           const value:NonNullable<SourceDocument['activity']>={version:1,provider:'lark',documentId:documentId,actor:{accountId:this.account},action:activity.action,evidenceBasis:'search-predicate',time:{precision:'range',start:activity.start,end:activity.end},observedAt:activity.observedAt,...(activity.action==='opened'?{limitations:['provider-open-may-include-connector-access' as const]}:{})};
           const text=`Feishu provider search matched this account's ${activity.action} filter for document ${documentId} in [${activity.start}, ${activity.end}]. This is a bounded provider-filter observation, not a complete action history. It does not establish reading duration, reading completion, agreement, content authorship, or the version the person saw.${activity.action==='opened'?' Provider open signals may include connector/API access; human reading is not established.':''}`;
           const item:SourceItem={externalId,revision:larkHash(JSON.stringify(value)),observedAt:activity.observedAt,title:pending.title??documentId,text,kind:'event',layer:'derived',deleted:false,...(uri?{uri}:{}),document:{timeBasis:'unknown',contentRole:'other',activity:value}};

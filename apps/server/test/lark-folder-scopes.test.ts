@@ -1,3 +1,4 @@
+import {larkContext} from '../src/connectors/lark-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -35,7 +36,7 @@ async function fixture(t:any,folderScope?:string){
       default:throw Error('Unexpected generated folder operation: '+command.kind);
     }
   };
-  const connector=new LarkConnector(context,runner);await connector.init();
+  const connector=new LarkConnector(larkContext(context),runner);await connector.init();
   t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});
   await connector.refresh();connector.login();assert.equal((await done(connector)).job?.state,'completed');
   await connector.select(selection);

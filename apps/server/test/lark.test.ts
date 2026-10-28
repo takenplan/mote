@@ -1,3 +1,4 @@
+import {larkContext} from '../src/connectors/lark-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile,stat} from 'node:fs/promises';
@@ -32,7 +33,7 @@ async function fixture(t:any){
    default:return '{}';
   }
  };
- const connector=new LarkConnector(ctx,runner);await connector.init();
+ const connector=new LarkConnector(larkContext(ctx),runner);await connector.init();
  t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});
  return {directory,ctx,store,sources,calls,state,runner,connector};
 }
@@ -100,13 +101,13 @@ test('Lark owner routes reject device and MCP credentials before parsing and nev
 
 test('saved scope survives restart while explicitly paused sources remain paused',async t=>{
  const f=await fixture(t);await connected(f);await f.connector.select(selection);f.connector.startSync();await done(f.connector);await f.connector.close();
- const resumed=new LarkConnector(f.ctx,f.runner);await resumed.init();t.after(()=>resumed.close());await resumed.refresh();assert.equal(resumed.status().connected,true);assert.deepEqual(resumed.status().selection,selection);
+ const resumed=new LarkConnector(larkContext(f.ctx),f.runner);await resumed.init();t.after(()=>resumed.close());await resumed.refresh();assert.equal(resumed.status().connected,true);assert.deepEqual(resumed.status().selection,selection);
  for(const source of f.sources.listSources())f.sources.update(source.id,{enabled:false});const before=f.calls.filter(c=>c.kind==='document'||c.kind==='events').length;
  resumed.startSync();await done(resumed);assert.equal(f.calls.filter(c=>c.kind==='document'||c.kind==='events').length,before);assert.ok(f.sources.listSources().every(s=>!s.enabled));
 });
 
 test('expired device flow clears its link and reports reauthorization without exposing codes',async t=>{
  const f=await fixture(t);f.state.blockLogin=true;
- const c=new LarkConnector(f.ctx,async(command,options)=>command.kind==='login'?encoded({verification_url:'https://accounts.feishu.cn/authorize?fixture=expired',device_code:'private-expired-code',expires_in:0.01}):f.runner(command,options));await c.init();t.after(()=>c.close());
+ const c=new LarkConnector(larkContext(f.ctx),async(command,options)=>command.kind==='login'?encoded({verification_url:'https://accounts.feishu.cn/authorize?fixture=expired',device_code:'private-expired-code',expires_in:0.01}):f.runner(command,options));await c.init();t.after(()=>c.close());
  await c.refresh();c.login();const status=await done(c);assert.equal(status.job?.error,'lark_authorization_expired');assert.equal(status.job?.authorizationUrl,undefined);assert.ok(!encoded(status).includes('private-expired-code'));
 });

@@ -1,3 +1,4 @@
+import {larkContext} from './lark-context.js';
 import {gmailContext} from './gmail-context.js';
 import {installRecordingMemory} from './recording-memory.js';
 import {recordingManifest,type RecordingProvider} from './recordings.js';
@@ -67,7 +68,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
     };
   }},
   {apiVersion:1,id:'lark',sourceKinds:['lark-docs','lark-calendar'],create:ctx=>{
-    const lark=new LarkConnector(ctx,testing?.lark);
+    const lark=new LarkConnector(larkContext(ctx),testing?.lark);
     return {
       init:()=>lark.init(),configureSyncInterval:interval=>lark.configureSyncInterval(interval),
       configure:host=>{

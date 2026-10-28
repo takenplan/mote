@@ -1,3 +1,4 @@
+import {larkContext} from '../src/connectors/lark-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -34,7 +35,7 @@ async function fixture(t:any){
    default:return '{}';
   }
  };
- const c=new LarkConnector(ctx,runner);await c.init();await c.refresh();c.login();assert.equal((await done(c)).job?.state,'completed');
+ const c=new LarkConnector(larkContext(ctx),runner);await c.init();await c.refresh();c.login();assert.equal((await done(c)).job?.state,'completed');
  t.after(async()=>{await c.close();await files.close();store.close();await rm(dir,{recursive:true,force:true});});
  return {dir,store,sources,files,ctx,c,runner,calls,state};
 }
@@ -86,7 +87,7 @@ test('pagination resumes the exact fixed predicate after restart, including earl
  const f=await fixture(t);await f.c.select({...selection,documentDiscovery:{created:false,edited:true,opened:false,firstSyncDays:30}});
  f.state.searchPages=[{...matches('DocumentDiary123'),has_more:true,page_token:'1'},matches('DocumentMeeting123')];f.state.searchFailureToken='1';f.c.startPreview();assert.equal((await done(f.c)).job?.state,'failed');
  const attempted=f.calls.filter(c=>c.kind==='documents-search');assert.equal(attempted.length,2);await f.c.close();f.state.searchFailureToken=undefined;
- const resumed=new LarkConnector(f.ctx,f.runner);await resumed.init();t.after(()=>resumed.close());resumed.startPreview();assert.equal((await done(resumed)).job?.state,'completed');
+ const resumed=new LarkConnector(larkContext(f.ctx),f.runner);await resumed.init();t.after(()=>resumed.close());resumed.startPreview();assert.equal((await done(resumed)).job?.state,'completed');
  const requests=f.calls.filter(c=>c.kind==='documents-search');assert.equal(requests[2].pageToken,'1');assert.equal(requests[2].start,requests[1].start);assert.equal(requests[2].end,requests[1].end);assert.equal(resumed.status().documentSync?.previewTotal,2);
  resumed.startSync();await done(resumed);assert.equal(f.sources.listItems({kind:'file'}).items.length,2);
 });
@@ -128,7 +129,7 @@ test('overlapping polls across hour boundaries do not turn one provider signal i
 test('a changed CLI account cannot contaminate durable metadata discoveries under the old actor',async t=>{
  const f=await fixture(t);await f.c.select({...selection,documentDiscovery:{created:false,edited:true,opened:false,firstSyncDays:30}});f.state.searchPages=[matches('DocumentDiary123')];
  const runner:LarkRunner=async(command,options)=>{const output=await f.runner(command,options);if(command.kind==='documents-search')f.state.account='wrong-fixture-account';return output;};
- await f.c.close();const changed=new LarkConnector(f.ctx,runner);await changed.init();t.after(()=>changed.close());changed.startPreview();assert.equal((await done(changed)).job?.error,'lark_account_changed');assert.equal(changed.status().documentSync?.previewTotal,undefined);assert.equal(changed.status().documentSync?.documents,0);
+ await f.c.close();const changed=new LarkConnector(larkContext(f.ctx),runner);await changed.init();t.after(()=>changed.close());changed.startPreview();assert.equal((await done(changed)).job?.error,'lark_account_changed');assert.equal(changed.status().documentSync?.previewTotal,undefined);assert.equal(changed.status().documentSync?.documents,0);
  f.state.account='fixture-user';changed.startSync();await done(changed);assert.equal(f.sources.listItems({kind:'event'}).items.length,0);
 });
 
@@ -184,7 +185,7 @@ test('explicit calendar authorization bootstraps native calendar discovery witho
   if(command.kind==='calendars'){if(!granted.includes('calendar:calendar:readonly'))throw new ConnectorError('lark_permission_required',403);return json({data:{calendar_list:[{calendar_id:'generated-calendar',summary:'Generated calendar',role:'reader'}],has_more:false}});}
   return f.runner(command,options);
  };
- const c=new LarkConnector(f.ctx,runner);await c.init();t.after(()=>c.close());c.login();assert.equal((await done(c)).job?.state,'completed');assert.ok(!requested.includes('calendar:calendar:readonly'));await assert.rejects(()=>c.calendars(),/lark_permission_required/);assert.equal(c.status().selection.calendarIds.length,0);
+ const c=new LarkConnector(larkContext(f.ctx),runner);await c.init();t.after(()=>c.close());c.login();assert.equal((await done(c)).job?.state,'completed');assert.ok(!requested.includes('calendar:calendar:readonly'));await assert.rejects(()=>c.calendars(),/lark_permission_required/);assert.equal(c.status().selection.calendarIds.length,0);
  c.login(true);assert.equal((await done(c)).job?.state,'completed');assert.ok(requested.includes('calendar:calendar:readonly'));assert.equal((await c.calendars()).calendars[0].id,'generated-calendar');assert.equal(c.status().selection.calendarIds.length,0);assert.equal(f.sources.listSources().length,0,'granting calendar read never selects or collects a calendar');
 });
 
@@ -193,7 +194,7 @@ for(const large of [false,true])test(`provider revision-only changes preserve La
  f.state.content.set(id,body);await f.c.select({...selection,documentDiscovery:undefined,documents:[url(id)]});
  f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');
  const source=f.sources.listSources()[0],first=f.sources.getItem(source.id,id)!,deletionRevision=f.store.deletionRevision();
- await f.c.close();const restarted=new LarkConnector(f.ctx,f.runner);await restarted.init();t.after(()=>restarted.close());
+ await f.c.close();const restarted=new LarkConnector(larkContext(f.ctx),f.runner);await restarted.init();t.after(()=>restarted.close());
  f.state.documentRevision=2;restarted.startSync();let status=await done(restarted);
  assert.equal(status.job?.state,'completed');assert.equal(status.job?.result?.duplicates,1);
  const same=f.sources.getItem(source.id,id)!;
@@ -204,4 +205,25 @@ for(const large of [false,true])test(`provider revision-only changes preserve La
  const changed=f.sources.getItem(source.id,id)!;assert.notEqual(changed.captureId,first.captureId);
  assert.equal(changed.document?.originalMetadata?.revisionId,3);assert.equal(f.sources.history(source.id,id).length,2);
  if(large){const row=f.store.db.prepare('SELECT object_hash FROM file_versions WHERE capture_id=?').get(changed.captureId)!;assert.equal(f.store.assets.read(String(row.object_hash)).toString(),body+'\nGenerated correction');}
+});
+
+
+test('Lark runtime projection keeps document archive and forgetting fences without global Store or owner credentials',async t=>{
+ const f=await fixture(t),context=larkContext(f.ctx);f.state.content.set('DocumentDiary123','Generated long fixture. '.repeat(6000));
+ assert.deepEqual(Object.keys(context).sort(),['directory','documentState','files','read','sources','syncIntervalMs']);
+ for(const object of [context,context.sources,context.files!,context.read]){
+  assert.equal('store' in object,false);assert.equal('config' in object,false);assert.equal('token' in object,false);assert.equal('capabilities' in object,false);
+ }
+ assert.deepEqual(Object.keys(context.files!).sort(),['begin','commit','part']);
+ await f.c.select({...selection,documentDiscovery:undefined,documents:[url('DocumentDiary123')]});
+ f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');
+ const source=f.sources.listSources()[0],item=f.sources.getItem(source.id,'DocumentDiary123')!;
+ assert.ok(context.read.sourceExists(source.id));assert.equal(context.read.sourceExists('missing-generated'),false);
+ assert.equal(context.read.forgotten(source.id,item.externalId),false);
+ assert.equal(f.c.status().documentSync?.documents,1);
+ f.files.forget(item.captureId);
+ assert.equal(context.read.forgotten(source.id,item.externalId),true);
+ f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');
+ assert.equal(f.c.status().documentSync?.documents,0);assert.equal(f.c.status().documentSync?.pending,0);
+ assert.equal(f.sources.getItem(source.id,item.externalId),undefined);
 });
