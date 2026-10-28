@@ -1,5 +1,5 @@
 require('../../../scripts/fixture-background.cjs');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const { readFileSync, writeFileSync } = require('node:fs');
 const assert = require('node:assert/strict');
 const { join, dirname } = require('node:path');
@@ -8,6 +8,24 @@ const statePath = process.env.MOTE_COMPLEX_STATE;
 const phase = process.env.MOTE_COMPLEX_PHASE;
 if (!statePath || !phase) throw new Error('This runner requires a generated fixture state and explicit phase');
 const state = JSON.parse(readFileSync(statePath, 'utf8'));
+// Exercise the real main/IPC browser handoff, loading its URL in a generated
+// browser fixture instead of launching the user's browser or resurrecting the
+// retired embedded window. Install before importing main's child_process API.
+const opened = [];
+const childProcess = require('node:child_process'), nativeExecFile = childProcess.execFile;
+const promisify = require('node:util').promisify;
+childProcess.execFile = function(file, args, ...rest) {
+  if (file !== '/usr/bin/open') return nativeExecFile.call(this, file, args, ...rest);
+  opened.push(args.at(-1));
+  const callback = rest.at(-1);
+  if (typeof callback === 'function') queueMicrotask(() => callback(null, '', ''));
+  return { kill() {} };
+};
+childProcess.execFile[promisify.custom] = async (file, args, ...rest) => {
+  if (file !== '/usr/bin/open') return promisify(nativeExecFile)(file, args, ...rest);
+  opened.push(args.at(-1)); return { stdout: '', stderr: '' };
+};
+shell.openExternal = async url => { opened.push(url); };
 const corpus = require('./complex-inputs.cjs')(state.marker);
 app.setPath('userData', state.profile);
 const timeout = setTimeout(() => { process.stderr.write('Complex app phase timeout: ' + phase + '\n'); app.exit(1); }, phase === 'query' ? 330000 : phase === 'central' ? 180000 : 45000);
@@ -90,13 +108,21 @@ app.on('browser-window-created', (_event, window) => {
       }
       if (phase === 'central' || phase === 'query' || phase === 'query-ui') {
         step('opening-central');await js('window.mote.openCentral()');step('central-opened');
-        const central = await until(() => BrowserWindow.getAllWindows().find(candidate => candidate !== window && candidate.webContents.getURL().startsWith(connection.url)));
+        const url = new URL(await until(() => opened[0]));
+        assert.equal(url.origin, new URL(connection.url).origin);
+        assert.equal(url.search, '');
+        assert.equal(url.href.includes(connection.token), false);
+        assert.match(new URLSearchParams(url.hash.split('?')[1]).get('loginTicket'), /^[A-Za-z0-9_-]{43}$/);
+        const central = new BrowserWindow({ width: 1280, height: 850, show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+        await central.loadURL(url.href);
         const run = source => bounded(central.webContents.executeJavaScript(source),'Central UI call');
-        await until(() => run('document.body.textContent.includes("随手记")'));
+        await until(() => run('document.querySelector("[data-session=ready]") !== null'));
         assert.equal(await run('typeof require'), 'undefined');
-        assert.equal(await run('JSON.parse(sessionStorage.getItem("mote.connection")).token'), '__MOTE_NATIVE_AUTH__');
+        const session = await run('JSON.parse(localStorage.getItem("mote.connection") || sessionStorage.getItem("mote.connection"))');
+        assert.ok(session.viewScope); assert.ok(session.token); assert.equal(Object.hasOwn(session, 'url'), false);
+        assert.equal(await run('location.hash.includes("loginTicket")'), false);
         for (const [index, id] of state.ids.entries()) {
-          const evidence = await run(`fetch('/api/captures/${id}').then(r=>r.json())`);
+          const evidence = await run(`fetch('/api/capture-browser/${id}',{headers:{Authorization:'Bearer '+${JSON.stringify(session.token)}}}).then(r=>{if(!r.ok)throw Error('Evidence HTTP '+r.status);return r.json();})`);
           assert.equal(evidence.ocrText, corpus[index].text);
         }
         assert.equal(await run('Boolean(window.__moteFixtureInjected)'), false);
@@ -192,7 +218,7 @@ app.on('browser-window-created', (_event, window) => {
           }
           state.phases.push('real-deepseek-through-central-ui'); persist(); clearTimeout(timeout); phaseSucceeded = true; app.quit(); return;
         }
-        state.phases.push('real-central-window-auth-and-evidence'); persist(); clearTimeout(timeout); phaseSucceeded = true; app.quit(); return;
+        state.phases.push('real-browser-ticket-auth-and-evidence'); persist(); clearTimeout(timeout); phaseSucceeded = true; app.quit(); return;
       }
       throw new Error('Unknown generated fixture phase');
     })().catch(error => { process.stderr.write(`Complex app ${phase} failed: ${error.message}\n`); app.exit(1); });

@@ -117,7 +117,8 @@ npm test -w @mote/desktop
 node apps/desktop/scripts/connection-server-smoke.cjs
 # 原生 Electron 窗口与 Swift QR 解码；仅截图生成测试 UI
 npx electron apps/desktop/scripts/connection-smoke.cjs
-npx electron apps/desktop/scripts/central-smoke.cjs
+# 当前中央认证入口使用外部浏览器票据；旧 embedded window smoke 已退役。
+npm run test:central -w @mote/desktop
 ```
 
 ## 本地日历、文件与目录来源（0.4.0 历史说明）
@@ -290,6 +291,8 @@ MOTE_FIXTURE_SERVER=http://127.0.0.1:47835 MOTE_FIXTURE_TOKEN='<测试节点令�
 npm run test:central -w @mote/desktop
 # 历史 test:vision / models:download 已移除，不再是当前验收入口。
 ```
+
+当前 `test:central` 运行轻量 `showCentral → Fastify → Web session` 消费合同和浏览器 URL 合同，覆盖固定节点、凭据不进入 URL、一次性/过期票据、共享退出及失败后重试。上面的内嵌中央窗口记录仅描述历史验证；其实现、专用 preload 和 smoke 已退役。需要检查实际浏览器渲染时，构建 Central 与 Desktop 后手动选择 `npx electron scripts/test-web-login.cjs`；该脚本使用隐藏窗口、生成资料及临时 loopback Central，不证明真实 Chrome 或系统授权行为。
 
 
 自动化使用生成的像素/协议 fixture，不读取用户真实屏幕，不启动采集。运行：

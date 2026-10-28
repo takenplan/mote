@@ -35,6 +35,7 @@ export function selectScopes(paths) {
   for (const path of paths) {
     if (documentation(path)) continue;
     if (androidContractInputs.has(path)) androidContract = true;
+    if (path === 'scripts/test-web-login.cjs') { add('desktop', 'web', 'i18n'); continue; }
     if (/^packages\/shared\/(?:src\/i18n(?:-[a-z]{2})?\.ts|test\/i18n\.test\.mjs)$/.test(path)
       || /^apps\/android\/app\/src\/main\/assets\/i18n-[a-z]{2}\.json$/.test(path) || /^scripts\/(?:check|sync)-i18n\.mjs$/.test(path)) { add('i18n'); continue; }
     if (path.startsWith('apps/web/')) { add('web', 'i18n'); continue; }

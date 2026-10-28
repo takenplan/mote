@@ -21,6 +21,15 @@ test('unknown inputs and locks conservatively select all light scopes and explai
   assert.deepEqual(changed('docs/testing.md', 'AGENTS.md', '.agents/skills/real-world-testing/SKILL.md').scopes, []);
   assert.deepEqual(changed('scripts/ci/select.mjs', '.github/workflows/component-checks.yml').scopes, ['tooling']);
 });
+test('the exact browser login smoke path selects its current clients without broadening unknown scripts', () => {
+  const login = changed('scripts/test-web-login.cjs');
+  assert.deepEqual(login, { scopes: ['web', 'i18n', 'desktop'], fallback: [] });
+  assert.deepEqual(automaticTasks(login), { tasks: ['architecture', 'i18n', 'web', 'desktop'], android: false });
+  assert.deepEqual(automaticTasks(login, 'push'), { tasks: ['architecture', 'i18n', 'web-contract', 'desktop-contract'], android: false });
+  for (const path of ['scripts/test-web-login.cjs.bak', 'scripts/test-web-login-other.cjs', 'scripts/test-web-unknown.cjs']) {
+    assert.deepEqual(changed(path), { scopes, fallback: [path], serverGroups: ['all'], androidContract: true });
+  }
+});
 test('PR selection is modular, main runs affected light contracts, neither starts specialist suites', () => {
   const web = automaticTasks(changed('apps/web/src/App.tsx'));
   assert.deepEqual(web, { tasks: ['architecture', 'i18n', 'web'], android: false });
