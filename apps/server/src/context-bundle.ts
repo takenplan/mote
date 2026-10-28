@@ -8,7 +8,7 @@ import type {MaterialRecord} from './materials.js';
 
 /** Each channel owns a resumable position; only delivered cards advance it.
  * A phase cursor keeps exhausted channels exhausted without storing private text. */
-export async function contextBundle(reader:EvidenceReader,query:ContextReader,args:ContextQueryInput){
+export async function contextBundle(reader:Pick<EvidenceReader,'queryPage'>,query:ContextReader,args:ContextQueryInput){
   const {cursor,limit=30,maxCharacters=12000,...scope}=args;
   const h=createHash('sha256').update(JSON.stringify(scope)).digest('base64url');
   type Position={v:1;h:string;p:number;c?:unknown};

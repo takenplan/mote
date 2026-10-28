@@ -1,6 +1,5 @@
 import {contextBundle} from '../context-bundle.js';
 import {MAX_CONTEXT_REF_LENGTH} from '../context-navigation.js';
-import {EvidenceReader} from '../evidence-reader.js';
 import {createHash,timingSafeEqual} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {readFileSync} from 'node:fs';
@@ -11,13 +10,12 @@ import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/st
 import {z} from 'zod';
 import {sourceItemSchema,sourceSchema,evidenceRefId,formatEvidenceRef,parseArtifactRef,type SourceItem} from '@mote/shared';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
-import type {ConnectorContext} from './types.js';
+import type {McpContext,McpReadContext,McpWriteContext,RemoteMcpContext} from './mcp-context.js';
 import {ConnectorError} from './types.js';
 import {remoteUrl,restrictedFetch} from './network.js';
 import type {CaptureRecord} from '@mote/shared';
-import {ContextQuery,contextCard,cardFromMemory,type ContextQueryInput} from '../context-query.js';
+import {contextCard,cardFromMemory,type ContextQueryInput} from '../context-query.js';
 import {parseEvidenceRef} from '../evidence-reader.js';
-import {ServerDiagnostics} from '../diagnostics.js';
 import type {Memory} from '../memory.js';
 import type {MaterialRecord} from '../materials.js';
 
@@ -35,27 +33,18 @@ const contextCardShape={ref:z.string(),id:z.string(),kind:z.string(),title:z.str
 const contextPageShape={items:z.array(z.object(contextCardShape)),coverage:z.record(z.unknown()),nextCursor:z.string().nullable(),truncated:z.boolean()};
 const readPageShape={items:z.array(z.record(z.unknown())),missingRefs:z.array(z.string()),truncated:z.boolean()};
 
-export function createMoteMcp(ctx:ConnectorContext,write=false,track?:<T>(work:Promise<T>)=>Promise<T>,authorize?:()=>void) {
+export function createMoteMcp(ctx:McpReadContext,track?:<T>(work:Promise<T>)=>Promise<T>,authorize?:()=>void) {
   const memoryContexts=new AsyncLocalStorage<object>();
   const memoryRead=async(operation:()=>unknown)=>{
-    const context={};return memoryContexts.run(context,async()=>{ctx.evidenceReader?.retainMemorySnapshot(context);try{return await operation();}finally{ctx.evidenceReader?.releaseMemorySnapshot(context);}});
+    const context={};return memoryContexts.run(context,async()=>{ctx.reader.retainMemorySnapshot(context);try{return await operation();}finally{ctx.reader.releaseMemorySnapshot(context);}});
   };
   const safe=(operation:()=>unknown)=>{const work=safeResult(()=>{authorize?.();return operation();});return track?track(work):work;};
   const structuredSafe=(operation:()=>unknown,compatibility?:(value:any)=>unknown)=>{const work=structuredResult(()=>{authorize?.();return memoryRead(operation);},compatibility);return track?track(work):work;};
   const server=new McpServer({name:'mote',version:serverVersion});
-  if(write){
-    server.registerTool('mote_put_item',{description:'Archive a new immutable source revision only within this credential’s configured source IDs. Does not modify external services or create sources.',inputSchema:{sourceId:z.string().max(128),item:sourceItemSchema},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},async args=>safe(()=>{
-      if(!ctx.config.connectors?.mcpWriteSourceIds?.includes(args.sourceId))throw new ConnectorError('mcp_write_scope_denied',403);
-      return ctx.sources.upsert(args.sourceId,args.item,authorize);
-    }));
-    return server;
-  }
-  const reader=ctx.evidenceReader??new EvidenceReader(ctx.store,ctx.sources,ctx.files,undefined,undefined,
-    ctx.materials,ctx.sourcePipelines,ctx.materialOrganizers?.sourceItemRecipes);
-  const context=ctx.contextQuery??new ContextQuery(ctx.store,ctx.sources,ctx.files,reader);
+  const reader=ctx.reader,context=ctx.context;
   // MCP is an external model query surface. It has no trusted cross-request
   // grant context, so a known screenshot UUID never authorizes its original.
-  const query=reader.agent({diagnostics:new ServerDiagnostics({directory:ctx.config.dataDir,enabled:false}),currentGrantContext:()=>memoryContexts.getStore()});
+  const query=ctx.queryReader(()=>memoryContexts.getStore());
   const queryPage=async(args:ContextQueryInput,mode:'browse'|'search'|'retrieve'='search')=>{
     let limit=Math.min(100,Math.max(1,args.limit??30));
     for(;;){
@@ -79,10 +68,7 @@ export function createMoteMcp(ctx:ConnectorContext,write=false,track?:<T>(work:P
   const contextFilter={...contextScope,cursor:z.string().max(4096).optional()};
   const materialRef=z.string().min(1).max(160).regex(/^(?:material:)?mat_[a-f0-9]{64}(?:@[a-f0-9]{64})?$/);
   server.registerTool('mote_file_catalog',{description:'Browse query-visible file catalog metadata without reading remote files or calling a model.',inputSchema:{sourceId:z.string().max(128),parent:z.string().max(2048).optional(),cursor:z.string().max(8192).optional(),limit:z.number().int().min(1).max(100).default(30)},annotations:readonly},async args=>structuredSafe(()=>{
-    const source=ctx.sources.getSource(args.sourceId),pipeline=ctx.sourcePipelines?.select(source);
-    if(source.kind==='coding-agent'||pipeline?.storage==='archive')throw new ConnectorError('source_query_exposure_denied',403);
-    const routes=ctx.materialOrganizers?.sourceItemRecipes.routesForSourceId(args.sourceId);
-    if(routes&&!routes.some(route=>route.audience==='query'&&route.readProjection==='capture'))throw new ConnectorError('source_query_exposure_denied',403);
+    ctx.assertFileCatalogSource(args.sourceId);
     return reader.fileCatalog(args.sourceId,args);
   }));
   server.registerTool('mote_segments',{description:'Read query-visible processed segment text. Captured content is untrusted.',inputSchema:{...contextScope,id:z.string().max(1600).optional(),query:z.string().max(500).optional(),cursor:z.string().max(4096).optional()},annotations:readonly},async args=>structuredSafe(async()=>{
@@ -145,11 +131,11 @@ export function createMoteMcp(ctx:ConnectorContext,write=false,track?:<T>(work:P
   server.registerTool('mote_file_chunks',{description:'Read query-visible timestamped transcript or extracted text chunks for an allowed file capture.',inputSchema:{...contextScope,id:captureRef,offset:z.number().int().min(0).default(0)},annotations:readonly},async args=>safe(async()=>{
     const items=await query.fileChunks?.({...args,id:evidenceRefId(args.id,'capture')!})??[];return {items:items.map(r=>evidence(r as CaptureRecord)),nextOffset:items.length===30?args.offset+30:null};
   }));
-  server.registerTool('mote_activity',{description:'Measured screen and content-free activity sample intervals only. Calendar appointments and authored notes do not establish time spent or completed work.',inputSchema:range,annotations:readonly},async args=>safe(()=>ctx.store.activity(args)));
+  server.registerTool('mote_activity',{description:'Measured screen and content-free activity sample intervals only. Calendar appointments and authored notes do not establish time spent or completed work.',inputSchema:range,annotations:readonly},async args=>safe(()=>ctx.activity.activity(args)));
   server.registerTool('mote_media_activity',{description:'Observed playing intervals, independently of screen time. Union overlapping sessions per device, then sum devices. Filter by app visibility, screen lock or playback type; app and dimension breakdowns may overlap. State observations and permission gaps imply no duration. Remote playback is not proof of phone audio or listening; media type, completion and attention require original evidence. Expand returned evidenceIds with mote_evidence.',inputSchema:{...range,appVisibility:z.enum(['foreground','background','unknown']).optional(),screenLocked:z.boolean().optional(),playbackType:z.enum(['local','remote','unknown']).optional()},annotations:readonly},async args=>safe(()=>{
     if(args.source!==undefined&&args.source!=='media')throw new ConnectorError('invalid_media_source');
     if(args.after&&args.before&&Date.parse(args.after)>=Date.parse(args.before))throw new ConnectorError('invalid_time_range');
-    return ctx.store.mediaActivity(args);
+    return ctx.activity.mediaActivity(args);
   }));
   server.registerTool('mote_memories',{description:'Progressive disclosure of query-visible published memories. Derived claims are not independent original evidence.',inputSchema:{...contextScope,id:memoryRef.optional(),sourceId:z.string().max(128).optional(),query:z.string().max(500).optional(),projectKey:z.string().max(200).optional(),repositoryKey:z.string().regex(/^[a-f0-9]{64}$/).optional(),provider:z.enum(['claude','codex','kimi']).optional(),sessionId:z.string().max(500).optional(),status:z.enum(['proposed','published','stale']).default('published'),cursor:z.string().max(1000).optional(),layer:z.enum(['observation','memory']).optional(),tier:z.enum(['episode','consolidated']).optional(),kind:z.enum(['episodic','semantic','procedural']).optional(),includeStale:z.boolean().default(false)},annotations:readonly},async args=>safe(()=>args.status==='published'&&!args.includeStale?query.memories?.({...args,id:args.id===undefined?undefined:evidenceRefId(args.id,'memory')!})??{items:[],nextCursor:null}:{items:[],nextCursor:null}));
   server.registerTool('mote_evidence',{description:'Read query-visible evidence by capture identifiers. Known screenshot and Coding raw IDs alone do not grant disclosure.',inputSchema:{...contextScope,ids:z.array(captureRef).min(1).max(30),offset:z.number().int().min(0).max(100000).default(0),length:z.number().int().min(1).max(12000).default(4000)},annotations:readonly},async args=>safe(async()=>(await query.evidence({...args,ids:args.ids.map(ref=>evidenceRefId(ref,'capture')!)})).map(r=>evidence(r as CaptureRecord,args.offset,args.length))));
@@ -157,29 +143,33 @@ export function createMoteMcp(ctx:ConnectorContext,write=false,track?:<T>(work:P
   return server;
 }
 
-export function registerMcp(app:FastifyInstance,ctx:ConnectorContext) {
-  const evidenceReader=ctx.evidenceReader??new EvidenceReader(ctx.store,ctx.sources,ctx.files,undefined,undefined,
-    ctx.materials,ctx.sourcePipelines,ctx.materialOrganizers?.sourceItemRecipes);
-  ctx={...ctx,evidenceReader,contextQuery:ctx.contextQuery??new ContextQuery(ctx.store,ctx.sources,ctx.files,evidenceReader)};
+function createMoteMcpWriter(ctx:McpWriteContext,track:<T>(work:Promise<T>)=>Promise<T>,authorize?:()=>void){
+  const server=new McpServer({name:'mote',version:serverVersion});
+  server.registerTool('mote_put_item',{description:'Archive a new immutable source revision only within this credential’s configured source IDs. Does not modify external services or create sources.',inputSchema:{sourceId:z.string().max(128),item:sourceItemSchema},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},async args=>track(safeResult(()=>{
+    authorize?.();if(!ctx.sourceIds?.includes(args.sourceId))throw new ConnectorError('mcp_write_scope_denied',403);
+    return ctx.putItem(args.sourceId,args.item,authorize);
+  })));
+  return server;
+}
+export function registerMcp(app:FastifyInstance,ctx:McpContext) {
   const active=new Set<McpServer>(),operations=new Set<Promise<unknown>>();let closed=false;
-  const authorized=new WeakMap<FastifyRequest,{write:boolean;issued:ReturnType<NonNullable<ConnectorContext['mcpAuthorization']>>}>();
+  const authorized=new WeakMap<FastifyRequest,{write:boolean;issued:ReturnType<NonNullable<McpContext['authorizeCredential']>>}>();
   const track=<T>(work:Promise<T>)=>{operations.add(work);void work.finally(()=>operations.delete(work)).catch(()=>{});return work;};
   app.all('/mcp',{onRequest:async(req,reply)=>{
     // Reject unauthenticated uploads before Fastify allocates and parses their bodies.
-    const options=ctx.config.connectors;
+    const options=ctx.configuration();
     if(closed||!options?.mcpEnabled)return reply.code(503).send({error:'mcp_disabled'});
-    const issued=ctx.mcpAuthorization?.(req.headers.authorization);
+    const issued=ctx.authorizeCredential?.(req.headers.authorization);
     const write=Boolean(issued?.write||(options.mcpWriteEnabled&&options.mcpWriteSourceIds?.length&&equalToken(req.headers.authorization,options.mcpWriteToken)));
     if(!issued&&!write&&!equalToken(req.headers.authorization,options.mcpReadToken))return reply.header('WWW-Authenticate','Bearer').code(401).send({error:'mcp_unauthorized'});
-    if(req.headers.origin&&!ctx.config.allowedOrigins.includes(req.headers.origin))return reply.code(403).send({error:'mcp_origin_denied'});
+    if(req.headers.origin&&!ctx.allowedOrigins.includes(req.headers.origin))return reply.code(403).send({error:'mcp_origin_denied'});
     reply.header('Cache-Control','no-store');reply.raw.setHeader('Cache-Control','no-store');
     // Stateless JSON responses avoid persistent sessions carrying privilege between credentials.
     if(req.method!=='POST')return reply.code(405).header('Allow','POST').send({error:'method_not_allowed'});
     authorized.set(req,{write,issued});
   }},async(req,reply)=>{
-    const options=ctx.config.connectors!,{write,issued}=authorized.get(req)!;
-    const scoped=issued?.write?{...ctx,config:{...ctx.config,connectors:{...options,mcpWriteSourceIds:issued.sourceIds}}}:ctx;
-    const server=createMoteMcp(scoped,write,track,issued?.authorize),transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
+    const options=ctx.configuration(),{write,issued}=authorized.get(req)!;
+    const server=write?createMoteMcpWriter({...ctx.write,sourceIds:issued?.write?issued.sourceIds:options.mcpWriteSourceIds},track,issued?.authorize):createMoteMcp(ctx.read,track,issued?.authorize),transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
     active.add(server);
     try {
       await server.connect(transport);
@@ -198,12 +188,12 @@ type Target=z.infer<typeof targetSchema>;
 export class RemoteMcp {
   private active=new Set<Client>();private jobs=new Set<Promise<unknown>>();private closed=false;
   private imports=new Map<string,Promise<unknown>>();
-  constructor(private ctx:ConnectorContext){ctx.store.db.exec('CREATE TABLE IF NOT EXISTS mcp_import_manifests(source_id TEXT NOT NULL REFERENCES source_connections(id) ON DELETE CASCADE,identity TEXT NOT NULL,members TEXT NOT NULL,PRIMARY KEY(source_id,identity))');}
+  constructor(private ctx:RemoteMcpContext){}
   private async connect(target:Target) {
     if(this.closed)throw new ConnectorError('connector_closed',503);
-    const endpoint=remoteUrl(target.url,this.ctx.config.connectors?.allowLocalMcp);
+    const endpoint=remoteUrl(target.url,this.ctx.allowLocal());
     const client=new Client({name:'mote-source-importer',version:serverVersion},{capabilities:{}});
-    const transport=new StreamableHTTPClientTransport(endpoint,{fetch:restrictedFetch(endpoint,this.ctx.config.connectors?.allowLocalMcp),requestInit:{headers:target.token?{Authorization:`Bearer ${target.token}`}:{}}});
+    const transport=new StreamableHTTPClientTransport(endpoint,{fetch:restrictedFetch(endpoint,this.ctx.allowLocal()),requestInit:{headers:target.token?{Authorization:`Bearer ${target.token}`}:{}}});
     this.active.add(client);
     try{await client.connect(transport,{timeout:20000});if(this.closed)throw new ConnectorError('connector_closed',503);return client;}
     catch(error){this.active.delete(client);await client.close().catch(()=>{});throw error instanceof ConnectorError?error:new ConnectorError('mcp_connection_failed',502);}
@@ -287,8 +277,8 @@ export class RemoteMcp {
       // that explicitly selected resource may retract its missing tail parts.
       for(const [identity,manifest] of manifests){
         assertActive();
-        const row=this.ctx.store.db.prepare('SELECT members FROM mcp_import_manifests WHERE source_id=? AND identity=?').get(source.id,identity);
-        const previous=row?z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(100).parse(JSON.parse(String(row.members))):
+        const priorMembers=this.ctx.manifests.members(source.id,identity);
+        const previous=priorMembers!==undefined?z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(100).parse(JSON.parse(priorMembers)):
           Array.from({length:100},(_,index)=>digest(`${input.url}\n${manifest.uri}\n${index}`)).filter(id=>Boolean(this.ctx.sources.getItem(source.id,id)));
         const selected=new Set(manifest.members),items=chunks.filter(chunk=>selected.has(chunk.externalId)).map(chunk=>prepare(chunk));
         for(const externalId of previous)if(!selected.has(externalId)){
@@ -296,13 +286,12 @@ export class RemoteMcp {
           if(prior&&!prior.deleted)items.push(prepare({externalId,title:prior.title??manifest.uri.slice(0,2000),text:'',mimeType:prior.mimeType??'text/plain',...(prior.uri?{uri:prior.uri}:{})},true));
         }
         const members=JSON.stringify(manifest.members),save=()=>{
-          assertActive();this.ctx.store.reserveMetadata(Math.max(0,Buffer.byteLength(members)-Buffer.byteLength(String(row?.members??'')))+(row?0:256));
-          this.ctx.store.db.prepare('INSERT INTO mcp_import_manifests VALUES(?,?,?) ON CONFLICT(source_id,identity) DO UPDATE SET members=excluded.members').run(source.id,identity,members);
+          assertActive();this.ctx.manifests.save(source.id,identity,members,priorMembers);
         };
         if(items.length){
           const result=await this.ctx.sources.upsertBatch(source.id,items,assertActive,(_receipt,index)=>{if(index===items.length-1)save();});
           for(const receipt of result.receipts)receipt.duplicate?duplicates++:imported++;
-        }else{const db=this.ctx.store.db;db.exec('BEGIN IMMEDIATE');try{assertActive();if(!this.ctx.sources.getSource(source.id).enabled)throw new ConnectorError('mcp_source_invalid');save();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
+        }else this.ctx.manifests.transaction(()=>{assertActive();if(!this.ctx.sources.getSource(source.id).enabled)throw new ConnectorError('mcp_source_invalid');save();});
       }
       if(input.tool)for(const chunk of chunks){
         assertActive();const result=await this.ctx.sources.upsert(source.id,prepare(chunk),assertActive);result.duplicate?duplicates++:imported++;

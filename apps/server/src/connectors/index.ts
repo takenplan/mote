@@ -1,3 +1,4 @@
+import {mcpContext,remoteMcpContext} from './mcp-context.js';
 import {larkContext} from './lark-context.js';
 import {gmailContext} from './gmail-context.js';
 import {installRecordingMemory} from './recording-memory.js';
@@ -28,14 +29,14 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
   recordingManifest('feishu',ctx=>testing?.recordings?.find(p=>p.id==='feishu')??createFeishuRecordings(ctx.config.connectors!.directory)),
   recordingManifest('dingtalk',ctx=>testing?.recordings?.find(p=>p.id==='dingtalk')??createDingtalkRecordings(ctx.config.connectors!.directory)),
   {apiVersion:1,id:'mcp',sourceKinds:['mcp'],statusKey:'mcp',create:ctx=>{
-    const remote=new RemoteMcp(ctx);let inbound:ReturnType<typeof registerMcp>|undefined;
+    const remote=new RemoteMcp(remoteMcpContext(ctx)),local=mcpContext(ctx);let inbound:ReturnType<typeof registerMcp>|undefined;
     return {
-      status:()=>({enabled:Boolean(ctx.config.connectors?.mcpEnabled),readConfigured:Boolean(ctx.config.connectors?.mcpReadToken),writeEnabled:Boolean(ctx.config.connectors?.mcpWriteEnabled&&ctx.config.connectors?.mcpWriteToken&&ctx.config.connectors?.mcpWriteSourceIds?.length),writeSourceIds:ctx.config.connectors?.mcpWriteSourceIds??[],endpoint:'/mcp'}),
+      status:()=>({enabled:Boolean(local.configuration().mcpEnabled),readConfigured:Boolean(local.configuration().mcpReadToken),writeEnabled:Boolean(local.configuration().mcpWriteEnabled&&local.configuration().mcpWriteToken&&local.configuration().mcpWriteSourceIds?.length),writeSourceIds:local.configuration().mcpWriteSourceIds??[],endpoint:'/mcp'}),
       configure:host=>{
         host.ownerRoute({method:'POST',path:'/api/connectors/mcp/discover',handler:req=>remote.discover(req.body)});
         host.ownerRoute({method:'POST',path:'/api/connectors/mcp/import',handler:req=>remote.import(req.body)});
       },
-      mountTransport:app=>{inbound=registerMcp(app,ctx);},
+      mountTransport:app=>{inbound=registerMcp(app,local);},
       close:async()=>{await Promise.all([remote.close(),inbound?.close()]);},
     };
   }},
