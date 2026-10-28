@@ -13,6 +13,7 @@ import {MemoryOutputValidationError,MEMORY_EXTRACTION_PROMPT,memoryEvidenceFinge
 import {memoryStrategyRefSchema} from './memory-strategy-contract.js';
 import {memoryReviewReceipt} from './memory-review.js';
 import type {MemoryPipeline} from './memory-pipeline.js';
+import type {MemoryOwnerPublication} from './memory-publication-contract.js';
 import type {MemoryLifecycle} from './memory-lifecycle.js';
 import type {MemoryInputSelection} from './evidence-read-ports.js';
 import type {FileStore} from './files.js';
@@ -21,11 +22,11 @@ import type {ModelAuthorizationHost} from './model-authorization-host.js';
 import type {ModelConnection} from './background-model-authorization.js';
 import {EvidenceExposurePolicy} from './evidence-exposure.js';
 import type {ManualMemoryInputPlanRequest} from './memory-input-plans.js';
-export function registerMemoryRoutes(app:FastifyInstance,{modelAuthorizationHost,availableModelConnections,memoryIntegrationSettings,memoryRecipeSettings,store,files,evidenceReader,memories,memoryPipeline,lifecycle,modelSettings,query,reviewExtraction}:{modelAuthorizationHost:ModelAuthorizationHost;availableModelConnections:()=>ModelConnection[];memoryIntegrationSettings:MemoryIntegrationSettings;memoryRecipeSettings:MemoryRecipeSettings;store:Store;files:FileStore;evidenceReader:MemoryInputSelection;memories:MemoryStore;memoryPipeline:MemoryPipeline;lifecycle:MemoryLifecycle;modelSettings:ModelSettingsStore;query:(input:QueryInput)=>Promise<QueryResult>;reviewExtraction:(input:QueryInput,result:QueryResult,strategy?:import('./memory-strategy-contract.js').MemoryReviewStrategy,draftOrigin?:import('./memory-review.js').MemoryDraftOrigin)=>Promise<QueryResult>}){
+export function registerMemoryRoutes(app:FastifyInstance,{ownerPublication,modelAuthorizationHost,availableModelConnections,memoryIntegrationSettings,memoryRecipeSettings,store,files,evidenceReader,memories,memoryPipeline,lifecycle,modelSettings,query,reviewExtraction}:{ownerPublication?:MemoryOwnerPublication;modelAuthorizationHost:ModelAuthorizationHost;availableModelConnections:()=>ModelConnection[];memoryIntegrationSettings:MemoryIntegrationSettings;memoryRecipeSettings:MemoryRecipeSettings;store:Store;files:FileStore;evidenceReader:MemoryInputSelection;memories:MemoryStore;memoryPipeline:MemoryPipeline;lifecycle:MemoryLifecycle;modelSettings:ModelSettingsStore;query:(input:QueryInput)=>Promise<QueryResult>;reviewExtraction:(input:QueryInput,result:QueryResult,strategy?:import('./memory-strategy-contract.js').MemoryReviewStrategy,draftOrigin?:import('./memory-review.js').MemoryDraftOrigin)=>Promise<QueryResult>}){
  const jobId=(params:unknown)=>z.object({id:z.string().uuid()}).parse(params).id;
-  app.post('/api/memories/:id/publish',async req=>{const body=z.object({version:z.number().int().positive().optional()}).strict().parse(req.body??{});return memoryPipeline.publication?memoryPipeline.publication.withOwnerWork(()=>memoryPipeline.publication!.publish((req.params as {id:string}).id,body.version)):memories.publish((req.params as {id:string}).id,body.version);});
-  app.post('/api/memories/:id/correct',async req=>memoryPipeline.publication?memoryPipeline.publication.withOwnerWork(()=>memoryPipeline.publication!.correct((req.params as {id:string}).id,req.body)):memories.correct((req.params as {id:string}).id,req.body));
-  app.delete('/api/memories/:id',async req=>memoryPipeline.publication?memoryPipeline.publication.delete((req.params as {id:string}).id):memories.delete((req.params as {id:string}).id));
+  app.post('/api/memories/:id/publish',async req=>{const body=z.object({version:z.number().int().positive().optional()}).strict().parse(req.body??{});return ownerPublication?ownerPublication.withOwnerWork(()=>ownerPublication!.publish((req.params as {id:string}).id,body.version)):memories.publish((req.params as {id:string}).id,body.version);});
+  app.post('/api/memories/:id/correct',async req=>ownerPublication?ownerPublication.withOwnerWork(()=>ownerPublication!.correct((req.params as {id:string}).id,req.body)):memories.correct((req.params as {id:string}).id,req.body));
+  app.delete('/api/memories/:id',async req=>ownerPublication?ownerPublication.delete((req.params as {id:string}).id):memories.delete((req.params as {id:string}).id));
   app.get('/api/memory-settings',async()=>lifecycle.view());
   app.put('/api/memory-settings',{bodyLimit:8192},async req=>lifecycle.save(req.body));
   app.post('/api/memory-settings/extraction/:id/retry',async(req,reply)=>{
@@ -142,6 +143,6 @@ export function registerMemoryRoutes(app:FastifyInstance,{modelAuthorizationHost
       memoryPipeline.publication?.assert(publication,result);const saved=memories.extract(result,profile.settings.model,{...options,prepared:publication?.prepared});memoryPipeline.publication?.committed(publication);return saved;
     },profile.id);
     }catch(error){memoryPipeline.nativeStages.abandon(context);throw error;}
-    };return modelAuthorizationHost.manual('owner-extract:'+randomUUID(),availableModelConnections(),()=>memoryPipeline.publication?memoryPipeline.publication.withOwnerWork(execute):execute());
+    };return modelAuthorizationHost.manual('owner-extract:'+randomUUID(),availableModelConnections(),()=>ownerPublication?ownerPublication.withOwnerWork(execute):execute());
   });
 }

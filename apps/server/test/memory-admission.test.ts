@@ -78,3 +78,26 @@ test('bounded automatic source rounds keep draining with current extraction sett
  l.configure({...l.settings(),extraction:{...l.settings().extraction,enabled:true}});await l.tick();assert.equal(l.view().extensions[0].cursor,6);
  now+=6*3600000;await l.tick();await l.tick();assert.equal(l.view().extensions[0].cursor,7);
 });
+
+test('owner HTTP mutations consume their own publication port while stage consumers retain only reviewed publication methods',async t=>{
+ const {buildApp}=await import('../src/app.js');
+ const directory=mkdtempSync(join(tmpdir(),'mote-owner-publication-port-')),token='generated-owner-publication-port';
+ const node=await buildApp({dataDir:directory,token,tokenPath:'generated',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false},{backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('No model belongs in this generated owner command');},close:async()=>{}}});
+ t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ const publication=node.memoryPublication;
+ const stage:import('../src/memory-publication-contract.js').MemoryStagePublication={retainedOutput:publication.retainedOutput.bind(publication),retainOutput:publication.retainOutput.bind(publication),stageExtract:publication.stageExtract.bind(publication),assert:publication.assert.bind(publication),committed:publication.committed.bind(publication)};
+ Object.defineProperty(node.memoryPipeline,'publication',{get:()=>stage});
+ const id=randomUUID();await node.store.ingest({id,deviceId:'generated',deviceName:'Generated',platform:'import',source:'note',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'Afternoon meetings only'});
+ const proposed=node.memories.extract(fixtureMemoryResult(node.memories,result(id)),'generated').items[0];
+ const headers={authorization:'Bearer '+token};
+ const denied=await node.app.inject({method:'POST',url:'/api/memories/'+proposed.id+'/publish',payload:{version:proposed.version}});
+ assert.equal(denied.statusCode,401);assert.equal(node.memories.get(proposed.id).status,'proposed');
+ const published=await node.app.inject({method:'POST',url:'/api/memories/'+proposed.id+'/publish',headers,payload:{version:proposed.version}});
+ assert.equal(published.statusCode,200,published.body);assert.equal(published.json().status,'published');assert.equal(published.json().version,proposed.version+1);
+ const corrected=await node.app.inject({method:'POST',url:'/api/memories/'+proposed.id+'/correct',headers,payload:{version:published.json().version,title:'Generated owner change',statement:'Morning meetings only',uncertainty:'Generated fixture'}});
+ assert.equal(corrected.statusCode,200,corrected.body);assert.equal(corrected.json().model,'owner');assert.equal(node.memories.get(proposed.id).supersededBy,corrected.json().id);
+ const stale=await node.app.inject({method:'POST',url:'/api/memories/'+proposed.id+'/correct',headers,payload:{version:proposed.version,title:'Generated stale change',statement:'Stale reply',uncertainty:'Generated fixture'}});assert.equal(stale.statusCode,409);
+ const deleted=await node.app.inject({method:'DELETE',url:'/api/memories/'+corrected.json().id,headers});
+ assert.equal(deleted.statusCode,200,deleted.body);assert.deepEqual(deleted.json(),{deleted:1,externalErase:'acknowledged',physicalEraseVerified:false});
+ const repeated=await node.app.inject({method:'DELETE',url:'/api/memories/'+corrected.json().id,headers});assert.equal(repeated.statusCode,200,repeated.body);assert.deepEqual(repeated.json(),{deleted:0,externalErase:'acknowledged',physicalEraseVerified:false});
+});

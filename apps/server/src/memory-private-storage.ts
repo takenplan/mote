@@ -2,7 +2,7 @@ import {moteText} from './i18n.js';
 import type {Store} from './store.js';
 import type {MemoryJob,MemoryBatch} from './memory-pipeline.js';
 
-export type MemoryPublicationDependencies={evidenceIds?:readonly string[];memoryIds?:readonly string[]};
+import type {MemoryPublicationDependencies} from './memory-publication-contract.js';
 /** Dependency routing is explicit host metadata, never an interpretation of
  * model prose. Persisted triggers also run in maintenance-only Store processes. */
 export function installMemoryPublicationRetirement(store:Store){

@@ -1,15 +1,15 @@
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import type {QueryResult} from '@mote/shared';
-import type {MemoryStore,MemoryExtractOptions,PreparedMemoryExtraction} from './memory.js';
+import type {MemoryStore,MemoryExtractOptions} from './memory.js';
 import type {MemoryBindings} from './memory-bindings.js';
 import {memoryProviderKey,memoryBodyDigest,withMemoryHostState,type MemoryProviderNamespace,type MemoryProviderReceipt} from './memory-provider-contract.js';
 import {ExecutionEngine,ExecutionFailure} from './execution-engine.js';
 import {sha256,StoreError,type Store} from './store.js';
 import {memorySchema,type Memory} from './memory-schema.js';
 import {randomUUID} from 'node:crypto';
-import {installMemoryPublicationRetirement,registerMemoryPublicationDependencies,memoryPublicationRetired,type MemoryPublicationDependencies} from './memory-private-storage.js';
+import {installMemoryPublicationRetirement,registerMemoryPublicationDependencies,memoryPublicationRetired} from './memory-private-storage.js';
 
-export type MemoryPublicationReceipt={operationId:string;binding:ReturnType<MemoryBindings['binding']>;prepared:PreparedMemoryExtraction;payloadHash:string};
+import type {MemoryPublicationReceipt,MemoryPublicationDependencies,MemoryStagePublication,MemoryOwnerPublication,MemoryOwnerDeletionResult} from './memory-publication-contract.js';
 function recordDependencies(records:Memory[]):MemoryPublicationDependencies{return {memoryIds:records.map(memory=>memory.id),evidenceIds:records.flatMap(memory=>memory.evidenceIds)};}
 function outputDependencies(output:any):MemoryPublicationDependencies{
   const ids=(rows:any)=>Array.isArray(rows)?rows.flatMap(row=>typeof row?.id==='string'?[row.id]:[]):[];
@@ -19,7 +19,7 @@ function outputDependencies(output:any):MemoryPublicationDependencies{
  * Their bodies and identities survive lost replies and host restarts; explicit
  * deletion/revocation retires prose while preserving reconciliation identities.
  * Only a verified receipt can make a control record visible to query readers. */
-export class MemoryPublication {
+export class MemoryPublication implements MemoryStagePublication,MemoryOwnerPublication {
   private activeOwnerWork=0;
   private dispose?:()=>Promise<void>;
   private poll?:ReturnType<typeof setInterval>;
@@ -147,7 +147,7 @@ export class MemoryPublication {
     const binding=JSON.stringify(intent.value.binding),result=await this.memories.correct(id,input,async(records,assert)=>this.stageRecords(operationId,records,()=>{if(binding!==JSON.stringify(this.bindings.binding()))throw new StoreError('Memory binding changed before correction',409);assert();}),intent.value.identity,()=>{this.store.db.prepare("UPDATE memory_owner_mutations SET state='committed' WHERE id=?").run(operationId);this.hostPublished(operationId);});
     return this.ownerResult(result.id);
   }
-  async delete(id:string){
+  async delete(id:string):Promise<MemoryOwnerDeletionResult>{
     // Host tombstones revoke reads before touching an external service. All
     // retained binding generations get durable erase intents, including history.
     const result=this.memories.delete(id);this.queueErases([id]);
