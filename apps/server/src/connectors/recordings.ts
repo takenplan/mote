@@ -1,11 +1,11 @@
 import {EXECUTION_POLICIES} from '../execution-policy.js';
-import {recordingMemoryRecipe} from './recording-memory.js';
+import {recordingResources,type RecordingContext} from './recording-context.js';
+import {initializeRecordingMedia} from './recording-state.js';
 import {z} from 'zod';
 import {StoreError} from '../store.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {recordingSelectionSchema,type RecordingSelection,type RecordingStatus,type Transcript} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionGrant} from '../execution-engine.js';
-import {ArchivedFileStore} from '../archived-files.js';
 import {PrivateFile} from './private-file.js';
 import {ConnectorError,type ConnectorContext} from './types.js';
 import {RecordingAuthorization,type RecordingAuthorizationPort} from './recording-authorization.js';
@@ -32,46 +32,47 @@ type Phase=typeof phases[number];
 
 /** Shared durable synchronization. Providers supply transport and decoding;
  * receipts, publication, recovery and cancellation remain host services. */
-export class RecordingConnector {
+class RecordingRuntime {
  private saved:Saved={version:1,selection:defaults(),epoch:randomUUID()};
  private readonly file:PrivateFile<Saved>;
- readonly engine:ExecutionEngine;
- private readonly owned:boolean;
+ private readonly execution:RecordingContext['engine'];
  private disposers:(()=>Promise<void>)[]=[];
  private timer?:ReturnType<typeof setInterval>;
  private initialized=false;private syncIntervalMs?:number;
- private closed=false;
+ private closed=false;private closePromise?:Promise<void>;private tasks=new Set<Promise<unknown>>();
  private error?:string;private bindingRevision=0;private bindingController=new AbortController();private bindingMutations:Promise<unknown>=Promise.resolve();
- constructor(private ctx:ConnectorContext,readonly provider:RecordingProvider){
-  new ArchivedFileStore(ctx.store);
-  ctx.store.db.exec(`CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_exports(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,metadata TEXT NOT NULL,observed_at TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('empty','unsupported')),PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_cursors(source_id TEXT PRIMARY KEY,epoch TEXT NOT NULL,scanned_until TEXT NOT NULL,full_at INTEGER NOT NULL);`);
-  this.file=new PrivateFile(ctx.config.connectors!.directory,`${provider.id}-recordings.json`);
-  this.engine=ctx.sourcePipelines?.engine??new ExecutionEngine(ctx.store);this.owned=!ctx.sourcePipelines;
+ constructor(private ctx:RecordingContext,readonly provider:RecordingProvider){
+  this.file=new PrivateFile(ctx.directory,`${provider.id}-recordings.json`);
+  this.execution=ctx.engine;
  }
  private sourceId(){return this.saved.account?`${this.provider.id}-recordings-${hash(this.saved.account.id).slice(0,24)}`:undefined;}
  private kind(phase:Phase){return `recording.${this.provider.id}.${phase}`;}
  private valid(step:ExecutionStep){return !this.closed&&this.saved.selection.enabled&&step.input.epoch===this.saved.epoch&&step.input.providerVersion===this.provider.version&&
   step.input.account===hash(this.saved.account?.id)&&Boolean(this.sourceId()&&this.ctx.sources.getSource(this.sourceId()!).enabled);}
- private authorize(step:ExecutionStep,grant:ExecutionGrant){grant.assert();if(!this.valid(step))throw new ExecutionFailure('stale','recording_binding_changed');}
+ private authorize(step:ExecutionStep,grant:ExecutionGrant){if(this.closed)throw new ExecutionFailure('stale','recording_binding_changed');grant.assert();if(!this.valid(step))throw new ExecutionFailure('stale','recording_binding_changed');}
  async init(){
-  const value=await this.file.read();if(value)this.saved=savedSchema.parse(value);
+  if(this.closed)throw new ConnectorError('connector_closed',503);
+  const value=await this.file.read();if(this.closed)throw new ConnectorError('connector_closed',503);if(value)this.saved=savedSchema.parse(value);
   if(this.saved.account)this.registerSource();
-  for(const phase of phases)this.disposers.push(this.engine.register({kind:this.kind(phase),pool:`recording.${phase}`,concurrency:()=>phase==='media'?1:2,
+  for(const phase of phases)this.disposers.push(this.execution.register({kind:this.kind(phase),pool:`recording.${phase}`,concurrency:()=>phase==='media'?1:2,
    policy:EXECUTION_POLICIES.networkAcquisition,timeoutMs:null,
    validate:step=>this.valid(step),resourceKeys:step=>[`recording:${this.provider.id}:${step.input.account}:${step.input.id??'discovery'}:${phase}`],
-   execute:async(step,signal,grant)=>{
-    const started=Date.now();this.observe(phase,'started',step);
-    try{this.authorize(step,grant);const current=await this.provider.account(signal);if(current.id!==this.saved.account!.id)throw new ExecutionFailure('blocked','recording_account_changed');
-     const result=await this.execute(phase,step,signal,grant);this.observe(phase,'completed',step,{durationMs:Date.now()-started});return result;
-    }catch(e){this.observe(phase,'failed',step,{durationMs:Date.now()-started});throw e;}
+   execute:(step,signal,grant)=>{
+    const task=(async()=>{
+     const started=Date.now();this.observe(phase,'started',step);
+     try{signal.throwIfAborted();this.authorize(step,grant);const current=await this.provider.account(signal);signal.throwIfAborted();this.authorize(step,grant);if(current.id!==this.saved.account!.id)throw new ExecutionFailure('blocked','recording_account_changed');
+      const result=await this.execute(phase,step,signal,grant);this.observe(phase,'completed',step,{durationMs:Date.now()-started});return result;
+     }catch(e){this.observe(phase,'failed',step,{durationMs:Date.now()-started});throw e;}
+    })();
+    this.tasks.add(task);void task.finally(()=>this.tasks.delete(task)).catch(()=>{});return task;
    },commit:(step,result)=>this.commit(phase,step,result),
    // Vendor throttling uses the existing finite acquisition budget. Keep its
    // code distinct from the engine's unbounded capacity-admission waits.
    classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&error.code==='lark_rate_limited'?new ExecutionFailure('transient','recording_rate_limited',60000):error instanceof ConnectorError&&['lark_operation_timeout','dingtalk_operation_timeout'].includes(error.code)?new ExecutionFailure('transient','provider_timeout'):error instanceof ConnectorError&&error.code==='recording_transcript_not_ready'?new ExecutionFailure('transient','recording_transcript_not_ready'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
     new ExecutionFailure('permanent','recording_provider_failed'),
   }));
-  this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);
-  void this.engine.tick();
+  this.initialized=true;this.configureSyncInterval(this.ctx.syncIntervalMs??300000);
+  void this.execution.tick();
  }
  configureSyncInterval(intervalMs:number){
   // This wake also drives durable retries; retain the existing five-minute ceiling.
@@ -84,7 +85,8 @@ export class RecordingConnector {
  private observe(phase:Phase|'decode'|'publish',state:'started'|'completed'|'failed',step:ExecutionStep,extra:{count?:number;bytes?:number;durationMs?:number}={}){
   this.ctx.diagnostics?.record(`source.${state}`,{operation:`recording_${phase}`,attempt:step.attempts,...extra},state==='failed'?'warn':'info');
  }
- private registerSource(enable?:boolean){const id=this.sourceId()!;this.ctx.sources.register({id,name:`${this.provider.id} recordings`,kind:`${this.provider.id}.recordings`,deviceId:id,platform:'import',retention:'archive',enabled:enable??this.saved.selection.enabled});if(enable!==undefined)this.ctx.sources.update(id,{enabled:enable});if(this.ctx.sourcePipelines&&!this.ctx.store.db.prepare('SELECT 1 FROM source_pipeline_config WHERE source_id=?').get(id))this.ctx.sourcePipelines?.configure(id,{settleSeconds:0});if(enable===true&&this.ctx.memoryRecipeSettings&&!this.ctx.store.db.prepare('SELECT 1 FROM memory_recipe_settings WHERE source_id=?').get(id))this.ctx.memoryRecipeSettings?.configure({sourceId:id,recipes:[recordingMemoryRecipe]});}
+ private registerSource(enable?:boolean){const id=this.sourceId()!;this.ctx.sources.register({id,name:`${this.provider.id} recordings`,kind:`${this.provider.id}.recordings`,deviceId:id,platform:'import',retention:'archive',enabled:enable??this.saved.selection.enabled});if(enable!==undefined)this.ctx.sources.update(id,{enabled:enable});this.ctx.configureDefaults(id,enable);}
+
  private serialBinding<T>(work:()=>Promise<T>):Promise<T>{const pending=this.bindingMutations.catch(()=>{}).then(work);this.bindingMutations=pending;return pending;}
  private bindingGrant(external?:RecordingBindingGrant){const revision=this.bindingRevision;return ()=>{if(this.closed||revision!==this.bindingRevision)throw new ConnectorError('recording_binding_changed',409);external?.signal.throwIfAborted();external?.assertCurrent();};}
  private async saveBinding(next:Saved,assertCurrent:()=>void){
@@ -102,7 +104,7 @@ export class RecordingConnector {
  select(raw:unknown){const selection=recordingSelectionSchema.parse(raw),assertCurrent=this.bindingGrant();return this.serialBinding(async()=>{assertCurrent();if(!this.saved.account)throw new ConnectorError('recording_not_connected');
   if(Math.ceil((Date.parse(selection.end??new Date().toISOString())-Date.parse(selection.start))/(27*86400000))>240)throw new ConnectorError('recording_range_limit');
   this.cancel();await this.saveBinding({...this.saved,selection,epoch:randomUUID()},assertCurrent);if(selection.enabled)this.sync();return this.status();});}
- private cancel(){for(const phase of phases)this.engine.cancelKind(this.kind(phase));}
+ private cancel(){for(const phase of phases)this.execution.cancelKind(this.kind(phase));}
  retireAuthorization(grant:RecordingBindingGrant){this.bindingRevision++;this.bindingController.abort();this.bindingController=new AbortController();this.cancel();const assertCurrent=this.bindingGrant(grant);return this.serialBinding(async()=>{assertCurrent();await this.saveBinding({...this.saved,selection:{...this.saved.selection,enabled:false},epoch:randomUUID()},assertCurrent);});}
  disconnect(){this.bindingRevision++;this.bindingController.abort();this.bindingController=new AbortController();this.cancel();const assertCurrent=this.bindingGrant();return this.serialBinding(async()=>{assertCurrent();await this.saveBinding({...this.saved,account:undefined,selection:{...this.saved.selection,enabled:false},epoch:randomUUID()},assertCurrent);return this.status();});}
  private enqueue(phase:Phase,operationId:string,input:Record<string,unknown>){const bound={...input,epoch:this.saved.epoch,account:hash(this.saved.account!.id),providerVersion:this.provider.version};
@@ -110,17 +112,17 @@ export class RecordingConnector {
   // Do not multiply blocked downloads or reset their retry budget every poll.
   if(phase==='media'){
    // Reuse earlier transcript-dependent receipts too; upgrading must not multiply failed backups.
-   const prior=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND json_extract(input,'$.epoch')=? AND json_extract(input,'$.account')=? AND json_extract(input,'$.providerVersion')=? AND json_extract(input,'$.id')=? LIMIT 1").get(this.kind(phase),bound.epoch,bound.account,bound.providerVersion,String(input.id));
-   if(prior)return this.engine.get(String(prior.id));
+   const prior=this.ctx.work.mediaAttempt(this.kind(phase),bound.epoch,bound.account,bound.providerVersion,String(input.id));
+   if(prior)return this.execution.get(prior);
   }
   if(phase==='transcript'){
-   const prior=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND state IN ('waiting','running','failed','blocked') AND json_extract(input,'$.epoch')=? AND json_extract(input,'$.id')=? LIMIT 1").get(this.kind(phase),bound.epoch,String(input.id));
-   if(prior)return this.engine.get(String(prior.id));
+   const prior=this.ctx.work.transcriptAttempt(this.kind(phase),bound.epoch,String(input.id));
+   if(prior)return this.execution.get(prior);
   }
-  return this.engine.enqueue(operationId,this.kind(phase),bound,phase==='media'?{id:hash([this.kind(phase),bound])}:{});}
- sync(full=true){if(!this.saved.account||!this.saved.selection.enabled)throw new ConnectorError('recording_not_connected');
-  const existing=Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind=? AND state IN ('waiting','running','blocked','failed') AND json_extract(input,'$.epoch')=?").get(this.kind('discover'),this.saved.epoch)!.n);if(existing)return this.status();
-  const end=this.saved.selection.end??new Date().toISOString();const cursor=this.ctx.store.db.prepare('SELECT * FROM recording_cursors WHERE source_id=? AND epoch=?').get(this.sourceId()!,this.saved.epoch);
+  return this.execution.enqueue(operationId,this.kind(phase),bound,phase==='media'?{id:hash([this.kind(phase),bound])}:{});}
+ sync(full=true){if(this.closed)throw new ConnectorError('connector_closed',503);if(!this.saved.account||!this.saved.selection.enabled)throw new ConnectorError('recording_not_connected');
+  const existing=this.ctx.work.activeDiscovery(this.kind('discover'),this.saved.epoch);if(existing)return this.status();
+  const end=this.saved.selection.end??new Date().toISOString();const cursor=this.ctx.state.cursor(this.sourceId()!,this.saved.epoch);
   const isFull=full||!cursor||Date.now()-Number(cursor.full_at)>86400000;
   const start=isFull?this.saved.selection.start:new Date(Math.max(Date.parse(this.saved.selection.start),Date.parse(String(cursor!.scanned_until))-7*86400000)).toISOString();
   if(Math.max(1,Math.ceil((Date.parse(end)-Date.parse(start))/(27*86400000)))>240)throw new ConnectorError('recording_range_limit');
@@ -129,26 +131,26 @@ export class RecordingConnector {
   let from=Date.parse(start);const until=Date.parse(end);let windows=0;
   while(from<=until){if(++windows>240)throw new ConnectorError('recording_range_limit');const to=Math.min(until,from+27*86400000);
    this.enqueue('discover',operation,{start:new Date(from).toISOString(),end:new Date(to).toISOString(),page:0,runEnd:end,runFull:isFull});if(to===until)break;from=to;}
-  void this.engine.tick();return this.status();
+  void this.execution.tick();return this.status();
  }
- async tick(){if(this.closed)return;if(this.saved.account&&this.saved.selection.enabled&&this.saved.selection.autoSync){try{this.sync(false);}catch{this.error='recording_sync_failed';}}await this.engine.tick();}
- async drain(){for(let n=0;n<100;n++){const steps=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('waiting','running') AND available_at<=? LIMIT 100").all(JSON.stringify(phases.map(p=>this.kind(p))),Date.now()) as {id:string}[];if(!steps.length)return;await this.engine.drain(steps.map(s=>s.id));}}
+ async tick(){if(this.closed)return;if(this.saved.account&&this.saved.selection.enabled&&this.saved.selection.autoSync){try{this.sync(false);}catch{this.error='recording_sync_failed';}}await this.execution.tick();}
+ async drain(){for(let n=0;n<100;n++){if(this.closed)return;const steps=this.ctx.work.dueSteps(phases.map(p=>this.kind(p)),Date.now());if(!steps.length)return;await this.execution.drain(steps);}}
  private async execute(phase:Phase,step:ExecutionStep,signal:AbortSignal,grant:ExecutionGrant):Promise<unknown>{
   const account=this.saved.account!,input=step.input,sourceId=this.sourceId()!,authorize=()=>{signal.throwIfAborted();this.authorize(step,grant);};
-  if(phase==='discover'){const page=await this.provider.discover(account,{start:String(input.start),end:String(input.end),...(input.cursor?{cursor:String(input.cursor)}:{})},signal);
-   if(page.ids.length>100||Number(input.page)>10000||page.next&&(page.next===input.cursor||Boolean(this.ctx.store.db.prepare("SELECT 1 FROM execution_steps WHERE operation_id=? AND kind=? AND json_extract(input,'$.start')=? AND json_extract(input,'$.cursor')=?").get(step.operationId,this.kind('discover'),String(input.start),page.next))))throw new ExecutionFailure('permanent','recording_pagination_invalid');
+  if(phase==='discover'){const page=await this.provider.discover(account,{start:String(input.start),end:String(input.end),...(input.cursor?{cursor:String(input.cursor)}:{})},signal);authorize();
+   if(page.ids.length>100||Number(input.page)>10000||page.next&&(page.next===input.cursor||this.ctx.work.hasPage(step.operationId,this.kind('discover'),String(input.start),page.next)))throw new ExecutionFailure('permanent','recording_pagination_invalid');
    this.observe(phase,'completed',step,{count:page.ids.length});return page;}
   const id=String(input.id);
-  if(phase==='metadata'){const metadata=await this.provider.metadata(account,id,signal);if(metadata.id!==id||!Number.isFinite(metadata.durationMs)||metadata.durationMs<0)throw new ExecutionFailure('permanent','recording_identity_invalid');return metadata;}
+  if(phase==='metadata'){const metadata=await this.provider.metadata(account,id,signal);authorize();if(metadata.id!==id||!Number.isFinite(metadata.durationMs)||metadata.durationMs<0)throw new ExecutionFailure('permanent','recording_identity_invalid');return metadata;}
   const metadata=input.metadata as unknown as RecordingMetadata;
   if(phase==='transcript'){
-   const result=await this.provider.transcript(account,metadata,signal);if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();this.observe('decode','completed',step,{count:result.transcript?.segments.length??0});
-   if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');
+   const result=await this.provider.transcript(account,metadata,signal);authorize();if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();this.observe('decode','completed',step,{count:result.transcript?.segments.length??0});
+   if(this.ctx.state.forgotten(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');
    if(!result.transcript||result.formatError){
-    const requireAllowed=()=>{authorize();if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');};
+    const requireAllowed=()=>{authorize();if(this.ctx.state.forgotten(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');};
     // Preserve the export without creating full-text evidence or a Memory input.
-    const bytes=Buffer.from(result.rawText),file=new ArchivedFileStore(this.ctx.store).putParts({name:`recording-export-${hash([sourceId,id])}.txt`,mimeType:'text/plain'},[bytes],bytes.length,requireAllowed);
-    if(result.formatError){grant.commit(()=>this.ctx.store.db.prepare("INSERT INTO recording_exports VALUES(?,?,?,?,?,'unsupported') ON CONFLICT(source_id,external_id) DO UPDATE SET file_id=excluded.file_id,metadata=excluded.metadata,observed_at=excluded.observed_at,state=excluded.state").run(sourceId,id,file.id,JSON.stringify(metadata),new Date().toISOString()));throw new ExecutionFailure('permanent',result.formatError);}
+    const bytes=Buffer.from(result.rawText),file=this.ctx.archives.putParts({name:`recording-export-${hash([sourceId,id])}.txt`,mimeType:'text/plain'},[bytes],bytes.length,requireAllowed);
+    if(result.formatError){grant.commit(()=>this.ctx.state.exportReceipt(sourceId,id,file.id,metadata,new Date().toISOString(),'unsupported'));throw new ExecutionFailure('permanent',result.formatError);}
     return {id,empty:true,fileId:file.id,metadata,observedAt:new Date().toISOString()};
    }
    if(!this.ctx.files)throw new ExecutionFailure('blocked','recording_storage_unavailable');
@@ -156,77 +158,97 @@ export class RecordingConnector {
    // time anchor. It does not assign the described events an occurrence date.
    const corpusTime=metadata.recordedAt??metadata.createdAt;
    const ack=await this.ctx.files.transcriptRevision(sourceId,{externalId:id,kind:'file',title:metadata.title,observedAt:new Date().toISOString(),deleted:false,
-    ...(metadata.uri?{uri:metadata.uri}:{}),document:{contentRole:'transcript',...(corpusTime?{recordedAt:corpusTime,timeBasis:'recorded'}:{timeBasis:'unknown'})}},result.rawText,result.transcript,authorize);
+    ...(metadata.uri?{uri:metadata.uri}:{}),document:{contentRole:'transcript',...(corpusTime?{recordedAt:corpusTime,timeBasis:'recorded'}:{timeBasis:'unknown'})}},result.rawText,result.transcript,authorize);authorize();
    this.observe('publish','completed',step,{count:ack.duplicate?0:1});
-   const prior=this.ctx.store.db.prepare('SELECT file_id FROM recording_media WHERE source_id=? AND external_id=?').get(sourceId,id);
-   if(prior)grant.commit(()=>new ArchivedFileStore(this.ctx.store).attach(ack.id,[String(prior.file_id)]));
+   const prior=this.ctx.state.media(sourceId,id);
+   if(prior)grant.commit(()=>this.ctx.archives.attach(ack.id,[prior]));
    return {captureId:ack.id,id};
   }
   // Media owns its durable receipt before any transcript exists. Both paths recheck deletion and grants.
-  const requireAllowed=()=>{authorize();if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');};
+  const requireAllowed=()=>{authorize();if(this.ctx.state.forgotten(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');};
   requireAllowed();
-  const existing=this.ctx.store.db.prepare('SELECT file_id FROM recording_media WHERE source_id=? AND external_id=?').get(sourceId,id);
-  if(existing)return {fileId:String(existing.file_id),id};
-  const media=await this.provider.media(account,metadata,signal);if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();
-  const archived=new ArchivedFileStore(this.ctx.store),file=archived.putRecordingMedia({name:`recording-${hash([sourceId,id])}.${({'audio/wav':'wav','audio/mp4':'m4a','audio/mpeg':'mp3','audio/flac':'flac','audio/ogg':'ogg'} as Record<string,string>)[media.mimeType]??'audio'}`,mimeType:media.mimeType,bytes:media.bytes},requireAllowed);
+  const existing=this.ctx.state.media(sourceId,id);
+  if(existing)return {fileId:existing,id};
+  const media=await this.provider.media(account,metadata,signal);authorize();if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();
+  const file=this.ctx.archives.putRecordingMedia({name:`recording-${hash([sourceId,id])}.${({'audio/wav':'wav','audio/mp4':'m4a','audio/mpeg':'mp3','audio/flac':'flac','audio/ogg':'ogg'} as Record<string,string>)[media.mimeType]??'audio'}`,mimeType:media.mimeType,bytes:media.bytes},requireAllowed);
   this.observe(phase,'completed',step,{bytes:media.bytes.length});return {fileId:file.id,id};
  }
  private commit(phase:Phase,step:ExecutionStep,result:unknown){const value=result as any;
   if(phase==='transcript'){
-   if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(this.sourceId()!,value.id))throw new ExecutionFailure('stale','recording_evidence_changed');
-   if(value.empty)this.ctx.store.db.prepare("INSERT INTO recording_exports VALUES(?,?,?,?,?,'empty') ON CONFLICT(source_id,external_id) DO UPDATE SET file_id=excluded.file_id,metadata=excluded.metadata,observed_at=excluded.observed_at,state=excluded.state").run(this.sourceId()!,value.id,value.fileId,JSON.stringify(value.metadata),value.observedAt);
-   else this.ctx.store.db.prepare('DELETE FROM recording_exports WHERE source_id=? AND external_id=?').run(this.sourceId()!,value.id);
+   if(this.ctx.state.forgotten(this.sourceId()!,value.id))throw new ExecutionFailure('stale','recording_evidence_changed');
+   if(value.empty)this.ctx.state.exportReceipt(this.sourceId()!,value.id,value.fileId,value.metadata,value.observedAt,'empty');
+   else this.ctx.state.dropExport(this.sourceId()!,value.id);
   }else if(phase==='discover'){
    for(const id of new Set<string>(value.ids))this.enqueue('metadata',step.operationId,{id,discovery:step.id});
    if(value.next)this.enqueue('discover',step.operationId,{start:step.input.start,end:step.input.end,cursor:value.next,page:Number(step.input.page)+1,runEnd:step.input.runEnd,runFull:step.input.runFull});
-   else {const others=this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE operation_id=? AND kind=? AND id!=? AND state!='succeeded'").get(step.operationId,this.kind('discover'),step.id);if(Number(others!.n)===0)this.ctx.store.db.prepare('INSERT INTO recording_cursors VALUES(?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET epoch=excluded.epoch,scanned_until=excluded.scanned_until,full_at=CASE WHEN excluded.full_at>0 THEN excluded.full_at ELSE recording_cursors.full_at END').run(this.sourceId()!,this.saved.epoch,String(step.input.runEnd),step.input.runFull?Date.now():0);}
+   else {const others=this.ctx.work.remainingDiscovery(step.operationId,this.kind('discover'),step.id);if(others===0)this.ctx.state.advanceCursor(this.sourceId()!,this.saved.epoch,String(step.input.runEnd),step.input.runFull?Date.now():0);}
   }else if(phase==='metadata'){
    const at=value.createdAt??value.recordedAt;if(at&&(Date.parse(at)<Date.parse(this.saved.selection.start)||this.saved.selection.end&&Date.parse(at)>Date.parse(this.saved.selection.end)))return;
    this.enqueue('transcript',step.operationId,{id:step.input.id,metadata:value,discovery:step.input.discovery});
    if(this.saved.selection.backupAudio)this.enqueue('media',step.operationId,{id:step.input.id,metadata:value});
   }else if(phase==='media'){
-   if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(this.sourceId()!,value.id))throw new ExecutionFailure('stale','recording_evidence_changed');
-   this.ctx.store.db.prepare('INSERT OR REPLACE INTO recording_media VALUES(?,?,?)').run(this.sourceId()!,value.id,value.fileId);
-   const head=this.ctx.store.db.prepare('SELECT capture_id FROM file_heads WHERE source_id=? AND external_id=?').get(this.sourceId()!,value.id);
-   if(head&&this.ctx.store.isCurrentEvidence(String(head.capture_id))){
-    new ArchivedFileStore(this.ctx.store).attach(String(head.capture_id),[value.fileId]);
-    this.ctx.store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(String(head.capture_id),new Date().toISOString());
-   }
+   if(this.ctx.state.forgotten(this.sourceId()!,value.id))throw new ExecutionFailure('stale','recording_evidence_changed');
+   this.ctx.state.publishMedia(this.sourceId()!,value.id,value.fileId);
   }
  }
  status():RecordingStatus {
   const sourceId=this.sourceId(),all=this.steps({limit:100,problemsFirst:true}).items;
-  const transcripts=sourceId?Number(this.ctx.store.db.prepare('SELECT count(*) n FROM file_heads WHERE source_id=?').get(sourceId)!.n):0;
-  const audio=sourceId?Number(this.ctx.store.db.prepare('SELECT count(*) n FROM recording_media WHERE source_id=?').get(sourceId)!.n):0;
+  const counts=sourceId?this.ctx.state.counts(sourceId):{transcripts:0,audio:0,empty:0};
   return {provider:this.provider.id,connected:Boolean(this.saved.account),accountName:this.saved.account?.name,sourceId,selection:this.saved.selection,
    steps:all,stepsTotal:this.count(['waiting','running','succeeded','failed','blocked','cancelled','stale']),
-   counts:{transcripts,audio,empty:sourceId?Number(this.ctx.store.db.prepare("SELECT count(*) n FROM recording_exports WHERE source_id=? AND state='empty'").get(sourceId)!.n):0,pending:this.count(['running','waiting']),failed:this.count(['failed','blocked'])},...(this.error?{error:this.error}:{})};
+   counts:{...counts,pending:this.count(['running','waiting']),failed:this.count(['failed','blocked'])},...(this.error?{error:this.error}:{})};
  }
  steps(args:{cursor?:number;limit?:number;problemsFirst?:boolean}={}){
-  const limit=Math.max(1,Math.min(args.limit??50,100)),clauses=["kind IN (SELECT value FROM json_each(?))","json_extract(input,'$.epoch')=?"],values:(string|number)[]=[JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch];
-  if(args.cursor!==undefined){clauses.push('rowid<?');values.push(args.cursor);}
-  const rows=this.ctx.store.db.prepare(`SELECT rowid,id FROM execution_steps WHERE ${clauses.join(' AND ')} ORDER BY ${args.problemsFirst?"state IN ('failed','blocked') DESC,":''}rowid DESC LIMIT ?`).all(...values,limit+1);
-  return {items:rows.slice(0,limit).map(row=>{const s=this.engine.get(String(row.id))!;return {id:s.id,phase:s.kind.split('.').at(-1)!,state:s.state,attempts:s.attempts,availableAt:s.availableAt,...(s.input.metadata?{title:(s.input.metadata as unknown as RecordingMetadata).title}:{}),...(s.error?{error:s.error}:{})};}),nextCursor:rows.length>limit?Number(rows[limit-1]!.rowid):null};
+  const limit=Math.max(1,Math.min(args.limit??50,100));
+  const rows=this.ctx.work.steps(phases.map(p=>this.kind(p)),this.saved.epoch,{...args,limit});
+  return {items:rows.slice(0,limit).map(row=>{const s=this.execution.get(String(row.id))!;return {id:s.id,phase:s.kind.split('.').at(-1)!,state:s.state,attempts:s.attempts,availableAt:s.availableAt,...(s.input.metadata?{title:(s.input.metadata as unknown as RecordingMetadata).title}:{}),...(s.error?{error:s.error}:{})};}),nextCursor:rows.length>limit?Number(rows[limit-1]!.rowid):null};
  }
  items(includeExports=false){
   const sourceId=this.sourceId();if(!sourceId)return {items:[]};
-  const archived=new ArchivedFileStore(this.ctx.store);
-  const rows=this.ctx.store.db.prepare('SELECT h.external_id,h.capture_id,m.file_id FROM file_heads h LEFT JOIN recording_media m ON m.source_id=h.source_id AND m.external_id=h.external_id JOIN captures c ON c.id=h.capture_id WHERE h.source_id=? ORDER BY c.received_at DESC LIMIT 30').all(sourceId) as {external_id:string;capture_id:string;file_id:string|null}[];
+  const archived=this.ctx.archives;
+  const rows=this.ctx.state.transcripts(sourceId);
   const full=rows.map(row=>{const item=this.ctx.sources.getItem(sourceId,row.external_id)!;return {id:row.external_id,captureId:row.capture_id,title:item.title,observedAt:item.observedAt,recordedAt:item.document?.recordedAt,...(row.file_id?{audio:archived.get(row.file_id)}:{})};});
   if(!includeExports)return {items:full};
-  const empty=this.ctx.store.db.prepare('SELECT e.*,m.file_id AS audio_id FROM recording_exports e LEFT JOIN recording_media m ON m.source_id=e.source_id AND m.external_id=e.external_id WHERE e.source_id=? ORDER BY e.observed_at DESC LIMIT 30').all(sourceId).map(row=>{const metadata=JSON.parse(String(row.metadata)) as RecordingMetadata;return {id:String(row.external_id),title:metadata.title,observedAt:String(row.observed_at),recordedAt:metadata.recordedAt,empty:row.state==='empty',unsupported:row.state==='unsupported',export:archived.get(String(row.file_id)),...(row.audio_id?{audio:archived.get(String(row.audio_id))}:{})};});
+  const empty=this.ctx.state.exports(sourceId).map(row=>{const metadata=JSON.parse(String(row.metadata)) as RecordingMetadata;return {id:String(row.external_id),title:metadata.title,observedAt:String(row.observed_at),recordedAt:metadata.recordedAt,empty:row.state==='empty',unsupported:row.state==='unsupported',export:archived.get(String(row.file_id)),...(row.audio_id?{audio:archived.get(String(row.audio_id))}:{})};});
   return {items:[...empty,...full.filter(item=>!empty.some(receipt=>receipt.id===item.id))].sort((a,b)=>b.observedAt.localeCompare(a.observedAt)).slice(0,30)};
  }
- private count(states:string[]){return Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN (SELECT value FROM json_each(?)) AND json_extract(input,'$.epoch')=?").get(JSON.stringify(phases.map(p=>this.kind(p))),JSON.stringify(states),this.saved.epoch)!.n);}
- retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id,true);void this.engine.tick();return this.status();}
- async close(){this.closed=true;this.bindingRevision++;this.bindingController.abort();await this.bindingMutations.catch(()=>{});clearInterval(this.timer);this.timer=undefined;for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
+ private count(states:string[]){return this.ctx.work.count(phases.map(p=>this.kind(p)),states,this.saved.epoch);}
+ retry(){if(this.closed)throw new ConnectorError('connector_closed',503);const ids=this.ctx.work.retryableSteps(phases.map(p=>this.kind(p)),this.saved.epoch);for(const id of ids)if(this.valid(this.execution.get(id)!))this.execution.retry(id,true);void this.execution.tick();return this.status();}
+ close(){
+  if(this.closePromise)return this.closePromise;
+  this.closed=true;this.closePromise=Promise.resolve().then(()=>this.finishClose());
+  this.bindingRevision++;this.bindingController.abort();clearInterval(this.timer);this.timer=undefined;
+  return this.closePromise;
+ }
+ private async finishClose(){
+  const errors:unknown[]=[];
+  await this.bindingMutations.catch(()=>{});
+  const retired=await Promise.allSettled(this.disposers.map(dispose=>Promise.resolve().then(dispose)));
+  for(const result of retired)if(result.status==='rejected')errors.push(result.reason);
+  // Unregister interrupts logical engine work. Provider resources remain live
+  // until the actual issued calls and their callbacks have physically settled.
+  await Promise.allSettled([...this.tasks]);
+  for(const dispose of [()=>this.ctx.closeEngine(),()=>this.provider.close?.(),()=>this.file.flush()])try{await dispose();}catch(error){errors.push(error);}
+  if(errors.length)throw new AggregateError(errors,'Recording connector cleanup failed');
+ }
+}
+
+/** The trusted extension composition entry keeps its established constructor
+ * and engine API. Processing uses only the projected runtime capabilities. */
+export class RecordingConnector extends RecordingRuntime {
+ readonly engine:ExecutionEngine;
+ constructor(context:ConnectorContext,provider:RecordingProvider){
+  const resources=recordingResources(context);
+  super(resources.context,provider);
+  this.engine=resources.engine;
+ }
 }
 
 /** New providers use this same manifest; no new owner transport or task engine. */
 export function recordingManifest(id:string,create:(ctx:ConnectorContext)=>RecordingProvider,options:Pick<RecordingStatus,'label'|'setup'>={}):ConnectorManifest{return {
  apiVersion:1,id:`${id}-recordings`,statusKey:`${id}-recordings`,sourceKinds:[{kind:`${id}.recordings`,capabilities:{lifecycle:'continuous',discovery:'provider-list',listening:'polling',readOriginal:'explicit-provider-read',synchronization:'revisions',externalWrite:false}}],
  create:ctx=>{
-  ctx.store.db.exec('CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id))');
+  initializeRecordingMedia(ctx.store);
   const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),authorization=provider.authorization?new RecordingAuthorization(connector,provider.authorization):undefined,status=()=>({...connector.status(),...(authorization?{authorization:authorization.status()}:{}),category:'recordings' as const,...options});return {status,init:()=>connector.init(),configureSyncInterval:interval=>connector.configureSyncInterval(interval),close:async()=>{await authorization?.close();await connector.close();},configure:host=>{
    const path=`/api/connectors/${id}-recordings` as const;
    host.ownerRoute({method:'GET',path,handler:status});
