@@ -50,9 +50,9 @@ export function taskPlan(task, root = '.', selectedServer = ['all']) {
   if (/^server-[1-4]$/.test(task)) return [...libs(), server(serverFiles(Number(task.at(-1)), root, selectedServer), '--test-skip-pattern', automaticSkipPattern)];
   if (task === 'server-contract') return [...libs(), npm('build', '-w', '@mote/server'), server(['apps/server/test/connections.test.ts', 'apps/server/test/runtime-listener.test.ts']), node('--test', 'scripts/update-tests.mjs', 'scripts/update-deployment-tests.mjs'), node('scripts/test-central-runner.mjs')];
   if (task === 'desktop' || task === 'desktop-contract') {
-    const plan = [sharedBuild(), npm('build', '-w', '@mote/diagnostics')];
+    const plan = [...libs(), npm('build', '-w', '@mote/diagnostics')];
     if (task === 'desktop') plan.push(npm('typecheck', '-w', '@mote/desktop'), npm('test', '-w', '@mote/diagnostics'), npm('test', '-w', '@mote/desktop'));
-    else plan.push(npm('test', '-w', '@mote/desktop', '--', 'test/connection-binding.test.ts', 'test/coding-transport-compatibility.test.ts'));
+    else plan.push(npm('test', '-w', '@mote/desktop', '--', 'test/connection-binding.test.ts', 'test/coding-transport-compatibility.test.ts', 'test/central-navigation.test.ts'));
     return plan;
   }
   throw Error(`Unknown check task: ${task}`);

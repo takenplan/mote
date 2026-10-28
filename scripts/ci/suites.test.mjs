@@ -153,6 +153,25 @@ test('Web regression preparation builds the Agent runtime needed by real Server 
   assert.deepEqual(taskPlan('web-contract').filter(step => step.command === 'npm').map(step => step.args), [['run', 'build', '-w', '@mote/shared']]);
 });
 
+test('Desktop plans build the Agent runtime before the real browser authentication contract', () => {
+  for (const task of ['desktop', 'desktop-contract']) {
+    const plan = taskPlan(task);
+    const build = workspace => plan.findIndex(step => step.command === 'npm' && step.args[1] === 'build' && step.args.includes(workspace));
+    const desktopTests = plan.findIndex(step => step.command === 'npm' && step.args[1] === 'test' && step.args.includes('@mote/desktop'));
+    assert.ok(build('@mote/shared') >= 0, 'Agent and Desktop consume compiled Shared contracts');
+    assert.ok(build('@mote/agent') >= 0, 'Desktop browser authentication fixtures import the real Server and Agent runtime');
+    assert.ok(build('@mote/diagnostics') >= 0, 'Desktop consumes compiled Diagnostics outputs');
+    assert.ok(build('@mote/shared') < build('@mote/agent'));
+    assert.ok(build('@mote/agent') < desktopTests, `${task} must prepare Agent before its consumer runs`);
+    assert.ok(build('@mote/diagnostics') < desktopTests);
+    assert.ok(!plan.some(step => step.args.includes('test') && (step.args.includes('@mote/agent') || step.args.includes('@mote/server'))));
+  }
+  const contracts = taskPlan('desktop-contract').find(step => step.args.includes('@mote/desktop'));
+  assert.ok(contracts.args.includes('test/central-navigation.test.ts'), 'The light Desktop contract selection exercises the current browser ticket entry');
+  assert.ok(contracts.args.includes('test/connection-binding.test.ts'));
+  assert.ok(contracts.args.includes('test/coding-transport-compatibility.test.ts'));
+});
+
 test('Server contracts build the runnable Central release before update and rollback process fixtures', () => {
   const plan = taskPlan('server-contract');
   const build = workspace => plan.findIndex(step => step.command === 'npm' && step.args[1] === 'build' && step.args.includes(workspace));
