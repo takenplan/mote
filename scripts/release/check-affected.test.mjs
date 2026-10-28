@@ -22,6 +22,23 @@ test('local checks use independent light scopes, never broad component or heavy 
   assert.ok(android.args.includes(':app:testDebugUnitTest'));
 });
 
+test('local intake checks run the real Kotlin consumer once, focused for producers and combined for Android consumers', () => {
+  const runner = 'apps/android/test-fixtures/central-kotlin-contract.ts';
+  for (const event of ['local', 'pull_request', 'push']) {
+    for (const path of ['apps/server/src/file-routes.ts', 'apps/android/app/src/main/java/dev/mote/collector/CentralNotes.kt']) {
+      const plan = checkPlan(selectScopes([path]), { event });
+      const contracts = plan.filter(step => step.args.includes(runner));
+      assert.equal(contracts.length, 1);
+      assert.equal(contracts[0].args.includes('--all-unit-tests'), event !== 'push' && path.startsWith('apps/android/'));
+      assert.equal(plan.filter(step => step.command === 'apps/android/gradlew').length, 0, 'the runner owns the sole Gradle invocation');
+      for (const workspace of ['@mote/shared', '@mote/agent']) assert.ok(plan.some(step => step.command === 'npm' && step.args.includes('build') && step.args.includes(workspace)));
+    }
+  }
+  const unrelated = checkPlan(selectScopes(['apps/server/src/memory-review.ts']));
+  assert.ok(!unrelated.some(step => step.args.includes(runner) || step.command === 'apps/android/gradlew'));
+  assert.deepEqual(checkPlan(selectScopes(['docs/testing.md'])), []);
+});
+
 function repository(t) {
   const directory = mkdtempSync(join(tmpdir(), 'mote-affected-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -128,7 +145,7 @@ test('actual tooling-only CLI executes regression checks without invoking applic
   const { directory, write, base } = repository(t);
   const marker = join(directory, 'regression-ran');
   write('scripts/release/affected-components.mjs');
-  write('scripts/release/check-affected.test.mjs', `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'passed');`);
+  write('scripts/release/components.test.mjs', `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'passed');`);
   // Start as a user's CLI, not as a child worker of this test runner.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;

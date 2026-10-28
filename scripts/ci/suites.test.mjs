@@ -37,13 +37,18 @@ test('every automatic plan excludes the long file and large case, while manual s
   assert.throws(() => manualPlan('scale', 'typo')); assert.throws(() => taskPlan('typo')); assert.throws(() => serverFiles(0));
 });
 test('required gate rejects selection failure, failed/cancelled jobs and an unexpected skip', () => {
-  const needs = { affected: { result: 'success', outputs: { node: 'true', android: 'false' } }, regressions: { result: 'success' }, android: { result: 'skipped' } };
+  const needs = { affected: { result: 'success', outputs: { node: 'true', android: 'false', android_contract: 'false' } }, regressions: { result: 'success' }, android: { result: 'skipped' } };
   verifyGate(needs);
   for (const result of ['failure', 'cancelled', 'skipped', undefined]) assert.throws(() => verifyGate({ ...needs, regressions: { result } }));
   for (const result of ['failure', 'cancelled', 'skipped']) assert.throws(() => verifyGate({ ...needs, affected: { ...needs.affected, result } }));
   assert.throws(() => verifyGate({ ...needs, affected: { result: 'success', outputs: {} } }));
-  verifyGate({ ...needs, affected: { result: 'success', outputs: { node: 'false', android: 'false' } }, regressions: { result: 'skipped' } });
+  verifyGate({ ...needs, affected: { result: 'success', outputs: { node: 'false', android: 'false', android_contract: 'false' } }, regressions: { result: 'skipped' } });
   assert.throws(() => verifyGate({ ...needs, android: { result: 'success' } }));
+  const contract = { ...needs, affected: { result: 'success', outputs: { node: 'true', android: 'false', android_contract: 'true' } }, android: { result: 'success' } };
+  verifyGate(contract);
+  for (const result of ['failure', 'cancelled', 'skipped', undefined]) assert.throws(() => verifyGate({ ...contract, android: { result } }));
+  for (const value of [undefined, '', 'typo']) assert.throws(() => verifyGate({ ...contract, affected: { ...contract.affected, outputs: { ...contract.affected.outputs, android_contract: value } } }));
+  verifyGate({ ...contract, affected: { result: 'success', outputs: { node: 'true', android: 'true', android_contract: 'false' } } });
 });
 
 test('real Node name filters partition actual Memory names, nested descriptions and dynamic test names without omission or duplication', async t => {

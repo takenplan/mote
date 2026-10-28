@@ -17,6 +17,7 @@ jobs:
       matrix: ${{ steps.affected.outputs.matrix }}
       node: ${{ steps.affected.outputs.node }}
       android: ${{ steps.affected.outputs.android }}
+      android_contract: ${{ steps.affected.outputs.android_contract }}
       server_groups: ${{ steps.affected.outputs.server_groups }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -63,9 +64,10 @@ jobs:
         run: node scripts/ci/run.mjs --task "$CHECK_TASK"
   android:
     needs: affected
-    if: needs.affected.outputs.android == 'true'
+    if: needs.affected.outputs.android == 'true' || needs.affected.outputs.android_contract == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env: { ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -75,7 +77,24 @@ jobs:
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with: { packages: platform-tools }
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-      - run: apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: needs.affected.outputs.android_contract == 'true'
+        with: { node-version: '24', cache: npm }
+      - run: npm ci --ignore-scripts
+        if: needs.affected.outputs.android_contract == 'true'
+      - run: npm rebuild better-sqlite3
+        if: needs.affected.outputs.android_contract == 'true'
+      - run: npm run build -w @mote/shared && npm run build -w @mote/agent
+        if: needs.affected.outputs.android_contract == 'true'
+      - name: Kotlin units and real Central consumption
+        if: needs.affected.outputs.android == 'true' && needs.affected.outputs.android_contract == 'true'
+        run: node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts --all-unit-tests
+      - name: Focused real Central consumption
+        if: needs.affected.outputs.android != 'true' && needs.affected.outputs.android_contract == 'true'
+        run: node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts
+      - name: Kotlin units
+        if: needs.affected.outputs.android == 'true' && needs.affected.outputs.android_contract != 'true'
+        run: apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest
   required-checks:
     name: Required checks
     if: always()
