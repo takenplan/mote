@@ -10,7 +10,7 @@ import {contextToolDefinitions,pinContextTools} from './tool-contributions.js';
 import {CodexSession,type CodexTool} from './codex-session.js';
 import {bundledSkills} from './skills.js';
 import {displayTime} from './time.js';
-import {parseAnswer} from './index.js';
+import {parseAnswer} from './answer-parser.js';
 import {systemInstructions} from './instructions.js';
 import {AgentInputError,AgentNotConfiguredError,AgentProviderError,AgentResponseError,AgentTimeoutError,reportProgress,reportTrace,validateHostOutput,MAX_OUTPUT_REPAIRS,type AgentOptions,type QueryInput,type AgentAnswer} from './types.js';
 
