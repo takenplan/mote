@@ -23,7 +23,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { DiagnosticsRecorder } from '@mote/diagnostics';
 import { githubFeedbackUrl } from '@mote/shared/feedback';
 import { readPowerState, recognizeInvitationQr, runHelper, readInstalledApplications } from './native';
-import { ConnectionOnboarding, ConnectionError, testConnection, assertConnectionChangeSafe, type ConnectionStatus } from './connection';
+import { ConnectionOnboarding, ConnectionError, testConnection, type ConnectionStatus } from './connection';
 import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -45,7 +45,8 @@ import { DesktopUpdater } from './updater';
 import { createUpdateNetwork } from './update-network';
 import { createChromiumUpdateFetch } from './electron-update-fetch';
 import { acknowledgeInstalledUpdate } from './update-install';
-import { QueueStorage, StorageCommitUncertainError } from './queue-storage';
+import { QueueStorage } from './queue-storage';
+import { SettingsCoordinator } from './settings-coordinator';
 import { DurableQueue } from './queue';
 import { BackgroundJobs } from './background-jobs';
 import {ensureStorageFormat} from './storage-format';
@@ -307,72 +308,23 @@ else {
         catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt,operation:channel,errorName:safeErrorName(error) }); throw error; }
       });
     };
-    const unboundBacklog = () => queue.binding.unbound() && localSources!.nodeBinding.unbound() && (!noteDrafts.hasPrepared() || noteDrafts.hasUnboundPrepared());
-    const pausedSettings = async <T>(operation: () => Promise<T>): Promise<T> => {
-      const releaseCollector = await collector.suspendForSettings(); let releaseSources: (() => void) | undefined;
-      try { releaseSources = await localSources!.holdConnection(); return await operation(); }
-      finally {
-        releaseSources?.();
-        // changeConnection's forced scan is suppressed while held. Resume it after settings settle;
-        // managed sources only stage locally here, leaving uploads to the collector's sync policy.
-        if (releaseSources && !quitting && !recoveryRequired) void localSources!.sync(true);
-        await releaseCollector();
-      }
-    };
-    const connectionChange = async <T>(operation: () => Promise<T>, sameNodeInvitation = false, confirmedInitial = false): Promise<T> => pausedSettings(async () => {
-      const source = localSources!.connectionActivity();
-      assertConnectionChangeSafe({ running: clientStatus().running, inFlight: collector.connectionActivity().inFlight, queued: queue.stats().depth, preparedNote: noteDrafts.hasPrepared(), sourcePending: source.pending, sourceInFlight: source.inFlight }, sameNodeInvitation || (confirmedInitial && unboundBacklog()));
-      return operation();
-    });
     const requireRecovery = (message: string): void => { recoveryRequired = message; collector.requireRecovery(message); void localSources!.close(); };
-    const applySettings = async (updated: Config): Promise<void> => {
-      const previous = settings;
-      const relocating = updated.captureStorageDirectory !== previous.captureStorageDirectory;
-      try {
-        if (profile.defaultProfile && updated.openAtLogin !== previous.openAtLogin) {
-          app.setLoginItemSettings({ openAtLogin: updated.openAtLogin });
-          if (app.getLoginItemSettings().openAtLogin !== updated.openAtLogin) throw new Error(moteText("系统未允许修改登录启动项，请在系统设置检查"));
-        }
-        await localSources!.changeConnection(updated);
-        settings = updated; collector.updateConfig(updated); await configureDiagnostics();
-        if (relocating) await queue.relocate(updated.captureStorageDirectory || storage.defaultDirectory, storage, () => store.save(updated), async () => (await store.load()).captureStorageDirectory || storage.defaultDirectory, value => backgroundJobs.progress('mote:configure', value));
-        else await store.save(updated);
-      } catch (error) {
-        // A failed directory fsync may follow a successful rename. Preserve both copies and stop all IO.
-        const persisted = await store.load().catch(() => undefined);
-        if (error instanceof StorageCommitUncertainError || !persisted || JSON.stringify(persisted) === JSON.stringify(updated)) {
-          requireRecovery(moteText("设置提交需要恢复；已停止采集与上传并保留数据，请重新打开 Mote。"));
-          throw new Error(recoveryRequired);
-        }
-        try {
-          await localSources!.changeConnection(previous);
-          settings = previous; collector.updateConfig(previous); await configureDiagnostics();
-          if (profile.defaultProfile && updated.openAtLogin !== previous.openAtLogin) {
-            app.setLoginItemSettings({ openAtLogin: previous.openAtLogin });
-            if (app.getLoginItemSettings().openAtLogin !== previous.openAtLogin) throw new Error(moteText("登录项还原失败"));
-          }
-        } catch {
-          requireRecovery(moteText("设置未完成；原持久配置和截图保留，运行状态无法安全还原。请重新打开 Mote 后重试")); throw new Error(recoveryRequired);
-        }
-        throw error;
-      }
-      pendingStorageDirectory = undefined;
-    };
-    const commitConnection = async (updated: Config, sameNodeInvitation = false, confirmedInitial = false): Promise<void> => {
-      // Checkpoint before config save so a crash cannot switch credentials without the original source queue.
-      const initial = confirmedInitial && unboundBacklog();
-      queue.binding.assertChange(updated, queue.stats().depth > 0 || noteDrafts.hasPrepared(), initial, sameNodeInvitation);
-      localSources!.nodeBinding.assertChange(updated, localSources!.connectionActivity().pending > 0, initial, sameNodeInvitation);
-      if (initial) await localSources!.prepareInitialConnection(updated);
-      else if (sameNodeInvitation) await localSources!.prepareReauthorization(updated);
-      // Bind before config persistence: after a crash, a mismatched editable config cannot upload old bodies.
-      await queue.binding.commit(updated, queue.stats().depth > 0 || noteDrafts.hasPrepared(), initial, sameNodeInvitation);
-      await localSources!.nodeBinding.commit(updated, localSources!.connectionActivity().pending > 0, initial, sameNodeInvitation);
-      if (initial) await noteDrafts.bindPreparedOrigin(updated.serverUrl);
-      if (sameNodeInvitation) await queue.resetRetries();
-      await applySettings(updated);
-      connectionState = { state: 'unchecked', message: moteText("连接已保存，可测试权限与节点版本") };
-    };
+    const settingsCoordinator = new SettingsCoordinator({
+      settings: () => settings, installSettings: value => { settings = value; },
+      store, collector, sources: localSources, queue, notes: noteDrafts,
+      defaultProfile: profile.defaultProfile,
+      loginItems: { set: openAtLogin => app.setLoginItemSettings({ openAtLogin }), get: () => app.getLoginItemSettings().openAtLogin },
+      running: () => clientStatus().running, quitting: () => quitting,
+      recoveryRequired: () => recoveryRequired, requireRecovery, configureDiagnostics,
+      relocate: updated => queue.relocate(updated.captureStorageDirectory || storage.defaultDirectory, storage, () => store.save(updated), async () => (await store.load()).captureStorageDirectory || storage.defaultDirectory, value => backgroundJobs.progress('mote:configure', value)),
+      clearStorageSelection: () => { pendingStorageDirectory = undefined; },
+      connectionStatus: value => { connectionState = value; },
+    });
+    const unboundBacklog = () => settingsCoordinator.unboundBacklog();
+    const pausedSettings = <T>(operation: () => Promise<T>) => settingsCoordinator.paused(operation);
+    const connectionChange = <T>(operation: () => Promise<T>, sameNodeInvitation = false, confirmedInitial = false) => settingsCoordinator.connectionChange(operation, sameNodeInvitation, confirmedInitial);
+    const applySettings = (updated: Config) => settingsCoordinator.apply(updated);
+    const commitConnection = (updated: Config, sameNodeInvitation = false, confirmedInitial = false) => settingsCoordinator.commitConnection(updated, sameNodeInvitation, confirmedInitial);
     const readSelectedInvitation = async (path: string, maximum: number): Promise<Buffer> => {
       const file = await open(path, 'r');
       try { const buffer = Buffer.alloc(maximum + 1); const read = await file.read(buffer, 0, buffer.length, 0); if (read.bytesRead > maximum) throw new Error(moteText("连接邀请文件超过大小限制")); return buffer.subarray(0, read.bytesRead); }
