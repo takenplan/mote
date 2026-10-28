@@ -28,6 +28,7 @@ import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { openCentralBrowser,validateCentralWorkId } from './central-browser';
+import { showCentral as navigateCentral, type BrowserLogin } from './central-navigation';
 import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
@@ -127,14 +128,17 @@ function encryptedStorageAvailable(): boolean {
   if (developmentProfile) return false;
   return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
 }
-let browserLogin: ((page?:string,evidenceId?:string,durationMs?:number,workId?:string)=>Promise<void>)|undefined;
+let browserLogin: BrowserLogin | undefined;
 let ensureBrowserLogin: (()=>Promise<void>)|undefined;
 async function showCentral(page?: string, evidenceId?: string,workId?:string): Promise<void> {
-  if(!connectionToken(settings)){if(browserLogin)return browserLogin(page,evidenceId,undefined,workId);throw Error(moteText('请先登录中央节点，各页面会共用这次登录。'));}
-  await ensureBrowserLogin?.();
-  const {code}=await loginRequest(settings,'/api/login/ticket',{expiresAt:settings.authExpiresAt},connectionToken(settings));
-  await openCentralBrowser(settings.serverUrl, page, process.platform,
-    url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]), url => shell.openExternal(url), evidenceId, code,undefined,workId);
+  return navigateCentral({
+    settings: () => settings,
+    browserLogin: () => browserLogin,
+    ensureBrowserLogin: async () => { await ensureBrowserLogin?.(); },
+    platform: process.platform,
+    launchChrome: url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]),
+    openDefault: url => shell.openExternal(url),
+  }, page, evidenceId, workId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
 function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central'): void {
