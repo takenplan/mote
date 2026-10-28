@@ -6,7 +6,7 @@ const origin = 'https://mote.example';
 test('restores explicit current identities and rejects retired session shapes', () => {
   const current={token:'fixture',viewScope:crypto.randomUUID()};
   assert.deepEqual(restoreSession(JSON.stringify(current),origin),current);
-  for(const value of [{token:'fixture'},{...current,url:''},{...current,url:origin}])assert.equal(restoreSession(JSON.stringify(value),origin),null);
+  for(const value of [{token:'fixture'},{...current,url:''},{...current,url:origin},{url:origin,token:'__MOTE_NATIVE_AUTH__'}])assert.equal(restoreSession(JSON.stringify(value),origin),null);
 });
 test('does not send a former remote-node credential to the current service', () => {
   for (const value of [{url:'https://other.example',token:'fixture'}, {url:42,token:'fixture'}, {token:''}, {token:42}, null]) {
