@@ -1,12 +1,11 @@
+import type { AskRun, AskScope, AskConversation, AskCommand } from './contracts/ask';
+export type { AskRun, AskScope, AskConversation, AskCommand } from './contracts/ask';
 import { connectionToken, requireConnectionToken } from './login-session';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import type { Config } from './contracts';
 import { validateServerUrl } from './config';
 import { readResponseText } from './response-body';
-export interface AskRun { id: string; status: 'running' | 'completed' | 'failed' | 'cancelled'; conversationId?: string; events: { stage: string; message?: string; tool?: string }[]; error?: {message: string}; execution?: import('@mote/shared').ExecutionEnvelope }
-export interface AskScope { evidenceIds?: string[] | null; anchorEvidenceIds?: string[] | null; after?: string; before?: string; deviceId?: string; timeZone?: string }
-export interface AskConversation { scope?: AskScope; id: string; title: string; revision?: number; nextCursor?: string | null; turns: { id: string; question: string; status: string; error?: {message: string}; result?: { answer: string; citations: {id: string; appName: string; capturedAt: string; excerpt: string}[] } }[] }
-export type AskCommand = 'history' | 'runs' | 'conversation' | 'run' | 'start' | 'cancel' | 'login' | 'logout' | 'login-browser';
+
 /** Fixed endpoints only. Owner credentials remain in the main process and are scoped to one origin. */
 export class AskClient {
   constructor(private isCurrent:(config:Config)=>boolean=()=>true) {}

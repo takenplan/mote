@@ -1,11 +1,8 @@
+import type { SourceRetention, SourceDefinition, SourceOptions, LocalSource, SourceStatus, CalendarChoice } from './contracts/sources';
+export type { SourceRetention, SourceDefinition, SourceOptions, LocalSource, SourceStatus, CalendarChoice } from './contracts/sources';
 import { moteText } from '@mote/shared/i18n';
 import {RESET_REQUIRED} from './storage-format';
-export type SourceRetention = 'snapshot' | 'reference' | 'archive';
-export interface SourceDefinition {
-  initialSync?: 'all' | 'new_only';
-  id: string; name: string; kind: string; deviceId: string;
-  platform: 'macos' | 'import'; retention: SourceRetention; enabled: boolean;
-}
+
 export interface SourceItem {
   localOriginal?: import('./original-spool').OriginalSpool;
   localOriginalBase64?: string;
@@ -42,30 +39,7 @@ export interface SourceScan {
   queue?: 'realtime' | 'history';
   scope?: { start: string; end: string };
 }
-export interface SourceOptions {
-  /** Collector-only policy: false captures one immutable import; undefined preserves legacy watching. */
-  syncContinuously?: boolean;
-  /** Explicit owner confirmation that snapshot file bytes are sent for central processing. */
-  centralProcessingConsent?: boolean;
-  allowRead?:boolean;
-  initialSync?: 'all' | 'new_only';
-  retention: SourceRetention; intervalSeconds: number; trackDeletions: boolean;
-  extensions: string[]; excludedPaths: string[]; redactLiterals: string[];
-}
-export interface LocalSource extends SourceDefinition, SourceOptions {
-  importCompletedAt?: string;
-  path?: string; calendarId?: string; agent?: 'claude' | 'codex' | 'kimi';
-}
-export interface SourceStatus {
-  blocked?: number;
-  failures?: {externalId:string;title:string;status:number}[];
-  facts?: import('@mote/shared/native-status').NativeStatusView;
-  scanComplete?: boolean;
-  lastAcknowledgedAt?: string;
-  source: LocalSource; state: 'idle' | 'syncing' | 'paused' | 'error' | 'permission_required';
-  message: string; pending: number; lastSyncAt?: string; items: number; skipped: number;
-}
-export interface CalendarChoice { id: string; title: string }
+
 export type SourceRequest = (path: string, body: unknown, method: 'GET' | 'POST' | 'PUT' | 'PATCH', signal?: AbortSignal) => Promise<unknown>;
 export const DEFAULT_SOURCE_OPTIONS: SourceOptions = {
   centralProcessingConsent: true, initialSync: 'all', retention: 'snapshot', intervalSeconds: 300, trackDeletions: false,

@@ -1,3 +1,5 @@
+import type { ConnectionPreview, ConnectionIdentity, ConnectionStatus } from './contracts/connection';
+export type { ConnectionPreview, ConnectionIdentity, ConnectionStatus } from './contracts/connection';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
 import {httpFailureMessage,responseFailureCode} from '@mote/shared';
@@ -5,13 +7,7 @@ import { parseConnectionInvitation, type ConnectionInvitation } from '@mote/shar
 import { MOTE_PROTOCOL_HEADERS, ProtocolCompatibilityError, requireCompatibleProtocol, type ProtocolRange } from '@mote/shared/protocol';
 import type { Config, Platform } from './contracts';
 import { validateServerUrl } from './config';
-export interface ConnectionPreview { id: string; serverUrl: string; expiresAt: string }
-export interface ConnectionIdentity {
-  credential: { id: string; scope: 'owner'; label: string; deviceId?: string; deviceName?: string; platform?: string; serverUrl?: string };
-  node: { version: string; profile: string; protocol: ProtocolRange };
-  capabilities: { ingest: boolean; ingressVersion?: number; ownSources: boolean; archiveRead: boolean };
-}
-export interface ConnectionStatus { state: 'unchecked' | 'checking' | 'connected' | 'error'; message: string; checkedAt?: string; identity?: ConnectionIdentity }
+
 export class ConnectionError extends Error { constructor(readonly code: string, message: string, readonly status?: number, readonly reason?: string) { super(message); } }
 const invalid = () => new ConnectionError('INVALID_RESPONSE', moteText("中央确认格式无效，原连接保持不变"));
 const object = (value: unknown, required: string[], optional: string[] = []): Record<string, unknown> => {

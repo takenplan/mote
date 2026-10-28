@@ -1,9 +1,7 @@
+import type { UploadGateConfig } from './contracts/settings';
+export type { UploadGateConfig } from './contracts/settings';
 /** Explicit owner privacy rules only; never infer intent or content value. */
-export interface UploadGateConfig {
-  enabled: boolean;
-  blockedText: string[];
-  failureAction: 'drop' | 'hold' | 'allow';
-}
+
 export type GateDecision = 'allow' | 'drop' | 'hold';
 export const defaultUploadGate: UploadGateConfig = { enabled: true, blockedText: [], failureAction: 'hold' };
 export function uploadGateConfig(value: unknown): UploadGateConfig {

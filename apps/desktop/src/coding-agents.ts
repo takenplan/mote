@@ -1,3 +1,5 @@
+import type { CodingProvider } from './contracts/sources';
+export type { CodingProvider } from './contracts/sources';
 import { moteText } from '@mote/shared/i18n';
 import {codingHostEnvelope,MAX_CODING_DIALOGUE_MESSAGE_CHARACTERS,type CodingEvidence} from '@mote/shared';
 import {constants} from 'node:fs';
@@ -9,13 +11,12 @@ import type {SourceOptions,SourceScan,ScannedItem} from './source-types';
 import {redactSourceText} from './source-types';
 import {repositoryCandidate} from './coding-project';
 
-export type CodingProvider='claude'|'codex'|'kimi';
 export const codingProviders={claude:'Claude Code',codex:'Codex',kimi:'Kimi Code'} as const;
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 export function codingRoot(provider:CodingProvider,home=homedir()):string {
   return join(home,provider==='claude'?'.claude/projects':provider==='codex'?'.codex/sessions':'.kimi/sessions');
 }
-export async function discoverCodingAgents(home=homedir()) {
+export async function discoverCodingAgents(home=homedir()): Promise<import('./contracts/sources').CodingAgentDiscovery[]> {
   return Promise.all((Object.keys(codingProviders) as CodingProvider[]).map(async provider=>({provider,name:codingProviders[provider],path:codingRoot(provider,home),available:await lstat(codingRoot(provider,home)).then(s=>s.isDirectory()&&!s.isSymbolicLink(),()=>false)})));
 }
 type Context={sessionId:string;cwd?:string;repositoryKey?:string;branch?:string;parentSessionId?:string;callId?:string;hostSession?:boolean;turnId?:string;finalEmitted?:boolean;kimiText?:string;kimiOverflow?:boolean;kimiAt?:string};

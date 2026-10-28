@@ -1,3 +1,5 @@
+import type { WorkActivityQuery } from './contracts/content';
+export type { WorkActivityQuery } from './contracts/content';
 import type {WorkActivityPage} from '@mote/shared';
 import {getLocale,moteText} from '@mote/shared/i18n';
 import type {Config} from './contracts';
@@ -5,7 +7,6 @@ import {validateServerUrl} from './config';
 import {requireConnectionToken} from './login-session';
 import {readResponseText} from './response-body';
 
-export type WorkActivityQuery={state?:'active'|'attention'|'completed';cursor?:number};
 /** A fixed, bounded owner read. The main-process connection fence rejects stale results. */
 export async function centralWorkActivity(config:Config,input:WorkActivityQuery={}):Promise<WorkActivityPage>{
   if(!input||typeof input!=='object'||Object.keys(input).some(key=>!['state','cursor'].includes(key))||input.state!==undefined&&!['active','attention','completed'].includes(input.state)||input.cursor!==undefined&&(!Number.isSafeInteger(input.cursor)||input.cursor<0))throw Error('Invalid work activity query');

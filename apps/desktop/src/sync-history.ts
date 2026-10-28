@@ -1,3 +1,5 @@
+import type { SyncSource, SyncOutcome, SyncHistoryItem, SyncHistoryRun, SyncHistoryQuery, SyncHistoryPage, SyncHistoryContentQuery } from './contracts/sync-history';
+export type { SyncSource, SyncOutcome, SyncHistoryItem, SyncHistoryRun, SyncHistoryQuery, SyncHistoryPage, SyncHistoryContentQuery } from './contracts/sync-history';
 import { DatabaseSync } from 'node:sqlite';
 import { chmod, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -9,25 +11,7 @@ import { UploadSliceYield } from './upload-slice';
 import { validateServerUrl } from './config';
 
 export const syncSources = ['screen', 'ui_page', 'note', 'activity', 'notification', 'media', 'file', 'calendar', 'coding'] as const;
-export type SyncSource = typeof syncSources[number];
-export type SyncOutcome = 'sending' | 'received' | 'unconfirmed' | 'interrupted';
-export interface SyncHistoryItem {
-  key: string; source: SyncSource; title: string; observedAt: string;
-  captureId?: string; sourceId?: string; versionKey?: string; layer?: string;
-  outcome: SyncOutcome; code?: number; firstReceipt: boolean;
-}
-export interface SyncHistoryRun {
-  id: string; startedAt: string; finishedAt?: string; trigger: 'automatic' | 'manual';
-  outcome: 'sending' | 'received' | 'partial' | 'unconfirmed' | 'interrupted';
-  bytes: number; total: number; received: number; unconfirmed: number; sources: SyncSource[];
-}
-export interface SyncHistoryQuery { day: string; days?: 1 | 7; offset?: number; source?: SyncSource; outcome?: 'received' | 'unconfirmed' }
-export interface SyncHistoryPage {
-  items: SyncHistoryRun[]; total: number; offset: number; nextOffset?: number;
-  received: number; bytes: number; since: string;
-  days: { day: string; received: number }[]; sources: { source: SyncSource; received: number }[];
-}
-export interface SyncHistoryContentQuery { runId: string; offset?: number; source?: SyncSource; outcome?: 'received' | 'unconfirmed' }
+
 export interface SourceUploadObserver {
   attempt(source: SourceDefinition, items: SourceItem[]): void;
   settle(source: SourceDefinition, items: SourceItem[], acks: Record<string, unknown>[], rejected?: { item: SourceItem; status: number }[]): void;
@@ -147,7 +131,7 @@ export class SyncHistory {
     const total = this.db.prepare("SELECT count(*) total,coalesce(sum(outcome='received'),0) received,coalesce(sum(outcome IN ('unconfirmed','interrupted')),0) unconfirmed FROM items WHERE run_id=?").get(id) as { total: number; received: number; unconfirmed: number };
     return { id, startedAt: row.started, finishedAt: row.finished ?? undefined, trigger: row.trigger, outcome: row.outcome, bytes: this.active.get(id) ?? row.bytes, ...total, sources: (this.db.prepare('SELECT DISTINCT source FROM items WHERE run_id=?').all(id) as { source: SyncSource }[]).map(r => r.source) };
   }
-  contents(config: Connection, input: SyncHistoryContentQuery): { run: SyncHistoryRun; items: SyncHistoryItem[]; total: number; offset: number; nextOffset?: number } {
+  contents(config: Connection, input: SyncHistoryContentQuery): import('./contracts/sync-history').SyncHistoryContentPage {
     const run = this.run(config, input?.runId), start = offset(input.offset); validSource(input.source); validOutcome(input.outcome);
     const where = ['run_id=?'], params: (string | number)[] = [run.id];
     if (input.source) { where.push('source=?'); params.push(input.source); }

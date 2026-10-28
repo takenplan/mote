@@ -1,7 +1,8 @@
+import type { BackgroundJob } from './contracts/operations';
+export type { BackgroundJob } from './contracts/operations';
 import { moteText, statusMessage } from '@mote/shared/i18n';
-import type { WorkProgress } from './background';
+import type { WorkProgress } from './contracts/operations';
 
-export interface BackgroundJob extends WorkProgress { id: string; startedAt: number; state: 'running' | 'completed' | 'failed' }
 /** Snapshot reads never join the operation chain. Repeated clicks cannot queue duplicate mutations. */
 export class BackgroundJobs {
   private rows = new Map<string, BackgroundJob>();
