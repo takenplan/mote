@@ -11,12 +11,30 @@ const documentation = path => path.startsWith('docs/') || path.startsWith('relea
   || /^\.agents\/skills\/.*\.(?:md|yaml)$/.test(path)
   || ['protocol/README.md', 'adapters/ui/README.md', 'plugins/source-packs/memex-markdown/README.md'].includes(path);
 
+// Real file intake producers and the Kotlin consumer exercised by the light
+// upload contract. Unrelated Server/Android modules keep their existing scopes.
+const androidContractInputs = new Set([
+  ...['app', 'auth', 'connections', 'source-routes', 'sources', 'source-schema', 'file-routes', 'files', 'file-schema', 'ingress',
+    'features/sources', 'features/files', 'features/connections'].map(name => `apps/server/src/${name}.ts`),
+  ...['CentralClient', 'CentralUploadClient', 'CentralNotes', 'FileUploadConfirmation', 'IngressV2Protocol', 'LocalSources']
+    .map(name => `apps/android/app/src/main/java/dev/mote/collector/${name}.kt`),
+  'apps/android/app/src/test/java/dev/mote/collector/CentralProducerContractTest.kt',
+  'apps/android/test-fixtures/central-kotlin-contract.ts',
+  ...['app/build.gradle.kts', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties'].map(name => `apps/android/${name}`),
+  ...['index', 'files', 'sources', 'collector-receipt', 'protocol', 'connection', 'http-failure'].map(name => `packages/shared/src/${name}.ts`),
+  'packages/shared/package.json', 'protocol/contract.json',
+  '.github/workflows/component-checks.yml', 'scripts/ci/select.mjs', 'scripts/ci/select.test.mjs',
+  'scripts/ci/gate.mjs', 'scripts/ci/workflows.test.mjs', 'scripts/ci/suites.test.mjs',
+  'scripts/release/check-affected.mjs', 'scripts/release/check-affected.test.mjs',
+]);
+
 export function selectScopes(paths) {
   const selected = new Set(), fallback = [];
-  let broadServer = false;
+  let broadServer = false, androidContract = false;
   const add = (...names) => names.forEach(name => selected.add(name));
   for (const path of paths) {
     if (documentation(path)) continue;
+    if (androidContractInputs.has(path)) androidContract = true;
     if (/^packages\/shared\/(?:src\/i18n(?:-[a-z]{2})?\.ts|test\/i18n\.test\.mjs)$/.test(path)
       || /^apps\/android\/app\/src\/main\/assets\/i18n-[a-z]{2}\.json$/.test(path) || /^scripts\/(?:check|sync)-i18n\.mjs$/.test(path)) { add('i18n'); continue; }
     if (path.startsWith('apps/web/')) { add('web', 'i18n'); continue; }
@@ -33,9 +51,9 @@ export function selectScopes(paths) {
     if (path.startsWith('plugins/') || path.startsWith('deploy/') || path.startsWith('Dockerfile') || path.startsWith('compose.')) { add('server', 'tooling'); broadServer = true; continue; }
     if (path.startsWith('adapters/') || path.startsWith('licenses/')) { add('desktop', 'android'); continue; }
     // Unknown code, root config and lock changes run every LIGHT scope, never a heavy suite.
-    add(...scopes); broadServer = true; fallback.push(path);
+    add(...scopes); broadServer = true; androidContract = true; fallback.push(path);
   }
-  return { scopes: scopes.filter(name => selected.has(name)), fallback, ...(selected.has('server') ? { serverGroups: broadServer ? ['all'] : serverGroups(paths) } : {}) };
+  return { scopes: scopes.filter(name => selected.has(name)), fallback, ...(selected.has('server') ? { serverGroups: broadServer ? ['all'] : serverGroups(paths) } : {}), ...(androidContract ? { androidContract: true } : {}) };
 }
 
 export function automaticTasks(selection, event = 'pull_request') {
@@ -46,9 +64,10 @@ export function automaticTasks(selection, event = 'pull_request') {
   for (const name of ['tooling', 'i18n', 'shared']) if (selected.has(name)) tasks.push(name);
   for (const name of ['web', 'agent', 'desktop']) if (selected.has(name)) tasks.push(event === 'push' ? `${name}-contract` : name);
   if (selected.has('server')) tasks.push(...(event === 'push' ? ['server-contract'] : ['server-build', ...[1, 2, 3, 4].filter(shard => serverFiles(shard, '.', selection.serverGroups).length).map(shard => `server-${shard}`)]));
-  // Main verifies the cross-platform catalog/contracts; PRs also run Kotlin JVM tests.
+  // Main retains focused Kotlin consumption when its actual wire inputs change;
+  // the full Android JVM suite remains a PR/local check.
   if (event === 'push' && selected.has('android') && !tasks.includes('shared')) tasks.push('shared');
-  return { tasks, android: event !== 'push' && selected.has('android') };
+  return { tasks, android: event !== 'push' && selected.has('android'), ...(selection.androidContract ? { androidContract: true } : {}) };
 }
 
 export function parseOptions(args, allowed = []) {
@@ -63,7 +82,7 @@ export function parseOptions(args, allowed = []) {
 }
 
 export function selectionFromOptions(options) {
-  if (options.all || /^0{40}$/.test(options.base ?? '')) return { scopes: [...scopes], fallback: ['all light scopes requested'], serverGroups: ['all'] };
+  if (options.all || /^0{40}$/.test(options.base ?? '')) return { scopes: [...scopes], fallback: ['all light scopes requested'], serverGroups: ['all'], androidContract: true };
   // Invalid revisions/diff errors throw: a failed selector is never an empty green plan.
   return selectScopes(changedPaths(options));
 }
@@ -72,7 +91,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const options = parseOptions(process.argv.slice(2), ['--event']);
     const selection = selectionFromOptions(options), plan = automaticTasks(selection, options.event);
-    const outputs = { matrix: JSON.stringify({ task: plan.tasks.length ? plan.tasks : ['none'] }), node: String(plan.tasks.length > 0), android: String(plan.android), server_groups: JSON.stringify(selection.serverGroups ?? ['all']) };
+    const outputs = { matrix: JSON.stringify({ task: plan.tasks.length ? plan.tasks : ['none'] }), node: String(plan.tasks.length > 0), android: String(plan.android), android_contract: String(Boolean(plan.androidContract)), server_groups: JSON.stringify(selection.serverGroups ?? ['all']) };
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([key, value]) => `${key}=${value}\n`).join(''));
     console.log(JSON.stringify({ ...selection, ...plan }, null, 2));
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Affected light checks\n\n\`\`\`json\n${JSON.stringify({ ...selection, ...plan }, null, 2)}\n\`\`\`\n`);

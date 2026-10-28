@@ -2,10 +2,14 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 export function verifyGate(needs) {
   if (needs.affected?.result !== 'success') throw Error('Affected selection did not succeed');
-  for (const [job, output] of [['regressions', 'node'], ['android', 'android']]) {
-    const selected = needs.affected.outputs?.[output];
-    if (!['true', 'false'].includes(selected)) throw Error(`Missing/invalid selection output: ${output}`);
-    const expected = selected === 'true' ? 'success' : 'skipped';
+  const selected = output => {
+    const value = needs.affected.outputs?.[output];
+    if (!['true', 'false'].includes(value)) throw Error(`Missing/invalid selection output: ${output}`);
+    return value === 'true';
+  };
+  const node = selected('node'), android = selected('android'), contract = selected('android_contract');
+  for (const [job, required] of [['regressions', node], ['android', android || contract]]) {
+    const expected = required ? 'success' : 'skipped';
     if (needs[job]?.result !== expected) throw Error(`${job}: expected ${expected}, got ${needs[job]?.result}`);
   }
 }

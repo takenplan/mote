@@ -25,6 +25,26 @@ test('ordinary push/PR has only affected light entrypoints and a strict always-r
     assert.ok(!/benchmark|--suite|npm test|check:central|test:e2e|test:media-e2e/.test(step.run ?? ''));
   }
 });
+test('Android workflow keeps focused producer contracts and combines consumer units in one Gradle owner', () => {
+  const auto = workflow('component-checks'), android = auto.jobs.android;
+  assert.equal(auto.jobs.affected.outputs.android_contract, '${{ steps.affected.outputs.android_contract }}');
+  assert.equal(android.if, "needs.affected.outputs.android == 'true' || needs.affected.outputs.android_contract == 'true'");
+  const setup = android.steps.filter(step => step.uses?.startsWith('actions/setup-node') || /npm ci|npm rebuild|npm run build/.test(step.run ?? ''));
+  assert.equal(setup.length, 4);
+  assert.ok(setup.every(step => step.if === "needs.affected.outputs.android_contract == 'true'"));
+  assert.ok(setup.some(step => step.run === 'npm ci --ignore-scripts'));
+  assert.ok(setup.some(step => step.run === 'npm rebuild better-sqlite3'));
+  assert.ok(setup.some(step => step.run?.includes('@mote/shared') && step.run.includes('@mote/agent')));
+  const execution = android.steps.filter(step => /central-kotlin-contract|gradlew/.test(step.run ?? ''));
+  const enabled = (condition, units, contract) => Function('return ' + condition.replaceAll('needs.affected.outputs.android_contract', JSON.stringify(String(contract))).replaceAll('needs.affected.outputs.android', JSON.stringify(String(units))))();
+  for (const [units, contract, expected] of [
+    [false, true, 'node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts'],
+    [true, true, 'node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts --all-unit-tests'],
+    [true, false, 'apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest'],
+  ]) assert.deepEqual(execution.filter(step => enabled(step.if, units, contract)).map(step => step.run), [expected]);
+  assert.deepEqual(execution.filter(step => enabled(step.if, false, false)), []);
+  assert.ok(execution.every(step => !step['continue-on-error']));
+});
 test('heavy workflow has only workflow_dispatch, immutable revision selection, and retains full integration commands', () => {
   const manual = workflow('checks');
   assert.deepEqual(Object.keys(manual.on), ['workflow_dispatch']);

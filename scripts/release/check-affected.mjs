@@ -2,12 +2,16 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { automaticTasks, parseOptions, selectionFromOptions } from '../ci/select.mjs';
-import { taskPlan } from '../ci/suites.mjs';
+import { taskPlan, node, npm } from '../ci/suites.mjs';
 
 export function checkPlan(selection, { event = 'local', directory = '.' } = {}) {
   const automatic = automaticTasks(selection, event);
   const plan = automatic.tasks.flatMap(task => taskPlan(task, directory, selection.serverGroups));
-  if (automatic.android) plan.push({
+  if (automatic.androidContract) plan.push(
+    npm('build', '-w', '@mote/shared'), npm('build', '-w', '@mote/agent'),
+    node('--import', 'tsx', 'apps/android/test-fixtures/central-kotlin-contract.ts', ...(automatic.android ? ['--all-unit-tests'] : [])),
+  );
+  else if (automatic.android) plan.push({
     command: 'apps/android/gradlew', args: ['-p', 'apps/android', '--no-daemon', ':app:testDebugUnitTest'],
   });
   return plan;
