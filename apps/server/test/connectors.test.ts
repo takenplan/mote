@@ -1,3 +1,4 @@
+import {googleCalendarContext} from '../src/connectors/google-context.js';
 import {fixtureCaptureRefs} from './fixtures/evidence-refs.js';
 import {memorySchema} from '../src/memory-schema.js';
 import {memoryEvidenceFingerprint} from '../src/memory.js';
@@ -455,7 +456,7 @@ function googleFixture(ctx:ConnectorContext,handle:(url:URL)=>Response|Promise<R
   oauth.getToken=(async(options:any)=>{exchanges++;receivedVerifier=options.codeVerifier;return {tokens:{refresh_token:'synthetic-refresh-private',access_token:'synthetic-access-private',scope:'https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.readonly'}};}) as any;
   oauth.getAccessToken=(async()=>{accesses++;oauth.credentials={...oauth.credentials,access_token:'synthetic-access-private'};return {token:'synthetic-access-private'};}) as any;
   const deps:GoogleDependencies={oauthFactory:()=>oauth,fetch:(async(input,init)=>{assert.equal(new Headers(init?.headers).get('authorization'),'Bearer synthetic-access-private');return handle(new URL(String(input)));}) as typeof fetch};
-  const connector=new GoogleCalendarConnector(ctx,deps);
+  const connector=new GoogleCalendarConnector(googleCalendarContext(ctx),deps);
   const authorize=async()=>{const started=await connector.start(),url=new URL(started.authorizationUrl);assert.equal(url.searchParams.get('access_type'),'offline');assert.equal(url.searchParams.get('code_challenge_method'),'S256');await connector.callback(url.searchParams.get('state')!,'synthetic-code');assert.equal(createHash('sha256').update(receivedVerifier).digest('base64url'),url.searchParams.get('code_challenge'));return url.searchParams.get('state')!;};
   return {connector,authorize,counts:()=>({exchanges,accesses})};
 }
@@ -606,4 +607,15 @@ test('concurrent connector closes await the same in-progress transport shutdown'
  const closing=registry.close();assert.equal(registry.close(),closing);let settled=false;void closing.then(()=>settled=true);
  await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(closed,1);
  release();await closing;assert.equal(closed,1);
+});
+
+
+test('calendar adapter receives working source capabilities without owner token, SQLite, or unrelated services',async t=>{
+ const {ctx,sources}=await fixture(t),projected=googleCalendarContext(ctx);
+ assert.equal(Reflect.has(projected,'store'),false);assert.equal(Reflect.has(projected.configuration,'token'),false);assert.equal(Reflect.has(projected.configuration,'mcpReadToken'),false);assert.equal(Reflect.has(projected.sources,'store'),false);assert.equal(Reflect.has(projected.sources,'capabilities'),false);
+ projected.sources.register({id:'generated-calendar-projection',name:'Generated calendar capability',kind:'google-calendar',deviceId:'generated-calendar',platform:'import',retention:'snapshot'});
+ await projected.sources.upsert('generated-calendar-projection',googleItem(googleEvent('generated-event','Generated calendar projection fixture'),calendar));
+ assert.equal(projected.sources.getItem('generated-calendar-projection','generated-event')?.text,'Generated calendar projection fixture');
+ projected.sources.update('generated-calendar-projection',{enabled:false});assert.equal(sources.getSource('generated-calendar-projection').enabled,false);
+ const connector=new GoogleCalendarConnector(projected);await connector.init();await connector.close();
 });

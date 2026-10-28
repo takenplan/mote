@@ -4,7 +4,8 @@ import {OAuth2Client,type Credentials} from 'google-auth-library';
 import type {SourceItem,SourceItemRecord} from '@mote/shared';
 import {z} from 'zod';
 import {PrivateFile} from './private-file.js';
-import {ConnectorError,type ConnectorContext} from './types.js';
+import {ConnectorError} from './types.js';
+import type {GoogleCalendarContext} from './google-context.js';
 
 const scopes=['https://www.googleapis.com/auth/calendar.calendarlist.readonly','https://www.googleapis.com/auth/calendar.events.readonly'];
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -61,20 +62,20 @@ export class GoogleCalendarConnector {
   private initialized=false;private syncIntervalMs?:number;
   private state:'idle'|'syncing'|'error'|'permission_required'='idle';private code?:string;private lastSyncAt?:string;
   private readonly fetcher:typeof fetch;private readonly clock:()=>number;
-  constructor(private ctx:ConnectorContext,private dependencies:GoogleDependencies={}) {
-    this.file=new PrivateFile(ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`,'google-calendar.json');
+  constructor(private ctx:GoogleCalendarContext,private dependencies:GoogleDependencies={}) {
+    this.file=new PrivateFile(ctx.directory,'google-calendar.json');
     this.fetcher=dependencies.fetch??fetch;this.clock=dependencies.clock??Date.now;
   }
   private serialize<T>(operation:()=>Promise<T>):Promise<T>{
     const result=this.sequence.catch(()=>{}).then(()=>{if(this.closed)throw new ConnectorError('connector_closed',503);return operation();});
     this.sequence=result.catch(()=>{});return result;
   }
-  get configured(){const c=this.ctx.config.connectors;return Boolean(c?.googleClientId&&c.googleClientSecret&&c.googleRedirectUri);}
+  get configured(){const c=this.ctx.configuration;return Boolean(c?.googleClientId&&c.googleClientSecret&&c.googleRedirectUri);}
   status(){return {configured:this.configured,connected:Boolean(this.saved.tokens.refresh_token||this.saved.tokens.access_token),selectedCalendarIds:this.saved.calendars.map(c=>c.id),state:this.state,...(this.code?{code:this.code}:{}),...(this.lastSyncAt?{lastSyncAt:this.lastSyncAt}:{})};}
   async init(){
     const saved=await this.file.read();
     if(saved){if(saved.version!==1||!saved.tokens||!Array.isArray(saved.calendars)||!saved.checkpoints)throw new ConnectorError('google_credentials_invalid',503);this.saved=saved;}
-    this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);
+    this.initialized=true;this.configureSyncInterval(this.ctx.configuration?.syncIntervalMs??300000);
   }
   configureSyncInterval(intervalMs:number){
     const interval=Math.max(60000,intervalMs);
@@ -85,7 +86,7 @@ export class GoogleCalendarConnector {
   }
   private oauth():OAuth {
     if(!this.configured)throw new ConnectorError('google_not_configured',503);
-    const config=this.ctx.config.connectors!;
+    const config=this.ctx.configuration!;
     return this.dependencies.oauthFactory?.()??new OAuth2Client({clientId:config.googleClientId,clientSecret:config.googleClientSecret,redirectUri:config.googleRedirectUri,transporterOptions:{timeout:20000}});
   }
   async start(){
