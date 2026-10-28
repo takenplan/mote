@@ -337,3 +337,21 @@ test('held downstream Memory does not hold subsequent recording acquisition and 
  }finally{release();}
  await memory;await f.memory();assert.equal(f.node.memoryPipeline.list().every(job=>job.status==='completed'),true);
 });
+
+
+test('recording media publication rolls back receipt and attachment together; owner forgetting fences subsequent acquisition',async t=>{
+ const f=await fixture(t);f.state.mediaFails=true;await f.connect();await f.flush();
+ const sourceId=(await f.request('GET')).sourceId,head=f.node.sources.getItem(sourceId,'r1')!;
+ const before=f.node.store.db.prepare('SELECT count(*) n FROM capture_files WHERE capture_id=?').get(head.captureId)!.n;
+ assert.equal((await f.request('GET')).counts.audio,0);f.state.mediaFails=false;
+ f.node.store.db.exec(`CREATE TEMP TRIGGER generated_recording_publication_failure BEFORE INSERT ON changes WHEN NEW.id='${head.captureId}' AND NEW.operation='upsert' BEGIN SELECT RAISE(ABORT,'generated recording publication failure'); END`);
+ await f.request('POST','/retry');await f.flush();
+ assert.equal((await f.request('GET')).counts.audio,0,'failed publication cannot retain a recording media receipt');
+ assert.equal(f.node.store.db.prepare('SELECT count(*) n FROM capture_files WHERE capture_id=?').get(head.captureId)!.n,before,'attachment rolls back with the media receipt');
+ f.node.store.db.exec('DROP TRIGGER generated_recording_publication_failure');
+ await f.request('POST','/retry');await f.flush();assert.equal((await f.request('GET')).counts.audio,1);
+ f.node.files.forget(head.captureId);
+ await f.request('POST','/sync');await f.flush();
+ assert.equal((await f.request('GET')).counts.transcripts,0);
+ assert.equal(f.node.sources.getItem(sourceId,'r1'),undefined,'forgotten originals cannot be republished by later discovery');
+});

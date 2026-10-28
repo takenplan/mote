@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {RecordingConnector,type ConnectorContext,type RecordingProvider} from '../src/connectors/index.js';
+import {Store} from '../src/store.js';
+import {SourceStore} from '../src/sources.js';
+import {FileStore} from '../src/files.js';
+import {ArchivedFileStore} from '../src/archived-files.js';
+import {ExecutionEngine} from '../src/execution-engine.js';
+import {feishuTranscript} from '../src/connectors/recording-formats.js';
+import type {RecordingContext} from '../src/connectors/recording-context.js';
+
+test('public recording constructor accepts the documented extension context, acquires transcript and audio, and preserves full engine access',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-recording-public-')),store=new Store(directory),sources=new SourceStore(store),files=new FileStore(store,sources);
+ sources.capabilities.register('generated.recordings',{lifecycle:'continuous',discovery:'provider-list',listening:'polling',readOriginal:'explicit-provider-read',synchronization:'revisions',externalWrite:false});
+ const raw='Generated diary\n\nOwner 00:00:00.000\nI prepared a generated plan.\n',audio=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
+ let mediaCalls=0,retired=0;
+ const provider:RecordingProvider={id:'generated',version:'fixture@1',account:async()=>({id:'generated-owner'}),discover:async()=>({ids:['original']}),metadata:async()=>({id:'original',title:'Generated diary',durationMs:5000,recordedAt:'2026-09-20T00:00:00Z'}),transcript:async()=>({rawText:raw,transcript:feishuTranscript(raw,5000)}),media:async()=>{mediaCalls++;return {mimeType:'audio/wav',bytes:audio};},close:async()=>{retired++;}};
+ const context:ConnectorContext={store,sources,files,config:{dataDir:directory,token:'generated-owner-token',allowedOrigins:[],connectors:{directory}}};
+ const connector=new RecordingConnector(context,provider);
+ t.after(async()=>{await connector.close();await files.close();store.close();await rm(directory,{recursive:true,force:true});});
+ assert.ok(connector.engine instanceof ExecutionEngine);assert.equal(typeof connector.engine.close,'function');assert.equal(typeof connector.engine.cancel,'function');
+ const runtime=(connector as unknown as {ctx:RecordingContext;execution:RecordingContext['engine']});
+ assert.equal('store' in runtime.ctx,false);assert.equal('token' in runtime.ctx,false);assert.equal('store' in runtime.execution,false);assert.equal('close' in runtime.execution,false);
+ await connector.init();await connector.connect();await connector.select({enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00:00Z',autoSync:false,backupAudio:true});await connector.drain();
+ const status=connector.status();assert.equal(status.counts.transcripts,1);assert.equal(status.counts.audio,1);assert.equal(mediaCalls,1);
+ const head=sources.getItem(status.sourceId!,'original')!;assert.ok(head.captureId);
+ const original=JSON.parse(Buffer.concat([...files.bytes(head.captureId)]).toString());assert.equal(original.rawText,raw);assert.ok(original.transcript.segments.some((segment:{text:string})=>segment.text.includes('generated plan')));
+ const archived=new ArchivedFileStore(store).listForCapture(head.captureId);assert.equal(archived.length,1);assert.deepEqual(new ArchivedFileStore(store).read(archived[0].id),audio);
+ await connector.close();assert.equal(retired,1);assert.equal(store.db.isOpen,true,'the extension closes its owned engine without closing the host Store');
+});

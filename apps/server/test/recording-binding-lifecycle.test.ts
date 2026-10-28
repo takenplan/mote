@@ -13,7 +13,7 @@ function deferred<T=void>(){let resolve!:(value:T)=>void;return {promise:new Pro
 async function fixture(t:import('node:test').TestContext){const directory=await mkdtemp(join(tmpdir(),'mote-binding-lifecycle-')),store=new Store(directory),sources=new SourceStore(store),state={account:'generated-one',held:undefined as Promise<void>|undefined,entered:undefined as (()=>void)|undefined};
  sources.capabilities.register('feishu.recordings',{lifecycle:'continuous',discovery:'provider-list',listening:'polling',readOriginal:'explicit-provider-read',synchronization:'revisions',externalWrite:false});
  const provider:RecordingProvider={id:'feishu',version:'generated',account:async()=>{state.entered?.();if(state.held)await state.held;return {id:state.account};},discover:async()=>({ids:[]}),metadata:async()=>{throw Error('unused');},transcript:async()=>{throw Error('unused');},media:async()=>{throw Error('unused');}};
- const connector=new RecordingConnector({store,sources,config:{dataDir:directory,connectors:{directory}}} as ConnectorContext,provider);await connector.init();t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});return {connector,store,sources,state,directory};}
+ const context={store,sources,config:{dataDir:directory,token:'generated-owner-token',allowedOrigins:[],connectors:{directory}}},connector=new RecordingConnector(context,provider);await connector.init();t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});return {connector,context,store,sources,state,directory};}
 for(const window of ['account','written'] as const)for(const action of ['cancel','disconnect','close','configure'] as const)test(`${action} during ${window} prevents late recording binding registration`,async t=>{
  const f=await fixture(t),entered=deferred(),held=deferred(),controller=new AbortController(),grant:RecordingBindingGrant={signal:controller.signal,assertCurrent:()=>controller.signal.throwIfAborted()};
  if(window==='account'){f.state.entered=()=>entered.resolve();f.state.held=held.promise;}else{const file=(f.connector as any).file,write=file.write.bind(file);let first=true;file.write=async(value:unknown)=>{await write(value);if(first){first=false;entered.resolve();await held.promise;}};}
@@ -37,4 +37,17 @@ test('old cancel cannot cancel a new authorization and check drains before confi
  await manager.close();assert.ok(checks>=1);
  const other=new RecordingAuthorization(f.connector,{check:async()=>({installed:true,configured:true}),login:async signal=>new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}))});
  const first=other.start('login',{operationId:randomUUID(),expectedRevision:other.status().revision});await other.cancel({expectedRevision:first.revision,taskId:first.task!.id});const second=other.start('login',{operationId:randomUUID(),expectedRevision:other.status().revision});await assert.rejects(other.cancel({expectedRevision:first.revision,taskId:first.task!.id}),{code:'recording_authorization_changed'});assert.equal(other.status().task!.id,second.task!.id);await other.close();
+});
+
+
+test('recording runtime projects only used capabilities and retains owned engine close',async t=>{
+ const f=await fixture(t),context=(f.connector as unknown as {ctx:import('../src/connectors/recording-context.js').RecordingContext}).ctx;
+ assert.deepEqual(Object.keys(context).sort(),['archives','closeEngine','configureDefaults','directory','engine','sources','state','syncIntervalMs','work']);
+ for(const object of [context,context.sources,context.archives,context.engine,context.state,context.work]){
+  assert.equal('store' in object,false);assert.equal('db' in object,false);assert.equal('config' in object,false);assert.equal('token' in object,false);assert.equal('capabilities' in object,false);
+ }
+ assert.deepEqual(Object.keys(context.engine).sort(),['cancelKind','drain','enqueue','get','register','retry','tick']);
+ await f.connector.connect();assert.equal(f.connector.status().connected,true);
+ await f.connector.close();assert.ok(f.sources.listSources().length===1);
+ await assert.rejects(f.connector.connect(),/recording_binding_changed/);
 });
