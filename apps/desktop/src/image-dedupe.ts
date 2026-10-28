@@ -1,6 +1,7 @@
+import type { ImageDedupeMode } from './contracts/settings';
+export type { ImageDedupeMode } from './contracts/settings';
 import { createHash } from 'node:crypto';
 
-export type ImageDedupeMode = 'off' | 'exact' | 'conservative' | 'balanced' | 'aggressive';
 export interface FrameFeatures { width: number; height: number; exactHash: string; dHash: bigint; thumb: Uint8Array }
 // The same grayscale, dHash, 32×32 thumbnail and thresholds as Android ScreenshotDedupeHelper.
 export function imageFeatures(bgra: Buffer, width: number, height: number): FrameFeatures {

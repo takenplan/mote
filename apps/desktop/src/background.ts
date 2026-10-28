@@ -1,9 +1,10 @@
+import type { WorkProgress } from './contracts/operations';
+export type { WorkProgress } from './contracts/operations';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { Worker } from 'node:worker_threads';
 import { join } from 'node:path';
 import type { Rectangle } from './contracts';
 
-export interface WorkProgress { message: string; completed?: number; total?: number }
 export type BackgroundRequest =
   | {kind:'spool-original';path:string;directory:string;expected:import('./original-spool').OriginalIdentity}
   | {kind:'original-part';spool:import('./original-spool').OriginalSpool;part:number}

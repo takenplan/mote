@@ -1,12 +1,11 @@
+import type { TopicDirectory, TopicMemory, TopicPage, TopicQuery, TopicEvidence } from './contracts/content';
+export type { TopicDirectory, TopicMemory, TopicPage, TopicQuery, TopicEvidence } from './contracts/content';
 import {getLocale,moteText} from '@mote/shared/i18n';
 import type {Config} from './contracts';
 import {validateServerUrl} from './config';
 import {requireConnectionToken} from './login-session';
 import {readResponseText} from './response-body';
-export type TopicDirectory={items:{id:string;label:string;nodes:{id:string;label:string;parentId?:string}[]}[];classification?:{state:string}};
-export type TopicMemory={id:string;title:string;statement?:string;status:string;version:number;fingerprint?:string;supersededBy?:string;uncertainty?:string;evidenceIds?:string[]};
-export type TopicPage={items:TopicMemory[];nextCursor?:string|null};
-export type TopicQuery={treeId?:string;nodeId?:string;cursor?:string};
+
 const key=(value:unknown):value is string=>typeof value==='string'&&/^[a-z][a-z0-9.-]{0,99}$/.test(value);
 const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
 async function read(config:Config,path:string){
@@ -34,7 +33,7 @@ export async function centralMemoryTopicPage(config:Config,input:TopicQuery={}):
  if(!Array.isArray(result.items)||result.items.length>30||result.nextCursor!=null&&(typeof result.nextCursor!=='string'||result.nextCursor.length>8192))throw Error('Invalid topic page');result.items.forEach(memory);return result;
 }
 export async function centralMemoryTopicDetail(config:Config,id:string):Promise<TopicMemory>{if(!uuid(id))throw Error('Invalid memory reference');return memory(await read(config,'/api/memories/'+id));}
-export type TopicEvidence={id:string;text:string;metadata:string};
+
 /** One Memory-scoped evidence route; no capture or device-reader fallback. */
 export async function centralMemoryTopicEvidence(config:Config,memoryId:string,evidenceId:string,assertCurrent:()=>void):Promise<TopicEvidence>{
  if(!uuid(memoryId)||!uuid(evidenceId))throw Error('Invalid memory evidence reference');

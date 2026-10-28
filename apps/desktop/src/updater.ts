@@ -1,3 +1,5 @@
+import type { UpdateStatus } from './contracts/settings';
+export type { UpdateStatus } from './contracts/settings';
 import { moteText, statusMessage } from '@mote/shared/i18n';
 import { checkRelease, compareVersions, downloadReleaseAsset, selectReleaseAsset, type ReleaseAsset, type ReleaseManifest, type ReleaseChannel } from '@mote/shared/release';
 import { mkdir, readFile, readdir, realpath, rm, stat, lstat } from 'node:fs/promises';
@@ -10,13 +12,7 @@ import { atomicSourceJson } from './source-sync';
 import { inspectUpdateArchive } from './update-archive';
 import { installationEligibility, inspectBundle, prepareInstall, startInstall, cancelPreparedInstall, recoverInterruptedUpdate } from './update-install';
 const execute = promisify(execFile);
-export interface UpdateStatus {
-  manualDownload?: boolean;
-  currentVersion: string; channel: ReleaseChannel;
-  state: 'idle' | 'checking' | 'available' | 'up_to_date' | 'downloading' | 'verifying' | 'ready' | 'installing' | 'error';
-  message: string; received: number; total: number; canInstall: boolean; installReason: string;
-  availableVersion?: string; notesUrl?: string; checkedAt?: string;
-}
+
 export interface UpdateDependencies {
   check: typeof checkRelease; download: typeof downloadReleaseAsset;
   inspect: typeof inspectBundle; extract: (archive: string, destination: string) => Promise<void>;

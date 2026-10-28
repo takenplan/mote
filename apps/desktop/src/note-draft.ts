@@ -1,3 +1,5 @@
+import type { NoteDraft } from './contracts/note';
+export type { NoteDraft } from './contracts/note';
 import {ensureStorageFormat} from './storage-format';
 import { moteText } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +8,7 @@ import { join } from 'node:path';
 import type { CaptureEvent, Config, Platform } from './contracts';
 import type { DurableQueue } from './queue';
 import { encodeLocalContent, readLocalContent } from './local-content';
-export interface NoteDraft { id: string; text: string; mood: string; revision: number; prepared?: boolean }
+
 interface StoredDraft { draft: NoteDraft; submission?: CaptureEvent; targetOrigin?: string; completed?: { draftId: string; eventId: string } }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function emptyDraft(): NoteDraft { return { id: randomUUID(), text: '', mood: '', revision: 0 }; }

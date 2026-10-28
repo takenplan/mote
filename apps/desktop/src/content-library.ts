@@ -1,12 +1,12 @@
+import type { ContentItem, LocalContentPage, ContentDetail, CentralContentPage } from './contracts/content';
+export type { ContentItem, LocalContentPage, ContentDetail, CentralContentPage } from './contracts/content';
 import {noteBody} from './note-presentation';
 import { moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
 import type { DurableQueue } from './queue';
 import type { LocalSourceManager } from './source-manager';
 import type { SyncSource } from './sync-history';
-export interface ContentItem { key:string;source:SyncSource;title:string;observedAt:string;preview:string;sourceName?:string;error?:string; }
-export interface LocalContentPage {items:ContentItem[];total:number;nextOffset?:number;}
-export interface ContentDetail {text:string;sourceName:string;metadata:string;hasImage?:boolean;image?:string;metadataOnly?:boolean;retainsOriginal?:boolean;truncated?:boolean;}
+
 const sourceKind=(kind:string):SyncSource=>kind==='local-calendar'?'calendar':kind==='coding-agent'?'coding':'file';
 /** All content is evidence. The bounded reading surface never executes or interprets its text. */
 export function localContentPage(queue:DurableQueue,sources:LocalSourceManager,offset=0):LocalContentPage {
@@ -32,7 +32,7 @@ export async function localContentDetail(queue:DurableQueue,sources:LocalSourceM
   }
   return {truncated:text.length>100000,text:text.slice(0,100000),sourceName:source.name,metadataOnly:item.layer==='reference',retainsOriginal:item.kind==='file'?Boolean(item.localOriginal||item.localOriginalBase64):undefined,metadata:JSON.stringify({title:item.title,uri:item.uri,modifiedAt:item.modifiedAt,mimeType:item.mimeType,calendar:item.calendar,document:item.document},null,2)};
 }
-export interface CentralContentPage {items:ContentItem[];total:number;nextCursor?:string;authorizationDenied?:true;}
+
 export async function centralContentPage(config:import('./contracts').Config,cursor?:string):Promise<CentralContentPage>{
   const {requireConnectionToken}=await import('./login-session.js');const {validateServerUrl}=await import('./config.js');const {readResponseText}=await import('./response-body.js');
   if(cursor!==undefined&&(typeof cursor!=='string'||cursor.length>512))throw Error(moteText('分页参数无效'));

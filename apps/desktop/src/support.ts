@@ -1,3 +1,9 @@
+import { stages, codes } from './contracts/operations';
+export { stages, codes } from './contracts/operations';
+import type { EventStage, EventCode, EventLevel } from './contracts/operations';
+export type { EventStage, EventCode, EventLevel } from './contracts/operations';
+import type { SupportEvent } from './contracts/operations';
+export type { SupportEvent } from './contracts/operations';
 import { moteText } from '@mote/shared/i18n';
 import { appendFile, mkdir, open, rename, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -5,11 +11,6 @@ import { constants } from 'node:fs';
 import type { Status } from './contracts';
 import type { DesktopProfile } from './profile';
 
-export const stages = ['APP','CONFIG','CAPTURE','MODEL','MODEL_DOWNLOAD','OCR','PRIVACY','QUEUE','UPLOAD','HEARTBEAT','NOTE','SUPPORT','SOURCE','CONNECTION','UPDATE'] as const;
-export type EventStage = typeof stages[number];
-export const codes = ['STARTED','STOPPED','OK','FILTERED','WAIT_NETWORK','PERMISSION','CONFIG_INVALID','NETWORK','TIMEOUT','TLS','AUTH','CONFLICT','SERVER','RESPONSE','STORAGE','MODEL_UNAVAILABLE','SCHEDULER','CANCELLED','OTHER'] as const;
-export type EventCode = typeof codes[number];
-export type EventLevel = 'debug' | 'info' | 'warn' | 'error';
 export function eventLevel(code: EventCode): EventLevel {
   if (code === 'STARTED') return 'debug';
   if (['STOPPED','OK','FILTERED','CANCELLED'].includes(code)) return 'info';
@@ -26,7 +27,7 @@ export function safeErrorName(error: unknown): string | undefined {
   try { const name=(error as {name?:unknown}).name; return typeof name==='string' && (errorNames as readonly string[]).includes(name) ? name : 'OtherError'; }
   catch { return 'OtherError'; }
 }
-export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number; errorName?: string; operation?: string; sourceId?: string; sourceKind?: string }
+
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= Number.MAX_SAFE_INTEGER;
 function cleanEvent(value: unknown): SupportEvent | undefined {
   if (!value || typeof value !== 'object') return;

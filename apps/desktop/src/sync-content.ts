@@ -1,3 +1,5 @@
+import type { SyncContent } from './contracts/content';
+export type { SyncContent } from './contracts/content';
 import {noteBody} from './note-presentation';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -9,13 +11,6 @@ import type { DurableQueue } from './queue';
 import type { LocalSourceManager } from './source-manager';
 import type { SyncHistory, SyncHistoryItem } from './sync-history';
 
-export interface SyncContent {
-  item: SyncHistoryItem; location: 'local' | 'central'; text: string; image?: string;
-  readiness?: 'ready'|'pending'|'failed'|'unknown'|'metadata';
-  hasImage?:boolean; retainsOriginal?:boolean; truncated?:boolean;
-  processing?: boolean; metadataOnly?: boolean; nextChunkOffset?: number;
-  metadata?: string; captureId?: string;
-}
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function text(value: unknown, max = 100000): string { return typeof value === 'string' ? value.slice(0, max) : ''; }
 function recordText(source: SyncHistoryItem['source'], record: Record<string, unknown>): string {

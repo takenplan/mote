@@ -1,6 +1,8 @@
+import type { CompressionPreview } from './contracts/settings';
+export type { CompressionPreview } from './contracts/settings';
 import {moteText} from '@mote/shared/i18n';
 import sharp from 'sharp';
-export interface CompressionPreview {original:string;compressed:string;originalBytes:number;compressedBytes:number;width:number;height:number;originalWidth:number;originalHeight:number}
+
 /** Generated input only: this debug action never captures a screen or reads the queue. */
 export async function compressionPreview(quality:number,maxSide:number):Promise<CompressionPreview>{
   if(!Number.isInteger(quality)||quality<40||quality>95||!Number.isInteger(maxSide)||maxSide<640||maxSide>2560)throw new Error(moteText("质量范围 40–95，最长边范围 640–2560"));

@@ -1,13 +1,5 @@
-export type PermissionKind = 'screen' | 'accessibility' | 'calendar' | 'files';
-export type DragPermissionKind = Exclude<PermissionKind, 'calendar'>;
-export interface PermissionStatus {
-  screen: string;
-  accessibility: string;
-  calendar: string;
-  appPath?: string;
-  bundleId?: string;
-  canDrag?: boolean;
-}
+import type { PermissionKind } from './contracts/permissions';
+export type { PermissionKind, DragPermissionKind, PermissionStatus } from './contracts/permissions';
 export function permissionKind(value: unknown): PermissionKind {
   if (value !== 'screen' && value !== 'accessibility' && value !== 'calendar' && value !== 'files') throw new Error('Unknown permission');
   return value;

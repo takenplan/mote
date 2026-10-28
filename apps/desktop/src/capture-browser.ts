@@ -1,3 +1,5 @@
+import type { CaptureLocation, BrowseRequest, BrowserCapture, BrowserPage, BrowserDetail } from './contracts/content';
+export type { CaptureLocation, BrowseRequest, BrowserCapture, BrowserPage, BrowserDetail } from './contracts/content';
 import { connectionToken, requireConnectionToken } from './login-session';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {captureSessions,type CaptureSession} from '@mote/shared/capture-sessions';
@@ -8,15 +10,6 @@ import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
 
-export type CaptureLocation = 'local' | 'central';
-export interface BrowseRequest { source?: 'screen'|'ui_page'; location: CaptureLocation; day: string; cursor?: string; grouping?: 'sessions' | 'records'; sessionId?: string }
-export interface BrowserCapture {
-  source?: 'screen'|'ui_page'; id: string; capturedAt: string; appName: string; appId: string;
-  ocr: { status: 'pending' | 'completed' | 'disabled' | 'failed' | 'unknown'; reason?: 'charging' };
-  textPreview: string; sizeBytes?: number; hasImage: boolean; syncError?: string;
-}
-export interface BrowserPage { items: BrowserCapture[]; totalCount: number; nextCursor?: string; sessions?: CaptureSession[]; sessionCount?: number }
-export interface BrowserDetail extends BrowserCapture { ocrText: string; deviceName?: string }
 const PAGE_SIZE = 30;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
