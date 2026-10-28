@@ -1,3 +1,4 @@
+import {EvidenceDeletion} from '../evidence-deletion.js';
 import type {ServerFeatureScope} from '../feature-host.js';
 import { captureSchema,rangeSchema } from '@mote/shared';
 import type { FastifyInstance } from 'fastify';
@@ -35,6 +36,7 @@ app.get('/api/captures',async req=>{
     const raw=req.query as Record<string,string>;const args=rangeSchema.parse(raw);
     return diagnostics.measure('source','timeline',()=>store.list({...args,cursor:raw.cursor}),page=>({count:page.items.length}));
   });
-app.delete('/api/captures/:id',async req=>{const id=(req.params as {id:string}).id;const file=store.db.prepare('SELECT capture_id FROM file_versions WHERE capture_id=? UNION SELECT capture_id FROM file_chunks WHERE id=? LIMIT 1').get(id,id) as {capture_id:string}|undefined;return file?files.forget(file.capture_id):store.delete(id);});
+const deletion=new EvidenceDeletion(store,files);
+app.delete('/api/captures/:id',async req=>deletion.delete((req.params as {id:string}).id));
 app.get('/api/activity',async req=>store.activity(rangeSchema.parse(req.query)));
 }

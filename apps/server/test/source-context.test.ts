@@ -178,3 +178,18 @@ test('source context HTTP accepts paired owners, enforces version conflicts and 
   for(const access of ['read','write']){const minted=await app.inject({method:'POST',url:'/api/connections/mcp',headers:owner,payload:{serverUrl:'http://127.0.0.1:47832',label:'Generated MCP',access}});assert.equal(minted.statusCode,200);for(const method of ['GET','PATCH'] as const){const reply=await app.inject({method,url,headers:minted.json().config.mcpServers.mote.headers,...(method==='PATCH'?{payload:{expectedVersion:1,description:'Forbidden collector instruction'}}:{})});assert.equal(reply.statusCode,403);}}
   assert.deepEqual((await app.inject({url,headers:owner})).json(),first.json());
 });
+
+test('a tail SQL failure during context republish rolls back declarations and affected descendants while preserving another source',async t=>{
+ const {sources,store,materials,sourceId}=fixture(t);sources.update(sourceId,{enabled:true});
+ const first=await sources.upsert(sourceId,item),published=materials.publish(draft(sourceId,first.id));
+ sources.register({id:'generated-other-context',name:'Generated unaffected',kind:'custom',deviceId:'generated-device',platform:'import'});
+ const other=await sources.upsert('generated-other-context',item),untouched=materials.publish(draft('generated-other-context',other.id));
+ const snapshot=()=>Object.fromEntries(['source_connections','source_context_declarations','material_heads','material_revisions','material_evidence','memory_provider_evidence_revocations'].map(table=>[table,store.db.prepare('SELECT * FROM '+table+' ORDER BY rowid').all()]));
+ const before=snapshot();
+ store.db.exec(`CREATE TEMP TRIGGER generated_context_tail BEFORE UPDATE OF revision ON material_heads WHEN NEW.id='${published.id}' BEGIN SELECT RAISE(ABORT,'Generated context republish tail failure'); END`);
+ assert.throws(()=>sources.updateContext(sourceId,{expectedVersion:0,description}),/Generated context republish tail failure/);
+ assert.deepEqual(snapshot(),before);assert.equal(store.db.isTransaction,false);assert.equal(materials.get(published.ref)?.revision,published.revision);assert.ok(materials.get(untouched.ref));
+ store.db.exec('DROP TRIGGER generated_context_tail');
+ const saved=sources.updateContext(sourceId,{expectedVersion:0,description});assert.equal(saved.version,1);assert.notEqual(materials.get(published.id)?.revision,published.revision);
+ assert.deepEqual(sources.updateContext(sourceId,{expectedVersion:0,description}),saved);assert.ok(materials.get(untouched.ref));
+});

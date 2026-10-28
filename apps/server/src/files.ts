@@ -335,7 +335,29 @@ export class FileStore {
     return {sql:`SELECT c.id,c.embedding FROM file_chunks c,file_artifacts a,file_heads h,captures r WHERE ${clauses.join(' AND ')}`,values};
   }
 
-  forget(id:string){const v=this.version(id);this.store.db.prepare('INSERT OR IGNORE INTO file_forgotten VALUES(?,?)').run(v.source_id,v.external_id);const ids=this.store.db.prepare('SELECT capture_id FROM file_versions WHERE source_id=? AND external_id=?').all(v.source_id,v.external_id) as {capture_id:string}[];for(const r of ids)this.store.delete(r.capture_id);this.sweep();return {deleted:ids.length};}
+  /** Resolve only file-owned evidence identities; ordinary capture IDs stay with their owner. */
+  captureForEvidence(id:string):string|undefined {
+    const row=this.store.db.prepare('SELECT capture_id FROM file_versions WHERE capture_id=? UNION SELECT capture_id FROM file_chunks WHERE id=? LIMIT 1').get(id,id);
+    return row?String(row.capture_id):undefined;
+  }
+  syncHead(sourceId:string,externalId:string){
+    return {revision:this.sources.getItem(sourceId,externalId)?.revision??null,forgotten:!!this.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,externalId)};
+  }
+  allowAgain(sourceId:string,externalId:string){
+    this.store.db.prepare('DELETE FROM file_forgotten WHERE source_id=? AND external_id=?').run(sourceId,externalId);return {allowed:true};
+  }
+  forget(id:string){
+    const db=this.store.db;db.exec('BEGIN IMMEDIATE');
+    let ids:{capture_id:string}[];
+    try{
+      const version=this.version(id);
+      db.prepare('INSERT OR IGNORE INTO file_forgotten VALUES(?,?)').run(version.source_id,version.external_id);
+      ids=db.prepare('SELECT capture_id FROM file_versions WHERE source_id=? AND external_id=?').all(version.source_id,version.external_id) as {capture_id:string}[];
+      for(const row of ids)this.store.deleteInTransaction(row.capture_id);
+      db.exec('COMMIT');
+    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+    this.store.collectDeletedEvidence();this.sweep();return {deleted:ids.length};
+  }
   sweepSnapshotInputs(){
     const db=this.store.db;
     const stale=`capture_id NOT IN (SELECT h.capture_id FROM file_heads h JOIN source_connections s ON s.id=h.source_id WHERE json_extract(s.json,'$.enabled')=1 AND json_extract(s.json,'$.retention')!='reference' AND h.origin_missing=0)`;
