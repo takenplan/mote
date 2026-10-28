@@ -41,6 +41,8 @@ export function selectScopes(paths) {
 export function automaticTasks(selection, event = 'pull_request') {
   if (!['pull_request', 'push', 'local'].includes(event)) throw Error(`Unsupported automatic event: ${event}`);
   const selected = new Set(selection.scopes), tasks = [];
+  // One source-boundary check before the affected Node tasks; no builds or heavy suites.
+  if ([...selected].some(name => name !== 'android')) tasks.push('architecture');
   for (const name of ['tooling', 'i18n', 'shared']) if (selected.has(name)) tasks.push(name);
   for (const name of ['web', 'agent', 'desktop']) if (selected.has(name)) tasks.push(event === 'push' ? `${name}-contract` : name);
   if (selected.has('server')) tasks.push(...(event === 'push' ? ['server-contract'] : ['server-build', ...[1, 2, 3, 4].filter(shard => serverFiles(shard, '.', selection.serverGroups).length).map(shard => `server-${shard}`)]));

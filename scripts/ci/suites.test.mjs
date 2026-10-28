@@ -25,6 +25,7 @@ test('Server shards plus explicit scale cases cover the original glob once, with
   assert.ok(original.includes('length:4097'));
 });
 test('every automatic plan excludes the long file and large case, while manual scopes retain the union', () => {
+  assert.deepEqual(taskPlan('architecture'), [{ command: process.execPath, args: ['scripts/ci/architecture.mjs'] }]);
   for (const event of ['pull_request', 'push', 'local']) for (const task of automaticTasks({ scopes }, event).tasks) {
     const checks = taskPlan(task);
     assert.ok(!JSON.stringify(checks).includes('query-large-lineage-http.test.ts'));

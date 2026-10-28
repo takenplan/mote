@@ -23,14 +23,16 @@ test('unknown inputs and locks conservatively select all light scopes and explai
 });
 test('PR selection is modular, main runs affected light contracts, neither starts specialist suites', () => {
   const web = automaticTasks(changed('apps/web/src/App.tsx'));
-  assert.deepEqual(web, { tasks: ['i18n', 'web'], android: false });
-  assert.deepEqual(automaticTasks(changed('packages/shared/src/i18n-en.ts')), { tasks: ['i18n'], android: false });
-  assert.deepEqual(automaticTasks(changed('apps/server/src/app.ts')).tasks, ['i18n', 'server-build', 'server-1', 'server-2', 'server-3', 'server-4']);
+  assert.deepEqual(web, { tasks: ['architecture', 'i18n', 'web'], android: false });
+  assert.deepEqual(automaticTasks(changed('packages/shared/src/i18n-en.ts')), { tasks: ['architecture', 'i18n'], android: false });
+  assert.deepEqual(automaticTasks(changed('apps/server/src/app.ts')).tasks, ['architecture', 'i18n', 'server-build', 'server-1', 'server-2', 'server-3', 'server-4']);
   const main = automaticTasks(changed('package-lock.json'), 'push');
   assert.equal(main.android, false);
   assert.ok(main.tasks.includes('server-contract'));
   assert.ok(!main.tasks.some(task => /^server-[1-4]$|benchmark|scale|recovery/.test(task)));
   assert.throws(() => automaticTasks(changed('apps/web/src/a.ts'), 'selection-error'));
+  assert.deepEqual(automaticTasks(changed('scripts/ci/architecture.mjs')).tasks, ['architecture', 'tooling']);
+  assert.deepEqual(automaticTasks(changed('docs/ci.md')).tasks, []);
 });
 function repository(t) {
   const directory = mkdtempSync(join(tmpdir(), 'mote-ci-selection-'));

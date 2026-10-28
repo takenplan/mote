@@ -38,6 +38,7 @@ function repository(t) {
   for (const dir of ['apps/server/test', 'packages/agent/test', 'scripts/ci']) mkdirSync(join(directory, dir), { recursive: true });
   write('apps/server/test/generated.test.ts');
   write('packages/agent/test/generated.test.mjs');
+  write('scripts/ci/architecture.mjs', '// Generated source-boundary fixture.\n');
   mkdirSync(join(directory, 'scripts/release'), { recursive: true });
   write('README.md');
   write('apps/desktop/src/old.ts');
