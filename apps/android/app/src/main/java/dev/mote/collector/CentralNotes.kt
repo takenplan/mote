@@ -40,7 +40,7 @@ internal class CentralNoteStore(private val directory: File, private val cipher:
 
 internal object CentralAttachments {
     const val MAX_BYTES = 50 * 1024 * 1024
-    fun upload(client: CentralClient, file: File, name: String, mime: String, deviceId: String,
+    fun upload(client: CentralUploadClient, file: File, name: String, mime: String, deviceId: String,
         resolveTime: (String) -> Long,
         identityScope: String = "", progress: (Int, Int) -> Unit = { _, _ -> }): String {
         require(mime.matches(Regex("[A-Za-z0-9!#$&^_.+\\-]+/[A-Za-z0-9!#$&^_.+\\-]+")) && file.length() in 1..MAX_BYTES.toLong()) {

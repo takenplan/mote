@@ -69,15 +69,15 @@ internal class CentralClient(
     },
     private val active: () -> Boolean = { true },
     private val unauthorized: () -> Unit = {},
-) {
+) : CentralUploadClient {
     fun get(path: String) = request("GET", path)
-    fun post(path: String, body: JSONObject = JSONObject()) = request("POST", path, body)
+    override fun post(path: String, body: JSONObject) = request("POST", path, body)
     fun put(path: String, body: JSONObject) = request("PUT", path, body)
     fun patch(path: String, body: JSONObject) = request("PATCH", path, body)
     fun delete(path: String, body: JSONObject? = null) = request("DELETE", path, body)
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         bytes(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
-    fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {
+    override fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {
         checkActive()
         val (status, value) = transport(method, destination(path), body, token, mime)
         checkActive()
