@@ -88,6 +88,17 @@ test('documentation-only CLI skips builds, while moving runtime code into docs r
   assert.ok(changedPaths({ base, directory, head: 'HEAD' }).includes('apps/desktop/src/old.ts'));
 });
 
+test('browser login smoke changes produce only the current client light plan in the actual CLI', t => {
+  const { write, dryRun } = repository(t);
+  write('scripts/test-web-login.cjs');
+  const result = dryRun();
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.deepEqual(plan.affected, { scopes: ['web', 'i18n', 'desktop'], fallback: [] });
+  for (const workspace of ['@mote/web', '@mote/desktop']) assert.ok(plan.checks.some(step => step.args.includes(workspace)));
+  assert.ok(!plan.checks.some(step => step.command.includes('gradlew') || step.args.includes('@mote/server') || step.args.includes('scripts/test-web-login.cjs')));
+});
+
 test('an advanced base branch does not turn its unrelated changes into PR inputs', t => {
   const { directory, git, write } = repository(t);
   git('switch', '-c', 'feature');

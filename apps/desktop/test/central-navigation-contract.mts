@@ -8,7 +8,8 @@ import type { Config as ServerConfig } from '../../server/src/config';
 import { defaultConfig } from '../src/config';
 import { showCentral, type CentralNavigation } from '../src/central-navigation';
 import { consumeLoginTicket } from '../../web/src/login-handoff';
-import { connectionStorageKey, readStoredSession } from '../../web/src/session';
+import { createApi } from '../../web/src/api';
+import { clearSession, connectionStorageKey, readStoredSession } from '../../web/src/session';
 
 const origin = 'https://fixture.invalid';
 const owner = 'generated-navigation-owner-token-123456789';
@@ -27,33 +28,33 @@ afterEach(() => {
   savedGlobals.clear();
 });
 
-async function fixture() {
+async function fixture(serviceOrigin = origin) {
   const directory = await mkdtemp(join(tmpdir(), 'mote-navigation-'));
   const config: ServerConfig = {
     dataDir: directory, token: owner, tokenPath: join(directory, 'owner-token'), host: '127.0.0.1', port: 0, profile: 'test', tokenFromEnvironment: true,
     maxStorageBytes: 30 * 1024 * 1024, maxExportBytes: 4 * 1024 * 1024, retentionDays: 0, insightIntervalHours: 0,
-    allowedOrigins: [origin], model: '', modelBaseUrl: 'https://api.deepseek.com', apiKey: '', allowUnauthenticatedLocal: false,
+    allowedOrigins: [serviceOrigin], model: '', modelBaseUrl: 'https://api.deepseek.com', apiKey: '', allowUnauthenticatedLocal: false,
     embeddingModel: '', embeddingBaseUrl: '', embeddingApiKey: '', diagnosticsEnabled: false,
   };
   const value = await buildApp(config, { agent: inactive, backgroundWorker: false });
   const requests: { url: URL; init?: RequestInit }[] = [];
   const fetcher = async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input), origin);
-    assert.equal(url.origin, origin);
+    const url = new URL(String(input), serviceOrigin);
+    assert.equal(url.origin, serviceOrigin);
     assert.equal(init?.redirect, 'error');
     requests.push({ url, init });
     const response = await value.app.inject({ method: (init?.method ?? 'GET') as 'GET' | 'POST', url: url.pathname + url.search, headers: Object.fromEntries(new Headers(init?.headers)), payload: init?.body as string | undefined });
     return new Response(response.body, { status: response.statusCode, headers: response.headers as Record<string, string> });
   };
   stubGlobal('fetch', fetcher);
-  return { ...value, requests, close: async () => { await value.app.close(); await rm(directory, { recursive: true, force: true }); } };
+  return { ...value, requests, fetcher, close: async () => { await value.app.close(); await rm(directory, { recursive: true, force: true }); } };
 }
 
 function browser(url: string) {
   let href = url;
   const local = new Map<string, string>(), session = new Map<string, string>();
   const storage = (values: Map<string, string>) => ({ getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
-  stubGlobal('location', { get href() { return href; }, get hash() { return new URL(href).hash; }, get pathname() { return new URL(href).pathname; }, get search() { return new URL(href).search; }, origin });
+  stubGlobal('location', { get href() { return href; }, get hash() { return new URL(href).hash; }, get pathname() { return new URL(href).pathname; }, get search() { return new URL(href).search; }, get origin() { return new URL(href).origin; } });
   stubGlobal('history', { replaceState: (_data: unknown, _unused: string, path: string) => { href = new URL(path, href).href; } });
   stubGlobal('localStorage', storage(local));
   stubGlobal('sessionStorage', storage(session));
@@ -104,6 +105,13 @@ it('rejects expired tickets at the real exchange and discards a late exchange af
     await assert.rejects(consumeLoginTicket(), /Login link expired/);
     assert.equal(readStoredSession(origin), null);
     now -= 61_000;
+    const longLived = navigation({ ...defaultConfig(), serverUrl: origin, token: owner, authExpiresAt: now + 600_000 });
+    await showCentral(longLived, 'notes');
+    now += 61_000;
+    browser(longLived.launchChrome.mock.calls[0].arguments[0] as string);
+    await assert.rejects(consumeLoginTicket(), /Login link expired/);
+    assert.equal(readStoredSession(origin), null, 'The ticket expires even while its parent credential remains valid');
+    now -= 61_000;
     await showCentral(entry, 'notes');
     const url = entry.launchChrome.mock.calls[1].arguments[0] as string;
     const b = browser(url), fetcher = globalThis.fetch;
@@ -117,6 +125,54 @@ it('rejects expired tickets at the real exchange and discards a late exchange af
     await assert.rejects(pending, /Login changed/);
     assert.equal(JSON.parse(b.local.get(connectionStorageKey)!).token, 'generated-newer-login');
   } finally { mock.restoreAll(); await f.close(); }
+});
+
+it('cannot exchange a desktop ticket at another Central origin or send that origin the bearer', async () => {
+  const f = await fixture(), other = await fixture('https://other.invalid');
+  try {
+    stubGlobal('fetch', f.fetcher);
+    const entry = navigation();
+    await showCentral(entry, 'notes');
+    const url = entry.launchChrome.mock.calls[0].arguments[0] as string;
+    const wrongOrigin = new URL(url); wrongOrigin.hostname = 'other.invalid';
+    const b = browser(wrongOrigin.href);
+    stubGlobal('fetch', other.fetcher);
+    await assert.rejects(consumeLoginTicket(), /Login link expired/);
+    assert.equal(other.requests.length, 1);
+    assert.equal(other.requests[0].url.origin, wrongOrigin.origin);
+    assert.equal(new Headers(other.requests[0].init?.headers).has('authorization'), false);
+    assert.ok(!(other.requests[0].init?.body as string).includes(owner));
+    assert.equal(readStoredSession(wrongOrigin.origin), null);
+    assert.ok(!b.href().includes('loginTicket'));
+    // The unrelated node did not consume the issuing node's one-time ticket.
+    browser(url); stubGlobal('fetch', f.fetcher);
+    await consumeLoginTicket();
+    assert.equal(readStoredSession(origin)?.token, owner);
+  } finally { await other.close(); await f.close(); }
+});
+
+it('browser logout revokes the shared desktop credential and rejects an outstanding ticket', async () => {
+  const f = await fixture();
+  try {
+    const grant = await f.connections.session(origin, 'Generated desktop', { deviceId: 'generated-logout-mac', deviceName: 'Generated Mac', platform: 'macos' }, 86400000);
+    const entry = navigation({ ...defaultConfig(), serverUrl: origin, token: grant.token });
+    await showCentral(entry, 'notes');
+    browser(entry.launchChrome.mock.calls[0].arguments[0] as string);
+    await consumeLoginTicket();
+    const api = createApi(readStoredSession(origin)!);
+    await api.request('/api/configuration');
+    await showCentral(entry, 'notes');
+    const outstanding = entry.launchChrome.mock.calls[1].arguments[0] as string;
+    await api.request('/api/login/logout', { method: 'POST', body: '{}' });
+    clearSession();
+    assert.equal(readStoredSession(origin), null);
+    await assert.rejects(api.request('/api/configuration'));
+    browser(outstanding);
+    await assert.rejects(consumeLoginTicket(), /Login link expired/);
+    assert.equal(readStoredSession(origin), null);
+    await assert.rejects(showCentral(entry, 'notes'));
+    assert.equal(entry.launchChrome.mock.calls.length, 2);
+  } finally { await f.close(); }
 });
 
 it('does not launch a browser after ticket or session preparation failure and repeats a later successful attempt', async () => {
