@@ -1,3 +1,4 @@
+import {gmailContext} from './gmail-context.js';
 import {installRecordingMemory} from './recording-memory.js';
 import {recordingManifest,type RecordingProvider} from './recordings.js';
 import {createFeishuRecordings} from './lark-recordings.js';
@@ -53,7 +54,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
     };
   }},
   {apiVersion:1,id:'gmail',sourceKinds:['gmail'],statusKey:'gmail',create:ctx=>{
-    const gmail=new GmailConnector(ctx,testing?.gmail);
+    const gmail=new GmailConnector(gmailContext(ctx),testing?.gmail);
     return {
       init:()=>gmail.init(),status:()=>gmail.status(),configureSyncInterval:interval=>gmail.configureSyncInterval(interval),
       configure:host=>{

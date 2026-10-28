@@ -1,3 +1,4 @@
+import {gmailContext} from '../src/connectors/gmail-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,stat,readFile} from 'node:fs/promises';
@@ -27,10 +28,10 @@ async function fixture(t:any,handle:(url:URL,init?:RequestInit)=>Promise<Respons
   oauth.getToken=(async()=>({tokens:{refresh_token:'generated-refresh-secret',access_token:'generated-access-secret',scope:gmailScope}})) as any;
   oauth.getAccessToken=(async()=>({token:'generated-access-secret'})) as any;
   const deps:GoogleDependencies={oauthFactory:()=>oauth,fetch:(async(input,init)=>{assert.equal(init?.method,'GET');assert.equal(new URL(String(input)).hostname,'gmail.googleapis.com');return handle(new URL(String(input)),init);}) as typeof fetch};
-  let connector=new GmailConnector(ctx,deps);await connector.init();
+  let context=gmailContext(ctx),connector=new GmailConnector(context,deps);await connector.init();
   t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});
   const authorize=async()=>{const url=new URL((await connector.start()).authorizationUrl);assert.equal(url.searchParams.get('scope'),gmailScope);assert.equal(url.searchParams.get('code_challenge_method'),'S256');const state=url.searchParams.get('state')!;await connector.callback(state,'generated-code');return state;};
-  return {ctx,get sources(){return sources;},get store(){return store;},directory,oauth,authorize,get connector(){return connector;},restart:async(reopen=false)=>{await connector.close();if(reopen){store.close();store=new Store(join(directory,'vault'));sources=sourceStore(store);ctx.store=store;ctx.sources=sources;}connector=new GmailConnector(ctx,deps);await connector.init();}};
+  return {ctx,get context(){return context;},get sources(){return sources;},get store(){return store;},directory,oauth,authorize,get connector(){return connector;},restart:async(reopen=false)=>{await connector.close();if(reopen){store.close();store=new Store(join(directory,'vault'));sources=sourceStore(store);ctx.store=store;ctx.sources=sources;}context=gmailContext(ctx);connector=new GmailConnector(context,deps);await connector.init();}};
 }
 
 test('Gmail history counter and JSON key order replays preserve immutable sources, original assets and Material across storage restart',async t=>{
@@ -182,4 +183,28 @@ test('disconnect aborts an in-flight Gmail read and prevents late source commits
   await f.authorize();const sync=f.connector.sync();const rejected=assert.rejects(sync,/connector_closed/);await started;
   await f.connector.disconnect();await rejected;assert.equal(f.sources.listItems().items.length,0);assert.equal(f.connector.status().connected,false);
   assert.equal(f.sources.listSources()[0].enabled,false);
+});
+
+
+test('Gmail projected capabilities preserve message parts and full-sync membership across reopen without global Store or owner credentials',async t=>{
+  const f=await fixture(t,url=>url.pathname.endsWith('/profile')?Response.json({emailAddress:'generated@example.invalid',historyId:'100'}):url.pathname.endsWith('/messages')?Response.json({messages:[{id:'projection'}]}):Response.json(message('projection','Generated original. '.repeat(2000))));
+  const context=f.context;
+  assert.deepEqual(Object.keys(context).sort(),['archives','configuration','directory','sources','syncState']);
+  for(const object of [context,context.sources,context.archives,context.syncState,context.configuration]){
+    assert.equal('store' in object,false);assert.equal('token' in object,false);assert.equal('mcpTokens' in object,false);assert.equal('capabilities' in object,false);
+  }
+  assert.deepEqual(Object.keys(context.sources).sort(),['getItem','getSource','register','reportStatus','update','upsert','upsertBatch']);
+  await f.authorize();assert.equal((await f.connector.sync()).imported,2);
+  const sourceId=f.sources.listSources()[0].id;
+  assert.deepEqual(context.syncState.partIds(sourceId,'projection'),['projection:0','projection:1']);
+  assert.deepEqual(context.syncState.partIds(sourceId,'project'),[],'part lookup is an exact message prefix');
+  assert.deepEqual(context.syncState.staleMembers(sourceId,'another-epoch'),['projection']);
+  const original=f.sources.getItem(sourceId,'projection:0')!.document!.fileId!;
+  await f.restart(true);
+  assert.deepEqual(f.context.syncState.partIds(sourceId,'projection'),['projection:0','projection:1']);
+  assert.ok(f.context.archives.read(original).includes(Buffer.from('projection')));
+  f.context.syncState.touchMember(sourceId,'projection','new-epoch');
+  assert.deepEqual(f.context.syncState.staleMembers(sourceId,'new-epoch'),[]);
+  f.context.syncState.forgetMember(sourceId,'projection');
+  assert.deepEqual(f.context.syncState.staleMembers(sourceId,'another-epoch'),[]);
 });

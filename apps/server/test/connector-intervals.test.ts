@@ -1,3 +1,4 @@
+import {gmailContext} from '../src/connectors/gmail-context.js';
 import {googleCalendarContext} from '../src/connectors/google-context.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,7 +61,7 @@ for(const kind of ['google-calendar','gmail','lark','recordings'] as const)test(
     const google=new GoogleCalendarConnector(googleCalendarContext(ctx));t.mock.method(google,'sync',async()=>{polls++;return googleResult;});connector=google;
   }else if(kind==='gmail'){
     await save('gmail.json',{version:1,tokens:{},account:'generated@example.invalid'});
-    const gmail=new GmailConnector(ctx);t.mock.method(gmail,'sync',async()=>{polls++;return gmailResult;});connector=gmail;
+    const gmail=new GmailConnector(gmailContext(ctx));t.mock.method(gmail,'sync',async()=>{polls++;return gmailResult;});connector=gmail;
   }else if(kind==='lark'){
     const lark=new LarkConnector(ctx,generatedLark);authorize=async()=>{await authorizeLark(lark);t.mock.method(lark,'startSync',()=>{polls++;return larkJob;});};connector=lark;
   }else{
@@ -123,7 +124,7 @@ for(const kind of ['google-calendar','gmail'] as const)test(`${kind} interval re
     polls++;if(polls===1){signal=options?.signal??undefined;entered();await hold;}
     return kind==='gmail'?Response.json({messages:[],history:[],historyId:String(polls)}):Response.json({items:[],nextSyncToken:`generated-${polls}`});
   }) as typeof fetch};
-  const connector=kind==='gmail'?new GmailConnector(ctx,dependencies):new GoogleCalendarConnector(googleCalendarContext(ctx),dependencies);
+  const connector=kind==='gmail'?new GmailConnector(gmailContext(ctx),dependencies):new GoogleCalendarConnector(googleCalendarContext(ctx),dependencies);
   t.after(async()=>{release();await connector.close();});
   await connector.init();
   const state=new URL((await connector.start()).authorizationUrl).searchParams.get('state')!;await connector.callback(state,'generated-code');
