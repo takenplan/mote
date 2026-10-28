@@ -1,3 +1,4 @@
+import {createMemoryControl} from './memory-control.js';
 import {createMemoryModelAuthorityJobReader} from './memory-model-authority.js';
 import {createQueryPreparation,type SavedQuery} from './query-preparation.js';
 import {createModelEvidenceAuthority,contextFailure} from './model-evidence-authority.js';
@@ -744,39 +745,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   lifecycle.automaticAdmission=id=>!['extraction','consolidation'].includes(id)||memoryBindings!.accepting();
   memoryBindings.onReleased=()=>lifecycle.skipAutomaticBacklog();
   pluginCenter.admissionChanged=(id,enabled)=>{if(memoryBindings!.binding().namespace?.instanceId===id){if(enabled)lifecycle.skipAutomaticBacklog();memoryAutomation.touch();}};
-  const cancelledMemoryWork=(automaticOnly=false)=>{
-    let active=0;
-    const automaticParents=new Set(lifecycle.view().extensions.filter(extension=>['extraction','consolidation'].includes(extension.id)&&extension.active&&!extension.active.manual).map(extension=>'lifecycle:'+extension.active!.id));
-    for(const row of store.db.prepare("SELECT b.id,j.json FROM memory_batches b JOIN memory_jobs j ON j.id=b.job_id WHERE json_extract(j.json,'$.status')='cancelled'").all()){
-      const job=JSON.parse(String(row.json));if(executor.isActiveStep(String(row.id))&&(!automaticOnly||job.automaticGrant||job.automaticGrants?.length||automaticParents.has(job.importJobId)))active++;
-    }
-    for(const extension of lifecycle.view().extensions)if(['extraction','consolidation'].includes(extension.id)&&extension.active&&extension.status==='cancelled'&&(!automaticOnly||!extension.active.manual)&&executor.isActiveStep('lifecycle:'+extension.active.id))active++;
-    return active;
-  };
-  memoryBindings.pendingTail=()=>{
-    const jobs=Number(store.db.prepare("SELECT count(*) n FROM memory_jobs WHERE json_extract(json,'$.status') NOT IN ('completed','cancelled')").get()!.n);
-    const windows=lifecycle.view().extensions.filter(extension=>['extraction','consolidation'].includes(extension.id)&&extension.active&&extension.status!=='cancelled').length;return jobs+windows+memoryPublication.pending()+cancelledMemoryWork();
-  };
-  memoryAutomation.onResume=()=>lifecycle.skipAutomaticBacklog();
-  memoryAutomation.onStop=()=>executor.deferLocalEffects(()=>{
-    store.db.prepare('UPDATE memory_input_authorizations SET revoked_at=? WHERE authorized=1 AND revoked_at IS NULL').run(Date.now());
-    for(const row of store.db.prepare("SELECT id FROM memory_jobs WHERE (json_extract(json,'$.automaticGrant') IS NOT NULL OR json_array_length(json_extract(json,'$.automaticGrants'))>0) AND json_extract(json,'$.status') NOT IN ('completed','cancelled')").all())memoryPipeline.cancel(String(row.id),{cause:'authority'});
-    for(const extension of lifecycle.view().extensions)if(['extraction','consolidation'].includes(extension.id)&&extension.active&&!extension.active.manual)lifecycle.cancel(extension.id,extension.active.id,{cause:'authority'});
-  });
-  memoryAutomation.counts=()=>{
-    const counts={queued:0,running:0,checkpointed:0,resultUnknown:0};
-    const jobs=new Set<string>();
-    for(const row of store.db.prepare('SELECT job_id FROM memory_input_authorizations WHERE authorized=1 AND revoked_at IS NULL').all()){
-      if(!row.job_id){counts.queued++;continue;}jobs.add(String(row.job_id));
-    }
-    for(const id of jobs){const job=memoryPipeline.get(id);if(['completed','cancelled'].includes(job.status))continue;
-      if(job.status==='running')counts.running++;else if(job.batches.some(batch=>batch.status==='completed'))counts.checkpointed++;else counts.queued++;
-    }
-    for(const extension of lifecycle.view().extensions)if(['extraction','consolidation'].includes(extension.id)&&extension.active&&!extension.active.manual&&extension.status!=='cancelled'){
-      if(extension.status==='running')counts.running++;else if(extension.active.checkpoint)counts.checkpointed++;else counts.queued++;
-    }
-    counts.running+=cancelledMemoryWork(true);counts.resultUnknown=memoryPublication.pending(true);return counts;
-  };
+  const memoryControl=createMemoryControl({store,pipeline:memoryPipeline,lifecycle,executor,publication:memoryPublication});
+  memoryBindings.pendingTail=memoryControl.pendingTail;
+  memoryAutomation.onResume=memoryControl.resume;
+  memoryAutomation.onStop=memoryControl.stop;
+  memoryAutomation.counts=memoryControl.counts;
   const memoryIntegrationSettings=new MemoryIntegrationSettings(store,memoryStrategies);
   registerMemoryExtensions({integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model});
   for(const extension of dependencies?.memoryExtensions??[])lifecycle.replace(extension);
