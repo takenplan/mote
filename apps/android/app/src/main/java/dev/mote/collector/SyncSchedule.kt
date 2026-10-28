@@ -26,10 +26,10 @@ object SyncSchedule {
     internal fun reportBusy(context: Context) {
         Settings(context).syncStatus("waiting", MoteI18n.text("正在应用设置，请完成后重试本次扫描或立即同步"))
     }
-    fun pending(context: Context): PendingSync {
-        val captures = context.queue().pendingSync(); val sources = context.localSources().pendingSync(); val files = context.fileArchives().pendingSync()
-        return PendingSync(captures.count + sources.count + files.count, listOfNotNull(captures.oldestAt, sources.oldestAt, files.oldestAt).minOrNull(), sources.pendingUpdates)
-    }
+    internal fun inventory(context: Context) = TransportInventory(
+        context.queue().pendingSync(), context.localSources().pendingSync(), context.fileArchives().pendingSync(),
+    )
+    fun pending(context: Context): PendingSync = inventory(context).pending
     // Scheduling identity binds current ingress, connection and dispatch policy.
     fun stamp(config: CollectorConfig) = SourceRules.hash(listOf(IngressV2Protocol.VERSION, config.server, config.connectionToken(), config.syncPaused, config.syncMode, config.syncIntervalMinutes, config.syncBatchSize, config.wifiOnly, config.syncChargingOnly, config.syncBatteryNotLow).joinToString("\u0000"))
     fun delay(context: Context, config: CollectorConfig, explicit: Boolean = false): Long? {
