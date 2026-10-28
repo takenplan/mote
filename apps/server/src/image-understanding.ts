@@ -1,5 +1,5 @@
 import type {ContextReader} from '@mote/agent';
-import type {QueryAgent} from './app.js';
+import type {QueryAgent} from './query-agent.js';
 import type {ModelAgentFactory,ModelAgentIdentity} from './model-agent.js';
 import type {ProcessingService,TokenUsage} from '@mote/shared';
 import type {ModelSettings} from '@mote/shared/models';
