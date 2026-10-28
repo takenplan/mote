@@ -24,6 +24,17 @@ Use the affected app's focused examples: [server](../apps/server/AGENTS.md), [we
 
 Build shared inputs only when changed or absent; coordinate shared output with other owners. SQLite must match the active Node ABI. A report, handoff, turn ending or Draft PR update does not trigger wider checks.
 
+The light Android intake contract starts a private `buildApp` with generated SQLite data and feeds its real HTTP responses into Kotlin `CentralClient`, `CentralAttachments.upload`, and the production part/final receipt validators:
+
+```sh
+# Shared/Agent compiled inputs and the current Node SQLite ABI must be ready.
+node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts
+# Include the ordinary Android JVM units in the same Gradle invocation:
+node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts --all-unit-tests
+```
+
+The runner selects `CentralProducerContractTest`, forces only the Gradle test task to execute, and rejects skipped contract cases. It verifies partial upload recovery, lost final ACK recovery, exact revision/ID and original bytes, current ingress requirements, permission failures, forgotten originals and late responses after session invalidation. A JDK HTTP adapter replaces the unavailable Android transport runtime; this establishes actual Kotlin use-case consumption, not `HttpJson`'s Android clock/meter, native permissions, background workers, physical-device behavior or model quality. Running other JVM unit selections without this runner skips the producer-dependent class.
+
 ## Early integration and candidate checks
 
 For a large requirement, connect one shortest real journey early: actual entrypoint/startup, authenticated action, producer output and consumer result. A light contract can catch an interface mismatch quickly; it does not replace the assembled journey. Add relevant restart, cancellation or partial-failure states as the modules converge. A manually composed internal object does not prove actual startup.
