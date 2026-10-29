@@ -9726,5 +9726,9 @@
   "更多：已有图片与完整处理策略": "Más: imágenes existentes y política completa de procesamiento",
   "来源覆盖、规则试算与完整处理策略": "Excepciones por fuente, vista previa de reglas y política completa",
   "文本提取": "Extracción de texto",
-  "所选服务已不可用，请返回后重新选择。": "El servicio elegido no está disponible. Vuelve atrás y selecciona de nuevo."
+  "所选服务已不可用，请返回后重新选择。": "El servicio elegido no está disponible. Vuelve atrás y selecciona de nuevo.",
+  "导出已取消，记录与设置保留。": "Exportación cancelada. Se conservan los registros y los ajustes.",
+  "图片上传失败": "Error al subir la imagen",
+  "上传结果尚未确认": "El resultado de la subida no está confirmado",
+  "请先重试或移除尚未上传完成的图片。": "Reintenta o elimina las imágenes cuya subida no haya terminado."
 }

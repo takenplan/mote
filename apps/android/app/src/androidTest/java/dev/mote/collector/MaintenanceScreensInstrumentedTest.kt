@@ -96,6 +96,46 @@ class MaintenanceScreensInstrumentedTest {
         }
         assertEquals(config, Settings(context).read())
     }
+    @Test fun codecFailureRemovesStaleImagesAndCanRecoverWithoutSavingParameters() = fixture {
+        val config=Settings(context).read()
+        ActivityScenario.launch(CompressionPreviewActivity::class.java).use { scenario ->
+            until("initial real codec output"){main { visible().filterIsInstance<Button>().any { it.text.toString()=="将参数带回采集设置" && it.isEnabled } }}
+            var encoder:((Bitmap,Bitmap.CompressFormat,Int)->ByteArray)?=null
+            scenario.onActivity { a -> encoder=a.previewEncoder;a.previewEncoder={_,_,_->throw java.io.IOException("Generated codec failure")};views(a.window.decorView).filterIsInstance<EditText>().single().setText("83") }
+            click("更新预览");until("real failure branch has no stale output"){has("预览未完成，请调整参数重试。")}
+            main { assertTrue(visible().filterIsInstance<ImageView>().all { it.drawable==null });assertFalse(visible().filterIsInstance<Button>().single { it.text.toString()=="将参数带回采集设置" }.isEnabled) }
+            capture("compression-no-image-failure");assertEquals(config,Settings(context).read())
+            scenario.onActivity { a -> a.previewEncoder=requireNotNull(encoder) };click("更新预览")
+            until("actual encoding recovers"){main { visible().filterIsInstance<Button>().any { it.text.toString()=="将参数带回采集设置" && it.isEnabled } }}
+            main { assertEquals(2,visible().filterIsInstance<ImageView>().count { it.drawable!=null }) };capture("compression-failure-recovered")
+        }
+        assertEquals(config,Settings(context).read())
+    }
+    @Test fun diagnosticPickerCancellationAndWriteFailureKeepSettingsAndExposeTheActualOutcome() = fixture {
+        val config=Settings(context).read();val inventory=context.queue().inventory()
+        val root=File(context.cacheDir,"record-camera/diagnostic-export-${UUID.randomUUID()}").apply { mkdirs() }
+        fun picker(file:File?,block:()->Unit){
+            val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:Intent):android.app.Instrumentation.ActivityResult? {
+                if(intent.action!=Intent.ACTION_CREATE_DOCUMENT)return null
+                assertEquals("application/json",intent.type)
+                return if(file==null)android.app.Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null)
+                else android.app.Instrumentation.ActivityResult(Activity.RESULT_OK,Intent().setData(androidx.core.content.FileProvider.getUriForFile(context,"${context.packageName}.record-files",file)))
+            }}
+            instrumentation.addMonitor(monitor);try{block()}finally{instrumentation.removeMonitor(monitor)}
+        }
+        try {
+            ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","DIAGNOSTICS")).awaitMainUi().use {
+                picker(null){click("导出数值诊断 JSON");until("cancel outcome remains on screen"){has("导出已取消，记录与设置保留。")}}
+                tag("diagnostic-export-status");capture("diagnostics-export-cancelled")
+                picker(root){click("导出安全支持包 JSON");until("real provider write fails visibly"){has("诊断导出失败")}}
+                tag("diagnostic-export-status");capture("diagnostics-export-failed")
+                val output=File(root,"generated-safe-support.json").apply { writeText("") }
+                picker(output){click("导出安全支持包 JSON");until("actual support JSON export succeeds"){has("诊断包已导出")}}
+                assertTrue(output.length()>0);JSONObject(output.readText());tag("diagnostic-export-status");capture("diagnostics-export-recovered")
+                assertEquals(config,Settings(context).read());assertEquals(inventory,context.queue().inventory())
+            }
+        } finally { root.deleteRecursively() }
+    }
 
     @Test fun diagnosticPairReadZoomAndClearDoNotChangeCaptureQueue() = fixture {
         val settings = Settings(context); val before = settings.read()
@@ -178,6 +218,11 @@ class MaintenanceScreensInstrumentedTest {
         val ids = List(3) { UUID.randomUUID().toString() }
         settings.save(config.copy(syncMode = "manual", imageDedupeMode = "exact"))
         try {
+            ActivityScenario.launch(BulkDedupeActivity::class.java).use {
+                until("empty local bulk page"){has("就绪") || has("尚无完整扫描结果") || has("扫描结果")}
+                click("扫描本机图片");until("empty real scan completes"){store.read("report").optBoolean("complete") && store.read("report").optJSONArray("pairs")?.length()==0}
+                capture("bulk-no-local-images");assertEquals(0,queue.depth())
+            }
             ids.forEachIndexed { index, id ->
                 queue.enqueue(JSONObject().put("id", id).put("source", "screen").put("capturedAt", "2026-10-29T01:0${index}:00Z")
                     .put("appId", "fixture.maintenance").put("appName", "Generated maintenance fixture")
@@ -194,6 +239,7 @@ class MaintenanceScreensInstrumentedTest {
                 scenario.onActivity { views(it.window.decorView).filterIsInstance<CheckBox>().single().isChecked = true }
                 click("删除候选副本"); until("delete confirmation") { has("确认永久删除本机记录及图片？") }; capture("bulk-delete-confirm"); click("取消")
                 assertNotNull(queue.capture(ids[0])); assertNotNull(queue.capture(ids[1]))
+                capture("bulk-delete-cancelled-originals-retained")
                 click("移入待决定区"); click("确认")
                 until("candidate quarantined") { pending.dedupeRow(ids[1]) != null && queue.dedupeRow(ids[1]) == null }
                 until("move finished") { manager.getWorkInfosForUniqueWork(BulkDedupeWorker.NAME).get().all { it.state.isFinished } }

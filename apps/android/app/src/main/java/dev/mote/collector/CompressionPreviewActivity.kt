@@ -16,6 +16,7 @@ import kotlin.math.roundToInt
 
 /** Uses the capture pipeline's Bitmap resize/JPEG codec on generated content only. */
 class CompressionPreviewActivity : MoteActivity() {
+    internal var previewEncoder: (Bitmap,Bitmap.CompressFormat,Int)->ByteArray = ::encode
     private val executor = Executors.newSingleThreadExecutor()
     private val task by lazy { UiTask(this, executor, ownsExecutor = false) }
     @Volatile private var revision = 0
@@ -135,10 +136,10 @@ class CompressionPreviewActivity : MoteActivity() {
             var source: Bitmap? = null; var resized: Bitmap? = null; var decoded: Bitmap? = null
             try {
                 val original = fixture(); source = original
-                val png = encode(original, Bitmap.CompressFormat.PNG, 100)
+                val png = previewEncoder(original, Bitmap.CompressFormat.PNG, 100)
                 val scale = minOf(1f, side.toFloat() / maxOf(original.width, original.height))
                 val output = Bitmap.createScaledBitmap(original, (original.width * scale).roundToInt(), (original.height * scale).roundToInt(), true); resized = output
-                val jpeg = encode(output, Bitmap.CompressFormat.JPEG, q)
+                val jpeg = previewEncoder(output, Bitmap.CompressFormat.JPEG, q)
                 val result = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: error(MoteI18n.text("无法解码 JPEG")); decoded = result
                 val message = MoteI18n.text("1440 × 2560 → {0} × {1}\n边长缩放 {2}% · PNG {3} KB → JPEG {4} KB\n文件大小为原图的 {5}%", output.width, output.height, "%.1f".format(scale * 100), png.size / 1024, jpeg.size / 1024, "%.1f".format(jpeg.size * 100.0 / png.size))
                 if (output !== original) output.recycle()
@@ -151,7 +152,11 @@ class CompressionPreviewActivity : MoteActivity() {
                 }
             } catch (_: Exception) {
                 listOfNotNull(source, resized, decoded).distinct().forEach { if (!it.isRecycled) it.recycle() }
-                runOnUiThread { if (!isDestroyed && stamp == revision) stats.text = MoteI18n.text("预览未完成，请调整参数重试。") }
+                runOnUiThread { if (!isDestroyed && stamp == revision) {
+                    originalView.setImageDrawable(null);compressedView.setImageDrawable(null);images.forEach { if(!it.isRecycled)it.recycle() };images=emptyList()
+                    originalCaption.text=MoteI18n.text("原图 · PNG");compressedCaption.text=MoteI18n.text("JPEG 输出")
+                    stats.text = MoteI18n.text("预览未完成，请调整参数重试。")
+                } }
             }
         }
     }

@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "导出已取消，记录与设置保留。": "Exportación cancelada. Se conservan los registros y los ajustes.",
+  "图片上传失败": "Error al subir la imagen",
+  "上传结果尚未确认": "El resultado de la subida no está confirmado",
+  "请先重试或移除尚未上传完成的图片。": "Reintenta o elimina las imágenes cuya subida no haya terminado.",
   "草稿已保留，请确认当前内容后重新发送。": "El borrador se conserva. Revisa el contenido actual y vuelve a enviarlo.",
   "参考原件暂不可用，请清除参考后继续。": "El original de referencia no está disponible. Borra la referencia para continuar.",
   "围绕这份资料提问": "Preguntar sobre este material",

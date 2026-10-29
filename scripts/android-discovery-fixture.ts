@@ -19,6 +19,8 @@ let dropAskAck=false,hideAskRuns=false,holdNextQuery=false,activeQueries=0,relea
 const nativeMaterialId=materialId('generated-native-material','one');let nativeMaterialRef='',changeMaterialOnStart=false;
 const materialReads:string[]=[];
 let holdNextMaterialRead=false,materialReadHeld=false,releaseMaterialRead:(()=>void)|undefined;
+let dropAttachmentAck=false,holdAttachmentCommit=false,attachmentCommitHeld=false,releaseAttachmentCommit:(()=>void)|undefined;
+const attachmentManifests:string[]=[];
 function publishMaterial(label='Original',partial=false){
  const material=node.materials.publish({id:nativeMaterialId,kind:'mote.file',schemaVersion:1,title:'Generated exact whole Material',origin:{sourceId:'generated-native-material',externalId:'one',deviceId:'generated-discovery-phone',firstAt:'2026-10-01T00:00:00Z',lastAt:'2026-10-01T00:00:00Z'},members:[{id:noteId,kind:'capture',ref:'capture:'+noteId}],blocks:Array.from({length:partial?2:31},(_,index)=>({id:'paragraph-'+index,kind:'text' as const,format:'plain',text:label+' generated exact paragraph '+index,memberIds:[noteId]})),coverage:{state:partial?'partial':'complete',...(partial?{reason:'generated_unavailable_tail'}:{})},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:node.materials.revisionForWrite(nativeMaterialId)});
  nativeMaterialRef=material.ref;return material;
@@ -44,6 +46,7 @@ const restricted=await node.connections.mintMcp({serverUrl:'http://127.0.0.1:'+p
 const restrictedToken=restricted.config.mcpServers.mote.headers.Authorization.slice(7);
 async function reset(){
  releaseMaterialRead?.();releaseMaterialRead=undefined;holdNextMaterialRead=false;materialReadHeld=false;
+ releaseAttachmentCommit?.();releaseAttachmentCommit=undefined;dropAttachmentAck=false;holdAttachmentCommit=false;attachmentCommitHeld=false;attachmentManifests.length=0;
  for(const run of node.featureServices.queryRuns.list())if(run.status==='running')node.featureServices.queryRuns.cancel(run.id);
  releaseQuery?.();releaseQuery=undefined;holdNextQuery=false;
  for(let i=0;activeQueries>0&&i<100;i++)await new Promise(resolve=>setTimeout(resolve,20));
@@ -77,18 +80,26 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/material-race')changeMaterialOnStart=true;
    if(req.method==='POST'&&url==='/api/__fixture/hold-material-read')holdNextMaterialRead=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-material-read'){releaseMaterialRead?.();releaseMaterialRead=undefined;}
+   if(req.method==='POST'&&url==='/api/__fixture/drop-attachment-ack')dropAttachmentAck=true;
+   if(req.method==='POST'&&url==='/api/__fixture/hold-attachment-commit')holdAttachmentCommit=true;
+   if(req.method==='POST'&&url==='/api/__fixture/release-attachment-commit'){releaseAttachmentCommit?.();releaseAttachmentCommit=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/hold-generation')holdNext=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-generation'){releaseGeneration?.();releaseGeneration=undefined;}
-   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
+   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,attachmentManifests,attachmentCommitHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
   }
   if(offline){req.socket.destroy();return;}
   if(req.method==='POST'&&url==='/api/insight-runs')seenRequests.push(JSON.parse(payload.toString()).requestId);
   if(req.method==='POST'&&url==='/api/query-runs')seenAskRequests.push(payload.toString());
+  if(req.method==='POST'&&url==='/api/file-sync/v1/uploads')attachmentManifests.push(payload.toString());
   if(changeMaterialOnStart&&req.method==='POST'&&url==='/api/query-runs'){changeMaterialOnStart=false;publishMaterial('Changed before admission');}
   const askId=req.method==='GET'?/^\/api\/query-runs\/([a-f0-9-]{36})$/.exec(url)?.[1]:undefined;
   if(askId){askGetIds.push(askId);if(hideAskRuns){res.writeHead(404,{'content-type':'application/json'}).end(JSON.stringify({error:'not_found'}));return;}}
   const result=await node.app.inject({method:req.method as 'GET',url,headers:req.headers,payload:payload.length?payload:undefined});
   if(holdNextMaterialRead&&req.method==='GET'&&url.startsWith('/api/materials/')&&url.includes('/read?')){holdNextMaterialRead=false;materialReadHeld=true;await new Promise<void>(resolve=>releaseMaterialRead=resolve);materialReadHeld=false;}
+  if(req.method==='POST'&&/^\/api\/file-sync\/v1\/uploads\/[^/]+\/commit$/.test(url)){
+   if(holdAttachmentCommit){holdAttachmentCommit=false;attachmentCommitHeld=true;await new Promise<void>(resolve=>releaseAttachmentCommit=resolve);attachmentCommitHeld=false;}
+   if(dropAttachmentAck&&result.statusCode>=200&&result.statusCode<300){dropAttachmentAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_attachment_receipt_lost'}));return;}
+  }
   if(dropAskAck&&req.method==='POST'&&url==='/api/query-runs'&&result.statusCode===202){dropAskAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ask_ack_lost'}));return;}
   if(dropAck&&req.method==='POST'&&url==='/api/insight-runs'&&result.statusCode===202){dropAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ack_lost'}));return;}
   res.writeHead(result.statusCode,result.headers);res.end(result.rawPayload);

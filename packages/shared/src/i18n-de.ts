@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "导出已取消，记录与设置保留。": "Export abgebrochen. Aufzeichnungen und Einstellungen bleiben erhalten.",
+  "图片上传失败": "Bild-Upload fehlgeschlagen",
+  "上传结果尚未确认": "Upload-Ergebnis ist unbestätigt",
+  "请先重试或移除尚未上传完成的图片。": "Wiederhole den Upload oder entferne Bilder, deren Upload nicht abgeschlossen ist.",
   "草稿已保留，请确认当前内容后重新发送。": "Dein Entwurf bleibt erhalten. Prüfe den aktuellen Inhalt und sende ihn erneut.",
   "参考原件暂不可用，请清除参考后继续。": "Das referenzierte Original ist nicht verfügbar. Entferne die Referenz, um fortzufahren.",
   "围绕这份资料提问": "Zu diesem Material fragen",

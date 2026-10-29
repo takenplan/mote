@@ -9726,5 +9726,9 @@
   "更多：已有图片与完整处理策略": "More: existing images and complete processing policy",
   "来源覆盖、规则试算与完整处理策略": "Source overrides, rule preview and complete processing policy",
   "文本提取": "Text extraction",
-  "所选服务已不可用，请返回后重新选择。": "The selected service is unavailable. Go back and choose again."
+  "所选服务已不可用，请返回后重新选择。": "The selected service is unavailable. Go back and choose again.",
+  "导出已取消，记录与设置保留。": "Export cancelled. Records and settings are retained.",
+  "图片上传失败": "Image upload failed",
+  "上传结果尚未确认": "Upload result is unconfirmed",
+  "请先重试或移除尚未上传完成的图片。": "Retry or remove images whose upload has not completed."
 }

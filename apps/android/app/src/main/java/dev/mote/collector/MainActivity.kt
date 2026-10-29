@@ -40,6 +40,7 @@ class MainActivity : MoteActivity() {
     private lateinit var syncStatus: TextView
     private lateinit var totalsStatus: TextView
     private lateinit var technicalStatus: TextView
+    private var diagnosticExportStatus: TextView? = null
     private lateinit var captureAction: Button
     private lateinit var centralConnectionTitle: TextView
     private lateinit var centralConnectionStatus: TextView
@@ -808,6 +809,7 @@ class MainActivity : MoteActivity() {
         button(MoteI18n.text("导出安全支持包 JSON")) {
             @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE, "mote-${BuildConfig.MOTE_PROFILE}-support.json"), 104)
         }
+        diagnosticExportStatus=text("",NativeFontRole.SUPPORT).apply { tag="diagnostic-export-status";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE }
     }
 
     private fun buildNotes() {
@@ -1411,12 +1413,14 @@ class MainActivity : MoteActivity() {
             }
             return
         }
-        if (requestCode in setOf(103, 104) && resultCode == RESULT_OK && data?.data != null) {
+        if (requestCode in setOf(103, 104)) {
+            fun feedback(message:String){diagnosticExportStatus?.apply { text=message;visibility=View.VISIBLE }}
+            if(resultCode!=RESULT_OK || data?.data==null){feedback(MoteI18n.text("导出已取消，记录与设置保留。"));return}
             val uri = data.data!!; val app = applicationContext
-            uiTask.start(MoteI18n.text("正在导出诊断包…"), { technicalStatus.text = it }, {
+            uiTask.start(MoteI18n.text("正在导出诊断包…"), { feedback(it) }, {
                 val body = if (requestCode == 104) SupportEvents.export(app, logExportHours) else Diagnostics(app).export()
                 app.contentResolver.openOutputStream(uri)!!.use { it.write(body.toByteArray()) }
-            }) { result -> toast(if (result.isSuccess) MoteI18n.text("诊断包已导出") else MoteI18n.text("诊断导出失败")) }
+            }) { result -> feedback(if (result.isSuccess) MoteI18n.text("诊断包已导出") else MoteI18n.text("诊断导出失败")) }
             return
         }
         if (requestCode == 100 && resultCode == RESULT_OK && data != null) {

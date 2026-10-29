@@ -48,6 +48,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var stop: Button? = null
     private var checkRun: Button? = null
     private var retryRun: Button? = null
+    private var askImagesView: LinearLayout? = null
+    private var addAskImage: Button? = null
     private var noteText: EditText? = null
     private var noteMood: EditText? = null
     private var noteDraft = JSONObject().put("text", "").put("mood", "").put("attachments", JSONArray())
@@ -93,7 +95,11 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val captureId=CentralEvidenceReference.captureId(normalized)
         if (captureId != null && conversationId != null) library.captureEvidence(captureId,conversationId) else library.evidence(normalized)
     }
-    fun clearPrivateState() { askState = JSONObject(); askHistory = JSONObject(); askHistoryReadable = false; modelSettings = JSONObject(); lastConversation = null; question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); library.clearTopics(); insights.clear(); body.removeAllViews() }
+    fun clearPrivateState() {
+        CentralDraftWrites.executor.execute { runCatching { askStore.read().also(NativeAskImages::clearReferences).also(askStore::write) } }
+        askImagesView?.removeAllViews();askImagesView=null;addAskImage=null
+        askState = JSONObject(); askHistory = JSONObject(); askHistoryReadable = false; modelSettings = JSONObject(); lastConversation = null; question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); library.clearTopics(); insights.clear(); body.removeAllViews()
+    }
     fun refresh() { if (currentPage == "insights") insights.returnFromEvidence(); ui.navigate(currentPage) }
     fun insightRequest(prompt: String): JSONObject = CentralDraftWrites.barrier {
         val saved = insightStore.read()
@@ -174,6 +180,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val api = client
         ui.work(MoteI18n.text("正在读取对话…"), {
             val state = CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; askStore.read() }
+            NativeAskImages.recover(state)
             val remote = runCatching {
                 val runs = api.get("/api/query-runs").getJSONArray("items")
                 if (!state.has("runId") && !state.has("pending")) {
@@ -188,7 +195,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }) { (state, remote) ->
             var scopeRefused = false
             ui.takeAskEvidence()?.let { evidence -> scopeRefused = !NativeAskEvidenceScope.select(state, evidence) }
-            askState = state; askHistoryReadable = remote.isSuccess
+            askState = state; persistAsk(); askHistoryReadable = remote.isSuccess
             remote.getOrNull()?.let { modelSettings = it.second }
             buildAsk(remote.getOrNull()?.first ?: JSONObject())
             if (scopeRefused) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
@@ -214,6 +221,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         if (askState.optString("conversationId").isBlank()) ui.text(MoteI18n.text("想从留下的内容里找什么？"), NativeFontRole.TITLE_MOBILE, messages!!)
         ui.askConversationActions(askState.optString("conversationId").isNotBlank())
         val compose = ui.askComposer()
+        askImagesView=LinearLayout(ui).apply { orientation=LinearLayout.VERTICAL }.also(compose::addView)
         scopeBox = LinearLayout(ui).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }.also(compose::addView)
         scopeLabel = TextView(ui).apply {
             MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
@@ -252,7 +260,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             NativePresentationStyles.bind(button, "ask-compose-action") { (it as Button).apply { minWidth = 0; minimumWidth = 0; minHeight = ui.moteDp(36); minimumHeight = minHeight; setPadding(ui.moteDp(8),0,ui.moteDp(8),0); textSize = 10f } }
             actions.addView(button, LinearLayout.LayoutParams(-2,ui.moteDp(36)))
         }
-        action("▧", "添加图片") { if (!askBusy()) ui.pickAttachment(chat = true) }
+        addAskImage=action("▧", "添加图片") { if (!askBusy() && NativeAskImages.count(askState)<4) ui.pickAttachment(chat = true) }
         val modelBox = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
         action("▸ " + MoteI18n.text("本次模型"), "本次模型") { modelBox.visibility = if (modelBox.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE }
         actions.addView(android.view.View(ui), LinearLayout.LayoutParams(0,1,1f))
@@ -277,14 +285,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }.also(modelBox::addView)
         model = ui.field(MoteI18n.text("模型 ID（留空跟随预设）"), askState.optString("modelOverride"), parent = modelBox).apply { filters = arrayOf(InputFilter.LengthFilter(512)) }
         watch(model!!) { askState.put("modelOverride", model!!.text.toString()); persistAsk() }
-        val attachments = askState.optJSONArray("attachments") ?: JSONArray()
-        for (i in 0 until attachments.length()) {
-            val attachment = attachments.getJSONObject(i)
-            ui.button(MoteI18n.text("移除附件：{0}", attachment.optString("name")), parent = compose) {
-                if (askBusy()) return@button
-                attachments.remove(i); askState.put("attachments", attachments); persistAsk(); refresh()
-            }
-        }
+        renderAskImages()
         retryRun = ui.button(MoteI18n.text("重试同一请求"), parent = compose) { submitAsk() }
         checkRun = ui.button(MoteI18n.text("检查结果"), parent = compose) { pollAsk() }
         stop = ui.button(MoteI18n.text("停止回答"), parent = compose) {
@@ -296,11 +297,11 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun askBusy() = askState.has("pending") || askState.optString("runStatus") == "running"
     fun newConversation(discardConfirmed: Boolean = false) {
         if (askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
-        if (!discardConfirmed && (askState.optString("question").isNotBlank() || (askState.optJSONArray("attachments")?.length() ?: 0) > 0)) {
+        if (!discardConfirmed && (askState.optString("question").isNotBlank() || NativeAskImages.count(askState)>0)) {
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
                 .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
         }
-        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty").forEach(askState::remove)
+        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty","imageUploads").forEach(askState::remove)
         askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
     }
     fun showAskHistory() {
@@ -348,7 +349,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         if (askState.has("pending") || askState.optString("runStatus") == "running") {
             ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return
         }
-        if (!discardConfirmed && (askState.optString("question").isNotBlank() || (askState.optJSONArray("attachments")?.length() ?: 0) > 0)) {
+        if (!discardConfirmed && (askState.optString("question").isNotBlank() || NativeAskImages.count(askState)>0)) {
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容"))
                 .setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
                 .setNegativeButton(MoteI18n.text("继续编辑"), null)
@@ -356,7 +357,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             return
         }
         askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
-        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty").forEach(askState::remove)
+        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty","imageUploads").forEach(askState::remove)
         question?.setText(""); persistAsk(); refresh()
     }
 
@@ -364,7 +365,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
         preset?.isEnabled = !busy; model?.isEnabled = !busy
-        send?.isEnabled = !busy && question?.text?.isNotBlank() == true
+        send?.isEnabled = !busy && NativeAskImages.pending(askState).length()==0 && question?.text?.isNotBlank() == true
+        addAskImage?.isEnabled = !busy && NativeAskImages.count(askState)<4
+        askImagesView?.let { host -> fun update(view:android.view.View) { if(view is Button)view.isEnabled=!busy && (view.tag?.toString()?.startsWith("ask-image-remove:")==true || !ui.isWorking);if(view is android.view.ViewGroup)for(i in 0 until view.childCount)update(view.getChildAt(i)) };update(host) }
         retryRun?.visibility = if (askState.has("pending")) android.view.View.VISIBLE else android.view.View.GONE
         checkRun?.visibility = if (busy) android.view.View.VISIBLE else android.view.View.GONE
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
@@ -380,6 +383,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private data class AskAdmission(val run:JSONObject?=null,val materialRejected:Boolean=false)
     private fun submitAsk(validatedMaterial: String? = null) {
         val api = client
+        if(!askState.has("pending") && NativeAskImages.pending(askState).length()>0) { ui.notice(MoteI18n.text("请先重试或移除尚未上传完成的图片。"));return }
         val reference=NativeAskEvidenceScope.material(askState)
         if(!askState.has("pending") && reference!=null && validatedMaterial!=reference) {
             val draft=askState.toString()
@@ -610,19 +614,66 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }
     }
 
+    private fun renderAskImages() {
+        val host=askImagesView ?: return;host.removeAllViews()
+        val ready=askState.optJSONArray("attachments") ?: JSONArray()
+        val pending=NativeAskImages.pending(askState)
+        fun row(item:JSONObject,upload:Boolean) {
+            val id=item.getString(if(upload)"selectionId" else "id")
+            val container=LinearLayout(ui).apply { orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL;isBaselineAligned=false;background=MoteUi.shape(ui,NativeColorRole.SURFACE_RAISED,7,true);setPadding(ui.moteDp(8),ui.moteDp(8),ui.moteDp(8),ui.moteDp(8));tag="ask-image:$id" }
+            host.addView(container,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=ui.moteDp(8) })
+            val preview=ImageView(ui).apply { contentDescription=MoteI18n.text("图片")+" · "+item.optString("name");scaleType=ImageView.ScaleType.CENTER_CROP }
+            item.optString("preview").takeIf(String::isNotBlank)?.let { encoded -> runCatching { android.util.Base64.decode(encoded,android.util.Base64.NO_WRAP).let { android.graphics.BitmapFactory.decodeByteArray(it,0,it.size) } }.getOrNull()?.let(preview::setImageBitmap) }
+            container.addView(preview,LinearLayout.LayoutParams(ui.moteDp(52),ui.moteDp(52)).apply { marginEnd=ui.moteDp(8) })
+            val copy=LinearLayout(ui).apply { orientation=LinearLayout.VERTICAL };container.addView(copy,LinearLayout.LayoutParams(0,-2,1f))
+            ui.text(item.optString("name"),NativeFontRole.SUPPORT,copy)
+            ui.text(MoteI18n.text(if(!upload)"已添加" else when(item.optString("status")){"uploading"->"正在上传";"failed"->"图片上传失败";else->"上传结果尚未确认"}),NativeFontRole.META,copy)
+            val actions=LinearLayout(ui).apply { orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL;isBaselineAligned=false };container.addView(actions)
+            fun imageAction(label:String,tagValue:String,action:()->Unit)=MoteUi.action(Button(ui).apply {
+                text=MoteI18n.text(label);tag=tagValue;contentDescription=if(label=="移除")MoteI18n.text("移除附件：{0}",item.optString("name")) else text
+                setOnClickListener { if(!askBusy())action() }
+            },MoteUi.ButtonRole.TEXT).also { actions.addView(it,LinearLayout.LayoutParams(-2,-2)) }
+            if(upload && item.optString("status")!="uploading") imageAction("重试上传","ask-image-retry:$id") {
+                if(!ui.isWorking){item.put("status","uploading");persistAsk();renderAskImages();uploadAskImages(listOf(JSONObject(item.toString())))}
+            }
+            imageAction("移除","ask-image-remove:$id") {
+                if(upload)NativeAskImages.remove(askState,id)
+                else askState.put("attachments",JSONArray((0 until ready.length()).map(ready::getJSONObject).filter { it.getString("id")!=id }))
+                persistAsk();renderAskImages();controlsAsk()
+            }
+        }
+        for(i in 0 until ready.length())row(ready.getJSONObject(i),false)
+        for(i in 0 until pending.length())row(pending.getJSONObject(i),true)
+    }
+    private fun uploadAskImages(selected:List<JSONObject>) {
+        val api=client;val device=Settings(ui).deviceId
+        controlsAsk()
+        ui.work(MoteI18n.text("正在上传附件…"), { progress ->
+            selected.map { selection -> NativeAskImages.upload(ui.contentResolver,selection,api,directory,device,resolveTime={ key ->
+                CentralDraftWrites.barrier { val times=attachmentStore.read();if(!times.has(key)){times.put(key,System.currentTimeMillis());attachmentStore.write(times)};times.getLong(key) }
+            }) { done,total -> progress.message=MoteI18n.text("正在上传附件 {0}/{1}",done,total) } }
+        }) { results ->
+            results.forEach { NativeAskImages.merge(askState,it) };persistAsk();renderAskImages();controlsAsk()
+            if(NativeAskImages.pending(askState).length()>0 && results.any { it.optString("status")!="ready" })ui.notice(MoteI18n.text("请先重试或移除尚未上传完成的图片。"))
+        }
+    }
     fun addAttachments(uris: List<Uri>, chat: Boolean) {
-        if (chat && (askState.has("pending") || askState.optString("runStatus") == "running")) return
+        if(chat) {
+            if(askBusy())return
+            if(uris.isEmpty())return
+            if(NativeAskImages.count(askState)+uris.size>4){ui.notice(MoteI18n.text("最多添加 4 张图片"));return}
+            // Reuse the exact URIs granted by this picker result. No broader or
+            // persistent permission is requested; an expired grant requires reselection.
+            val selected=runCatching { NativeAskImages.stage(askState,uris) }.getOrElse { ui.notice(it.message.orEmpty());return };persistAsk();renderAskImages();uploadAskImages(selected);return
+        }
         val api = client
-        val previous = if (chat) askState.optJSONArray("attachments") ?: JSONArray() else noteDraft.getJSONArray("attachments")
-        val max = if (chat) 4 else 10
-        if (previous.length() + uris.size > max) { ui.notice(if (chat) MoteI18n.text("最多添加 4 张图片") else MoteI18n.text("最多 10 个附件")); return }
+        val previous = noteDraft.getJSONArray("attachments")
+        if (previous.length() + uris.size > 10) { ui.notice(MoteI18n.text("最多 10 个附件")); return }
         val draftSnapshot = JSONObject(noteDraft.toString())
-        val askSnapshot = JSONObject(askState.toString())
         ui.work(MoteI18n.text("正在上传附件…"), { progress -> runCatching {
             val settings = Settings(ui)
             for (uri in uris) {
                 val mime = ui.contentResolver.getType(uri).orEmpty()
-                require(!chat || mime in listOf("image/png", "image/jpeg", "image/webp")) { MoteI18n.text("请选择 PNG、JPEG 或 WebP 图片。") }
                 val name = ui.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } ?: "attachment"
                 directory.mkdirs()
                 val spool = File(directory, "attachment-" + UUID.randomUUID() + ".tmp")
@@ -630,7 +681,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     ui.contentResolver.openInputStream(uri)!!.use { input -> spool.outputStream().use { output ->
                         val buffer = ByteArray(65536); var total = 0
                         while (true) { val n = input.read(buffer); if (n < 0) break; total += n
-                            require(total <= if (chat) 8 * 1024 * 1024 else CentralAttachments.MAX_BYTES) { MoteI18n.text("附件必须是图片或音频，且每个文件最多 50 MiB。") }
+                            require(total <= CentralAttachments.MAX_BYTES) { MoteI18n.text("附件必须是图片或音频，且每个文件最多 50 MiB。") }
                             output.write(buffer, 0, n)
                         }
                     } }
@@ -644,18 +695,12 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     }) { done, total ->
                         progress.message = MoteI18n.text("正在上传附件 {0}/{1}", done, total)
                     }
-                    if (chat) {
-                        val attachments = askSnapshot.optJSONArray("attachments") ?: JSONArray()
-                        attachments.put(JSONObject().put("id", id).put("name", name)); askSnapshot.put("attachments", attachments)
-                        CentralDraftWrites.barrier { askStore.write(askSnapshot) }
-                    } else {
-                        draftSnapshot.getJSONArray("attachments").put(id)
-                        CentralDraftWrites.barrier { noteStore.edit(draftSnapshot.getString("text"), draftSnapshot.getString("mood"), draftSnapshot.getJSONArray("attachments")) }
-                    }
+                    draftSnapshot.getJSONArray("attachments").put(id)
+                    CentralDraftWrites.barrier { noteStore.edit(draftSnapshot.getString("text"), draftSnapshot.getString("mood"), draftSnapshot.getJSONArray("attachments")) }
                 } finally { spool.delete() }
             }
         } }) { outcome ->
-            askState = askSnapshot; noteDraft = draftSnapshot
+            noteDraft = draftSnapshot
             refresh(); outcome.exceptionOrNull()?.let(ui::requestFailure)
         }
     }

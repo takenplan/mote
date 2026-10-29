@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "导出已取消，记录与设置保留。": "Export cancelled. Records and settings are retained.",
+  "图片上传失败": "Image upload failed",
+  "上传结果尚未确认": "Upload result is unconfirmed",
+  "请先重试或移除尚未上传完成的图片。": "Retry or remove images whose upload has not completed.",
   "草稿已保留，请确认当前内容后重新发送。": "Your draft is retained. Review the current content and send it again.",
   "参考原件暂不可用，请清除参考后继续。": "The referenced original is unavailable. Clear the reference to continue.",
   "围绕这份资料提问": "Ask about this material",

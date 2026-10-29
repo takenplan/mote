@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "导出已取消，记录与设置保留。": "Exportation annulée. Les enregistrements et réglages sont conservés.",
+  "图片上传失败": "Échec de l’envoi de l’image",
+  "上传结果尚未确认": "Résultat de l’envoi non confirmé",
+  "请先重试或移除尚未上传完成的图片。": "Réessayez ou retirez les images dont l’envoi n’est pas terminé.",
   "草稿已保留，请确认当前内容后重新发送。": "Votre brouillon est conservé. Vérifiez son contenu actuel, puis renvoyez-le.",
   "参考原件暂不可用，请清除参考后继续。": "L’original référencé est indisponible. Retirez la référence pour continuer.",
   "围绕这份资料提问": "Interroger ce document",
