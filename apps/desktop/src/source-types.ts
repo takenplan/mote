@@ -1,7 +1,7 @@
 import type { SourceRetention, SourceDefinition, SourceOptions, LocalSource, SourceStatus, CalendarChoice } from './contracts/sources';
 export type { SourceRetention, SourceDefinition, SourceOptions, LocalSource, SourceStatus, CalendarChoice } from './contracts/sources';
 import { moteText } from '@mote/shared/i18n';
-import {RESET_REQUIRED} from './storage-format';
+import {RESET_REQUIRED} from './storage-format-constants';
 
 export interface SourceItem {
   localOriginal?: import('./original-spool').OriginalSpool;
@@ -49,6 +49,8 @@ export function normalizeSourceOptions(input: unknown): SourceOptions {
   if (!input || typeof input !== 'object') throw new Error(moteText("来源配置无效"));
   if(Object.hasOwn(input,'indexMode'))throw new Error(RESET_REQUIRED);
   const v = input as SourceOptions;
+  if(v.name!==undefined&&(typeof v.name!=='string'||!v.name.trim()||v.name.length>200))throw new Error(moteText("来源名称无效"));
+  if(v.description!==undefined&&(typeof v.description!=='string'||v.description.length>12000))throw Error('Invalid source description');
   if(v.syncContinuously!==undefined&&typeof v.syncContinuously!=='boolean')throw new Error('Invalid source continuation policy');
   if(v.centralProcessingConsent!==undefined&&typeof v.centralProcessingConsent!=='boolean')throw new Error('Invalid central processing consent');
   if(v.initialSync!==undefined&&!['all','new_only'].includes(v.initialSync))throw new Error(moteText("首次同步范围无效"));
@@ -63,7 +65,7 @@ export function normalizeSourceOptions(input: unknown): SourceOptions {
   if (excludedPaths.some(p => p.startsWith('/') || p.split('/').some(x => !x || x === '.' || x === '..'))) throw new Error(moteText("排除路径必须是所选目录内的相对路径"));
   if(v.retention==='archive'&&Array.isArray(v.redactLiterals)&&v.redactLiterals.length)throw new Error(moteText("原件归档不能应用文字遮盖，请选择内容索引。"));
   if(v.allowRead!==undefined&&typeof v.allowRead!=='boolean')throw new Error('Invalid original read authorization');
-  return {syncContinuously:v.syncContinuously??true,centralProcessingConsent:v.centralProcessingConsent??false,allowRead:v.retention==='snapshot'&&(v.allowRead??false), initialSync:v.initialSync??'all', retention: v.retention, intervalSeconds: v.intervalSeconds, trackDeletions: v.trackDeletions, extensions, excludedPaths, redactLiterals: list(v.redactLiterals, 1000) };
+  return {...(v.name!==undefined?{name:v.name.trim()}:{}),...(v.description!==undefined?{description:v.description}:{}),syncContinuously:v.syncContinuously??true,centralProcessingConsent:v.centralProcessingConsent??false,allowRead:v.retention==='snapshot'&&(v.allowRead??false), initialSync:v.initialSync??'all', retention: v.retention, intervalSeconds: v.intervalSeconds, trackDeletions: v.trackDeletions, extensions, excludedPaths, redactLiterals: list(v.redactLiterals, 1000) };
 }
 export function redactSourceText(text: string, literals: string[]): string {
   for (const literal of [...literals].sort((a, b) => b.length - a.length)) text = text.split(literal).join(moteText("[已遮盖]"));

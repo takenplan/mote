@@ -132,6 +132,10 @@ export interface DesktopApi {
   codingAgents(): Promise<import('./contracts/sources').CodingAgentDiscovery[]>;
   addCodingAgent(provider: import('./contracts/sources').CodingProvider, options: import('./contracts/sources').SourceOptions): Promise<void>;
   sources(): Promise<import('./contracts/sources').SourceStatus[]>;
+  sourceArchivedContent(id:string,cursor?:string):Promise<import('./contracts/content').CentralContentPage>;
+  sourcePendingContent(id:string):Promise<import('./contracts/content').LocalContentPage>;
+  sourceContext(id:string):Promise<import('./source-context-outbox').SourceContextState>;
+  saveSourceContext(id:string,input:{expectedVersion:number;description:string}):Promise<import('./source-context-outbox').SourceContextState>;
   selectSourceFiles(mode: 'files' | 'directory'): Promise<{canceled:boolean;selectionId?:string;names?:string[]}>;
   confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<void>;
   cancelSourceFiles(selectionId:string): Promise<void>;

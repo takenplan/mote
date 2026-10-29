@@ -1,6 +1,8 @@
 import {createMemoryTopicsUi} from './memory-topics-ui';
 import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
+import {createSourceWorkspaceUi} from './source-workspace-ui';
+import {normalizeSourceOptions} from './source-types';
 import {createWorkbenchUi, type RecentConversation} from './workbench-ui';
 import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
@@ -48,6 +50,7 @@ const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasC
   close(){if(currentPage==='content-reader')showPage(contentOrigin,true,false,true,true);},
 });
 function refreshContent():Promise<void>{return libraryUi.refresh();}
+const sourceWorkspace=createSourceWorkspaceUi(desktopApi,{openDetail:()=>showPage('source-detail'),edit:id=>void editSource(id),toggle:row=>sourceAction(()=>desktopApi.updateSource(row.source.id,{...row.source,enabled:!row.source.enabled})),content:()=>{byId<HTMLSelectElement>('content-scope').value='local';showPage('records');},read:item=>libraryUi.open(item)});
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
 const permissionsUi=createPermissionsUi(desktopApi);
@@ -74,6 +77,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
       if (!settingsApplying) void desktopApi.cancelConnection().catch(() => {});
     }
   }
+  if(currentPage==='source-editor'&&page!=='source-editor')invalidateSourceEditor();
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
   if (currentPage === 'work' && page !== 'work') workActivityUi.hide();
   if (currentPage === 'permissions' && page !== 'permissions') permissionsUi.hide();
@@ -93,7 +97,8 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
   byId('workspace-location').textContent = page==='ask'?moteText('问一问'):page==='content-reader'?moteText('内容详情'):page === selected ? title : `${sectionTitle} / ${title}`;
-  byId('workspace-back').hidden = !navigation.canGoBack||page==='content-reader';
+  byId('workspace-back').hidden = !navigation.canGoBack||['content-reader','source-detail','source-editor','source-connect'].includes(page);
+  byId('source-feedback').hidden=!['sources','source-detail','source-editor','source-connect'].includes(page)||!byId('source-feedback').textContent;
   updateNoteAction();
   byId('workspace-back').setAttribute('aria-label', moteText("返回{0}", heading(navigation.backTarget)));
   updateSettingsHint();
@@ -373,10 +378,10 @@ function renderOperations(jobs:NonNullable<import('./contracts').Status['operati
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
-    recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
+    sourceWorkspace.clear();localSourceRows=[];invalidateSourceEditor();byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLTextAreaElement>('source-initial-description').disabled=true;sourceReadGeneration++;recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
-  currentStatus = status; renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
+  currentStatus = status;sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -663,6 +668,10 @@ byId('support-export').addEventListener('click', () => void perform(async () => 
 
 let localSourceRows: import('./source-types').SourceStatus[] = [];
 let sourceEditingId: string | undefined;
+let sourceEditingEpoch=0;
+function invalidateSourceEditor():void {sourceEditingEpoch++;sourceEditingId=undefined;sourceEditingContext=undefined;}
+function sourceEditorRequest(){return {epoch:sourceEditingEpoch,id:sourceEditingId,scope:sourceReadGeneration};}
+function sourceEditorCurrent(request:ReturnType<typeof sourceEditorRequest>):boolean{return request.epoch===sourceEditingEpoch&&request.id===sourceEditingId&&request.scope===sourceReadGeneration;}
 let sourceBusy = false;
 let sourceSelection:{id:string;mode:'files'|'directory';names:string[]}|undefined;
 const sourceRules=byId<HTMLDetailsElement>('source-rules');
@@ -671,108 +680,97 @@ function refreshSourcePolicySummaries():void {
   for(const [fieldId,summaryId] of [['source-initial-sync','source-history-value'],['source-retention','source-retention-value']]) byId(summaryId).textContent=byId<HTMLSelectElement>(fieldId).selectedOptions[0]?.textContent??'';
 }
 function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
-function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';refreshSourcePolicySummaries();}
+function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceMode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);byId('source-initial-sync-row').hidden=once;byId('source-once-row').hidden=!once;if(once)field.value='all';refreshSourcePolicySummaries();}
 byId('source-initial-sync').addEventListener('change',refreshSourcePolicySummaries);
 refreshSourcePolicySummaries();
 byId('source-continuous').addEventListener('change',updateSourceHistoryChoice);
-async function beginSourceSelection(mode:'files'|'directory'):Promise<void>{
-  if(sourceBusy||!showPage('sources'))return;
-  await sourceAction(async()=>{
-    const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId)return;
-    if(sourceSelection)await desktopApi.cancelSourceFiles(sourceSelection.id);
-    sourceSelection={id:result.selectionId,mode,names:result.names??[]};sourceEditingId=undefined;
-    byId('source-confirmation').hidden=false;byId('source-selected-names').textContent=sourceSelection.names.join('\n');
-    byId('source-confirm-title').textContent=mode==='directory'?moteText('确认同步文件夹'):moteText('确认导入文件');
-    byId<HTMLInputElement>('source-continuous').checked=mode==='directory';byId<HTMLInputElement>('source-continuous').disabled=mode==='directory';
-    byId('source-destination').textContent=currentStatus?.config.serverUrl?moteText('发送到：{0}',currentStatus.config.serverUrl):moteText('尚未连接中央，先保存在本机');
-    byId<HTMLSelectElement>('source-initial-sync').value='all';byId<HTMLSelectElement>('source-retention').value='snapshot';
-    updateSourceHistoryChoice();
-    byId('source-edit-continuous-row').hidden=true;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;
-    byId('source-confirm-rules').append(sourceRules);sourceRules.open=true;refreshSourceTextOptions();
-    byId('source-confirm-title').scrollIntoView({block:'start'});
-  });
+let sourceMode:'files'|'directory'='directory';
+let sourceEditingContext:import('./source-context-outbox').SourceContextState|undefined;
+const sourceAddDialog=byId<HTMLDialogElement>('source-add-dialog');
+byId('source-add').addEventListener('click',()=>sourceAddDialog.showModal());
+byId('source-add-close').addEventListener('click',()=>sourceAddDialog.close());
+for(const id of ['source-central','source-cloud-choice'])byId(id).addEventListener('click',()=>{sourceAddDialog.close();void perform(()=>desktopApi.openCentral('sources'));});
+function renderSourceDestination():void {
+  const config=currentStatus?.config;byId('source-destination').textContent=config?.serverUrl||moteText('尚未连接中央，先保存在本机');
+  byId('source-destination-state').textContent=!config?.tokenConfigured?moteText('未连接'):config.syncPaused?moteText('发送已暂停'):moteText('已连接');
 }
-byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();});
+function configureSourceEditor(mode:'files'|'directory'):void{
+  sourceMode=mode;invalidateSourceEditor();byId('source-existing-selection').hidden=true;byId('source-editor-subtitle').hidden=true;byId('source-edit-footer').hidden=true;
+  for(const kind of ['files','directory'])byId('source-mode-'+kind).setAttribute('aria-pressed',String(mode===kind));
+  byId('source-selection-hint').textContent=mode==='directory'?moteText('以后修改，也自动同步'):moteText('保存当前文件一次');byId('source-continuous-row').hidden=mode!=='files';
+  byId('source-confirm').textContent=mode==='directory'?moteText('添加并同步'):moteText('导入文件');byId('source-confirm-policy').textContent=currentStatus?.config.syncPaused?moteText('添加后先保存在本机'):moteText('按当前发送设置同步');
+  byId('source-confirmation').hidden=false;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;
+  byId('source-editor-heading').textContent=mode==='directory'?moteText('同步文件夹'):moteText('导入文件');byId('source-confirm-title').hidden=true;
+  byId('source-selected-names').textContent=sourceSelection?.names.join('\n')||(mode==='directory'?moteText('选择这台 Mac 上的文件夹'):moteText('选择这台 Mac 上的文件'));
+  byId('source-change-selection').textContent=sourceSelection?moteText('更换'):moteText('选择…');
+  if(mode==='directory')byId<HTMLInputElement>('source-continuous').checked=true;byId<HTMLInputElement>('source-continuous').disabled=mode==='directory';
+  renderSourceDestination();
+  byId('source-description-scope').textContent=mode==='directory'?moteText('适用于这个来源的已有与后续资料。'):moteText('仅适用于这次导入的文件。');
+  byId('source-edit-continuous-row').hidden=true;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;
+  byId('source-confirm-rules').append(sourceRules);sourceRules.open=true;byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection;updateSourceHistoryChoice();refreshSourceTextOptions();
+}
+async function beginSourceSelection(mode:'files'|'directory',pick=false):Promise<void>{
+  if(sourceBusy)return;sourceAddDialog.close();
+  if(mode!==sourceMode||sourceEditingId){byId<HTMLInputElement>('source-continuous').checked=mode==='directory';if(sourceSelection)await desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLSelectElement>('source-initial-sync').value='all';byId<HTMLSelectElement>('source-retention').value='snapshot';}
+  configureSourceEditor(mode);if(!showPage('source-editor'))return;if(!pick)return;
+  await sourceAction(async()=>{const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId)return;sourceSelection={id:result.selectionId,mode,names:result.names??[]};byId<HTMLInputElement>('source-name').value=sourceSelection.names.length===1?sourceSelection.names[0]:'';configureSourceEditor(mode);});
+}
+for(const mode of ['files','directory'] as const)byId('source-mode-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
+byId('source-change-selection').addEventListener('click',()=>void beginSourceSelection(sourceMode,true));
+byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();showPage('sources');});
 byId('source-confirm').addEventListener('click',()=>void sourceAction(async()=>{
-  if(!sourceSelection)return;const selected=sourceSelection;const oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
-  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();await refreshContent();if(oneTime)showPage('records');
+  if(!sourceSelection)return;const selected=sourceSelection,oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:oneTime?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
+  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();byId<HTMLTextAreaElement>('source-initial-description').value='';await refreshContent();showPage(oneTime?'records':'sources');
 }));
 function sourceOptions(): import('./source-types').SourceOptions {
-  return { syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) };
+  return normalizeSourceOptions({name:readInput('source-name').trim()||undefined, ...(!sourceEditingId?{description:readInput('source-initial-description')}:{}),syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) });
 }
-function editSource(id?: string): void {
-  if(sourceSelection){void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;}restoreSourceRules();
-  sourceEditingId = id;
+async function editSource(id?: string): Promise<void> {
+  if(sourceSelection){void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;}byId('source-confirmation').hidden=true;restoreSourceRules();
+  invalidateSourceEditor();sourceEditingId = id;const request=sourceEditorRequest();
   const source = localSourceRows.find(s => s.source.id === id)?.source;
   byId('source-editor-title').textContent = source ? moteText("编辑：") + source.name : moteText("新来源的保留与过滤规则");
   byId('source-edit-continuous-row').hidden=!source||source.kind!=='local-files';byId<HTMLInputElement>('source-edit-continuous').checked=source?.syncContinuously!==false;
   byId('source-save-edit').hidden = !source; byId('source-cancel-edit').hidden = !source;
-  if (!source) { refreshSourceTextOptions(); return; }
+  if (!source) { refreshSourceTextOptions();showPage('sources'); return; }
+  byId('source-existing-selection').hidden=false;byId('source-existing-name').textContent=source.name;byId('source-existing-path').textContent=source.path||moteText('所选系统日历');byId('source-editor-subtitle').textContent=source.name;byId('source-editor-subtitle').hidden=false;byId('source-edit-footer').hidden=false;byId('source-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLInputElement>('source-name').value=source.name;renderSourceDestination();
+  byId('source-editor-heading').textContent=moteText('编辑来源');byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').value=sourceWorkspaceDescription(id!);byId<HTMLTextAreaElement>('source-initial-description').disabled=true;showPage('source-editor');
   const editor = byId('source-editor-title').closest('details');
   if (editor) editor.open = true;
-  byId('source-editor-title').scrollIntoView({ block: 'start', behavior: 'instant' });
-  byId('source-retention').focus({ preventScroll: true });
-  byId<HTMLSelectElement>('source-initial-sync').value=source.initialSync??'all'; byId<HTMLSelectElement>('source-retention').value = source.retention;byId<HTMLInputElement>('source-allow-read').checked=source.allowRead??false; byId<HTMLInputElement>('source-interval').value = String(source.intervalSeconds);
+  byId<HTMLDetailsElement>('source-advanced').open=false;
+  byId<HTMLSelectElement>('source-initial-sync').disabled=true;byId<HTMLSelectElement>('source-initial-sync').value=source.initialSync??'all'; byId<HTMLSelectElement>('source-retention').value = source.retention;byId<HTMLInputElement>('source-allow-read').checked=source.allowRead??false; byId<HTMLInputElement>('source-interval').value = String(source.intervalSeconds);
   byId<HTMLInputElement>('source-deletions').checked = source.trackDeletions; byId<HTMLInputElement>('source-extensions').value = source.extensions.join(',');
   byId<HTMLTextAreaElement>('source-excludes').value = source.excludedPaths.join('\n'); byId<HTMLTextAreaElement>('source-redacts').value = source.redactLiterals.join('\n'); refreshPresets();
   refreshSourceTextOptions();
+  try{const value=await desktopApi.sourceContext(id!);if(sourceEditorCurrent(request)){sourceEditingContext=value;byId<HTMLTextAreaElement>('source-initial-description').value=value.pending?.description??value.snapshot.description;byId<HTMLTextAreaElement>('source-initial-description').disabled=value.error==='denied'||Boolean(value.error)&&!value.pending;byId('source-description-scope').textContent=value.error?moteText('暂时无法核对中央说明。输入保留在这里，可稍后重试。'):value.conflict?moteText('中央说明已改变，请核对后保存。'):moteText('适用于这个来源的已有与后续资料。');}}catch{/* Local rules remain editable when Central is unavailable. */}
 }
+function sourceWorkspaceDescription(id:string):string{const row=localSourceRows.find(row=>row.source.id===id);return row?.context?.pending?.description??row?.context?.snapshot.description??'';}
 function refreshSourceTextOptions(): void {
   refreshSourcePolicySummaries();
   const source=localSourceRows.find(row=>row.source.id===sourceEditingId)?.source;
   const visible=(!source||source.kind==='local-files')&&readInput('source-retention')==='snapshot';
   byId('source-file-text-options').hidden=!visible;
   byId<HTMLInputElement>('source-allow-read').disabled=!visible;
+  byId('source-retention-hint').textContent=readInput('source-retention')==='snapshot'?moteText('完整文件发往中心解析；处理后删除中心临时原件。'):readInput('source-retention')==='archive'?moteText('完整文件发往中心解析，并保留原件。'):moteText('只记录文件信息，不读取正文，也不上传文件内容。');
 }
 byId('source-retention').addEventListener('change',refreshSourceTextOptions);
-let sourcesReading = false;
+let sourcesReading = false;let sourceReadGeneration=0;
 async function refreshSources(): Promise<void> {
   if (sourcesReading) return;
-  sourcesReading = true;
+  sourcesReading = true;const generation=sourceReadGeneration;
   try {
-  const rows = await desktopApi.sources(); localSourceRows = rows;
-  const list = byId('source-list'); list.replaceChildren();byId('source-attention').replaceChildren();
-  const ongoing = rows.filter(row => row.source.syncContinuously !== false);
-  workbenchUi.setHasSource(ongoing.length>0);
-  if (!ongoing.length) { const p = document.createElement('p'); p.className = 'helper'; p.textContent = moteText("尚未连接本地来源。选择只包含你希望归档资料的目录。"); list.append(p); }
-  const groups = [
-    { title: '需要处理', rows: ongoing.filter(row=>Boolean(row.blocked)) },
-    { title: '文件与文件夹', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='local-files') },
-    { title: 'Coding Agent', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='coding-agent') },
-    { title: '本机日历与其他来源', rows: ongoing.filter(row=>!row.blocked && !['local-files','coding-agent'].includes(row.source.kind)) },
-  ];
-  for (const group of groups) {
-    if (!group.rows.length) continue;
-    const target=group.title==='需要处理'?byId('source-attention'):list;
-    const heading=document.createElement('h2');heading.textContent=moteText(group.title);target.append(heading);
-  for (const row of group.rows) {
-    const card = document.createElement('article'); card.className = 'source-card';
-    const title = document.createElement('strong'); title.textContent = `${row.source.kind === 'local-calendar' ? moteText("日历") : row.source.kind === 'coding-agent' ? moteText("编码对话") : moteText("文件")} · ${row.source.name} · ${row.source.retention === 'reference' ? moteText("仅文件目录") : row.source.retention === 'archive' ? moteText("原件归档") : row.source.kind==='local-files'?moteText("中央提取正文，不保留原件"):moteText("内容快照")}`;
-    const detail = document.createElement('p'); detail.className = 'helper profile-path'; detail.textContent = row.source.path || moteText("所选系统日历");
-    const status = document.createElement('p'); status.className = 'helper'; status.textContent = moteText("{0} · {1} 项 · 待传 {2} · 跳过 {3}{4}", row.source.enabled ? row.message : moteText("本机已暂停"), row.items, row.pending, row.skipped, row.lastSyncAt ? moteText(" · 最近同步 ") + new Date(row.lastSyncAt).toLocaleString(getLocale()) : '') + (row.facts ? `\n${nativeStatusSummary(row.facts)}` : '');
-    const actions = document.createElement('div'); actions.className = 'actions';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary'; edit.textContent = moteText("编辑规则"); edit.addEventListener('click', () => editSource(row.source.id));
-    const pause = document.createElement('button'); pause.type = 'button'; pause.className = 'secondary'; pause.textContent = row.source.enabled ? moteText("暂停这个来源") : moteText("恢复这个来源"); pause.disabled = sourceBusy;
-    pause.addEventListener('click', () => void sourceAction(async () => { await desktopApi.updateSource(row.source.id, { ...row.source, enabled: !row.source.enabled }); }));
-    actions.append(edit, pause); card.append(title, detail, status);
-    if(row.blocked){
-      const failures=document.createElement('details'),summary=document.createElement('summary'),explanation=document.createElement('p');
-      failures.className='source-failures';summary.textContent=moteText('本机待处理 {0} 项',row.blocked);explanation.className='helper';explanation.textContent=moteText('这些文件的本机副本仍保留，其他资料会继续同步。');failures.append(summary,explanation);
-      for(const failure of row.failures??[]){const item=document.createElement('p');item.className='helper profile-path';item.textContent=`${failure.title||failure.externalId} · ${failure.status===410?moteText('中央已删除此文件'):failure.status===409?moteText('文件版本冲突'):moteText('中央拒绝此文件（{0}）',failure.status)}`;failures.append(item);}
-      card.append(failures);
-    }
-    card.append(actions); target.append(card);
-  }
-  }
+  const rows = await desktopApi.sources();if(generation!==sourceReadGeneration)return;localSourceRows = rows;
+  sourceWorkspace.update(rows);workbenchUi.setHasSource(rows.some(row=>row.source.syncContinuously!==false));
   } finally { sourcesReading = false; }
 }
 async function sourceAction(action: () => Promise<void>): Promise<void> {
-  if (sourceBusy) return; sourceBusy = true; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
+  if (sourceBusy) return; sourceBusy = true;byId('source-feedback').hidden=false; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
   for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
-  try { await action(); byId('source-feedback').textContent = moteText("已处理，下面显示各来源的当前同步状态。"); }
+  try { await action(); byId('source-feedback').textContent='';byId('source-feedback').hidden=true; }
   catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
-  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
+  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {});byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection; }
 }
+for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-connect-title').textContent=kind==='agent'?moteText('连接 Coding Agent'):moteText('连接日历');byId('source-connect-rules').append(sourceRules);sourceRules.open=true;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;showPage('source-connect');});
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
   const permissions = await desktopApi.permissionStatus();
@@ -793,10 +791,13 @@ byId('source-calendar-add').addEventListener('click', () => void sourceAction(as
 byId('source-sync').addEventListener('click', () => void sourceAction(() => desktopApi.syncSources()));
 byId('calendar-actions-connect').addEventListener('click', () => void sourceAction(async()=>{await desktopApi.connectActionCalendar();await desktopApi.openCentral('actions');}));
 byId('source-calendar-permissions').addEventListener('click', () => void sourceAction(() => desktopApi.openCalendarPermissions()));
-byId('source-cancel-edit').addEventListener('click', () => editSource());
+byId('source-cancel-edit').addEventListener('click',()=>{if(sourceEditingId)sourceWorkspace.open(sourceEditingId);else showPage('sources');});
 byId('source-save-edit').addEventListener('click', () => void sourceAction(async () => {
   const source = localSourceRows.find(s => s.source.id === sourceEditingId)?.source; if (!source) throw new Error(moteText("请先选择要编辑的来源"));
-  await desktopApi.updateSource(source.id, { ...sourceOptions(), enabled: source.enabled }); editSource();
+  const request=sourceEditorRequest(),options=sourceOptions(),description=readInput('source-initial-description');
+  if(sourceEditingContext&&!byId<HTMLTextAreaElement>('source-initial-description').disabled&&description!==(sourceEditingContext.pending?.description??sourceEditingContext.snapshot.description))await desktopApi.saveSourceContext(source.id,{expectedVersion:sourceEditingContext.snapshot.version,description});
+  if(!sourceEditorCurrent(request))return;
+  await desktopApi.updateSource(source.id, { ...options, enabled: source.enabled });if(!sourceEditorCurrent(request))return;await refreshSources();if(!sourceEditorCurrent(request))return;sourceWorkspace.open(source.id);invalidateSourceEditor();
 }));
 void refreshSources().catch(() => { byId('source-feedback').textContent = moteText("来源状态暂不可用，请重新打开应用"); });
 setInterval(() => { void refreshSources().catch(() => {}); }, 3000);
