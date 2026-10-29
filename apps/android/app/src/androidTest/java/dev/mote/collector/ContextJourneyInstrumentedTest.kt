@@ -125,6 +125,7 @@ class ContextJourneyInstrumentedTest {
                 until("Memory view resolves to the existing Central memory page") { main { activity() is CentralActivity && activity().intent.getStringExtra("page") == "memories" } }
                 capture("memory-connection-required")
                 main { activity().finish() }
+                until("Return to resumed Main Library before dispatching Back") { main { activity() is MainActivity && shown().any { it.tag == "library-primary-views" } } }
                 instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);clickTag("menu:发现历史")
                 until("Discovery resolves to the existing Central insights page") { main { activity() is CentralActivity && activity().intent.getStringExtra("page") == "insights" } }
                 main { activity().finish() }
