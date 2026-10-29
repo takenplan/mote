@@ -1,6 +1,9 @@
 import {originalReferenceRoute,rememberOriginalReturn} from './ask-original-reference';
 import {confirmNavigation} from './unsaved';
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
+import {noteMaterialPage,noteAssetTarget,type NoteReadSpan} from './note-material-render';
+import {ArchivedFileButton} from './ArchivedFileButton';
+import type {ArchivedFile} from '@mote/shared';
 import { moteText } from '@mote/shared/i18n';
 import { type Api, ApiError, errorMessage,dateTime } from './api';
 import { useResource } from './useResource';
@@ -55,12 +58,25 @@ export type Material = {
 type ReadPage = {
     material: Material;
     text: string;
+    spans?:NoteReadSpan[];
     textRange: {
         offset: number;
         total: number;
         nextOffset: number | null;
     };
 };
+const noteReaderOwners=new WeakMap<Api,number>();let nextNoteReaderOwner=0;
+function noteReaderKey(api:Api,ref:string){if(!noteReaderOwners.has(api))noteReaderOwners.set(api,++nextNoteReaderOwner);return noteReaderOwners.get(api)+':'+ref;}
+function installNoteReaderStyle(){if(document.querySelector('link[data-mote-note-material]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./note-material-final.css?no-inline',import.meta.url).href;link.dataset.moteNoteMaterial='';document.head.append(link);}
+function NoteAsset({api,span,onOpen}:{api:Api;span:NoteReadSpan;onOpen:(ref:string)=>void}){
+ const target=noteAssetTarget(span),file=useResource<ArchivedFile>(api,target?.kind==='archive'?'/api/archived-files/'+encodeURIComponent(target.id):null);
+ const matched=file.data?.id===target?.id&&file.data?.hash===span.asset?.hash&&file.data?.mimeType===span.asset?.mimeType;
+ return <div className="note-material-asset"><span>{matched?file.data!.name:moteText('附件')}<small>{span.asset?.mimeType}</small></span>{target?.kind==='capture'?<button className="text-button" onClick={()=>onOpen('capture:'+target.id)}>{moteText('查看原始记录')}</button>:target?.kind==='archive'?file.error?<span role="alert">{errorMessage(file.error)} <button className="text-button" onClick={file.refresh}>{moteText('重试')}</button></span>:matched?<ArchivedFileButton api={api} id={target.id} name={file.data!.name}/>:file.loading?<span role="status">{moteText('正在读取…')}</span>:<span role="status">{moteText('此版本已变化，请返回资料列表重新选择。')}</span>:span.evidenceId&&/^[a-f0-9-]{36}$/i.test(span.evidenceId)?<button className="text-button" onClick={()=>onOpen('capture:'+span.evidenceId)}>{moteText('查看原始记录')}</button>:null}</div>;
+}
+function NoteMaterialBody({api,page,onOpen,offset,onOffset}:{api:Api;page:ReadPage;onOpen:(ref:string)=>void;offset:number;onOffset:(offset:number)=>void}){
+ useEffect(installNoteReaderStyle,[]);const [quoteOpen,setQuoteOpen]=useState(true),content=noteMaterialPage(page),hasBody=content.quotes.length+content.records.length+content.other.length>0;
+ return <section className="note-material-body">{content.quotes.length>0&&<details className="note-material-quote" open={quoteOpen} onToggle={event=>setQuoteOpen(event.currentTarget.open)}><summary>{moteText('引用原文')}</summary>{content.quotes.map((text,index)=><pre key={index}>{text}</pre>)}</details>}{content.records.length>0&&<section className="note-material-record"><h3>{content.quotes.length?moteText('我的补充'):moteText('用户原文')}</h3>{content.records.map((text,index)=><pre key={index}>{text}</pre>)}</section>}{content.other.map((text,index)=><pre key={index}>{text}</pre>)}{!hasBody&&<p role="status">{moteText('本页暂无文字正文。')}</p>}{content.assets.length>0&&<section className="note-material-assets"><h3>{moteText('附件')}</h3>{content.assets.map(span=><NoteAsset key={span.blockId+':'+span.pageRange.start} api={api} span={span} onOpen={onOpen}/>)}</section>}{content.descriptions.length>0&&<details className="note-material-description"><summary>{moteText('资料说明')}</summary>{content.descriptions.map((text,index)=><pre key={index}>{text}</pre>)}</details>}<details className="note-material-technical"><summary>{moteText('技术详情')}</summary><pre>{page.text}</pre><p>{moteText('从第 {0} 个字符开始',offset+1)} · {page.textRange.total}</p></details><div className="processing-actions">{offset>0&&<button className="button" onClick={()=>onOffset(0)}>{moteText('返回第一页')}</button>}{page.textRange.nextOffset!==null&&<button className="button" onClick={()=>onOffset(page.textRange.nextOffset!)}>{moteText('继续展开')}</button>}</div></section>;
+}
 type Scope = {
     deviceId?: string;
     after?: string;
@@ -98,6 +114,7 @@ export function MaterialDetail({ api, material, onOpen, agent = false, scope = {
     const historical = current.error === undefined && current.data && current.data.revision !== material.revision;
     const memorySource = !agent && !historical && current.error === undefined && current.data?.ref === material.ref ? current.data.memorySource : undefined;
     const catalog = (presentation.data?.schemaVersion === 1 && Array.isArray(presentation.data.types) ? presentation.data.types : []).find(type => type.kind === selected.kind && type.schemaVersion === selected.schemaVersion);
+    const ownerNote=!agent&&material.kind==='mote.note'&&material.schemaVersion===2;
     const retry = () => { read.refresh(); current.refresh(); };
     const retryIndex = async () => { setIndexBusy(true); setIndexError(''); try {
         await api.request(`/api/materials/${encodeURIComponent(material.id)}/index/retry`, { method: 'POST' });
@@ -109,14 +126,14 @@ export function MaterialDetail({ api, material, onOpen, agent = false, scope = {
     finally {
         setIndexBusy(false);
     } };
-    return <article className="panel panel-pad material-detail">{!agent&&!historical&&current.error===undefined&&current.data?.ref===material.ref&&read.error===undefined&&read.data?.material.ref===material.ref&&<a className="button material-reader-ask" href={originalReferenceRoute('material',selected.ref)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'material',selected.ref);}}>{moteText('问问 AI')} ↗</a>}<h2>{selected.title}</h2><p>{materialKind(selected.kind, catalog?.label)} · {sourceDisplay(selected.origin.sourceId)}{(selected.origin.lastAt??selected.origin.firstAt)&&<> · {dateTime((selected.origin.lastAt??selected.origin.firstAt)!)}</>}</p>
+    return <article className={'panel panel-pad material-detail'+(ownerNote?' note-material-reader':'')}>{!agent&&!historical&&current.error===undefined&&current.data?.ref===material.ref&&read.error===undefined&&read.data?.material.ref===material.ref&&<a className="button material-reader-ask" href={originalReferenceRoute('material',selected.ref)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'material',selected.ref);}}>{moteText('问问 AI')} ↗</a>}<h2>{selected.title}</h2><p>{materialKind(selected.kind, catalog?.label)}{!ownerNote&&<> · {sourceDisplay(selected.origin.sourceId)}</>}{(selected.origin.lastAt??selected.origin.firstAt)&&<> · {dateTime((selected.origin.lastAt??selected.origin.firstAt)!)}</>}</p>
     {['pending', 'running'].includes(selected.indexing?.state ?? '') && <p role="status">{moteText('资料已发布，检索索引正在处理中。')}</p>}
     {selected.indexing?.state === 'failed' && <p role="status">{moteText('检索索引未完成，正文可正常查看。')}{!agent && !historical && current.error === undefined && current.data?.ref === material.ref && <button className="button" disabled={indexBusy} onClick={() => void retryIndex()}>{moteText('仅重试检索索引')}</button>}</p>}
     {indexError && <p role="alert">{indexError}</p>}
     {historical && <p role="status">{moteText('这是历史版本，当前资料已更新。')} <button className="button" onClick={() => onOpen(current.data!.ref)}>{moteText('查看当前版本')}</button></p>}
     {rebuilding ? <p role="status">{moteText('来源已更正，正在重新整理资料。完成后可继续查看。')} <button onClick={retry}>{moteText('刷新')}</button></p> : read.error !== undefined && <p role="alert">{errorMessage(read.error)} <button onClick={retry}>{moteText('重试')}</button></p>}
     {current.error !== undefined && <p role="alert">{errorMessage(current.error)} <button onClick={retry}>{moteText('重试')}</button></p>}
-    {!rebuilding && read.error === undefined && current.error === undefined && read.data && <FeatureView catalog={catalog} api={api} onOpen={onOpen} value={{ ...selected, representation: agent ? 'markdown' : 'owner-material', text: read.data.text }} fallback={<><AnswerMarkdown onOpen={onOpen} answer={{ answer: read.data.text, runId: selected.ref, trace: [], citations: [] }}/><p className="fine-print">{moteText('从第 {0} 个字符开始', offset + 1)} · {read.data.textRange.total}</p><div className="processing-actions">{offset > 0 && <button className="button" onClick={() => setOffset(0)}>{moteText('返回第一页')}</button>}{read.data.textRange.nextOffset !== null && <button className="button" onClick={() => setOffset(read.data!.textRange.nextOffset!)}>{moteText('继续展开')}</button>}</div></>}/>}
+    {!rebuilding && read.error === undefined && current.error === undefined && read.data && read.data.material.ref===material.ref && <FeatureView catalog={catalog} api={api} onOpen={onOpen} value={{ ...selected, representation: agent ? 'markdown' : 'owner-material', text: read.data.text }} fallback={ownerNote?<NoteMaterialBody key={noteReaderKey(api,material.ref)} api={api} page={read.data} onOpen={onOpen} offset={offset} onOffset={setOffset}/>:<><AnswerMarkdown onOpen={onOpen} answer={{ answer: read.data.text, runId: selected.ref, trace: [], citations: [] }}/><p className="fine-print">{moteText('从第 {0} 个字符开始', offset + 1)} · {read.data.textRange.total}</p><div className="processing-actions">{offset > 0 && <button className="button" onClick={() => setOffset(0)}>{moteText('返回第一页')}</button>}{read.data.textRange.nextOffset !== null && <button className="button" onClick={() => setOffset(read.data!.textRange.nextOffset!)}>{moteText('继续展开')}</button>}</div></>}/>}
     {!agent && <FeatureActions position="detail" catalog={catalog} api={api} onOpen={onOpen} value={{ ...selected, representation: 'owner-material', text: read.data?.text ?? '' }}/>}
     <div className="reader-source-details"><button className="text-button" aria-expanded={tab==='origin'} onClick={()=>{setTab(tab==='origin'?'body':'origin');setMemberOffset(0);}}>{moteText('来源与处理')}</button>{tab === 'origin' && <>    {memorySource?.status === 'ready' && <a className="button" href={memoryMaterialRoute(selected.ref)}>{moteText('仅从这份正式资料提取记忆')}</a>}
     {memorySource && memorySource.status !== 'ready' && <p role="status">{moteText('这份正式资料暂不能单独提取记忆，请查看来源与处理状态。')}</p>}
