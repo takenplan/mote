@@ -217,8 +217,7 @@ test('recording discovery shows a saved binding and disabled sync with known run
  const status=structuredClone(recorder);status.connected=true;status.authorization={revision:'generated',environment:{installed:false,configured:false,error:'generated_cli_missing'}};
  const f=await fixture(t,{capabilities:[capability(providerDetailId)],recorderStatus:status});await f.render();
  await f.openRecorders();const recording=card(f.d,status.label!);
- assert.equal(recording.querySelector('.badge')?.textContent,'已保存账号绑定');assert.equal(recording.querySelector('.badge.green'),null);
- assert.equal(recording.querySelector('.recording-sync-status')?.textContent,'录音同步未启用 · 运行环境需要处理');
+ assert.equal(recording.querySelector('small')?.textContent,'已保存账号绑定 · 录音同步未启用 · 运行环境需要处理');assert.equal(recording.querySelector('.badge.green'),null);
  assert.ok(!f.reads.some(path=>/\/(check|login|sync|connect)$/.test(path)));
 });
 
