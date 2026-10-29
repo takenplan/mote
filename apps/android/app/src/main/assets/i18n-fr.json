@@ -9017,5 +9017,9 @@
   "来源与详情": "Source and details",
   "返回来源": "Back to sources",
   "资料说明与内容归属": "Description and authorship",
-  "连接与范围": "Connection and scope"
+  "连接与范围": "Connection and scope",
+  "资料说明最多 12000 个字符位；原草稿未改动。": "La description est limitée à 12000 unités de caractères. Le brouillon est inchangé.",
+  "记录内容": "Contenu de la note",
+  "先保存在本机": "Enregistré localement en premier",
+  "资料说明": "Description"
 }

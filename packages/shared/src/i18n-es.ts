@@ -9018,5 +9018,9 @@ export const spanish: Readonly<Record<string, string>> = {
   "来源与详情": "Source and details",
   "返回来源": "Back to sources",
   "资料说明与内容归属": "Description and authorship",
-  "连接与范围": "Connection and scope"
+  "连接与范围": "Connection and scope",
+  "资料说明最多 12000 个字符位；原草稿未改动。": "La descripción admite hasta 12000 unidades de caracteres. El borrador original no ha cambiado.",
+  "记录内容": "Contenido de la nota",
+  "先保存在本机": "Primero se guarda en este dispositivo",
+  "资料说明": "Descripción"
 };

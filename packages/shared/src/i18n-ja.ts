@@ -9018,5 +9018,9 @@ export const japanese: Readonly<Record<string, string>> = {
   "来源与详情": "Source and details",
   "返回来源": "Back to sources",
   "资料说明与内容归属": "Description and authorship",
-  "连接与范围": "Connection and scope"
+  "连接与范围": "Connection and scope",
+  "资料说明最多 12000 个字符位；原草稿未改动。": "資料説明は12000文字単位以内にしてください。元の下書きは変更されていません。",
+  "记录内容": "記録内容",
+  "先保存在本机": "まずこの端末に保存",
+  "资料说明": "資料説明"
 };
