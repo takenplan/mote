@@ -18,7 +18,7 @@ async function fixture(t:any,remove:()=>Promise<unknown>,capture=original){
  await render();t.after(async()=>{await act(async()=>root.unmount());dom.window.close();for(const [key,descriptor]of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}});
  const d=dom.window.document;
  async function confirm(){await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.danger-text')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.evidence-footer .danger')!.click());}
- return {d,api,render,writes,events,confirm};
+ return {d,api,render,writes,events,confirm,unmountReader:async()=>{await act(async()=>root.render(null));}};
 }
 
 test('a virtual original without a unique deletion capability stays readable with no delete control',async t=>{
@@ -43,4 +43,9 @@ test('a positive file deletion uses the existing file confirmation without expos
 for(const outcome of ['success','failure'] as const)test('a late '+outcome+' for the old original cannot close or report an error in the next reader',async t=>{
  let resolve!:(value:unknown)=>void,reject!:(error:Error)=>void;const pending=new Promise((yes,no)=>{resolve=yes;reject=no;}),f=await fixture(t,()=>pending);await f.confirm();await f.render(f.api,other);assert.equal(f.d.querySelector('.evidence-heading h2')!.textContent,'Generated original');
  await act(async()=>{if(outcome==='success')resolve({deleted:1});else reject(Error('Generated old read failure'));await pending.catch(()=>{});});assert.deepEqual(f.events,{closed:0,deleted:0});assert.equal(f.d.querySelector('.notice.error'),null);assert.equal(f.d.querySelector('.deletion-diagnostic'),null);assert.equal(f.d.querySelector('.evidence-text pre')!.textContent,original.ocrText);assert.equal(f.writes.length,1);
+});
+
+for(const outcome of ['success','failure'] as const)test('an unmounted reader cannot affect a newly opened reader after a late '+outcome,async t=>{
+ let resolve!:(value:unknown)=>void,reject!:(error:Error)=>void;const pending=new Promise((yes,no)=>{resolve=yes;reject=no;}),f=await fixture(t,()=>pending);await f.confirm();await f.unmountReader();await f.render(f.api,other);
+ await act(async()=>{if(outcome==='success')resolve({deleted:1});else reject(Error('Generated unmounted reader failure'));await pending.catch(()=>{});});assert.deepEqual(f.events,{closed:0,deleted:0});assert.equal(f.d.querySelector('.deletion-diagnostic'),null);assert.equal(f.d.querySelector('.evidence-text pre')!.textContent,original.ocrText);assert.equal(f.writes.length,1);
 });

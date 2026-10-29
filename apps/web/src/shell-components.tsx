@@ -399,6 +399,8 @@ export function EvidenceDialog({
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
+  const readerAlive=useRef(true);
+  useEffect(()=>{readerAlive.current=true;return()=>{readerAlive.current=false;};},[]);
   const readerVisit=useRef({api,id});
   if(readerVisit.current.api!==api||readerVisit.current.id!==id)readerVisit.current={api,id};
   const [mutationError,setError]=useState(''),[deletionDiagnostic,setDeletionDiagnostic]=useState('');
@@ -427,13 +429,13 @@ export function EvidenceDialog({
       });
       if(!Number.isSafeInteger(result?.deleted)||Number(result.deleted)<=0)throw new Error('Deletion response did not confirm a positive deleted count');
       resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources|materials|library)([/?]|$)/.test(key));
-      if(readerVisit.current!==visit)return;
+      if(!readerAlive.current||readerVisit.current!==visit)return;
       onDeleted();
       onClose();
     } catch (e) {
-      if(readerVisit.current===visit){setError(moteText('未能确认删除完成。请刷新查看当前状态。'));setDeletionDiagnostic(errorMessage(e));}
+      if(readerAlive.current&&readerVisit.current===visit){setError(moteText('未能确认删除完成。请刷新查看当前状态。'));setDeletionDiagnostic(errorMessage(e));}
     } finally {
-      if(readerVisit.current===visit)setBusy(false);
+      if(readerAlive.current&&readerVisit.current===visit)setBusy(false);
     }
   }
   const presentation = capture ? evidencePresentation(capture) : null;
