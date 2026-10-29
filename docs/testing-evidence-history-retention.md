@@ -89,7 +89,7 @@ checks, unchanged privacy/expiry behavior and a real deny-all empty selected sco
 | --- | --- |
 | Central capture/note/file-backed ordinary deletion | Original physically gone; submitted Q/A, citation identities/excerpts and run/usage metadata remain. File delete retries do not mint extra proof; later explicit file forget clears retained generations. |
 | External record-store tombstone | Historical citation unavailable and fresh model original reads denied; the separate existing owner immutable archive route remains readable. |
-| Archive-pipeline tombstone | Exact old Material anchors become unavailable; submitted dialogue survives rebuild and duplicate tombstone replay. Explicit source forget still clears it and pauses the source. |
+| Archive-pipeline tombstone | Exact old Material anchors become unavailable; submitted dialogue survives rebuild and duplicate tombstone replay. Unrelated updates in the same batch acquire no deletion receipt. Explicit source forget still clears it and pauses the source. |
 | Formal organizer after ordinary deletion | Preserve only exact anchors already proven ordinarily deleted. Generic Material retirement/redaction without that proof retains the old clearing contract. |
 | Partial / complete strict selection | Keep the original selected scope. Fresh reads use only remaining selected originals; with all originals gone, actual HTTP tool requests for evidence/search/materials fail before any reader call. Explicit scope clearing remains separate. |
 | Missing, forgotten, revoked or mixed roots | Do not silently discard unknown/restricted roots or partially allow a mixed answer. Current source exposure revocation blocks model entry; privacy erasure clears subsequent inherited generations. |
@@ -104,7 +104,7 @@ unless a root path is shown):
 ```sh
 # apps/server
 node --import tsx --test --test-concurrency=3 test/conversation-retirement-authority.test.ts test/conversation-history-retention.test.ts test/conversation-history-boundaries.test.ts test/conversation-lineage.test.ts test/evidence-deletion.test.ts test/conversations.test.ts
-node --import tsx --test --test-concurrency=2 test/source-pipelines.test.ts test/evidence-exposure.test.ts
+node --import tsx --test --test-concurrency=2 test/source-pipelines.test.ts test/evidence-exposure.test.ts test/source-archive-index.test.ts
 # Additional affected consumers: source-context-conversation, model-evidence-authority,
 # sources, files and imports. No whole-repository or performance run was selected.
 
@@ -119,7 +119,7 @@ node --import tsx --test test/read-state-closure.test.ts
 node --import tsx apps/android/test-fixtures/central-kotlin-contract.ts
 ```
 
-The first server group passes 33 cases and source-pipeline/exposure 29; the Agent HTTP bridge 14, envelope/selected
+The first server group passes 33 cases and source-pipeline/exposure/index 32; the Agent HTTP bridge 14, envelope/selected
 consumer 23, Web state suite 29, Android presentation JVM 3 and real
 Fastify-to-Kotlin contract 6. Server/Web type checks, Agent build, six-locale
 catalog check (8,841 messages) and diff whitespace checks pass. Generated local

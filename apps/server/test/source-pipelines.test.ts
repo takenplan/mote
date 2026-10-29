@@ -98,11 +98,12 @@ test('forget during organization cannot resurrect erased source material',async 
 });
 test('an archived-source tombstone retains submitted dialogue through rebuilding, while explicit source forget still erases it',async t=>{
   const {materials,runtime,sources,store,reader}=await fixture(t),conversations=new Conversations(store);
-  await sources.upsertBatch('coding',[item(1),item(2,'session-a','Generated remaining input')]);await runtime.tick();
-  const material=materials.list().items[0],ids=materials.evidenceIds(material.ref);assert.ok(ids.length);
+  await sources.upsertBatch('coding',[item(1),item(2,'session-a','Generated remaining input'),item(3,'session-b','Generated separate group')]);await runtime.tick();
+  const material=materials.list().items.find(value=>value.title==='session-a')!,other=materials.list().items.find(value=>value.title==='session-b')!,ids=materials.evidenceIds(material.ref),otherIds=materials.evidenceIds(other.ref);assert.ok(ids.length);
   const saved=conversations.append(undefined,{question:'Generated historical coding question'}, {answer:'Generated submitted coding answer',citations:ids.map(id=>({id,appName:'Generated coding',capturedAt:'2026-09-24T01:00:00Z',excerpt:'Generated saved coding excerpt'})),trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids}});
+  const independent=conversations.append(undefined,{question:'Generated other group question'}, {answer:'Generated independent answer',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:otherIds}});
   const tombstone={...item(1),revision:'2',deleted:true,text:'',observedAt:'2026-09-24T02:00:00Z'};
-  await sources.upsert('coding',tombstone);
+  await sources.upsertBatch('coding',[tombstone,{...item(3,'session-b','Generated separate group updated'),revision:'2',observedAt:'2026-09-24T02:00:00Z'}]);
   const retired=conversations.get(saved.conversationId),snapshot=conversations.historyContext(retired),proofs=conversations.assertHistoryContext(snapshot);
   assert.equal(retired.turns[0].evidenceUnavailable,true);assert.equal(retired.turns[0].evidenceDeleted,undefined);assert.equal(retired.turns[0].result!.answer,'Generated submitted coding answer');
   assert.equal(reader.contextDependenciesAllowed(snapshot.evidenceDependencies.ids,undefined,true,proofs),true);
@@ -110,6 +111,8 @@ test('an archived-source tombstone retains submitted dialogue through rebuilding
   assert.equal(reader.evidence(fixtureCaptureRefs(ids)).length,0,'retired history does not grant a current original read');
   await runtime.tick();const revision=conversations.get(saved.conversationId).revision;
   assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,undefined);
+  const unaffected=conversations.get(independent.conversationId).turns[0];assert.equal(unaffected.evidenceUnavailable,undefined);assert.equal(unaffected.evidenceDeleted,undefined);assert.equal(unaffected.result!.answer,'Generated independent answer');
+  for(const id of otherIds)assert.equal(store.db.prepare('SELECT 1 FROM conversation_retired_roots WHERE id=?').get(id),undefined,'an unrelated update in the tombstone batch gets no ordinary-deletion receipt');
   await sources.upsert('coding',tombstone);await runtime.tick();assert.equal(conversations.get(saved.conversationId).revision,revision,'immutable tombstone replay does not mutate saved history');
   runtime.forget('coding');assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true);assert.doesNotMatch(JSON.stringify(conversations.get(saved.conversationId)),/Generated submitted coding answer|Generated saved coding excerpt/);
   assert.equal(store.db.prepare('SELECT count(*) n FROM conversation_retired_roots').get()!.n,0);assert.equal(sources.getSource('coding').enabled,false);

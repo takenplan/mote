@@ -164,7 +164,7 @@ export class SourceArchive {
       db.prepare('INSERT INTO source_archive_batches VALUES(?,?,?) ON CONFLICT(source_id,batch_hash) DO UPDATE SET bytes=excluded.bytes').run(sourceId,batch,size);
       db.prepare('UPDATE source_archive_sizes SET bytes=bytes+? WHERE source_id=?').run(size-(previous?.bytes??0),sourceId);
     }
-    const changes=new Map<string,string[][]>(),rewritten=new Set<string>(),countDeltas=new Map<string,number>();
+    const changes=new Map<string,string[][]>(),rewritten=new Set<string>(),deletedGroups=new Set<string>(),countDeltas=new Map<string,number>();
     const changed=(group:string,event:string[])=>{const list=changes.get(group)??[];list.push(event);changes.set(group,list);};
     const changeCount=(group:string,delta:number)=>countDeltas.set(group,(countDeltas.get(group)??0)+delta);
     const insertVersion=db.prepare('INSERT INTO source_archive_versions VALUES(?,?,?,?,?,?,?)');
@@ -182,6 +182,7 @@ export class SourceArchive {
       if(duplicate)continue;
       insertVersion.run(sourceId,versionKey,contentHash,batch,index,item.observedAt,groupHash);
       if(prior&&Date.parse(item.observedAt)<Date.parse(prior.observed_at))continue;
+      if(item.deleted){deletedGroups.add(group);if(prior)deletedGroups.add(nameOf(prior.group_hash));}
       if(prior){rewritten.add(nameOf(prior.group_hash));if(prior.group_hash!==groupHash){
         rewritten.add(group);changed(nameOf(prior.group_hash),['remove',externalKey,prior.version_key]);
         changeCount(nameOf(prior.group_hash),-1);changeCount(group,1);
@@ -196,7 +197,7 @@ export class SourceArchive {
     }
     db.prepare('DELETE FROM source_archive_recovery_groups WHERE source_id=?').run(sourceId);
     const groupCheckpoints=Object.fromEntries([...touched].map(group=>[group,this.indexedCheckpoint(sourceId,group)]));
-    return {checkpoint:archiveHash([sourceId,batch,groupCheckpoints]),groups:[...touched],changedGroups:[...changes.keys()],groupCheckpoints,
+    return {checkpoint:archiveHash([sourceId,batch,groupCheckpoints]),groups:[...touched],changedGroups:[...changes.keys()],deletedGroups:[...deletedGroups],groupCheckpoints,
       receipts:versions.map(({item,duplicate})=>({id:sourceReceiptId(sourceId,item),sourceId,externalId:item.externalId,revision:item.revision,duplicate}))};
   }
   /** The index and receipt are committed together. No file journal ACK is needed. */

@@ -230,9 +230,10 @@ export class SourcePipelineRuntime {
       for(const group of archived.changedGroups)this.memoryWork.inputs.receive({sourceId:source.id,inputKey:archived.groupCheckpoints[group]});
       // A repeated tombstone has already revoked its old projection. Hiding
       // its unchanged current Material again would require a rebuild that an
-      // immutable replay must not enqueue. New deletions still revoke every
-      // changed group (including the previous group when an identity moves).
-      if(items.some(item=>item.deleted))for(const group of archived.changedGroups)this.materials.redactUntilRebuilt(materialId(source.id,group),{ordinarySourceDeletion:true});
+      // immutable replay must not enqueue. Only groups with an actual new
+      // tombstone acquire ordinary-deletion proof, including a prior moved
+      // group; unrelated updates in the same batch remain ordinary revisions.
+      for(const group of archived.deletedGroups)this.materials.redactUntilRebuilt(materialId(source.id,group),{ordinarySourceDeletion:true});
       db.prepare('INSERT OR IGNORE INTO source_pipeline_bindings(source_id,pipeline_id,storage) VALUES(?,?,?)').run(source.id,pipeline.id,pipeline.storage);
       const superseded:string[]=[];
       for(const group of archived.groups){
