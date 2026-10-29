@@ -115,7 +115,7 @@ class ConnectionHierarchyInstrumentedTest {
                 scenario.onActivity { a->shown(a).single { it.tag=="menu:"+MoteI18n.text("系统权限与后台运行") }.performClick() }
                 await(scenario,"Actual permission state ready") { a->shown(a).filterIsInstance<TextView>().any { it.tag=="permission-detail"&&!it.text.toString().startsWith(MoteI18n.text("正在检查系统权限…")) } }
                 fun permissionCard(a:MainActivity) {
-                    val detail=shown(a).filterIsInstance<TextView>().single { it.tag=="permission-detail" }
+                    val detail=shown(a).filterIsInstance<TextView>().single { it.tag=="permission-detail" && ((it.parent as? ViewGroup)?.getChildAt(0) as? TextView)?.text?.toString()==MoteI18n.text("投屏会话") }
                     assertEquals("The shared role reaches the Projection permission card",NativeColorRole.TINT.color(),((detail.parent as View).background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
                     assertFalse(Settings(context).enabled);assertFalse(ProjectionService.running)
                 }
