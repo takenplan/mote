@@ -9566,5 +9566,10 @@
   "Dev 构建": "Dev ビルド",
   "从构建产物页面手动下载安装包，同包覆盖安装。": "ビルド成果物ページから手動でインストーラーをダウンロードし、同じアプリを上書きします。",
   "采样与运行": "サンプリングと動作",
-  "画质与去重": "画質と重複除去"
+  "画质与去重": "画質と重複除去",
+  "资料操作": "Material actions",
+  "关闭资料操作": "Close material actions",
+  "日程建议与执行": "Calendar suggestions and execution",
+  "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
+  "连接、处理与维护": "Connections, processing and maintenance"
 }

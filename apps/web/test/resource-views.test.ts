@@ -338,11 +338,12 @@ test('full record uses a visible heading and unnamed text content without losing
  const api=apiWith(path=>{assert.equal(path,`/api/capture-browser/${ids[0]}`);return capture;});
  await act(async()=>root.render(React.createElement(EvidenceDialog,{id:'capture:'+ids[0],api,onClose:()=>{},onDeleted:()=>{},onOpen:()=>{}})));
  const body=d.querySelector('.evidence-text pre')!;
- assert.match(d.querySelector<HTMLAnchorElement>('.evidence-text a')!.href,/library\?view=memories&memorySource=capture%3Aaaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
  assert.equal(body.previousElementSibling?.tagName,'H3');assert.equal(body.previousElementSibling?.textContent,'用户原文');
  assert.equal(body.textContent,text);assert.equal(body.getAttribute('aria-label'),null);assert.equal(body.getAttribute('aria-labelledby'),null);
  assert.equal(body.querySelector('b, img, script'),null);assert.equal(body.closest('[aria-hidden=true], [inert]'),null);
  assert.equal((d.defaultView as unknown as {__evidenceExecuted?:boolean}).__evidenceExecuted,undefined);
+ await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());
+ assert.match(d.querySelector<HTMLAnchorElement>('.evidence-source-actions a')!.href,/library\?view=memories&memorySource=capture%3Aaaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
 });
 test('registered source originals navigate through verified Material mapping and never offer raw Memory input',async t=>{
  const {EvidenceDialog}=await import('../src/shell-components.js');const {root,document:d}=await fixture(t),opened:string[]=[];
@@ -350,12 +351,13 @@ test('registered source originals navigate through verified Material mapping and
  const capture={id:ids[0],source:'file',platform:'import',capturedAt:'2026-09-27T00:00:00Z',appName:'Generated upload',deviceName:'Fixture',ocrText:'Generated original',durationMs:0,indexingStatus:'indexed',privacy:{excluded:false,redacted:false},revisionState:'current',requiresMaterialForMemory:true,memoryMaterialRef:ref};
  let mapped=true;const api=apiWith(path=>{assert.equal(path,`/api/capture-browser/${ids[0]}`);return mapped?capture:{...capture,memoryMaterialRef:undefined};});
  await act(async()=>root.render(React.createElement(EvidenceDialog,{id:'capture:'+ids[0],api,onClose:()=>{},onDeleted:()=>{},onOpen:ref=>opened.push(ref)})));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());
  assert.equal(d.querySelector('.evidence-text a[href*="memorySource="]'),null);
  await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='查看正式资料并提取记忆')!.click());
  assert.deepEqual(opened,[ref]);
  mapped=false;await act(async()=>resources(api).invalidate(key=>key===`/api/capture-browser/${ids[0]}`));
  assert.equal(d.querySelector('.evidence-text a[href*="memorySource="]'),null);
- assert.match(d.querySelector<HTMLAnchorElement>('.evidence-text a[href="#/library?view=materials"]')!.textContent!,/查看正式资料/);
+ assert.match(d.querySelector<HTMLAnchorElement>('.evidence-source-actions a[href="#/library?view=materials"]')!.textContent!,/查看正式资料/);
 });
 
 test('failed speaker separation keeps raw transcript readable with current summary-disabled policy',async t=>{
@@ -615,6 +617,7 @@ test('source drawer decodes only declared organizer text once and separates acti
  let declaration:string|undefined='source-record-json-v1',raw=envelope;
  const api=apiWith(()=>({id:ids[0],source:'file',platform:'import',capturedAt:'2026-09-27T00:00:00Z',appName:'Generated',ocrText:raw,evidencePresentation:declaration,privacy:{},revisionState:'current',requiresMaterialForMemory:true,memoryMaterialRef:`material:mat_${'a'.repeat(64)}@${'b'.repeat(64)}`}));
  await act(async()=>root.render(React.createElement(EvidenceDialog,{id:'capture:'+ids[0],api,onClose:()=>{},onDeleted:()=>{},onOpen:()=>{}})));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());
  const body=()=>d.querySelector('.evidence-text>pre')!;
  assert.equal(body().textContent,text);assert.equal(body().querySelector('script'),null);
  const action=d.querySelector('.evidence-source-actions')!;assert.ok(action.querySelector('button'));assert.ok(body().compareDocumentPosition(action)&d.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING);assert.equal(body().previousElementSibling?.tagName,'H3');assert.equal(body().previousElementSibling?.textContent,'原始文本');

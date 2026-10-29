@@ -9567,5 +9567,10 @@ export const french: Readonly<Record<string, string>> = {
   "Dev 构建": "Version Dev",
   "从构建产物页面手动下载安装包，同包覆盖安装。": "Téléchargez manuellement le programme depuis la page des versions et remplacez la même app.",
   "采样与运行": "Échantillonnage et fonctionnement",
-  "画质与去重": "Qualité d’image et déduplication"
+  "画质与去重": "Qualité d’image et déduplication",
+  "资料操作": "Material actions",
+  "关闭资料操作": "Close material actions",
+  "日程建议与执行": "Calendar suggestions and execution",
+  "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
+  "连接、处理与维护": "Connections, processing and maintenance"
 };

@@ -9567,5 +9567,10 @@ export const russian: Readonly<Record<string, string>> = {
   "Dev 构建": "Сборка Dev",
   "从构建产物页面手动下载安装包，同包覆盖安装。": "Скачайте установщик со страницы сборок вручную и установите поверх того же приложения.",
   "采样与运行": "Сбор и работа",
-  "画质与去重": "Качество изображения и дедупликация"
+  "画质与去重": "Качество изображения и дедупликация",
+  "资料操作": "Material actions",
+  "关闭资料操作": "Close material actions",
+  "日程建议与执行": "Calendar suggestions and execution",
+  "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
+  "连接、处理与维护": "Connections, processing and maintenance"
 };

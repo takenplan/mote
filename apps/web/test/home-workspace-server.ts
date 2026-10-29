@@ -19,6 +19,7 @@ runtime.app.addHook('onRequest',async(req,reply)=>{
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated version unavailable'});
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-mismatch')))return reply.send({currentVersion:'0.0.0-generated'});
  if(req.url==='/api/devices/first-data'&&existsSync(join(directory,'first-data-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated receipt read unavailable'});
+ if(req.url.startsWith('/api/captures/')&&req.method==='DELETE'&&existsSync(join(directory,'deny-delete')))return reply.code(403).send({error:'forbidden',message:'Generated original deletion denied'});
  if(req.url==='/api/notes'&&req.method==='POST'&&existsSync(join(directory,'deny-note')))return reply.code(403).send({error:'forbidden',message:'Generated note permission denied'});
 });
 const headers={authorization:'Bearer '+token};

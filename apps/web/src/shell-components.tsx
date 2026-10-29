@@ -1,3 +1,4 @@
+import {ReaderToolsDialog} from './ReaderToolsDialog';
 import {originalReferenceRoute,rememberOriginalReturn} from './ask-original-reference';
 import {confirmNavigation} from './unsaved';
 import {ActionResults} from './ActionResults';
@@ -400,16 +401,16 @@ export function EvidenceDialog({
   useOperationUpdates(api);
   const [mutationError,setError]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
-  const [confirm, setConfirm] = useState(false);
+  const [confirm, setConfirm] = useState(false),[readerTools,setReaderTools]=useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(()=>{setError('');setConfirm(false);},[id]);
+  useEffect(()=>{setError('');setConfirm(false);setReaderTools(false);},[id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape"){if(readerTools)setReaderTools(false);else onClose();}
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
+  }, [onClose,readerTools]);
   useEffect(() => {
     if(embedded)return;
     const panel = document.querySelector<HTMLElement>('.evidence-modal');
@@ -436,7 +437,7 @@ export function EvidenceDialog({
   const readableText=sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText;
   const ocr = capture ? ocrPresentation(captureOcrState(capture), capture.ocrText, capture.metadata?.capture?.deduplication?.duplicate, capture.perceptionJobs) : null;
   const sourceLabel=capture?(sourceLabels[capture.source]||capture.source):'';
-  const readerTitle=capture?(capture.source==='note'?sourceLabel:capture.windowTitle||capture.appName||sourceLabel):moteText('上下文证据');
+  const readerTitle=capture?(capture.windowTitle||(capture.source==='note'?capture.ocrText?.split('\n')[0]?.slice(0,100):capture.appName)||sourceLabel):moteText('上下文证据');
   const materialRef=capture?.revisionState==='current'&&capture.memoryMaterialRef;
   const currentMaterialRef=materialRef&&/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(materialRef)?materialRef:undefined;
   return (
@@ -450,8 +451,8 @@ export function EvidenceDialog({
         aria-modal={embedded?undefined:true}
         aria-label={moteText("上下文证据详情")}
       >
-        {embedded&&<button className="text-button evidence-back" onClick={onClose}>{moteText("返回资料列表")}</button>}
-        <div className="evidence-heading">
+        <div className="reader-top-actions"><button className="text-button evidence-back" onClick={onClose}>{moteText("返回资料列表")}</button>{capture&&<button className="text-button reader-more-button" onClick={()=>setReaderTools(true)}>{moteText('更多')}</button>}{capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}</div>
+        {captureRef&&<div className="evidence-heading">
           <div>
             <h2>{readerTitle}</h2>
             {capture && (
@@ -469,12 +470,12 @@ export function EvidenceDialog({
           >
             <X size={20} />
           </button>
-        </div>
-        {capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}
+        </div>}
+
         {capture?.blobHash&&capture.revisionState!=='historical'&&<ImageProgress api={api} id={capture.id}/>}
         {capture?.revisionState==='historical'&&<p role="status">{moteText('历史证据，仅用于核对当时的内容。')}</p>}
         {presentation?.nativeFile && <FileDetail api={api} id={presentation.nativeFile.captureId} startMs={presentation.nativeFile.startMs} onOpen={onOpen}/>}
-        {error && <ErrorNotice text={error} />}
+        {error && !readerTools && <ErrorNotice text={error} />}
         {!captureRef&&<ReferenceDetail key={id} api={api} reference={id} onOpen={onOpen}/>}
         {captureRef && !capture && !error && (
           <div className="panel-pad">
@@ -485,19 +486,16 @@ export function EvidenceDialog({
           <>
             <div className={`evidence-grid ${!capture.blobHash ? 'note-evidence' : ''}`}>
               {capture.blobHash && <OriginalImage key={capture.id} api={api} capture={capture}/>}
-              <div className="evidence-text"><EvidenceState compact/>
+              <div className="evidence-text">
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
                 <NoteOrigin api={api} capture={capture} onOpen={onOpen}/>{(!capture.metadata?.noteOrigin||capture.metadata.noteOrigin.kind==='manual'||Boolean(readableText))&&<><h3 className="evidence-body-heading">{capture.metadata?.noteOrigin?.kind!==undefined&&capture.metadata.noteOrigin.kind!=='manual'?moteText("我的补充"):presentation?.textLabel}</h3>
                 {capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
                 </pre>} </>}
-                <EvidenceProcessingHelp/>
     <ActionResults api={api} evidenceId={capture.id}/>
-                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
-                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
-                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div>
+
                 {(capture.source==='media'||capture.metadata?.media)&&<MediaSnapshot media={capture.metadata?.media} observedAt={capture.metadata?.observedAt??capture.capturedAt} screenLocked={capture.metadata?.state?.screenLocked} collection={capture.privacy.collection}/>}
-                <details className="reader-source-details"><summary>{moteText("来源与详情")}</summary><dl>
+                <details className="reader-source-details"><summary>{moteText("来源与详情")}</summary><EvidenceState compact/><dl>
                   <div>
                     <dt>{moteText("来源")}</dt>
                     <dd>
@@ -540,7 +538,9 @@ export function EvidenceDialog({
                 <code className="record-id">{capture.id}</code></details>
               </div>
             </div>
-            <div className="evidence-footer">
+            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{error&&<ErrorNotice text={error}/>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
+                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
+                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div><EvidenceProcessingHelp/>            <div className="evidence-footer">
               {confirm ? (
                 <>
                   <p>
@@ -574,7 +574,7 @@ export function EvidenceDialog({
                     {moteText("删除这条记录")}</button>
                 </>
               )}
-            </div>
+            </div></ReaderToolsDialog>}
           </>
         )}
       </section>
