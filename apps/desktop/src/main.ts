@@ -133,7 +133,7 @@ function encryptedStorageAvailable(): boolean {
 }
 let browserLogin: BrowserLogin | undefined;
 let ensureBrowserLogin: (()=>Promise<void>)|undefined;
-async function showCentral(page?: string, evidenceId?: string,workId?:string): Promise<void> {
+async function showCentral(page?: string, evidenceId?: string,workId?:string,conversationId?:string): Promise<void> {
   return navigateCentral({
     settings: () => settings,
     browserLogin: () => browserLogin,
@@ -141,7 +141,7 @@ async function showCentral(page?: string, evidenceId?: string,workId?:string): P
     platform: process.platform,
     launchChrome: url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]),
     openDefault: url => shell.openExternal(url),
-  }, page, evidenceId, workId);
+  }, page, evidenceId, workId,conversationId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
 function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central' | 'capture-start'): void {
@@ -477,9 +477,10 @@ else {
       await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), clientStatus(), logs.events),...logs}, null, 2), { mode: 0o600 });
       return { canceled: false };
     });
-    handle('mote:central', async (page, evidenceId) => {
+    handle('mote:central', async (page, evidenceId,conversationId) => {
       if (evidenceId !== undefined && typeof evidenceId !== 'string') throw new Error('Invalid evidence reference');
-      await showCentral(typeof page === 'string' ? page : undefined, evidenceId);
+      if(conversationId!==undefined&&(typeof conversationId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(conversationId)))throw Error('Invalid conversation identity');
+      await showCentral(typeof page === 'string' ? page : undefined, evidenceId,undefined,conversationId);
     });
     handle('mote:central-work',async workId=>showCentral('activity',undefined,validateCentralWorkId(workId)));
     handle('mote:quick-note', () => openQuickNote?.());
@@ -560,11 +561,11 @@ else {
       if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/login/logout',{},requested.token).catch(()=>{});
     };
     ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)&&(await testConnection(current)).credential.id==='owner')await installLogin(current.token!,current.authSessionOnly?0:2592000000);};
-    browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
+    browserLogin=async(page,evidenceId,durationMs=2592000000,workId,conversationId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
       const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,challenge,durationMs});
-      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId);
+      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId,conversationId);
       const deadline=Date.now()+10*60000;
       while(Date.now()<deadline&&generation===loginGeneration&&settings===requested&&!quitting){
         const grant=await loginRequest(requested,'/api/login/poll',{id,verifier});

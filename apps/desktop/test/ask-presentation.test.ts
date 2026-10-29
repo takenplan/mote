@@ -48,3 +48,9 @@ it('renders other current filters as literal text without granting navigation', 
   const view = renderAskScope(document, {deviceId:'<img src=evil>',after:'2026-01-01'}, () => {});
   expect(view.textContent).toContain('<img src=evil>'); expect(view.querySelector('img')).toBeNull();
 });
+it('retains a whole Material version reference as an exact Central navigation entry',()=>{
+ const document=new JSDOM('').window.document,reference='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),opened:string[]=[];
+ const view=renderAskScope(document,{anchorMaterialRef:reference},value=>opened.push(value));
+ expect(view.hidden).toBe(false);expect(view.textContent).toContain('其他已授权资料');expect(view.querySelectorAll('button')).toHaveLength(1);view.querySelector('button')!.click();expect(opened).toEqual([reference]);
+ expect(renderAskScope(document,{anchorMaterialRef:reference},()=>{},true).querySelector('button')).toBeNull();
+});
