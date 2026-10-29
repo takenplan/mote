@@ -56,8 +56,8 @@ for(const operation of ['delete','prune','revise'] as const)test(`${operation} i
  assert.ok(summaryB?.evidenceDependencies?.ids.includes(ids[1]));
  if(operation==='delete')store.delete(ids[0]);else if(operation==='prune')store.prune('2026-09-10T00:00:00Z');else store.invalidateMemoryEvidence(ids[0]);
  const updatedA=conversations.get(a.conversationId),updatedB=conversations.get(b.conversationId);
- assert.ok(updatedA.turns.every(turn=>operation==='revise'?turn.evidenceStale&&!turn.evidenceDeleted&&turn.result?.answer==='Generated derived answer':turn.evidenceDeleted));assert.equal(updatedA.turns[1].id,a2.turnId);assert.equal(working.get(updatedA),undefined);
- assert.equal(conversations.get(legacy.conversationId).turns[0][operation==='revise'?'evidenceStale':'evidenceDeleted'],true);
+ assert.ok(updatedA.turns.every(turn=>operation!=='prune'?turn.evidenceStale&&!turn.evidenceDeleted&&turn.result?.answer==='Generated derived answer':turn.evidenceDeleted));assert.equal(updatedA.turns[1].id,a2.turnId);assert.equal(working.get(updatedA),undefined);
+ assert.equal(conversations.get(legacy.conversationId).turns[0][operation==='prune'?'evidenceDeleted':'evidenceStale'],true);
  assert.deepEqual(updatedB,beforeB);assert.deepEqual(working.get(updatedB),summaryB);
 });
 
@@ -68,5 +68,6 @@ test('a disclosed memory resolves all original ancestors before deletion cascade
  const memory=memories.extract(fixtureMemoryResult(memories,{answer:JSON.stringify({memories:[{title:'Decision',statement:`Decision [${id}]`,uncertainty:'Fixture',evidenceIds:[id],evidence:[{id,quote:'Synthetic useful decision.'}]}]}),citations:[{id,capturedAt:'2026-09-01T10:00:00Z',appName:'Fixture',excerpt:''}],trace:[],runId:'fixture'}),'fixture').items[0];
  const saved=conversations.append(undefined,{question:'Read memory overview without citing the original'},answer([memory.id]));
  assert.ok(conversations.get(saved.conversationId).turns[0].result!.evidenceDependencies!.ids.includes(id));
- store.delete(id);assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true);
+ store.delete(id);assert.equal(conversations.get(saved.conversationId).turns[0].evidenceUnavailable,true);assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,undefined);
+ store.prune('2026-09-10T00:00:00Z');assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true,'expiry still clears an ordinarily deleted root');
 });

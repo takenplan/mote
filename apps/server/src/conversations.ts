@@ -1,3 +1,4 @@
+import {inheritRetiredConversationRoots,unavailableHistoryEvidence} from './conversation-retention.js';
 import {randomUUID} from 'node:crypto';
 import type {QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
@@ -7,7 +8,7 @@ import {SourceContextStore} from './source-context.js';
 import {assertSourceContextDependencies,combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
 
 export type ConversationScope = Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'evidenceIds'|'anchorEvidenceIds'>;
-export type ConversationTurn = {id:string;question:string;scope:ConversationScope;result?:QueryResult;status:'completed'|'failed';error?:{code:string;message:string};createdAt:string;evidenceDeleted?:boolean;evidenceStale?:boolean;historyEvidenceDependencies?:QueryResult['evidenceDependencies'];attachments?:{id:string;name:string;mimeType:string}[]};
+export type ConversationTurn = {id:string;question:string;scope:ConversationScope;result?:QueryResult;status:'completed'|'failed';error?:{code:string;message:string};createdAt:string;evidenceDeleted?:boolean;evidenceStale?:boolean;evidenceUnavailable?:boolean;unavailableEvidenceIds?:string[];historyEvidenceDependencies?:QueryResult['evidenceDependencies'];attachments?:{id:string;name:string;mimeType:string}[]};
 export type ConversationSummary = {id:string;title:string;createdAt:string;updatedAt:string;turnCount:number;scope:ConversationScope;status:'completed'|'failed'};
 export type Conversation = ConversationSummary & {turns:ConversationTurn[];revision?:number};
 type Row = {id:string;title:string;created_at:string;updated_at:string;json:string};
@@ -52,6 +53,11 @@ export class Conversations {
   }
 
   get(id:string):Conversation {return this.read(id);}
+  referenceAvailability(id:string,evidenceId:string){
+    const conversation=this.get(id);
+    const retained=conversation.turns.some(turn=>!turn.evidenceDeleted&&Boolean(turn.result)&&[...turn.result!.citations.map(citation=>citation.id),...(turn.scope.evidenceIds??[]),...(turn.scope.anchorEvidenceIds??[])].includes(evidenceId));
+    return {id:evidenceId,available:retained&&!unavailableHistoryEvidence(this.store,[evidenceId]).length};
+  }
   /** UI reads only the requested page. Cursor is the exclusive older turn index. */
   page(id:string,{limit=20,cursor}:{limit?:number;cursor?:string}={}){
     if(cursor!==undefined&&!/^\d{1,9}$/.test(cursor))throw new StoreError('Invalid turn cursor');
@@ -64,7 +70,15 @@ export class Conversations {
     if(!row)throw new StoreError('Conversation not found',404);
     const value=JSON.parse(row.json);
     const rows=this.store.db.prepare('SELECT idx,json FROM conversation_turns WHERE conversation_id=? AND idx<? ORDER BY idx DESC LIMIT ?').all(id,before??value.turnCount,limit).reverse();
-    const turns=rows.map(r=>{const turn=JSON.parse(String(r.json)) as ConversationTurn;return !turn.evidenceDeleted&&turn.result&&!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies)?{...turn,evidenceStale:true}:turn;});
+    const turns=rows.map(r=>{let turn=JSON.parse(String(r.json)) as ConversationTurn;
+      if(!turn.evidenceDeleted&&turn.result){
+        const result=turn.result;
+        if(!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies))turn={...turn,evidenceStale:true};
+        const unavailableEvidenceIds=unavailableHistoryEvidence(this.store,[...result.citations.map(cite=>cite.id),...(turn.scope.evidenceIds??[]),...(turn.scope.anchorEvidenceIds??[])]);
+        if(unavailableEvidenceIds.length)turn={...turn,unavailableEvidenceIds};
+      }
+      return turn;
+    });
     return {id:row.id,title:row.title,createdAt:row.created_at,updatedAt:row.updated_at,scope:value.scope,turnCount:value.turnCount,status:value.status,revision:value.revision,turns,firstIndex:Number(rows[0]?.idx??0)};
   }
 
@@ -99,6 +113,7 @@ export class Conversations {
       this.store.reserveMetadata(size+512);
       this.store.db.prepare('INSERT INTO conversations(id,title,created_at,updated_at,json) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at,json=excluded.json').run(id,title,previous?.createdAt??now,now,JSON.stringify({scope:turn.scope,turnCount:count+1,status:turn.status,bytes:(meta?.bytes??0)+size,revision:(meta?.revision??0)+1}));
       this.store.db.prepare('INSERT INTO conversation_turns VALUES(?,?,?,?)').run(id,count,turn.id,json);
+      inheritRetiredConversationRoots(this.store,id,turn);
       this.onTurnReceived?.(turn.id,id);
       if(own)this.store.db.exec('COMMIT');
     }catch(error){if(own&&this.store.db.isTransaction)this.store.db.exec('ROLLBACK');throw error;}
@@ -106,18 +121,38 @@ export class Conversations {
   }
 
   delete(id:string) {
-    // Public status messages can contain derived facts; remove them with the dialogue.
-    if(this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='query_runs'").get())this.store.db.prepare("DELETE FROM query_runs WHERE json_extract(json,'$.conversationId')=?").run(id);
-    return {deleted:Number(this.store.db.prepare('DELETE FROM conversations WHERE id=?').run(id).changes)};
+    const db=this.store.db;db.exec('SAVEPOINT delete_conversation');
+    try{
+      // Public status messages can contain derived facts; remove them with the dialogue.
+      if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='query_runs'").get())db.prepare("DELETE FROM query_runs WHERE json_extract(json,'$.conversationId')=?").run(id);
+      const deleted=Number(db.prepare('DELETE FROM conversations WHERE id=?').run(id).changes);
+      db.exec('DELETE FROM conversation_retired_roots WHERE NOT EXISTS(SELECT 1 FROM conversation_retired_turn_roots r WHERE r.evidence_id=conversation_retired_roots.id)');
+      db.exec('RELEASE delete_conversation');return {deleted};
+    }catch(error){db.exec('ROLLBACK TO delete_conversation; RELEASE delete_conversation');throw error;}
   }
 
   historyContext(conversation:Conversation,turns:readonly ConversationTurn[]=conversation.turns):NonNullable<QueryInput['historyContext']>{
     const active=turns.filter(turn=>turn.result&&!turn.evidenceDeleted);
-    return {conversationId:conversation.id,revision:conversation.revision??0,evidenceDependencies:combineDependencies(active.map(turn=>turn.historyEvidenceDependencies))??{version:1,complete:!active.length,ids:[]}};
+    return {conversationId:conversation.id,revision:conversation.revision??0,turns:active.map(turn=>({id:turn.id,runId:turn.result!.runId})),evidenceDependencies:combineDependencies(active.map(turn=>turn.historyEvidenceDependencies))??{version:1,complete:!active.length,ids:[]}};
   }
   assertHistoryContext(snapshot:NonNullable<QueryInput['historyContext']>){
     const row=this.store.db.prepare("SELECT coalesce(json_extract(json,'$.revision'),0) revision FROM conversations WHERE id=?").get(snapshot.conversationId);
     if(!row||Number(row.revision)!==snapshot.revision)throw new StoreError('Conversation changed; reload its current history',409);
+    if(!Array.isArray(snapshot.turns)||new Set(snapshot.turns.map(turn=>turn.id)).size!==snapshot.turns.length)throw new StoreError('Invalid conversation history receipt',409);
+    const selected=this.store.db.prepare('SELECT id,json FROM conversation_turns WHERE conversation_id=? AND id IN (SELECT value FROM json_each(?))').all(snapshot.conversationId,JSON.stringify(snapshot.turns.map(turn=>turn.id)));
+    const turns=selected.map(value=>JSON.parse(String(value.json)) as ConversationTurn);
+    if(turns.length!==snapshot.turns.length||turns.some(turn=>turn.evidenceDeleted||!turn.result||!snapshot.turns.some(pin=>pin.id===turn.id&&pin.runId===turn.result!.runId)))throw new StoreError('Conversation history lineage changed',409);
+    const expected=combineDependencies(turns.map(turn=>turn.historyEvidenceDependencies))??{version:1,complete:!turns.length,ids:[]};
+    if(snapshot.evidenceDependencies.version!==1||snapshot.evidenceDependencies.complete!==expected.complete||JSON.stringify([...new Set(snapshot.evidenceDependencies.ids)].sort())!==JSON.stringify([...new Set(expected.ids)].sort()))throw new StoreError('Conversation history lineage changed',409);
+    return new Set(this.store.db.prepare(`SELECT DISTINCT r.evidence_id FROM conversation_retired_turn_roots r JOIN conversation_turns t ON t.id=r.turn_id
+      WHERE r.conversation_id=? AND r.turn_id IN (SELECT value FROM json_each(?)) AND r.result_run_id=json_extract(t.json,'$.result.runId')
+       AND EXISTS(SELECT 1 FROM json_each(t.json,'$.historyEvidenceDependencies.ids') d WHERE d.value=r.evidence_id)`).all(snapshot.conversationId,JSON.stringify(snapshot.turns.map(turn=>turn.id))).map(value=>String(value.evidence_id)));
+
+  }
+
+  retiredSelection(snapshot:NonNullable<QueryInput['historyContext']>,ids:readonly string[]){
+    const proofs=this.assertHistoryContext(snapshot);
+    return new Set(ids.filter(id=>proofs.has(id)));
   }
 
   context(conversation:Conversation,maxTurns=20,maxCharacters=60000):NonNullable<QueryInput['conversation']> {
@@ -132,7 +167,7 @@ export class Conversations {
 
       const contextStale=!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies);
       const answer=turn.result.answer.slice(0,20000);
-      const value={question:turn.question,answer,scope:turn.scope,createdAt:turn.createdAt,...(answer.length<turn.result.answer.length?{answerTruncated:true}:{}),...(contextStale?{contextStale:true}:{}),...(turn.evidenceStale?{evidenceStale:true}:{}),...(turn.evidenceDeleted?{evidenceDeleted:true}:{}),...(turn.attachments?.length?{attachments:turn.attachments}:{})};
+      const value={question:turn.question,answer,scope:turn.scope,createdAt:turn.createdAt,...(answer.length<turn.result.answer.length?{answerTruncated:true}:{}),...(contextStale?{contextStale:true}:{}),...(turn.evidenceStale?{evidenceStale:true}:{}),...(turn.evidenceUnavailable?{evidenceUnavailable:true}:{}),...(turn.evidenceDeleted?{evidenceDeleted:true}:{}),...(turn.attachments?.length?{attachments:turn.attachments}:{})};
       const size=JSON.stringify(value).length;
       if(turns.length===maxTurns||length+size>maxCharacters)break;
       turns.unshift(value);selected.push(turn);length+=size;

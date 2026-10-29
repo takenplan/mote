@@ -15,7 +15,7 @@ import {Conversations} from '../src/conversations.js';
 const token='generated-history-boundary-owner',headers={authorization:`Bearer ${token}`};
 const config=(dataDir:string):Config=>({dataDir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:50_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});
 
-for(const erase of ['retire','forget'] as const)test(`Material revision preserves historical locators and follow-ups; ${erase} erases every generation`,async t=>{
+for(const erase of ['retire','forget'] as const)test(`Material revision preserves historical locators and follow-ups; ${erase} applies its distinct retention boundary`,async t=>{
  const dir=await mkdtemp(join(tmpdir(),'mote-history-material-')),seen:QueryInput[]=[];let ids:string[]=[];
  const agent={configured:true,close:async()=>{},query:async(input:QueryInput)=>{seen.push(input);return {answer:'Generated historical paper-glider proposal.',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1 as const,complete:true,ids}};}};
  let node=await buildApp(config(dir),{backgroundWorker:false,agent});t.after(async()=>{await node.app.close();await rm(dir,{recursive:true,force:true});});
@@ -47,7 +47,7 @@ for(const mutation of ['revise','delete'] as const)test(`late compaction cannot 
  });
  await assert.rejects(pending,/Conversation changed/);
  const current=node.featureServices.conversations.get(conversationId);assert.equal(node.working.get(current),undefined);
- if(mutation==='delete'){assert.equal(current.turns[0].evidenceDeleted,true);assert.doesNotMatch(JSON.stringify(current),/preserved initial proposal/);}
+ if(mutation==='delete'){assert.equal(current.turns[0].evidenceUnavailable,true);assert.equal(current.turns[0].evidenceDeleted,undefined);assert.match(JSON.stringify(current),/preserved initial proposal/);}
  else{assert.equal(current.turns[0].evidenceStale,true);assert.equal(current.turns[0].result!.answer,'Generated preserved initial proposal.');}
 });
 

@@ -91,7 +91,10 @@ export interface QueryGrants {
    * not delivered evidence or extraction targets. No archive discovery is added. */
   evidenceReadRanges?: readonly {id:string;offset:number;length:number}[];
   /** Host-only dialogue snapshot for compaction; never an original-read grant. */
-  historyContext?:{conversationId:string;revision:number;evidenceDependencies:import('@mote/shared').EvidenceDependencies};
+  historyContext?:{conversationId:string;revision:number;turns:{id:string;runId:string}[];evidenceDependencies:import('@mote/shared').EvidenceDependencies};
+  /** Host-only original selection retained after ordinary deletion. Fresh
+   * evidenceIds remain the exact readable subset; an empty subset denies reads. */
+  historicalSelection?:{evidenceIds?:string[];anchorEvidenceIds?:string[]};
 }
 
 /** Host callbacks; observation never grants model authority. */

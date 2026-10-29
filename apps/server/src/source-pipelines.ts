@@ -1,3 +1,4 @@
+import {forgetRetiredConversationRoots} from './conversation-retention.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import {InstallationEpochs} from './installation-epochs.js';
 import {z} from 'zod';
@@ -231,7 +232,7 @@ export class SourcePipelineRuntime {
       // its unchanged current Material again would require a rebuild that an
       // immutable replay must not enqueue. New deletions still revoke every
       // changed group (including the previous group when an identity moves).
-      if(items.some(item=>item.deleted))for(const group of archived.changedGroups)this.materials.redactUntilRebuilt(materialId(source.id,group));
+      if(items.some(item=>item.deleted))for(const group of archived.changedGroups)this.materials.redactUntilRebuilt(materialId(source.id,group),{ordinarySourceDeletion:true});
       db.prepare('INSERT OR IGNORE INTO source_pipeline_bindings(source_id,pipeline_id,storage) VALUES(?,?,?)').run(source.id,pipeline.id,pipeline.storage);
       const superseded:string[]=[];
       for(const group of archived.groups){
@@ -365,6 +366,7 @@ export class SourcePipelineRuntime {
     if(!this.store.db.prepare('SELECT 1 FROM source_pipeline_bindings WHERE source_id=?').get(sourceId))throw new StoreError('Source has no archive pipeline',409);
     const db=this.store.db,superseded:string[]=[];db.exec('BEGIN IMMEDIATE');try{
       db.prepare("UPDATE source_connections SET json=json_set(json,'$.enabled',json('false')) WHERE id=?").run(sourceId);
+      forgetRetiredConversationRoots(this.store,{sourceId});
       // Explicit source forgetting erases entire derived owner rules, including
       // mixed-source conclusions. Ordinary retention uses partial cleanup instead.
       if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='memory_deletion_dependencies'").get())db.prepare(`DELETE FROM memory_deletions WHERE id IN (

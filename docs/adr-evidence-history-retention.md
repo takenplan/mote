@@ -1,10 +1,10 @@
 # Evidence revisions and retained conversation history
 
-Date: 2026-10-17. Status: owner-directed implementation; independently reviewed,
-awaiting merge and deployment.
-Applies to main. This does not authorize deployment or a paid historical replay.
+Date: 2026-10-17; updated 2026-10-29. Status: ordinary revisions already implemented;
+ordinary-deletion extension implemented for independent review and PR checks.
+This does not authorize deployment or a paid historical replay.
 
-2026-10-29 supersession target: the owner’s later [UI review and execution authorization](adr-ui-final-three-clients.md) require visible submitted conversations after ordinary material deletion as well as modification. Ordinary-update retention below already meets that target. H01 now authorizes changing ordinary deletion while explicit privacy erasure, forget and revocation retain their existing erasure/restriction rules. The exceptions below describe the code baseline until that authorized change is implemented and verified; this note does not claim completion, expand expiry/access/model-context policy or recover already-erased text.
+The final [UI review](codex://threads/01a17d84-94a3-7382-b12a-5c656106f534), turn 38 (`01a183b0-234a-73e0-afee-8424cc5b4c22`, owner message `01a183b0-2359-7d31-95b9-b0f253900ab4`), requires submitted conversations after original modification **or deletion**. The [execution authorization](adr-ui-final-three-clients.md) records the owner's reply `Sentinel_257460f132848191881fe64393bba4c5` to `Sentinel_6409e67a4e0481918ccb06bb1688db5a`, approving ordinary deletion retention with explicit privacy erasure, forget and revocation exceptions. This revision supersedes the previous ADR's ordinary-deletion clearing rule. It neither expands expiry/access policy nor recovers erased text.
 
 ## Decision and scope
 
@@ -27,12 +27,32 @@ current facts or using an old citation. Changed source declarations carry
 `contextStale` as well as the historical status; their expired declaration pins do
 not become current owner statements.
 
-Explicit capture deletion, retention expiry, a source-item tombstone, Material
-forget/retirement, and existing access restrictions retain their destructive or
-blocking behavior. Source tombstones and Material retirement retract all retained
-generations, including earlier answers that were only marked stale on a previous
-ordinary revision. User questions retain the existing policy. An ordinary update
-never issues historical processing grants or restores a revoked original.
+Ordinary capture/note/import deletion and source-item tombstones
+retain submitted questions, answers, citation identities and saved citation excerpts.
+Affected turns carry `evidenceUnavailable` and `evidenceStale`; unavailable has display
+priority. Saved tool names, counts, bound identity/range and image-view metadata
+remain; free-form tool queries, descriptions and unexpected payloads are removed. The historical
+reference route returns unavailable and clients stay in the conversation; a saved
+reference never redirects to a replacement original. Explicit privacy forget,
+retention expiry and access restrictions retain their erasure or blocking behavior.
+Privacy erasure has display priority over both ordinary states.
+
+An external tombstone marks the historical original unavailable but does not change
+the separate, existing owner immutable-archive contract. That owner route can still
+read an archived copy. History citation navigation and model original reads cannot
+use that route as a bypass. Central ordinary deletion physically removes the original;
+privacy forget never restores erased originals or prose.
+
+| Product entry / endpoint | Operation and historical outcome |
+| --- | --- |
+| Delete this record, `DELETE /api/captures/:id` | Ordinary; includes file-backed records even though the previous internal delegate was named `forget`. Remove original versions, retain submitted dialogue. |
+| Delete note, `DELETE /api/notes/:id` | Ordinary; retain submitted dialogue. |
+| Delete this import, `DELETE /api/imports/:id` | Ordinary for removed imported originals; retain submitted dialogue. |
+| Central forget this file, `DELETE /api/files/:id` | Explicit privacy forget; clear all affected generations, including history retained after an earlier ordinary file deletion. |
+| Forget source, `DELETE /api/source-pipelines/:id` | Existing archive erasure and source pause; clear retained dialogue scoped to that source. |
+| External source tombstone | Ordinary original unavailability; retain dialogue, deny historical citation/model original reads. |
+| Generic Material retirement | Existing clearing contract, except exact anchors already retired by a proven ordinary original deletion. A later organizer retirement cannot relabel that known operation as privacy erasure. |
+| Retention prune / expiry | Existing erasure policy; also clears retained dialogue whose original was ordinarily deleted before expiry. |
 
 ## Ownership and permission receipts
 
@@ -54,12 +74,32 @@ including when called within an existing transaction; a failed migration can ret
 without leaving partially added receipts. Erased prose is never reconstructed. The original result and its full
 privacy lineage are preserved independently of those receipts.
 
-Every historical model context pins the conversation ID and revision. Preparation,
+Every historical model context pins the conversation ID, revision and exact saved
+turn/run identities. Preparation,
 external model admission, resumed prepared queries and final publication revalidate
 that snapshot and current root permissions. Historical Material-root checks use the
 current Material's exposure policy without treating an obsolete block as a current
-quote grant. Tombstones, retirement, missing roots and attachment restrictions still
-refuse disclosure. Newly read evidence retains the ordinary stricter checks.
+quote grant. A new body-free retirement receipt is minted only while the known
+ordinary deletion transaction still has the original identity and exposure metadata.
+It binds that root to the already submitted turn/run. Unknown missing originals and
+already erased turns get no receipt. Receipt creation, invalidation and original
+deletion commit or roll back together; repeated deletion does not create new proof.
+The receipt is included in SQLite backup and capacity accounting and removed when
+no conversation retains it. It is never a retrieval source or model-visible grant.
+
+Retained history can use only its exact receipt roots and still rechecks the current
+source identity, exposure recipe and model authorization. A mixed-root response is
+not partially approved when another root is missing, forgotten, expired or revoked.
+Later privacy erasure clears every dependent answer and summary. New original reads
+retain their ordinary stricter checks; a receipt never authorizes a fresh citation.
+
+For an existing explicit record selection, preparation removes only those selected
+IDs proven by this conversation's exact ordinary receipts from fresh retrieval. The
+saved user scope is unchanged. If none remain, `evidenceIds:[]` plus host retrieval
+`none` creates a real deny-all tool session: no reader invocation, no original tools
+and no search fallback. Only allowed historical dialogue is sent to the model.
+Unknown/forgotten/revoked identities are not silently dropped. Explicit owner scope
+clearing remains the existing route to broader retrieval.
 
 Summaries preserve historical proposal references and stale status. They retain the
 full original privacy lineage, clear on related changes, and cannot commit over a
@@ -73,9 +113,9 @@ archives in this change.
 | Category | Disposition |
 | --- | --- |
 | KEEP | Owner authorization, source/attachment exposure, original-read and citation validation, immutable revisions, attribution fences, late-result rejection, privacy erasure, no paid replay on revision/restart. |
-| CHANGE | Ordinary evidence invalidation marks old dialogue stale while preserving its answer and references. Historical discussion remains available to follow-ups with status and live permission checks. |
-| REMOVE | Equating ordinary supersession with `evidenceDeleted`; withdrawing every obsolete assistant proposal from dialogue/summary context. |
-| EXCEPTION | Explicit deletion/revocation still erases or blocks; incomplete lineage stays conservative; already-erased text cannot be recovered. |
+| CHANGE | Ordinary revision marks stale; ordinary deletion marks original unavailable, retains submitted dialogue and permits historical continuation with exact receipts and current permissions. |
+| REMOVE | Equating ordinary deletion or supersession with privacy erasure; free-form original/description payloads in ordinary-deleted tool traces; historical-reference access to deleted originals. |
+| EXCEPTION | Explicit privacy erasure/forget, expiry and revocation still erase or block; incomplete lineage stays conservative; already-erased text cannot be recovered. |
 | UNKNOWN | Real-model quality in distinguishing historical discussion from current facts requires separate evaluation. Generated fixtures prove host state and permission transitions, not semantic quality. |
 
 This supersedes the ordinary-update clearing language in the Material disclosure
@@ -88,11 +128,13 @@ Memory/cache invalidation; that is a separate module.
 
 Generated production HTTP journeys cover revision → retained answer/citations →
 cache removal → restart → referential follow-up → summary → source tombstone or
-capture deletion, with all subsequent derived answers cleared. Legacy receipt
+capture deletion, with dialogue retained until explicit privacy erasure, which then
+clears every subsequent dependent answer. Legacy receipt
 backfill and rejection of a frozen revoked history before model entry are included.
 Existing attribution, transcript correction, independent-dialogue, deletion,
 compaction-race and query-authority regressions remain required. The webpage
-regression checks stale text/citation display followed by destructive deletion;
+regression checks stale and ordinary-deleted text/citation display, unavailable
+reference navigation, an enabled continuation composer and later privacy erasure;
 Agent envelope tests ensure host receipts are never serialized to the model.
 
 Independent generated journeys also cover Material revisions, two follow-up

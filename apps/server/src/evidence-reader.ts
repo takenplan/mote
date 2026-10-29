@@ -1,3 +1,4 @@
+import {retiredConversationRoot} from './conversation-retention.js';
 import {z} from 'zod';
 import {materialDependencyStatus,type MaterialInputPin} from './material-readiness.js';
 import {scopeRecord} from './evidence-scope-record.js';
@@ -547,7 +548,7 @@ export class EvidenceReader implements CaptureRead,CaptureContextRead,SourceFile
   /** Validate every disclosed dependency without loading its body. Reuse only
    * within this synchronous check: the next external request/commit gets a fresh
    * view, including current source tombstones and attachment/Material policy. */
-  contextDependenciesAllowed(ids:readonly string[],policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy,historical=false):boolean {
+  contextDependenciesAllowed(ids:readonly string[],policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy,historical=false,retiredIds?:ReadonlySet<string>):boolean {
     const selected=[...new Set(ids)],encoded=JSON.stringify(selected),db=this.store.db;
     if(!selected.length)return true;
     const anchors=this.materials?db.prepare(`SELECT e.id,e.material_id,e.revision,e.block_id FROM material_evidence e
@@ -577,6 +578,13 @@ export class EvidenceReader implements CaptureRead,CaptureContextRead,SourceFile
       return current?allowMaterial(current):this.captureExposure(record,'expand',policy,'capture',true,true);
     };
     for(const id of selected){
+      const retired=historical&&retiredIds?.has(id)?retiredConversationRoot(this.store,id):undefined;
+      if(retired){
+        const source=retired.scope.sourceId?db.prepare("SELECT json_extract(json,'$.kind') kind FROM source_connections WHERE id=?").get(retired.scope.sourceId):undefined;
+        if(retired.sourceRegistered&&(!source||source.kind!==retired.scope.sourceKind))return false;
+        if(!this.exposureAllows(retired.scope,policy,retired.scope.sourceKind==='screen'))return false;
+        continue;
+      }
       const capture=captures.get(id);if(capture){if(!allowRecord(capture))return false;continue;}
       const anchor=anchorMap.get(id);
       if(anchor){const prior=material(historical?anchor.material_id:`material:${anchor.material_id}@${anchor.revision}`),current=prior&&material(prior.id);

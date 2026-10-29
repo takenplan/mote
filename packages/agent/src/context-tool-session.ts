@@ -287,10 +287,11 @@ export async function createContextToolSession(
   if(bounds.evidenceRanges&&!restricted)throw hostError('Evidence ranges require explicit evidence IDs');
   if(bounds.evidenceReadRanges&&!restricted)throw hostError('Context read ranges require a bounded extraction session');
   if(restricted){
-    if(!bounds.evidenceIds||!extractionSeedScopeValid(bounds.evidenceIds,ranges))throw hostError('Invalid extraction evidence scope');
+    const historicalEmpty=bounds.executionLane==='interactive'&&bounds.hostRetrieval==='none'&&Boolean(bounds.conversation?.historyContext)&&Boolean(bounds.historicalSelection?.evidenceIds?.length)&&bounds.evidenceIds?.length===0&&ranges.length===0;
+    if(!bounds.evidenceIds||!extractionSeedScopeValid(bounds.evidenceIds,ranges)&&!historicalEmpty)throw hostError('Invalid extraction evidence scope');
     if(readRanges.some(r=>typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||!Number.isSafeInteger(r.offset+r.length)))throw hostError('Invalid context evidence read scope');
     const ids=[...new Set([...bounds.evidenceIds,...readRanges.map(r=>r.id)])];
-    for(const raw of await reader.evidence({...range({},bounds),ids}))if(ids.includes(raw.id)){const record=bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw;permitted.set(record.id,record);originalPins.set(record.id,originalPin(record));}
+    for(const raw of ids.length?await reader.evidence({...range({},bounds),ids}):[])if(ids.includes(raw.id)){const record=bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw;permitted.set(record.id,record);originalPins.set(record.id,originalPin(record));}
     const scope=range({},bounds);
     for(const id of ids){
       const record=permitted.get(id);

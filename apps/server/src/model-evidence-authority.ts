@@ -18,7 +18,7 @@ export interface ModelEvidenceAuthorityDependencies {
   resolveLineage:(value:EvidenceDependencies|undefined)=>EvidenceDependencies|undefined;
   assertImageGrants:(materials:Parameters<typeof assertMemoryImageGrants>[1],images:Parameters<typeof assertMemoryImageGrants>[2])=>void;
   reader:Pick<EvidenceReader,'deletionContextAllowed'|'contextDependenciesAllowed'|'evidence'|'memoryCatalogMetadataAllowed'|'processingEvidenceAllowed'|'memoryCatalogMetadata'>;
-  conversations:Pick<Conversations,'assertHistoryContext'>;
+  conversations:Pick<Conversations,'assertHistoryContext'|'retiredSelection'>;
   sourceContexts:SourceContextStore;
   authorization:Pick<BackgroundModelAuthorization,'currentId'|'assertDisclosure'>;
   host:Pick<ModelAuthorizationHost,'assertEvidence'>;
@@ -36,13 +36,19 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
   const modelContextGroups=(input:QueryInput|undefined)=>{
     const historicalIds=new Set(input?.conversation?.historyContext?input.conversation.evidenceDependencies?.ids:[]);
     return [
-    ...(input?.conversation?[{ids:(input.conversation.historyContext?.evidenceDependencies??input.conversation.evidenceDependencies)?.ids??[],historical:Boolean(input.conversation.historyContext)}]:[]),
-    ...(input?.contextEvidenceDependencies?[{ids:input.historyContext?input.historyContext.evidenceDependencies.ids:input.contextEvidenceDependencies.ids.filter(id=>!historicalIds.has(id)),historical:Boolean(input.historyContext)}]:[]),
-    ...(input?.derivedContextEvidenceIds?[{ids:input.derivedContextEvidenceIds,historical:false}]:[]),
+    ...(input?.conversation?[{ids:(input.conversation.historyContext?.evidenceDependencies??input.conversation.evidenceDependencies)?.ids??[],historical:Boolean(input.conversation.historyContext),snapshot:input.conversation.historyContext}]:[]),
+    ...(input?.contextEvidenceDependencies?[{ids:input.historyContext?input.historyContext.evidenceDependencies.ids:input.contextEvidenceDependencies.ids.filter(id=>!historicalIds.has(id)),historical:Boolean(input.historyContext),snapshot:input.historyContext}]:[]),
+    ...(input?.derivedContextEvidenceIds?[{ids:input.derivedContextEvidenceIds,historical:false,snapshot:undefined}]:[]),
     ].map(group=>({...group,ids:resolveLineage({version:1,complete:true,ids:[...group.ids]})!.ids}));
   };
   const assertModelContext=(input:QueryInput|undefined)=>{
     for(const snapshot of [input?.historyContext,input?.conversation?.historyContext])if(snapshot){conversations.assertHistoryContext(snapshot);if(!snapshot.evidenceDependencies.complete)throw contextFailure('context_lineage_incomplete');}
+    if(input?.historicalSelection){
+      const snapshot=input.conversation?.historyContext;if(!snapshot)throw contextFailure('context_lineage_incomplete');
+      const removed=[...(input.historicalSelection.evidenceIds??[]).filter(id=>!input.evidenceIds?.includes(id)),...(input.historicalSelection.anchorEvidenceIds??[]).filter(id=>!input.anchorEvidenceIds?.includes(id))];
+      const permitted=conversations.retiredSelection(snapshot,removed);
+      if(removed.some(id=>!permitted.has(id))||input.historicalSelection.evidenceIds&&input.evidenceIds===undefined)throw contextFailure('context_evidence_restricted');
+    }
     assertSourceContextDependencies(sourceContexts,sourceContextDependencies(input));
     if(input?.derivedContextEvidenceIds?.some(id=>!evidenceReader.deletionContextAllowed(id,new EvidenceExposurePolicy())))throw new StoreError('Derived context evidence is no longer permitted for this model',409);
     const conversationText=Boolean(input?.conversation?.workingMemory?.text||input?.conversation?.turns.some(turn=>!turn.evidenceDeleted&&turn.answer));
@@ -78,7 +84,7 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
     }
     // Derived nodes remain in the fence alongside every original ancestor.
     // Private metadata checks never disclose bodies or grant raw reads.
-    for(const group of modelContextGroups(input))if(!evidenceReader.contextDependenciesAllowed(group.ids,new EvidenceExposurePolicy(),group.historical))throw contextFailure('context_evidence_restricted');
+    for(const group of modelContextGroups(input))if(!evidenceReader.contextDependenciesAllowed(group.ids,new EvidenceExposurePolicy(),group.historical,group.snapshot?conversations.assertHistoryContext(group.snapshot):undefined))throw contextFailure('context_evidence_restricted');
     // The bridge may already hold restricted originals while deletion or a
     // Formal input/owner declaration changes. Check the frozen Memory grant at
     // every outbound request as well as before entering the agent; publication
@@ -96,7 +102,7 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
     // every dependency while allowing lease renewal, cancellation and intake.
     for(const group of modelContextGroups(input))for(let offset=0;offset<group.ids.length;offset+=256){
       input.signal?.throwIfAborted();
-      if(!evidenceReader.contextDependenciesAllowed(group.ids.slice(offset,offset+256),policy,group.historical))throw contextFailure('context_evidence_restricted');
+      if(!evidenceReader.contextDependenciesAllowed(group.ids.slice(offset,offset+256),policy,group.historical,group.snapshot?conversations.assertHistoryContext(group.snapshot):undefined))throw contextFailure('context_evidence_restricted');
       await yieldEventLoop();
     }
     input.signal?.throwIfAborted();

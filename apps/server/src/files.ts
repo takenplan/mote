@@ -1,3 +1,4 @@
+import {forgetRetiredConversationRoots,retiredConversationRoot} from './conversation-retention.js';
 import {z} from 'zod';
 import {textSearch} from './text-search.js';
 import {randomUUID} from 'node:crypto';
@@ -346,14 +347,18 @@ export class FileStore {
   allowAgain(sourceId:string,externalId:string){
     this.store.db.prepare('DELETE FROM file_forgotten WHERE source_id=? AND external_id=?').run(sourceId,externalId);return {allowed:true};
   }
-  forget(id:string){
+  remove(id:string){return this.removeOriginal(id,true);}
+  forget(id:string){return this.removeOriginal(id,false);}
+  private removeOriginal(id:string,preserveDialogue:boolean){
     const db=this.store.db;db.exec('BEGIN IMMEDIATE');
     let ids:{capture_id:string}[];
     try{
-      const version=this.version(id);
+      const retired=!preserveDialogue&&retiredConversationRoot(this.store,id)?.file;
+      const version=retired?{source_id:retired.sourceId,external_id:retired.externalId}:this.version(id);
+      if(!preserveDialogue)forgetRetiredConversationRoots(this.store,{file:{sourceId:version.source_id,externalId:version.external_id}});
       db.prepare('INSERT OR IGNORE INTO file_forgotten VALUES(?,?)').run(version.source_id,version.external_id);
       ids=db.prepare('SELECT capture_id FROM file_versions WHERE source_id=? AND external_id=?').all(version.source_id,version.external_id) as {capture_id:string}[];
-      for(const row of ids)this.store.deleteInTransaction(row.capture_id);
+      for(const row of ids)this.store.deleteInTransaction(row.capture_id,preserveDialogue);
       db.exec('COMMIT');
     }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
     this.store.collectDeletedEvidence();this.sweep();return {deleted:ids.length};
