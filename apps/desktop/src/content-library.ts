@@ -1,5 +1,6 @@
 import type { ContentItem, LocalContentPage, ContentDetail, CentralContentPage } from './contracts/content';
 export type { ContentItem, LocalContentPage, ContentDetail, CentralContentPage } from './contracts/content';
+import {sourceSchema} from '@mote/shared';
 import {noteBody} from './note-presentation';
 import { moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -46,10 +47,10 @@ export async function centralContentPage(config:import('./contracts').Config,cur
   if(needle){
     if(!Array.isArray(page.items)||page.items.length>30)throw Error(moteText('记录不属于当前设备'));
     const items=page.items.map(row=>{const origin=row.origin as Record<string,unknown>|undefined;
-      if(typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||origin?.deviceId!==config.deviceId||row.ref!==`capture:${row.id}`||typeof origin.source!=='string'||!['screen','ui_page','note','activity','notification','media','file','calendar','message'].includes(origin.source))throw Error(moteText('记录不属于当前设备'));
-      return {key:`capture:${row.id}`,source:origin.source==='message'?'coding':origin.source as SyncSource,title:String(row.title??'').slice(0,200),observedAt:String(origin.capturedAt),preview:String(row.snippet??'').slice(0,160),sourceName:config.deviceName};});
+      if(typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||origin?.deviceId!==config.deviceId||row.ref!==`capture:${row.id}`||!sourceSchema.safeParse(origin?.source).success)throw Error(moteText('记录不属于当前设备'));
+      return {key:`capture:${row.id}`,source:origin.source==='message'?'coding' as const:sourceSchema.parse(origin.source),title:String(row.title??'').slice(0,200),observedAt:String(origin.capturedAt),preview:String(row.snippet??'').slice(0,160),sourceName:config.deviceName};});
     return {items,nextCursor:page.nextCursor??undefined};
   }
-  if(!Array.isArray(page.items)||page.items.length>30||page.items.some(row=>typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||row.deviceId!==config.deviceId))throw Error(moteText('记录不属于当前设备'));
-  return {items:page.items.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':row.source as SyncSource,title:String(row.windowTitle??row.appName??'').slice(0,200),observedAt:String(row.capturedAt),preview:String(row.textPreview??row.ocrText??'').slice(0,160),sourceName:String(row.deviceName??config.deviceName)})),total:page.totalCount,nextCursor:page.nextCursor??undefined};
+  if(!Array.isArray(page.items)||page.items.length>30||page.items.some(row=>typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||row.deviceId!==config.deviceId||!sourceSchema.safeParse(row.source).success))throw Error(moteText('记录不属于当前设备'));
+  return {items:page.items.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':sourceSchema.parse(row.source),title:String(row.windowTitle??row.appName??'').slice(0,200),observedAt:String(row.capturedAt),preview:String(row.textPreview??row.ocrText??'').slice(0,160),sourceName:String(row.deviceName??config.deviceName)})),total:page.totalCount,nextCursor:page.nextCursor??undefined};
 }

@@ -12,7 +12,7 @@ const n = (value: number) => value.toLocaleString(getLocale());
 const bytes = (value: number) => `${(value / 1048576).toFixed(2)} MiB`;
 const dateTime = (s: string) => new Date(s).toLocaleString(getLocale(), { hour12: false });
 const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const label = (source: SyncSource) => names[source]?.() ?? source;
+const label = (source: string) => names[source as SyncSource]?.() ?? moteText('内容');
 const badge = (outcome: SyncHistoryRun['outcome'] | SyncHistoryItem['outcome']) => {
   const messages = { sending: moteText('正在上传'), received: moteText('中央已接收'), partial: moteText('部分成功'), unconfirmed: moteText('未确认'), interrupted: moteText('同步已中断') };
   return `<span class="upload-badge ${outcome === 'received' ? 'received' : outcome === 'sending' ? '' : 'needs-attention'}">${escape(messages[outcome])}</span>`;

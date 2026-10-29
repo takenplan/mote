@@ -11,7 +11,7 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
   let archiveGeneration=0,archiveAuthorizationDenied=false,detailIsCentral=false;
   let loadedScope='';
   let items:ContentItem[]=[],homeItems:ContentItem[]=[],selected:ContentItem|undefined,selectedButton:HTMLElement|undefined,chunkOffset=0,centralId:string|undefined;
-  const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),media:moteText('媒体状态'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')})[source]??moteText('内容');
+  const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),media:moteText('媒体状态'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')} as Partial<Record<ContentItem['source'],string>>)[source]??moteText('内容');
   function renderFeed(id:string,rows:ContentItem[],known=true){
     const compact=id==='home-recent',root=el(id);root.replaceChildren();
     if(compact)homeContentChanged?.(known?rows.length>0:undefined);
@@ -27,7 +27,7 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
       }
       const state=document.createElement('span');state.className=item.error&&!item.key.startsWith('capture:')?'content-state needs-attention':'content-state';state.classList.toggle('received',item.key.startsWith('capture:'));state.textContent=item.key.startsWith('capture:')?moteText('中心已接收'):item.error?moteText('需要处理'):moteText('本机待发送');
       {
-        button.classList.add('home-content-row');icon.className='home-content-symbol';icon.setAttribute('aria-hidden','true');icon.textContent=({note:'✎',screen:'▧',ui_page:'▤',activity:'◷',notification:'◌',media:'♫',file:'▤',calendar:'▦',coding:'⌘'})[item.source]??'▤';
+        button.classList.add('home-content-row');icon.className='home-content-symbol';icon.setAttribute('aria-hidden','true');icon.textContent=({note:'✎',screen:'▧',ui_page:'▤',activity:'◷',notification:'◌',media:'♫',file:'▤',calendar:'▦',coding:'⌘'} as Partial<Record<ContentItem['source'],string>>)[item.source]??'▤';
         const arrow=document.createElement('span');arrow.className='chevron';arrow.setAttribute('aria-hidden','true');arrow.textContent='›';button.append(icon,copy,state,arrow);
       }
       button.addEventListener('click',()=>{selectedButton=button;selected=item;detailIsCentral=item.key.startsWith('capture:');chunkOffset=0;el<HTMLDetailsElement>('content-original').open=false;void readSelected();});root.append(button);

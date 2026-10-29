@@ -1,5 +1,6 @@
 import type { SyncContent } from './contracts/content';
 export type { SyncContent } from './contracts/content';
+import {sourceSchema} from '@mote/shared';
 import {noteBody} from './note-presentation';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -13,7 +14,7 @@ import type { SyncHistory, SyncHistoryItem } from './sync-history';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function text(value: unknown, max = 100000): string { return typeof value === 'string' ? value.slice(0, max) : ''; }
-function recordText(source: SyncHistoryItem['source'], record: Record<string, unknown>): string {
+function recordText(source: SyncContent['item']['source'], record: Record<string, unknown>): string {
   if (source === 'notification') {
     const notification = (record.metadata as { notification?: Record<string, unknown> } | undefined)?.notification;
     if (notification) return ['title', 'text', 'bigText', 'subText'].map(key => text(notification[key])).concat(Array.isArray(notification.textLines) ? notification.textLines.slice(0, 100).map(line => text(line)) : []).filter(Boolean).join('\n').slice(0, 100000);
@@ -52,11 +53,11 @@ export async function syncContent(history: SyncHistory, queue: DurableQueue, sou
   }
   return readCentralContent(config,item,chunkOffset,includeImage);
 }
-export async function readCentralContent(config:Config,item:SyncHistoryItem,chunkOffset=0,includeImage=false):Promise<SyncContent>{
+export async function readCentralContent(config:Config,item:SyncContent['item'],chunkOffset=0,includeImage=false):Promise<SyncContent>{
   if (!item.captureId || !uuid.test(item.captureId)) throw Error(moteText('本机副本已变化；尚无可读取的中央接收凭据。'));
   const record = await json(config, `/api/capture-browser/${item.captureId}`);
   if (record.id !== item.captureId || record.deviceId !== config.deviceId) throw Error(moteText('记录不属于当前设备'));
-  if(typeof record.source==='string'&&['screen','ui_page','note','activity','notification','file','calendar','message'].includes(record.source)) item.source=record.source==='message'?'coding':record.source as SyncHistoryItem['source'];
+  if(record.source!==undefined)item.source=record.source==='message'?'coding':sourceSchema.parse(record.source);
   item.title=typeof record.windowTitle==='string'?record.windowTitle:typeof record.appName==='string'?record.appName:item.title;
   item.observedAt=typeof record.capturedAt==='string'?record.capturedAt:item.observedAt;
   const provenance = record.provenance as Record<string, unknown> | undefined;

@@ -1021,3 +1021,6 @@ input,select,textarea { accent-color:var(--mote-accent); }
 @media (max-width:900px) { .workspace-content .content-library-tools { align-items: stretch; flex-direction: column; } }
 
 .home-content-row .content-state.received { color: var(--mote-accent); }
+
+.workspace-content .content-search { box-sizing: border-box; height: 37px; }
+#content-search { min-height: 0; height: 23px; line-height: 23px; }
