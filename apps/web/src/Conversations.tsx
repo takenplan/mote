@@ -312,7 +312,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
           storeImages(rows=>rows.filter(row=>row.key!==item.key));
         }catch(cause){if(!current())return;storeImages(rows=>rows.map(row=>row.key===item.key?{...row,status:'failed'}:row));setError(conversationFailure(cause));}
       }
-    }finally{if(current()){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
+    }catch(cause){if(current()){storeImages(rows=>rows.map(row=>selected.some(item=>item.key===row.key)?{...row,status:'failed'}:row));setError(conversationFailure(cause));}}finally{if(current()){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
   }
   async function addImages(files:FileList|null){
     if(!files?.length||uploading||busy||opening)return;
