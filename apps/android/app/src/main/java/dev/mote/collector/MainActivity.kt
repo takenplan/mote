@@ -1117,7 +1117,7 @@ class MainActivity : MoteActivity() {
 
     private fun buildAbout() {
         page(Page.ABOUT, MoteI18n.text("Mote · 让经历留有线索"))
-        card(MoteUi.tint) {
+        card(NativeColorRole.TINT) {
             text("Mote · ${RuntimeProfile.current.name}", NativeFontRole.TITLE).apply { tag = "about-build-profile" }
             text(MoteI18n.text("你的个人上下文档案"), NativeFontRole.BODY)
             text(MoteI18n.text("版本 {0}", BuildConfig.VERSION_NAME), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
@@ -1140,7 +1140,7 @@ class MainActivity : MoteActivity() {
         permissionRow("通知使用权",MoteI18n.text("通知使用权：读取通知与媒体会话")) { mediaPermission() }
         permissionRow("通知",MoteI18n.text("通知提醒：显示运行通知")) { notifications() }
         permissionRow("使用情况",MoteI18n.text("使用情况访问")) { safeOpen(Intent(SystemSettings.ACTION_USAGE_ACCESS_SETTINGS)) }
-        card(MoteTheme.tint) {
+        card(NativeColorRole.TINT) {
             text(MoteI18n.text("投屏会话"),NativeFontRole.SUPPORT)
             permissionBadges["投屏会话"] = text("",NativeFontRole.META,NativeColorRole.MUTED).apply { tag = "permission-detail" }
         }
@@ -2027,10 +2027,10 @@ class MainActivity : MoteActivity() {
         val previous = activeMenuGroup; activeMenuGroup = group
         try { body() } finally { activeMenuGroup = previous }
     }
-    private fun card(color: Int = MoteTheme.surface, body: () -> Unit) {
+    private fun card(role: NativeColorRole = NativeColorRole.SURFACE, body: () -> Unit) {
         val parent = content
         val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(8)); background = MoteUi.shape(this@MainActivity, color)
+            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(8)); background = MoteUi.shape(this@MainActivity, role)
         }
         parent.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(14) })
         content = card

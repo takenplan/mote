@@ -181,6 +181,7 @@ internal object GeneratedWindowRendering {
             "connection-default-light", "connection-default-dark", "connection-collapsed-draft-light", "connection-new-owner-default" -> Triple("connection", "default-disclosure", "扫码或导入邀请")
             "connection-manual-draft-dark" -> Triple("connection", "private-unsaved-draft", "Generated unsaved connection name")
             "about-profile-light", "about-profile-dark", "about-profile-english-dark" -> Triple("about", "actual-build-profile", "Mote · ${RuntimeProfile.current.name}")
+            "permissions-live-tint-dark", "permissions-live-tint-light" -> Triple("permissions", "actual-theme-role", "采集权限")
             "final-settings" -> Triple("settings", "content", "偏好与本机维护")
             "final-device-options" -> Triple("device-options", "content", "外观与语言")
             "final-appearance" -> Triple("appearance", "content", "切换只影响界面，已有输入、附件和授权保留。")

@@ -97,7 +97,10 @@ class ConnectionHierarchyInstrumentedTest {
             MoteI18n.select(context,"zh-CN");selectTheme(AppearancePreference.LIGHT)
             ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","ABOUT")).awaitMainUi().use { scenario ->
                 fun actual(a:MainActivity) {
-                    assertEquals("Mote · ${RuntimeProfile.current.name}",(shown(a).single { it.tag=="about-build-profile" } as TextView).text.toString())
+                    val title=shown(a).single { it.tag=="about-build-profile" } as TextView
+                    assertEquals("Mote · ${RuntimeProfile.current.name}",title.text.toString())
+                    assertEquals("The current theme must reach the actual About card",NativeColorRole.TINT.color(),((title.parent as View).background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                    assertEquals(NativeColorRole.INK.color(),title.currentTextColor)
                     assertTrue(shown(a).filterIsInstance<TextView>().any { it.text.toString()==MoteI18n.text("版本 {0}",BuildConfig.VERSION_NAME) })
                     assertEquals(before,Settings(context).read())
                 }
@@ -107,6 +110,17 @@ class ConnectionHierarchyInstrumentedTest {
                 await(scenario,"Return to this-device settings") { shown(it).any { view->view.tag=="menu:关于、更新与反馈" } }
                 scenario.onActivity { shown(it).single { view->view.tag=="menu:关于、更新与反馈" }.performClick();actual(it) }
                 MoteI18n.select(context,"en");scenario.recreate();scenario.awaitMainUi();scenario.onActivity(::actual);screenshot(scenario,"about-profile-english-dark")
+                scenario.onActivity { it.onBackPressed() }
+                await(scenario,"Return to device options in English") { shown(it).any { view->view.tag=="menu:"+MoteI18n.text("系统权限与后台运行") } }
+                scenario.onActivity { a->shown(a).single { it.tag=="menu:"+MoteI18n.text("系统权限与后台运行") }.performClick() }
+                await(scenario,"Actual permission state ready") { a->shown(a).filterIsInstance<TextView>().any { it.tag=="permission-detail"&&!it.text.toString().startsWith(MoteI18n.text("正在检查系统权限…")) } }
+                fun permissionCard(a:MainActivity) {
+                    val detail=shown(a).filterIsInstance<TextView>().single { it.tag=="permission-detail" }
+                    assertEquals("The shared role reaches the Projection permission card",NativeColorRole.TINT.color(),((detail.parent as View).background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                    assertFalse(Settings(context).enabled);assertFalse(ProjectionService.running)
+                }
+                scenario.onActivity(::permissionCard);screenshot(scenario,"permissions-live-tint-dark")
+                selectTheme(AppearancePreference.LIGHT);scenario.onActivity(::permissionCard);screenshot(scenario,"permissions-live-tint-light")
             }
             assertEquals(before,Settings(context).read())
         } finally { MoteI18n.select(context,language);selectTheme(appearance) }
