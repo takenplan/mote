@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "先留下，再慢慢想。": "Gardez-le maintenant, réfléchissez ensuite.",
+  "查看 Central 的接收结果": "Voir la réception dans Central",
   "引用原文已删除，历史问答仍保留。": "Le document cité a été supprimé. Vos questions et réponses passées sont conservées.",
   "引用不可用": "Référence indisponible",
   "返回原对话": "Revenir à la conversation",

@@ -9612,5 +9612,6 @@
   "用原请求重试": "Retry original request",
   "重新编辑问题": "Edit question again",
   "将失败问题带回输入框，会替换当前草稿。继续？": "Restoring the failed question will replace your current draft. Continue?",
-  "返回当前提问": "Return to current question"
+  "返回当前提问": "Return to current question",
+  "查看 Central 的接收结果": "View Central receipt"
 }

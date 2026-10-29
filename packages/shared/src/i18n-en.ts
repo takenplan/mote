@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "先留下，再慢慢想。": "Save it now, reflect later.",
+  "查看 Central 的接收结果": "View Central receipt",
   "引用原文已删除，历史问答仍保留。": "The cited original was deleted. Your past questions and answers are preserved.",
   "引用不可用": "Citation unavailable",
   "返回原对话": "Back to conversation",

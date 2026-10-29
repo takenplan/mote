@@ -12,7 +12,8 @@ import {prepareAndroidDetailFixture} from './android-ui-detail-fixture.js';
 const dataDir=await mkdtemp(join(tmpdir(),'mote-android-central-'));
 const token='generated-native-central-owner-token-123456';
 const detailFixture=process.env.MOTE_ANDROID_UI_DETAIL_FIXTURE==='1';
-const fixturePort=detailFixture?47884:47883;
+const firstDataFixture=process.env.MOTE_ANDROID_FIRST_DATA_FIXTURE==='1';
+const fixturePort=firstDataFixture?47889:detailFixture?47884:47883;
 const config:Config={dataDir,dataKey:undefined,token,tokenPath:join(dataDir,'owner-token'),host:'127.0.0.1',port:fixturePort,profile:'test',
  tokenFromEnvironment:true,maxStorageBytes:64*1024*1024,maxExportBytes:16*1024*1024,retentionDays:0,insightIntervalHours:0,
  allowedOrigins:[],model:'generated-fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'generated-fixture-key',
@@ -34,7 +35,7 @@ function fixtureAgent(fixtureReader:ContextReader):QueryAgent { return {configur
  return {answer:'Generated native answer · 原生回答 fixture',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[]}};
 }}; }
 const value=await buildApp(config,{createModelAgent:async(_settings,reader)=>fixtureAgent(reader),...(detailFixture?{backgroundWorker:false}:{})});
-await value.store.ingest(noteCapture({id:relatedId,deviceId:'generated-fixture-phone',deviceName:'Generated phone',platform:'android',
+if(!firstDataFixture)await value.store.ingest(noteCapture({id:relatedId,deviceId:'generated-fixture-phone',deviceName:'Generated phone',platform:'android',
  capturedAt:new Date().toISOString(),text:'Generated native note · 中文 🐾 <script>untrusted evidence</script>'}));
 const detail=detailFixture?await prepareAndroidDetailFixture(value,dataDir):undefined;
 if(detail)await writeFile(join(dataDir,'generated-ui-detail-identity.json'),JSON.stringify(detail));

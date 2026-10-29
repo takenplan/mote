@@ -1,0 +1,68 @@
+package dev.mote.collector
+
+import android.app.Activity
+import android.content.ClipboardManager
+import android.os.Build
+import android.os.SystemClock
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.TextView
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
+import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.concurrent.atomic.AtomicReference
+
+/** Prevents first-use installation help from losing the first offline record or its exact reader return. */
+@RunWith(AndroidJUnit4::class)
+class FirstUseNavigationInstrumentedTest {
+    private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    private val context get() = instrumentation.targetContext
+    private fun <T> main(block: () -> T): T { val result=AtomicReference<Result<T>>(); instrumentation.runOnMainSync { result.set(runCatching(block)) }; return result.get().getOrThrow() }
+    private fun views(root: View): List<View> = listOf(root)+if(root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+    private fun activity(): Activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single()
+    private fun shown() = views(activity().window.decorView).filter { it.isShown }
+    private fun until(label: String, check: () -> Boolean) { val end=SystemClock.elapsedRealtime()+20_000; while(SystemClock.elapsedRealtime()<end) { if(main { if(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).isEmpty()) false else check() }) return; Thread.sleep(50) }; fail(label+": "+main { shown().filterIsInstance<TextView>().joinToString(" | ") { it.text.toString() } }) }
+    private fun click(label: String) { until(label) { shown().filterIsInstance<TextView>().any { it.isEnabled && it.isClickable && (it.text.toString()==label || it.contentDescription?.toString()==label) } }; main { shown().filterIsInstance<TextView>().first { it.isEnabled && it.isClickable && (it.text.toString()==label || it.contentDescription?.toString()==label) }.performClick() } }
+    private fun screenshot(name: String) {
+        val frames=java.util.concurrent.CountDownLatch(1); main { activity().window.decorView.postOnAnimation { activity().window.decorView.postOnAnimation { frames.countDown() } } }; assertTrue(frames.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        main { val a=activity(); assertTrue(a.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0); val root=a.window.decorView
+            assertTrue(GeneratedWindowRendering.hasNoPendingLabels(root)); val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+            try { root.draw(android.graphics.Canvas(image)); File(context.filesDir,"first-use-final").apply { mkdirs() }.resolve("$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) } } finally { image.recycle() }
+        }
+    }
+    @Test fun firstOfflineRecordSurvivesInstallHelpAndOpensItsSameLocalOriginal() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("uiFinalFixture")=="true")
+        require(context.packageName=="dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a"))
+        val settings=Settings(context); require(!settings.enabled && context.queue().depth()==0 && !settings.read().hasSyncConnection())
+        settings.save(settings.read().copy(server="",token="",syncMode="manual"),confirmCentralEndpoint=true)
+        MoteI18n.select(context,"zh-CN"); MoteAppearance.select(context,AppearancePreference.LIGHT)
+        val original="Generated first offline thought: leave the afternoon unplanned."
+        val description="Generated diary context; no Central or model is required."
+        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use {
+            until("Actual empty first use") { shown().filterIsInstance<TextView>().any { it.text.toString()=="先记下一件事。" } }; screenshot("first-open")
+            click("还没有自己的 Mote？"); until("Install help") { activity() is StartUsingActivity }; screenshot("install-help")
+            click("复制给安装助手")
+            assertEquals(StartUsingActivity.INSTALL_PROMPT,main { context.getSystemService(ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString() })
+            click("查看安装提示词"); screenshot("install-prompt")
+            click("现在先记下来"); until("Offline editor") { activity() is RecordEditorActivity && shown().filterIsInstance<EditText>().any { it.contentDescription=="正在想什么" && it.isEnabled } }
+            main { shown().filterIsInstance<EditText>().single { it.contentDescription=="正在想什么" }.setText(original) }; click("资料说明（选填）")
+            main { shown().filterIsInstance<EditText>().single { it.tag=="record-description" }.setText(description) }; screenshot("first-editor")
+            assertEquals(0,context.queue().depth()); click("保存")
+            until("Local receipt after explicit save") { activity() is MainActivity && shown().filterIsInstance<TextView>().any { it.text.toString()=="• 本机已保存" } }; screenshot("local-saved-receipt")
+            main { assertTrue(shown().filterIsInstance<TextView>().any { it.text.toString()=="先留下，再慢慢想。" }); assertTrue(shown().filterIsInstance<TextView>().any { it.text.toString()=="最近留下的内容" }) }
+            val row=context.queue().peek()!!; assertEquals(original,row.getString("ocrText")); assertEquals(description,row.getJSONObject("metadata").getString("ownerDescription")); assertFalse(row.optBoolean("uploaded")); assertFalse(settings.read().hasSyncConnection())
+            click("查看原文"); until("Exact full-page local original") { activity() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString()==original } }; screenshot("first-local-original")
+            main { assertEquals("原文",shown().filterIsInstance<TextView>().single { it.tag=="detail-title" }.text.toString()); assertTrue(shown().filterIsInstance<android.widget.Spinner>().isEmpty()) }
+            click("返回上一页"); until("Return to the same local receipt") { activity() is MainActivity && shown().filterIsInstance<TextView>().any { it.text.toString()=="• 本机已保存" } }
+            assertEquals(row.getString("id"),context.queue().peek()!!.getString("id")); assertEquals(1,context.queue().depth()); assertFalse(settings.enabled); assertFalse(ProjectionService.running)
+        }
+    }
+}

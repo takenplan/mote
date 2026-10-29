@@ -159,7 +159,7 @@ class ConnectionActivity : MoteActivity() {
         root.addView(preview); root.addView(confirmAction); root.addView(status)
         if (initial.status == "unchecked" && !config.hasSyncConnection()) status.text = ""
         root.addView(View(this).apply { MoteUi.backgroundColor(this,NativeColorRole.DIVIDER) },LinearLayout.LayoutParams(-1,moteDp(1)))
-        MoteUi.action(button(MoteI18n.text("还没有自己的 Mote？")) { startActivity(Intent(this,StartUsingActivity::class.java)) },MoteUi.ButtonRole.TEXT)
+        MoteUi.action(button(MoteI18n.text("还没有自己的 Mote？")) { startActivity(Intent(this,StartUsingActivity::class.java).putExtra("firstUse",intent.getBooleanExtra("firstUse",false))) },MoteUi.ButtonRole.TEXT)
         MoteUi.action(button(MoteI18n.text("连接管理与设备信息")) { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE },MoteUi.ButtonRole.TEXT)
         root.addView(advanced)
         val entryViews = (0 until root.childCount).map(root::getChildAt).filter { it !in setOf(preview,confirmAction,status) }

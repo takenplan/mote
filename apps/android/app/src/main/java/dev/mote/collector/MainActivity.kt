@@ -82,6 +82,9 @@ class MainActivity : MoteActivity() {
     private lateinit var homeWelcome: TextView
     private lateinit var homeConversationsSection: LinearLayout
     private lateinit var homeRecordReceipt: LinearLayout
+    private lateinit var homeFirstIntro: TextView
+    private var homeReceiptAvailable = false
+    internal fun isFirstUseRecordEntry() = firstUse
     private var libraryView: LibraryCaptureView? = null
     private var libraryState: Bundle? = null
     private var libraryRecordsRevision = -1L
@@ -92,7 +95,7 @@ class MainActivity : MoteActivity() {
     private var homeConnectionTitle: TextView? = null
     private var homeConnectionState: TextView? = null
     private var homeConnectionAction: Button? = null
-    private var homeConnectionHelp: Button? = null
+    private var homeConnectionHelp: TextView? = null
     private val controls = mutableListOf<View>()
     private val controlPages = mutableMapOf<View, Page>()
     private val fieldLabels = mutableMapOf<EditText, TextView>()
@@ -290,24 +293,26 @@ class MainActivity : MoteActivity() {
             tag = "home-attention"; visibility = View.GONE; minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
             isFocusable = true; setOnClickListener { showPage(Page.PRIVACY) }
         }
-        homeRecordReceipt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-record-receipt" }.also(content::addView)
         homeWelcome = text(MoteI18n.text("欢迎使用 Mote"), NativeFontRole.META, NativeColorRole.MUTED)
         homeGreeting = text(MoteI18n.text("想问什么？"), NativeFontRole.TITLE_MOBILE).apply {
             NativePresentationStyles.bind(this, "home-greeting") { (it as TextView).textSize = 25f; it.typeface = android.graphics.Typeface.create(android.graphics.Typeface.create(MoteTheme.fontFamily(true), android.graphics.Typeface.NORMAL), 500, false) }
             setPadding(0, dp(22), 0, dp(29))
             (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0
         }
+        homeRecordReceipt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-record-receipt" }.also(content::addView)
         val pageContent = content
         val guide = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         content.addView(guide); firstUseGuide = guide; content = guide
-        text(MoteI18n.text("留下想法、照片或录音。\n需要找回什么时，再问 Mote。"), NativeFontRole.BODY, NativeColorRole.MUTED)
+        homeFirstIntro = text(MoteI18n.text("留下想法、照片或录音。\n需要找回什么时，再问 Mote。"), NativeFontRole.BODY, NativeColorRole.MUTED).apply {
+            NativePresentationStyles.bind(this,"first-use-intro") { (it as TextView).setLineSpacing(0f,1f) }
+        }
         val connection = lightControl(MoteI18n.text("连接你的 Mote"), MoteI18n.text("连接")) {
-            if (loadedConfig.hasSyncConnection()) showPage(Page.SOURCES) else startActivity(Intent(this,ConnectionActivity::class.java))
+            if (loadedConfig.hasSyncConnection()) startActivity(Intent(this,SyncQueueActivity::class.java)) else startActivity(Intent(this,ConnectionActivity::class.java).putExtra("firstUse",firstUse))
         }
         homeConnectionTitle = (connection.first.parent as LinearLayout).getChildAt(0) as TextView
         homeConnectionState = connection.first; homeConnectionAction = connection.second
         connection.first.text = MoteI18n.text("让记录进入中央档案，供其他设备和 AI 使用。")
-        homeConnectionHelp = MoteUi.action(button(MoteI18n.text("还没有自己的 Mote？")) { startActivity(Intent(this,StartUsingActivity::class.java)) }, MoteUi.ButtonRole.TEXT)
+        homeConnectionHelp = lightTextAction(MoteI18n.text("还没有自己的 Mote？")) { startActivity(Intent(this,StartUsingActivity::class.java).putExtra("firstUse",firstUse)) }
         text(MoteI18n.text("也可以自动留下"),NativeFontRole.META,NativeColorRole.MUTED).apply { (layoutParams as LinearLayout.LayoutParams).topMargin = dp(24) }
         val capture = lightControl(MoteI18n.text("屏幕与应用记录"),MoteI18n.text("设置")) { showPage(Page.PRIVACY) }
         capture.first.text = MoteI18n.text("需要时再选范围、开权限")
@@ -334,15 +339,17 @@ class MainActivity : MoteActivity() {
 
     private fun updateFirstUse() {
         val connected = loadedConfig.hasSyncConnection()
-        homeWelcome.text = MoteI18n.text(if (connected) "欢迎回来" else "欢迎使用 Mote")
+        val firstReceipt=homeReceiptAvailable && NativeRecordReceipt.fromFirstUse
+        homeWelcome.text = MoteI18n.text(if(firstReceipt) "最近留下的内容" else if (connected) "欢迎回来" else "欢迎使用 Mote")
         homeConnectionTitle?.text = MoteI18n.text(if (connected) "已连接你的 Mote" else "连接你的 Mote")
         homeConnectionState?.text = MoteI18n.text(if (connected) "自动采集尚未开启。" else "让记录进入中央档案，供其他设备和 AI 使用。")
         homeConnectionAction?.text = MoteI18n.text(if (connected) "查看状态" else "连接")
         homeConnectionHelp?.visibility = if (connected) View.GONE else View.VISIBLE
-        firstUseGuide?.visibility = if (firstUse) View.VISIBLE else View.GONE
-        homeWelcome.visibility = if (firstUse) View.VISIBLE else View.GONE
-        homeConversationsSection.visibility = if (firstUse) View.GONE else View.VISIBLE
-        homeGreeting.text = MoteI18n.text(if (firstUse) "先记下一件事。" else "想问什么？")
+        firstUseGuide?.visibility = if (firstUse || firstReceipt) View.VISIBLE else View.GONE
+        homeFirstIntro.visibility = if (firstUse && !firstReceipt) View.VISIBLE else View.GONE
+        homeWelcome.visibility = if (firstUse || firstReceipt) View.VISIBLE else View.GONE
+        homeConversationsSection.visibility = if (firstUse || firstReceipt) View.GONE else View.VISIBLE
+        homeGreeting.text = MoteI18n.text(if(firstReceipt) "先留下，再慢慢想。" else if (firstUse) "先记下一件事。" else "想问什么？")
     }
 
     private fun buildManagement() {
@@ -466,20 +473,21 @@ class MainActivity : MoteActivity() {
                 navigation.updateDraft(capturePage.optBoolean("hasDraft"))
                 homeHasRecords = capturePage.getBoolean("hasAnyRecords") || files.isNotEmpty() || sources.any { it.first.syncContinuously }
                 firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), homeHasRecords,homeArchiveEmpty)
+                val receipt = capturePage.optJSONObject("savedReceipt")
+                homeReceiptAvailable = receipt != null
                 updateFirstUse()
                 homeRecordReceipt.removeAllViews()
-                val receipt = capturePage.optJSONObject("savedReceipt")
                 homeRecordReceipt.visibility = if (receipt == null) View.GONE else View.VISIBLE
                 if (receipt != null) {
-                    val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0,dp(6),0,dp(18)) }
-                    row.addView(TextView(this).apply { text = "✓"; textSize = 22f; MoteUi.textColor(this,NativeColorRole.SUCCESS) },LinearLayout.LayoutParams(dp(30),-2))
-                    row.addView(LinearLayout(this).apply {
-                        orientation = LinearLayout.VERTICAL
-                        addView(TextView(this@MainActivity).apply { text = NativeRecordPreview.text(receipt).lineSequence().firstOrNull().orEmpty().take(80).ifBlank { MoteI18n.text("随手记") }; MoteUi.type(this,NativeFontRole.SUPPORT); MoteUi.textColor(this,NativeColorRole.INK); maxLines = 2 })
-                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text("已保存在此手机"); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.MUTED); setPadding(0,dp(5),0,0) })
-                    },LinearLayout.LayoutParams(0,-2,1f))
-                    row.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("查看"); setOnClickListener { startActivity(Intent(this@MainActivity,CaptureRecordsActivity::class.java).putExtra("recordId",receipt.getString("id"))) } },MoteUi.ButtonRole.TEXT))
-                    homeRecordReceipt.addView(row)
+                    val card=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; background=MoteUi.shape(this@MainActivity,NativeColorRole.SURFACE,NativeRadiusRole.CONTAINER,true); setPadding(dp(16),dp(16),dp(16),dp(12)) }
+                    card.addView(TextView(this).apply { text="• "+MoteI18n.text("本机已保存"); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.ACCENT) })
+                    card.addView(TextView(this).apply { text=NativeRecordPreview.text(receipt).ifBlank { MoteI18n.text("随手记") }; MoteUi.type(this,NativeFontRole.BODY); MoteUi.textColor(this,NativeColorRole.INK); maxLines=5; setPadding(0,dp(12),0,dp(16)) })
+                    val row=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
+                    val at=runCatching { java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT).withLocale(MoteI18n.locale()).withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(receipt.getString("capturedAt"))) }.getOrDefault("")
+                    row.addView(TextView(this).apply { text=listOf(MoteI18n.text("随手记"),at).filter(String::isNotBlank).joinToString(" · "); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.MUTED) },LinearLayout.LayoutParams(0,-2,1f))
+                    lightTextAction(MoteI18n.text("查看原文")+" →",row) { startActivity(Intent(this@MainActivity,CaptureRecordsActivity::class.java).putExtra("recordId",receipt.getString("id")).putExtra("directReader",true)) }.contentDescription=MoteI18n.text("查看原文")
+                    card.addView(row); homeRecordReceipt.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(18) })
+                    if(loadedConfig.hasSyncConnection()) lightTextAction(MoteI18n.text("查看 Central 的接收结果")+" ↗",homeRecordReceipt) { startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(loadedConfig.server))) }
                 }
                 homeSourceList.removeAllViews()
                 if (sources.none { it.first.syncContinuously }) homeSourceList.addView(TextView(this).apply { text = MoteI18n.text("尚未添加文件夹。添加后可在这里查看范围和状态。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) })
@@ -1468,7 +1476,7 @@ class MainActivity : MoteActivity() {
                 result.onSuccess { snapshot ->
                     snapshot.config?.let { if (!applyingSettings && it != loadedConfig) reloadSettings(it) }
                     if (::homeSyncStatus.isInitialized) {
-                        homeCaptureStatus.text = snapshot.title
+                        homeCaptureStatus.text = if (!settings.enabled && !snapshot.captureAttention) MoteI18n.text("已暂停") else snapshot.title
                         homeSyncStatus.text = if (loadedConfig.syncPaused) MoteI18n.text("已暂停") else snapshot.syncPolicy
                         homeSyncDetailStatus.text = snapshot.syncFacts
                         homeSyncRate.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label()
@@ -1929,6 +1937,11 @@ class MainActivity : MoteActivity() {
             (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(MoteTheme.spaceItem); bottomMargin = dp(4) }
         }
     }
+    private fun lightTextAction(label: String, parent: LinearLayout=content, action: () -> Unit): TextView = object:TextView(this) { override fun getAccessibilityClassName(): CharSequence = Button::class.java.name }.apply {
+        text=label; contentDescription=label; isFocusable=true; minimumHeight=dp(44); gravity=Gravity.START or Gravity.CENTER_VERTICAL
+        MoteUi.type(this,NativeFontRole.SUPPORT); MoteUi.textColor(this,NativeColorRole.MUTED); background=MoteUi.clickable(this@MainActivity,android.graphics.Color.TRANSPARENT,0,false)
+        setOnClickListener { action() }
+    }.also { parent.addView(it,LinearLayout.LayoutParams(if(parent.orientation==LinearLayout.HORIZONTAL) -2 else -1,-2)) }
     private fun lightMenu(label: String, icon: String, description: String = "", action: () -> Unit) {
         content.addView(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER) }, LinearLayout.LayoutParams(-1, dp(1)))
         val row = LinearLayout(this).apply {
