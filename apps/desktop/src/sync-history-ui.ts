@@ -1,4 +1,4 @@
-import {appendDiagnostic} from './ui-diagnostic';
+import {appendDiagnostic,renderReadableFailure} from './ui-diagnostic';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import type { DesktopApi, Status } from './contracts';
 import type { DesktopPage } from './navigation';
@@ -30,6 +30,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
   let pending: Awaited<ReturnType<DesktopApi['syncHistoryPending']>> = [];
   (el('upload-day') as HTMLInputElement).value = localDay();
   const failure = (error: unknown) => error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText('状态读取失败，请重试。');
+  const showFailure=(id:string,error:unknown)=>renderReadableFailure(el(id),moteText('操作未完成，请检查权限与配置后重试'),failure(error));
   const setText = (id: string, s: string) => { el(id).textContent = s; };
   async function refresh() {
     if (!active || refreshing) return;
@@ -39,7 +40,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
       const [page, week, rows] = await Promise.all([api.syncHistory({ day, days, offset, source, outcome }), api.syncHistory({ day, days: 7 }), api.syncHistoryPending()]);
       if (!active || generation !== refreshGeneration) return;
       pending = rows; render(page, week); setText('upload-error', '');
-    } catch (error) { if (generation === refreshGeneration) setText('upload-error', failure(error)); }
+    } catch (error) { if (generation === refreshGeneration) renderReadableFailure(el('upload-error'),moteText('状态读取失败，请重试。'),failure(error)); }
     finally { if (generation === refreshGeneration) refreshing = false; }
   }
   function render(page: SyncHistoryPage, week: SyncHistoryPage) {
@@ -69,7 +70,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
     el('upload-receipt-body').textContent = moteText('正在读取'); if (!receiptDialog.open) receiptDialog.showModal();
     try { const page = await api.syncHistoryContents({ runId: id }); if (generation !== runGeneration || !receiptDialog.open) return; const r = page.run;
       el('upload-receipt-body').innerHTML = `<h2>${escape(dateTime(r.startedAt))}</h2><p class="helper">${r.trigger === 'manual' ? moteText('手动上传') : moteText('自动上传')}</p>${badge(r.outcome)}<div class="upload-receipt-metrics"><div><span>${moteText('中央接收')}</span><strong>${n(r.received)}</strong></div><div><span>${moteText('未确认')}</span><strong>${n(r.unconfirmed)}</strong></div><div><span>${moteText('传输量')}</span><strong>${bytes(r.bytes)}</strong></div><div><span>${moteText('耗时')}</span><strong>${r.finishedAt ? moteText('{0} 秒', Math.max(0, (Date.parse(r.finishedAt) - Date.parse(r.startedAt)) / 1000).toFixed(1)) : moteText('正在上传')}</strong></div></div><h3>${moteText('包含的来源')}</h3>${r.sources.map(s => `<button class="upload-source-row" data-upload-content-source="${s}"><span>${escape(label(s))}</span><span>${moteText('查看内容 →')}</span></button>`).join('')}<button class="secondary upload-view-all" id="upload-view-all">${moteText('查看本次全部内容（{0} 条）', n(r.total))}</button><p class="upload-note">${moteText('接收确认与中央识别、索引、整理分别进行。失败重试保留原凭据；内容按当前归档保留策略读取。')}</p>${r.unconfirmed ? `<button class="primary" id="upload-receipt-retry">${moteText('重试上传')}</button>` : ''}`;
-    } catch (error) { if (generation === runGeneration) el('upload-receipt-body').textContent = failure(error); }
+    } catch (error) { if (generation === runGeneration) showFailure('upload-receipt-body',error); }
   }
   async function contents(id: string, filter?: SyncSource) {
     runId = id; contentSource = filter; contentOutcome = undefined; contentOffset = 0;
@@ -89,7 +90,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
       (el('upload-content-prev') as HTMLButtonElement).disabled = contentOffset === 0; (el('upload-content-next') as HTMLButtonElement).disabled = page.nextOffset === undefined; el('upload-content-next').dataset.offset = String(page.nextOffset ?? 0);
       el('upload-content-list').querySelectorAll<HTMLButtonElement>('button').forEach(button => button.addEventListener('click', () => { selected = page.items[Number(button.dataset.index)]; chunkOffset = 0; void preview(); }));
       selected = page.items[0]; chunkOffset = 0; if (selected) await preview();
-    } catch (error) { if (generation === contentGeneration) setText('upload-content-list', failure(error)); }
+    } catch (error) { if (generation === contentGeneration) showFailure('upload-content-list',error); }
   }
   async function preview() {
     if (!selected) return; const generation = ++contentGeneration, item = selected;
@@ -97,9 +98,9 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
     setText('upload-content-preview', moteText('正在读取内容…'));
     try { const result = await api.syncHistoryContent(runId, item.key, chunkOffset); if (generation !== contentGeneration || !contentDialog.open) return;
       el('upload-content-preview').innerHTML = `<h2>${escape(item.title || label(item.source))}</h2><p class="helper">${escape(label(item.source))} · ${escape(dateTime(item.observedAt))}</p><div class="actions">${badge(result.location === 'central' ? 'received' : item.outcome)}<span class="upload-badge">${result.location === 'central' ? moteText('中央已归档') : moteText('本机待传副本')}</span></div>${result.image ? `<img class="upload-content-image" src="${escape(result.image)}" alt="${escape(moteText('当前选择的采集截图'))}">` : ''}${result.description?`<section class="upload-content-description"><h3>${moteText('资料说明')}</h3><pre class="upload-content-text">${escape(result.description)}</pre></section>`:''}<h3>${moteText('内容')}</h3>${result.metadataOnly ? `<p class="upload-note">${moteText('此记录仅同步目录信息，未上传正文或原件。')}</p>` : result.text ? `<pre class="upload-content-text">${escape(result.text)}</pre>` : `<p class="upload-note">${result.processing ? moteText('内容已接收，中央仍在处理正文。请稍后刷新。') : moteText('此记录暂无可预览正文；可查看元数据或在中央打开原件。')}</p>`}${result.nextChunkOffset !== undefined ? `<button class="secondary" id="upload-next-chunks" data-offset="${result.nextChunkOffset}">${moteText('下一页正文')}</button>` : ''}<details class="disclosure"><summary>${moteText('元数据')}</summary><pre class="upload-content-text">${escape(result.metadata)}</pre></details><div class="actions"><button class="secondary" id="upload-preview-refresh">${moteText('刷新内容')}</button>${result.captureId ? `<button class="text-button" id="upload-preview-central" data-capture="${result.captureId}">${moteText('在中央打开 →')}</button>` : ''}</div><p class="upload-note">${moteText('已上传内容从中央读取；本机副本可能已清理。正文最长预览 100000 个字符，原件及完整内容可在中央查看。')}</p>`;
-    } catch (error) { if (generation === contentGeneration) el('upload-content-preview').innerHTML = `<p role="alert">${escape(failure(error))}</p><button class="secondary" id="upload-preview-refresh">${moteText('重试')}</button>`; }
+    } catch (error) { if (generation === contentGeneration) {showFailure('upload-content-preview',error);const retry=document.createElement('button');retry.type='button';retry.className='secondary';retry.id='upload-preview-refresh';retry.textContent=moteText('重试');el('upload-content-preview').append(retry);} }
   }
-  async function retry() { (el('upload-now') as HTMLButtonElement).disabled = true; try { await api.retry(); await refresh(); } catch (e) { setText('upload-error', failure(e)); } finally { (el('upload-now') as HTMLButtonElement).disabled = false; } }
+  async function retry() { (el('upload-now') as HTMLButtonElement).disabled = true; try { await api.retry(); await refresh(); } catch (e) { showFailure('upload-error',e); } finally { (el('upload-now') as HTMLButtonElement).disabled = false; } }
   el('upload-refresh').addEventListener('click', () => void refresh()); el('upload-now').addEventListener('click', () => void retry());
   el('upload-day').addEventListener('change', resetFilters);
   el('upload-source-filter').addEventListener('change', e => { source = (e.target as HTMLSelectElement).value as SyncSource || undefined; resetFilters(); });
@@ -114,7 +115,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
     if (button.id === 'upload-review') navigate('privacy'); if (button.id === 'upload-source-settings') navigate('sources');
   });
   receiptDialog.addEventListener('click', e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (b?.id === 'upload-view-all') void contents(runId); if (b?.dataset.uploadContentSource) void contents(runId, b.dataset.uploadContentSource as SyncSource); if (b?.id === 'upload-receipt-retry') { closeReceipt(); void retry(); } });
-  contentDialog.addEventListener('click', e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return; if (b.id === 'upload-content-back') { closeContent(); void receipt(runId); } if (b.id === 'upload-content-prev' || b.id === 'upload-content-next') { contentOffset = b.id.endsWith('prev') ? Math.max(0, contentOffset - 20) : Number(b.dataset.offset); void loadContents(); } if (b.id === 'upload-preview-refresh') void preview(); if (b.id === 'upload-next-chunks') { chunkOffset = Number(b.dataset.offset); void preview(); } if (b.id === 'upload-preview-central') void api.openCentral(undefined, b.dataset.capture).catch(e => { setText('upload-content-preview', failure(e)); }); });
+  contentDialog.addEventListener('click', e => { const b = (e.target as Element).closest<HTMLButtonElement>('button'); if (!b) return; if (b.id === 'upload-content-back') { closeContent(); void receipt(runId); } if (b.id === 'upload-content-prev' || b.id === 'upload-content-next') { contentOffset = b.id.endsWith('prev') ? Math.max(0, contentOffset - 20) : Number(b.dataset.offset); void loadContents(); } if (b.id === 'upload-preview-refresh') void preview(); if (b.id === 'upload-next-chunks') { chunkOffset = Number(b.dataset.offset); void preview(); } if (b.id === 'upload-preview-central') void api.openCentral(undefined, b.dataset.capture).catch(e => { showFailure('upload-content-preview',e); }); });
   for (const id of ['upload-content-source', 'upload-content-outcome']) el(id).addEventListener('change', () => { contentSource = (el('upload-content-source') as HTMLSelectElement).value as SyncSource || undefined; contentOutcome = (el('upload-content-outcome') as HTMLSelectElement).value as typeof contentOutcome || undefined; contentOffset = 0; void loadContents(); });
   receiptDialog.querySelector('[data-upload-close]')!.addEventListener('click', closeReceipt);
   contentDialog.querySelector('[data-upload-close]')!.addEventListener('click', closeContent);

@@ -1,4 +1,5 @@
 import {centralMemoryTopics,centralMemoryTopicPage,centralMemoryTopicDetail,centralMemoryTopicEvidence} from './memory-topics';
+import {describeBackupFile} from './queue-backup-identity';
 import {ChromeCaptureBridge} from './chrome-bridge';
 import {CHROME_EXTENSION_ID} from './chrome-constants';
 import {registerChromeNativeHost} from './chrome-registration';
@@ -623,20 +624,24 @@ else {
     handle('mote:export-queue', async () => {
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出已脱敏待上传队列（包含个人资料）"), defaultPath: `mote-queue-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
+      const selectedFile=await describeBackupFile(selected.filePath);
+      backgroundJobs.progress('mote:export-queue',{message:moteText('正在导出队列'),file:{name:selectedFile.name,path:selectedFile.path}});updateUi(clientStatus());
       await queue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
-      return { canceled: false, path: selected.filePath };
+      return { canceled: false, path: selected.filePath, file:await describeBackupFile(selected.filePath) };
     });
     handle('mote:import-queue', () => serialize(async () => {
       const selected = await dialog.showOpenDialog(window!, { title: moteText("导入 Mote 电脑端队列备份"), properties: ['openFile'], filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePaths[0]) return { canceled: true };
       const path = selected.filePaths[0];
+      const file=await describeBackupFile(path);
+      backgroundJobs.progress('mote:import-queue',{message:moteText('正在校验备份'),file});updateUi(clientStatus());
       try {
         const imported = await queue.importArchiveFile(path, value => backgroundJobs.progress('mote:import-queue', value));
         updateUi(clientStatus()); void collector.upload();
-        return { canceled: false, state:'imported', imported };
+        return { canceled: false, state:'imported', imported, file };
       } catch(error) {
         updateUi(clientStatus());
-        if(error instanceof QueueImportFailure)return {canceled:false,state:'incomplete',...error.report,error:error.message};
+        if(error instanceof QueueImportFailure)return {canceled:false,state:'incomplete',...error.report,error:error.message,file};
         throw error;
       }
     }));

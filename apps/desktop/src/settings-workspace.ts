@@ -1,6 +1,7 @@
 import {describeCaptureSelection} from './app-capture-ui';
 import {getLocale,moteText} from '@mote/shared/i18n';
 import type {Status} from './contracts';
+import type {BackupFileIdentity} from './contracts/operations';
 
 type DiagnosticRead={scope:string;ticket:number;read:boolean};
 const diagnosticReads=new WeakMap<HTMLElement,DiagnosticRead>();
@@ -97,13 +98,23 @@ export function renderSettingsWorkspace(status:Status,root:Document=document):vo
   renderDiagnosticFacts(status,root);
 }
 
-export function showBackupOperation(kind:'import'|'export',phase:'working'|'canceled'|'complete'|'error',message:string,root:Document=document):void {
+export function showBackupOperation(kind:'import'|'export',phase:'working'|'canceled'|'complete'|'error',message:string,root:Document=document,file?:BackupFileIdentity):void {
   const panel=root.getElementById('backup-operation')!;root.querySelector('[data-page="'+(kind==='import'?'restore':'export-result')+'"]')!.append(panel);panel.hidden=kind==='import'&&phase==='canceled';const selection=root.getElementById('restore-selection')!;if(kind==='import')selection.hidden=phase!=='canceled';panel.dataset.phase=phase;panel.setAttribute('aria-busy',String(phase==='working'));panel.replaceChildren();
-  const heading=root.createElement('h2');heading.textContent=kind==='import'?(phase==='working'?moteText('校验并保存记录'):phase==='complete'?moteText('记录已回来'):moteText('导入尚未完成')):moteText('导出待上传队列');
-  const text=root.createElement('p');text.textContent=message;panel.append(heading,text);
+  const state=root.createElement('span');state.className='backup-operation-state';state.textContent=kind==='import'?(phase==='working'?moteText('正在导入到本机'):phase==='complete'?moteText('已导入本机'):phase==='canceled'?moteText('已取消'):moteText('导入尚未完成')):phase==='working'?moteText('正在导出…'):phase==='complete'?moteText('导出文件已生成'):phase==='canceled'?moteText('已取消'):moteText('导出未完成，请重试');
+  const heading=root.createElement('h2');heading.textContent=kind==='import'?(phase==='working'?moteText('校验并保存记录'):phase==='complete'?moteText('记录已回来'):moteText('导入尚未完成')):phase==='working'?moteText('正在整理待上传队列'):phase==='complete'?moteText('已保存到所选位置'):phase==='canceled'?moteText('已取消'):moteText('备份未能生成');
+  panel.append(state,heading);
+  if(file&&phase!=='canceled'){
+    const card=root.createElement('div');card.className='backup-operation-file';card.setAttribute('aria-label',moteText('本次选择的备份'));
+    const symbol=root.createElement('span');symbol.className='backup-file-symbol';symbol.textContent='▤';symbol.setAttribute('aria-hidden','true');
+    const copy=root.createElement('span'),name=root.createElement('strong'),path=root.createElement('small');name.textContent=file.name;path.textContent=file.path;copy.append(name,path);
+    if(file.sizeBytes!==undefined){const size=root.createElement('small');size.textContent=`${file.sizeBytes.toLocaleString(getLocale())} bytes`;copy.append(size);}card.append(symbol,copy);panel.append(card);
+  }else if(phase==='working'){const pending=root.createElement('p');pending.className='helper';pending.textContent=moteText('目标位置尚未确认');panel.append(pending);}
+  const text=root.createElement('p');text.textContent=message;panel.append(text);
   if(phase==='working'){const progress=root.createElement('progress');progress.setAttribute('aria-label',heading.textContent);panel.append(progress);}
   if(phase==='complete'&&kind==='import'){const note=root.createElement('p');note.className='helper';note.textContent=moteText('导入没有改变原来的发送设置。');panel.append(note);}
+  if(kind==='export'&&(phase==='complete'||phase==='error')){const note=root.createElement('p');note.className='helper';note.textContent=phase==='complete'?moteText('导出没有清空本机内容。'):moteText('本机记录保留，请检查目标位置后重试。');panel.append(note);}
   if(phase==='error'&&kind==='import'){
+    const note=root.createElement('p');note.className='helper';note.textContent=moteText('重新选择同一份备份后重试。');panel.append(note);
     const actions=root.createElement('div');actions.className='actions';
     const retry=root.createElement('button');retry.type='button';retry.className='primary';retry.textContent=moteText('重新选择备份');retry.addEventListener('click',()=>root.getElementById('import')!.click());
     const content=root.createElement('button');content.type='button';content.className='secondary';content.textContent=moteText('检查本机内容');content.addEventListener('click',()=>root.querySelector<HTMLButtonElement>('.main-nav [data-nav="records"]')!.click());actions.append(retry,content);panel.append(actions);

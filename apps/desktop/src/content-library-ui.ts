@@ -1,4 +1,5 @@
 import {getLocale,moteText} from '@mote/shared/i18n';
+import {appendDiagnostic,renderReadableFailure} from './ui-diagnostic';
 import type {DesktopApi,Status} from './contracts';
 import type {ContentItem,ContentDetail} from './content-library';
 import type {SyncContent} from './sync-content';
@@ -88,6 +89,8 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
     el('content-more').hidden=!localMore&&!remoteMore;
     el('content-status').textContent=error||(!status?.config.tokenConfigured?moteText('本机内容可离线阅读；连接中央后显示已归档内容。'):moteText('接收与整理分别进行，点开内容查看实际状态。'));
     el('content-status').classList.toggle('visually-hidden',!error);
+    const diagnostics=[l,r].flatMap(result=>result.status==='rejected'?[result.reason instanceof Error?result.reason.message:String(result.reason)]:[]);
+    if(error&&diagnostics.length)appendDiagnostic(el('content-status'),diagnostics.join('\n\n'));
     if(!items.length&&query.trim()&&!error)el('content-feed').textContent=moteText('没有符合条件的内容');
     el('content-status').setAttribute('aria-busy','false');
   }
@@ -119,7 +122,7 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
       el('content-original').hidden=!result.hasImage;if(result.image)el<HTMLImageElement>('content-detail-image').src=result.image;
       el('content-detail-central').hidden=!centralId;
       if('nextChunkOffset'in result&&result.nextChunkOffset!==undefined){el('content-detail-next').hidden=false;el('content-detail-next').dataset.offset=String(result.nextChunkOffset);}
-    }catch(error){if(version!==detailGeneration||!dialog.open)return;el('content-detail-status').textContent=(error instanceof Error?error.message:String(error)).replace(/^Error invoking remote method '[^']+': (Error: )?/,'');clearDetail();el('content-detail-title').textContent=moteText('内容暂不可用');el<HTMLDetailsElement>('content-processing').open=true;if(item.key.startsWith('capture:')){items=items.filter(row=>!row.key.startsWith('capture:'));renderFeed('content-feed',items);renderHome(homeItems.filter(row=>!row.key.startsWith('capture:')));}}
+    }catch(error){if(version!==detailGeneration||!dialog.open)return;renderReadableFailure(el('content-detail-status'),moteText('内容暂不可完整读取，请重试。'),error instanceof Error?error.message:String(error));clearDetail();el('content-detail-title').textContent=moteText('内容暂不可用');el<HTMLDetailsElement>('content-processing').open=true;if(item.key.startsWith('capture:')){items=items.filter(row=>!row.key.startsWith('capture:'));renderFeed('content-feed',items);renderHome(homeItems.filter(row=>!row.key.startsWith('capture:')));}}
     finally{if(version===detailGeneration&&dialog.open)el('content-detail-status').setAttribute('aria-busy','false');}
   }
   function clearDetail(){el('content-detail-facts').textContent='';el('content-detail-description').textContent='';el('content-description-section').hidden=true;el('content-detail-range').textContent='';el('content-detail-range').hidden=true;el('content-detail-original-state').textContent='';el('content-detail-body').textContent='';el('content-detail-metadata').textContent='';el('content-detail-source').textContent='';el('content-detail-title').textContent='';el<HTMLImageElement>('content-detail-image').removeAttribute('src');centralId=undefined;detailIsCentral=false;el<HTMLDetailsElement>('content-original').open=false;}

@@ -182,7 +182,7 @@ export interface DesktopApi {
   openPermissions(): Promise<void>;
   openDataFolder(): Promise<void>;
   exportMetadata(): Promise<void>;
-  exportQueue(): Promise<{ canceled: boolean; path?: string }>;
-  importQueue(): Promise<{canceled:true}|{canceled:false;state:'imported';imported:number}|{canceled:false;state:'incomplete';phase:'validation'|'saving'|'cleanup';imported:number;total?:number;currentRecordUnconfirmed:boolean;error:string}>;
+  exportQueue(): Promise<{canceled:true}|{canceled:false;path:string;file:import('./contracts/operations').BackupFileIdentity}>;
+  importQueue(): Promise<{canceled:true}|{canceled:false;state:'imported';imported:number;file:import('./contracts/operations').BackupFileIdentity}|{canceled:false;state:'incomplete';phase:'validation'|'saving'|'cleanup';imported:number;total?:number;currentRecordUnconfirmed:boolean;error:string;file:import('./contracts/operations').BackupFileIdentity}>;
   onStatus(callback: (status: Status) => void): () => void;
 }
