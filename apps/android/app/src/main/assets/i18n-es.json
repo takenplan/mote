@@ -9249,5 +9249,11 @@
   "查看安装提示词": "Ver instrucciones de instalación",
   "查看安装文档": "Ver guía de instalación",
   "现在先记下来": "Anotar algo ahora",
-  "已复制": "Copiado"
+  "已复制": "Copiado",
+  "补充这一类资料的背景（选填）": "Añade contexto para este tipo de material (opcional)",
+  "适用于此手机的{0}来源。": "Se aplica a la fuente {0} de este teléfono.",
+  "采集来源说明": "Descripciones de fuentes de captura",
+  "有未保存的修改": "Cambios sin guardar",
+  "编辑采集来源说明": "Editar descripciones de fuentes de captura",
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "Hay un conflicto de versión en la descripción de captura. Conserva o actualiza la descripción antes de reintentar."
 }

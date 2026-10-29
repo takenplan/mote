@@ -662,6 +662,7 @@ class MainActivity : MoteActivity() {
 
     private fun buildCapture(config: CollectorConfig) {
         page(Page.CAPTURE, MoteI18n.text("在记录密度、清晰度和耗电之间找到平衡"))
+        button(MoteI18n.text("编辑采集来源说明")) { CaptureContextDialog(this).show() }
         section(MoteI18n.text("采集来源"))
         screenCollectionEnabled = check(MoteI18n.text("采集屏幕与前台应用活动"), config.screenCollectionEnabled)
         notificationCollectionEnabled = check(MoteI18n.text("采集通知（正文、持续状态与更新）"), config.notificationCollectionEnabled)

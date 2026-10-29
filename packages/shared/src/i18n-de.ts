@@ -9250,5 +9250,11 @@ export const german: Readonly<Record<string, string>> = {
   "查看安装提示词": "Installationsanweisung anzeigen",
   "查看安装文档": "Installationsanleitung öffnen",
   "现在先记下来": "Jetzt etwas festhalten",
-  "已复制": "Kopiert"
+  "已复制": "Kopiert",
+  "补充这一类资料的背景（选填）": "Hintergrund für diese Art von Material ergänzen (optional)",
+  "适用于此手机的{0}来源。": "Gilt für die Quelle „{0}“ auf diesem Telefon.",
+  "采集来源说明": "Beschreibungen der Erfassungsquellen",
+  "有未保存的修改": "Nicht gespeicherte Änderungen",
+  "编辑采集来源说明": "Beschreibungen der Erfassungsquellen bearbeiten",
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "Die Erfassungsbeschreibung hat einen Versionskonflikt. Behalten oder aktualisieren Sie die Beschreibung und versuchen Sie es erneut."
 };

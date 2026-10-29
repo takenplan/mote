@@ -171,6 +171,7 @@ internal object GeneratedWindowRendering {
             "ask-retained-draft" -> Triple("ask", "draft", "生成的未发送草稿")
             "home-history-error" -> Triple("home", "error", "对话暂不可读取，请稍后重试。")
             "home-first-use-draft" -> Triple("home", "first-use", "先记下一件事。")
+            "capture-context-local" -> Triple("capture", "local-context", "采集来源说明")
             "feishu-preview" -> Triple("lark", "content", "实际发现的文档")
             "feishu-archived" -> Triple("lark", "content", "已归档 2 篇文档 · 6 条活动线索 · 0 项待处理 · 0 项失败")
             "home" -> Triple("home", "empty", "还没有内容。选一个动作，留下第一份资料。")

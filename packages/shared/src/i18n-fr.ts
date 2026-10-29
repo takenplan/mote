@@ -9250,5 +9250,11 @@ export const french: Readonly<Record<string, string>> = {
   "查看安装提示词": "Voir la demande d’installation",
   "查看安装文档": "Voir le guide d’installation",
   "现在先记下来": "Enregistrer une note maintenant",
-  "已复制": "Copié"
+  "已复制": "Copié",
+  "补充这一类资料的背景（选填）": "Ajoutez le contexte de ce type de document (facultatif)",
+  "适用于此手机的{0}来源。": "S’applique à la source {0} de ce téléphone.",
+  "采集来源说明": "Descriptions des sources de collecte",
+  "有未保存的修改": "Modifications non enregistrées",
+  "编辑采集来源说明": "Modifier les descriptions des sources de collecte",
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "La version de la description de collecte est en conflit. Conservez ou mettez à jour la description avant de réessayer."
 };
