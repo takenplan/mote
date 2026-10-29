@@ -18,9 +18,12 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
  const page=pages.find(entry=>(entry.route??entry.id)===route||entry.aliases?.includes(route));
  if(!page)return;
  const query=new URLSearchParams(queryText);
- const allowed=new Set(['origin','view','evidence','source','sourceId','kind','type','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight']);
+ const allowed=new Set(['origin','view','evidence','source','sourceId','kind','type','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight','query','cursor','memory']);
  for(const [key,value] of query){
   if(!allowed.has(key)||query.getAll(key).length!==1)return;
+  if(key==='query'&&page.id!=='search')return;
+  if(key==='cursor'&&!['search','archive'].includes(page.id))return;
+  if(key==='memory'&&page.id!=='archive')return;
   if(key==='origin'&&(page.id!=='archive'||value!=='notes'))return;
   if(key==='type'&&(page.id!=='archive'||!libraryMaterialTypes.includes(value as LibraryMaterialType)))return;
   if(key==='view'&&(page.id!=='archive'||!collections.some(entry=>entry.id===value)))return;
