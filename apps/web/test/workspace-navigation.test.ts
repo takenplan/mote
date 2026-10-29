@@ -70,7 +70,7 @@ test('fixed Settings cards react to page disposal and restoration without invoki
  const install=()=>webFeatures.install({id:'generated.settings-destination',version:'1',components:[]},[{surface:'page',entry:{id:'settings',route:'system/models',label:'Generated models',featureId:'generated.settings-destination',render:()=>null}}]);
  let registration=await install();
  t.after(async()=>{await act(async()=>root.unmount());await registration.dispose();for(const [key,value] of previous){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
- const modelCard=()=>Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.settings-link-grid button')).find(button=>button.querySelector('strong')?.textContent==='模型与服务')!;
+ const modelCard=()=>Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.settings-directory-rows button')).find(button=>button.querySelector('strong')?.textContent==='模型与服务')!;
  await act(async()=>root.render(React.createElement(SettingsLanding,{onPage:page=>destinations.push(page)})));
  assert.equal(modelCard().disabled,false);await act(async()=>modelCard().click());assert.deepEqual(destinations,['settings']);
  await act(async()=>registration.dispose());
