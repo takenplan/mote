@@ -32,7 +32,8 @@ function button(host:Element,name:string){const found=[...host.querySelectorAll<
 async function click(host:Element,name:string){await act(async()=>{button(host,name).click();await tick();});}
 async function input(host:Element,label:string,value:string){const field=[...host.querySelectorAll('label')].find(element=>element.textContent?.startsWith(label))?.querySelector('input');assert.ok(field,`field ${label}`);await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});}
 async function mount(t:import('node:test').TestContext,api:Api,hash='#/system/plugins'){dom.window.history.replaceState(null,'',hash);const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});await act(async()=>{root.render(React.createElement(PluginCenter,{api,onPage:()=>{}}));await tick();});return {element,root};}
-function readFixture(path:string,plugins:PluginCenterView,binding:MemoryBindingView){if(path==='/api/plugins')return structuredClone(plugins);if(path===bindingPath)return structuredClone(binding);if(path==='/api/features')return {features:[],capabilities:[]};throw new Error('Unexpected fixture read '+path);}
+async function openInstalled(element:Element){await click(element,'已安装插件');await act(async()=>{element.querySelector<HTMLButtonElement>('.provider-card')!.click();await tick();});}
+function readFixture(path:string,plugins:PluginCenterView,binding:MemoryBindingView){if(path==='/api/model-authorization')return {authorization:{revision:1,state:'enabled'}};if(path==='/api/plugins')return structuredClone(plugins);if(path===bindingPath)return structuredClone(binding);if(path==='/api/features')return {features:[],capabilities:[]};throw new Error('Unexpected fixture read '+path);}
 
 test('installation requires an explicit pinned preview, config, verified capabilities, and separate enable; transport retry reuses its operation ID',async t=>{
  const {plugins,binding}=fixtures(),calls:{path:string;body:Record<string,unknown>}[]=[];let installAttempt=0;
@@ -50,7 +51,7 @@ test('installation requires an explicit pinned preview, config, verified capabil
  }} as unknown as Api;
  const {element}=await mount(t,api);
  assert.equal(calls.length,0,'mounting does not mutate');
- await click(element,'发现');await click(element,'选择仓库');await click(element,'预览发布包');
+ await click(element,'添加插件');await click(element,'选择仓库');await click(element,'预览发布包');
  const dialog=element.querySelector('[role=dialog]')!;assert.ok(dialog.textContent?.includes(source.digest));assert.ok(dialog.textContent?.includes('不是沙箱隔离'));
  await click(dialog,'安装此版本');assert.ok(element.querySelector('[role=dialog]'),'failed request retains its preview');await click(dialog,'重试同一请求');
  const installs=calls.filter(call=>call.path==='/api/plugins/install');assert.equal(installs.length,2);assert.deepEqual(installs[0].body,installs[1].body);assert.equal(installs[0].body.previewId,preview.id);assert.equal('repository' in installs[0].body,false,'install cannot override the pinned source');
@@ -72,7 +73,7 @@ test('ordinary pause shows authorized task drainage, immediate stop is separate,
   if(path.endsWith('/resume')){binding.admission.desired=true;binding.admission.state='enabled';binding.admission.generation++;binding.allowedActions=['pause','stop','prepare'];}
   return structuredClone(binding);
  }} as unknown as Api;
- const {element}=await mount(t,api);await click(element,'记忆方案');
+ const {element}=await mount(t,api);await click(element,'自动记忆');
  await act(async()=>{element.querySelector<HTMLButtonElement>('[role=switch]')!.click();await tick();});
  assert.ok(element.textContent?.includes('停用中：仍有 3 个已授权任务'));assert.equal(element.querySelector('[role=switch]')?.getAttribute('aria-checked'),'false');assert.equal(calls[0].path,bindingPath+'/pause');
  assert.equal(calls.some(call=>call.path.endsWith('/stop')),false);
@@ -90,7 +91,7 @@ test('replacement separates scope and fee acknowledgement, preparation, verifica
   if(path.endsWith('/activate')){assert.equal(body.preparationId,'generated-preparation');binding.activePlan=structuredClone(candidate);binding.generation++;binding.preparation!.state='applied';binding.preparation!.allowedActions=[];binding.allowedActions=['pause','stop','prepare'];}
   return structuredClone(binding);
  }} as unknown as Api;
- const {element}=await mount(t,api);await click(element,'记忆方案');
+ const {element}=await mount(t,api);await click(element,'自动记忆');
  const unknown=[...element.querySelectorAll('.plugin-plan')].find(plan=>plan.textContent?.includes('Generated unverified engine'))!;assert.equal(unknown.querySelector<HTMLButtonElement>('button')!.disabled,true);assert.ok(unknown.textContent?.includes('not proven'));
  await click(element,'预览更换');const prepare=element.querySelector('[role=dialog]')!;assert.equal(button(prepare,'开始准备').disabled,true);await act(async()=>prepare.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());await click(prepare,'开始准备');
  assert.equal(calls[0].body.feeAcknowledged,true);assert.equal(calls[0].body.scope,'default');assert.equal(binding.activePlan.id,builtin.id);assert.ok(element.textContent?.includes('准备失败'));assert.equal(element.textContent?.includes('设为当前方案'),false);
@@ -101,7 +102,7 @@ test('replacement separates scope and fee acknowledgement, preparation, verifica
 test('owner revision conflicts reload actual state and never silently retry; dialogs restore the triggering control',async t=>{
  const {plugins,binding}=fixtures();plugins.packages=[structuredClone(packageFixture)];plugins.instances=[structuredClone(instanceFixture)];plugins.packages[0].instanceIds=[instanceFixture.id];let posts=0;
  const api={request:async(path:string,init?:RequestInit)=>{if(!init?.method)return readFixture(path,plugins,binding);posts++;plugins.instances[0].revision=7;throw new ApiError('Generated revision conflict',409);}} as unknown as Api;
- const {element}=await mount(t,api);const origin=button(element,'配置');origin.focus();await click(element,'配置');const panel=element.querySelector('[role=dialog]')!;await input(panel,'Generated service reference','generated-edited-reference');await click(panel,'保存配置');assert.equal(posts,1);assert.equal(panel.textContent?.includes('重试同一请求'),false);assert.ok(element.textContent?.includes('配置版本 7'));
+ const {element}=await mount(t,api);await openInstalled(element);const origin=button(element,'配置');origin.focus();await click(element,'配置');const panel=element.querySelector('[role=dialog]')!;await input(panel,'Generated service reference','generated-edited-reference');await click(panel,'保存配置');assert.equal(posts,1);assert.equal(panel.textContent?.includes('重试同一请求'),false);assert.ok(element.textContent?.includes('配置版本 7'));
  await click(panel,'重新读取配置并丢弃草稿');assert.equal(element.querySelector<HTMLInputElement>('[role=dialog] input')?.value,instanceFixture.name);assert.equal(button(element,'保存配置').disabled,true,'reload uses current server configuration, not the stale draft');await click(element.querySelector('[role=dialog]')!,'关闭详情');assert.equal(document.activeElement,origin);assert.equal(element.querySelector('[role=dialog]'),null);
 });
 
@@ -109,14 +110,14 @@ test('switching authenticated sessions discards stale preview results and aborts
  const first=fixtures(),second=fixtures();let resolvePreview:(value:PluginReleasePreview)=>void=()=>{};let requestSignal:AbortSignal|undefined;
  const oldApi={request:async(path:string,init?:RequestInit)=>{if(!init?.method)return readFixture(path,first.plugins,first.binding);requestSignal=init.signal as AbortSignal;return new Promise<PluginReleasePreview>(resolve=>{resolvePreview=resolve;});}} as unknown as Api;
  const newApi={request:async(path:string)=>readFixture(path,second.plugins,second.binding)} as unknown as Api;
- const {element,root}=await mount(t,oldApi);await click(element,'发现');await click(element,'选择仓库');await act(async()=>button(element,'预览发布包').click());
+ const {element,root}=await mount(t,oldApi);await click(element,'添加插件');await click(element,'选择仓库');await act(async()=>button(element,'预览发布包').click());
  await act(async()=>{root.render(React.createElement(PluginCenter,{api:newApi,onPage:()=>{}}));await tick();});assert.equal(requestSignal?.aborted,true);await act(async()=>{resolvePreview(preview);await tick();});assert.equal(element.querySelector('[role=dialog]'),null);assert.equal(element.querySelector<HTMLInputElement>('input[placeholder]')?.value,'');
 });
 
 test('unavailable installation remains explicit and configuration validation rejects invalid values without inferring capabilities',async t=>{
  const {plugins,binding}=fixtures();plugins.installation={supported:false,reason:'Generated runtime does not implement installation',runtime:'worker',restartRequired:true};let mutation=false;
  const api={request:async(path:string,init?:RequestInit)=>{if(init?.method)mutation=true;return readFixture(path,plugins,binding);}} as unknown as Api;
- const {element}=await mount(t,api);await click(element,'发现');await click(element,'选择仓库');assert.equal(button(element,'预览发布包').disabled,true);assert.ok(element.textContent?.includes(plugins.installation.reason!));assert.equal(mutation,false);
+ const {element}=await mount(t,api);await click(element,'添加插件');await click(element,'选择仓库');assert.equal(button(element,'预览发布包').disabled,true);assert.ok(element.textContent?.includes(plugins.installation.reason!));assert.equal(mutation,false);
  assert.equal(configurationValid([{id:'count',label:'Generated count',type:'number',required:true}],{count:NaN}),false);
  assert.equal(configurationValid([{id:'option',label:'Generated option',type:'select',options:[{value:'allowed',label:'Allowed'}]}],{option:'unknown'}),false);
  assert.equal(memoryAdmissionLabel({...binding.admission,desired:false,state:'draining',queued:0,running:1,checkpointed:2}), '停用中：仍有 3 个已授权任务');
@@ -126,7 +127,7 @@ test('unavailable installation remains explicit and configuration validation rej
 test('uninstall is unavailable for a bound package and requires a fresh owner-confirmed command for an eligible package',async t=>{
  const {plugins,binding}=fixtures(),calls:{path:string;body:Record<string,unknown>}[]=[];plugins.packages=[{...structuredClone(packageFixture),allowedActions:['configure'],issues:['Generated historical reader still pins this package']}];
  const api={request:async(path:string,init?:RequestInit)=>{if(!init?.method)return readFixture(path,plugins,binding);calls.push({path,body:JSON.parse(String(init.body))});plugins.packages=[];plugins.revision++;return structuredClone(plugins);}} as unknown as Api;
- const {element}=await mount(t,api);assert.equal(element.textContent?.includes('卸载安装包'),false);assert.ok(element.textContent?.includes('historical reader'));
+ const {element}=await mount(t,api);await openInstalled(element);assert.equal(element.textContent?.includes('卸载安装包'),false);assert.ok(element.textContent?.includes('historical reader'));
  plugins.packages[0].allowedActions.push('uninstall');plugins.packages[0].issues=[];await act(async()=>{resources(api).invalidate(key=>key==='/api/plugins');await tick();});
  await click(element,'卸载安装包');assert.equal(calls.length,0);await click(element.querySelector('[role=dialog]')!,'确认卸载');assert.equal(calls[0].path,'/api/plugins/'+packageFixture.id+'/uninstall');assert.equal(calls[0].body.expectedRevision,1);assert.ok(element.textContent?.includes('还没有安装外部插件'));
 });
@@ -134,7 +135,7 @@ test('uninstall is unavailable for a bound package and requires a fresh owner-co
 test('revoked plugin reads discard cached configuration and close its owner modal',async t=>{
  const {plugins,binding}=fixtures();plugins.packages=[structuredClone(packageFixture)];plugins.instances=[structuredClone(instanceFixture)];let revoked=false;
  const api={request:async(path:string)=>{if(path==='/api/plugins'&&revoked)throw new ApiError('Generated permission revoked',403);return readFixture(path,plugins,binding);}} as unknown as Api;
- const {element}=await mount(t,api);await click(element,'配置');assert.ok(element.querySelector('[role=dialog]'));revoked=true;await act(async()=>{resources(api).invalidate(key=>key==='/api/plugins');await tick();});assert.equal(element.querySelector('[role=dialog]'),null);assert.equal(element.querySelector('.plugin-package-detail'),null);assert.ok(element.textContent?.includes('Generated permission revoked'));
+ const {element}=await mount(t,api);await openInstalled(element);await click(element,'配置');assert.ok(element.querySelector('[role=dialog]'));revoked=true;await act(async()=>{resources(api).invalidate(key=>key==='/api/plugins');await tick();});assert.equal(element.querySelector('[role=dialog]'),null);assert.equal(element.querySelector('.plugin-package-detail'),null);assert.ok(element.textContent?.includes('Generated permission revoked'));
 });
 
 test('an installed package exposes required fields before the first instance exists and saves its initial configuration in one command',async t=>{
@@ -146,7 +147,7 @@ test('an installed package exposes required fields before the first instance exi
   const instance={...structuredClone(instanceFixture),name:body.name,configuration:body.configuration};plugins.instances=[instance];plugins.revision++;
   return structuredClone(instance);
  }} as unknown as Api;
- const {element}=await mount(t,api);await click(element,'新增实例');const dialog=element.querySelector('[role=dialog]')!;
+ const {element}=await mount(t,api);await openInstalled(element);await click(element,'新增实例');const dialog=element.querySelector('[role=dialog]')!;
  assert.ok(dialog.textContent?.includes('Generated service reference'));assert.equal(button(dialog,'创建实例').disabled,true);
  await input(dialog,'Generated service reference','generated-initial-service');await click(dialog,'创建实例');
  assert.equal(element.querySelector('[role=dialog]'),null);assert.equal(calls.length,1);assert.equal(calls[0].path,'/api/plugin-instances');
@@ -158,9 +159,15 @@ test('an installed package exposes required fields before the first instance exi
 test('plugin deep links and same-page browser history retain the selected tab',async t=>{
  const {plugins,binding}=fixtures(),api={request:async(path:string)=>readFixture(path,plugins,binding)} as unknown as Api;
  const {element}=await mount(t,api,'#/system/plugins?tab=memory');
- assert.equal(button(element,'记忆方案').getAttribute('aria-pressed'),'true');
+ assert.equal(button(element,'自动记忆').getAttribute('aria-pressed'),'true');
  await act(async()=>{dom.window.location.hash='#/system/plugins?tab=discover';dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
- assert.equal(button(element,'发现').getAttribute('aria-pressed'),'true');
+ assert.equal(button(element,'添加插件').getAttribute('aria-pressed'),'true');
  await act(async()=>{dom.window.location.hash='#/system/plugins';dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
- assert.equal(button(element,'已安装').getAttribute('aria-pressed'),'true');
+ assert.equal(button(element,'自动记忆').getAttribute('aria-pressed'),'true');
+});
+
+test('automatic Memory desire is separate from the real global authorization; failed reads remain unavailable without implying approval',async t=>{
+ const {plugins,binding}=fixtures();let state='unapproved',denied=false,writes=0;const api={request:async(path:string,init?:RequestInit)=>{if(init?.method){writes++;throw Error('No authorization mutation belongs to this read-only status');}if(path==='/api/model-authorization'){if(denied)throw new ApiError('Generated automatic processing authorization denied',403);return {authorization:{revision:1,state}};}return readFixture(path,plugins,binding);}} as Api;
+ const {element}=await mount(t,api);assert.equal(button(element,'自动记忆').getAttribute('aria-pressed'),'true');assert.match(element.querySelector('.plugin-memory-control [role=status]')!.textContent!,/等待开启自动处理/);assert.equal(element.querySelector('[role=switch]')!.getAttribute('aria-checked'),'true');assert.equal(element.querySelector<HTMLAnchorElement>('.plugin-waiting-authorization a')!.hash,'#/system/models?category=processing');
+ denied=true;await act(async()=>{resources(api).invalidate(path=>path==='/api/model-authorization');await tick();});assert.match(element.querySelector('.plugin-memory-control [role=status]')!.textContent!,/暂不可用/);assert.equal(element.querySelector('.plugin-waiting-authorization'),null);assert.match(element.textContent!,/Generated automatic processing authorization denied/);denied=false;state='enabled';await act(async()=>{resources(api).invalidate(path=>path==='/api/model-authorization');await tick();});assert.match(element.querySelector('.plugin-memory-control [role=status]')!.textContent!,/自动记忆已启用/);assert.equal(writes,0);
 });

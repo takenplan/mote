@@ -9,7 +9,7 @@ export function settingsCategoryFromHash(hash:string):SettingsCategory|null {
 }
 export function pluginTabFromHash(hash:string):'installed'|'discover'|'memory' {
  const value=new URLSearchParams(hash.split('?')[1]??'').get('tab');
- return value==='discover'||value==='memory'?value:'installed';
+ return value==='discover'||value==='installed'?value:'memory';
 }
 /** A return link is local navigation to an installed destination, never an arbitrary URL. */
 export function validatedReturnTarget(candidate:string|null|undefined,pages:readonly PageEntry[],collections:readonly CollectionEntry[]):string|undefined {
