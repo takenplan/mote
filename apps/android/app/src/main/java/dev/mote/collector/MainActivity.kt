@@ -80,6 +80,8 @@ class MainActivity : MoteActivity() {
     private lateinit var homeSourceList: LinearLayout
     private val homeTask by lazy { UiTask(this) }
     private var homeConversations: HomeConversationView? = null
+    private var homeDiscovery: HomeDiscoveryView? = null
+    private var homeFindingVisible = false
     private lateinit var homeAttention: TextView
     private lateinit var homeGreeting: TextView
     private lateinit var homeWelcome: TextView
@@ -309,6 +311,10 @@ class MainActivity : MoteActivity() {
             setPadding(0, dp(22), 0, dp(29))
             (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0
         }
+        homeDiscovery?.close()
+        homeDiscovery=HomeDiscoveryView(this,present={visible->homeFindingVisible=visible;homeGreeting.visibility=if(visible&&!firstUse&&!homeReceiptAvailable)View.GONE else View.VISIBLE}){id->
+            startActivity(Intent(this,CentralActivity::class.java).putExtra("page","insights").apply{if(id!=null)putExtra("insightId",id)})
+        }.also(content::addView)
         homeRecordReceipt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-record-receipt" }.also(content::addView)
         val pageContent = content
         val guide = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -360,6 +366,7 @@ class MainActivity : MoteActivity() {
         homeFirstIntro.visibility = if (firstUse && !firstReceipt) View.VISIBLE else View.GONE
         homeWelcome.visibility = if (firstUse || firstReceipt) View.VISIBLE else View.GONE
         homeConversationsSection.visibility = if (firstUse || firstReceipt) View.GONE else View.VISIBLE
+        homeGreeting.visibility=if(homeFindingVisible&&!firstUse&&!firstReceipt)View.GONE else View.VISIBLE
         homeGreeting.text = MoteI18n.text(if(firstReceipt) "先留下，再慢慢想。" else if (firstUse) "先记下一件事。" else "想问什么？")
     }
 
@@ -458,7 +465,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun loadHomeContent() {
-        if (currentPage == Page.OVERVIEW) homeConversations?.refresh()
+        if (currentPage == Page.OVERVIEW) { homeConversations?.refresh();homeDiscovery?.refresh() }
         if (!::homeSourceList.isInitialized || homeTask.busy || currentPage !in setOf(Page.OVERVIEW, Page.MANAGE, Page.SOURCES)) return
         homeTask.start("", {}, {
             val store = applicationContext.localSources()
@@ -1681,7 +1688,7 @@ class MainActivity : MoteActivity() {
     }
     override fun onPause() {
         resumed = false
-        homeConversations?.pause()
+        homeConversations?.pause();homeDiscovery?.pause()
         centralContent?.pause()
         activityContent?.pause()
         localStateJob?.cancel(); localStateJob = null
@@ -1690,7 +1697,7 @@ class MainActivity : MoteActivity() {
         super.onPause()
     }
     override fun onStop() { super.onStop() }
-    override fun onDestroy() { homeConversations?.close(); homeTask.close(); libraryView?.close(); centralContent?.close(); activityContent?.close(); statusExecutor.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onDestroy() { homeConversations?.close();homeDiscovery?.close(); homeTask.close(); libraryView?.close(); centralContent?.close(); activityContent?.close(); statusExecutor.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     private fun dp(value: Int) = moteDp(value)
 
     private fun help(title: String, message: String) {
@@ -1756,7 +1763,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun showPage(page: Page, discardConfirmed: Boolean = false, connectionEntryOrigin: ConnectionOrigin? = null) {
-        if (page != Page.OVERVIEW) { homeConversations?.pause() }
+        if (page != Page.OVERVIEW) { homeConversations?.pause();homeDiscovery?.pause() }
         if (page == Page.DEVELOPER && !RuntimeProfile.current.developerTools) {
             showPage(Page.SETTINGS, discardConfirmed, connectionEntryOrigin)
             return
