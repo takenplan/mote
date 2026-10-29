@@ -1,4 +1,4 @@
-import {queryRecovery,type PendingQuery} from './query-recovery';
+import {queryRecovery,type OwnedQuery} from './query-recovery';
 import {unsentDrafts,type ChatAttachment} from './chat-drafts';
 import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
@@ -142,7 +142,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   useEffect(()=>{if(history.data){setItems(history.data.items);setCursor(history.data.nextCursor??null);}else if(history.error){setItems([]);setCursor(null);}},[history.data,history.error]);
   useEffect(()=>{if(!recentRuns.data||selectionMade.current||queryRecovery.get(api))return;selectionMade.current=true;
     const recent=recentRuns.data.items.find(r=>r.status==='running')??recentRuns.data.items[0];
-    if(recent){setRun(recent);setBusy(recent.status==='running');setSelectedId(recent.conversationId??null);}
+    if(recent){if(recent.status==='running')queryRecovery.set(api,{kind:'adopted',id:recent.id,contextVersion:queryRecovery.versions(api).contextVersion,conversationId:recent.conversationId,run:recent,unknown:false});setRun(recent);setBusy(recent.status==='running');setSelectedId(recent.conversationId??null);}
   },[recentRuns.data]);
   useEffect(() => {if (!targetTurn&&conversation?.turns.length) end.current?.scrollIntoView({block: 'nearest'});}, [conversation?.id, conversation?.turns.length,targetTurn]);
   useEffect(()=>{
@@ -163,12 +163,12 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       setBusy(true);return;
     }
     settledReceipts.current.add(current.id);
-    const versions=queryRecovery.versions(api),sameContext=!owned||owned.contextVersion===versions.contextVersion,sameDraft=owned&&owned.draftVersion===versions.draftVersion;
+    const versions=queryRecovery.versions(api),sameContext=!owned||owned.contextVersion===versions.contextVersion,sameDraft=owned?.kind==='owned'&&owned.draftVersion===versions.draftVersion;
     if((current.status==='completed'||current.status==='failed')&&current.conversationId){
       if(sameContext){setSelectedId(current.conversationId);window.history.replaceState(null,'','#/ask?'+new URLSearchParams({conversation:current.conversationId}));window.dispatchEvent(new window.Event('mote:workspace-state'));}
       historyRequest.current?.abort();setLoadingPage(false);setHistoryError('');resources(api).invalidate(key=>key.startsWith('/api/conversations'));
     }
-    if(sameDraft){if(current.status==='completed'){setQuestion('');setAttachments([]);}else if(current.status==='failed')setQuestion(owned.question);}
+    if(owned?.kind==='owned'&&sameDraft){if(current.status==='completed'){setQuestion('');setAttachments([]);}else if(current.status==='failed')setQuestion(owned.question);}
     if(owned)queryRecovery.set(api,undefined);
     setBusy(false);setPendingQuestion('');operation.current=null;
   }
@@ -198,7 +198,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     catch(cause){if(!controller.signal.aborted)unconfirmed(cause);}
     finally{if(operation.current===controller)operation.current=null;}
   }
-  async function postOriginal(retained:PendingQuery,controller:AbortController){
+  async function postOriginal(retained:OwnedQuery,controller:AbortController){
     let ambiguous=retained.unknown;
     for(let attempt=0;attempt<2;attempt++)try{
       const accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body:retained.body});
@@ -214,7 +214,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     }
   }
   async function retryOriginal(){
-    const retained=queryRecovery.get(api);if(!retained||operation.current||uploading||opening)return;
+    const retained=queryRecovery.get(api);if(retained?.kind!=='owned'||operation.current||uploading||opening)return;
     const controller=new AbortController();operation.current=controller;setBusy(true);setError('');setPollError('');
     try{await postOriginal(retained,controller);}finally{if(operation.current===controller)operation.current=null;}
   }
@@ -275,7 +275,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if(controller.signal.aborted)return;
       const id=crypto.randomUUID();
       const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null,anchorMaterialRef:null}:{})}:reference.origin?reference.materialRef?{anchorMaterialRef:reference.materialRef}:{anchorEvidenceIds:reference.ids}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
-      const retained:PendingQuery={id,body,question:text,attachments:attachments.map(value=>({...value})),...queryRecovery.versions(api),conversationId:conversation?.id,unknown:false};
+      const retained:OwnedQuery={kind:'owned',id,body,question:text,attachments:attachments.map(value=>({...value})),...queryRecovery.versions(api),conversationId:conversation?.id,unknown:false};
       queryRecovery.set(api,retained);
       await postOriginal(retained,controller);
     } catch (e) {
@@ -343,7 +343,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       </article>)}
       {busy&&!run&&pendingQuestion&&<p className="query-admission-status" role="status">{moteText('正在提交问题…')}</p>}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}
-      {(recovery?.unknown||pollError&&run?.status==='running')&&<section className="query-unconfirmed notice" aria-label={moteText('结果尚未确认，请检查或重试原请求。')}><p role="status">{moteText('上次提交结果尚未确认；先重试原要求，当前草稿会保留。')}</p>{recovery&&<p>{recovery.question}</p>}{pollError&&<p>{pollError}</p>}<div className="source-toolbar"><button className="button" disabled={busy} onClick={()=>void checkOriginal()}>{moteText('检查结果')}</button>{recovery&&<button className="button" disabled={busy||uploading||opening} onClick={()=>void retryOriginal()}>{moteText('重试同一请求')}</button>}</div></section>}
+      {(recovery?.unknown||pollError&&run?.status==='running')&&<section className="query-unconfirmed notice" aria-label={recovery?.kind==='adopted'?moteText('请刷新检查结果，避免重复发送。'):moteText('结果尚未确认，请检查或重试原请求。')}><p role="status">{recovery?.kind==='adopted'?moteText('请刷新检查结果，避免重复发送。'):moteText('上次提交结果尚未确认；先重试原要求，当前草稿会保留。')}</p>{recovery?.kind==='owned'&&<p>{recovery.question}</p>}{pollError&&<p>{pollError}</p>}<div className="source-toolbar"><button className="button" disabled={busy} onClick={()=>void checkOriginal()}>{moteText('检查结果')}</button>{recovery?.kind==='owned'&&<button className="button" disabled={busy||uploading||opening} onClick={()=>void retryOriginal()}>{moteText('重试同一请求')}</button>}</div></section>}
       {run&&run.status!=='completed'&&!recovery?.unknown&&!(pollError&&run.status==='running')&&<QueryProgress compact api={api} run={run} error={pollError}/>}
       {run?.status==='running'&&<button className="button subtle" onClick={()=>void cancelRunning()}>{moteText("停止生成")}</button>}
       <div ref={end}/>

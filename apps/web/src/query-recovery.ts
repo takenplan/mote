@@ -1,17 +1,25 @@
 import type {Api} from './api';
 import type {ChatAttachment} from './chat-drafts';
 import type {QueryRun} from './QueryProgress';
-export interface PendingQuery {
+interface QueryIdentity {
  readonly id:string;
- readonly body:string;
- readonly question:string;
- readonly attachments:readonly ChatAttachment[];
- readonly draftVersion:number;
  readonly contextVersion:number;
  readonly conversationId?:string;
  readonly run?:QueryRun;
  readonly unknown:boolean;
 }
+export interface OwnedQuery extends QueryIdentity {
+ readonly kind:'owned';
+ readonly body:string;
+ readonly question:string;
+ readonly attachments:readonly ChatAttachment[];
+ readonly draftVersion:number;
+}
+export interface AdoptedQuery extends QueryIdentity {
+ readonly kind:'adopted';
+ readonly run:QueryRun;
+}
+export type PendingQuery=OwnedQuery|AdoptedQuery;
 interface OwnerState {pending?:PendingQuery;draftVersion:number;contextVersion:number;listeners:Set<()=>void>}
 const owners=new WeakMap<Api,OwnerState>();
 function state(api:Api){let value=owners.get(api);if(!value){value={draftVersion:0,contextVersion:0,listeners:new Set()};owners.set(api,value);}return value;}

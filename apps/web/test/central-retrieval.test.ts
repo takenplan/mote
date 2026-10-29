@@ -69,9 +69,9 @@ test('clearing Ask scope changes only the next submitted turn and history naviga
   if(path==='/api/model-settings')return modelView();
   if(path==='/api/conversations?limit=30')return {items:[summary(id),summary(other)],nextCursor:null};
   if(path.startsWith('/api/conversations/'))return path.split('/').pop()===id?scopedRecord:otherRecord;
-  if(path==='/api/query-runs'&&init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {id:'generated-pending-run',status:'running',createdAt:when,updatedAt:when,events:[]};}
+  if(path==='/api/query-runs'&&init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {id:writes.at(-1).id,status:'running',createdAt:when,updatedAt:when,events:[]};}
   if(path==='/api/query-runs')return {items:[]};
-  if(path==='/api/query-runs/generated-pending-run')return new Promise(()=>{});
+  if(path==='/api/query-runs/'+writes.at(-1)?.id)return new Promise(()=>{});
   if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};
   if(path.startsWith('/api/owner-questions'))return {items:[],nextCursor:null};
   throw Error('Unexpected generated scope fixture path '+path);
