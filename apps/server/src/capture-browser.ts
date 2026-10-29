@@ -1,3 +1,4 @@
+import type {EvidenceDeletion} from './evidence-deletion.js';
 import {storedCaptureLibraryVersion} from './capture-library-version.js';
 import {CaptureTimeline,type TimelineRange} from './capture-timeline.js';
 import {registerDeviceLibrary} from './device-library.js';
@@ -26,8 +27,8 @@ const timelineRange=z.object(timelineFields).strict().refine(validTimelineRange,
 const timelineMemberRange=z.object({...timelineFields,group:z.string().min(1).max(8192)}).strict().refine(validTimelineRange,{message:'Select up to 32 days for time browsing'});
 const update=z.object({status:z.enum(['completed','failed']),ocrText:z.string().max(100000)}).strict();
 
-export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;evidenceReader:EvidenceReader;connections:Connections;credential:(req:FastifyRequest)=>ConnectionCredential|undefined}) {
-  const {store,connections,credential,evidenceReader}=context;
+export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;evidenceReader:EvidenceReader;connections:Connections;credential:(req:FastifyRequest)=>ConnectionCredential|undefined;deletion:EvidenceDeletion}) {
+  const {store,connections,credential,evidenceReader,deletion}=context;
   const timeline=new CaptureTimeline(store);
   registerDeviceLibrary(app,context);
   const thumbnails=new Map<string,Buffer>();let cachedBytes=0;
@@ -107,7 +108,7 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
       const {recordContextDeclarations:_,recordContextStatements:__,sourceContextDeclarations:___,sourceContextStatements:____,...context}=detailed.attributionContext;
       detailed.attributionContext=context;
     }
-    return {...detailed,libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
+    return {...detailed,deletion:credential(req)?{available:false,kind:null}:deletion.capability(record.id),libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
       requiresMaterialForMemory,...(memoryMaterialRef?{memoryMaterialRef}:{})};
   });
   app.get('/api/capture-browser/:id/image',async(req,reply)=>{

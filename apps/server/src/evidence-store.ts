@@ -620,10 +620,10 @@ export class EvidenceStore {
     if(this.db.isTransaction)throw new StoreError('Evidence collection requires a committed transaction');
     this.sweep();this.archive.collect();
   }
-  delete(id:string) {
+  delete(id:string,assertCurrent?:()=>void) {
     this.db.exec('BEGIN IMMEDIATE');
     let result:{deleted:number};
-    try{result=this.deleteInTransaction(id,true);this.db.exec('COMMIT');}
+    try{assertCurrent?.();result=this.deleteInTransaction(id,true);this.db.exec('COMMIT');}
     catch(error){if(this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}
     this.collectDeletedEvidence();return result;
   }

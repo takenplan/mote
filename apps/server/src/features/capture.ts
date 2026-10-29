@@ -1,3 +1,4 @@
+import {MaterialNoteDeletion} from '../material-note-deletion.js';
 import {EvidenceDeletion} from '../evidence-deletion.js';
 import type {ServerFeatureScope} from '../feature-host.js';
 import { captureSchema,rangeSchema } from '@mote/shared';
@@ -10,9 +11,10 @@ import type { FeatureServices } from '../feature-services.js';
 import { StoreError } from '../store.js';
 
 /** capture: owns its transport, data and command contributions. */
-export function register(app:FastifyInstance,{perception,executor,maintenanceWorker,assertRequestActive,connections,credential,diagnostics,evidenceReader,files,ingress,parseCaptureBundle,store}:Pick<FeatureServices,"perception"|"executor"|"maintenanceWorker"|"assertRequestActive"|"connections"|"credential"|"diagnostics"|"evidenceReader"|"files"|"ingress"|"parseCaptureBundle"|"store">,scope?:ServerFeatureScope){
+export function register(app:FastifyInstance,{perception,executor,maintenanceWorker,assertRequestActive,connections,credential,diagnostics,evidenceReader,files,ingress,parseCaptureBundle,store,materials}:Pick<FeatureServices,"perception"|"executor"|"maintenanceWorker"|"assertRequestActive"|"connections"|"credential"|"diagnostics"|"evidenceReader"|"files"|"ingress"|"parseCaptureBundle"|"store"|"materials">,scope?:ServerFeatureScope){
  scope?.every(5000,()=>{if(!maintenanceWorker)store.archive.aggregate(1,Date.now()-15000);perception.prepare();return executor.tick();});scope?.defer(()=>perception.close());scope?.defer(()=>maintenanceWorker?.close());
-registerCaptureBrowser(app,{store,connections,credential,evidenceReader});
+const deletion=new EvidenceDeletion(store,files,new MaterialNoteDeletion(store,materials));
+registerCaptureBrowser(app,{store,connections,credential,evidenceReader,deletion});
 app.post('/api/captures',async(req,reply)=>{const input=captureSchema.parse(req.body),c=credential(req);assertExternalCaptures([input],!c);assertCaptureAttachments([input],files,c);if(c)connections.assertCapture(c,input);const result=await diagnostics.measure('ingest','capture',()=>ingress.capture(input,()=>{assertRequestActive(req);assertCaptureAttachments([input],files,c);if(c)connections.assertCapture(c,input);}),r=>({count:r.duplicate?0:1}));return reply.code(result.duplicate?200:201).send(result);});
 app.post('/api/captures/bundle',{bodyLimit:12*1024*1024},async req=>{
     const captures=parseCaptureBundle(req.body);assertExternalCaptures(captures,!credential(req));
@@ -36,7 +38,6 @@ app.get('/api/captures',async req=>{
     const raw=req.query as Record<string,string>;const args=rangeSchema.parse(raw);
     return diagnostics.measure('source','timeline',()=>store.list({...args,cursor:raw.cursor}),page=>({count:page.items.length}));
   });
-const deletion=new EvidenceDeletion(store,files);
 app.delete('/api/captures/:id',async req=>deletion.delete((req.params as {id:string}).id));
 app.get('/api/activity',async req=>store.activity(rangeSchema.parse(req.query)));
 }
