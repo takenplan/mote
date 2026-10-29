@@ -2,36 +2,44 @@
 .app-shell[data-navigation] .content:has(>.owner-maintenance-page) { max-width:1000px; padding:35px 42px 70px; }
 .content:has(>.owner-maintenance-page)>.workspace-tools { display:none; }
 .owner-maintenance-page { font-size:14px; line-height:1.65; }
+.owner-maintenance-page.usage-page { display:block; }
+.owner-maintenance-page .diagnostics-panel { padding:0; margin:0; }
+.owner-maintenance-page .transfer-panel { padding:0; border:0; background:transparent; }
 .owner-maintenance-page .owner-back { display:inline-flex; color:var(--mote-muted); font-size:12px; line-height:19.8px; padding:6px 0; margin:3px 0 29px; text-decoration:none; }
 .owner-maintenance-heading { margin:0 0 30px; }
 .owner-maintenance-heading h1 { font-size:25px; line-height:35px; font-weight:600; margin:0; }
 .owner-maintenance-page .panel { border:0; border-radius:0; box-shadow:none; background:transparent; padding:0; margin:0; }
-.owner-maintenance-page .button { font-size:12px; line-height:20px; min-height:35px; padding:6px 12px; border-radius:5px; box-shadow:none; }
-.owner-maintenance-page .text-button { font-size:12px; line-height:20px; min-height:0; padding:0; }
-.owner-maintenance-page input:not([type=checkbox]),.owner-maintenance-page select { font-size:12px; line-height:20px; min-height:30px; border-radius:5px; padding:4px 9px; }
+.owner-maintenance-page .button { font-size:12px; line-height:20px; min-height:35px; padding:6px 12px; border-radius:5px; box-shadow:none; border-color:var(--mote-border); }
+.owner-maintenance-page .text-button { font-size:12px; line-height:19.8px; min-height:0; padding:0; color:var(--mote-muted); text-decoration:none; }
+.owner-maintenance-page input:not([type=checkbox]),.owner-maintenance-page select { font-size:12px; line-height:20px; min-height:30px; border-radius:5px; padding:4px 9px; border-color:var(--mote-border); background:var(--mote-surface); }
 .owner-maintenance-page label { font-size:12px; }
 .owner-maintenance-page .fine-print { font-size:12px; line-height:1.9; }
 .owner-maintenance-page .owner-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; padding:23px 0; margin:23px 0; border-top:1px solid var(--mote-border); border-bottom:1px solid var(--mote-border); }
 .owner-metrics>div { min-width:0; }
-.owner-metrics span,.owner-metrics small { display:block; font-size:12px; line-height:22.8px; color:var(--mote-muted); }
-.owner-metrics strong { display:block; font-size:26px; line-height:43px; font-weight:600; overflow-wrap:anywhere; }
+.owner-metrics span,.owner-metrics small { display:block; font-size:11px; line-height:1.65; color:var(--mote-muted); }
+.owner-metrics strong { display:block; font-size:25px; line-height:1.65; font-weight:500; margin:6px 0 2px; overflow-wrap:anywhere; }
 .owner-metrics .owner-metric-text { font-size:18px; }
 .owner-filter-line { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:12px; }
 .owner-filter-line label { display:flex; align-items:center; gap:8px; }
+.owner-maintenance-page .owner-filter-line select { height:30px; min-height:30px; line-height:normal; padding:6px 9px; color:var(--mote-muted); }
 .owner-filter-line>small { font-size:12px; color:var(--mote-muted); }
 .owner-presets { display:inline-flex; padding:2px; border:1px solid var(--mote-border); border-radius:5px; }
-.owner-presets button { font-size:12px; line-height:20px; padding:5px 10px; border-radius:3px; color:var(--mote-muted); }
-.owner-presets button[aria-pressed=true] { background:var(--mote-tint); color:var(--mote-ink); }
+.owner-presets button { font-size:12px; line-height:19.8px; padding:5px 9px; border-radius:3px; color:var(--mote-muted); }
+.owner-presets button[aria-pressed=true] { background:#e8e4dd; color:var(--mote-ink); }
+[data-theme=dark] .owner-presets button[aria-pressed=true] { background:var(--mote-surface-hover); }
 .owner-usage-summary { width:100%; border-collapse:collapse; font-size:12px; text-align:left; }
-.owner-usage-summary th { font-size:11px; color:var(--mote-muted); font-weight:400; padding:12px 0; border-bottom:1px solid var(--mote-border); }
-.owner-usage-summary td { padding:20px 0; border-bottom:1px solid var(--mote-border); vertical-align:top; }
+.owner-usage-summary th { font-size:11px; line-height:1.65; color:var(--mote-muted); font-weight:400; padding:13px 10px 13px 0; border-bottom:1px solid var(--mote-border); }
+.owner-usage-summary td { padding:17px 10px 17px 0; border-bottom:1px solid var(--mote-border); vertical-align:middle; }
 .owner-usage-summary th:first-child { width:24%; }
 .owner-usage-summary th:nth-child(2) { width:14%; }
 .owner-usage-summary th:nth-child(3) { width:32%; }
 .owner-usage-summary small { display:block; font-size:11px; color:var(--mote-muted); margin-top:3px; }
-.owner-usage-summary .text-button { color:var(--mote-ink); text-align:left; }
+.owner-usage-summary .text-button { color:var(--mote-ink); text-align:left; padding:6px 0; }
 .owner-maintenance-page .owner-disclosure { margin:23px 0 0; padding:0; border:0; background:transparent; }
-.owner-disclosure>summary { cursor:pointer; font-size:12px; line-height:20px; padding:13px 0; color:var(--mote-muted); }
+.owner-disclosure>summary { cursor:pointer; font-size:12px; line-height:20px; padding:13px 0; color:var(--mote-muted); list-style:none; }
+.owner-disclosure>summary::-webkit-details-marker { display:none; }
+.owner-disclosure>summary::before { content:'›'; display:inline-block; margin-right:10px; }
+.owner-disclosure[open]>summary::before { transform:rotate(90deg); }
 .owner-disclosure[open]>summary { margin-bottom:12px; }
 .owner-disclosure .usage-filter { margin:16px 0; }
 .owner-maintenance-page .owner-section { margin-top:28px; }
@@ -44,6 +52,12 @@
 .owner-maintenance-page .content-storage { margin-top:28px; }
 .owner-maintenance-page .content-storage .check-field { display:flex; align-items:center; justify-content:space-between; flex-direction:row-reverse; padding:18px 0; border-bottom:1px solid var(--mote-border); gap:20px; font-size:14px; }
 .owner-maintenance-page .content-storage .check-field input { margin:0; flex-shrink:0; }
+.content-storage input[role=switch] { appearance:none; width:34px; height:21px; border:1px solid var(--mote-border); border-radius:12px; background:#e8e4dd; padding:0; cursor:pointer; }
+[data-theme=dark] .content-storage input[role=switch]:not(:checked) { background:var(--mote-surface-hover); }
+.content-storage input[role=switch]::after { content:''; display:block; width:13px; height:13px; margin:3px; border-radius:50%; background:var(--mote-muted); }
+.content-storage input[role=switch]:checked { background:var(--mote-accent); border-color:var(--mote-accent); }
+.content-storage input[role=switch]:checked::after { transform:translateX(13px); background:var(--mote-surface); }
+.content-storage input[role=switch]:disabled { opacity:.5; cursor:default; }
 .owner-maintenance-page .content-storage .check-field strong { font-size:14px; font-weight:600; }
 .owner-maintenance-page .content-storage .check-field small { display:block; font-size:12px; color:var(--mote-muted); margin-top:4px; }
 .owner-maintenance-page .diagnostics-metrics { margin:0 0 20px; }

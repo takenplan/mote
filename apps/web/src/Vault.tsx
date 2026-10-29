@@ -69,7 +69,7 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, chil
       {error&&<ErrorNotice text={error}/>}
       {message&&<p className="notice success" role="status"><CheckCircle2 size={16}/>{message}</p>}
       <div className="owner-metrics owner-storage-metrics">
-        <div><span>{moteText('中心已使用')}</span><strong>{disk.data?bytes(disk.data.bytes):'—'}</strong><small>{disk.error?errorMessage(disk.error):disk.data?.skipped?moteText('部分文件无法读取，统计可能不完整。'):disk.loading?moteText('正在读取…'):moteText('文件与模型 · 当前占用')}</small></div>
+        <div><span>{moteText('中心已使用')}</span><strong>{!disk.error&&disk.data?bytes(disk.data.bytes):'—'}</strong><small role={disk.error?'alert':undefined}>{disk.error?errorMessage(disk.error):disk.data?.skipped?moteText('部分文件无法读取，统计可能不完整。'):disk.loading?moteText('正在读取…'):moteText('文件与模型 · 当前占用')}</small></div>
         <div><span>{moteText('资料保存')}</span><strong className="owner-metric-text">{status.retentionDays?moteText('{0} 天',status.retentionDays):moteText('持续保留')}</strong><small>{status.retentionDays?moteText('保留周期'):moteText('未启用自动删除')}</small></div>
         <div><span>{moteText('检索方式')}</span><strong className="owner-metric-text">{status.index.mode==='hybrid'?moteText('全文 + 向量检索'):moteText('文本检索')}</strong><small>{status.index.model||moteText('可选择配置 Embedding 模型')}</small></div>
       </div>

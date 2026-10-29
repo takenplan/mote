@@ -26,7 +26,7 @@ export function ContentStorage({api,onChange}:{api:Api;onChange?:()=>void}) {
   const running=state?.job.state==='running';
   return <section className="owner-section content-storage" aria-labelledby="content-storage-title">
     <h2 id="content-storage-title">{moteText('内容保存')}</h2>
-    <label className="check-field"><input type="checkbox" checked={state?.enabled??false} disabled={!state||busy||running}
+    <label className="check-field"><input type="checkbox" role="switch" aria-label={moteText('加密后续图片与原件')} checked={state?.enabled??false} disabled={!state||busy||running}
       onChange={event=>void change('/api/content-storage','PUT',{enabled:event.target.checked,revision:state!.revision})}/><span><strong>{moteText('加密后续图片与原件')}</strong><small>{!state?moteText('正在读取…'):state.enabled?moteText('当前：加密保存'):moteText('当前：明文保存')}</small></span></label>
     <details className="owner-disclosure"><summary>{moteText('已有文件与加密范围')}</summary>
     <p className="fine-print">{moteText("开关立即生效，已有文件保持原格式并可继续读取。记录正文和索引存储在 SQLite 中；客户端的本地存储可在各自开发者选项中设置。")}</p>

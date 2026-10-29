@@ -11,6 +11,7 @@ const directory=process.argv[2];if(!directory)throw Error('Generated fixture dir
 const token=randomBytes(32).toString('hex'),when='2026-10-29T01:00:00.000Z',noteId=randomUUID(),reportId=randomUUID();
 const runtime=await buildApp({dataDir:join(directory,'data'),token,tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,agent:{configured:process.argv[3]==='memory-ask',query:async()=>{if(process.argv[3]!=='memory-ask')throw Error('No model calls allowed');return {runId:randomUUID(),answer:'Generated controlled original reference answer',citations:[],trace:[]};},close:async()=>{}}});
 runtime.app.addHook('onRequest',async(req,reply)=>{
+ for(const [path,marker] of [['/api/usage?','usage-fault'],['/api/storage-statistics','storage-fault'],['/api/diagnostics','diagnostics-fault']])if(process.argv[3]==='maintenance'&&req.method==='GET'&&req.url.startsWith(path)&&existsSync(join(directory,marker)))return reply.code(503).send({error:'service_unavailable',message:'Generated maintenance read unavailable'});
  if(process.argv[3]==='workspace'&&req.url.includes('/api/model-settings')&&req.url.endsWith('/models'))return reply.send({items:[{id:'generated-model',name:'Generated model catalog'}]});
  if(process.argv[3]==='memory-ask'&&req.url.startsWith('/api/materials/')&&existsSync(join(directory,'advance-material.json'))){const target=JSON.parse(readFileSync(join(directory,'advance-material.json'),'utf8')) as {id:string};const current=runtime.materials.get(target.id)!;runtime.materials.publish({id:target.id,kind:current.kind,schemaVersion:1,title:current.title,origin:current.origin,members:[{id:documentId,kind:'capture',ref:'capture:'+documentId}],blocks:[{id:'body',kind:'text',format:'plain',text:'Changed after the owner selected the pinned Material',memberIds:[documentId]}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:current.revision});rmSync(join(directory,'advance-material.json'));}
  if(req.url.startsWith('/api/library/browse?')&&existsSync(join(directory,'retire-material.json'))){const target=JSON.parse(readFileSync(join(directory,'retire-material.json'),'utf8')) as {id:string;revision:string};runtime.materials.retire(target.id,{expectedRevision:target.revision});rmSync(join(directory,'retire-material.json'));}
@@ -64,6 +65,15 @@ if(['workspace','memory-ask'].includes(process.argv[3])){
   const record=runtime.memories.readEvidence([evidenceId])[0],offset=record.ocrText.indexOf(quote);
   const id=randomUUID(),memory={version:1,domain:'personal',tier:'episode',kind:'episodic',id,title:['资料阅读与提问要保留返回路径','阅读优先展示原文与原图','先走通一段完整旅程'][index],statement:'这次界面讨论要求从原文发起提问、核对引用，并能回到原来的资料列表位置。',uncertainty:'仅来自本轮生成资料，不代表所有使用场景。',status:index===2?'stale':'published',createdAt:when,model:'controlled-fixture',runId:'controlled-fixture',fingerprint:String(index+1).repeat(64),evidenceIds:[evidenceId],evidence:[{id:evidenceId,deviceId:record.deviceId,capturedAt:record.capturedAt,receivedAt:record.receivedAt,offset,length:quote.length,quote,contentHash:memoryEvidenceFingerprint(record)}],admission:{layer:'memory',reason:'Generated visual fixture',scope:'Generated UI validation',attribution:'user'}};
   runtime.store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(id,when,JSON.stringify(memory));runtime.store.db.prepare('INSERT INTO memory_dependencies(memory_id,evidence_id) VALUES(?,?)').run(id,evidenceId);memoryIds.push(id);memoryNoteIds.push(evidenceId);
+ }
+}
+if(process.argv[3]==='maintenance'){
+ const ledger=runtime.featureServices.usageLedger;
+ ledger.setPrice({provider:'generated-fixture',model:'generated-priced',currency:'USD',input:2,output:3,cacheRead:1,cacheWrite:1});
+ for(let index=0;index<12;index++){
+  const meter=ledger.start('generated-fixture',index%3?'generated-priced':'generated-unpriced','query',{agentId:'context-query',moduleId:['conversations','memories','insights','files','imports'][index%5],skillId:null});
+  if(index%4)meter.update({requests:1,reportedRequests:1,inputTokens:1000+index,outputTokens:100,totalTokens:1100+index,cacheReadTokens:0,cacheWriteTokens:0});
+  meter.finish(index%5?'completed':'failed');
  }
 }
 await runtime.app.listen({host:'127.0.0.1',port:0});
