@@ -1,3 +1,4 @@
+import {appendDiagnostic,renderReadableFailure} from './ui-diagnostic';
 import {sourceSelectionResult} from './source-selection-result';
 import {keepLanguageAskDraft,takeLanguageAskDraft,dropLanguageAskDraft} from './language-draft';
 import {createWorkPendingUi} from './work-pending-ui';
@@ -455,7 +456,7 @@ function render(status: import('./contracts').Status): void {
   byId('stop').hidden = !status.running && !(settingsApplying && wasRunningBeforeSave);
   // A source registration or settings update can need a flush even with no pending bodies.
   byId('retry').hidden = false;
-  byId<HTMLButtonElement>('retry').disabled = busy || (status.facts ? !status.facts.sync.allowedActions.includes('retry_sync') : status.sync.state === 'uploading' || status.sync.state === 'unconfigured');
+  byId<HTMLButtonElement>('retry').disabled = busy || Boolean(status.config.syncPaused) || (status.facts ? !status.facts.sync.allowedActions.includes('retry_sync') : status.sync.state === 'uploading' || status.sync.state === 'unconfigured');
   byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即上传");
   fields.disabled = busy;for(const control of Array.from(document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('[form=settings]')))control.disabled=busy;
   byId<HTMLInputElement>('device-name').disabled = busy;
@@ -506,7 +507,7 @@ async function perform(action: () => Promise<unknown>): Promise<void> {
   busy = true; feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
   try { await action(); } catch (error) {
     const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作失败");
-    feedback(message);
+    renderReadableFailure(byId('feedback'),moteText('操作未完成，请检查权限与配置后重试'),message);
   } finally { busy = false; byId('feedback').setAttribute('aria-busy', 'false'); if (byId('feedback').textContent === moteText("正在处理，请稍候…")) feedback(''); if (currentStatus) render(currentStatus); }
 }
 byId('settings').addEventListener('submit', event => {
@@ -709,10 +710,12 @@ let sourceBusy = false;
 let sourceSelection:{id:string;mode:'files'|'directory';names:string[]}|undefined;
 const sourceRules=byId<HTMLDetailsElement>('source-rules');
 const sourceRulesHome=sourceRules.parentElement!;
+function restoreSourceRuleFields():void{sourceRules.prepend(byId('source-initial-description-row'));sourceRules.insertBefore(byId('source-destination').closest('label')!,byId('source-advanced'));}
+
 function refreshSourcePolicySummaries():void {
   for(const [fieldId,summaryId] of [['source-initial-sync','source-history-value'],['source-retention','source-retention-value']]) byId(summaryId).textContent=byId<HTMLSelectElement>(fieldId).selectedOptions[0]?.textContent??'';
 }
-function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
+function restoreSourceRules():void {restoreSourceRuleFields();sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
 function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceMode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);byId('source-initial-sync-row').hidden=once;byId('source-once-row').hidden=!once;if(once)field.value='all';refreshSourcePolicySummaries();}
 byId('source-initial-sync').addEventListener('change',refreshSourcePolicySummaries);
 refreshSourcePolicySummaries();
@@ -728,7 +731,7 @@ function renderSourceDestination():void {
   byId('source-destination-state').textContent=!config?.tokenConfigured?moteText('未连接'):config.syncPaused?moteText('发送已暂停'):moteText('已连接');
 }
 function configureSourceEditor(mode:'files'|'directory'):void{
-  sourceMode=mode;invalidateSourceEditor();byId('source-existing-selection').hidden=true;byId('source-editor-subtitle').hidden=true;byId('source-edit-footer').hidden=true;
+  restoreSourceRuleFields();sourceMode=mode;invalidateSourceEditor();byId('source-existing-selection').hidden=true;byId('source-editor-subtitle').hidden=true;byId('source-edit-footer').hidden=true;
   for(const kind of ['files','directory'])byId('source-mode-'+kind).setAttribute('aria-pressed',String(mode===kind));
   byId('source-selection-hint').textContent=mode==='directory'?moteText('以后修改，也自动同步'):moteText('保存当前文件一次');byId('source-continuous-row').hidden=mode!=='files';
   byId('source-confirm').textContent=mode==='directory'?moteText('添加并同步'):moteText('导入文件');byId('source-confirm-policy').textContent=currentStatus?.config.syncPaused?moteText('添加后先保存在本机'):moteText('按当前发送设置同步');
@@ -805,10 +808,10 @@ async function sourceAction(action: () => Promise<void>): Promise<void> {
   if (sourceBusy) return; sourceBusy = true;byId('source-feedback').hidden=false; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
   for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
   try { await action(); byId('source-feedback').textContent='';byId('source-feedback').hidden=true; }
-  catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
+  catch (error) { renderReadableFailure(byId('source-feedback'),moteText('操作未完成，请检查权限与配置后重试'),error instanceof Error?error.message:String(error)); }
   finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {});byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection;byId<HTMLButtonElement>('source-calendar-add').disabled=!readInput('source-calendar-choice');byId<HTMLButtonElement>('source-agent-add').disabled=!readInput('source-agent-choice'); }
 }
-for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceConnectGeneration++;byId<HTMLSelectElement>('source-agent-choice').replaceChildren();byId<HTMLSelectElement>('source-calendar-choice').replaceChildren();byId('source-agent-choice').hidden=true;byId('source-agent-add').hidden=true;byId('source-calendars').hidden=true;byId<HTMLButtonElement>('source-calendar-add').disabled=true;byId<HTMLButtonElement>('source-agent-add').disabled=true;sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-connect-title').textContent=kind==='agent'?moteText('连接 Coding Agent'):moteText('连接日历');byId('source-connect-rules').append(sourceRules);sourceRules.open=true;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;byId<HTMLSelectElement>('source-retention').value='snapshot';showPage('source-connect');refreshSourceTextOptions();});
+for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceConnectGeneration++;byId<HTMLSelectElement>('source-agent-choice').replaceChildren();byId<HTMLSelectElement>('source-calendar-choice').replaceChildren();byId('source-agent-choice').hidden=true;byId('source-agent-add').hidden=true;byId('source-calendars').hidden=true;byId<HTMLButtonElement>('source-calendar-add').disabled=true;byId<HTMLButtonElement>('source-agent-add').disabled=true;sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-agent-statuses').replaceChildren();byId('source-connect-title').textContent=kind==='agent'?moteText('本机 Coding Agent'):moteText('本机日历');byId('source-editor-title').textContent=moteText('同步详情');byId('source-connect-rules').append(byId('source-initial-description-row'),byId('source-destination').closest('label')!,sourceRules);sourceRules.open=false;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;byId<HTMLSelectElement>('source-retention').value='snapshot';showPage('source-connect');refreshSourceTextOptions();});
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
   const current=sourceConnectRequest();
@@ -821,6 +824,8 @@ byId('source-calendar-connect').addEventListener('click', () => void sourceActio
 }));
 byId('source-agent-discover').addEventListener('click', () => void sourceAction(async () => {
   const current=sourceConnectRequest(),agents = await desktopApi.codingAgents();if(!current())return; const select = byId<HTMLSelectElement>('source-agent-choice'); select.replaceChildren();
+  const statuses=byId('source-agent-statuses');statuses.replaceChildren();
+  for(const agent of agents){const row=document.createElement('div');row.className='source-provider-row';const name=document.createElement('strong'),state=document.createElement('span');name.textContent=agent.name;const connected=localSourceRows.find(item=>item.source.agent===agent.provider);state.textContent=connected?moteText('已连接'):agent.available?moteText('发现本机目录'):moteText('未发现本机目录');row.append(name,state);if(connected){const open=document.createElement('button');open.type='button';open.className='text-button';open.textContent=moteText('查看来源');open.addEventListener('click',()=>{if(!sourceBusy)sourceWorkspace.open(connected.source.id);});row.append(open);}statuses.append(row);}
   for (const agent of agents.filter(a => a.available)) { const option = document.createElement('option'); option.value = agent.provider; option.textContent = agent.name; select.append(option); }
   select.hidden = !select.options.length; byId('source-agent-add').hidden = !select.options.length;
   if (!select.options.length) throw new Error(moteText("本机默认目录中尚未发现受支持的 Agent 会话"));
@@ -1254,16 +1259,18 @@ function renderAsk(): void {
     question.textContent = turn.question;question.hidden=index===0&&askConversation?.title===turn.question;
     const openEvidence = (id: string) => void askAction(() => openAskEvidence(id));
     const citations=turn.evidenceDeleted?[]:turn.result?.citations??[];
-    article.append(question, renderAskAnswer(document, turn.evidenceDeleted?moteText('内容已按隐私要求清除。'):turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'),citations,openEvidence));
+    article.append(question, renderAskAnswer(document, turn.evidenceDeleted?moteText('内容已按隐私要求清除。'):turn.result?.answer ?? moteText('回答未完成'),citations,openEvidence));
+    if(!turn.evidenceDeleted&&turn.error)appendDiagnostic(article,JSON.stringify(turn.error,null,2));
     if(!turn.evidenceDeleted&&(turn.evidenceUnavailable||turn.evidenceStale)){const notice=document.createElement('p');notice.className='ask-history-note';notice.textContent=turn.evidenceUnavailable?moteText('引用原文已删除，历史问答仍保留。'):moteText('这是历史版本，当前资料已更新。');article.append(notice);}
     if(citations.length){const list=document.createElement('div');list.className='ask-references';const label=document.createElement('p');label.textContent=moteText('依据');list.append(label);citations.forEach((citation,index)=>list.append(renderAskCitation(document,citation,openEvidence,index+1)));article.append(list);}
     messages.append(article);
   }
   if(askRun?.status==='running'&&askSubmittedQuestion){const pending=document.createElement('article'),question=document.createElement('h3');question.textContent=askSubmittedQuestion;pending.append(question);messages.append(pending);}
-  const last = askRun?.events?.at(-1);
-  setText('ask-progress', !askRun ? '' : askRun.status === 'running'&&askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askRun.status === 'running'&&askStopPending?moteText('正在停止，等待中央确认…'):askRun.status === 'running' ? last?.message ?? (last?.tool ? `${moteText('正在读取资料')} · ${last.tool}` : moteText('中央节点正在回答…')) : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? askRun.error?.message ?? moteText('回答未完成') : moteText('回答已完成'));
+  setText('ask-progress', !askRun ? '' : askRun.status === 'running'&&askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askRun.status === 'running'&&askStopPending?moteText('正在停止，等待中央确认…'):askRun.status === 'running' ? moteText('正在读取资料') : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? moteText('回答未完成') : moteText('回答已完成'));
+  if(askRun&&(askRun.error||askRun.events?.length))appendDiagnostic(byId('ask-progress'),JSON.stringify({id:askRun.id,status:askRun.status,error:askRun.error,events:askRun.events},null,2));
   askControls();
 }
+function askFailure(error:unknown):void{const message=askView==='history'?moteText('对话暂不可读取，请稍后重试。'):askPendingInput||askRunLookupPending||askStopPending?moteText('请刷新检查结果，避免重复发送。'):moteText('请求失败，请重试');renderReadableFailure(byId('ask-error'),message,error instanceof Error?error.message:String(error));}
 async function loadAskConversation(id: string): Promise<void> {
   const generation = askGeneration;
   const conversation = await askCall<import('./ask').AskConversation>('conversation', {id});
@@ -1299,7 +1306,7 @@ async function askHistory(append = false): Promise<void> {
 }
 async function askAction(action: () => Promise<void>): Promise<void> {
   if (askBusy) return; askBusy = true; askControls(); setText('ask-error', '');
-  try { await action(); } catch (error) { if(askPendingInput)askPendingMessage='';setText('ask-error', error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/,'') : moteText('请求失败，请重试')); }
+  try { await action(); } catch (error) { if(askPendingInput)askPendingMessage='';askFailure(error); }
   finally { askBusy = false; askControls(); }
 }
 async function refreshAsk(): Promise<void> {
@@ -1343,7 +1350,7 @@ function scheduleAskPoll(): void {
       }
       setText('ask-error', ''); renderAsk();
       if (run.status === 'running') scheduleAskPoll();
-    } catch (error) { if (generation !== askGeneration) return; setText('ask-error', `${error instanceof Error ? error.message : ''} · ${moteText('请刷新检查结果，避免重复发送。')}`); if (askRun?.status === 'running') scheduleAskPoll(); }
+    } catch (error) { if (generation !== askGeneration) return; askFailure(error); if (askRun?.status === 'running') scheduleAskPoll(); }
   }, 1000);
 }
 byId('ask-form').addEventListener('submit', event => {
