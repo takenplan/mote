@@ -5,6 +5,7 @@ import {buildApp} from '../../server/src/app.js';
 import {memoryEvidenceFingerprint} from '../../server/src/memory.js';
 import {materialId} from '../../server/src/materials.js';
 import sharp from 'sharp';
+import {sha256} from '../../server/src/store.js';
 import {uploadNoteAttachment} from '../src/note-attachments.js';
 import type {Api} from '../src/api.js';
 const directory=process.argv[2];if(!directory)throw Error('Generated fixture directory required');
@@ -20,6 +21,8 @@ runtime.app.addHook('onRequest',async(req,reply)=>{
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated version unavailable'});
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-mismatch')))return reply.send({currentVersion:'0.0.0-generated'});
  if(req.url==='/api/devices/first-data'&&existsSync(join(directory,'first-data-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated receipt read unavailable'});
+ if(req.url.includes('/export')&&existsSync(join(directory,'raw-export-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated raw export unavailable'});
+ if(req.url.endsWith('/corrections')&&existsSync(join(directory,'correction-fault')))return reply.code(409).send({error:'conflict',message:'Generated correction conflict'});
  if(req.url.startsWith('/api/captures/')&&req.method==='DELETE'&&existsSync(join(directory,'deny-delete')))return reply.code(403).send({error:'forbidden',message:'Generated original deletion denied'});
  if(req.url==='/api/notes'&&req.method==='POST'&&existsSync(join(directory,'deny-note')))return reply.code(403).send({error:'forbidden',message:'Generated note permission denied'});
 });
@@ -78,6 +81,18 @@ if(process.argv[3]==='maintenance'){
   meter.finish(index%5?'completed':'failed');
  }
 }
+let recordingId:string|undefined;
+if(process.argv[3]==='recording'){
+ // Generated waveform plus controlled ASR output: no audio/model provider call.
+ const waveform=Buffer.alloc(44+8000*2);waveform.write('RIFF');waveform.writeUInt32LE(waveform.length-8,4);waveform.write('WAVEfmt ',8);waveform.writeUInt32LE(16,16);waveform.writeUInt16LE(1,20);waveform.writeUInt16LE(1,22);waveform.writeUInt32LE(8000,24);waveform.writeUInt32LE(16000,28);waveform.writeUInt16LE(2,32);waveform.writeUInt16LE(16,34);waveform.write('data',36);waveform.writeUInt32LE(16000,40);for(let i=0;i<8000;i++)waveform.writeInt16LE(Math.round(Math.sin(i*Math.PI/20)*1000),44+i*2);
+ runtime.sources.register({id:'generated-recording',name:'本轮生成录音',kind:'local-files',deviceId:'generated-web',platform:'macos',retention:'archive'});
+ const begin=runtime.files.begin({sourceId:'generated-recording',item:{externalId:'recording.wav',revision:'1',observedAt:when,kind:'file',layer:'original',mimeType:'audio/wav',title:'资料阅读讨论.wav'},sizeBytes:waveform.length,sha256:sha256(waveform)},()=>{});runtime.files.part(begin.uploadId,0,waveform,()=>{});recordingId=(await runtime.files.commit(begin.uploadId,()=>{})).id;
+ const raw=randomUUID(),dialogue=randomUUID(),diarization=randomUUID();const segments=[{startMs:0,endMs:400,text:'本轮生成的原始转写：先核对资料。',speaker:'SPEAKER_0'},{startMs:400,endMs:800,text:'继续核对返回路径。',speaker:'SPEAKER_0',uncertain:true},{startMs:800,endMs:1000,text:'保留原始录音和转写。',speaker:'SPEAKER_1'}];
+ for(const [artifact,kind,value]of [[raw,'transcript',{complete:true,transcript:{durationMs:1000,segments}}],[dialogue,'dialogue',{complete:true,transcript:{durationMs:1000,segments},inputArtifacts:[raw]}],[diarization,'diarization',{durationMs:1000,segments:segments.map(({startMs,endMs,speaker})=>({startMs,endMs,speaker})),samples:[{speaker:'SPEAKER_0'},{speaker:'SPEAKER_1'}],warnings:[],observedSpeakers:2}]] as const){runtime.store.db.prepare('INSERT INTO file_artifacts VALUES(?,?,?,?,?,?,1)').run(artifact,recordingId,kind,when,'generated-controlled-ASR',JSON.stringify(value));}
+ for(const [index,segment]of segments.entries())runtime.store.db.prepare('INSERT INTO file_chunks(id,artifact_id,capture_id,start_ms,end_ms,text,metadata,ordinal) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),dialogue,recordingId,segment.startMs,segment.endMs,segment.text,JSON.stringify({speaker:segment.speaker,uncertain:segment.uncertain}),index);
+ for(const speaker of ['SPEAKER_0','SPEAKER_1'])runtime.files.saveAsset(diarization,'speaker_samples/'+speaker+'.wav','audio/wav',waveform);
+ runtime.store.db.prepare("UPDATE file_jobs SET state='succeeded',summary_state='skipped',error=NULL WHERE capture_id=?").run(recordingId);
+}
 await runtime.app.listen({host:'127.0.0.1',port:0});
-console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,memoryIds,memoryNoteIds,directory,generatedOnly:true,modelCalls:0}));
+console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,memoryIds,memoryNoteIds,recordingId,directory,generatedOnly:true,modelCalls:0}));
 process.on('SIGTERM',()=>{void runtime.app.close().then(()=>process.exit(0));});
