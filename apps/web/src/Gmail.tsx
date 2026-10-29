@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
-import type {Api} from './api';
+import {ApiError,type Api} from './api';
 import {connectorFailure,useSourceConnectorStyle} from './source-connectors-ui';
 import {SourceDisconnectReview} from './SourceDisconnectReview';
 type Status={configured:boolean;connected:boolean;account?:string;state:string;hasMore:boolean;code?:string};
@@ -9,7 +9,7 @@ export function Gmail({api,refresh,initiallyOpen=false}:{api:Api;refresh:()=>Pro
  const [status,setStatus]=useState<Status>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[url,setUrl]=useState(''),[message,setMessage]=useState(''),[disconnecting,setDisconnecting]=useState(false);
  const owner=useRef(api);owner.current=api;const scope=useRef(new AbortController());
  const current=(signal:AbortSignal)=>owner.current===api&&!signal.aborted;
- async function load(signal:AbortSignal){const result=await api.request<{gmail:Status}>('/api/connectors/status',{signal});if(current(signal))setStatus(result.gmail);}
+ async function load(signal:AbortSignal){try{const result=await api.request<{gmail:Status}>('/api/connectors/status',{signal});if(current(signal))setStatus(result.gmail);}catch(error){if(current(signal)&&error instanceof ApiError&&[401,403,404,410].includes(error.status))setStatus(undefined);throw error;}}
  useEffect(()=>{const controller=new AbortController();scope.current=controller;setStatus(undefined);setError('');setUrl('');setMessage('');setBusy(false);setDisconnecting(false);void load(controller.signal).catch(error=>{if(current(controller.signal))setError(connectorFailure(error));});return()=>controller.abort();},[api]);
  async function action(fn:(signal:AbortSignal)=>Promise<void>){if(busy)return;const signal=scope.current.signal;setBusy(true);setError('');setMessage('');try{await fn(signal);if(!current(signal))return;await load(signal);if(current(signal))await refresh();}catch(error){if(current(signal))setError(connectorFailure(error));}finally{if(current(signal))setBusy(false);}}
  const authorize=()=>void action(async signal=>{const result=await api.request<{authorizationUrl:string}>('/api/connectors/gmail/start',{method:'POST',body:'{}',signal});const target=new URL(result.authorizationUrl);if(target.protocol!=='https:'||target.hostname!=='accounts.google.com')throw Error(moteText('授权地址不符合预期。'));if(current(signal))setUrl(target.href);});
