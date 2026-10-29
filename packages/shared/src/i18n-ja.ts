@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "适用于这台 Mac 的{0}来源。": "この Mac の「{0}」ソースに適用されます。",
   "应用到草稿": "下書きに適用",
   "补充这类记录的背景（选填）": "この種類の記録の背景を追加（任意）",
   "适用于这台 Mac 的已有与后续资料，不改写原文。": "この Mac の既存と今後の資料に適用され、原文は変更されません。",

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "适用于这台 Mac 的{0}来源。": "Gilt für die Quelle „{0}“ auf diesem Mac.",
   "应用到草稿": "Auf Entwurf anwenden",
   "补充这类记录的背景（选填）": "Hintergrund für diese Art von Aufzeichnung ergänzen (optional)",
   "适用于这台 Mac 的已有与后续资料，不改写原文。": "Gilt für vorhandene und künftige Inhalte auf diesem Mac, ohne den Originaltext zu ändern.",

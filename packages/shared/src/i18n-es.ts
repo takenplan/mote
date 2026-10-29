@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "适用于这台 Mac 的{0}来源。": "Se aplica a la fuente «{0}» de este Mac.",
   "应用到草稿": "Aplicar al borrador",
   "补充这类记录的背景（选填）": "Añadir contexto para este tipo de registro (opcional)",
   "适用于这台 Mac 的已有与后续资料，不改写原文。": "Se aplica a los materiales actuales y futuros de este Mac sin modificar el texto original.",
