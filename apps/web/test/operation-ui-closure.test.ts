@@ -22,7 +22,7 @@ test('calendar confirmation pins the reviewed version and requires a new review 
   return {items:[]};
  },setAgentTimeout:()=>{}} as Api;
  await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
- await act(async()=>button(d,'核对变更').click());
+ await act(async()=>d.querySelector<HTMLButtonElement>('.calendar-final-row')!.click());await act(async()=>button(d,'核对变更').click());
  const dialog=()=>d.querySelector<HTMLFormElement>('[role="dialog"]')!;
  assert.equal(dialog().querySelector<HTMLInputElement>('input[required]')!.value,title);
  version=2;title='Generated correction from another client';await act(async()=>resources(api).get('/api/actions?cursor=0').refresh());
@@ -38,7 +38,7 @@ test('calendar confirmation pins the reviewed version and requires a new review 
 test('Actions consumes operation changes through the shared resource and explains blocked/cancelled analysis safely',async t=>{
  const {root,d}=await fixture(t);let resolve!:(value:unknown)=>void,reads=0,changed=false;const change=new Promise(r=>{resolve=r;});
  const api={request:async(path:string)=>{if(path==='/api/action-capabilities')return {providers:[],declarations:[],sources:[],drafts:[],grants:[]};if(path.startsWith('/api/operations/changes'))return change;if(path.startsWith('/api/actions?')){reads++;return {items:[],total:0,nextCursor:null,targets:[],settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:[]},progress:{configured:true,running:false,jobs:changed?[{status:'blocked',count:3},{status:'cancelled',count:2}]:[{status:'pending',count:5}],error:changed?'PRIVATE ENGINE RAW ERROR':null,errorCode:changed?'action_analysis_failed':null}};}return {items:[],nextCursor:null};},setAgentTimeout:()=>{}} as Api;
- await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));assert.equal(reads,1);assert.match(d.body.textContent!,/待分析 5 批/);
+ await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));assert.equal(reads,1);await act(async()=>button(d,'日程设置').click());assert.match(d.body.textContent!,/待分析 5 批/);
  changed=true;await act(async()=>resolve({ids:['workflow:actions:generated'],cursor:1,reset:false,hasMore:false}));assert.equal(reads,2);assert.match(d.body.textContent!,/等待条件满足 3 批.*已停止分析 2 批/);assert.match(d.body.textContent!,/日程分析未完成，请查看批次状态后重试/);assert.doesNotMatch(d.body.textContent!,/PRIVATE ENGINE RAW ERROR|blocked|cancelled/);
 });
 test('Operation detail identifies Actions and both embedding steps, routes to Actions and counts optional issues as settled',async t=>{
