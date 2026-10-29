@@ -20,31 +20,58 @@ class BackupActivity : MoteActivity() {
     private var prepared: QueueArchive.Prepared? = null
     private var exportOrigin: String? = null
     private var exportGeneration = -1L
+    private var configTab = false
+    private lateinit var inventory: TextView
+    private var localStateJob: kotlinx.coroutines.Job? = null
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         includeToken = state?.getBoolean("includeToken") ?: false
         exportOrigin = state?.getString("exportOrigin"); exportGeneration = state?.getLong("exportGeneration") ?: -1L
-        val body = moteDetailPage(title = MoteI18n.text("导入与导出"))
-        fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(10), 0, moteDp(10)) }.also(body::addView)
-        fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { if (!task.busy) action() } }.also(body::addView)
-        text(MoteI18n.text("客户端配置"), 20f)
-        text(MoteI18n.text("迁移采集、应用规则、同步和诊断设置。系统权限和来源文件授权需在新设备重新授予。"))
-        secrets = CheckBox(this).apply { text = MoteI18n.text("导出时包含节点令牌（文件为明文，请妥善保管）"); isChecked = includeToken }.also(body::addView)
-        button(MoteI18n.text("导出配置 JSON")) { includeToken = secrets.isChecked; create(10, "application/json", "mote-settings.json") }
-        button(MoteI18n.text("导入配置 JSON")) { open(11, "application/json") }
-        text(MoteI18n.text("本机记录"), 20f)
-        text(MoteI18n.text("备份本机仍保留的截图、应用活动、通知、媒体和随手记。ZIP 为明文，不含中央归档、来源文件原件、未提交草稿或模型文件。"))
-        button(MoteI18n.text("导出本机记录 ZIP")) { create(12, "application/zip", "mote-records.zip") }
-        button(MoteI18n.text("导入本机记录 ZIP")) { open(13, "application/zip") }
-        button(MoteI18n.text("导出本机元数据 JSON")) { create(14, "application/json", "mote-local-metadata.json") }
-        text(MoteI18n.text("中央资料导出"), 20f)
-        text(MoteI18n.text("中央导出与问答、资料库共用登录状态。"))
-        button(MoteI18n.text("中央登录与账户")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "vault")) }
-        button(MoteI18n.text("导出中央元数据")) { create(15, "application/gzip", "mote-central-metadata.tar.gz") }
-        button(MoteI18n.text("导出中央资料与附件")) { create(16, "application/gzip", "mote-central-data.tar.gz") }
-        status = text(MoteI18n.text("导入前可预览；同 ID 记录不会重复添加。"))
-        MoteUi.styleTree(body)
+        configTab = state?.getBoolean("configTab") ?: false
+        val body = moteDetailPage(title = MoteI18n.text("备份与恢复"))
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
+        val recordsTab = Button(this).apply { text = MoteI18n.text("本机记录"); tag = "backup-records-tab" }
+        val settingsTab = Button(this).apply { text = MoteI18n.text("客户端配置"); tag = "backup-config-tab" }
+        tabs.addView(recordsTab, LinearLayout.LayoutParams(0, -2, 1f))
+        tabs.addView(settingsTab, LinearLayout.LayoutParams(0, -2, 1f))
+        val records = SecondaryUi.column(body)
+        val recordCard = SecondaryUi.column(records, card = true)
+        SecondaryUi.text(recordCard, MoteI18n.text("本机记录"), heading = true)
+        inventory = SecondaryUi.text(recordCard, MoteI18n.text("正在读取本机同步状态…"), muted = true)
+        SecondaryUi.action(recordCard, MoteI18n.text("导出本机记录 ZIP"), primary = true) { create(12, "application/zip", "mote-records.zip") }.tag = "backup-export-records"
+        SecondaryUi.action(recordCard, MoteI18n.text("从备份恢复")) { open(13, "application/zip") }.tag = "backup-restore-records"
+        val range = SecondaryUi.disclosure(records, MoteI18n.text("备份包含什么"), "backup-scope")
+        SecondaryUi.text(range, MoteI18n.text("备份本机仍保留的截图、应用活动、通知、媒体和随手记。ZIP 为明文，不含中央归档、来源文件原件、未提交草稿或模型文件。"), muted = true)
+        SecondaryUi.action(range, MoteI18n.text("导出本机元数据 JSON")) { create(14, "application/json", "mote-local-metadata.json") }
+        SecondaryUi.row(records, MoteI18n.text("本机存储位置")) { startActivity(Intent(this, StorageActivity::class.java)) }
+        val central = SecondaryUi.disclosure(records, MoteI18n.text("中央资料导出"), "backup-central")
+        SecondaryUi.text(central, MoteI18n.text("中央导出与问答、资料库共用登录状态。"), muted = true)
+        SecondaryUi.action(central, MoteI18n.text("中央登录与账户")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "vault")) }
+        SecondaryUi.action(central, MoteI18n.text("导出中央元数据")) { create(15, "application/gzip", "mote-central-metadata.tar.gz") }
+        SecondaryUi.action(central, MoteI18n.text("导出中央资料与附件")) { create(16, "application/gzip", "mote-central-data.tar.gz") }
+        val config = SecondaryUi.column(body, card = true)
+        SecondaryUi.text(config, MoteI18n.text("客户端配置"), heading = true)
+        SecondaryUi.text(config, MoteI18n.text("迁移采集、应用规则、同步和诊断设置。系统权限和来源文件授权需在新设备重新授予。"), muted = true)
+        val options = SecondaryUi.disclosure(config, MoteI18n.text("导出选项"), "backup-export-options", includeToken)
+        secrets = CheckBox(this).apply { text = MoteI18n.text("导出时包含节点令牌（文件为明文，请妥善保管）"); isChecked = includeToken; setOnCheckedChangeListener { _, checked -> includeToken = checked } }.also(options::addView)
+        SecondaryUi.action(config, MoteI18n.text("导出配置 JSON"), primary = true) { includeToken = secrets.isChecked; create(10, "application/json", "mote-settings.json") }
+        SecondaryUi.action(config, MoteI18n.text("导入配置 JSON")) { open(11, "application/json") }
+        status = SecondaryUi.text(body, MoteI18n.text("导入前可预览；同 ID 记录不会重复添加。"), muted = true).apply { tag = "backup-status"; accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        fun select() {
+            records.visibility = if (configTab) android.view.View.GONE else android.view.View.VISIBLE
+            config.visibility = if (configTab) android.view.View.VISIBLE else android.view.View.GONE
+            recordsTab.isSelected = !configTab; settingsTab.isSelected = configTab
+            MoteUi.button(recordsTab, primary = !configTab); MoteUi.button(settingsTab, primary = configTab)
+        }
+        recordsTab.setOnClickListener { configTab = false; select() }
+        settingsTab.setOnClickListener { configTab = true; select() }
+        select(); MoteUi.styleTree(body)
     }
+    override fun onResume() {
+        super.onResume()
+        localStateJob = observeLocalState { state -> inventory.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, it.pending) } ?: state.imageLabel() }
+    }
+    override fun onPause() { localStateJob?.cancel(); localStateJob = null; super.onPause() }
     private fun create(code: Int, mime: String, name: String) {
         if (code in setOf(15, 16)) {
             task.start(MoteI18n.text("正在读取…"), { status.text = it }, { CentralAccess.requireClient(this).server to CentralSession.get(this).generation }) { result ->
@@ -124,5 +151,5 @@ class BackupActivity : MoteActivity() {
         }
     }
     override fun onDestroy() { closed = true; if (!restoring) prepared?.let { java.util.concurrent.Executors.newSingleThreadExecutor().apply { execute { it.close() }; shutdown() } }; super.onDestroy() }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("includeToken", includeToken); outState.putString("exportOrigin", exportOrigin); outState.putLong("exportGeneration", exportGeneration); super.onSaveInstanceState(outState) }
+    override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("configTab", configTab); outState.putBoolean("includeToken", includeToken); outState.putString("exportOrigin", exportOrigin); outState.putLong("exportGeneration", exportGeneration); super.onSaveInstanceState(outState) }
 }

@@ -10,6 +10,12 @@ import org.json.JSONObject
 
 class SyncQueueActivity : MoteActivity() {
     private val task by lazy { UiTask(this) }
+    private val actionTask by lazy { UiTask(this) }
+    private lateinit var sendStatus: TextView
+    private lateinit var sendCount: TextView
+    private lateinit var pauseSend: Button
+    private lateinit var sendNow: Button
+    private var localStateJob: kotlinx.coroutines.Job? = null
     private lateinit var summary: TextView
     private lateinit var rows: LinearLayout
     private lateinit var next: Button
@@ -28,13 +34,21 @@ class SyncQueueActivity : MoteActivity() {
     private lateinit var speed: TextView
     private val speedHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val speedTick = object : Runnable { override fun run() { if (::speed.isInitialized) speed.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label(); speedHandler.postDelayed(this, 1000) } }
-    override fun onResume() { super.onResume(); speedHandler.post(speedTick) }
-    override fun onPause() { speedHandler.removeCallbacks(speedTick); super.onPause() }
+    override fun onResume() { super.onResume(); speedHandler.post(speedTick); localStateJob = observeLocalState { refreshSendState(it) } }
+    override fun onPause() { localStateJob?.cancel(); localStateJob = null; speedHandler.removeCallbacks(speedTick); super.onPause() }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         history = state?.getBoolean("history") ?: false
         offset = state?.getInt("offset") ?: 0
         val body = moteDetailPage(primary = MotePrimaryTab.SOURCES, title = MoteI18n.text("同步与上传"))
+        val sendCard = SecondaryUi.column(body, card = true)
+        sendStatus = SecondaryUi.text(sendCard, MoteI18n.text("正在读取本机同步状态…"), heading = true).apply { tag = "sync-send-status"; accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        sendCount = SecondaryUi.text(sendCard, "", muted = true)
+        val sendActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(sendCard::addView)
+        pauseSend = MoteUi.button(Button(this).apply { tag = "sync-send-pause"; setOnClickListener { changeSendState() } })
+        sendNow = MoteUi.button(Button(this).apply { text = MoteI18n.text("立即同步"); tag = "sync-send-now"; setOnClickListener { requestSync() } }, primary = true)
+        sendActions.addView(pauseSend, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(MoteTheme.spaceInline) })
+        sendActions.addView(sendNow, LinearLayout.LayoutParams(0, -2, 1f))
         val tabs = LinearLayout(this).also(body::addView)
         currentTab = Button(this).apply { text = MoteI18n.text("当前任务"); tag = "sync-current-tab"; setOnClickListener { selectTab(false) } }
         historyTab = Button(this).apply { text = MoteI18n.text("上传历史"); tag = "sync-history-tab"; setOnClickListener { selectTab(true) } }
@@ -48,15 +62,18 @@ class SyncQueueActivity : MoteActivity() {
         paging = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
         previous = Button(this).apply { text = MoteI18n.text("上一页"); setOnClickListener { offset = (offset - pageSize).coerceAtLeast(0); load() } }.also { paging.addView(it, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(6) }) }
         next = Button(this).apply { text = MoteI18n.text("下一页"); setOnClickListener { offset += pageSize; load() } }.also { paging.addView(it, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = moteDp(6) }) }
-        body.addView(Button(this).apply { text = MoteI18n.text("同步与恢复"); setOnClickListener { startActivity(Intent(this@SyncQueueActivity, SyncRecoveryActivity::class.java)) } })
+
         historyBody = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
         historyPanel = UploadHistoryPanel(this, historyBody, state)
+        SecondaryUi.row(body, MoteI18n.text("同步与恢复")) { startActivity(Intent(this, SyncRecoveryActivity::class.java)) }
+        refreshSendState(LocalStateRepository.get(this).state.value)
         MoteUi.styleTree(body)
         updateTabs()
         task.start(MoteI18n.text("正在读取来源…"), { summary.text = it }, { localSources().sources() }) { result ->
             result.onSuccess {
                 sources = it
                 categories.adapter = MoteUi.choiceAdapter(this, listOf(MoteI18n.text("采集与随手记")) + it.map { source -> source.name + if (source.enabled) "" else MoteI18n.text("（已暂停）") })
+                intent.getStringExtra("sourceId")?.let { id -> sources.indexOfFirst { source -> source.id == id }.takeIf { it >= 0 }?.let { index -> categories.setSelection(index + 1) } }
                 categories.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onNothingSelected(parent: AdapterView<*>?) = Unit
                     override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { if (!history) offset = 0; load() }
@@ -65,6 +82,40 @@ class SyncQueueActivity : MoteActivity() {
                 // A restored history tab hides the source spinner, which need not dispatch selection.
                 load()
             }.onFailure { summary.text = MoteI18n.text("队列暂不可读，请重试") }
+        }
+    }
+    private fun refreshSendState(state: LocalStateSnapshot) {
+        if (!::sendStatus.isInitialized || !::pauseSend.isInitialized) return
+        val settings = Settings(this); val config = settings.read()
+        if (!actionTask.busy) sendStatus.text = SyncSchedule.waitingReason(this, config) ?: settings.uploadStatus()
+        sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, it.pending) } ?: state.imageLabel()
+        pauseSend.text = MoteI18n.text(if (config.syncPaused) "恢复全部发送" else "暂停全部发送")
+        pauseSend.isEnabled = !actionTask.busy
+        sendNow.isEnabled = !actionTask.busy && !config.syncPaused && config.hasSyncConnection()
+    }
+    private fun changeSendState() {
+        if (actionTask.busy) return
+        pauseSend.isEnabled = false; sendNow.isEnabled = false
+        actionTask.start(MoteI18n.text("正在保存发送状态…"), { sendStatus.text = it }, {
+            SendPauseControl.set(applicationContext, !Settings(applicationContext).read().syncPaused)
+        }) { outcome ->
+            refreshSendState(LocalStateRepository.get(this).state.value)
+            outcome.onFailure { sendStatus.text = it.message ?: MoteI18n.text("操作失败，请重试") }
+        }
+    }
+    private fun requestSync() {
+        if (actionTask.busy) return
+        pauseSend.isEnabled = false; sendNow.isEnabled = false
+        actionTask.start(MoteI18n.text("正在提交同步任务…"), { sendStatus.text = it }, {
+            ConnectionGuard.sync {
+                val config = Settings(applicationContext).read(); config.validateConnection()
+                if (localSources().sources().any { it.enabled }) SourceWork.schedule(applicationContext, true, syncExplicit = true)
+                else UploadWorker.schedule(applicationContext, config, true)
+            } ?: error(MoteI18n.text("正在应用设置，请稍后重试"))
+        }) { outcome ->
+            refreshSendState(LocalStateRepository.get(this).state.value)
+            outcome.onFailure { sendStatus.text = it.message ?: MoteI18n.text("操作失败，请重试") }
+            load()
         }
     }
     override fun onSaveInstanceState(outState: Bundle) {

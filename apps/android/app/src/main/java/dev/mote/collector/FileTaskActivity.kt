@@ -143,12 +143,19 @@ class FileTaskActivity : MoteActivity() {
         }
         window.decorView.findViewWithTag<TextView>("detail-title").text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件")
         window.decorView.findViewWithTag<android.view.View>("detail-add-action")?.visibility = if (savedSource == null) View.VISIBLE else View.GONE
-        hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
-        pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }
-        selectedInfo = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
+        val selection = SecondaryUi.column(body, card = true)
+        pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; selection.addView(this) }
+        selectedInfo = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); selection.addView(this) }
+        label("资料说明（选填）")
+        description = field(source.description, "file-task:description", multiline = true).apply {
+            minLines = 3; filters = arrayOf(android.text.InputFilter.LengthFilter(12000)); hint = MoteI18n.text("例如：这是我的日记，文件名是日期。")
+        }
+        hint(if (source.tree) "适用于这个文件夹的已有与后续资料。" else "仅适用于这份文件。")
+        metadataStatus = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); body.addView(this) }
+        if (savedSource != null) hint("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。")
         if (source.tree) {
-            label("收集哪些文件")
+            label("同步哪些文件")
             val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; body.addView(choices)
             listOf("all" to "支持的文件", "audio" to "音频文件", "custom" to "自定义").forEach { (key, text) ->
                 val button = Button(this).apply { this.text = MoteI18n.text(text); tag = "file-task:preset:$key"; setOnClickListener { choosePreset(key) } }
@@ -156,37 +163,19 @@ class FileTaskActivity : MoteActivity() {
             }
             presetHelp = hint("文本、音频、图片和文档。")
         } else presetHelp = TextView(this)
-        label("资料说明（选填）")
-        description = field(source.description, "file-task:description", multiline = true).apply {
-            minLines = 3; hint = MoteI18n.text("例如：这是我的通话录音，我通常是其中一方；对方的表达属于对方。")
-        }
-        hint(if (source.tree) "用于理解这个来源的背景、作者和内容归属。" else "可说明格式、时间、作者，以及哪些内容属于你。")
-        metadataStatus = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); body.addView(this) }
-        if (savedSource != null) hint("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。")
         initial = Spinner(this).apply {
             adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
             setSelection(if (source.initialSync == "new_only") 1 else 0); tag = "file-task:initial"
         }
-        if (source.tree) { label("已有文件"); body.addView(initial) }
-        label("中央保存方式")
+        if (source.tree) { label("首次同步范围"); body.addView(initial) }
+        else hint(if (source.syncContinuously) "持续同步这个文件的修改。" else "仅导入这一次，不跟踪后续修改。")
+        label("中心保存方式")
         retention = Spinner(this).apply {
             adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("仅保留提取内容"), MoteI18n.text("保留原件及提取内容"), MoteI18n.text("仅记录文件信息")))
             tag = "file-task:retention"; setSelection(listOf("snapshot", "archive", "reference").indexOf(source.retention))
             body.addView(this)
         }
         retentionHelp = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); body.addView(this) }
-        advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        body.addView(Button(this).apply { text = MoteI18n.text("高级设置"); tag = "file-task:advanced"; setOnClickListener { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE; persistDraft() } })
-        body.addView(advanced)
-        label("来源名称", advanced); name = field(source.name, "file-task:name", advanced)
-        label("扫描间隔 / 分钟（15–1440，系统可能推迟）", advanced); interval = field(source.intervalMinutes.toString(), "file-task:interval", advanced, numeric = true)
-        label("单文件上限（MiB，1–512）", advanced); maximum = field(source.maxFileMiB.toString(), "file-task:maximum", advanced, numeric = true)
-        label("允许扩展名，逗号分隔", advanced); extensions = field(source.extensions, "file-task:extensions", advanced)
-        label("排除相对路径：每行一项，* 表示任意字符；区分大小写", advanced); excludes = field(source.excluded, "file-task:excludes", advanced, multiline = true)
-        allowRead = CheckBox(this).apply { text = MoteI18n.text("中央保留完整提取正文，供离线读取片段"); isChecked = source.allowRead; advanced.addView(this) }
-        enabled = CheckBox(this).apply { text = MoteI18n.text("允许读取并按所选策略发送这个来源"); isChecked = source.enabled; if (savedSource != null) advanced.addView(this) }
-        continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously; tag = "file-task:continuous"; if (savedSource != null && !source.tree) advanced.addView(this) }
-        hint("更改选择、过滤或保留方式会清除这个来源的本机旧待发缓存，按新设置重新扫描；不会自动删除中央历史。停用仅暂停本机检查与同步，中央的启用状态与历史保持不变。移除只影响本机连接。", advanced)
         val destinationConfig = Settings(this).read()
         val destination = destinationConfig.server
         label("发送目的地")
@@ -195,7 +184,19 @@ class FileTaskActivity : MoteActivity() {
             if (destination.isNotBlank()) hint(MoteI18n.text("已填写的中央地址：{0}；连接并确认后才会发送。", destination))
         } else hint(MoteI18n.text("完整文件的发送目的地：{0}", destination))
         hint("上传后仅清理 Mote 暂存，保留手机原文件。")
-        confirm = Button(this).apply { text = MoteI18n.text(if (savedSource != null) "保存来源设置" else if (source.tree) "开始同步" else "确认导入"); tag = "file-task:confirm"; setTag(R.id.mote_primary, true); setOnClickListener { save() }; body.addView(this) }
+        advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        body.addView(Button(this).apply { text = MoteI18n.text("高级设置"); tag = "file-task:advanced"; setOnClickListener { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE; persistDraft() } })
+        body.addView(advanced)
+        label("来源名称", advanced); name = field(source.name, "file-task:name", advanced)
+        label("扫描间隔 / 分钟（15–1440，系统可能推迟）", advanced); interval = field(source.intervalMinutes.toString(), "file-task:interval", advanced, numeric = true).apply { isEnabled = source.tree || (savedSource != null && source.syncContinuously) }
+        label("单文件上限（MiB，1–512）", advanced); maximum = field(source.maxFileMiB.toString(), "file-task:maximum", advanced, numeric = true)
+        label("允许扩展名，逗号分隔", advanced); extensions = field(source.extensions, "file-task:extensions", advanced)
+        label("排除相对路径：每行一项，* 表示任意字符；区分大小写", advanced); excludes = field(source.excluded, "file-task:excludes", advanced, multiline = true)
+        allowRead = CheckBox(this).apply { text = MoteI18n.text("中央保留完整提取正文，供离线读取片段"); isChecked = source.allowRead; advanced.addView(this) }
+        enabled = CheckBox(this).apply { text = MoteI18n.text("允许读取并按所选策略发送这个来源"); isChecked = source.enabled; if (savedSource != null) advanced.addView(this) }
+        continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously; tag = "file-task:continuous"; if (savedSource != null && !source.tree) advanced.addView(this) }
+        hint("更改选择、过滤或保留方式会清除这个来源的本机旧待发缓存，按新设置重新扫描；不会自动删除中央历史。停用仅暂停本机检查与同步，中央的启用状态与历史保持不变。移除只影响本机连接。", advanced)
+        confirm = Button(this).apply { text = MoteI18n.text(if (savedSource != null) "保存修改" else if (source.tree) "添加同步文件夹" else "导入这份文件"); tag = "file-task:confirm"; setTag(R.id.mote_primary, true); setOnClickListener { save() }; body.addView(this) }
         if (hasContextConflict) body.addView(Button(this).apply { text = MoteI18n.text("解决资料说明冲突"); tag = "file-task:context-conflict"; setOnClickListener { resolveConflict() } })
         if (savedSource != null) body.addView(Button(this).apply { text = MoteI18n.text("移除连接"); setOnClickListener { remove() } })
         restoredValues?.let { v ->
@@ -363,7 +364,7 @@ class FileTaskActivity : MoteActivity() {
     }
     private fun remove() {
         if (task.busy) return
-        MoteDialogBuilder(this).setTitle(MoteI18n.text("移除连接")).setMessage(MoteI18n.text("移除只影响本机连接，中央历史保留。"))
+        MoteDialogBuilder(this).setTitle(MoteI18n.text("移除连接")).setMessage(MoteI18n.text("移除这个来源和本机待发缓存；手机原文件与中央历史保留。"))
             .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("移除连接")) { _, _ ->
                 task.start(MoteI18n.text("正在移除来源连接…"), { status.text = it }, {
                     localSources().remove(source.id); fileArchives().remove(source.id); source.uri?.let(::releaseUnused); SourceWork.schedule(applicationContext)
