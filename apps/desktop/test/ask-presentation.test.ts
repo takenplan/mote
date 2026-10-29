@@ -34,7 +34,7 @@ it('keeps exact evidence text and a visible original action outside the excerpt 
 
 it('distinguishes strict records from reference records and opens exact original identities', () => {
   const document = new JSDOM('').window.document, opened: string[] = [];
-  for (const [scope, wording] of [[{evidenceIds:[id]}, '严格范围：只查询'], [{anchorEvidenceIds:[id]}, '其他已授权内容']] as const) {
+  for (const [scope, wording] of [[{evidenceIds:[id]}, '仅查阅上面的资料'], [{anchorEvidenceIds:[id]}, '其他已授权资料']] as const) {
     const view = renderAskScope(document, {...scope, ...('evidenceIds' in scope ? {evidenceIds:[id]} : {anchorEvidenceIds:[id]})}, value => opened.push(value));
     expect(view.textContent).toContain(wording); view.querySelector('button')!.click();
   }

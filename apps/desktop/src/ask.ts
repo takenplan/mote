@@ -20,6 +20,9 @@ export class AskClient {
       case 'conversation':
         if (input.cursor !== undefined && !/^\d{1,9}$/.test(input.cursor)) throw Error('Invalid turn cursor');
         path = '/api/conversations/' + id() + '?limit=20' + (input.cursor !== undefined ? '&cursor=' + input.cursor : ''); break;
+      case 'reference':
+        if(typeof input.conversationId!=='string'||!/^[a-f0-9-]{36}$/i.test(input.conversationId))throw Error('Invalid conversation ID');
+        path='/api/conversations/'+input.conversationId+'/references/'+id();break;
       case 'run': path = '/api/query-runs/' + id(); break;
       case 'cancel': path = '/api/query-runs/' + id() + '/cancel'; body = '{}'; break;
       case 'start':
@@ -33,8 +36,8 @@ export class AskClient {
     if (!response.ok) {
       await response.body?.cancel();
       if (command === 'run' && response.status === 404) return {id: input.id, status: 'failed', events: [], error: {message: moteText('对话或运行记录已删除。')}};
-      throw Error(response.status === 401 || response.status === 403 ? moteText('令牌无效或已失效，请检查后重新登录。') : moteText('问答请求失败（HTTP {0}），请检查中央节点模型设置或稍后重试。', response.status));
+      throw Error(response.status === 401 || response.status === 403 ? moteText('令牌无效或已失效，请检查后重新登录。') : command==='history'?moteText('对话暂不可读取，请稍后重试。'):command==='reference'?moteText('这条引用暂时打不开，请稍后重试。'):moteText('问答请求失败（HTTP {0}），请检查中央节点模型设置或稍后重试。', response.status));
     }
-    const value=JSON.parse(await readResponseText(response,8*1024*1024));this.check(config);return value;
+    const value=JSON.parse(await readResponseText(response,8*1024*1024));this.check(config);if(command==='reference'&&(value?.id!==input.id||typeof value?.available!=='boolean'))throw Error('Invalid reference availability');return value;
   }
 }

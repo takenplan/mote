@@ -45,3 +45,15 @@ it('reads scope unchanged and omits selection fields when continuing the same co
  const body=JSON.parse((fetcher.mock.calls[1] as unknown as [string,RequestInit])[1].body as string);
  expect(body.input.conversationId).toBe(id);expect(body.input).not.toHaveProperty('evidenceIds');expect(body.input).not.toHaveProperty('anchorEvidenceIds');
 });
+
+
+it('checks current reference availability through the exact conversation before any archive navigation',async()=>{
+ const client=new AskClient(),config={...defaultConfig(),token:'generated-owner-token'.repeat(3)},evidenceId='22222222-2222-4222-8222-222222222222';
+ const fetcher=vi.fn(async()=>new Response(JSON.stringify({id:evidenceId,available:false})));vi.stubGlobal('fetch',fetcher);
+ expect(await client.request(config,'reference',{id:evidenceId,conversationId:id})).toEqual({id:evidenceId,available:false});
+ expect(String(fetcher.mock.calls[0][0])).toBe(config.serverUrl+'/api/conversations/'+id+'/references/'+evidenceId);
+ await expect(client.request(config,'reference',{id:evidenceId,conversationId:'../other'})).rejects.toThrow('Invalid conversation ID');
+ await expect(client.request(config,'reference',{id:'../other',conversationId:id})).rejects.toThrow('Invalid ID');expect(fetcher).toHaveBeenCalledTimes(1);
+ fetcher.mockImplementation(async()=>new Response(JSON.stringify({id:evidenceId,available:'true'})));
+ await expect(client.request(config,'reference',{id:evidenceId,conversationId:id})).rejects.toThrow('Invalid reference availability');
+});
