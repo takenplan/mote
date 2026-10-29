@@ -5,6 +5,8 @@ export type EventStage = typeof stages[number];
 export type EventCode = typeof codes[number];
 export type EventLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export interface WorkProgress { message: string; completed?: number; total?: number }
+/** Describes only the file explicitly selected in this native operation. */
+export interface BackupFileIdentity { name: string; path: string; sizeBytes?: number }
+export interface WorkProgress { message: string; completed?: number; total?: number; file?: BackupFileIdentity }
 export interface BackgroundJob extends WorkProgress { id: string; startedAt: number; state: 'running' | 'completed' | 'failed' }
 export interface SupportEvent { level?: EventLevel; atMs: number; stage: EventStage; code: EventCode; elapsedMs?: number; httpStatus?: number; errorName?: string; operation?: string; sourceId?: string; sourceKind?: string }
