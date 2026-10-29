@@ -6,6 +6,8 @@ import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {InsightReportFrame} from '../src/InsightReportFrame';
+import lightTokens from '../../../packages/shared/design-tokens.light.json';
+import darkTokens from '../../../packages/shared/design-tokens.json';
 
 const citation={id:'11111111-1111-4111-8111-111111111111',capturedAt:'2026-10-01T00:00:00Z',appName:'Generated original',excerpt:'Generated evidence'};
 
@@ -41,7 +43,8 @@ test('only verified visible citations receive unpredictable host navigation mark
  const dom=new JSDOM(),before=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
  try{
   const token='c'.repeat(32),html=`<p>Generated [${citation.id}] [unknown]</p><span data-mote-report-source="${token}" data-mote-report-index="999">Model marker</span><code>[${citation.id}]</code><script>window.generatedAttack=true</script>`,plain=reportDocument(html,[citation]),sized=reportDocument(html,[citation],'light',{token,parentOrigin:'http://localhost'}),rendered=new JSDOM(sized),markers=rendered.window.document.querySelectorAll('[data-mote-report-source]');
-  assert.equal(markers.length,1);assert.equal(markers[0].getAttribute('data-mote-report-source'),token);assert.equal(markers[0].getAttribute('data-mote-report-index'),'0');assert.equal(markers[0].getAttribute('role'),'button');assert.equal(markers[0].textContent,'（来源 1）');assert.match(sized,/<code>\[11111111/);assert.match(sized,/\[unknown\]/);assert.match(sized,/window.generatedAttack=true/);
+  assert.equal(markers.length,1);assert.equal(markers[0].getAttribute('data-mote-report-source'),token);assert.equal(markers[0].getAttribute('data-mote-report-index'),'0');assert.equal(markers[0].getAttribute('role'),'button');assert.equal(markers[0].textContent,'1');assert.equal(markers[0].getAttribute('aria-label'),'来源 1');assert.match(sized,/<code>\[11111111/);assert.match(sized,/\[unknown\]/);assert.match(sized,/window.generatedAttack=true/);
+  for(const [scheme,colors] of [['light',lightTokens],['dark',darkTokens]] as const){const view=new JSDOM(reportDocument(html,[citation],scheme,{token,parentOrigin:'http://localhost'})),marker=view.window.document.querySelector<HTMLElement>('[data-mote-report-source]')!,style=view.window.getComputedStyle(marker);assert.equal(marker.textContent,'1');assert.equal(style.display,'inline-flex');assert.equal(style.minWidth,'22px');assert.equal(style.minHeight,'22px');assert.equal(style.marginLeft,'5px');assert.equal(style.padding,'0px 5px');assert.equal(style.borderRadius,'4px');assert.equal(style.fontSize,'10px');assert.equal(style.verticalAlign,'2px');assert.equal(style.lineHeight,'1.5');const color=(hex:string)=>'rgb('+hex.slice(1).match(/../g)!.map(value=>parseInt(value,16)).join(', ')+')';assert.equal(style.background,color(colors.tint));assert.equal(style.color,color(colors.accent));assert.equal(style.textDecoration,'');assert.match(view.serialize(),/@media\(pointer:coarse\)[\s\S]*?min-height:32px!important;min-width:30px!important/);view.window.close();}
   assert.doesNotMatch(plain,/data-mote-report-source|data-mote-report-index|<script nonce=/);assert.match(plain,/script-src 'none'/);assert.match(plain,/Generated （来源 1）/);assert.ok(html.includes(`[${citation.id}]`));rendered.window.close();
  }finally{if(before)Object.defineProperty(globalThis,'document',before);else Reflect.deleteProperty(globalThis,'document');dom.window.close();}
 });
