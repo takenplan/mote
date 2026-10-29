@@ -1,4 +1,9 @@
 {
+  "日历访问": "Calendar access",
+  "读取所选日历过去 30 天至未来 90 天的日程。": "Reads events from the past 30 days through the next 90 days in the selected calendars.",
+  "连接并同步": "Connect and sync",
+  "压缩前": "Before compression",
+  "所选参数的 JPEG": "JPEG with the selected settings",
   "发送时机": "When to send",
   "每批内容数": "Items per batch",
   "发送间隔（分钟）": "Send interval (minutes)",

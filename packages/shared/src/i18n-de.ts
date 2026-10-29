@@ -1,5 +1,10 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "日历访问": "Kalenderzugriff",
+  "读取所选日历过去 30 天至未来 90 天的日程。": "Liest Termine der ausgewählten Kalender von den letzten 30 bis zu den nächsten 90 Tagen.",
+  "连接并同步": "Verbinden und synchronisieren",
+  "压缩前": "Vor der Komprimierung",
+  "所选参数的 JPEG": "JPEG mit den gewählten Einstellungen",
   "发送时机": "Sendezeitpunkt",
   "每批内容数": "Einträge pro Stapel",
   "发送间隔（分钟）": "Sendeintervall (Minuten)",
