@@ -165,7 +165,7 @@ for(const populated of [false,true])test(`Import ${populated?'populated':'empty'
  refreshing=true;await act(async()=>root.render(importView(api,{refreshVersion:1})));
  assert.doesNotMatch(list.textContent!,/正在读取/);assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);assert.equal(d.querySelector('.import-detail'),detail);assert.equal(d.querySelector('.imports-page')!.getAttribute('aria-busy'),'false');
  await act(async()=>refresh.reject(new ApiError('Generated import refresh unavailable',503)));
- assert.match(d.body.textContent!,/Generated import refresh unavailable/);assert.equal(d.querySelector('.import-detail'),detail);
+ assert.match(d.body.textContent!,/中央服务暂不可用（503），请检查节点状态后重试。/);assert.equal(d.querySelector('.import-detail'),detail);
 });
 
 test('Import revocation removes archived content and a different node keeps its first-read loader',async t=>{
@@ -173,7 +173,7 @@ test('Import revocation removes archived content and a different node keeps its 
  const api=apiWith(path=>path==='/api/imports'?(revoked?revocation.promise:{items:[importJob]}):{items:[]});
  await act(async()=>root.render(importView(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  revoked=true;await act(async()=>root.render(importView(api,{refreshVersion:1})));await act(async()=>revocation.reject(new ApiError('Generated imports revoked',403)));
- assert.equal(d.querySelector('.import-detail'),null);assert.doesNotMatch(d.body.textContent!,/Generated import(?!s)/);assert.match(d.body.textContent!,/Generated imports revoked/);
+ assert.equal(d.querySelector('.import-detail'),null);assert.doesNotMatch(d.body.textContent!,/Generated import(?!s)/);assert.match(d.body.textContent!,/请求被拒绝（403），请检查连接权限和入口访问配置。/);
  const nextApi=apiWith(path=>path==='/api/imports'?next.promise:{items:[]});await act(async()=>root.render(importView(nextApi)));
  assert.match(d.querySelector('.workspace-list')!.textContent!,/正在读取/);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/你的第一份导入/);
  await act(async()=>next.resolve({items:[]}));assert.match(d.querySelector('.workspace-list')!.textContent!,/你的第一份导入/);
