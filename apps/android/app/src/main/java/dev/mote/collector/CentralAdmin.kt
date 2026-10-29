@@ -500,7 +500,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("检查更新")) { action("/api/software-update/check") { target.removeAllViews(); values(it, target) } }
     }
     private fun agent(path: String = "/context") {
-        body.removeAllViews(); screens.setBack { screens.refresh() }
+        body.removeAllViews(); if (path != "/context") screens.setBack { agent() }
         listOf("/context", "/context/memory", "/context/episodes", "/context/sources").forEach { folder ->
             ui.button(folder) { agent(folder) }
         }
@@ -589,7 +589,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun lark() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") to api.get("/api/sources") }) { (value, sourceList) ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
+            body.removeAllViews()
             ui.button(MoteI18n.text("刷新")) { lark() }
             ui.text(MoteI18n.text("飞书文档与日历"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("照常在飞书写日记、会议纪要和方案。中央节点归档文档与活动线索，供回顾、问答和 Memory 使用。"))
