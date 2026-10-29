@@ -1,7 +1,7 @@
 import {libraryMaterialTypes,type LibraryMaterialType} from '@mote/shared';
 import type {CollectionEntry,PageEntry} from './features/types';
 
-export const settingsCategories=['providers','model','file-processing','images','storage','embedding','connectors'] as const;
+export const settingsCategories=['providers','model','processing','audio','documents','file-processing','images','storage','embedding','connectors'] as const;
 export type SettingsCategory=typeof settingsCategories[number];
 export function settingsCategoryFromHash(hash:string):SettingsCategory|null {
  const value=new URLSearchParams(hash.split('?')[1]??'').get('category');

@@ -4,7 +4,7 @@ import { ModelStartGuide } from './ModelStartGuide';
 import { ApiError } from './api';
 import { useUnsavedChanges } from './unsaved';
 import { moteText } from '@mote/shared/i18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MODEL_FEATURES, MODEL_FEATURE_LABELS, type ModelFeature, type ModelFeatureDefaults, type ModelFeatureModels, type ModelSettingsView } from '@mote/shared/models';
 import { type Api, errorMessage } from './api';
 function ModuleModel({ api, feature, profileId, value, onChange, disabled, fallback }: {
@@ -34,10 +34,11 @@ export function ModelAssignments({ api, revision, onApplied, onManage }: {
     onManage: () => void;
 }) {
     const [view, setView] = useState<ModelSettingsView>(), [defaults, setDefaults] = useState<ModelFeatureDefaults>(), [models, setModels] = useState<ModelFeatureModels>({}), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+    const activeApi=useRef(api);activeApi.current=api;const operation=useRef<AbortController|undefined>(undefined);
     const dirty = !!view && (JSON.stringify(defaults) !== JSON.stringify(view.defaults) || JSON.stringify(models) !== JSON.stringify(view.defaultModels));
     useUnsavedChanges(dirty);
-    const read = useResource<ModelSettingsView>(api, '/api/model-settings');
-    useEffect(() => { setView(undefined); setDefaults(undefined); setModels({}); setError(''); setNotice(''); }, [api]);
+    const read = useResource<ModelSettingsView>(api, '/api/model-settings',undefined,revision);
+    useEffect(() => { setView(undefined); setDefaults(undefined); setModels({}); setError(''); setNotice('');setBusy(false);return()=>{operation.current?.abort();operation.current=undefined;}; }, [api]);
     useEffect(() => { if (read.data && !dirty) {
         setView(read.data);
         setDefaults(read.data.defaults);
@@ -47,10 +48,10 @@ export function ModelAssignments({ api, revision, onApplied, onManage }: {
         setDefaults(undefined);
         setModels({});
     } }, [api, read.data, read.error]);
-    async function save() { if (!view || !defaults)
-        return; setBusy(true); setError(''); setNotice(''); try {
-        const next = await api.request<ModelSettingsView>('/api/model-settings/defaults', { method: 'PUT', body: JSON.stringify({ revision: view.revision, defaults, defaultModels: models }) });
-        setView(next);
+    async function save() { if (!view || !defaults || operation.current)
+        return; const controller=new AbortController();operation.current=controller;const current=()=>activeApi.current===api&&!controller.signal.aborted&&operation.current===controller;setBusy(true); setError(''); setNotice(''); try {
+        const next = await api.request<ModelSettingsView>('/api/model-settings/defaults', { method: 'PUT', body: JSON.stringify({ revision: view.revision, defaults, defaultModels: models }),signal:controller.signal });
+        if(!current())return;setView(next);
         setDefaults(next.defaults);
         setModels(next.defaultModels);
         invalidateConfiguration(api);
@@ -58,12 +59,12 @@ export function ModelAssignments({ api, revision, onApplied, onManage }: {
         onApplied();
     }
     catch (e) {
-        setError(errorMessage(e));
+        if(current())setError(errorMessage(e));
     }
     finally {
-        setBusy(false);
+        if(current())setBusy(false);if(operation.current===controller)operation.current=undefined;
     } }
-    return <><ModelStartGuide step="module"/><section className="panel module-assignments"><div className="section-heading"><div><h2>{moteText("模块使用的模型")}</h2><p>{moteText("跟随预设的默认模型，或为模块指定同一连接下的其他模型。单次请求的选择优先。")}</p></div><button className="button subtle" onClick={onManage}>{moteText("管理模型连接")}</button></div>{Boolean(error || read.error) && <p role="alert" className="notice error">{error || errorMessage(read.error)}</p>}{view && defaults && <><div className="module-assignment-list">{MODEL_FEATURES.map(feature => <div className="module-assignment-row" key={feature}><div><h3>{MODEL_FEATURE_LABELS[feature]}</h3>{feature === 'file' && <small>{moteText("文件处理器的显式模型与本地处理限制优先。")}</small>}</div><label className="preference-field">{moteText("模型连接预设（Provider）")}<select aria-label={MODEL_FEATURE_LABELS[feature] + moteText("默认模型")} value={defaults[feature]} disabled={busy} onChange={e => { setDefaults({ ...defaults, [feature]: e.target.value }); setModels(prev => { const next = { ...prev }; delete next[feature]; return next; }); setNotice(''); }}>{view.profiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.readOnly ? moteText(" · 只读") : ''}</option>)}</select></label><ModuleModel key={feature + defaults[feature] + view.revision} api={api} feature={feature} profileId={defaults[feature]} fallback={view.profiles.find(p => p.id === defaults[feature])?.settings.model ?? ''} value={models[feature] ?? ''} disabled={busy} onChange={value => { setModels(prev => { const next = { ...prev }; if (value.trim())
+    return <><section className="panel module-assignments"><div className="section-heading"><div><h2>{moteText("模块使用的模型")}</h2><p>{moteText("跟随预设的默认模型，或为模块指定同一连接下的其他模型。单次请求的选择优先。")}</p></div><button className="button subtle" onClick={onManage}>{moteText("管理模型连接")}</button></div>{Boolean(error || read.error) && <p role="alert" className="notice error">{error || errorMessage(read.error)}</p>}{view && defaults && <><div className="module-assignment-list">{MODEL_FEATURES.map(feature => <div className="module-assignment-row" key={feature}><div><h3>{MODEL_FEATURE_LABELS[feature]}</h3>{feature === 'file' && <small>{moteText("文件处理器的显式模型与本地处理限制优先。")}</small>}</div><label className="preference-field">{moteText("模型连接预设（Provider）")}<select aria-label={MODEL_FEATURE_LABELS[feature] + moteText("默认模型")} value={defaults[feature]} disabled={busy} onChange={e => { setDefaults({ ...defaults, [feature]: e.target.value }); setModels(prev => { const next = { ...prev }; delete next[feature]; return next; }); setNotice(''); }}>{view.profiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.readOnly ? moteText(" · 只读") : ''}</option>)}</select></label><ModuleModel key={feature + defaults[feature] + view.revision} api={api} feature={feature} profileId={defaults[feature]} fallback={view.profiles.find(p => p.id === defaults[feature])?.settings.model ?? ''} value={models[feature] ?? ''} disabled={busy} onChange={value => { setModels(prev => { const next = { ...prev }; if (value.trim())
         next[feature] = value.trim();
     else
         delete next[feature]; return next; }); setNotice(''); }}/></div>)}</div><div className="module-assignment-footer"><button className="button primary" disabled={busy || (JSON.stringify(defaults) === JSON.stringify(view.defaults) && JSON.stringify(models) === JSON.stringify(view.defaultModels))} onClick={() => void save()}>{moteText("保存模块分配")}</button>{notice && <span role="status">{notice}</span>}</div></>}</section></>;

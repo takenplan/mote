@@ -1,0 +1,3 @@
+import type {FilePolicy,FileProcessingSettings,ProcessingService,ProcessorParameter} from '@mote/shared';
+export type PublicProcessingService=Omit<ProcessingService,'apiKey'>&{apiKeyConfigured:boolean;apiKey?:string|null};
+export type FileSettingsView={revision:string;settings:Omit<FileProcessingSettings,'apiKey'|'localWorkerApiKey'>&{apiKeyConfigured?:boolean;localWorkerApiKeyConfigured?:boolean};policy:Omit<FilePolicy,'services'>&{services:PublicProcessingService[]};policyConfigured:boolean;processors:{id:string;name:string;stage:string;serviceKind?:string;localOnly?:boolean;mediaTypes:string[];parameters?:ProcessorParameter[];dialogue?:boolean;allowSummary?:boolean}[]};
