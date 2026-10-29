@@ -10070,5 +10070,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "运行详情": "Detalles de ejecución",
   "返回对话": "Volver a la conversación",
   "未能确认发送完成，请检查同步与活动后重试。": "No se pudo confirmar el envío. Revisa Sincronización y actividad antes de reintentarlo.",
-  "查看结果与依据 →": "Ver resultado y evidencias →"
+  "查看结果与依据 →": "Ver resultado y evidencias →",
+  "暂时无法确认当前目录": "No se puede confirmar la carpeta actual"
 };

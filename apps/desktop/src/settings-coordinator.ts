@@ -75,7 +75,7 @@ export class SettingsCoordinator {
       // A failed directory fsync may follow a successful rename. Preserve both copies and stop all IO.
       const persisted = await d.store.load().catch(() => undefined);
       if (error instanceof StorageCommitUncertainError || !persisted || JSON.stringify(persisted) === JSON.stringify(updated)) {
-        d.requireRecovery(moteText('设置提交需要恢复；已停止采集与上传并保留数据，请重新打开 Mote。'));
+        d.requireRecovery(error instanceof StorageCommitUncertainError?error.message:moteText('设置提交需要恢复；已停止采集与上传并保留数据，请重新打开 Mote。'));
         throw new Error(d.recoveryRequired());
       }
       try {

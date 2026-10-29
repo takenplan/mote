@@ -10070,5 +10070,6 @@ export const french: Readonly<Record<string, string>> = {
   "运行详情": "Détails de l’exécution",
   "返回对话": "Revenir à la conversation",
   "未能确认发送完成，请检查同步与活动后重试。": "L’envoi n’a pas pu être confirmé. Vérifiez Synchronisation et activité avant de réessayer.",
-  "查看结果与依据 →": "Voir le résultat et ses sources →"
+  "查看结果与依据 →": "Voir le résultat et ses sources →",
+  "暂时无法确认当前目录": "Le dossier actuel ne peut pas être confirmé"
 };

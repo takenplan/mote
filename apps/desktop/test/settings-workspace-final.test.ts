@@ -23,3 +23,7 @@ it('a failed explicit refresh followed by later automatic samples does not discl
 it('only the current owner and newest explicit sample acknowledgement may disclose facts',()=>{
  const a=status(),counters={saved:0,blocked:0,failed:0,imageBytes:0,uploadedBytes:0,inferenceMs:0,ocrMs:0,captureMs:0};a.diagnostics={enabled:true,sampleCount:1,fileBytes:1,counters,latest:{at:'2026-10-30T01:00:00Z',rssBytes:1048576,cpuUserMicros:1,cpuSystemMicros:1,processId:1,queueBytes:0,modelBytes:0,counters}};renderSettingsWorkspace(a);const old=beginDiagnosticFactsRefresh(),latest=beginDiagnosticFactsRefresh();old(a);expect(el('diagnostics-current-facts').hidden).toBe(true);const b={...a,authorizationGeneration:2};renderSettingsWorkspace(b);latest(a);expect(el('diagnostics-current-facts').hidden).toBe(true);const current=beginDiagnosticFactsRefresh();current(b);expect(el('diagnostics-current-facts').hidden).toBe(false);renderSettingsWorkspace(a);current(b);expect(el('diagnostics-current-facts').hidden).toBe(true);
 });
+
+it('keeps the existing recovery action in the Storage page instead of the hidden legacy overview',()=>{
+ expect(el('storage-restart').closest('[data-page]')?.getAttribute('data-page')).toBe('storage');
+});
