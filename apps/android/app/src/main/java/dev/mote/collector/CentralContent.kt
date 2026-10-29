@@ -87,10 +87,14 @@ internal class CentralContent(
     internal var server = ""; private set
     internal val isWorking get() = task.busy || pending.isNotEmpty()
     internal val navigationRevision get() = revision
+    internal fun readVisit(): () -> Boolean {
+        val version=revision;val foreground=foregroundRevision
+        return { version==revision && foreground==foregroundRevision && resumed && !isDestroyed && !isFinishing }
+    }
     private var page = "ask"
     @Volatile private var revision = 0L
-    private var resumed = false
-    private var foregroundRevision = 0L
+    @Volatile private var resumed = false
+    @Volatile private var foregroundRevision = 0L
     // This is a UI routing stamp. Authorization always reads the current session in background work.
     private var accessGeneration = -1L
     private var accessReady = false

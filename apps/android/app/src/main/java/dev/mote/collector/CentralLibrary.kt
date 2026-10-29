@@ -182,11 +182,18 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
     }
     private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, conversationId: String? = null) {
-        val api = client
+        val api = client;val currentVisit=ui.readVisit()
         ui.work(MoteI18n.text("正在读取原文…"), {
             val row = api.get("/api/capture-browser/" + enc(id))
-            row to topicMemoryId?.let { api.get("/api/memories/" + enc(it)) }
-        }) { (row, memory) ->
+            check(row.getString("id")==id)
+            val projected=NativeDerivedEvidencePresentation.load(row,currentVisit,api::get)
+            if(projected!=null) {
+                val current=api.get("/api/capture-browser/"+enc(id))
+                check(current.getString("id")==id && current.optString("deviceId")==row.optString("deviceId") && current.optString("source")==row.optString("source") && current.optString("libraryVersion")==row.optString("libraryVersion") && current.optString("ocrText")==row.optString("ocrText")) { MoteI18n.text("分页内容已变化或游标无效，请返回第一页重新读取。") }
+            }
+            if(conversationId!=null)check(CentralConversationReference.available(api,conversationId,id)) { MoteI18n.text("引用原文已删除，历史问答仍保留。") }
+            Triple(row,topicMemoryId?.let { api.get("/api/memories/" + enc(it)) },projected)
+        }) { (row, memory, projected) ->
             if (memory != null && accept != null && !accept(memory)) return@work
             if (CentralCaptureReader.supports(row.optString("source"))) {
                 check(row.getString("id") == id)
@@ -194,10 +201,12 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 return@work
             }
             body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
+            ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt"))
+            projected?.speaker?.let { ui.text(MoteI18n.text("说话人 {0}",it),NativeFontRole.SUPPORT) }
+            ui.text(projected?.text ?: row.optString("ocrText")).tag="capture-reference-text"
             ui.button(MoteI18n.text("基于这条记录提问")) { screens.askAbout(id) }
             val metadata = row.optJSONObject("metadata")
-            values(metadata ?: JSONObject(), ui.card())
+            if(projected==null)values(metadata ?: JSONObject(), ui.card())
             val attachments = metadata?.optJSONArray("attachments") ?: JSONArray()
             for (i in 0 until attachments.length()) ui.button(MoteI18n.text("附件") + " " + (i + 1)) { file(attachments.getString(i)) }
             if (row.optBoolean("hasImage") || !row.isNull("blobHash") && row.has("blobHash")) ui.button(MoteI18n.text("查看原图")) {
@@ -205,6 +214,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
             val deletionKind=CentralDeletion.kind(row)
             ui.disclosure(MoteI18n.text("更多")) { more ->
+                if(projected!=null) {
+                    ui.text(MoteI18n.text("原始文本"),NativeFontRole.SECTION,more)
+                    ui.text(projected.canonical,parent=more).tag="capture-reference-canonical"
+                    values(projected.locator,ui.card(more));metadata?.let { values(it,ui.card(more)) }
+                }
                 if (deletionKind == null) ui.text(MoteI18n.text("此引用不能直接删除原始记录。"),parent=more)
                 else ui.button(MoteI18n.text(if(deletionKind == "file") "删除文件" else "删除记录"),parent=more) {
                     screens.confirm(MoteI18n.text(if(deletionKind == "file") "删除中央文件" else "删除中央记录"), MoteI18n.text(if(deletionKind == "file") "删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。" else "删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {

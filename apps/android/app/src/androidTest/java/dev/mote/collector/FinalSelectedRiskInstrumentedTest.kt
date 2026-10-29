@@ -270,6 +270,53 @@ class FinalSelectedRiskInstrumentedTest {
             }
         }finally{instrumentation.removeMonitor(monitor);originals.forEach{(file,bytes)->if(bytes==null)file.delete()else file.writeBytes(bytes)};root.deleteRecursively()}
     }
+
+    /** Uses a normal short-lived owner login, public citation route and persisted H04 results only. */
+    @Test fun persistedExactDerivedMediaCitationsReadNaturallyAndReturnWithoutNewInference()=fixture{
+        val settings=Settings(context);val before=settings.read();val preferences=context.getSharedPreferences("mote",0);val originalPreferences=preferences.all.toMap()
+        val privateConfig=JSONObject(File(context.filesDir,"final-calendar-journey.json").readText());require(privateConfig.getBoolean("generatedOnly")&&privateConfig.getString("origin")==before.server&&privateConfig.getString("deviceId")==settings.deviceId)
+        val origin=before.server;val vaultOwner=privateConfig.getString("ownerToken");val conversation="b0230e1a-fa9b-4e71-8581-102b16b4dae6";val turnId="f7f6a4a1-9dfa-4843-ba29-97243bb1b4ea"
+        val ids=listOf("5469611e-ea55-5e4e-acd0-9924840b7427","97f5258a-dbb7-55a2-a757-6fed4b5601b6","7e6797e0-aa66-57f4-a163-fdcc3c76b2b5")
+        val expected=listOf("MOTE GENERATED TEST","Tomorrow at nine."," This is a generated mode test. The project meeting starts tomorrow at 9. Please bring the blue notebook.")
+        val draftFile=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(origin)+"/ask.enc");CentralDraftWrites.barrier{};val originalDraft=if(draftFile.exists())draftFile.readBytes()else null
+        val queueDirectory=File(QueueStorage(context).current().path);val queueOriginals=queueDirectory.listFiles().orEmpty().filter{it.extension in setOf("event","blob")}.associate{it.name to it.readBytes()}
+        var temporaryOwner:String?=null
+        try{
+            settings.signOut() // Local login state only. Never call logout with the retained collector credential.
+            ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask")).use{
+                until("Normal product owner login form"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="中央管理令牌"}}};main{shown().filterIsInstance<EditText>().single{it.contentDescription=="中央管理令牌"}.setText(vaultOwner)};click("登录并继续")
+                until("Owner login session applied"){val token=settings.read().connectionToken();token.isNotBlank()&&token!=before.connectionToken()&&token!=vaultOwner};temporaryOwner=settings.read().connectionToken()
+                until("Actual owner page idle"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.isEnabled}}}
+            }
+            val api=CentralAccess.requireClient(context);assertEquals("owner",api.get("/api/connections/self").getJSONObject("credential").getString("scope"));val snapshot=api.get("/api/conversations/$conversation?limit=50");val turns=snapshot.getJSONArray("turns");require(turns.length()==1&&turns.getJSONObject(0).getString("id")==turnId);val turn=turns.getJSONObject(0);val citations=turn.getJSONObject("result").getJSONArray("citations");assertEquals(ids,(0 until citations.length()).map{citations.getJSONObject(it).getString("id")})
+            val originals=ids.map{api.get("/api/capture-browser/$it")};originals.forEachIndexed{i,row->assertTrue(row.getString("ocrText").endsWith("\n"+expected[i]));assertEquals("file",row.getString("source"));assertEquals(row.getString("libraryVersion"),row.getJSONObject("provenance").getString("uri"))}
+            val draft="Generated H04 exact-derived reference return draft"
+            ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",conversation)).use{scenario->
+                until("Actual H04 parent conversation selected"){if(has("还有未发送的内容"))click("舍弃并切换");var selected=false;scenario.onActivity{selected=!it.isWorking&&it.selectedAskConversationId==conversation};selected&&has(turn.getString("question"))}
+                main{shown().filterIsInstance<EditText>().single{it.contentDescription=="你的问题"}.setText(draft)}
+                for(i in ids.indices){
+                    main{MoteAppearance.select(context,if(i==0)AppearancePreference.LIGHT else AppearancePreference.DARK)}
+                    val label="查看引用 ${i+1} · ";until("Exact H04 turn citation row"){main{shown().any{it.contentDescription?.toString()?.startsWith(label)==true}}};main{shown().single{it.contentDescription?.toString()?.startsWith(label)==true}.performClick()}
+                    until("Public reader shows full exact typed text"){main{shown().filterIsInstance<TextView>().any{it.tag=="capture-reference-text"&&it.text.toString()==expected[i]}}}
+                    assertFalse(has("imageLocation"));assertFalse(has("{\"speaker\""));assertFalse(main{shown().any{it.tag=="capture-reference-canonical"}});picture("h04-citation-${i+1}-readable-default")
+                    click("更多  ›");until("Complete exact canonical remains explicitly readable"){main{shown().filterIsInstance<TextView>().any{it.tag=="capture-reference-canonical"&&it.text.toString()==originals[i].getString("ocrText")}}};picture("h04-citation-${i+1}-canonical-more");click("返回上级")
+                    until("Same actual parent and full later draft returned"){var selected=false;scenario.onActivity{selected=!it.isWorking&&it.selectedAskConversationId==conversation};selected&&main{shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.text.toString()==draft}}};picture("h04-citation-${i+1}-same-parent-return")
+                }
+            }
+            assertEquals(turns.toString(),api.get("/api/conversations/$conversation?limit=50").getJSONArray("turns").toString())
+            File(context.filesDir,"final-selected-risk/h04-derived-reader-facts.json").writeText(JSONObject().put("conversationId",conversation).put("turnId",turnId).put("evidenceIds",JSONArray(ids)).put("pins",JSONArray(originals.map{it.getString("libraryVersion")})).put("newInference",false).put("fullCanonicalPreserved",true).put("sameParentAndDraft",true).toString())
+        }finally{
+            var logoutConfirmed=false
+            temporaryOwner?.takeIf{it!=before.connectionToken()&&it!=vaultOwner}?.let{token->
+                logoutConfirmed=runCatching { val api=CentralClient(origin,token);api.post("/api/login/logout",JSONObject());val rejected=runCatching{api.get("/api/connections/self")}.exceptionOrNull();rejected is CentralFailure && rejected.status==401 }.getOrDefault(false)
+            }
+            CentralDraftWrites.barrier{if(originalDraft==null)draftFile.delete()else draftFile.writeBytes(originalDraft)}
+            val edit=preferences.edit().clear();originalPreferences.forEach{(key,value)->when(value){is String->edit.putString(key,value);is Boolean->edit.putBoolean(key,value);is Int->edit.putInt(key,value);is Long->edit.putLong(key,value);is Float->edit.putFloat(key,value);is Set<*>->edit.putStringSet(key,value.filterIsInstance<String>().toSet());else->error("Unsupported preference")}};check(edit.commit());CentralSession.get(context).select(origin);assertEquals(before,settings.read());assertEquals(originalPreferences,preferences.all)
+            assertEquals("collector",CentralAccess.requireClient(context).get("/api/connections/self").getJSONObject("credential").getString("scope"));if(temporaryOwner!=null)assertTrue("Only new owner session must be revoked",logoutConfirmed)
+            File(context.filesDir,"final-selected-risk/h04-derived-reader-facts.json").takeIf{it.isFile}?.let{file->file.writeText(JSONObject(file.readText()).put("newOwnerSessionLoggedOut",logoutConfirmed).put("collectorRoleRestored",true).put("originalCredentialStoredValuesRestored",true).toString())}
+            val after=queueDirectory.listFiles().orEmpty().filter{it.extension in setOf("event","blob")}.associate{it.name to it.readBytes()};assertEquals(queueOriginals.keys,after.keys);queueOriginals.forEach{(name,bytes)->assertArrayEquals(bytes,after[name])}
+        }
+    }
     private class HttpFixture:AutoCloseable{
         val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
         init{threads.submit{while(!server.isClosed)runCatching{server.accept()}.getOrNull()?.let{socket->threads.submit{socket.use{
