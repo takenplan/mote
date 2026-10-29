@@ -78,7 +78,7 @@ export function Insights({ api, range, configured, onOpen, onSettings, onChanged
         }
         if (!restored.current && runHistory.data&&runHistory.error===undefined) {
             restored.current = true;
-            setRun(current => current ?? (pendingAdmissions.has(api)?runHistory.data!.items.find(item=>item.id===pendingAdmissions.get(api)!.id):!selection?runHistory.data!.items.find(item => item.status === 'running'):undefined) ?? null);
+            setRun(current => current ?? (pendingAdmissions.has(api)?runHistory.data!.items.find(item=>item.id===pendingAdmissions.get(api)!.id):runHistory.data!.items.find(item => item.status === 'running')) ?? null);
         }
     }, [api,selection,report.error,runHistory.data,runHistory.error,selectedRun.data,selectedRun.error]);
     useEffect(() => { if (run)
