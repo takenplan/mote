@@ -9843,5 +9843,14 @@ export const french: Readonly<Record<string, string>> = {
   "待设备同步": "En attente de synchronisation de l’appareil",
   "完成 {0}": "Terminer {0}",
   "重新打开 {0}": "Rouvrir {0}",
-  "返回原文": "Revenir au document original"
+  "返回原文": "Revenir au document original",
+  "这里会显示已结束的工作": "Les tâches terminées apparaîtront ici.",
+  "补充时间后自动同步": "Synchroniser automatiquement après ajout des horaires",
+  "补充后按已有授权继续处理，状态以实际回执为准。": "Après ajout des horaires, le traitement se poursuit selon les autorisations existantes. Le statut dépend du résultat réel reçu.",
+  "时间信息已保存。": "Les horaires ont été enregistrés.",
+  "保存结果尚未核实，请检查当前日程或重试同一请求。": "Le résultat de l’enregistrement n’est pas vérifié. Vérifiez l’événement actuel ou réessayez la même requête.",
+  "日程信息已变化，请读取最新内容后再继续。": "Les informations de l’événement ont changé. Rechargez la dernière version avant de continuer.",
+  "补充时间": "Ajouter les horaires",
+  "保存信息": "Enregistrer les informations",
+  "检查保存结果": "Vérifier l’enregistrement"
 };

@@ -248,18 +248,18 @@ test('Markdown citation renderer retains the exact focused control across parent
 });
 
 test('Insight cancel shows a distinct stopped state and does not automatically relaunch',async t=>{
- const {root,d}=await fixture(t),pendingPoll=deferred();let status='running',writes=0;
+ const {root,d}=await fixture(t),pendingPoll=deferred();window.history.replaceState(null,'','#/library/insights?insight=new');let status='running',writes=0;
  const run=()=>({id:'generated-insight',status,createdAt:when,updatedAt:when,scope:{},events:[]});
  const api=apiWith((path,init)=>{if(path.endsWith('/cancel')){assert.equal(init?.method,'POST');writes++;status='cancelled';return run();}if(path==='/api/insight-runs')return {items:[run()]};if(path==='/api/insight-runs/generated-insight')return status==='running'?pendingPoll.promise:run();return {items:[]};});
  await act(async()=>root.render(React.createElement(Insights,{api,range:{},configured:true,onOpen:()=>{},onSettings:()=>{},onChanged:()=>{}})));
  await act(async()=>button(d,'取消回顾').click());
  await act(async()=>pendingPoll.resolve({...run(),status:'running'}));
  assert.equal(writes,1);assert.match(d.querySelector('.insight-progress')!.textContent!,/回顾已取消/);assert.match(d.querySelector('.insight-progress')!.textContent!,/原始资料仍保留/);
- assert.equal(button(d,'取消回顾'),undefined);assert.doesNotMatch(d.querySelector('.insight-progress')!.textContent!,/报告已归档/);assert.ok(button(d,'新建洞察'));
+ assert.equal(button(d,'取消回顾'),undefined);assert.doesNotMatch(d.querySelector('.insight-progress')!.textContent!,/报告已归档/);assert.ok(button(d,'调整范围后重试'));await act(async()=>button(d,'调整范围后重试').click());assert.ok(d.querySelector('.insight-compose'));assert.equal(writes,1,'Opening the retained draft never relaunches automatically');
 });
 
 test('Insight cancellation on a new node is not blocked or overwritten by an old node request ignoring abort',async t=>{
- const {root,d}=await fixture(t),oldReply=deferred();let oldSignal:AbortSignal|undefined,newCancels=0;
+ const {root,d}=await fixture(t),oldReply=deferred();window.history.replaceState(null,'','#/library/insights?insight=new');let oldSignal:AbortSignal|undefined,newCancels=0;
  const run=(status='running')=>({id:'same-generated-id',status,createdAt:when,updatedAt:when,scope:{},events:[]});
  const oldApi=apiWith((path,init)=>{if(path.endsWith('/cancel')){oldSignal=init?.signal as AbortSignal;return oldReply.promise;}return path==='/api/insight-runs'?{items:[run()]}:path.includes('/api/insight-runs/')?run():{items:[]};});
  const newApi=apiWith((path,init)=>{if(path.endsWith('/cancel')){assert.equal(init?.method,'POST');newCancels++;return run('cancelled');}return path==='/api/insight-runs'?{items:[run()]}:path.includes('/api/insight-runs/')?run(newCancels?'cancelled':'running'):{items:[]};});

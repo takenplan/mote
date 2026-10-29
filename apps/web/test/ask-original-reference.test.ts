@@ -38,3 +38,23 @@ test('owner read success for an attachment accepts empty text without assuming t
  const materialRef='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),paths:string[]=[];const material={ref:materialRef,revision:'b'.repeat(64),title:'Generated image',coverage:{state:'partial'}};const api={request:async(path:string)=>{paths.push(path);return path.includes('/read?')?{material,text:'',spans:[{kind:'asset'}]}:material;}} as Api;
  assert.deepEqual(await verifiedOriginals(api,{kind:'material',id:materialRef},new AbortController().signal),{ids:[],title:'Generated image',materialRef});assert.equal(paths.length,2);
 });
+
+test('Discovery follow-up reads the exact immutable report and all current originals through owner HTTP',async t=>{
+ const {buildApp}=await import('../../server/src/app.js'),directory=mkdtempSync(join(tmpdir(),'mote-discovery-originals-')),token='generated-discovery-original-owner-token';
+ const node=await buildApp({dataDir:directory,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:3_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false});
+ t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ const ids=[randomUUID(),randomUUID()],runId=randomUUID(),at='2026-10-29T00:00:00Z',headers={authorization:'Bearer '+token};
+ for(const id of ids){const response=await node.app.inject({method:'POST',url:'/api/notes',headers,payload:{id,deviceId:'generated',deviceName:'Generated',platform:'import',capturedAt:at,text:'Generated exact Discovery original '+id}});assert.equal(response.statusCode,201,response.body);}
+ node.store.saveInsight({runId,answer:'Generated finding',trace:[],citations:ids.map(id=>({id,appName:'Generated original',capturedAt:at,excerpt:'Generated exact Discovery original'}))},runId);
+ const paths:string[]=[],api={request:async(path:string)=>{paths.push(path);const response=await node.app.inject({url:path,headers});if(response.statusCode!==200)throw Error('Unavailable current original or report');return response.json();}} as Api;
+ assert.deepEqual(await verifiedOriginals(api,{kind:'insight',id:runId},new AbortController().signal),{ids,title:'发现'});assert.deepEqual(paths,['/api/insights/'+runId,...ids.map(id=>'/api/capture-browser/'+id)]);
+ const removed=await node.app.inject({method:'DELETE',url:'/api/notes/'+ids[0],headers});assert.equal(removed.statusCode,200);paths.length=0;
+ await assert.rejects(verifiedOriginals(api,{kind:'insight',id:runId},new AbortController().signal));assert.deepEqual(paths,['/api/insights/'+runId],'An invalidated report never falls back to another capture or an available evidence subset');
+});
+
+test('Discovery follow-up refuses incomplete or oversized citation references without silently narrowing them',async()=>{
+ const id=randomUUID(),ids=Array.from({length:31},()=>randomUUID()),paths:string[]=[];
+ const api={request:async(path:string)=>{paths.push(path);return {runId:id,citations:ids.map(id=>({id}))};}} as Api;
+ await assert.rejects(verifiedOriginals(api,{kind:'insight',id},new AbortController().signal),/30/);assert.deepEqual(paths,['/api/insights/'+id]);
+ for(const value of [null,{}, {runId:randomUUID(),citations:[{id:ids[0]}]}])await assert.rejects(verifiedOriginals({request:async()=>value} as Api,{kind:'insight',id},new AbortController().signal),/暂不可用/);
+});

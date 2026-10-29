@@ -13,7 +13,7 @@ export function InsightProgress({run,pollError,elapsed,onRetry,onResume,onCancel
     {pollError&&<div className="error-banner" role="alert">{moteText("进度连接暂时中断：")}{pollError}{moteText("。服务器可能仍在运行，正在自动重连。")}<button type="button" className="button" onClick={onResume}>{moteText("重新连接")}</button></div>}
     <ol className="insight-steps">{run.events.map((event,index)=><li key={index}><Clock3 size={14}/><time>{new Date(event.at).toLocaleTimeString(getLocale())}</time><span>{event.stage==='tool'?`${tools[event.tool??'']??event.tool??moteText("读取资料")}${event.phase==='started'?moteText(" · 正在执行"):moteText(" · 返回 {0} 项", event.count??0)}`:stages[event.stage]}</span></li>)}</ol>
     {running&&onCancel&&<button type="button" className="button secondary" disabled={cancelling} onClick={onCancel}>{cancelling?moteText("正在取消…"):moteText("取消回顾")}</button>}
-    {run.status==='failed'&&<button type="button" className="button primary" onClick={onRetry}>{moteText("调整范围后重试")}</button>}
+    {['failed','cancelled'].includes(run.status)&&<button type="button" className="button primary" onClick={onRetry}>{moteText("调整范围后重试")}</button>}
     <p className="field-note">{moteText("这里展示实际运行阶段与检索操作；报告中的结论附有可打开的原文引用。")}</p>
   </section>;
 }

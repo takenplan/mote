@@ -1,3 +1,4 @@
+import {modelView} from './fixtures/model-settings';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
@@ -91,6 +92,21 @@ test('an old owner pagination response cannot enter a different Central session 
  await act(async()=>root.render(view(oldApi)));await until(()=>!!button(d,'加载更多'));
  await act(async()=>button(d,'加载更多').click());await act(async()=>root.render(view(currentApi)));assert.equal(signal?.aborted,true);
  await act(async()=>finish({items:[report('old-private-page','Generated old private page')],nextCursor:null}));
+ await until(()=>d.querySelector('.workspace-select')?.textContent?.includes('Generated current owner finding')??false);
+ await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  await until(()=>d.querySelector('.insight-report')?.textContent?.includes('Generated current owner finding')??false);
  assert.doesNotMatch(d.body.textContent!,/Generated old owner finding|Generated old private page/);
+});
+
+test('an unconfirmed generation retains its exact request across history, remount and later range changes',async t=>{
+ const {root,d,win,until}=await fixture(t,'#/library/insights?insight=new'),bodies:any[]=[];let later=false,last:any;
+ const api=fake((path,init)=>{if(path==='/api/model-settings')return modelView();if(path==='/api/insight-runs'&&init?.method==='POST'){const body=JSON.parse(String(init.body));bodies.push(body);if(bodies.length===1)throw Error('Generated lost admission acknowledgement');last={id:body.requestId,status:'failed',createdAt:when,updatedAt:when,scope:{},events:[],error:{code:'provider_unavailable',message:'Generated unavailable'}};return last;}if(path.startsWith('/api/insight-runs/'))return last;return {items:[]};});
+ const view=()=>React.createElement(Insights,{api,range:later?{after:'2026-01-01T00:00:00Z'}:{},configured:true,onOpen:()=>{},onSettings:()=>{},onChanged:()=>{}});
+ await act(async()=>root.render(view()));await act(async()=>d.querySelector<HTMLFormElement>('.insight-compose')!.requestSubmit());
+ await until(()=>d.body.textContent!.includes('上次提交结果尚未确认'));
+ await act(async()=>button(d,'发现历史').click());await act(async()=>root.render(null));later=true;await act(async()=>root.render(view()));
+ await act(async()=>button(d,'生成回顾').click());await until(()=>!!d.querySelector('.insight-compose'));
+ assert.match(d.body.textContent!,/上次提交结果尚未确认/);await act(async()=>d.querySelector<HTMLFormElement>('.insight-compose')!.requestSubmit());
+ await until(()=>bodies.length===2);assert.deepEqual(bodies[1],bodies[0],'A later range cannot change the unconfirmed request body or ID');
+ assert.equal(win.location.hash,'#/library/insights?insight=new');
 });

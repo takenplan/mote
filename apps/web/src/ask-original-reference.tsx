@@ -2,12 +2,12 @@ import {useEffect,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
 import {type Api,errorMessage} from './api';
 import type {Material} from './Materials';
-type Origin={kind:'memory'|'capture'|'material';id:string};
+type Origin={kind:'memory'|'capture'|'material'|'insight';id:string};
 const referenceReturns=new WeakMap<Api,Map<string,string>>();
 export function rememberOriginalReturn(api:Api,kind:Origin['kind'],id:string){let values=referenceReturns.get(api);if(!values){values=new Map();referenceReturns.set(api,values);}values.set(kind+':'+id,window.location.hash);}
-export function originalReferenceRoute(kind:Origin['kind'],id:string){return '#/ask?'+new URLSearchParams({[kind==='memory'?'fromMemory':kind==='material'?'fromMaterial':'fromCapture']:id});}
+export function originalReferenceRoute(kind:Origin['kind'],id:string){return '#/ask?'+new URLSearchParams({[kind==='memory'?'fromMemory':kind==='material'?'fromMaterial':kind==='insight'?'fromInsight':'fromCapture']:id});}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function readOrigin():Origin|null{const query=new URLSearchParams(window.location.hash.split('?')[1]);for(const [key,kind] of [['fromMemory','memory'],['fromMaterial','material'],['fromCapture','capture']] as const){const id=query.get(key);if(id)return {kind,id};}return null;}
+function readOrigin():Origin|null{const query=new URLSearchParams(window.location.hash.split('?')[1]);for(const [key,kind] of [['fromMemory','memory'],['fromMaterial','material'],['fromCapture','capture'],['fromInsight','insight']] as const){const id=query.get(key);if(id)return {kind,id};}return null;}
 const unavailable=()=>moteText('参考原件暂不可用，请清除参考后继续。');
 /** Re-read the selected entity and every exact original. A displayed evidence
  * subset never becomes the scope, and a newer Material never replaces a pin. */
@@ -22,10 +22,12 @@ export async function verifiedOriginals(api:Api,origin:Origin,signal:AbortSignal
   return {ids:[],title:material.title,materialRef:origin.id};
  }else{
   if(!uuid.test(origin.id))throw Error(unavailable());
+  const report=origin.kind==='insight'?await api.request<{runId:string;artifact?:{title:string};citations:{id:string}[]}>('/api/insights/'+origin.id,{signal}):undefined;
+  if(origin.kind==='insight'&&(!report||report.runId!==origin.id||!Array.isArray(report.citations)))throw Error(unavailable());
   const memory=origin.kind==='memory'?await api.request<{title:string;evidenceIds?:string[];evidenceCount?:number;evidence?:{id:string}[]}>('/api/memories/'+origin.id,{signal}):undefined;
   // Full saved IDs are authoritative. Union retains any explicit evidence the
   // detail adds, while a larger count fails rather than silently narrowing.
-  ids=memory?[...new Set([...(memory.evidenceIds??[]),...(memory.evidence??[]).map(item=>item.id)])]:[origin.id];title=memory?.title??moteText('原始记录');
+  ids=report?[...new Set(report.citations.map(item=>item.id))]:memory?[...new Set([...(memory.evidenceIds??[]),...(memory.evidence??[]).map(item=>item.id)])]:[origin.id];title=report?.artifact?.title??(report?moteText('发现'):memory?.title??moteText('原始记录'));
   if(memory?.evidenceCount!==undefined&&memory.evidenceCount>ids.length)throw Error(unavailable());
  }
  if(ids.length>30)throw Error(moteText('原始依据超过本次问答的 30 条上限；正文仍可阅读。'));
@@ -41,7 +43,7 @@ export function useOriginalReference(api:Api){
   void verifiedOriginals(api,origin,controller.signal).then(value=>{if(!controller.signal.aborted)setRead({owner:api,key,...value});}).catch(error=>{if(!controller.signal.aborted)setRead({owner:api,key,ids:[],title:'',error:errorMessage(error)});});return()=>controller.abort();
  },[api,key]);
  const current=read?.owner===api&&read.key===key?read:undefined;
- function clear(){setOrigin(null);setRead(undefined);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const field of ['fromMemory','fromMaterial','fromCapture'])query.delete(field);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}
+ function clear(){setOrigin(null);setRead(undefined);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const field of ['fromMemory','fromMaterial','fromCapture','fromInsight'])query.delete(field);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}
  async function verify(signal:AbortSignal){if(!origin)return;const fresh=await verifiedOriginals(api,origin,signal);if(!current||fresh.materialRef!==current.materialRef||JSON.stringify([...fresh.ids].sort())!==JSON.stringify([...current.ids].sort()))throw Error(unavailable());}
  return {key,origin,returnRoute:referenceReturns.get(api)?.get(key),ids:current?.ids??[],materialRef:current?.materialRef,title:current?.title??'',error:current?.error,loading:Boolean(origin&&!current),ready:!origin||Boolean(current&&!current.error&&(current.materialRef||current.ids.length)),clear,verify};
 }

@@ -9842,5 +9842,14 @@
   "待设备同步": "Waiting for device sync",
   "完成 {0}": "Complete {0}",
   "重新打开 {0}": "Reopen {0}",
-  "返回原文": "Return to original"
+  "返回原文": "Return to original",
+  "这里会显示已结束的工作": "Finished work will appear here.",
+  "补充时间后自动同步": "Sync automatically after adding times",
+  "补充后按已有授权继续处理，状态以实际回执为准。": "After adding times, processing continues under existing authorization. The actual receipt determines the status.",
+  "时间信息已保存。": "Time information saved.",
+  "保存结果尚未核实，请检查当前日程或重试同一请求。": "The save result has not been verified. Check the current event or retry the same request.",
+  "日程信息已变化，请读取最新内容后再继续。": "Event information has changed. Load the latest version before continuing.",
+  "补充时间": "Add times",
+  "保存信息": "Save information",
+  "检查保存结果": "Check save result"
 }

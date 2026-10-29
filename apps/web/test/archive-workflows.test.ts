@@ -8,7 +8,7 @@ import {InsightReport,reportDocument} from '../src/InsightReport.js';
 import {MemoryProgress,type MemoryJob} from '../src/MemoryProgress.js';
 import {SourceDocumentDetails} from '../src/SourceDocumentDetails.js';
 import {createApi,type Answer} from '../src/api.js';
-import designTokens from '../../../packages/shared/design-tokens.json';
+import designTokens from '../../../packages/shared/design-tokens.light.json';
 
 configureLocale(()=> 'zh-CN');
 const evidenceId='11111111-1111-4111-8111-111111111111';
@@ -20,12 +20,12 @@ test('snapshot metadata describes central text retention and partial coverage wi
 });
 const answer:Answer={runId:'fixture-run',answer:`合成资料中的项目进展 [${evidenceId}]`,citations:[{id:evidenceId,appName:'合成笔记',capturedAt:'2026-09-15T02:00:00Z',excerpt:'项目在等待一次合成评审'}],trace:[],artifact:{id:'fixture-report',title:'项目进展',html:'<h1>合成报告</h1><style>h1{color:green}</style><p>等待评审。</p>',createdAt:'2026-09-15T03:00:00Z',skillId:'insight',skillVersion:'1'}};
 
-test('a generated report is isolated in a scriptless iframe while evidence controls remain in the host',()=>{
+test('a generated report isolates untrusted content and keeps evidence controls in the host',()=>{
   const html=renderToStaticMarkup(React.createElement(InsightReport,{answer,onOpen:()=>{}}));
-  assert.match(html,/<iframe[^>]+sandbox=""[^>]+referrerPolicy="no-referrer"/);
+  assert.match(html,/<iframe[^>]+sandbox="allow-scripts"[^>]+referrerPolicy="no-referrer"/);
   assert.match(html,/srcDoc="&lt;!doctype html/);
   assert.doesNotMatch(html,/<h1>合成报告<\/h1>/);
-  assert.match(html,/<section class="report-evidence"/);
+  assert.match(html,/<details class="report-evidence"/);
   assert.match(html,/<button[^>]+class="evidence-card"/);
   assert.match(html,/项目在等待一次合成评审/);
   assert.match(html,/aria-haspopup="menu" aria-expanded="false"/);
@@ -126,9 +126,9 @@ test('report display shortens only verified visible citation text in an inert co
 test('a narrow Insight coverage block has its own layout hook while iframe isolation remains',()=>{
   const snapshot:NonNullable<Answer['snapshot']>={schemaVersion:1,id:'fixture-snapshot',seriesId:'fixture-series',version:1,asOf:'2026-09-15T03:00:00Z',scope:{before:'2026-09-15T03:00:00Z',timeZone:'Asia/Shanghai'},watermark:1,scopeFingerprint:'fixture',coverage:{records:5,materialRecords:5,referenceOnlyRecords:0,pendingProcessing:0,sourceStates:[],measured:{observedDurationMs:0,deviceDurationMs:0,overlapDurationMs:0,unobservedDurationMs:null,accounting:'union_across_devices',coverage:'observed_intervals_only'},limitations:[]}};
   const html=renderToStaticMarkup(React.createElement(InsightReport,{answer:{...answer,snapshot},onOpen:()=>{}}));
-  assert.match(html,/<section class="notice report-coverage"/);
-  assert.equal((html.match(/<section class="notice report-coverage"[\s\S]*?<\/section>/)?.[0].match(/<p>/g)||[]).length,3);
-  assert.match(html,/<iframe[^>]+sandbox=""/);
+  assert.match(html,/<div class="report-coverage"/);
+  assert.equal((html.match(/<div class="report-coverage"[\s\S]*?<\/div>/)?.[0].match(/<p>/g)||[]).length,3);
+  assert.match(html,/<iframe[^>]+sandbox="allow-scripts"/);
 });
 
 test('legacy reports remain readable as markdown with clickable evidence when no HTML artifact exists',()=>{

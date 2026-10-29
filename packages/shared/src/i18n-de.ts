@@ -9843,5 +9843,14 @@ export const german: Readonly<Record<string, string>> = {
   "待设备同步": "Warten auf Gerätesynchronisierung",
   "完成 {0}": "{0} abschließen",
   "重新打开 {0}": "{0} wieder öffnen",
-  "返回原文": "Zum Original zurückkehren"
+  "返回原文": "Zum Original zurückkehren",
+  "这里会显示已结束的工作": "Abgeschlossene Arbeiten werden hier angezeigt.",
+  "补充时间后自动同步": "Nach Ergänzen der Zeiten automatisch synchronisieren",
+  "补充后按已有授权继续处理，状态以实际回执为准。": "Nach Ergänzen der Zeiten wird die Verarbeitung mit den bestehenden Berechtigungen fortgesetzt. Der tatsächliche Rückmeldestatus ist maßgeblich.",
+  "时间信息已保存。": "Die Zeitangaben wurden gespeichert.",
+  "保存结果尚未核实，请检查当前日程或重试同一请求。": "Das Speicherergebnis ist noch nicht bestätigt. Prüfen Sie den aktuellen Termin oder wiederholen Sie dieselbe Anfrage.",
+  "日程信息已变化，请读取最新内容后再继续。": "Die Termininformationen haben sich geändert. Laden Sie vor dem Fortfahren die neueste Version.",
+  "补充时间": "Zeiten ergänzen",
+  "保存信息": "Informationen speichern",
+  "检查保存结果": "Speicherergebnis prüfen"
 };
