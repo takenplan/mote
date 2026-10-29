@@ -370,7 +370,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
 function UnavailableReference({opener,close}:{opener:HTMLElement|null;close:()=>void}){
  const panel=useRef<HTMLElement>(null);
  useEffect(()=>panel.current?containDialogFocus(panel.current,opener):undefined,[opener]);
- return <div className="modal-backdrop" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();close();}}}><section ref={panel} className="modal" role="dialog" aria-modal="true" aria-label={moteText('引用不可用')}>
-  <h2>{moteText('引用不可用')}</h2><p>{moteText('引用原文已删除，历史问答仍保留。')}</p><button className="button" onClick={close}>{moteText('返回原对话')}</button>
+ return <div className="conversation-dialog-backdrop" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();close();}}}><section ref={panel} className="conversation-dialog" role="dialog" aria-modal="true" aria-label={moteText('引用不可用')}>
+  <header><h2>{moteText('引用不可用')}</h2></header><div className="conversation-dialog-body"><p>{moteText('引用原文已删除，历史问答仍保留。')}</p></div><footer><button className="button" onClick={close}>{moteText('返回原对话')}</button></footer>
  </section></div>;
 }
