@@ -62,4 +62,3 @@ export async function fixture(t:Pick<TestContext,'after'>,options:{skipDeviceCon
  const restart=async()=>{await node.app.close();node=await buildApp(config,{agent,backgroundWorker:false});options.beforeListen?.(node);origin=await node.app.listen({host:'127.0.0.1',port:0});};
  return {get node(){return node;},get origin(){return origin;},restart,request,paired,instance,client,add,change,grant,nativeChanges,setChangedNative:()=>{changedNative=true;},get nativeCalls(){return nativeCalls;},get reconciliations(){return reconciliations;},setNativePresent:()=>{nativePresent=true;},setPermission:(value:string)=>{permission=value;},blockReceipts:(value:boolean)=>{blockReceipts=value;},onNative:(hook:()=>Promise<void>)=>{nativeHook=hook;}};
 }
-
