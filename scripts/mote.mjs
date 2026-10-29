@@ -97,7 +97,8 @@ async function main() {
       const {prepareNativeMediaRuntime}=await import(pathToFileURL(join(resolve(p.meta.release),'apps/server/dist/media-native-runtime.mjs')).href);
       const controller=new AbortController(),cancel=()=>controller.abort();process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
       try{
-        const prepared=await prepareNativeMediaRuntime({repository:resolve(p.meta.release),directory:join(p.modelDirectory,'runtime'),env:isolatedEnvironment(p),sourcePython:values.python,signal:controller.signal});
+        const sourcePython=values.python?.includes('/')?resolve(values.python):values.python;
+        const prepared=await prepareNativeMediaRuntime({repository:resolve(p.meta.release),directory:join(p.modelDirectory,'runtime'),env:isolatedEnvironment(p),sourcePython,signal:controller.signal});
         return {profile:p.profile,installed:true,changed:prepared.created,python:prepared.python,runtimeReady:true};
       }finally{process.off('SIGINT',cancel);process.off('SIGTERM',cancel);}
     });print(result);return;
