@@ -104,7 +104,7 @@ test('uploads freeze a batch while the next form stays available, and resume int
   throw Error('Unexpected '+path);
  });
  await act(async()=>root.render(view(api)));await select(d,[new File(['generated'],'original.txt')]);await submit(d);
- assert.equal(button(d,'新建导入').disabled,false);assert.equal(button(d,'服务器目录').disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);assert.equal(d.querySelectorAll('.selected-files .file-row').length,0);
+ assert.equal(button(d,'新建导入').disabled,false);assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);assert.equal(d.querySelectorAll('.selected-files .file-row').length,0);
  await act(async()=>button(d,'暂停上传').click());assert.equal(signal!.aborted,true);assert.match(d.body.textContent!,/上传已暂停/);assert.equal(d.querySelectorAll('.import-queue-item').length,1);assert.equal(writes.length,0);
  await select(d,[new File(['generated next draft'],'next-draft.txt')]);await act(async()=>button(d,'继续上传').click());await until(()=>writes.length===1);assert.equal(d.querySelectorAll('.selected-files .file-row').length,1);assert.equal(writes.length,1);assert.deepEqual(writes[0].archivedFileIds,['archived-generated']);assert.equal(writes[0].processing,'automatic');assert.equal(uploads[0],uploads[1]);assert.match(writes[0].requestId,/^[0-9a-f-]{36}$/);assert.match(d.body.textContent!,/记录已保存/);assert.equal(d.querySelector('[role=alert]'),null);
 });
@@ -259,15 +259,17 @@ test('confirmation locks only its own job and late completion never steals the n
  await act(async()=>resolvers.get('/api/imports/second/confirm')!(jobs[1]));assert.equal(d.querySelector('.import-detail h2')!.textContent,'second');assert.match(d.body.textContent!,/记录已保存到中央归档/);
 });
 
-test('directory failure stays in its own queue entry and edit restores settings without blocking file intake',async t=>{
+test('retired directory intake has no form or edit entry while existing jobs remain inspectable and removable',async t=>{
  const {root,d}=await fixture(t);
  const api=apiWith((path,init)=>{if(init?.method==='POST')throw new ApiError('Generated path missing',422,undefined,'import_directory_missing');return {items:[]};});
- await act(async()=>root.render(view(api)));await act(async()=>button(d,'服务器目录').click());
- const input=d.querySelector<HTMLInputElement>('input[placeholder="/data/imports/my-notes"]')!;
- await act(async()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')!.set!.call(input,'/generated/missing');input.dispatchEvent(new window.Event('input',{bubbles:true}));});
- await submit(d);await until(()=>Boolean(button(d,'修改目录')));
- assert.equal(d.querySelector('.imports-page > [role=alert]'),null);assert.equal(button(d,'选择文件').disabled,false);assert.match(d.querySelector('.import-queue-item')!.textContent!,/目录不存在/);
- await act(async()=>button(d,'修改目录').click());assert.equal(d.querySelector<HTMLInputElement>('input[placeholder="/data/imports/my-notes"]')!.value,'/generated/missing');assert.equal(d.querySelectorAll('.import-queue-item').length,0);
+ await act(async()=>root.render(view(api)));
+ assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector('input[placeholder="/data/imports/my-notes"]'),null);assert.doesNotMatch(d.querySelector('form')!.textContent!,/服务器目录/);
+ await act(async()=>{importQueue(api).enqueue({source:{kind:'directory',path:'/generated/missing'},name:'Existing directory job',instruction:'',sourcePackId:''});});
+ await until(()=>Boolean(button(d,'重试提交')));
+ assert.equal(d.querySelector('.imports-page > [role=alert]'),null);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.match(d.querySelector('.import-queue-item')!.textContent!,/目录不存在/);assert.equal(button(d,'修改目录'),undefined);
+ await act(async()=>d.querySelector<HTMLButtonElement>('.import-queue-item .workspace-select')!.click());assert.match(d.querySelector('.import-detail')!.textContent!,/\/generated\/missing/);assert.equal(button(d,'修改目录'),undefined);
+ await act(async()=>button(d,'移出队列').click());assert.equal(d.querySelectorAll('.import-queue-item').length,0);
+ await act(async()=>button(d,'新建导入').click());await select(d,[new File(['generated local'],'local.txt')]);assert.equal(button(d,'加入导入队列').disabled,false);
 });
 
 test('folder drop expands entries before admission, blocks partial submission and displays relative paths',async t=>{
