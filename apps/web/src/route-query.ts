@@ -29,7 +29,7 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
   if(key==='type'&&(page.id!=='archive'||!libraryMaterialTypes.includes(value as LibraryMaterialType)))return;
   if(key==='view'&&(page.id!=='archive'||!collections.some(entry=>entry.id===value)))return;
   if(key==='category'&&(page.id!=='settings'||!settingsCategories.includes(value as SettingsCategory)))return;
-  if(key==='tab'&&(page.id!=='extensions'||!['installed','discover','memory'].includes(value)))return;
+  if(key==='tab'&&!((page.id==='extensions'&&['installed','discover','memory'].includes(value))||(page.id==='agentView'&&value==='input')))return;
   if(key==='setup'&&(page.id!=='sources'||!['gmail','google','mcp','reference'].includes(value)))return;
   if(key==='provider'&&page.id!=='recordings')return;
   if(key==='work'&&page.id!=='activity')return;

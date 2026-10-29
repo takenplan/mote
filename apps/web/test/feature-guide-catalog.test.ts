@@ -92,6 +92,15 @@ test('every guide destination resolves through installed pages and collections t
     }
 });
 
+test('the recorded-input guide return permits only its installed inspector tab',async()=>{
+  await featuresReady;
+  const pages=webFeatures.pages(),collections=webFeatures.collections();
+  assert.equal(validatedReturnTarget('#/agent?tab=input',pages,collections),'#/agent?tab=input');
+  assert.equal(validatedReturnTarget('#/agent?tab=installed',pages,collections),undefined);
+  assert.equal(validatedReturnTarget('#/agent?tab=input&tab=input',pages,collections),undefined);
+  assert.equal(validatedReturnTarget('#/ask?tab=input',pages,collections),undefined);
+});
+
 test('note attachments describe existing files and Coding progress uses the registered sync view with its specific requirement',async()=>{
   await featuresReady;
   const attachments=units.find(unit=>unit.id==='C13');
