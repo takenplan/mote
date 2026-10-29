@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "查看已生效日程和设备写入状态": "Ver eventos vigentes y el estado de escritura del dispositivo",
   "例如：这是我的工作日历，日程不代表实际参加。": "Por ejemplo: este es mi calendario de trabajo; un evento no demuestra que haya asistido.",
   "备份未导入": "Copia de seguridad sin importar",
   "已清理的本机副本不在其中。": "No se incluyen las copias locales ya eliminadas de este dispositivo.",
