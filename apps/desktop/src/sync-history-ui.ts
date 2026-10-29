@@ -1,3 +1,4 @@
+import {appendDiagnostic} from './ui-diagnostic';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import type { DesktopApi, Status } from './contracts';
 import type { DesktopPage } from './navigation';
@@ -45,7 +46,8 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
     const total = pending.reduce((sum, r) => sum + r.pending, 0), review = pending.reduce((sum, r) => sum + r.review, 0), errors = pending.reduce((sum, r) => sum + r.blocked + r.retrying, 0);
     const status = current?.sync;
     setText('upload-status-title', !current?.config.serverUrl || !current.config.tokenConfigured ? moteText('仅保存在本机') : status?.state === 'uploading' ? moteText('正在上传') : status?.state === 'error' || errors ? moteText('部分记录需要处理') : total ? moteText('本机记录等待同步') : moteText('本机积存内容已全部同步'));
-    setText('upload-status-message', status?.message ?? moteText('正在读取'));
+    setText('upload-status-message', status?.state==='error'?moteText('同步未完成，保留队列待重试'):status?.message ?? moteText('正在读取'));
+    if(status?.state==='error'&&status.message)appendDiagnostic(el('upload-status-message'),status.message);
     setText('upload-status-extra', moteText('本机待传 {0} 条，含 {1} 条待隐私复核。', total, review));
     setText('upload-received', n(page.received)); setText('upload-bytes', bytes(page.bytes)); setText('upload-pending', n(total)); setText('upload-needs-attention', n(errors + review));
     setText('upload-review-count', moteText('{0} 条待复核', review)); setText('upload-failure-count', moteText('{0} 条需重试或处理', errors));

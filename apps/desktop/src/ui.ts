@@ -25,7 +25,7 @@ import {createAppCaptureUi,describeCaptureSelection} from './app-capture-ui';
 import {normalizeAppCollectionRules} from './app-collection';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
 const desktopApi = window.mote;
-const captureContextUi=createCaptureContextUi(desktopApi);
+const captureContextUi=createCaptureContextUi(desktopApi,document,markSettingsDirty);
 document.getElementById('ui-page-builtins')!.addEventListener('click',()=>{byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(builtinUiRules,null,2);appCaptureUi.refreshRules();markSettingsDirty();});
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let currentStatus: import('./contracts').Status;
@@ -302,7 +302,7 @@ async function loadRecords(): Promise<void> {
       const time = document.createElement('time'); time.dateTime = item.capturedAt; time.textContent = new Date(item.capturedAt).toLocaleTimeString(getLocale());
       const state = document.createElement('small'); state.textContent = item.syncError ? moteText("同步需处理 · {0}", ocrLabel(item, location)) : `${location === 'local' ? moteText("本机待同步 · ") : ''}${ocrLabel(item, location)}`;
       if(item.sizeBytes!==undefined)state.textContent+=` · ${(item.sizeBytes/1024).toFixed(1)} KiB`;
-      caption.append(title, time, state); card.append(image, caption); card.addEventListener('click', () => {
+      caption.append(title, time, state); if(item.hasImage)card.append(image);card.append(caption); card.addEventListener('click', () => {
         selectedRecordButton?.classList.remove('selected'); selectedRecordButton?.setAttribute('aria-pressed', 'false');
         selectedRecordButton = card; card.classList.add('selected'); card.setAttribute('aria-pressed', 'true');
         void openRecord(item, location, revision);
@@ -343,6 +343,7 @@ byId('record-detail-close').addEventListener('click', closeRecordDetail);
 function readInput(id: string): string { return byId<HTMLInputElement>(id).value; }
 function numberInput(id: string): number { return Number(readInput(id)); }
 function fillConfig(config: import('./contracts').PublicConfig): void {
+  captureContextUi.reset();
   byId<HTMLInputElement>('packed-upload').checked = config.packedUpload ?? false;
   writeChannels(byId('default-collection'),config.defaultCollection);
   byId<HTMLInputElement>('structured-ocr').checked=config.structuredOcrEnabled;
@@ -401,7 +402,7 @@ function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
     sourceWorkspace.clear();localSourceRows=[];invalidateSourceEditor();byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLTextAreaElement>('source-initial-description').disabled=true;sourceReadGeneration++;recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
-    askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;askStopPending=false;askRunLookupPending=false;askPendingMessage='';byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
+    askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;askStopPending=false;askRunLookupPending=false;askPendingMessage='';askCursor=undefined;byId('ask-more').hidden=true;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status;workPendingUi.update(status);chromeCaptureUi.update(status);captureContextUi.update(status);renderSettingsWorkspace(status);sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
@@ -558,7 +559,7 @@ byId('settings').addEventListener('submit', event => {
       ...(token ? { token } : {}),
     });
     } finally { settingsApplying = false; wasRunningBeforeSave = false; }
-    render(updated); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
+    render(updated); await captureContextUi.save(); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
   });
 });
 const captureConfirmation=byId<HTMLDialogElement>('capture-confirm-dialog');
@@ -1401,4 +1402,4 @@ byId('ask-reference-back').addEventListener('click',()=>askReferenceDialog.close
 async function openAskEvidence(id:string):Promise<void>{const conversationId=askConversation?.id,generation=askGeneration;if(!conversationId)return;if(/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(id)){await desktopApi.openCentral('ask',id,conversationId);return;}const result=await askCall<{id:string;available:boolean}>('reference',{id,conversationId});if(generation!==askGeneration||askConversation?.id!==conversationId)return;if(!result.available){byId('ask-reference-message').textContent=moteText('引用原文已删除，历史问答仍保留。');askReferenceDialog.showModal();return;}await desktopApi.openCentral('ask',id,conversationId);}
 byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; askScopeUnavailable = false; renderAsk(); await askHistory(); }); });
 byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
-byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); askScopeUnavailable = false; renderAsk(); }));
+byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; askCursor=undefined;byId('ask-more').hidden=true;byId('ask-history').replaceChildren(); askScopeUnavailable = false; renderAsk(); }));

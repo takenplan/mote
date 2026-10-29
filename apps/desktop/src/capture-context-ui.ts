@@ -1,30 +1,48 @@
 import {moteText} from '@mote/shared/i18n';
+import {appendDiagnostic} from './ui-diagnostic';
 import type {DesktopApi,Status} from './contracts';
 import type {CaptureContextChannel} from './source-manager';
 import type {SourceContextState} from './source-context-outbox';
 
-/** The versioned owner declaration belongs to this device/channel, separately from captured bytes. */
-export function createCaptureContextUi(api:DesktopApi,root:Document=document){
+/** Four independent device/channel declarations; no cross-channel transaction or capture-byte edits. */
+export function createCaptureContextUi(api:DesktopApi,root:Document=document,onDraftChange:()=>void=()=>{}){
   const button=root.createElement('button');button.id='capture-context-open';button.type='button';button.className='text-button';button.textContent=moteText('资料说明');root.querySelector('[data-page="screen"] .page-header')!.append(button);
-  const dialog=root.createElement('dialog');dialog.id='capture-context-dialog';dialog.className='source-add-dialog';
-  const title=root.createElement('h2');title.textContent=moteText('采集资料说明');
-  const select=root.createElement('select');select.id='capture-context-channel';select.setAttribute('aria-label',moteText('采集通道'));
-  for(const [value,label] of [['activity',moteText('应用活动')],['screen',moteText('屏幕记录')],['structured',moteText('页面内容采集')],['notifications',moteText('通知')]]){const option=root.createElement('option');option.value=value;option.textContent=label;select.append(option);}
-  const scope=root.createElement('p');scope.className='helper';scope.textContent=moteText('适用于这台 Mac 所选通道的已有与后续资料，不改写原文。');
-  const input=root.createElement('textarea');input.id='capture-context-description';input.rows=5;input.maxLength=12000;input.setAttribute('aria-label',moteText('资料说明'));
-  const message=root.createElement('p');message.id='capture-context-state';message.className='helper';message.setAttribute('role','status');
-  const actions=root.createElement('div');actions.className='actions';const cancel=root.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent=moteText('取消');const save=root.createElement('button');save.type='button';save.className='primary';save.textContent=moteText('保存');save.id='capture-context-save';actions.append(cancel,save);dialog.append(title,select,scope,input,message,actions);root.body.append(dialog);
-  let state:SourceContextState|undefined,generation=0,key='',reading=false,saving=false,channel=select.value as CaptureContextChannel;
-  const controls=()=>{select.disabled=saving;input.disabled=reading||saving||state?.error==='denied';save.disabled=reading||saving||!state||state.error==='denied'||input.value===(state.pending?.description??state.snapshot.description)&&!state.conflict;};
-  const dirty=()=>state&&input.value!==(state.pending?.description??state.snapshot.description);
-  async function read(){const revision=++generation;reading=true;state=undefined;input.value='';message.textContent=moteText('正在读取…');controls();
-    try{const next=await api.captureContext(channel);if(revision!==generation||!dialog.open)return;state=next;input.value=next.pending?.description??next.snapshot.description;message.textContent=next.conflict?moteText('说明已在其他地方更新，请核对后再保存。'):next.pending?moteText('已保存在本机，等待同步。'):next.error==='denied'?moteText('没有访问权限'):next.error?moteText('暂时无法读取中央说明，可在本机保存后同步。'):'';}
-    catch(error){if(revision===generation)message.textContent=error instanceof Error?error.message:moteText('操作失败');}
-    finally{if(revision===generation){reading=false;controls();}}
+  const dialog=root.createElement('dialog');dialog.id='capture-context-dialog';dialog.className='source-add-dialog capture-context-dialog';
+  const header=root.createElement('header');header.className='capture-context-header';const title=root.createElement('h2');title.textContent=moteText('采集资料说明');const dismiss=root.createElement('button');dismiss.type='button';dismiss.className='text-button';dismiss.textContent='×';dismiss.setAttribute('aria-label',moteText('关闭'));header.append(title,dismiss);const body=root.createElement('div');body.className='capture-context-body';dialog.append(header,body);
+  const scope=root.createElement('p');scope.className='helper';scope.textContent=moteText('适用于这台 Mac 的已有与后续资料，不改写原文。');body.append(scope);
+  const entries=([['activity',moteText('应用活动')],['screen',moteText('屏幕记录')],['structured',moteText('页面内容采集')],['notifications',moteText('通知')]] as const).map(([channel,label])=>{
+    const field=root.createElement('label');field.className='capture-context-field';field.append(root.createTextNode(label));
+    const input=root.createElement('textarea');input.id=channel==='activity'?'capture-context-description':`capture-context-description-${channel}`;input.dataset.captureContext=channel;input.rows=2;input.maxLength=12000;input.placeholder=moteText('补充这类记录的背景（选填）');input.setAttribute('aria-label',label);
+    const message=root.createElement('small');message.id=channel==='activity'?'capture-context-state':`capture-context-state-${channel}`;message.className='helper';message.setAttribute('role','status');field.append(input,message);body.append(field);
+    return {channel:channel as CaptureContextChannel,input,message,state:undefined as SourceContextState|undefined,reading:false};
+  });
+  const actions=root.createElement('div');actions.className='actions';const cancel=root.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent=moteText('取消');const save=root.createElement('button');save.type='button';save.className='primary';save.textContent=moteText('应用到草稿');save.id='capture-context-save';actions.append(cancel,save);dialog.append(actions);root.body.append(dialog);
+  let generation=0,key='',saving=false;
+  const drafts=new Map<CaptureContextChannel,{expectedVersion:number;description:string}>();
+  const changed=(entry:typeof entries[number])=>Boolean(entry.state&&(entry.input.value!==(drafts.get(entry.channel)?.description??entry.state.pending?.description??entry.state.snapshot.description)||entry.state.conflict||Boolean(drafts.get(entry.channel)&&drafts.get(entry.channel)!.expectedVersion!==entry.state.snapshot.version)));
+  const controls=()=>{for(const entry of entries)entry.input.disabled=entry.reading||saving||!entry.state||entry.state.error==='denied';save.disabled=saving||entries.some(e=>e.reading)||!entries.some(e=>e.state?.error!=='denied'&&changed(e));};
+  const stateMessage=(entry:typeof entries[number])=>{const next=entry.state!;entry.message.replaceChildren(root.createTextNode(next.conflict||drafts.get(entry.channel)&&drafts.get(entry.channel)!.expectedVersion!==next.snapshot.version?moteText('说明已在其他地方更新，请核对后再保存。'):drafts.has(entry.channel)?moteText('有未保存的修改，离开前会提醒。保存后立即生效。'):next.pending?moteText('已保存在本机，等待同步。'):next.error==='denied'?moteText('没有访问权限'):next.error?moteText('暂时无法读取中央说明，可在本机保存后同步。'):''));};
+  const clear=()=>{for(const entry of entries){entry.input.value='';entry.message.replaceChildren();entry.state=undefined;entry.reading=false;}};
+  async function read(){const revision=++generation;clear();for(const entry of entries){entry.reading=true;entry.message.textContent=moteText('正在读取…');}controls();
+    await Promise.all(entries.map(async entry=>{try{const next=await api.captureContext(entry.channel);if(revision!==generation||!dialog.open)return;entry.state=next;entry.input.value=drafts.get(entry.channel)?.description??next.pending?.description??next.snapshot.description;stateMessage(entry);}catch(error){if(revision===generation&&dialog.open){entry.message.textContent=moteText('操作未完成，请检查权限与配置后重试');appendDiagnostic(entry.message,error instanceof Error?error.message:String(error));}}finally{if(revision===generation){entry.reading=false;controls();}}}));
   }
-  button.addEventListener('click',()=>{dialog.showModal();void read();});input.addEventListener('input',controls);
-  select.addEventListener('change',()=>{if(dirty()&&!window.confirm(moteText('有未保存的修改。离开并丢弃修改？'))){select.value=channel;return;}channel=select.value as CaptureContextChannel;void read();});
-  const close=()=>{if(saving)return;generation++;dialog.close();input.value='';state=undefined;button.focus();};cancel.addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
-  save.addEventListener('click',async()=>{if(save.disabled||!state)return;const revision=generation;saving=true;controls();try{const next=await api.saveCaptureContext(channel,{expectedVersion:state.snapshot.version,description:input.value});if(revision!==generation)return;state=next;message.textContent=next.pending?moteText('已保存在本机，等待同步。'):moteText('已保存');}catch(error){if(revision===generation)message.textContent=error instanceof Error?error.message:moteText('操作失败');}finally{if(revision===generation){saving=false;controls();}}});
-  return {update(status:Status){const next=JSON.stringify([status.authorizationGeneration,status.config.deviceId,status.config.serverUrl,status.config.tokenConfigured,status.config.authSignedOut,status.config.authSourceBinding]);if(key&&next!==key){generation++;dialog.close();input.value='';state=undefined;saving=false;reading=false;}key=next;}};
+  button.addEventListener('click',()=>{dialog.showModal();void read();});for(const entry of entries)entry.input.addEventListener('input',controls);
+  const close=()=>{if(saving)return;generation++;dialog.close();clear();button.focus();};cancel.addEventListener('click',close);dismiss.addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+  save.addEventListener('click',()=>{
+    if(save.disabled)return;
+    for(const entry of entries){if(!entry.state||entry.state.error==='denied')continue;const baseline=entry.state.pending?.description??entry.state.snapshot.description;
+      if(entry.input.value===baseline&&!entry.state.conflict)drafts.delete(entry.channel);
+      else drafts.set(entry.channel,{expectedVersion:entry.state.snapshot.version,description:entry.input.value});
+    }
+    close();onDraftChange();
+  });
+  async function persistDrafts(){
+    const revision=generation,pending=[...drafts.entries()];saving=true;controls();
+    try{for(const [channel,input] of pending){if(revision!==generation)return;const next=await api.saveCaptureContext(channel,input);if(revision!==generation)return;
+      if(next.conflict)throw Error(moteText('说明已在其他地方更新，请核对后再保存。'));
+      if(drafts.get(channel)===input)drafts.delete(channel);
+      const entry=entries.find(value=>value.channel===channel)!;entry.state=next;stateMessage(entry);
+    }}finally{if(revision===generation){saving=false;controls();}}
+  }
+  return {dirty:()=>drafts.size>0,save:persistDrafts,reset(){generation++;drafts.clear();dialog.close();clear();saving=false;controls();},update(status:Status){const next=JSON.stringify([status.authorizationGeneration,status.config.deviceId,status.config.serverUrl,status.config.tokenConfigured,status.config.authSignedOut,status.config.authSourceBinding]);if(key&&next!==key){generation++;drafts.clear();dialog.close();clear();saving=false;controls();}key=next;}};
 }

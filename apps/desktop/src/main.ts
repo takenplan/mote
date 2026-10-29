@@ -308,6 +308,7 @@ else {
         if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED', {operation:channel});
         try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt,operation:channel }); return result; }
         catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt,operation:channel,errorName:safeErrorName(error) }); throw error; }
+        finally { if (operationLabels[channel] && !quitting) updateUi(clientStatus()); }
       });
     };
     const requireRecovery = (message: string): void => { recoveryRequired = message; collector.requireRecovery(message); void localSources!.close(); };
