@@ -199,7 +199,7 @@ class RemainingFinalUiInstrumentedTest {
             for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-library-local-"+theme.value)}}
             tag("library-locations:central");main{assertTrue(visible().single{it.tag=="library-locations:central"}.isSelected);assertFalse(visible().any{it.tag=="library-record:"+id})};scenario.onActivity{picture(it,"gap-library-central-unavailable-dark")}
             tag("library-locations:local");until("same local original remains"){main{visible().any{it.tag=="library-record:"+id}}};tag("library-record:"+id)
-            until("exact local record reader"){text(original)}
+            until("exact local record reader"){main{androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).any{it is CaptureRecordsActivity}&&visible().filterIsInstance<TextView>().any{it.text.toString().contains(original)}}}
             main{val a=androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).single();assertTrue(a is CaptureRecordsActivity);picture(a,"gap-library-exact-original-dark")};click("返回上一页")
             until("same location on return"){main{visible().any{it.tag=="library-locations:local"&&it.isSelected}}}
             tag("library-primary-views:memories");until("source memory handoff"){text("查看中心整理的记忆。")};scenario.onActivity{picture(it,"gap-library-memory-handoff-dark")}
@@ -216,6 +216,7 @@ class RemainingFinalUiInstrumentedTest {
             for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-processing-default-"+theme.value)}}
             tag("image-dedupe-choice");click("近似画面");until("explicit native preset choice"){text("选择近似画面档位")};click("取消")
             assertEquals("aggressive",settings.read().imageDedupeMode)
+            until("JPEG returns after picker cancellation"){main{visible().any{it.tag=="JPEG 质量"}}}
             main{val number=visible().single{it.tag=="JPEG 质量"} as EditText;assertNotNull(number.keyListener);assertTrue(number.isFocusableInTouchMode);number.requestFocus();assertTrue(number.hasFocus())}
             tag("image-processing-advanced")
             main{val root=visible();assertEquals("1920",(root.single{it.tag=="图片最长边 / px"} as EditText).text.toString());assertEquals(4,(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);(root.single{it.tag=="JPEG 质量"} as EditText).setText("81");(root.single{it.tag=="临时保留图片去重对比记录"} as CheckBox).isChecked=true;(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).setSelection(1)}
@@ -282,12 +283,12 @@ class RemainingFinalUiInstrumentedTest {
             ActivityScenario.launch<CalendarActionsActivity>(Intent(context,CalendarActionsActivity::class.java)).use{scenario->
                 until("A real native card read from controlled HTTP"){text(secret)};click("核对变更");until("owned confirmation dialog"){text("确认变更")}
                 val oldPositive=main{visible().filterIsInstance<android.widget.Button>().single{it.text.toString()=="确认变更"}}
-                settings.signIn(origin,tokenB,60_000);scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                settings.signIn(origin,tokenB,86400000);scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
                 until("B denied never shows A card"){!text(secret)&&text("当前连接没有执行此操作的权限")}
                 main{oldPositive.performClick()};assertEquals("Old dialog must never write under B",0,writes.get());scenario.onActivity{picture(it,"gap-actions-owner-denied-withdrawn-dark")}
-                settings.signIn(origin,tokenA,60_000);tag("action-tabs:todos");tag("action-tabs:calendar")
+                settings.signIn(origin,tokenA,86400000);tag("action-tabs:todos");tag("action-tabs:calendar")
                 assertTrue("Explicitly held old A read",held.await(10,java.util.concurrent.TimeUnit.SECONDS))
-                tag("action-tabs:todos");settings.signIn(origin,tokenB,60_000);tag("action-tabs:calendar")
+                tag("action-tabs:todos");settings.signIn(origin,tokenB,86400000);tag("action-tabs:calendar")
                 assertFalse("Old A card withdrawn synchronously",text(secret));release.countDown()
                 until("B failure remains after A late response"){!text(secret)&&text("当前连接没有执行此操作的权限")}
                 scenario.onActivity{picture(it,"gap-actions-owner-late-read-rejected-dark")};assertEquals(0,writes.get());assertFalse(settings.enabled)
