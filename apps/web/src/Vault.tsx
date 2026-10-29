@@ -2,7 +2,7 @@ import {useMaintenanceTransfer,provideMaintenanceDownload,maintenanceFailure,mai
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { CheckCircle2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useRef, type ReactNode } from "react";
-import { bytes, dateTime, errorMessage, type Api, type Status } from "./api";
+import { bytes, dateTime, errorMessage, ApiError, type Api, type Status } from "./api";
 import { ErrorNotice } from './shell-components';
 import {useResource} from './useResource';
 import type {StorageStatistics} from '@mote/shared/storage-statistics';
@@ -35,6 +35,8 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, chil
                 imported: number;
                 duplicates: number;
             }>("/api/import", { method: "POST", body: raw });
+            if(!Number.isSafeInteger(result.imported)||result.imported<0||!Number.isSafeInteger(result.duplicates)||result.duplicates<0)
+                throw new ApiError(moteText('中央响应格式无效，请刷新后重试。'),200,undefined,'invalid_response');
             return moteText("已导入 {0} 条记录，跳过 {1} 条重复记录。", result.imported, result.duplicates);
         });
         if (current()&&input.current)
