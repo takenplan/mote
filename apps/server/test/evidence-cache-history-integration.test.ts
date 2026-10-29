@@ -30,7 +30,7 @@ async function fixture(t:any){
  return {get node(){return node;},original,artifactId,save,request,conversationId:saved.body.conversationId as string,seen,calls:()=>calls,setIds:(value:string[])=>{ids=value;},setHook:(value?:()=>void)=>{hook=value;},async restart(){await node.app.close();node=await buildApp(config(directory),{backgroundWorker:false,agent});base=await node.app.listen({host:'127.0.0.1',port:0});}};
 }
 
-for(const operation of ['replacement','eviction','parent-cascade'] as const)test(`context ${operation} preserves historical HTTP answers, revokes snapshots and summaries, and still erases on original deletion`,async t=>{
+for(const operation of ['replacement','eviction','parent-cascade'] as const)test(`context ${operation} preserves historical HTTP answers, revokes snapshots and summaries, and retains submitted dialogue on ordinary original deletion`,async t=>{
  const f=await fixture(t),history=async()=>(await f.request('/api/conversations/'+f.conversationId)).body;
  const before=await history();f.save();assert.deepEqual(await history(),before,'exact replay must not expire dialogue');
  await f.node.working.compact(f.conversationId,{...defaultLifecycleSettings,recentTurns:0},async()=>result([],'Generated historical summary.'));
@@ -47,7 +47,9 @@ for(const operation of ['replacement','eviction','parent-cascade'] as const)test
  assert.equal(f.node.working.get(f.node.featureServices.conversations.get(f.conversationId)),undefined);
  const calls=f.calls();await assert.rejects(withFixtureOwnerModelWork(f.node,()=>f.node.featureServices.queryAgent({question:'Generated frozen replay',conversation:frozen})),/Conversation changed/);assert.equal(f.calls(),calls,'expired snapshots never enter the provider');
  f.setIds([]);await f.restart();const followup=await f.request('/api/query',{conversationId:f.conversationId,question:'Discuss the earlier proposal'});assert.equal(followup.status,200,JSON.stringify(followup.body));assert.equal(f.seen.at(-1)!.conversation!.turns[0].evidenceStale,true);
- f.node.store.delete(f.original);const erased=await history();assert.ok(erased.turns.every((turn:any)=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/Generated answer based/);
+ f.node.store.delete(f.original);const retained=await history();assert.ok(retained.turns.every((turn:any)=>turn.evidenceUnavailable&&!turn.evidenceDeleted));assert.ok(retained.turns.every((turn:any)=>turn.result.answer==='Generated answer based on the first interpretation.'));assert.deepEqual(f.node.store.evidence([f.original]),[]);assert.equal(f.node.working.get(f.node.featureServices.conversations.get(f.conversationId)),undefined);
+ // Explicit privacy invalidation remains distinct from the approved ordinary-delete policy.
+ f.node.store.invalidateConversationAnswers([f.original],true);const erased=await history();assert.ok(erased.turns.every((turn:any)=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/Generated answer based/);
 });
 
 for(const stage of ['model-result','summary'] as const)test(`changed context rejects a late ${stage} against the frozen conversation`,async t=>{
@@ -76,7 +78,7 @@ for(const nested of [false,true])test(`failed context lifecycle replacement pres
  if(nested)execute('COMMIT');f.save('2'.repeat(64),'Generated corrected interpretation.');assert.equal(f.node.featureServices.conversations.get(f.conversationId).turns[0].evidenceStale,true);
 });
 
-test('real backup and restore retain conversation authority while raw SQLite cache eviction stays atomic and later original deletion erases every generation',async t=>{
+test('real backup and restore retain conversation authority while raw SQLite cache eviction stays atomic and later ordinary deletion preserves submitted generations',async t=>{
  const f=await fixture(t),directory=await mkdtemp(join(tmpdir(),'mote-context-history-backup-')),snapshot=join(directory,'snapshot'),target=join(directory,'restored');
  let restored:Awaited<ReturnType<typeof buildApp>>|undefined;
  t.after(async()=>{await restored?.app.close();await rm(directory,{recursive:true,force:true});});
@@ -103,5 +105,6 @@ test('real backup and restore retain conversation authority while raw SQLite cac
  }finally{db.close();}
  const changed=restored.featureServices.conversations.get(f.conversationId);assert.ok(changed.turns.every(turn=>turn.evidenceStale&&!turn.evidenceDeleted));assert.deepEqual(changed.turns[0].result,before.turns[0].result);
  await restored.app.close();restored=await buildApp(config(target),{backgroundWorker:false,agent});await ask();assert.equal(seen.at(-1)!.conversation!.turns[0].evidenceStale,true);
- restored.store.delete(f.original);const erased=restored.featureServices.conversations.get(f.conversationId);assert.equal(erased.turns.length,3);assert.ok(erased.turns.every(turn=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/Generated answer based|Generated retained summary/);
+ restored.store.delete(f.original);const retained=restored.featureServices.conversations.get(f.conversationId);assert.equal(retained.turns.length,3);assert.ok(retained.turns.every(turn=>turn.evidenceUnavailable&&!turn.evidenceDeleted));assert.ok(retained.turns.every(turn=>turn.result?.answer==='Generated answer based on the first interpretation.'));assert.deepEqual(restored.store.evidence([f.original]),[]);assert.equal(restored.working.get(retained),undefined);
+ restored.store.invalidateConversationAnswers([f.original],true);const erased=restored.featureServices.conversations.get(f.conversationId);assert.ok(erased.turns.every(turn=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/Generated answer based|Generated retained summary/);
 });

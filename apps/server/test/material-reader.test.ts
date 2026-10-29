@@ -45,7 +45,7 @@ test('model material view requires every original member to remain in the select
   assert.throws(()=>reader.materialRead({ref:published.ref}),{statusCode:404});
 });
 
-test('host material disclosure receipts retain scoped answers during unrelated processing but erase on actual dependency change',async t=>{
+test('host material disclosure receipts retain scoped historical answers after ordinary deletion without restoring original access',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-material-lineage-')),store=new Store(directory),materials=new MaterialStore(store);
   const diagnostics=new ServerDiagnostics({directory:join(directory,'logs'),enabled:false});await diagnostics.init();
   t.after(async()=>{await diagnostics.close();store.close();rmSync(directory,{recursive:true,force:true});});
@@ -68,7 +68,10 @@ test('host material disclosure receipts retain scoped answers during unrelated p
   store.invalidateMemoryEvidence(materials.evidenceIds(refs[1])[0]);
   assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,undefined);
   store.delete(captures[0]);
-  assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true);
+  const retained=conversations.get(saved.conversationId).turns[0];
+  assert.equal(retained.evidenceDeleted,undefined);assert.equal(retained.evidenceUnavailable,true);assert.equal(retained.result?.answer,'Generated title');assert.deepEqual(store.evidence([captures[0]]),[]);
+  store.invalidateConversationAnswers([captures[0]],true);assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true,'explicit privacy invalidation still clears the retired lineage');
+  const cleared=conversations.get(saved.conversationId).turns[0];assert.doesNotMatch(JSON.stringify(cleared),/Generated title|Generated body/);assert.deepEqual(cleared.result?.citations??[],[]);const context=conversations.context(conversations.get(saved.conversationId));assert.equal(context.turns[0].evidenceDeleted,true);assert.doesNotMatch(JSON.stringify(context),/Generated title|Generated body/);
 });
 
 test('large material metadata lineage retains every private dependency',async t=>{

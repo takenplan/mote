@@ -173,6 +173,7 @@ for (const kind of ['anchor', 'strict'] as const) test(`a restored ${kind} conve
   const api = apiWith((path, init) => {
     if (path === '/api/conversations?limit=30') return {items: [summary]};
     if (path === '/api/conversations/' + conversationId) return detail;
+    if (path === '/api/conversations/' + conversationId + '/references/' + captureId) return {id:captureId,available:true};
     if (path === '/api/query-runs' && init?.method === 'POST') {
       submissions.push(JSON.parse(String(init.body)));
       return submissions.length === 1 ? admission : {id: 'generated-pending', status: 'running', conversationId, createdAt: when, updatedAt: when, events: []};
