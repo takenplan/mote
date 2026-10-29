@@ -34,8 +34,9 @@ export function configurationValid(fields:PluginConfigurationField[],values:Reco
  });
 }
 
-export function preparationPhaseLabel(preparation:Pick<MemoryPreparationView,'state'|'phase'>){
+export function preparationPhaseLabel(preparation:Pick<MemoryPreparationView,'state'|'phase'|'kind'>){
  if(preparation.state==='cancelled')return moteText('准备已取消');
- return ({copy:moteText('正文迁移与索引准备'),drain:moteText('处理中'),verified:moteText('核验通过 · 尚未生效'),applied:moteText('已生效')} as Record<string,string>)[preparation.phase]??moteText('处理中');
+ if(preparation.phase==='copy')return preparation.kind==='content-migration'?moteText('正文迁移与索引准备'):moteText('同一正文权威的索引准备');
+ return ({drain:moteText('处理中'),verified:moteText('核验通过 · 尚未生效'),applied:moteText('已生效')} as Record<string,string>)[preparation.phase]??moteText('处理中');
 }
 export function preparationFailureLabel(code:string){const label=failureMessage(code);return label===moteText('操作未完成。错误码：{0}',code)?moteText('准备未完成'):label;}
