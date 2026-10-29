@@ -3,7 +3,7 @@ import type {DesktopApi,Status} from './contracts';
 import type {ContentItem,ContentDetail} from './content-library';
 import type {SyncContent} from './sync-content';
 /** Home and Content share one evidence reader; no markup from evidence becomes UI. */
-export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,homeContentChanged?:(hasContent:boolean)=>void){
+export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,homeContentChanged?:(hasContent:boolean|undefined)=>void){
   const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
   const dialog=el<HTMLDialogElement>('content-detail-dialog');
   document.getElementById('content-memories')?.addEventListener('click',()=>openMemories?.());
@@ -11,10 +11,10 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
   let archiveGeneration=0,archiveAuthorizationDenied=false,detailIsCentral=false;
   let items:ContentItem[]=[],homeItems:ContentItem[]=[],selected:ContentItem|undefined,selectedButton:HTMLElement|undefined,chunkOffset=0,centralId:string|undefined;
   const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),media:moteText('媒体状态'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')})[source]??moteText('内容');
-  function renderFeed(id:string,rows:ContentItem[]){
+  function renderFeed(id:string,rows:ContentItem[],known=true){
     const compact=id==='home-recent',root=el(id);root.replaceChildren();
-    if(compact)homeContentChanged?.(rows.length>0);
-    if(compact&&!rows.length){const empty=document.createElement('p');empty.className='home-empty';empty.textContent=moteText('还没有本机内容');root.append(empty);return;}
+    if(compact)homeContentChanged?.(known?rows.length>0:undefined);
+    if(compact&&!rows.length){if(known){const empty=document.createElement('p');empty.className='home-empty';empty.textContent=moteText('还没有本机内容');root.append(empty);}return;}
     if(!rows.length){const empty=document.createElement('div');empty.className='content-empty';const title=document.createElement('strong');title.textContent=moteText('还没有内容，从一个小动作开始');const copy=document.createElement('p');copy.textContent=moteText('同步文件夹、导入文件、记录屏幕或写一条随手记。内容会先保存在本机。');empty.append(title,copy);root.append(empty);return;}
     for(const item of rows){const button=document.createElement('button');button.type='button';button.className='content-row';button.dataset.contentKey=item.key;
       const icon=document.createElement('span');icon.className='content-type';icon.textContent=sourceName(item.source);
@@ -39,7 +39,14 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
     const centralIds=new Set(sorted.filter(item=>item.key.startsWith('capture:')).map(item=>item.key.slice(8)));
     return sorted.filter(item=>!item.key.startsWith('queue:')||!centralIds.has(item.key.slice(6)));
   }
-  function renderHome(rows:ContentItem[]){homeItems=rows;renderFeed('home-recent',rows.slice(0,3));}
+  function renderHome(rows:ContentItem[],unavailable=false){
+    homeItems=rows;renderFeed('home-recent',rows.slice(0,3),!unavailable);
+    if(unavailable){
+      const notice=document.createElement('p');notice.className='home-empty';notice.textContent=moteText('内容暂不可完整读取，请重试。');
+      const retry=document.createElement('button');retry.type='button';retry.className='text-button';retry.textContent=moteText('重试');retry.addEventListener('click',()=>{retry.disabled=true;void refreshHome();});
+      el('home-recent').append(notice,retry);
+    }
+  }
   function denyArchive(){
     archiveAuthorizationDenied=true;archiveGeneration++;remoteMore=false;remoteCursor=undefined;
     items=items.filter(row=>!row.key.startsWith('capture:'));renderFeed('content-feed',items);
@@ -52,11 +59,11 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
     const [local,remote]=await Promise.allSettled([api.localContent(0),status?.config.tokenConfigured?api.centralContent():undefined]);
     if(version!==homeGeneration)return;
     const rows:ContentItem[]=[];
-    if(local.status==='fulfilled')rows.push(...local.value.items);
+    if(local.status==='fulfilled')rows.push(...local.value.items);else rows.push(...homeItems.filter(row=>!row.key.startsWith('capture:')));
     if(remote.status==='fulfilled'&&remote.value){
       if(remote.value.authorizationDenied)denyArchive();else{archiveAuthorizationDenied=false;rows.push(...remote.value.items);}
     }
-    renderHome(mergeRows(rows));
+    renderHome(mergeRows(rows),local.status==='rejected'||remote.status==='rejected');
   }
   async function refresh(append=false){
     lastRefresh=Date.now();if(refreshTimer){clearTimeout(refreshTimer);refreshTimer=undefined;}
@@ -75,7 +82,7 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
       }else{archiveAuthorizationDenied=false;rows.push(...r.value.items);remoteMore=Boolean(r.value.nextCursor);remoteCursor=r.value.nextCursor;}
     }else if(r.status==='rejected'){error=r.reason instanceof Error?r.reason.message:String(r.reason);items=items.filter(row=>!row.key.startsWith('capture:'));}
     items=mergeRows([...items,...rows]);renderFeed('content-feed',items);
-    if(scope==='all'){homeGeneration++;renderHome(items);}else void refreshHome();
+    if(scope==='all'){homeGeneration++;const unavailable=l.status==='rejected'||r.status==='rejected';renderHome(mergeRows([...items,...(l.status==='rejected'?homeItems.filter(row=>!row.key.startsWith('capture:')):[])]),unavailable);}else void refreshHome();
     el('content-more').hidden=!localMore&&!remoteMore;
     el('content-status').textContent=error||(!status?.config.tokenConfigured?moteText('本机内容可离线阅读；连接中央后显示已归档内容。'):moteText('接收与整理分别进行，点开内容查看实际状态。'));
     el('content-status').setAttribute('aria-busy','false');
@@ -118,5 +125,5 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
   el<HTMLDetailsElement>('content-original').addEventListener('toggle',()=>{if(el<HTMLDetailsElement>('content-original').open&&!el<HTMLImageElement>('content-detail-image').src)void readSelected(true);});
   el('content-refresh').addEventListener('click',()=>void refresh());el('content-scope').addEventListener('change',()=>void refresh());el('content-more').addEventListener('click',()=>void refresh(true));
   let signature='',lastRefresh=0,refreshTimer:ReturnType<typeof setTimeout>|undefined;
-  return {refresh,refreshHome,update(next:Status){const changed=status&&(status.authorizationGeneration!==next.authorizationGeneration||status.config.serverUrl!==next.config.serverUrl||status.config.tokenConfigured!==next.config.tokenConfigured||status.config.authSignedOut!==next.config.authSignedOut||status.config.authExpiresAt!==next.config.authExpiresAt||status.config.authSourceBinding!==next.config.authSourceBinding);const nextSignature=JSON.stringify([next.queueDepth,next.sync.pendingRecords,next.sync.lastUploadAt,next.sync.state]);const contentChanged=signature!==nextSignature;signature=nextSignature;status=next;if(changed){close();items=[];generation++;homeGeneration++;archiveGeneration++;archiveAuthorizationDenied=false;renderFeed('content-feed',[]);renderHome([]);void refresh();}else if(contentChanged&&!refreshTimer){const delay=Math.max(0,3000-(Date.now()-lastRefresh));if(!delay)void refresh();else refreshTimer=setTimeout(()=>{refreshTimer=undefined;void refresh();},delay);}},close};
+  return {refresh,refreshHome,update(next:Status){const changed=status&&(status.authorizationGeneration!==next.authorizationGeneration||status.config.serverUrl!==next.config.serverUrl||status.config.tokenConfigured!==next.config.tokenConfigured||status.config.authSignedOut!==next.config.authSignedOut||status.config.authExpiresAt!==next.config.authExpiresAt||status.config.authSourceBinding!==next.config.authSourceBinding);const nextSignature=JSON.stringify([next.queueDepth,next.sync.pendingRecords,next.sync.lastUploadAt,next.sync.state]);const contentChanged=signature!==nextSignature;signature=nextSignature;status=next;if(changed){close();items=[];homeItems=[];generation++;homeGeneration++;archiveGeneration++;archiveAuthorizationDenied=false;renderFeed('content-feed',[]);renderFeed('home-recent',[],false);void refresh();}else if(contentChanged&&!refreshTimer){const delay=Math.max(0,3000-(Date.now()-lastRefresh));if(!delay)void refresh();else refreshTimer=setTimeout(()=>{refreshTimer=undefined;void refresh();},delay);}},close};
 }

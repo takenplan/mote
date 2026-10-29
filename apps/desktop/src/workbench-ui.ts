@@ -8,13 +8,13 @@ type WorkbenchActions = {question:(text:string)=>boolean;conversation:(id:string
 export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
   const question=el<HTMLTextAreaElement>('home-question'),submit=el<HTMLButtonElement>('home-ask-submit'),history=el('home-conversations');
-  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent=false,hasSource=false;
+  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent:boolean|undefined,hasSource=false;
   function controls(){
     submit.disabled=blocked||!question.value.trim();
     for(const button of Array.from(history.querySelectorAll('button')))button.disabled=blocked;
   }
   function onboarding(){
-    el('home-onboarding').hidden=hasContent||hasSource||Boolean(status?.lastCaptureAt)||Boolean(status?.queueDepth)||Boolean(status?.running);
+    el('home-onboarding').hidden=hasContent!==false||hasSource||Boolean(status?.lastCaptureAt)||Boolean(status?.queueDepth)||Boolean(status?.running);
   }
   function message(text:string){
     const empty=document.createElement('p');empty.className='home-empty';empty.textContent=text;history.replaceChildren(empty);
@@ -54,7 +54,7 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
     refresh,
     setHistory(items:RecentConversation[]){generation++;renderHistory(items);},
     setBusy(value:boolean){blocked=value;controls();},
-    setHasContent(value:boolean){hasContent=value;onboarding();},
+    setHasContent(value:boolean|undefined){hasContent=value;onboarding();},
     setHasSource(value:boolean){hasSource=value;onboarding();},
     update(next:Status){
       status=next;onboarding();

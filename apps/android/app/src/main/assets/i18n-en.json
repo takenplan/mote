@@ -8862,5 +8862,6 @@
   "最近留下的内容": "Recently saved content",
   "查看全部 →": "View all →",
   "本机采集与同步 →": "Local capture & sync →",
-  "对话暂不可读取，请稍后重试。": "Conversations are temporarily unavailable. Please try again later."
+  "对话暂不可读取，请稍后重试。": "Conversations are temporarily unavailable. Please try again later.",
+  "内容暂不可完整读取，请重试。": "Some content is temporarily unavailable. Please retry."
 }

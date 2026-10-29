@@ -45,6 +45,8 @@ it('preserves the home question when changing drafts is cancelled and never subm
 });
 
 it('keeps collection and sending independent and only dismisses first-use after real content or a source',async()=>{
+  ui.update(status);await flush();expect(el('home-onboarding').hidden).toBe(true);
+  ui.setHasContent(false);
   ui.update({...status,config:{...status.config,syncPaused:true}});await flush();
   expect(el('home-collection-summary').textContent).toBe('已停止 · 发送已暂停');expect(el('home-onboarding').hidden).toBe(false);
   ui.update({...status,running:true,state:'capturing',config:{...status.config,syncPaused:true}});

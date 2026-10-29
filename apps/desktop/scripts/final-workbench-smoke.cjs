@@ -1,6 +1,6 @@
 require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
-const {app,BrowserWindow,safeStorage}=require('electron');
+const {app,BrowserWindow,safeStorage,ipcMain}=require('electron');
 const {createServer}=require('node:http');
 const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=require('node:fs');
 const {join,resolve}=require('node:path');
@@ -20,7 +20,9 @@ mkdirSync(output,{recursive:true});
 const token='generated-final-workbench-token-'.repeat(3),id='11111111-1111-4111-8111-111111111111';
 const requests=[],errors=[],captures=[];
 const summary={id,title:'周五评审需要准备什么？',turnCount:1,updatedAt:'2026-10-28T08:20:00Z'};
-let historyFailure=false,finished=false,main;
+let historyFailure=false,localReadFailure=false,finished=false,main;
+const registerHandler=ipcMain.handle.bind(ipcMain);
+ipcMain.handle=(channel,handler)=>registerHandler(channel,(event,...args)=>{if(channel==='mote:content-local'&&localReadFailure)throw Error('Generated local content read failure');return handler(event,...args);});
 const server=createServer((req,res)=>{
   requests.push({method:req.method,path:req.url});res.setHeader('content-type','application/json');
   assert.equal(req.headers.authorization,'Bearer '+token);
@@ -96,6 +98,12 @@ app.on('browser-window-created',(_event,window)=>{
     assert(await js('!!document.querySelector("#home-recent .content-row")'),'History failure retains local content');await shot('home-history-error');
     historyFailure=false;await js('document.querySelector("#home-conversations button").click()');
     await until(()=>js('!!document.querySelector("#home-conversations button")'),'history retry');
+    localReadFailure=true;await js('document.querySelector("aside [data-nav=records]").click();document.querySelector("aside [data-nav=overview]").click()');
+    await until(()=>js('document.querySelector("#home-recent").textContent.includes("内容暂不可完整读取")'),'local read error');
+    assert(await js('!!document.querySelector("#home-recent .content-row")&&document.querySelector("#home-onboarding").hidden'));
+    assert.equal(await js('document.querySelector("#home-recent").textContent.includes("还没有本机内容")'),false);await shot('home-content-error');
+    localReadFailure=false;await js('document.querySelector("#home-recent > button.text-button").click()');
+    await until(()=>js('!document.querySelector("#home-recent").textContent.includes("内容暂不可完整读取")'),'local read retry');
     window.setContentSize(820,620);await shot('home-compact');assert(await js('document.documentElement.scrollWidth<=innerWidth'));
     assert.deepEqual(errors,[]);
     const result={passed:true,generatedOnly:true,hidden:true,electron:process.versions.electron,sourcePrototypeRendered:false,realRendererPreloadIpc:true,liveModel:false,palette:'baseline linear tokens; coordinated final light palette pending',sourceReference:'pre-existing home.png (1440x936 element screenshot from 1440x1000 DPR1 source viewport)',checks:['real local note and conversation summaries','same conversation ID','home input preserved on cancel','home entry does not send','global note preserves settings draft and origin','quick-note draft survives close','capture and send pause independent','history failure/retry preserves local content','compact window has no horizontal overflow'],captures};

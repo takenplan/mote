@@ -8863,5 +8863,6 @@ export const german: Readonly<Record<string, string>> = {
   "最近留下的内容": "Zuletzt gespeicherte Inhalte",
   "查看全部 →": "Alle anzeigen →",
   "本机采集与同步 →": "Lokale Erfassung und Synchronisierung →",
-  "对话暂不可读取，请稍后重试。": "Unterhaltungen sind vorübergehend nicht verfügbar. Bitte versuche es später erneut."
+  "对话暂不可读取，请稍后重试。": "Unterhaltungen sind vorübergehend nicht verfügbar. Bitte versuche es später erneut.",
+  "内容暂不可完整读取，请重试。": "Einige Inhalte sind vorübergehend nicht verfügbar. Bitte versuche es erneut."
 };
