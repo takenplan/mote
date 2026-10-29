@@ -1,13 +1,14 @@
 import {useEffect,useMemo,useState} from 'react';
 import {decodeSourceText} from '@mote/shared';
 import type {Api,Capture} from './api';
+type MediaSpeech=Extract<NonNullable<ReturnType<typeof decodeSourceText>>,{kind:'speech'}>;
 type Span={blockId:string;kind:string;format?:string;evidenceId?:string;evidenceOffset?:number;pageRange:{start:number;end:number};materialRange:{start:number;end:number};locator?:Record<string,unknown>};
 type Page={material:{id:string;revision:string;ref:string;kind:string;schemaVersion:number;textLength:number;blockCount:number};text:string;textRange:{offset:number;total:number;nextOffset:number|null};spans:Span[]};
 function speechBody(canonical:string,locator?:Record<string,unknown>){
  const end=canonical.indexOf('\n');if(end<0)return;let header:unknown;try{header=JSON.parse(canonical.slice(0,end));}catch{return;}
  if(!header||typeof header!=='object'||Array.isArray(header)||Object.keys(header).some(key=>!['speaker','speakerAttribution','imageLocation'].includes(key)))return;
  const decoded=decodeSourceText('speech-text-v2',canonical);if(decoded?.kind!=='speech')return;
- if(locator&&JSON.stringify(decoded.imageLocation)!==JSON.stringify(locator.imageLocation))return;return decoded.text;
+ if(locator&&JSON.stringify(decoded.imageLocation)!==JSON.stringify(locator.imageLocation))return;return decoded;
 }
 const pinPattern=/^(material:(mat_[a-f0-9]{64})@([a-f0-9]{64}))#(chunk:([a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}))$/i;
 /** The owner API has already checked this opaque pin against the complete stored anchor bytes. */
@@ -19,7 +20,7 @@ export function mediaEvidencePin(capture:Capture|undefined){
 /** Read only the selected immutable Material until its declared chunk is found.
  * The existing API exposes no block-position index. Returned continuation offsets,
  * text length and block count bound this walk; no newer parent file is consulted. */
-export async function pinnedMediaText(api:Api,capture:Capture,signal:AbortSignal):Promise<string|undefined>{
+export async function pinnedMediaText(api:Api,capture:Capture,signal:AbortSignal):Promise<MediaSpeech|undefined>{
  const pin=mediaEvidencePin(capture);if(!pin)return;
  let offset=0,total:number|undefined,blocks:number|undefined,maxPages=1;
  for(let count=0;count<maxPages;count++){
@@ -31,7 +32,7 @@ export async function pinnedMediaText(api:Api,capture:Capture,signal:AbortSignal
   const candidates=page.spans.filter(span=>span.blockId===pin.blockId);
   if(candidates.length){
    if(candidates.length!==1)return;const span=candidates[0],a=span.pageRange,b=span.materialRange,e=span.evidenceOffset;
-   if(span.kind!=='text'||span.format!=='speech-text'||span.evidenceId!==capture.id||span.locator?.chunkId!==pin.chunkId||span.locator.textStart!==0||span.locator.textEnd!==capture.ocrText.length||typeof e!=='number'||!a||!b||![a.start,a.end,b.start,b.end,e].every(value=>Number.isSafeInteger(value))||a.start<0||a.end<=a.start||a.end>page.text.length||b.start<offset||b.end>b.start+12000||b.end>r.total||b.end-b.start!==a.end-a.start||e<0||b.start-e<0||e+a.end-a.start>capture.ocrText.length+1)return;
+   if(span.kind!=='text'||span.format!=='speech-text'||span.evidenceId!==capture.id||span.locator?.chunkId!==pin.chunkId||span.locator.textStart!==0||span.locator.textEnd!==capture.ocrText.length||typeof e!=='number'||!a||!b||![a.start,a.end,b.start,b.end,e].every(value=>Number.isSafeInteger(value))||a.start<0||a.end<=a.start||a.end>page.text.length||b.start!==offset+a.start||b.end!==offset+a.end||b.end>b.start+12000||b.end>r.total||b.end-b.start!==a.end-a.start||e<0||b.start-e<0||e+a.end-a.start>capture.ocrText.length+1)return;
    // Material serialization appends exactly one separator, outside anchor content.
    if(page.text.slice(a.start,a.end)!==(capture.ocrText+'\n').slice(e,e+a.end-a.start))return;
    return speechBody(capture.ocrText,span.locator);
@@ -40,10 +41,8 @@ export async function pinnedMediaText(api:Api,capture:Capture,signal:AbortSignal
  }
 }
 export function useMediaEvidenceText(api:Api,capture:Capture|undefined){
- const direct=capture?.evidencePresentation==='speech-text-v2'?speechBody(capture.ocrText):capture?.evidencePresentation==='speech-json-v1'?decodeSourceText(capture.evidencePresentation,capture.ocrText):undefined;
- const declared=typeof direct==='string'?direct:direct?.kind==='speech'?direct.text:undefined;
- const pin=declared===undefined?mediaEvidencePin(capture):undefined,identity=useMemo(()=>({api,id:capture?.id,pin:capture?.libraryVersion,text:capture?.ocrText,format:capture?.evidencePresentation}),[api,capture?.id,capture?.libraryVersion,capture?.ocrText,capture?.evidencePresentation]);
- const [resolved,setResolved]=useState<{identity:typeof identity;text?:string}>();
- useEffect(()=>{if(!capture||!pin)return;const controller=new AbortController();void pinnedMediaText(api,capture,controller.signal).then(text=>{if(!controller.signal.aborted)setResolved({identity,text});}).catch(()=>{if(!controller.signal.aborted)setResolved({identity});});return()=>controller.abort();},[identity]);
- return {loading:Boolean(pin)&&resolved?.identity!==identity,text:declared??(resolved?.identity===identity?resolved.text:undefined)};
+ const pin=mediaEvidencePin(capture),identity=useMemo(()=>({api,id:capture?.id,pin:capture?.libraryVersion,text:capture?.ocrText}),[api,capture?.id,capture?.libraryVersion,capture?.ocrText]);
+ const [resolved,setResolved]=useState<{identity:typeof identity;body?:MediaSpeech}>();
+ useEffect(()=>{if(!capture||!pin)return;const controller=new AbortController();void pinnedMediaText(api,capture,controller.signal).then(body=>{if(!controller.signal.aborted)setResolved({identity,body});}).catch(()=>{if(!controller.signal.aborted)setResolved({identity});});return()=>controller.abort();},[identity]);
+ return {loading:Boolean(pin)&&resolved?.identity!==identity,body:resolved?.identity===identity?resolved.body:undefined};
 }
