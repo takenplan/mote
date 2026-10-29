@@ -42,7 +42,11 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
     try{
       const page=await api.ask('history') as {items:RecentConversation[]};
       if(version===generation)renderHistory(page.items);
-    }catch(error){if(version===generation){history.removeAttribute('aria-busy');message(error instanceof Error?error.message:moteText('请求失败，请重试'));}}
+    }catch{if(version===generation){
+      history.removeAttribute('aria-busy');message(moteText('对话暂不可读取，请稍后重试。'));
+      const retry=document.createElement('button');retry.type='button';retry.className='text-button';retry.textContent=moteText('重试');
+      retry.addEventListener('click',()=>{retry.disabled=true;void refresh();});history.append(retry);controls();
+    }}
   }
   question.addEventListener('input',controls);
   el('home-ask-form').addEventListener('submit',event=>{event.preventDefault();if(blocked||!question.value.trim())return;if(actions.question(question.value)){question.value='';controls();}});

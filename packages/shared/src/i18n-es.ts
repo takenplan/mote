@@ -8862,5 +8862,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "对话历史 →": "Historial de conversaciones →",
   "最近留下的内容": "Contenido guardado recientemente",
   "查看全部 →": "Ver todo →",
-  "本机采集与同步 →": "Captura y sincronización locales →"
+  "本机采集与同步 →": "Captura y sincronización locales →",
+  "对话暂不可读取，请稍后重试。": "Las conversaciones no están disponibles temporalmente. Inténtalo de nuevo más tarde."
 };

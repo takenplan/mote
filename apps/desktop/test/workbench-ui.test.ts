@@ -52,3 +52,12 @@ it('keeps collection and sending independent and only dismisses first-use after 
   ui.update(status);ui.setHasContent(true);expect(el('home-onboarding').hidden).toBe(true);
   ui.setHasContent(false);ui.setHasSource(true);expect(el('home-onboarding').hidden).toBe(true);
 });
+
+it('keeps IPC diagnostics out of the home error and retries history in place',async()=>{
+  vi.mocked(api.ask).mockRejectedValueOnce(Error("Error invoking remote method 'mote:ask': generated failure 503"));
+  ui.update(status);await flush();
+  expect(el('home-conversations').textContent).toContain('对话暂不可读取');
+  expect(el('home-conversations').textContent).not.toMatch(/mote:ask|503/);
+  el('home-conversations').querySelector('button')!.click();await flush();
+  expect(el('home-conversations').textContent).toContain(conversation.title);
+});

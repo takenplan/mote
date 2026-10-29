@@ -8862,5 +8862,6 @@ export const french: Readonly<Record<string, string>> = {
   "对话历史 →": "Historique des conversations →",
   "最近留下的内容": "Contenus récemment enregistrés",
   "查看全部 →": "Tout voir →",
-  "本机采集与同步 →": "Collecte et synchronisation locales →"
+  "本机采集与同步 →": "Collecte et synchronisation locales →",
+  "对话暂不可读取，请稍后重试。": "Les conversations sont temporairement indisponibles. Réessayez plus tard."
 };

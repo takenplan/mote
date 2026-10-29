@@ -92,9 +92,9 @@ app.on('browser-window-created',(_event,window)=>{
     assert.equal((await js('window.mote.status()')).running,false);await shot('home-sending-paused');
 
     historyFailure=true;await js('document.querySelector("aside [data-nav=records]").click();document.querySelector("aside [data-nav=overview]").click()');
-    await until(()=>js('document.querySelector("#home-conversations").textContent.includes("503")'),'history error');
+    await until(()=>js('document.querySelector("#home-conversations").textContent.includes("对话暂不可读取")'),'history error');
     assert(await js('!!document.querySelector("#home-recent .content-row")'),'History failure retains local content');await shot('home-history-error');
-    historyFailure=false;await js('document.querySelector("aside [data-nav=records]").click();document.querySelector("aside [data-nav=overview]").click()');
+    historyFailure=false;await js('document.querySelector("#home-conversations button").click()');
     await until(()=>js('!!document.querySelector("#home-conversations button")'),'history retry');
     window.setContentSize(820,620);await shot('home-compact');assert(await js('document.documentElement.scrollWidth<=innerWidth'));
     assert.deepEqual(errors,[]);
