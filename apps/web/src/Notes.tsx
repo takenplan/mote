@@ -216,7 +216,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved, composerOnly=
       <label className={composerOnly?"visually-hidden":undefined} htmlFor="note-text">{moteText("此刻想留下什么？")}</label>
       <textarea disabled={uploading} id="note-text" value={draft.text} onChange={e => edit({ ...draft, text: e.target.value })} maxLength={100000} rows={6} placeholder={moteText(composerOnly?"记点什么…":"记下此刻的想法…")} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && draft.text.trim())
         save(e); }}/>
-      <details className="note-description"><summary>{moteText('资料说明（选填）')}</summary><label className="visually-hidden" htmlFor="note-description">{moteText('这条记录的资料说明')}</label><textarea id="note-description" rows={2} value={draft.description??''} maxLength={12000} onChange={event=>edit({...draft,description:event.target.value})} placeholder={moteText('例如：这是我的日记，记录当天的经历和感受。')}/><p>{moteText('仅用于理解这条记录。')}</p></details>
+      <details className="note-description"><summary>{moteText('资料说明（选填）')}</summary><label className="visually-hidden" htmlFor="note-description">{moteText('这条记录的资料说明')}</label><textarea disabled={uploading} id="note-description" rows={2} value={draft.description??''} maxLength={12000} onChange={event=>edit({...draft,description:event.target.value})} placeholder={moteText('例如：这是我的日记，记录当天的经历和感受。')}/><p>{moteText('仅用于理解这条记录。')}</p></details>
 
       <div className="note-composer-actions"><details className="note-more"><summary>{moteText('更多')}</summary><div className="note-more-content"><label>{moteText("选择已有图片 / 音频附件")}<input type="file" accept="image/*,audio/*" multiple disabled={uploading} onChange={event => {
             const selected = Array.from(event.target.files ?? []);

@@ -19,6 +19,9 @@ import {ConversationHeading,ConversationComposer} from './ConversationShell';
 import {FeaturePanels} from './features/runtime';
 import {readOwnerQuestion} from './owner-question-route';
 
+type ChatImageUpload={key:string;file:File;status:'uploading'|'failed'};
+// File objects remain private to this Api session; routes and storage contain no file bytes.
+const unsentImages=new WeakMap<Api,ChatImageUpload[]>();
 interface ConversationSummary {
   id: string;
   title: string;
@@ -101,6 +104,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const [attachments,updateAttachments]=useState<ChatAttachment[]>([]);
   const setAttachments=(next:React.SetStateAction<ChatAttachment[]>)=>updateAttachments(current=>{const value=typeof next==='function'?next(current):next,owner=draftOwner.current;unsentDrafts.set(owner,{question:draft.getSnapshot(),attachments:value});return value;});
   const [uploading,setUploading]=useState(false);
+  const [imageUploadState,setImageUploadState]=useState<{owner:Api;items:ChatImageUpload[]}>({owner:api,items:unsentImages.get(api)??[]});
+  const imageUploads=imageUploadState.owner===api?imageUploadState.items:unsentImages.get(api)??[];
+  const storeImages=(change:(current:ChatImageUpload[])=>ChatImageUpload[])=>{const items=change(unsentImages.get(api)??[]);unsentImages.set(api,items);if(draftOwner.current===api)setImageUploadState({owner:api,items});};
   const attachmentInput=useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false), [loadingOlder,setLoadingOlder]=useState(false), [loadingPage,setLoadingPage] = useState(false);
   const [error, setError] = useState(''), [historyError, setHistoryError] = useState('');
@@ -131,8 +137,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(conversationFailure(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;settledReceipts.current.clear();const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);const retained=queryRecovery.get(api);selectionMade.current=Boolean(retained);setRun(retained?.run??null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
-    return()=>{operation.current?.abort();cancelRequest.current?.abort();cancelRequest.current=null;const retained=queryRecovery.get(api);if(retained)queryRecovery.set(api,{...retained,unknown:true});attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
+  useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;settledReceipts.current.clear();const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);const retained=queryRecovery.get(api);selectionMade.current=Boolean(retained);setRun(retained?.run??null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setImageUploadState({owner:api,items:unsentImages.get(api)??[]});setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+    return()=>{operation.current?.abort();cancelRequest.current?.abort();cancelRequest.current=null;const retained=queryRecovery.get(api);if(retained)queryRecovery.set(api,{...retained,unknown:true});attachmentRequest.current?.abort();unsentImages.set(api,(unsentImages.get(api)??[]).map(item=>({...item,status:'failed'})));historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
   useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');if(draftQuery.get('history')==='1'){setHistoryOpen(true);draftQuery.delete('history');window.history.replaceState(null,'',window.location.hash.split('?')[0]+(draftQuery.size?'?'+draftQuery:''));}const incoming=draftQuery.get('questionDraft');if(incoming!==null){queryRecovery.draftEdited(api);selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){const retained=queryRecovery.get(api);if(retained&&next!==retained.conversationId&&next!==retained.run?.conversationId)queryRecovery.contextChanged(api);selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
   useLayoutEffect(()=>{
@@ -231,12 +237,12 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   function open(id: string,force=false) {
     if (busy) return;
     if(id===selectedId){setHistoryOpen(false);return;}
-    if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id});return;}
+    if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length||imageUploads.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id});return;}
     queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
     setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
-    setRun(null);setPollError('');setError('');setConfirmDelete(false);setQuestion('');setAttachments([]);setPendingQuestion('');
+    setRun(null);setPollError('');setError('');setConfirmDelete(false);setQuestion('');setAttachments([]);storeImages(()=>[]);setPendingQuestion('');
     setOlder(null);setSelectedId(id);setSelectedOwnerQuestion(null);
     window.location.hash='#/ask?'+new URLSearchParams({conversation:id});
   }
@@ -253,11 +259,11 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   }
   function startNew(force=false) {
     if (busy) return;
-    if(!force&&(draft.getSnapshot().trim()||attachments.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id:null});return;}
+    if(!force&&(draft.getSnapshot().trim()||attachments.length||imageUploads.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id:null});return;}
     queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
-    setRun(null);setPollError('');setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
+    setRun(null);setPollError('');setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);storeImages(()=>[]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
     window.location.hash='#/ask';
   }
   function retry(question: string) {
@@ -267,7 +273,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   async function submit(event?: {preventDefault(): void}, sample?: string) {
     event?.preventDefault();
     const text = (sample ?? draft.getSnapshot()).trim();
-    if (!text || busy || uploading || opening || operation.current || queryRecovery.get(api) || !configured || !reference.ready) return;
+    if (!text || busy || uploading || imageUploads.length>0 || opening || operation.current || queryRecovery.get(api) || !configured || !reference.ready) return;
     selectionMade.current=true;
     const controller = new AbortController(); operation.current = controller;
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
@@ -283,25 +289,32 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if (!controller.signal.aborted) {setBusy(false);setPendingQuestion(''); setError(moteText("{0} 可刷新历史检查结果后再重试。", conversationFailure(e)));}
     } finally {if (!controller.signal.aborted) {operation.current = null;}}
   }
-  async function addImages(files:FileList|null){
-    if(!files?.length||uploading||busy||opening)return;
-    if(attachments.length+files.length>4){setError(moteText("最多添加 4 张图片"));return;}
-    queryRecovery.draftEdited(api);const selected=Array.from(files);
-    if(selected.some(file=>!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>8*1024*1024||file.size===0)){
-      setError(moteText("聊天图片仅支持 PNG、JPEG、WebP，每张不超过 8 MiB。"));return;
-    }
-    const controller=new AbortController();attachmentRequest.current=controller;
-    setUploading(true);setError('');
+  async function uploadImages(selected:ChatImageUpload[]) {
+    if(!selected.length||uploading||busy||opening)return;
+    const controller=new AbortController();attachmentRequest.current=controller;setUploading(true);setError('');
+    const current=()=>!controller.signal.aborted&&draftOwner.current===api&&attachmentRequest.current===controller;
     try{
       let deviceId=localStorage.getItem('mote.chat.device.v1');
       if(!deviceId){deviceId=`web:${crypto.randomUUID()}`;localStorage.setItem('mote.chat.device.v1',deviceId);}
-      for(const file of selected){
-        const id=await uploadChatImage(api,file,deviceId,controller.signal);
-        if(controller.signal.aborted||draftOwner.current!==api||attachmentRequest.current!==controller)return;
-        updateAttachments(current=>{if(controller.signal.aborted||draftOwner.current!==api)return current;const next=current.some(item=>item.id===id)?current:[...current,{id,name:file.name,mimeType:file.type}];unsentDrafts.set(api,{question:draft.getSnapshot(),attachments:next});return next;});
+      for(const item of selected){
+        if(!current())return;storeImages(rows=>rows.map(row=>row.key===item.key?{...row,status:'uploading'}:row));
+        try{
+          const id=await uploadChatImage(api,item.file,deviceId,controller.signal);
+          if(!current())return;
+          setAttachments(rows=>controller.signal.aborted||draftOwner.current!==api?rows:rows.some(row=>row.id===id)?rows:[...rows,{id,name:item.file.name,mimeType:item.file.type}]);
+          storeImages(rows=>rows.filter(row=>row.key!==item.key));
+        }catch(cause){if(!current())return;storeImages(rows=>rows.map(row=>row.key===item.key?{...row,status:'failed'}:row));setError(conversationFailure(cause));}
       }
-    }catch(e){if(!controller.signal.aborted)setError(conversationFailure(e));}
-    finally{if(!controller.signal.aborted){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
+    }finally{if(current()){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
+  }
+  async function addImages(files:FileList|null){
+    if(!files?.length||uploading||busy||opening)return;
+    if(attachments.length+imageUploads.length+files.length>4){setError(moteText("最多添加 4 张图片"));return;}
+    const selected=Array.from(files);
+    if(selected.some(file=>!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>8*1024*1024||file.size===0)){
+      setError(moteText("聊天图片仅支持 PNG、JPEG、WebP，每张不超过 8 MiB。"));return;
+    }
+    queryRecovery.draftEdited(api);const rows=selected.map(file=>({key:crypto.randomUUID(),file,status:'uploading' as const}));storeImages(current=>[...current,...rows]);await uploadImages(rows);
   }
   async function remove() {
     if (!conversation || operation.current) return;
@@ -357,9 +370,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {conversation?.scope.anchorMaterialRef&&<nav className="filter-bar" aria-label={moteText('参考资料')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这份资料')}</span><button className="text-button" onClick={()=>onOpen(conversation.scope.anchorMaterialRef!)}>{moteText('查看参考资料')}</button></>}<button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);setClearedScope({owner:api,id:conversation.id});}}>{moteText('清除参考记录')}</button></nav>}
       {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);setClearedScope({owner:api,id:conversation!.id});}}>{moteText('清除参考记录')}</button></>}</nav>}
       <DraftComposer draft={draft}>{question=><ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={value=>{queryRecovery.draftEdited(api);setQuestion(value);}} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
-        {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>{queryRecovery.draftEdited(api);setAttachments(current=>current.filter(item=>item.id!==attachment.id));}}><X size={13}/></button></span>)}</div>}
+        {Boolean(attachments.length||imageUploads.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>{queryRecovery.draftEdited(api);setAttachments(current=>current.filter(item=>item.id!==attachment.id));}}><X size={13}/></button></span>)}{imageUploads.map(item=><span key={item.key} className="chat-attachment chat-image-upload" data-status={item.status}><ImagePlus size={14}/><span>{item.file.name}<small role={item.status==='uploading'?'status':undefined}>{item.status==='uploading'?moteText('正在上传'):moteText('图片上传失败')}</small></span>{item.status==='failed'&&<button type="button" disabled={busy||uploading||opening} onClick={()=>{queryRecovery.draftEdited(api);void uploadImages([item]);}}>{moteText('重试')}</button>}<button type="button" disabled={busy||uploading} aria-label={moteText('移除图片 {0}',item.file.name)} onClick={()=>{queryRecovery.draftEdited(api);storeImages(rows=>rows.filter(row=>row.key!==item.key));setError('');}}><X size={13}/></button></span>)}</div>}
         <details className="chat-model-options"><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={value=>{queryRecovery.draftEdited(api);setModelProfileId(value);}} model={modelOverride} onModelChange={value=>{queryRecovery.draftEdited(api);setModelOverride(value);}} disabled={busy||opening} detachedFromForm/></details>
-        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || Boolean(recovery)||Boolean(pollError&&run?.status==='running') || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
+        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length+imageUploads.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || imageUploads.length>0 || opening || Boolean(recovery)||Boolean(pollError&&run?.status==='running') || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
       </ConversationComposer>}</DraftComposer>
       </div>
       {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
