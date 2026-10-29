@@ -75,6 +75,15 @@ class SourcesEntryInstrumentedTest {
         }
         return requireNotNull(recreated) { "The source page must resume after recreation" }
     }
+    private fun awaitFileTaskReady(activity: FileTaskActivity) {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var ready = false
+        while (!ready && SystemClock.elapsedRealtime() < deadline) {
+            instrumentation.runOnMainSync { ready = views(activity.window.decorView).any { it.tag == "file-task:description" && it.isShown } }
+            if (!ready) Thread.sleep(25)
+        }
+        assertTrue("The actual file form must finish reading its draft", ready)
+    }
     private fun fileEntry(useAddMenu: Boolean, folder: Boolean = false) = fixture {
         val picker = pickerMonitor(folder)
         val sources = instrumentation.addMonitor(FileTaskActivity::class.java.name, null, false)
@@ -97,6 +106,7 @@ class SourcesEntryInstrumentedTest {
                 current = instrumentation.waitForMonitorWithTimeout(sources, 10_000) as? FileTaskActivity
                 assertNotNull("The actual file entry must open the source page", current)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Entering the page must not open a file picker", 0, picker.hits)
                 instrumentation.runOnMainSync {
                     (views(current!!.window.decorView).single { it.tag == "file-task:description" } as android.widget.EditText).setText("Generated call recording background")
@@ -104,6 +114,7 @@ class SourcesEntryInstrumentedTest {
                 }
                 current = recreate(current!!)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Recreating the page before selection must not open a picker", 0, picker.hits)
                 instrumentation.runOnMainSync {
                     assertEquals("Generated call recording background", (views(current!!.window.decorView).single { it.tag == "file-task:description" } as android.widget.EditText).text.toString())
@@ -114,10 +125,12 @@ class SourcesEntryInstrumentedTest {
                         .single { it.tag == "file-task:pick" }.performClick()
                 }
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("An explicit file action opens the picker once", 1, picker.hits)
                 assertFalse("Cancelling the picker keeps the source page open", current!!.isFinishing)
                 current = recreate(current!!)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Cancelling and recreating must not reopen the picker", 1, picker.hits)
                 instrumentation.runOnMainSync { current!!.finish() }
                 current = null

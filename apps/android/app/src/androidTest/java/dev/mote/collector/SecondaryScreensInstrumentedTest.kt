@@ -181,6 +181,20 @@ class SecondaryScreensInstrumentedTest {
         }
     }
 
+    @Test fun sourceFailuresRemainVisibleOutsideCollapsedDetails() = fixture {
+        val source = LocalSource(name = "Generated permission source", kind = "local-calendar", calendarId = 991993, enabled = true)
+        context.localSources().save(source)
+        for ((code, message) in listOf("permission" to "权限丢失，请重新授权", "paused" to "中央已暂停；请在中央恢复后重试", "provider" to "提供者不可用或缓存已满；保留旧快照，稍后重试", "context-conflict" to "资料说明与中央版本冲突；请打开设置处理，文件保留待发。")) {
+            context.localSources().status(source.id, code)
+            ActivityScenario.launch<SourcesActivity>(Intent(context, SourcesActivity::class.java).putExtra("detailSourceId", source.id)).use { scenario ->
+                until("visible $code") { main { visible().filterIsInstance<TextView>().any { it.tag == "source-primary-status" && it.text.toString() == MoteI18n.text(message) } } }
+                assertFalse(main { visible().any { it.tag == "source-sync-details:content" } })
+                scenario.onActivity { screenshot(it, "source-$code") }
+            }
+            assertTrue(context.localSources().sources().single { it.id == source.id }.enabled)
+        }
+    }
+
     @Test fun backupDoesNotOpenAnotherPickerWhileAWriteIsRunning() = fixture {
         val release = java.util.concurrent.CountDownLatch(1)
         val completed = java.util.concurrent.CountDownLatch(1)
@@ -198,6 +212,20 @@ class SecondaryScreensInstrumentedTest {
                 }
             } finally { release.countDown() }
             assertTrue(completed.await(15, java.util.concurrent.TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun staleResumeSendingButtonKeepsTheExplicitResumeIntent() = fixture {
+        val settings = Settings(context)
+        ActivityScenario.launch(SyncQueueActivity::class.java).use { scenario ->
+            until("resume sending") { main { visible().filterIsInstance<Button>().any { it.tag == "sync-send-pause" && it.text.toString() == MoteI18n.text("恢复全部发送") } } }
+            scenario.onActivity { activity ->
+                val button = views(activity.window.decorView).single { it.tag == "sync-send-pause" }
+                settings.save(settings.read().copy(syncPaused = false))
+                button.performClick()
+            }
+            until("resume completed") { main { visible().single { it.tag == "sync-send-pause" }.isEnabled } }
+            assertFalse(settings.read().syncPaused); assertFalse(settings.enabled)
         }
     }
 

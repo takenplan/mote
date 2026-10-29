@@ -14,7 +14,7 @@ class UploadHistorySettingsActivity : MoteActivity() {
         val body = moteDetailPage(primary = MotePrimaryTab.SOURCES, title = MoteI18n.text("上传历史保存时长"))
         SecondaryUi.text(body, MoteI18n.text("保存天数"))
         choice = Spinner(this).apply { tag = "history-retention-choice"; adapter = MoteUi.choiceAdapter(this@UploadHistorySettingsActivity, UploadHistoryRetention.choices.map { MoteI18n.text("{0} 天", it) }) }.also(body::addView)
-        val notice = SecondaryUi.column(body, card = true)
+        val notice = SecondaryUi.column(body, card = true).apply { background = MoteUi.shape(context, fill = NativeColorRole.TINT, outline = true) }
         SecondaryUi.text(notice, MoteI18n.text("只清理上传历史"), heading = true)
         SecondaryUi.text(notice, MoteI18n.text("默认保存30天。到期只清理上传历史，不删除资料、待传原件或草稿。"), muted = true)
         status = TextView(this).also(body::addView)
@@ -25,7 +25,7 @@ class UploadHistorySettingsActivity : MoteActivity() {
                 isEnabled = true
                 status.text = if (result.isSuccess) MoteI18n.text("已保存") else MoteI18n.text("保存未完成，请重试；资料和待传原件保留。")
             }
-        } }.also(body::addView)
+        } }.also { body.addView(it, LinearLayout.LayoutParams(-2, -2)) }
         MoteUi.styleTree(body)
         task.start(MoteI18n.text("正在读取…"), { status.text = it }, { UploadHistoryRetention.read(applicationContext) }) { result ->
             result.onSuccess { days -> choice.setSelection(savedInstanceState?.getInt("selection") ?: UploadHistoryRetention.choices.indexOf(days)); save.isEnabled = true; status.text = "" }

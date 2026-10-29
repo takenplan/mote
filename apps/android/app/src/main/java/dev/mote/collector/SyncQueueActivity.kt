@@ -27,10 +27,12 @@ class SyncQueueActivity : MoteActivity() {
     private lateinit var historyBody: LinearLayout
     private lateinit var historyPanel: UploadHistoryPanel
     private var history = false
+    private var sendingPaused = false
     private var refreshPending = false
     private var sources = emptyList<LocalSource>()
     private val pageSize = 10
     private var offset = 0
+    private lateinit var filters: LinearLayout
     private lateinit var speed: TextView
     private val speedHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val speedTick = object : Runnable { override fun run() { if (::speed.isInitialized) speed.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label(); speedHandler.postDelayed(this, 1000) } }
@@ -41,23 +43,22 @@ class SyncQueueActivity : MoteActivity() {
         history = state?.getBoolean("history") ?: false
         offset = state?.getInt("offset") ?: 0
         val body = moteDetailPage(primary = MotePrimaryTab.SOURCES, title = MoteI18n.text("同步与上传"))
-        val sendCard = SecondaryUi.column(body, card = true)
+        val sendCard = SecondaryUi.column(body)
         sendStatus = SecondaryUi.text(sendCard, MoteI18n.text("正在读取本机同步状态…"), heading = true).apply { tag = "sync-send-status"; accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
         sendCount = SecondaryUi.text(sendCard, "", muted = true)
-        val sendActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(sendCard::addView)
-        pauseSend = MoteUi.button(Button(this).apply { tag = "sync-send-pause"; setOnClickListener { changeSendState() } })
-        sendNow = MoteUi.button(Button(this).apply { text = MoteI18n.text("立即同步"); tag = "sync-send-now"; setOnClickListener { requestSync() } }, primary = true)
-        sendActions.addView(pauseSend, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(MoteTheme.spaceInline) })
-        sendActions.addView(sendNow, LinearLayout.LayoutParams(0, -2, 1f))
+        val sendActions = SecondaryUi.actions(sendCard)
+        pauseSend = SecondaryUi.action(sendActions, "") { changeSendState() }.apply { tag = "sync-send-pause" }
+        sendNow = SecondaryUi.action(sendActions, MoteI18n.text("立即同步"), primary = true) { requestSync() }.apply { tag = "sync-send-now" }
         val tabs = LinearLayout(this).also(body::addView)
         currentTab = Button(this).apply { text = MoteI18n.text("当前任务"); tag = "sync-current-tab"; setOnClickListener { selectTab(false) } }
         historyTab = Button(this).apply { text = MoteI18n.text("上传历史"); tag = "sync-history-tab"; setOnClickListener { selectTab(true) } }
-        tabs.addView(currentTab, LinearLayout.LayoutParams(0, -2, 1f))
-        tabs.addView(historyTab, LinearLayout.LayoutParams(0, -2, 1f))
+        tabs.addView(currentTab, LinearLayout.LayoutParams(-2, -2))
+        tabs.addView(historyTab, LinearLayout.LayoutParams(-2, -2))
+        filters = SecondaryUi.disclosure(body, MoteI18n.text("来源筛选与传输详情"), "sync-filters", intent.hasExtra("sourceId"))
         summary = TextView(this).also(body::addView)
-        speed = TextView(this).apply { MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceItem)) }.also(body::addView)
-        categories = Spinner(this).also { body.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
-        body.addView(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { load() } })
+        speed = TextView(this).apply { MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceItem)) }.also(filters::addView)
+        categories = Spinner(this).also { filters.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
+        SecondaryUi.action(filters, MoteI18n.text("刷新")) { load() }
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
         paging = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
         previous = Button(this).apply { text = MoteI18n.text("上一页"); setOnClickListener { offset = (offset - pageSize).coerceAtLeast(0); load() } }.also { paging.addView(it, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(6) }) }
@@ -81,7 +82,7 @@ class SyncQueueActivity : MoteActivity() {
                 updateTabs()
                 // A restored history tab hides the source spinner, which need not dispatch selection.
                 load()
-            }.onFailure { summary.text = MoteI18n.text("队列暂不可读，请重试") }
+            }.onFailure { summary.text = MoteI18n.text("队列暂不可读，请重试"); summary.visibility = android.view.View.VISIBLE }
         }
     }
     private fun refreshSendState(state: LocalStateSnapshot) {
@@ -89,15 +90,17 @@ class SyncQueueActivity : MoteActivity() {
         val settings = Settings(this); val config = settings.read()
         if (!actionTask.busy) sendStatus.text = SyncSchedule.waitingReason(this, config) ?: settings.uploadStatus()
         sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, it.pending) } ?: state.imageLabel()
+        sendingPaused = config.syncPaused
         pauseSend.text = MoteI18n.text(if (config.syncPaused) "恢复全部发送" else "暂停全部发送")
         pauseSend.isEnabled = !actionTask.busy
         sendNow.isEnabled = !actionTask.busy && !config.syncPaused && config.hasSyncConnection()
     }
     private fun changeSendState() {
         if (actionTask.busy) return
+        val requestedPause = !sendingPaused
         pauseSend.isEnabled = false; sendNow.isEnabled = false
         actionTask.start(MoteI18n.text("正在保存发送状态…"), { sendStatus.text = it }, {
-            SendPauseControl.set(applicationContext, !Settings(applicationContext).read().syncPaused)
+            SendPauseControl.set(applicationContext, requestedPause)
         }) { outcome ->
             refreshSendState(LocalStateRepository.get(this).state.value)
             outcome.onFailure { sendStatus.text = it.message ?: MoteI18n.text("操作失败，请重试") }
@@ -129,7 +132,9 @@ class SyncQueueActivity : MoteActivity() {
     }
     private fun updateTabs() {
         currentTab.isSelected = !history; historyTab.isSelected = history
-        MoteUi.button(currentTab, primary = !history); MoteUi.button(historyTab, primary = history)
+        MoteUi.action(currentTab, MoteUi.ButtonRole.TEXT); MoteUi.action(historyTab, MoteUi.ButtonRole.TEXT)
+        currentTab.paintFlags = if (!history) android.graphics.Paint.UNDERLINE_TEXT_FLAG else 0
+        historyTab.paintFlags = if (history) android.graphics.Paint.UNDERLINE_TEXT_FLAG else 0
         historyBody.visibility = if (history) android.view.View.VISIBLE else android.view.View.GONE
         rows.visibility = if (history) android.view.View.GONE else android.view.View.VISIBLE
         summary.visibility = if (history) android.view.View.GONE else android.view.View.VISIBLE
@@ -155,13 +160,22 @@ class SyncQueueActivity : MoteActivity() {
                     JSONObject().put("name", item.optString("title", item.optString("externalId"))).put("status", MoteI18n.text("等待上传"))
                 }))
             }
+            if (source == null) {
+                val items = page.getJSONArray("items")
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i); val content = queue().capture(item.getString("id"))
+                    val text = content?.optString("ocrText").orEmpty().trim()
+                    item.put("displayTitle", text.lineSequence().firstOrNull()?.take(80).orEmpty()).put("preview", text.take(180))
+                }
+            }
             page to (SyncSchedule.waitingReason(this, Settings(this).read()) ?: Settings(this).uploadStatus())
         }) { result ->
             categories.isEnabled = true
             if (history) { refreshPending = false; load(); return@start }
             result.onSuccess { (page, reason) ->
                 val total = page.getInt("total")
-                summary.text = MoteI18n.text("共 {0} 条 · 第 {1} 页\n{2}", total, offset / pageSize + 1, reason)
+                summary.text = MoteI18n.text("共 {0} 条 · 第 {1} 页", total, offset / pageSize + 1)
+                summary.visibility = if (total > pageSize || offset > 0) android.view.View.VISIBLE else android.view.View.GONE
                 previous.isEnabled = offset > 0; next.isEnabled = offset + pageSize < total
                 paging.visibility = if (total > pageSize || offset > 0) android.view.View.VISIBLE else android.view.View.GONE
                 rows.removeAllViews()
@@ -169,14 +183,14 @@ class SyncQueueActivity : MoteActivity() {
                 if (items.length() == 0) rows.addView(TextView(this).apply { text = MoteI18n.text("暂无待上传记录"); setPadding(0, moteDp(24), 0, moteDp(24)) })
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
-                    rows.addView(TextView(this).apply {
-                        MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.INK); gravity = android.view.Gravity.START
-                        setPadding(moteDp(16), moteDp(16), moteDp(16), moteDp(16)); background = MoteUi.clickable(this@SyncQueueActivity); isFocusable = true
-                        text = if (source == null) "${item.optString("appName").ifBlank { sourceLabel(item.optString("source")) }} · ${item.getString("status")}\n${java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss"))}" else "${item.optString("name")}\n${item.getString("status")}"
-                        setOnClickListener { startActivity(if (source == null) Intent(this@SyncQueueActivity, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")) else Intent(this@SyncQueueActivity, SourcesActivity::class.java)) }
-                    }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) })
+                    val title = if (source == null) item.optString("displayTitle").ifBlank { item.optString("appName").ifBlank { sourceLabel(item.optString("source")) } } else item.optString("name")
+                    val timestamp = if (source == null) java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm")) else ""
+                    val detail = listOf(item.optString("preview").takeIf { it.isNotBlank() && it != title }, listOf(if (source == null) sourceLabel(item.optString("source")) else source.name, timestamp).filter(String::isNotBlank).joinToString(" · "), item.getString("status")).filterNotNull().joinToString("\n")
+                    SecondaryUi.row(rows, title, detail, icon = if (item.optString("source") == "note") "✎" else "▤") {
+                        startActivity(if (source == null) Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")) else Intent(this, SourcesActivity::class.java).putExtra("detailSourceId", source.id))
+                    }
                 }
-            }.onFailure { summary.text = MoteI18n.text("队列读取失败，记录保留。请刷新重试。") }
+            }.onFailure { summary.text = MoteI18n.text("队列读取失败，记录保留。请刷新重试。"); summary.visibility = android.view.View.VISIBLE }
             if (refreshPending) { refreshPending = false; load() }
         }
     }

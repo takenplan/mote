@@ -18,7 +18,7 @@ class StorageStatisticsActivity : MoteActivity() {
         body = moteDetailPage(title = MoteI18n.text("本机统计"))
         SecondaryUi.text(body, MoteI18n.text("本机存量与累计观测"), muted = true)
         val result = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(result)
-        val refresh = Button(this).apply { text = MoteI18n.text("刷新统计"); tag = "statistics-refresh" }; body.addView(refresh)
+        val refresh = Button(this).apply { text = MoteI18n.text("刷新统计"); tag = "statistics-refresh" }; body.addView(refresh, LinearLayout.LayoutParams(-2, -2))
         fun load() { refresh.isEnabled = false
             worker.execute {
                 val report = runCatching {

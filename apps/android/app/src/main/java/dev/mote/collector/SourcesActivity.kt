@@ -36,18 +36,22 @@ class SourcesActivity : MoteActivity() {
         restoringDraft = lastNonConfigurationInstance as? Draft
         detailSourceId = intent.getStringExtra("detailSourceId")
         localOffset = savedInstanceState?.getInt("localOffset") ?: 0
-        val content = moteDetailPage(title = MoteI18n.text(if (detailSourceId == null) "来源" else "来源详情"))
+        val content = moteDetailPage(title = MoteI18n.text(if (detailSourceId == null) "采集与同步" else "来源详情"))
         operationStatus = SecondaryUi.text(content, "", muted = true).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
         if (detailSourceId == null) {
-            SecondaryUi.text(content, MoteI18n.text("这台手机的来源"), heading = true)
-            SecondaryUi.action(content, MoteI18n.text("添加来源")) { chooseSource() }.tag = "sources-add"
+            val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }.also(content::addView)
+            heading.addView(TextView(this).apply { text = MoteI18n.text("这台手机的来源"); MoteUi.type(this, NativeFontRole.SECTION, medium = true) }, LinearLayout.LayoutParams(0, -2, 1f))
+            SecondaryUi.action(heading, MoteI18n.text("＋ 添加")) { chooseSource() }.tag = "sources-add"
         }
         list = SecondaryUi.column(content)
         if (detailSourceId == null) {
             SecondaryUi.text(content, MoteI18n.text("自动采集"), heading = true)
-            SecondaryUi.row(content, MoteI18n.text("屏幕与应用活动"), MoteI18n.text("采集来源、频率与电量策略")) { startActivity(Intent(this, MainActivity::class.java).putExtra("page", "CAPTURE")) }
-            SecondaryUi.row(content, MoteI18n.text("同步与上传")) { startActivity(Intent(this, SyncQueueActivity::class.java)) }
-            SecondaryUi.row(content, MoteI18n.text("其他来源"), MoteI18n.text("在中央工作台管理云端来源")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "sources")) }
+            SecondaryUi.row(content, MoteI18n.text("屏幕与应用活动"), MoteI18n.text("采集来源、频率与电量策略"), icon = "▧") { startActivity(Intent(this, MainActivity::class.java).putExtra("page", "CAPTURE")) }
+            SecondaryUi.row(content, MoteI18n.text("通知与设备信息"), MoteI18n.text("独立选择采集内容"), icon = "◷") { startActivity(Intent(this, MainActivity::class.java).putExtra("page", "OBSERVATIONS")) }
+            SecondaryUi.row(content, MoteI18n.text("同步与上传"), icon = "⇄") { startActivity(Intent(this, SyncQueueActivity::class.java)) }
+            SecondaryUi.row(content, MoteI18n.text("其他来源"), MoteI18n.text("在中央工作台管理云端来源"), icon = "↗") { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "sources")) }
+            SecondaryUi.text(content, MoteI18n.text("本机日历"), heading = true)
+            SecondaryUi.row(content, MoteI18n.text("日历来源"), MoteI18n.text("选择要同步的日历")) { connectCalendar() }
             val options = SecondaryUi.disclosure(content, MoteI18n.text("来源限制与同步说明"), "sources-details")
             SecondaryUi.text(options, MoteI18n.text("文件快照和原件归档都会上传完整文件，由中央解析或转写。快照处理后删除中央临时原件，保留提取正文；原件归档长期保留文件。每文件最多 512 MiB，支持断网续传。仅文件目录不读取正文。超限或扫描不完整不会推断文件已删除。\n系统后台任务约每 15 分钟检查一次。"), muted = true)
             SecondaryUi.action(options, MoteI18n.text("立即扫描并同步")) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
@@ -97,14 +101,20 @@ class SourcesActivity : MoteActivity() {
                         MoteI18n.text("最近扫描：{0}", state.optString("lastScan").ifBlank { MoteI18n.text("尚无") })
                     ).joinToString("\n") else MoteI18n.text("\n{0}\n{1} · {2} · {3}\n待发 {4} 个版本 · 最近扫描 {5}\n{6}", source.name, if (source.kind == "local-calendar") MoteI18n.text("日历") else MoteI18n.text("文件"), when (source.retention) { "reference" -> MoteI18n.text("仅文件目录"); "archive" -> MoteI18n.text("原件归档"); else -> if (source.kind == "local-files") MoteI18n.text("中央提取正文，不保留原件") else MoteI18n.text("内容快照") }, if (source.enabled) status else MoteI18n.text("本机已停用"), pending, state.optString("lastScan", MoteI18n.text("尚无")), if (state.has("scanComplete") && !state.optBoolean("scanComplete")) MoteI18n.text("本次扫描未完整：跳过 {0} 项；没有推断这些项已删除。", state.optInt("skipped")) else "") + "\n" + NativeStatus.summary(facts)
                     val local = if (detailSourceId != null && source.binaryFiles()) fileArchives().rows(source.id).filter { it.optJSONObject("candidate") != null && !it.optBoolean("deleted") }.sortedByDescending { it.getJSONObject("candidate").optString("modifiedAt") } else emptyList()
-                    SourceRow(source, summary, local.drop(localOffset).take(localPageSize), local.size, state.optString("status") == "context-conflict" && (source.contextDirty || state.optJSONObject("contextConflict")?.optInt("version", -1) != source.contextVersion))
+                    val presentationStatus = when {
+                        !source.enabled -> MoteI18n.text("已暂停")
+                        state.optString("status") in setOf("permission", "paused", "provider", "context-conflict", "context-http", "consent", "offline", "http", "ack", "partial") -> status
+                        !Settings(this).read().hasSyncConnection() -> MoteI18n.text("仅保存在本机 · 连接节点后可同步")
+                        else -> status
+                    }
+                    SourceRow(source, summary, presentationStatus, local.drop(localOffset).take(localPageSize), local.size, state.optString("status") == "context-conflict" && (source.contextDirty || state.optJSONObject("contextConflict")?.optInt("version", -1) != source.contextVersion))
 
                 }
             }
             runOnUiThread {
                 rendering = false
                 if (isDestroyed || isFinishing) return@runOnUiThread
-                val signature = rows.getOrNull()?.joinToString { row -> row.source.json().toString() + row.summary + row.local.joinToString() + row.localTotal + row.contextConflict }
+                val signature = rows.getOrNull()?.joinToString { row -> row.source.json().toString() + row.summary + row.presentationStatus + row.local.joinToString() + row.localTotal + row.contextConflict }
                 if (signature != null && signature == renderedSignature) return@runOnUiThread
                 renderedSignature = signature
                 list.removeAllViews()
@@ -123,37 +133,45 @@ class SourcesActivity : MoteActivity() {
             }
         }
     }
-    private data class SourceRow(val source: LocalSource, val summary: String, val local: List<org.json.JSONObject>, val localTotal: Int, val contextConflict: Boolean)
+    private data class SourceRow(val source: LocalSource, val summary: String, val presentationStatus: String, val local: List<org.json.JSONObject>, val localTotal: Int, val contextConflict: Boolean)
     private fun chooseSource() {
         val labels = arrayOf(MoteI18n.text("导入文件"), MoteI18n.text("同步文件夹"), MoteI18n.text("连接本机日历"), MoteI18n.text("连接飞书文档"))
         MoteDialogBuilder(this).setTitle(MoteI18n.text("添加来源")).setItems(labels) { _, index ->
             when (index) {
                 0, 1 -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", if (index == 0) "FILE" else "FOLDER"))
-                2 -> if (checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) chooseCalendars() else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 301)
+                2 -> connectCalendar()
                 3 -> startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "lark"))
             }
         }.setNegativeButton(MoteI18n.text("取消"), null).show()
     }
+    private fun connectCalendar() {
+        if (checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) chooseCalendars()
+        else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 301)
+    }
     private fun showSourceDetail(row: SourceRow) {
         val source = row.source
-        SecondaryUi.text(list, MoteI18n.text(if (source.syncContinuously) "持续同步" else "单次导入"), muted = true)
+        (window.decorView.findViewWithTag<android.view.View>("detail-title") as? TextView)?.text = source.name
+        SecondaryUi.text(list, MoteI18n.text("这台手机") + " · " + MoteI18n.text(if (source.kind == "local-calendar") "日历来源" else if (source.syncContinuously) "同步文件夹" else "单次导入"), muted = true)
         SecondaryUi.text(list, source.name, heading = true)
-        if (!source.uri.isNullOrBlank()) SecondaryUi.text(list, source.uri, muted = true)
-        SecondaryUi.action(list, MoteI18n.text("编辑设置")) { edit(source) }.tag = "source-edit"
-        SecondaryUi.action(list, MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源")) {
+        val state = SecondaryUi.column(list, card = true)
+        SecondaryUi.text(state, row.presentationStatus).apply { tag = "source-primary-status"; accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        val sourceActions = SecondaryUi.actions(state)
+        SecondaryUi.action(sourceActions, MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源")) {
             work(MoteI18n.text("正在保存来源设置…")) {
                 check(localSources().setEnabled(source.id, !source.enabled)) { MoteI18n.text("所选文件不可用") }
                 SourceWork.schedule(applicationContext, true)
             }
         }.tag = "source-toggle"
-        val context = SecondaryUi.column(list, card = true)
-        SecondaryUi.text(context, MoteI18n.text("资料说明"), heading = true)
+        MoteUi.action(SecondaryUi.action(sourceActions, MoteI18n.text("编辑设置")) { edit(source) }, MoteUi.ButtonRole.TEXT).tag = "source-edit"
+        val context = SecondaryUi.disclosure(list, MoteI18n.text("资料说明"), "source-description", row.contextConflict)
         SecondaryUi.text(context, source.description.ifBlank { MoteI18n.text("尚未填写") }, muted = source.description.isBlank())
         SecondaryUi.text(context, if (source.contextDirty) MoteI18n.text("资料说明保存在本机，等待中央确认。") else if (source.contextVersion > 0) MoteI18n.text("资料说明已获中央确认，版本 {0}。", source.contextVersion) else MoteI18n.text("资料说明会作为这个来源的背景保存。"), muted = true)
         if (row.contextConflict) SecondaryUi.action(context, MoteI18n.text("解决资料说明冲突")) {
             if (source.kind == "local-files") edit(source) else resolveCalendarContext(source)
         }.tag = "source-context-conflict"
-        SecondaryUi.text(list, row.summary.removePrefix("\n${source.name}\n"), muted = true)
+        val syncDetails = SecondaryUi.disclosure(list, MoteI18n.text("来源同步状态"), "source-sync-details")
+        if (!source.uri.isNullOrBlank()) SecondaryUi.text(syncDetails, source.uri, muted = true)
+        SecondaryUi.text(syncDetails, row.summary.removePrefix("\n${source.name}\n"), muted = true)
         SecondaryUi.text(list, MoteI18n.text("本机内容"), heading = true)
         if (source.binaryFiles() && row.local.isEmpty()) SecondaryUi.text(list, MoteI18n.text("还没有本机记录"), muted = true)
         row.local.forEach { item ->
