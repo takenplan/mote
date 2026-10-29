@@ -1,5 +1,6 @@
+import {FirstUseHome,type FirstDeviceData} from './FirstUseHome';
 import {OriginalNoteRow,type OwnerBrowsePage} from './owner-library-browse';
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {featureRequirementsAvailable} from '@mote/shared';
 import {DiscoveryLink,DiscoveryProvider,useDiscoveryState} from './DiscoveryLink';
 import {getLocale,moteText} from '@mote/shared/i18n';
@@ -12,7 +13,6 @@ import {useResource} from './useResource';
 import {HomeMaterialRow,type RecentMaterial} from './HomeMaterialRow';
 import {ownerQuestionListPath} from './owner-question-route';
 
-type FirstDeviceData={state:'waiting'|'unverified'|'received_unavailable'|'ready';originalAvailable:boolean;checkedDevices:number;checkedRecords:number;windowLimited:boolean;candidate?:{id:string;deviceId:string;deviceName:string;source:string;capturedAt:string;receivedAt:string}};
 type Conversation={id:string;title:string;updatedAt:string;turnCount:number};
 
 export function Overview({api,status,devices,insights,onPage,onOpen}: {
@@ -34,7 +34,10 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  const questions=useResource<{items:{id:string}[];nextCursor?:string|null}>(api,canQuestions?ownerQuestionListPath():null);
  const actions=useResource<{items:{status:string;resolution?:string;event?:{start?:string|null;end?:string|null}}[];nextCursor:number|null}>(api,canActions?'/api/actions?cursor=0':null);
  const todos=useResource<{items:{status:string}[];nextCursor:string|null}>(api,canTodos?'/api/todos?status=open':null);
- const firstData=useResource<FirstDeviceData>(api,'/api/devices/first-data',undefined,status.storage?.captures);
+ const firstData=useResource<FirstDeviceData>(api,'/api/devices/first-data',undefined,String(status.storage?.captures??0)+':'+devices.map(device=>device.deviceId).sort().join(','));
+ const [firstUseJourney,setFirstUseJourney]=useState<Api|null>(null);
+ useEffect(()=>{if(firstData.error===undefined&&!firstData.loading&&firstData.data&&['waiting','unverified'].includes(firstData.data.state)&&catalog.error===undefined&&catalog.data?.items.length===0)setFirstUseJourney(api);},[api,firstData.data,firstData.error,firstData.loading,catalog.data,catalog.error]);
+ const firstUse=firstUseJourney===api;
  const checked=!firstData.loading&&!firstData.error?firstData.data:undefined;
  const retained=!firstData.error?firstData.data:undefined;
  const sample=retained?.candidate;
@@ -72,6 +75,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
   </section>;
  return <DiscoveryProvider state={availability}><div className="home-page central-overview">
   <div className="page-heading home-heading"><h1>{moteText('首页')}</h1><div className="home-heading-meta"><time>{new Date().toLocaleDateString(getLocale(),{month:'long',day:'numeric'})} · {new Date().toLocaleDateString(getLocale(),{weekday:'short'})}</time><button className="text-button" onClick={()=>onPage('activity')}>{moteText('后台活动')}<ArrowRight size={13}/></button></div></div>
+  {firstUse?<FirstUseHome api={api} data={firstData.data} error={firstData.error} loading={firstData.loading} configured={status.agent.configured} onRefresh={firstData.refresh} onPage={onPage} onOpen={onOpen}/>:<>
   {!foldReceipt&&firstReceipt}
   <form className="home-find" role="search" aria-label={moteText('搜索资料或提问')} onSubmit={event=>{event.preventDefault();if(query.trim())window.location.hash='/search?query='+encodeURIComponent(query.trim());}}>
    <input aria-label={moteText('搜索资料或提问')} placeholder={moteText('想找什么，或问点什么…')} maxLength={500} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className="button primary">{moteText('搜索')}</button><button type="button" className="button ghost" disabled={!hasPage('ask')} onClick={()=>{window.location.hash='/ask'+(query.trim()?'?questionDraft='+encodeURIComponent(query.trim()):'');}}>{moteText('问一问')}<ArrowUpRight size={13}/></button>
@@ -98,5 +102,6 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
    {conversations.error!==undefined?<p className="home-read-error" role="alert">{errorMessage(conversations.error)}<button className="text-button" onClick={conversations.refresh}>{moteText('重新读取')}</button></p>:conversations.loading&&!conversations.data?<p role="status" className="home-empty">{moteText('正在读取…')}</p>:!recentConversations?.length&&<button className="text-button home-empty" onClick={()=>onPage('ask')}>{moteText('开启一段对话')}<ArrowRight size={13}/></button>}
   </section>}
   <details className="home-extensions"><summary>{moteText('更多上下文视图')}</summary>{foldReceipt&&firstReceipt}<FeatureHome api={api} onPage={onPage}/></details>
+ </>}
  </div></DiscoveryProvider>;
 }
