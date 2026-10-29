@@ -22,7 +22,7 @@ class PrimaryNavigationTest {
     }
 
     @Test fun groupedNavigationKeepsEveryExistingCentralCapabilityReachable() {
-        val registered = setOf("overview", "archive", "ask", "notes", "materials", "coding", "timeline", "files", "memories", "insights",
+        val registered = setOf("overview", "activity", "archive", "ask", "notes", "materials", "coding", "timeline", "files", "memories", "insights",
             "actions", "agentView", "sources", "devices", "connections", "lark", "statistics", "processing", "plugins", "settings",
             "usage", "vault", "developer", "about", "imports", "help")
         val grouped = MoteNavigation.groups.flatMap { it.pages }

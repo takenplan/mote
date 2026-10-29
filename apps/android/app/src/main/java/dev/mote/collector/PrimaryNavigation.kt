@@ -20,7 +20,7 @@ object MoteNavigation {
     val libraryBrowsePages = libraryPages.filterNot { it == "coding" }
     val groups = listOf(
         MoteNavigationGroup("资料库", libraryBrowsePages),
-        MoteNavigationGroup("首页", listOf("overview", "actions")),
+        MoteNavigationGroup("首页", listOf("overview", "actions", "activity")),
         MoteNavigationGroup("来源", listOf("sources", "devices", "connections", "lark")),
         MoteNavigationGroup("管理与维护", listOf("statistics", "processing", "plugins", "settings", "usage", "vault", "developer", "about", "help"))
     )

@@ -59,7 +59,7 @@ class NativeUiPackInstrumentedTest {
     }
     private fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
     private fun visible(activity: Activity) = views(activity.window.decorView).filter { it.isShown }
-    private fun click(activity: Activity, text: String) = visible(activity).filterIsInstance<TextView>().first { it.isClickable && it.text.toString() == MoteI18n.text(text) }.performClick()
+    private fun click(activity: Activity, text: String) = visible(activity).filterIsInstance<TextView>().first { it.isClickable && (it.text.toString() == MoteI18n.text(text) || it.contentDescription?.toString() == MoteI18n.text(text)) }.performClick()
     private fun <T : Activity> await(scenario: ActivityScenario<T>, description: String, check: (T) -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + 20000
         while (SystemClock.elapsedRealtime() < deadline) {
@@ -177,7 +177,7 @@ class NativeUiPackInstrumentedTest {
             scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(question); click(activity, "发送") }
             await(scenario, "Generated deterministic agent answer is actually archived") { idle(it) && visible(it).filterIsInstance<TextView>().any { row -> row.text.contains("Generated native answer") } && visible(it).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.isEmpty() } }
             val draft = "Generated unsent Ask draft remains private"
-            scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(draft); activity.openGeneratedMenu(); visible(activity).single { it.tag == "menu:采集与同步" }.performClick(); click(activity, "活动") }
+            scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(draft); activity.openMoteLocalPage("ACTIVITY") }
             await(scenario, "The primary Activity loads product receipts") { visible(it).filterIsInstance<TextView>().any { row -> row.isClickable && row.text == "最近完成" } }
             scenario.onActivity { click(it, "最近完成") }
             await(scenario, "Completed product work appears in Activity") { visible(it).filterIsInstance<TextView>().any { row -> row.text.toString() == question } }
@@ -202,6 +202,36 @@ class NativeUiPackInstrumentedTest {
             scenario.onActivity { old = it; NativeUiPacks.registry.bind(binding) }
             await(scenario, "Live provider replacement preserves Ask, owner session and draft") { activity -> activity === old && visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() } == emptyList<String>() && visible(activity).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.toString() == draft } }
             scenario.onActivity { assertTrue(visible(it).any { row -> row.tag == "central-title" && (row as? TextView)?.text == "问一问" }); assertFalse(Settings(it).enabled); render(it, "replacement-ask") }
+        }
+        CentralSession.get(context).signOut()
+    }
+    @Test fun existingWorkIsReachableFromTheSecondaryCentralMenuAndReturnsToTheDraft() {
+        val args=InstrumentationRegistry.getArguments(); val origin=requireNotNull(args.getString("nativeUiOrigin")); val owner=requireNotNull(args.getString("nativeUiOwner"))
+        require(origin.startsWith("http://127.0.0.1:"))
+        Settings(context).save(Settings(context).read().copy(server=origin,token="",debugHttp=true,authSignedOut=false),confirmCentralEndpoint=true)
+        CentralSession.get(context).select(origin); CentralSession.get(context).signIn(origin,owner)
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","ASK")).awaitMainUi().use { scenario ->
+            await(scenario,"Ask ready") { visible(it).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.isEnabled } }
+            val monitor=instrumentation.addMonitor(CentralActivity::class.java.name,null,false)
+            try {
+                scenario.onActivity { a -> visible(a).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated draft before Activity"); a.openGeneratedMenu(); visible(a).single { it.tag == "menu:中央工作台" }.performClick() }
+                val central=instrumentation.waitForMonitorWithTimeout(monitor,10_000) as CentralActivity
+                fun ready(label:String,check:()->Boolean) { val until=SystemClock.elapsedRealtime()+20_000; while(SystemClock.elapsedRealtime()<until) { var done=false; instrumentation.runOnMainSync { done=check() }; if(done)return; Thread.sleep(40) }; fail(label) }
+                ready("Central overview loaded") { !central.isWorking && visible(central).filterIsInstance<TextView>().any { it.isClickable && it.text.toString() == "更多" } }
+                instrumentation.runOnMainSync { click(central,"更多") }
+                fun menu(label: String) { instrumentation.runOnMainSync {
+                    val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<android.widget.ListView>().single { it.isShown }
+                    val index=(0 until list.adapter.count).single { list.adapter.getItem(it).toString() == label }
+                    list.performItemClick(list.getChildAt(index),index,list.adapter.getItemId(index))
+                } }
+                menu("首页"); menu("活动")
+                ready("Existing work list loads through its visible menu") { !central.isWorking && visible(central).filterIsInstance<TextView>().any { it.text.toString() == "最近完成" && it.isClickable } }
+                instrumentation.runOnMainSync { render(central,"activity-secondary-menu"); visible(central).single { it.contentDescription == "返回上级" }.performClick() }
+                ready("Native header returns to Central overview") { !central.isWorking && visible(central).filterIsInstance<TextView>().any { it.text.toString() == "中央工作台" } }
+                instrumentation.runOnMainSync { central.finish() }
+            } finally { instrumentation.removeMonitor(monitor) }
+            scenario.onActivity { a -> a.openGeneratedHome(); visible(a).single { it.tag == "home-ask-action" }.performClick() }
+            await(scenario,"Back returns to the same Ask draft") { visible(it).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.toString() == "Generated draft before Activity" } }
         }
         CentralSession.get(context).signOut()
     }
