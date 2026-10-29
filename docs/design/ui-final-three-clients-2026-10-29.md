@@ -312,7 +312,7 @@ D34 的旧调色属于实施偏差，本次按所有者要求恢复源颜色。�
 
 Web 的 Memory 管理有 22 图分组证据；插件有 28 图及准备文案 5 图；Actions/Todos/H11 有 `5c38bd28` 的真实隔离 Central/构建后 Web 45 图，后续错误→返回的小修仅以 `45d4fd0d` 的相关 5 图重测，不将旧 45 图重新称为新 head 通过。H11 后端见已整合的 `56d9a17c`，Web 见 `4ea00dc9` 与错误修复 `dd302658`；报告中的独立工作树 SHA 保留原值，不冒充 `398b1b1b` 重跑。受控 Agent、release/worker、HTTP 设备回执与原生仪器证据各按实际边界记录，没有代替最终 Terra、真实供应商或物理日历写入。
 
-Mac 最新真实 EventKit helper 的权限为 `granted`，但 `localSourceCount=0`。按所有者本轮范围停止该外部写入子步骤；没有真实 create/write、update、cancel 或相应设备回执通过证据。旧 generated helper/日历 adapter 的成功合同不能覆盖这一限制。发现报告的默认 HTML 安全自然高度已集成；来源引用到宿主统一 reader 的只读桥接由 Mac 模块补齐，目标是保持精确引用与原路返回，最终宿主实测由根回填，尚不记视觉或旅程通过。
+Mac 最新真实 EventKit helper 的权限为 `granted`，但 `localSourceCount=0`。按所有者本轮范围停止该外部写入子步骤；没有真实 create/write、update、cancel 或相应设备回执通过证据。旧 generated helper/日历 adapter 的成功合同不能覆盖这一限制。发现报告的默认 HTML 安全自然高度已集成；来源引用到宿主统一 reader 的只读桥接由报告模块补齐，目标是保持精确引用与原路返回，最终宿主实测由根回填，尚不记视觉或旅程通过。
 
 ### 阶段覆盖：已有证据与剩余状态
 
