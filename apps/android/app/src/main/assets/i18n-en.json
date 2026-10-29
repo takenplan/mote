@@ -1,4 +1,10 @@
 {
+  "回顾生成中": "Review in progress",
+  "找回已有的资料": "Find archived materials",
+  "把这个问题交给 Mote": "Ask Mote this question",
+  "搜索已有资料": "Search archived materials",
+  "查看进度": "View progress",
+  "重试会提交新的提取任务；已取消任务和已有成果保留。": "Retry submits a new extraction task; the cancelled task and existing results are kept.",
   "手动整理记忆": "Manually organize memories",
   "按时间范围提取": "Extract from a time range",
   "选择资料": "Choose material",

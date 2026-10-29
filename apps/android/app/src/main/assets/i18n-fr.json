@@ -1,4 +1,10 @@
 {
+  "回顾生成中": "Génération du bilan en cours",
+  "找回已有的资料": "Retrouver les documents archivés",
+  "把这个问题交给 Mote": "Poser cette question à Mote",
+  "搜索已有资料": "Rechercher dans les documents archivés",
+  "查看进度": "Voir la progression",
+  "重试会提交新的提取任务；已取消任务和已有成果保留。": "Réessayer soumet une nouvelle tâche d’extraction ; la tâche annulée et les résultats existants sont conservés.",
   "手动整理记忆": "Organiser les souvenirs manuellement",
   "按时间范围提取": "Extraire sur une période",
   "选择资料": "Choisir un document",

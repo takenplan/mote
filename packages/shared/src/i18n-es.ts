@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "回顾生成中": "Generando revisión",
+  "找回已有的资料": "Encontrar materiales archivados",
+  "把这个问题交给 Mote": "Hacer esta pregunta a Mote",
+  "搜索已有资料": "Buscar en materiales archivados",
+  "查看进度": "Ver progreso",
+  "重试会提交新的提取任务；已取消任务和已有成果保留。": "Reintentar envía una nueva tarea de extracción; se conservan la tarea cancelada y los resultados existentes.",
   "手动整理记忆": "Organizar recuerdos manualmente",
   "按时间范围提取": "Extraer de un período",
   "选择资料": "Elegir material",
