@@ -47,7 +47,7 @@ test('plugin topic dimensions use supplied exact IDs without replacing or guessi
 test('saving a conversation requires editor confirmation and keeps quoted model output separate from the owner comment',async t=>{
  const {root,d}=await fixture(t),writes:any[]=[];
  const {SaveConversationRecord}=await import('../src/SaveConversationRecord');
- const api={request:async(path:string,init:RequestInit)=>{writes.push({path,body:JSON.parse(String(init.body))});return {id:'11111111-1111-4111-8111-111111111111'};}} as unknown as Api;
+ const api={request:async(path:string,init:RequestInit)=>{writes.push({path,body:JSON.parse(String(init.body))});return {id:writes.at(-1).body.id};}} as unknown as Api;
  await act(async()=>root.render(React.createElement(SaveConversationRecord,{api,conversationId:'generated-conversation',messageId:'generated-message',question:'Generated question',answer:'Generated untrusted model output',onOpen:()=>{}})));
  assert.equal(writes.length,0);await act(async()=>d.querySelector<HTMLButtonElement>('button')!.click());assert.equal(writes.length,0);assert.match(d.querySelector('details')!.textContent!,/Generated untrusted model output/);
  await act(async()=>d.querySelector('form')!.dispatchEvent(new d.defaultView!.Event('submit',{bubbles:true,cancelable:true})));
