@@ -2864,13 +2864,13 @@ export const guideSections:GuideSection[] = [
               "退出登录"
             ],
             "target": {
-              "pageId": "about",
-              "href": "#/preferences",
+              "pageId": "localPreferences",
+              "href": "#/preferences/session",
               "collectionId": null,
               "categoryId": null,
-              "label": "设置",
+              "label": "外观、语言与会话",
               "path": "设置 → 当前服务（中央节点）",
-              "where": "页面下方的「当前服务（中央节点）」和「登录会话有效期」；未登录时由目标页进入登录。"
+              "where": "在「当前服务」查看连接与浏览器登录保留时间；未登录时由目标页进入登录。"
             },
             "otherTargets": [],
             "setup": "需要当前中央节点的管理令牌；登录只连接当前网页所属的中央节点。",
@@ -3197,13 +3197,13 @@ export const guideSections:GuideSection[] = [
               "选择中文或 English"
             ],
             "target": {
-              "pageId": "about",
-              "href": "#/preferences",
+              "pageId": "localPreferences",
+              "href": "#/preferences/session",
               "collectionId": null,
               "categoryId": null,
-              "label": "设置",
+              "label": "外观、语言与会话",
               "path": "设置 → 语言",
-              "where": "设置入口顶部的语言选择器。"
+              "where": "在「此浏览器」选择界面语言。"
             },
             "otherTargets": [],
             "setup": null,

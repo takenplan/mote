@@ -155,6 +155,7 @@ test('current featured Memory detail offers the manual consolidation entry, whil
  await act(async()=>root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}})));
  assert.equal(d.querySelector('#manual-memory-integration'),null,'no full form above the list before selecting a current card');
  await act(async()=>d.querySelector('.workspace-select')!.dispatchEvent(new window.MouseEvent('click',{bubbles:true})));
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='更多')!.click());
  assert.ok(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'));
  assert.match(d.querySelector('#manual-memory-integration')!.textContent!,/仅选择此卡作为整合起点/);
  assert.equal(Array.from(d.querySelectorAll('#manual-memory-integration button')).find(b=>b.textContent==='整理这条记忆')!.disabled,false,'the current feature default is configured');
@@ -189,8 +190,9 @@ test('current multi-block Material offers one bounded extraction route; stale an
  const {root,document:d}=await fixture(t),id='mat_'+'a'.repeat(64),revision='b'.repeat(64),ref=`material:${id}@${revision}`;
  const material:Material={id,ref,revision,kind:'mote.file',schemaVersion:1,title:'Generated two-block material',sequence:1,textLength:30,blockCount:2,coverage:{state:'complete'},origin:{sourceId:'generated'},retention:{original:'retained'}};
  const anchors=[ids[0],ids[1]];let current={...material,memorySource:{status:'ready' as const,evidenceIds:anchors}};
- const api=apiWith(path=>path.includes('/source-view?')?{material:current,items:[{blockId:'generated',type:'text',text:'Generated formal body',offset:0,total:21,continued:false}],next:null}:path.includes('/read?')?{material,text:'Generated formal body',textRange:{offset:0,total:21,nextOffset:null}}:current);
+ const api=apiWith(path=>path.includes('/members?')?{items:[],nextOffset:null}:path==='/api/sources'?{items:[]}:path.includes('/source-view?')?{material:current,items:[{blockId:'generated',type:'text',text:'Generated formal body',offset:0,total:21,continued:false}],next:null}:path.includes('/read?')?{material,text:'Generated formal body',textRange:{offset:0,total:21,nextOffset:null}}:current);
  await act(async()=>root.render(React.createElement(MaterialDetail,{api,material,onOpen:()=>{}})));
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='来源与处理')!.click());
  const link=d.querySelector<HTMLAnchorElement>('.material-detail a[href*="memoryMaterial="]');assert.ok(link);
  assert.match(link.href,/memoryMaterial=material%3Amat_[a-f0-9]{64}%40[b]{64}/);
  current={...current,coverage:{state:'pending'},memorySource:{status:'waiting',evidenceIds:[]}} as typeof current;

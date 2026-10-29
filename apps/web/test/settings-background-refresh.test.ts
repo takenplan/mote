@@ -67,12 +67,12 @@ test('entering model profiles with an existing settings revision reads once and 
  const api=apiWith((path,init)=>{assert.equal(path,'/api/model-settings');reads.push(init!.signal as AbortSignal);return reads.length===1?initial.promise:refresh.promise;});
  const render=(revision:number,selectedApi=api)=>root.render(React.createElement(ModelProfiles,{api:selectedApi,revision,onApplied:()=>{}}));
  await act(async()=>render(5));assert.equal(reads.length,1);assert.equal(reads[0].aborted,false);
- await act(async()=>initial.resolve(modelView()));const details=d.querySelector('.deployment-provider')!;assert.ok(details);
+ await act(async()=>initial.resolve(modelView()));await act(async()=>d.querySelector<HTMLButtonElement>('[data-model-profile]')!.click());const details=d.querySelector('.deployment-provider')!;assert.ok(details);
  await act(async()=>render(6));assert.equal(reads.length,2);assert.equal(reads[1].aborted,false);assert.equal(d.querySelector('.deployment-provider'),details);
  await act(async()=>refresh.resolve({...modelView(),revision:2}));assert.equal(reads.length,2);
  const next=apiWith((path,init)=>{assert.equal(path,'/api/model-settings');nextReads.push(init!.signal as AbortSignal);return nextNode.promise;});
  await act(async()=>render(6,next));assert.equal(nextReads.length,1);assert.equal(nextReads[0].aborted,false);assert.equal(d.querySelector('.deployment-provider'),null);
- await act(async()=>nextNode.resolve(modelView()));assert.ok(d.querySelector('.deployment-provider'));
+ await act(async()=>nextNode.resolve(modelView()));assert.equal(d.querySelector('.deployment-provider'),null,'a new owner begins at the connections list');await act(async()=>d.querySelector<HTMLButtonElement>('[data-model-profile]')!.click());assert.ok(d.querySelector('.deployment-provider'));
 });
 
 test('an empty source library keeps its explanation through source-list and item-page revalidation',async t=>{

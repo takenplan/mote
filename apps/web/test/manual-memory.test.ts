@@ -98,13 +98,13 @@ test('Memory deletion retains accurate external clearing status after the card d
  },setAgentTimeout:()=>{}} as Api;
  const render=(owner=api)=>act(async()=>root.render(React.createElement(Memories,{api:owner,range:{},onOpen:()=>{}})));
  const click=(text:string)=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent===text||button.querySelector('strong')?.textContent===text)!.click());
- await render();await click(memory.title);await click('删除记忆');await click('确认删除');
+ await render();await click(memory.title);await click('更多');await click('删除记忆');await click('确认删除');
  assert.match(d.querySelector('.notice[role=status]')!.textContent!,/外部清除仍待确认/);
  assert.equal(d.querySelectorAll('.workspace-select').length,0);
  assert.doesNotMatch(d.querySelector('.notice[role=status]')!.textContent!,/已物理擦除/);
  const other={...api,request:api.request.bind(api)} as Api;await render(other);
  assert.equal(d.querySelector('.notice[role=status]'),null,'a previous node receipt does not appear under a new connection');
- deleted=false;receipt={deleted:1,externalErase:'acknowledged',physicalEraseVerified:false};await render(api);await click(memory.title);await click('删除记忆');await click('确认删除');
+ deleted=false;receipt={deleted:1,externalErase:'acknowledged',physicalEraseVerified:false};await render(api);await click(memory.title);await click('更多');await click('删除记忆');await click('确认删除');
  assert.match(d.querySelector('.notice[role=status]')!.textContent!,/已确认移除当前记录，物理擦除尚未核验/);
 });
 

@@ -1,3 +1,4 @@
+import {associateChatScope,clearChatReloadDraft} from './chat-drafts';
 import {installGlobalErrorLogging,log} from './logger';
 import { ClientLoginApproval } from './ClientLoginApproval';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
@@ -147,7 +148,7 @@ function App() {
   const [timelineRevision, setTimelineRevision] = useState(0);
   const clearConnection = useCallback(() => {
     connectionGeneration.current++;
-    clearSession();
+    clearSession();clearChatReloadDraft();
     log('auth.session_cleared','info');
     setPeriod("week");
     setConnection(null);
@@ -206,6 +207,7 @@ function App() {
     },
     [connection, unauthorized],
   );
+  useEffect(()=>{if(api)associateChatScope(api,connection?.viewScope);},[api,connection?.viewScope]);
   useEffect(() => {
     if (!api || verified) return;
     const controller = new AbortController();

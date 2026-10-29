@@ -1,3 +1,5 @@
+import {originalReferenceRoute,rememberOriginalReturn} from './ask-original-reference';
+import {confirmNavigation} from './unsaved';
 import {ActionResults} from './ActionResults';
 import {NoteOrigin,NoteAttachments} from './NoteOrigin';
 import {StructuredObservation} from './StructuredObservation';
@@ -468,6 +470,7 @@ export function EvidenceDialog({
             <X size={20} />
           </button>
         </div>
+        {capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}
         {capture?.blobHash&&capture.revisionState!=='historical'&&<ImageProgress api={api} id={capture.id}/>}
         {capture?.revisionState==='historical'&&<p role="status">{moteText('历史证据，仅用于核对当时的内容。')}</p>}
         {presentation?.nativeFile && <FileDetail api={api} id={presentation.nativeFile.captureId} startMs={presentation.nativeFile.startMs} onOpen={onOpen}/>}

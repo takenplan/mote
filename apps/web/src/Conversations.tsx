@@ -1,3 +1,4 @@
+import {unsentDrafts,type ChatAttachment} from './chat-drafts';
 import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
 import {SaveConversationRecord} from './SaveConversationRecord';
@@ -42,8 +43,6 @@ interface Conversation extends ConversationSummary {turns: ConversationTurn[];re
 interface OlderTurns {api:Api;id:string;revision?:number;turns:ConversationTurn[];nextCursor:string|null}
 interface HistoryPage {items: ConversationSummary[]; nextCursor?: string | null}
 
-type ChatAttachment={id:string;name:string;mimeType:string};
-const unsentDrafts=new WeakMap<Api,{question:string;attachments:ChatAttachment[]}>();
 function createQuestionDraft(onChange?:(question:string)=>void){
  let value='';const listeners=new Set<()=>void>();
  return {
@@ -124,7 +123,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(errorMessage(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{draftOwner.current=api;const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+  useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
   useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');const incoming=draftQuery.get('questionDraft');if(incoming!==null){selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
@@ -157,6 +156,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
         if(current.status==='running'){setBusy(true);timer=setTimeout(()=>void update(),1000);return;}
         if((current.status==='completed'||current.status==='failed')&&current.conversationId){
           setSelectedId(current.conversationId);
+          window.history.replaceState(null,'','#/ask?'+new URLSearchParams({conversation:current.conversationId}));window.dispatchEvent(new window.Event('mote:workspace-state'));
           historyRequest.current?.abort();setLoadingPage(false);setHistoryError('');
           resources(api).invalidate(key=>key.startsWith('/api/conversations'));
           if(current.status==='completed'){setQuestion('');setAttachments([]);}
@@ -213,6 +213,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     const controller = new AbortController(); operation.current = controller;
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
     try {
+      if(!conversation)await reference.verify(controller.signal);
+      if(controller.signal.aborted)return;
       const id=crypto.randomUUID();
       const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null}:{})}:reference.origin?{anchorEvidenceIds:reference.ids}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
       let accepted:QueryRun;
@@ -244,7 +246,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if(!deviceId){deviceId=`web:${crypto.randomUUID()}`;localStorage.setItem('mote.chat.device.v1',deviceId);}
       for(const file of selected){
         const id=await uploadChatImage(api,file,deviceId,controller.signal);
-        setAttachments(current=>current.some(item=>item.id===id)?current:[...current,{id,name:file.name,mimeType:file.type}]);
+        if(controller.signal.aborted||draftOwner.current!==api||attachmentRequest.current!==controller)return;
+        updateAttachments(current=>{if(controller.signal.aborted||draftOwner.current!==api)return current;const next=current.some(item=>item.id===id)?current:[...current,{id,name:file.name,mimeType:file.type}];unsentDrafts.set(api,{question:draft.getSnapshot(),attachments:next});return next;});
       }
     }catch(e){if(!controller.signal.aborted)setError(errorMessage(e));}
     finally{if(!controller.signal.aborted){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
@@ -277,7 +280,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
       <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
-      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{moteText('参考原件暂不可用，请清除参考后继续。')}</span>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}{reference.origin.kind==='memory'&&<a className="text-button" href={'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id)}>{moteText('返回记忆')}</a>}<button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
+      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):reference.origin.kind==='material'?moteText('参考这份资料'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{reference.error}</span>:reference.origin.kind==='material'?<button className="text-button" onClick={()=>onOpen(reference.origin!.id)}>{moteText('查看参考资料')}</button>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<a className="text-button" href={reference.origin.kind==='memory'?'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id):reference.returnRoute??'#/library?view=materials&selected='+encodeURIComponent(reference.origin.kind==='material'?reference.origin.id:'capture:'+reference.origin.id)}>{reference.origin.kind==='memory'?moteText('返回记忆'):moteText('返回资料')}</a><button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
       {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
       {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
       {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}

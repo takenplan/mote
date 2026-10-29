@@ -219,3 +219,15 @@ for (const kind of ['anchor', 'strict'] as const) test(`a restored ${kind} conve
   assert.equal(submissions[1].input.anchorEvidenceIds, null);
   assert.equal(submissions[1].input.evidenceIds, null);
 });
+
+test('an in-flight chat upload and drafts remain owned by their authenticated API across a node switch',async t=>{
+ const {root,d,tick}=await fixture(t,'#/ask?questionDraft=Generated%20owner%20A%20draft');let finish!:(value:unknown)=>void,signal:AbortSignal|undefined,sourceId='';const pending=new Promise(resolve=>finish=resolve),oldReads:string[]=[];
+ const oldApi=apiWith((path,init)=>{oldReads.push(path);if(path==='/api/sources'&&init?.method==='POST'){sourceId=JSON.parse(String(init.body)).id;signal=init.signal as AbortSignal;return pending;}return {items:[]};});
+ const currentApi=apiWith(()=>({items:[]}));
+ const view=(api:Api)=>React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:(answer:Answer)=>answer.answer});
+ await act(async()=>root.render(view(oldApi)));assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.value,'Generated owner A draft');
+ const picker=d.querySelector<HTMLInputElement>('.conversation-content input[type=file]')!;Object.defineProperty(picker,'files',{configurable:true,value:[new File(['generated'],'generated.png',{type:'image/png'})]});await act(async()=>picker.dispatchEvent(new window.Event('change',{bubbles:true})));assert.ok(signal);
+ await act(async()=>{location.hash='#/ask?questionDraft=Generated%20owner%20B%20draft';root.render(view(currentApi));});assert.equal(signal!.aborted,true);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.value,'Generated owner B draft');
+ await act(async()=>finish({id:sourceId}));await tick();assert.equal(d.querySelectorAll('.chat-attachment').length,0);assert.equal(oldReads.some(path=>path.startsWith('/api/file-sync/')),false,'an aborted old owner upload cannot continue admission');assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.value,'Generated owner B draft');
+ await act(async()=>root.render(view(oldApi)));assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.value,'Generated owner A draft');assert.equal(d.querySelectorAll('.chat-attachment').length,0);
+});
