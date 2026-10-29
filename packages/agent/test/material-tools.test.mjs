@@ -38,6 +38,17 @@ test('material catalog discloses only metadata and pins exact returned revisions
   assert.equal(bridge.records.has(id),false,'material identity is not an original citation');
 });
 
+test('an owner-selected exact Material is a navigation entrypoint without preauthorizing originals or another revision',async t=>{
+ const {bridge,call}=await fixture(t,baseReader,{question:'Generated owner-selected Material',anchorMaterialRef:ref});
+ assert.equal((await call('evidence',{ids:[original.id]})).status,400);
+ assert.equal((await call('material_read',{ref:ref.replace(/b$/,'c')})).status,400);
+ const read=await call('material_read',{ref});assert.equal(read.status,200);assert.equal(read.body.data.text,text);
+ assert.equal(bridge.records.has(id),false,'a selected Material locator is never original citation evidence');
+ assert.equal((await call('evidence',{ids:[original.id]})).status,200);
+ const bounded=await fixture(t,baseReader,{question:'Generated strict scope',anchorMaterialRef:ref,evidenceIds:[original.id]});
+ assert.notEqual((await bounded.call('material_read',{ref})).status,200,'a navigation hint cannot expand strict original bounds');
+});
+
 test('material catalog and read enforce host time and device scope',async t=>{
   const outside={...material,origin:{...material.origin,deviceId:'other-device'}};
   const {call}=await fixture(t,{...baseReader,materialCatalog:async()=>({items:[outside],nextCursor:null})});

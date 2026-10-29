@@ -323,7 +323,7 @@ export async function createContextToolSession(
   // Reference locators may be expanded through the normal current-authorized reader.
   // They contain no delivered text and cannot support citations before a read.
   const discovered=new Set([...records.keys(),...(!restricted?bounds.anchorEvidenceIds??[]:[])]);
-  const pinnedMaterials=new Set<string>();
+  const pinnedMaterials=new Set<string>(!restricted&&bounds.anchorMaterialRef&&pinnedMaterialRef.test(bounds.anchorMaterialRef)?[bounds.anchorMaterialRef]:[]);
   let deliveredCharacters=JSON.stringify(seedEvidence).length;
   const deliveredRanges=seedEvidence.flatMap(record=>{const span=record.textRange as {start:number;end:number};return span.end>span.start?[{id:record.id,offset:span.start,length:span.end-span.start}]:[];});
   const expanded=new Set<string>();
@@ -506,7 +506,7 @@ export async function createContextToolSession(
         trace.push({tool,arguments:effective,count:items.length});reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:items.length});res.end(serialized);return;
       }
       if(tool==='material_read'){
-        if(Object.keys(args).some(key=>!['ref','offset','length'].includes(key))||typeof args.ref!=='string'||!pinnedMaterialRef.test(args.ref)||!pinnedMaterials.has(args.ref))throw hostError('Use an exact pinned material ref returned by material_catalog in this run');
+        if(Object.keys(args).some(key=>!['ref','offset','length'].includes(key))||typeof args.ref!=='string'||!pinnedMaterialRef.test(args.ref)||!pinnedMaterials.has(args.ref))throw hostError('Use the owner-selected pinned material ref or one returned by material_catalog in this run');
         const offset=args.offset??0,length=args.length??4000;
         if(!Number.isSafeInteger(offset)||Number(offset)<0||!Number.isSafeInteger(length)||Number(length)<1||Number(length)>12000)throw hostError('Invalid material read range');
         if(!reader.materialRead)throw hostError('Material reading is unavailable');

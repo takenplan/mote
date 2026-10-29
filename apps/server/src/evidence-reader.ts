@@ -380,6 +380,12 @@ export class EvidenceReader implements CaptureRead,CaptureContextRead,SourceFile
     }
     return members.length?{material,members}:undefined;
   }
+  /** A selected locator is metadata only; actual pages retain normal read gates. */
+  queryMaterialReference(ref:string,scope:Range={},policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy):boolean {
+    const scoped=this.scopedMaterial(ref,scope);
+    return Boolean(scoped&&this.materials?.get(scoped.material.id)?.ref===ref&&
+      this.materialExposure(scoped.material,'discover',policy)&&this.materialExposure(scoped.material,'expand',policy));
+  }
   materialCatalog(args:Range&{sourceId?:string;kind?:string;query?:string}={}){
     if(!this.materials)return {items:[],nextCursor:null};
     const page=this.materials.list({query:args.query,sourceId:args.sourceId,kind:args.kind,deviceId:args.deviceId,after:args.after,before:args.before,limit:args.limit,cursor:args.cursor});

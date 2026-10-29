@@ -10,6 +10,10 @@ The owner authorizes implementation of the UI, strict comparison, draft PRs, ind
 
 In this continuation the owner additionally approved two concrete gaps after a plain-language explanation: read-only inspection of permissions for the configured Chrome origins, and truthful partial/uncertain Mac backup-import results. The reply was “两处都按这个方案补齐（推荐）”. These narrow H09/H07 additions preserve existing permissions, saves and deduplication; they do not authorize automatic permission grants/retries or new recovery transactions/checkpoints/rollback policies.
 
+The owner later directed this task to use the original conversation directly and stop relying on the derived website. Continue from the conversation's final decisions and its accepted prototype/images. Website login is no longer a dependency; earlier publication-provenance checks remain historical evidence only.
+
+The owner also approved H10 with “补齐整份资料的版本引用（推荐）” after the existing 30-UUID limit and the bounded exact-version proposal were explained. Add a single nullable `anchorMaterialRef` to the current query input and conversation scope, mutually exclusive with strict evidence IDs and original-reference IDs. Preserve request identity, inheritance and explicit clearing; do not truncate a long Material to its first 30 blocks.
+
 ## Decision
 
 Central Web remains the complete archive and management workspace. Preserve the sidebar and top bar, original-first reading, separate materials and memories, input sources and outward AI access. Keep quick note in the global top bar; saving or collapsing returns to the same page, reading position and unsent question. The same record uses the same detail from library, source or citation, with an origin-aware return path.
@@ -37,6 +41,8 @@ Chrome's recheck uses the authenticated local bridge to inspect only the saved e
 The owner library must show a successfully saved original note even before any model-derived Material exists. The owner-only `/api/library/browse` read projection merges existing captures and published Materials without adding storage, synthetic summaries or a model task. Its signed chronological cursor is complete across both existing sources, normalizes equivalent source timestamps, respects current visibility and invalidates on deletion or generation changes. Deduplication is limited to a complete Material whose exact singleton original is the same readable record; uncertain or multi-original lineage remains separate. Existing catalog consumers keep their contract. Reading a note or browsing it never triggers paid processing.
 
 Reader Ask actions use the existing open-query `anchorEvidenceIds` contract with verified readable originals. Opening an Ask action does not submit a question. The draft, uploaded attachments and return origin remain attached to the current owner connection; changing references must not convert derived Memory prose into user-authored question text or a new authorization grant. Historical/unavailable originals must not silently resolve to current replacements.
+
+For a whole Material, H10 uses its exact `material:mat_…@revision` locator instead of expanding block IDs. Admission and preparation validate the selected time/device scope and existing current read exposure. Subsequent model boundaries and publication revalidate the version and exposure; the existing tools retain any narrower child scope and all original/image authorization checks. The locator seeds navigation to `material_read`, supplies no body and is never citation evidence. Readable partial or asset-only Materials retain their existing coverage and modality rules. Actual delivered pages/originals keep existing disclosure lineage. This is a current-format optional field with no new tables, migration, automatic processing, provider selection or pricing policy.
 
 ## Supersession and unchanged contracts
 
