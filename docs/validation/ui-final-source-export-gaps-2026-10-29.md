@@ -29,6 +29,7 @@
 | WEB-S03 | 同上；`/continuity?platform=central&scene=stale#journey/central/ask` 及其引用页 | 旅程「引用对应的资料已更新」→同一历史：问答仍在，提示“引用资料已更新，这是当时的回答。”；点第 2 引用→“这条引用的历史原文暂不可用”“原引用不会改指更新后的正文。”。 | W13 源已见；不能把新正文偷换到旧引用 |
 | MAC-S01 | 同上；`/continuity?platform=mac&scene=stale#mac/ask`、`scene=deleted#mac/ask` | 顶部切 Mac→分别选更新/删除；完整历史问答、轻提示、继续提问保留，引用指向「在 Central 打开」。 | M09/M10 源已见；只取连续性状态，不以本组缺少后续“更多”入口删掉 S38 功能 |
 | MAC-S02 | 同上；Mac 删除场景进入 Central 引用页 | 点第 2 条「原文已删除 · 在 Central 打开」→Central 不可用提示；顶栏「返回 Mac 对话」可返回原会话。 | M10/W13 跨端返回源已见；真实外部浏览器回跳未测 |
+| MAC-S03 | 04:05–04:06；`/?platform=central&scene=previous#mac/home` | 分组「三端界面」→Mac→「＋ 随手记」：标题/关闭、正文、默认折叠的「资料说明（选填）」、先保存在本机、收起和禁用保存；展开资料说明后出现独立输入及“仅用于理解这条记录。”。两态均实际截图查看，浏览器仍为上述 1440×1000、DPR 1。 | M04 随手记默认/展开源已见；保留既有附件能力的产品“更多”、真实原生窗口边框及本机阅读器不属于本条源图覆盖 |
 | PHONE-S01 | 03:42–03:51、03:54–03:55；`/continuity?platform=mac&scene=deleted#phone/ct-evidence` | 切 Android→删除历史仍显示完整回答、提示、引用、保存与续问；点击删除引用后显示原文不可用和两个返回入口；按「返回原对话」成功。 | P17–P19 源已见；query 曾保留 mac，顶部实际选 Android |
 | PHONE-S02 | 03:54–03:55；`/continuity?platform=phone&scene=stale#phone/ask` → `#phone/ct-evidence` | 旅程「引用对应的资料已更新」→完整旧问答与轻提示→第 2 引用→历史原文不可用且不改指新正文→「返回原对话」。工具标题「核对 Android 更新后的历史问答与引用」「记录更新引用提示并进入首次使用来源」。 | P17–P19 更新态源已见；产品未测 |
 | FIRST-S01 | 03:55–03:56；`/first-use?platform=phone&scene=start#phone/home` | 分组「首次使用」→Android→「第一次打开」：先记下一件事、连接、没有自己的 Mote 帮助、采集设置及记录/问一问底栏。工具标题「核对首次使用与原文不可用的源画面」。 | P01/P03/P04 源已见；只取首次使用补充，不取代最终累计日常首页 |
@@ -116,7 +117,7 @@
 | `FW-local-image`；`FW-local-audio`；`FW-local-failed` | 资料处理→图片/录音→本机准备；分别准备/可用/失败恢复。已有图中只显示下载结束或旧技术地址的不能替代完整链路 | W43、W45 |
 | `FW-plugin-recovery`；`FW-plugin-failed`；`FW-plugin-capabilities`；`FW-agent-trace` | final → 插件与方案恢复；默认/准备失败及重试、实际能力、已记录输入。旧Memory设置的相同区域不重导 | W46–W47 |
 | `FW-preferences`；`FW-signin`；`FW-version`；`FW-guide-search`；`FW-guide-empty` | final → 本机偏好与维护/诊断版本/全部功能；退出确认后登录、版本状态、搜索展开与无结果。guide默认态已有 | W49–W50 |
-| `FM-note`；`FM-menu-bar` | final→Mac→日常工作台→随手记。菜单栏真实预览若final无可见入口，使用已接受的 `mote-mac-role-exploration.html`→轻量落点→只用菜单栏；不导“已定工作台”旧优先级作目标 | M04–M05 |
+| `FM-menu-bar` | 随手记默认/说明展开已由 MAC-S03 覆盖，不重复请求。菜单栏真实预览若final无可见入口，使用已接受的 `mote-mac-role-exploration.html`→轻量落点→只用菜单栏；不导“已定工作台”旧优先级作目标 | M05；M04 其余状态仍逐项验 |
 | `FM-content-detail`；`FM-content-empty`；`FM-source-detail` | final→Mac→内容/来源→单项；空或不可读状态只按可见操作导出。6张根页不重导 | M06–M07、M16 |
 | `FM-chat`；`FM-chat-scope`；`FM-save-answer` | Mac历史→会话→范围/引用/保存；Central原文复用FW-reader，不为Mac再复制同一中央画面 | M08–M10 |
 | `FM-add-source`；`FM-file-form`；`FM-folder-form`；`FM-description`；`FM-coding`；`FM-calendar` | 来源→添加→各已有本机来源；展开高级与选填说明。文件选择取消仅在产品实际检查，不要求用户选择个人文件 | M13–M19 |
