@@ -1,3 +1,6 @@
+import sharp from 'sharp';
+import {randomUUID} from 'node:crypto';
+import {PerceptionSettings} from '../src/PerceptionSettings';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
@@ -129,4 +132,21 @@ test('withdrawn owner authority immediately removes the open processing review a
  f.api.request=async(path,init)=>{if(denied&&path==='/api/model-authorization')throw new ApiError('Generated authority withdrawn',403);return real(path,init);};
  await act(async()=>f.root.render(React.createElement(AutomaticProcessing,{api:f.api})));await until(()=>!!button(f.d,'开启自动处理')&&!button(f.d,'开启自动处理').disabled,'automatic control');await click(f.d,'开启自动处理');assert.ok(f.d.querySelector('.automatic-review-dialog'));
  denied=true;await act(async()=>resources(f.api).invalidate(path=>path==='/api/model-authorization'));await until(()=>!f.d.querySelector('.automatic-review-dialog'),'revoked review cleared');assert.equal(button(f.d,'开启自动处理').disabled,true);assert.equal(f.writes.length,0);assert.equal(f.node.modelAuthorization.view().state,'unapproved');
+});
+
+test('a committed automatic command with lost ACK remains explicitly recoverable by the identical operation after revision refresh',async t=>{
+ const f=await fixture(t),real=f.api.request.bind(f.api),attempts:any[]=[];let lose=true;
+ f.api.request=async(path,init)=>{if(path==='/api/model-authorization/commands'&&init?.method==='POST'){attempts.push(JSON.parse(String(init.body)));const result=await real(path,init);if(lose){lose=false;throw new ApiError('Generated ACK lost after actual commit',503);}return result;}return real(path,init);};
+ await act(async()=>f.root.render(React.createElement(AutomaticProcessing,{api:f.api})));await until(()=>!!button(f.d,'开启自动处理')&&!button(f.d,'开启自动处理').disabled,'automatic control');await click(f.d,'开启自动处理');
+ await act(async()=>{const submit=f.d.querySelector<HTMLButtonElement>('.automatic-review-dialog footer .primary')!;submit.click();submit.click();});await until(()=>f.node.modelAuthorization.view().state==='enabled'&&!!f.d.querySelector('.automatic-review-dialog [role=alert]'),'actual commit but no ACK');
+ const revision=f.node.modelAuthorization.view().revision;assert.equal(attempts.length,1);assert.ok(button(f.d,'重试'),'The frozen command remains explicitly recoverable after the authoritative revision advances');assert.equal(button(f.d,'重试').disabled,false);await click(f.d,'重试');await until(()=>!f.d.querySelector('.automatic-review-dialog'),'same operation acknowledged');assert.equal(attempts.length,2);assert.deepEqual(attempts[1],attempts[0]);assert.equal(f.node.modelAuthorization.view().revision,revision);assert.match(f.d.body.textContent!,/已保存后续任务的授权范围/);
+});
+
+test('a real historical image preview can be cancelled without granting or scheduling its original',async t=>{
+ const f=await fixture(t),bytes=await sharp({create:{width:12,height:12,channels:3,background:'#eadfcf'}}).png().toBuffer(),id=randomUUID();
+ await f.node.store.ingest({id,deviceId:'generated-preview',deviceName:'Generated preview',platform:'import',source:'screen',capturedAt:'2026-10-29T00:00:00Z',durationMs:0,ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:false,mode:'local'},imageMime:'image/png',imageBase64:bytes.toString('base64')});
+ const grant=structuredClone(f.node.modelAuthorization.view());await act(async()=>f.root.render(React.createElement(PerceptionSettings,{api:f.api})));await until(()=>!!button(f.d,'预览处理范围'),'historical controls');await click(f.d,'预览处理范围');await until(()=>f.d.body.textContent!.includes('范围内共 1 张图片'),'real one-image preview');assert.ok(button(f.d,'取消'));await click(f.d,'取消');assert.doesNotMatch(f.d.body.textContent!,/范围内共 1 张图片/);assert.equal(f.writes.filter(write=>write.path==='/api/perception/ocr/historical-process').length,0);assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM image_backfills').get()!.n,0);assert.deepEqual(f.node.modelAuthorization.view(),grant);assert.ok(f.node.store.evidence([id])[0]);
+});
+test('a late historical preview for the previous Api cannot become the new owner confirmation',async t=>{
+ const f=await fixture(t),real=f.api.request.bind(f.api);let release!:(value:any)=>void,previous:any;f.api.request=async(path,init)=>{const value=await real(path,init);if(path==='/api/perception/ocr/historical-preview'){previous=value;return new Promise(resolve=>{release=resolve;});}return value;};await act(async()=>f.root.render(React.createElement(PerceptionSettings,{api:f.api})));await until(()=>!!button(f.d,'预览处理范围'),'historical controls');await click(f.d,'预览处理范围');await until(()=>Boolean(release),'actual previous preview pending');const next={request:real} as Api;await act(async()=>f.root.render(React.createElement(PerceptionSettings,{api:next})));await until(()=>!!button(f.d,'预览处理范围'),'new owner controls');await act(async()=>release(previous));assert.equal(f.d.body.textContent!.includes('范围内共'),false,'Previous owner preview must not become a new confirmation');
 });

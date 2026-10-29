@@ -44,3 +44,7 @@ test('current permission withdrawal removes drafts and fences an already pending
  const f=await fixture(t),pending=deferred<any>(),view=f.state();let revoked=false;const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='PUT')return pending.promise;if(revoked)throw new ApiError('denied',403);return view;}} as Api;
  await f.render(api);await f.change(0,'generated-second');await act(async()=>f.save().click());revoked=true;await act(async()=>resources(api).invalidate(()=>true));assert.equal(f.d.querySelector('.module-assignment-row'),null);await act(async()=>pending.resolve({...view,revision:2}));assert.equal(f.d.querySelector('.module-assignment-row'),null);assert.doesNotMatch(f.d.body.textContent!,/模块分配已保存/);
 });
+test('a pending assignment save rejected as forbidden withdraws the former owner controls without a false saved receipt',async t=>{
+ const f=await fixture(t),view=f.state();let reject!:(error:unknown)=>void;const pending=new Promise<any>((_resolve,rejectValue)=>{reject=rejectValue;});const api={request:async(_path:string,init?:RequestInit)=>init?.method==='PUT'?pending:view} as Api;
+ await f.render(api);await f.change(0,'generated-second');await act(async()=>f.save().click());await act(async()=>reject(new ApiError('Generated pending save forbidden',403)));assert.equal(Boolean(f.d.querySelector('.module-assignment-row')),false,'Forbidden save withdraws assignment controls');assert.doesNotMatch(f.d.body.textContent!,/模块分配已保存/);assert.match(f.d.body.textContent!,/权限|拒绝|403/);
+});

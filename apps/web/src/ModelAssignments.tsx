@@ -36,7 +36,7 @@ export function ModelAssignments({api,revision,onApplied,onManage}:{api:Api;revi
   if(!view||viewOwner.current!==api||!defaults||invalid||!dirty||formBusy||operation.current)return;
   const controller=new AbortController();operation.current=controller;const current=()=>activeApi.current===api&&!controller.signal.aborted&&operation.current===controller;setBusy(true);setError('');setNotice('');
   try{const next=await api.request<ModelSettingsView>('/api/model-settings/defaults',{method:'PUT',body:JSON.stringify({revision:view.revision,defaults,defaultModels:models}),signal:controller.signal});if(!current())return;adopt(next);invalidateConfiguration(api);setNotice(moteText('模块分配已保存，新请求立即生效。'));onApplied();}
-  catch(failure){if(current())setError(failure);}
+  catch(failure){if(current()){setError(failure);if(failure instanceof ApiError&&[401,403,404,410].includes(failure.status)){viewOwner.current=undefined;controller.abort();operation.current=undefined;setBusy(false);setView(undefined);setDefaults(undefined);setModels({});setCustom({});}}}
   finally{if(current())setBusy(false);if(operation.current===controller)operation.current=undefined;}
  }
  return <section className="panel module-assignments final-module-assignments" aria-busy={formBusy}>
