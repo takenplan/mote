@@ -165,15 +165,15 @@ export class LocalSourceManager {
     this.permissionTask = calendarHelper(this.helperPath, 'calendar-permission', undefined, controller.signal).then(raw => { this.choices = decodeCalendarChoices(raw); return structuredClone(this.choices); }).finally(() => { this.permissionTask = undefined; this.permissionController = undefined; });
     return this.permissionTask;
   }
-  async addCalendar(id: string, input: unknown): Promise<void> {
+  async addCalendar(id: string, input: unknown): Promise<string> {
     const calendar = this.choices.find(c => c.id === id);
     if (!calendar) throw new Error(moteText("请先连接日历，再从已授权列表中选择"));
-    await this.add({ calendarId: calendar.id, name: calendar.title.slice(0, 200) || moteText("本地日历"), kind: 'local-calendar' }, input);
+    return this.add({ calendarId: calendar.id, name: calendar.title.slice(0, 200) || moteText("本地日历"), kind: 'local-calendar' }, input);
   }
   async addFiles(path: string, input: unknown): Promise<string> { return this.add({ path, name: basename(path).slice(0, 200) || moteText("本地文件"), kind: 'local-files' }, input); }
-  async addCodingAgent(provider: CodingProvider, input: unknown): Promise<void> {
+  async addCodingAgent(provider: CodingProvider, input: unknown): Promise<string> {
     if (!Object.hasOwn(codingProviders, provider)) throw new Error(moteText("不支持的 Coding Agent"));
-    await this.add({ path: codingRoot(provider), name: codingProviders[provider], kind: 'coding-agent', agent: provider }, { ...normalizeSourceOptions(input), trackDeletions: false });
+    return this.add({ path: codingRoot(provider), name: codingProviders[provider], kind: 'coding-agent', agent: provider }, { ...normalizeSourceOptions(input), trackDeletions: false });
   }
   /** Platform integrations can add a registered source without changing the manager's dispatch. */
   async addAdapterSource(fields: Pick<LocalSource, 'name' | 'kind'> & Partial<LocalSource>, input: unknown): Promise<string> { return this.add(fields, input); }

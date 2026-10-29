@@ -135,7 +135,7 @@ export interface DesktopApi {
   releaseNotes(): Promise<void>;
   openFeedback(): Promise<void>;
   codingAgents(): Promise<import('./contracts/sources').CodingAgentDiscovery[]>;
-  addCodingAgent(provider: import('./contracts/sources').CodingProvider, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  addCodingAgent(provider: import('./contracts/sources').CodingProvider, options: import('./contracts/sources').SourceOptions): Promise<string>;
   sources(): Promise<import('./contracts/sources').SourceStatus[]>;
   sourceArchivedContent(id:string,cursor?:string):Promise<import('./contracts/content').CentralContentPage>;
   sourcePendingContent(id:string):Promise<import('./contracts/content').LocalContentPage>;
@@ -155,7 +155,7 @@ export interface DesktopApi {
   chooseSourceFiles(mode: 'files' | 'directory', options: import('./contracts/sources').SourceOptions): Promise<{ canceled: boolean }>;
   connectActionCalendar(): Promise<{deviceId:string}>;
   authorizeCalendar(): Promise<import('./contracts/sources').CalendarChoice[]>;
-  addCalendarSource(id: string, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  addCalendarSource(id: string, options: import('./contracts/sources').SourceOptions): Promise<string>;
   updateSource(id: string, options: import('./contracts/sources').SourceOptions & { enabled: boolean }): Promise<void>;
   syncSources(): Promise<void>;
   openCalendarPermissions(): Promise<void>;

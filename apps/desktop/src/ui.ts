@@ -784,13 +784,15 @@ function sourceWorkspaceDescription(id:string):string{const row=localSourceRows.
 function refreshSourceTextOptions(): void {
   refreshSourcePolicySummaries();
   const source=localSourceRows.find(row=>row.source.id===sourceEditingId)?.source;
-  const visible=(!source||source.kind==='local-files')&&readInput('source-retention')==='snapshot';
+  const fileSource=currentPage!=='source-connect'&&(!source||source.kind==='local-files'),visible=fileSource&&readInput('source-retention')==='snapshot';
+  const archive=byId<HTMLSelectElement>('source-retention').querySelector<HTMLOptionElement>('option[value=archive]');if(archive){archive.disabled=!fileSource;archive.hidden=!fileSource;}
   byId('source-file-text-options').hidden=!visible;
   byId<HTMLInputElement>('source-allow-read').disabled=!visible;
+  byId('source-retention-hint').hidden=!fileSource;
   byId('source-retention-hint').textContent=readInput('source-retention')==='snapshot'?moteText('完整文件发往中心解析；处理后删除中心临时原件。'):readInput('source-retention')==='archive'?moteText('完整文件发往中心解析，并保留原件。'):moteText('只记录文件信息，不读取正文，也不上传文件内容。');
 }
 byId('source-retention').addEventListener('change',refreshSourceTextOptions);
-let sourcesReading = false;let sourceReadGeneration=0;
+let sourcesReading = false;let sourceReadGeneration=0,sourceConnectGeneration=0;
 async function refreshSources(): Promise<void> {
   if (sourcesReading) return;
   sourcesReading = true;const generation=sourceReadGeneration;
@@ -804,26 +806,37 @@ async function sourceAction(action: () => Promise<void>): Promise<void> {
   for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
   try { await action(); byId('source-feedback').textContent='';byId('source-feedback').hidden=true; }
   catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
-  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {});byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection; }
+  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {});byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection;byId<HTMLButtonElement>('source-calendar-add').disabled=!readInput('source-calendar-choice');byId<HTMLButtonElement>('source-agent-add').disabled=!readInput('source-agent-choice'); }
 }
-for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-connect-title').textContent=kind==='agent'?moteText('连接 Coding Agent'):moteText('连接日历');byId('source-connect-rules').append(sourceRules);sourceRules.open=true;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;showPage('source-connect');});
+for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceConnectGeneration++;byId<HTMLSelectElement>('source-agent-choice').replaceChildren();byId<HTMLSelectElement>('source-calendar-choice').replaceChildren();byId('source-agent-choice').hidden=true;byId('source-agent-add').hidden=true;byId('source-calendars').hidden=true;byId<HTMLButtonElement>('source-calendar-add').disabled=true;byId<HTMLButtonElement>('source-agent-add').disabled=true;sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-connect-title').textContent=kind==='agent'?moteText('连接 Coding Agent'):moteText('连接日历');byId('source-connect-rules').append(sourceRules);sourceRules.open=true;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;byId<HTMLSelectElement>('source-retention').value='snapshot';showPage('source-connect');refreshSourceTextOptions();});
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
-  const permissions = await desktopApi.permissionStatus();
+  const current=sourceConnectRequest();
+  const permissions = await desktopApi.permissionStatus();if(!current())return;
   if (permissions.calendar === 'denied') { window.alert(moteText("日历访问尚未授权，请在权限管理中开启。")); showPage('permissions'); return; }
-  const calendars = await desktopApi.authorizeCalendar(); const select = byId<HTMLSelectElement>('source-calendar-choice'); select.replaceChildren();
+  const calendars = await desktopApi.authorizeCalendar();if(!current())return; const select = byId<HTMLSelectElement>('source-calendar-choice'); select.replaceChildren();
   for (const calendar of calendars) { const option = document.createElement('option'); option.value = calendar.id; option.textContent = calendar.title; select.append(option); }
   byId('source-calendars').hidden = !calendars.length;
   if (!calendars.length) throw new Error(moteText("已授权，但系统中没有可选日历；请在系统日历中添加后重试"));
 }));
 byId('source-agent-discover').addEventListener('click', () => void sourceAction(async () => {
-  const agents = await desktopApi.codingAgents(); const select = byId<HTMLSelectElement>('source-agent-choice'); select.replaceChildren();
+  const current=sourceConnectRequest(),agents = await desktopApi.codingAgents();if(!current())return; const select = byId<HTMLSelectElement>('source-agent-choice'); select.replaceChildren();
   for (const agent of agents.filter(a => a.available)) { const option = document.createElement('option'); option.value = agent.provider; option.textContent = agent.name; select.append(option); }
   select.hidden = !select.options.length; byId('source-agent-add').hidden = !select.options.length;
   if (!select.options.length) throw new Error(moteText("本机默认目录中尚未发现受支持的 Agent 会话"));
 }));
-byId('source-agent-add').addEventListener('click', () => void sourceAction(() => desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider, sourceOptions())));
-byId('source-calendar-add').addEventListener('click', () => void sourceAction(async () => { await desktopApi.addCalendarSource(readInput('source-calendar-choice'), sourceOptions()); }));
+function sourceConnectRequest():()=>boolean{const generation=sourceConnectGeneration,scope=sourceSaveScope(),revision=pageRevision;return ()=>generation===sourceConnectGeneration&&scope===sourceSaveScope()&&revision===pageRevision&&currentPage==='source-connect';}
+async function connectLocalSource(save:()=>Promise<string>):Promise<void>{
+  const generation=sourceConnectGeneration,scope=sourceSaveScope(),revision=pageRevision,id=await save();
+  if(generation!==sourceConnectGeneration||scope!==sourceSaveScope()||revision!==pageRevision||currentPage!=='source-connect')return;
+  sourceSelectionResult({sourceIds:[id]},{selectionId:'connect',scope},{selectionId:'connect',scope:sourceSaveScope()});
+  await refreshSources();if(generation!==sourceConnectGeneration||scope!==sourceSaveScope()||revision!==pageRevision||currentPage!=='source-connect')return;
+  byId<HTMLTextAreaElement>('source-initial-description').value='';sourceWorkspace.open(id);
+}
+byId('source-agent-add').addEventListener('click', () => void sourceAction(()=>connectLocalSource(()=>desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider,sourceOptions()))));
+byId('source-calendar-add').addEventListener('click', () => void sourceAction(()=>connectLocalSource(()=>desktopApi.addCalendarSource(readInput('source-calendar-choice'),sourceOptions()))));
+byId('source-calendar-choice').addEventListener('change',()=>{byId<HTMLButtonElement>('source-calendar-add').disabled=sourceBusy||!readInput('source-calendar-choice');});
+byId('source-agent-choice').addEventListener('change',()=>{byId<HTMLButtonElement>('source-agent-add').disabled=sourceBusy||!readInput('source-agent-choice');});
 byId('source-sync').addEventListener('click', () => void sourceAction(() => desktopApi.syncSources()));
 byId('calendar-actions-connect').addEventListener('click', () => void sourceAction(async()=>{await desktopApi.connectActionCalendar();await desktopApi.openCentral('actions');}));
 byId('source-calendar-permissions').addEventListener('click', () => void sourceAction(() => desktopApi.openCalendarPermissions()));

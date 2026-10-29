@@ -427,7 +427,7 @@ else {
     handle('mote:source-sync', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); });
     handle('mote:action-calendar-connect', () => serialize(() => nativeCalendarActions({...settings},helperPath,dataDirectory).connectAndDeliver(()=>settings.syncPaused===true)));
     handle('mote:calendar-authorize', () => serialize(() => localSources!.authorizeCalendar()));
-    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); await localSources!.addCalendar(id, options); }));
+    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); return localSources!.addCalendar(id, options); }));
     handle('mote:source-update', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("来源选择无效")); await localSources!.update(id, options); }));
     const sourceSelections = new SourceSelectionController((path, options) => localSources!.addFiles(path, options));
     handle('mote:source-select', mode => serialize(async () => {
