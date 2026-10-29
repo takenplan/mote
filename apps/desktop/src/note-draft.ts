@@ -33,7 +33,7 @@ export class NoteDraftStore {
       if ((await stat(path)).size > maxBytes) throw new Error('oversized');
       const data = (await readLocalContent(path)).toString('utf8');
       if (Buffer.byteLength(data) > maxBytes) throw new Error('oversized');
-      const value = JSON.parse(data) as StoredDraft;value.draft.description??='';validateDraft(value.draft);
+      const value = JSON.parse(data) as StoredDraft;validateDraft(value.draft);
       if (value.completed && (!uuid.test(value.completed.draftId) || !uuid.test(value.completed.eventId))) throw new Error('invalid completion');
       if (value.submission && (value.submission.id !== value.draft.id || value.submission.source !== 'note' || value.submission.ocrText !== value.draft.text || (value.submission.metadata?.ownerDescription??'')!==(value.draft.description.trim()?value.draft.description:'') || typeof value.targetOrigin !== 'string')) throw new Error('invalid prepared note');
       this.value = value;

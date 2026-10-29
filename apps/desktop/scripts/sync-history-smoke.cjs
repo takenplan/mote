@@ -38,7 +38,7 @@ app.on('browser-window-created', (_event, window) => {
   window.webContents.once('did-finish-load', () => void (async () => {
     const js = code => window.webContents.executeJavaScript(code);
     const wait = async (code, label) => { for (let i = 0; i < 200; i++) { if (await js(code)) return; await new Promise(resolve => setTimeout(resolve, 25)); } throw Error(label); };
-    await wait('Boolean(window.mote && document.querySelector("#home-sync-details [data-nav=uploads]"))', 'Renderer startup');
+    await wait('Boolean(window.mote && document.querySelector("[data-page=work] [data-nav=uploads]"))', 'Renderer startup');
     const status = await js('window.mote.status()'); assert.equal(status.running, false);
     ipcMain.removeHandler('mote:permission-status');
     ipcMain.handle('mote:permission-status', () => ({ screen: 'denied', accessibility: 'denied', calendar: 'denied' }));
@@ -117,7 +117,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     writeFileSync(join(out,'shared-library.png'),(await window.webContents.capturePage()).toPNG());
     await js('document.querySelector("aside [data-nav=overview]").click()');
-    await js('document.querySelector("#home-sync-details").open=true;document.querySelector("#home-sync-details [data-nav=uploads]").click()');
+    await js('document.querySelector("aside [data-nav=work]").click();document.querySelector("[data-page=work] [data-nav=uploads]").click()');
     await wait('document.querySelectorAll("[data-upload-run]").length === 20', 'Run pagination');
     assert.equal(await js('document.querySelector("#upload-received").textContent'), '44');
     assert.equal(await js('document.querySelector("#upload-next").disabled'), false);

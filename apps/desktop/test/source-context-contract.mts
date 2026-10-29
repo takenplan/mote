@@ -20,7 +20,7 @@ test('owner source-context route preserves exact text, retry identity, conflicts
  try{
   sources.register({id,name:'Generated source',kind:'local-files',deviceId:'generated-device',platform:'macos',retention:'snapshot',enabled:true});
   app.setErrorHandler((error,req,res)=>res.status((error as {statusCode?:number;status?:number}).status??(error as {statusCode?:number}).statusCode??500).send({error:error.message}));
-  registerSourceRoutes(app,{sources,credential:()=>denied?{} as never:undefined,sourceOwner:(_req,id)=>{sources.getSource(id);},layers:{} as never,evidenceReader:{} as never,ingress:{} as never,connections:{} as never});
+  registerSourceRoutes(app,{sources,credential:()=>denied?{} as never:undefined,sourceOwner:(_req,id)=>{sources.getSource(id);},layers:{} as never,evidenceReader:{} as never,ingress:{} as never,connections:{assertActive(){}} as never});
   const request:SourceRequest=async(path,body,method)=>{calls.push({path,body,method});const response=await app.inject({method,url:path,payload:body});if(response.statusCode>=400)throw new TransportFailure('Generated route failure',httpFailure(response.statusCode),response.statusCode);if(drop&&method==='PATCH'){drop=false;throw Error('Generated lost ACK');}return response.json();};
   const signal=new AbortController().signal,path=join(directory,'binding-one','contexts.json');let outbox=new SourceContextOutbox(path);await outbox.initialize();
   assert.deepEqual((await outbox.read(id,request,signal)).snapshot,{sourceId:id,version:0,description:''});
@@ -50,4 +50,19 @@ test('source archive HTTP rows are consumed with exact identities, pagination an
   const config={...defaultConfig(),serverUrl:'http://127.0.0.1:1',token:'generated-owner',deviceId},source={...DEFAULT_SOURCE_OPTIONS,...definition},page=await centralSourceContentPage(config,source);assert.equal(page.items.length,30);assert.ok(page.nextCursor);assert.ok(page.items.every(row=>row.key.startsWith('capture:')&&row.source==='file'&&row.sourceName===definition.name));const second=await centralSourceContentPage(config,source,page.nextCursor);assert.equal(second.items.length,1);assert.equal(new Set([...page.items,...second.items].map(item=>item.key)).size,31);assert.equal(JSON.stringify(page).includes('Must stay elsewhere'),false);
   denied=true;assert.deepEqual(await centralSourceContentPage(config,source),{items:[],authorizationDenied:true});
  }finally{globalThis.fetch=originalFetch;await app.close();store.close();await rm(directory,{recursive:true,force:true});}
+});
+
+test('desktop capture-channel outbox consumes actual device context routes without changing original bytes',async()=>{
+ const {LocalSourceManager}=await import('../src/source-manager');
+ const directory=await mkdtemp(join(tmpdir(),'mote-capture-context-contract-')),store=new Store(join(directory,'vault')),sources=new SourceStore(store),app=Fastify(),deviceId='generated-mac-context';let manager:InstanceType<typeof LocalSourceManager>|undefined;
+ const input={id:'6245e812-27d0-4da0-bbf3-5abbbeedc25a',deviceId,deviceName:'Generated Mac',platform:'macos' as const,source:'activity' as const,capturedAt:'2026-10-29T08:00:00.000Z',durationMs:1000,appId:'dev.mote.generated',appName:'Generated Notes',privacy:{excluded:false as const,redacted:false,mode:'none' as const,collection:'activity' as const}};
+ try{
+  await store.ingest(input);const original=store.db.prepare('SELECT json FROM captures WHERE id=?').get(input.id)!.json;
+  app.setErrorHandler((error,_req,res)=>res.status((error as {statusCode?:number}).statusCode??500).send({error:error.message}));
+  registerSourceRoutes(app,{sources,credential:()=>undefined,sourceOwner:()=>{},layers:{} as never,evidenceReader:{} as never,ingress:{} as never,connections:{} as never});await app.listen({port:0,host:'127.0.0.1'});
+  manager=new LocalSourceManager(join(directory,'desktop'),{...defaultConfig(),deviceId,serverUrl:app.server.address()&&'http://127.0.0.1:'+(app.server.address() as {port:number}).port,token:'generated-context-owner',syncMode:'manual',syncPaused:true},'/never-native-helper',true);await manager.initialize();
+  const empty=await manager.captureContext('activity');assert.equal(empty.snapshot.version,0);await manager.saveCaptureContext('activity',{expectedVersion:0,description:'Generated source-wide declaration'});assert.equal(manager.pendingStats().pendingUpdates,1);await manager.flushPending(new AbortController().signal);assert.equal((await manager.captureContext('activity')).pending?.description,'Generated source-wide declaration');await manager.setSyncPaused(false);await manager.flushPending(new AbortController().signal);
+  const accepted=await manager.captureContext('activity');assert.equal(accepted.snapshot.description,'Generated source-wide declaration');assert.equal(accepted.snapshot.version,1);assert.equal(accepted.pending,undefined);assert.equal((await manager.captureContext('screen')).snapshot.description,'');assert.equal(store.db.prepare('SELECT json FROM captures WHERE id=?').get(input.id)!.json,original);
+  await manager.saveCaptureContext('activity',{expectedVersion:1,description:''});await manager.flushPending(new AbortController().signal);assert.equal((await manager.captureContext('activity')).snapshot.description,'');
+ }finally{await manager?.close();await app.close();store.close();await rm(directory,{recursive:true,force:true});}
 });

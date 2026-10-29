@@ -87,6 +87,11 @@ export interface Status {
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }
 export interface DesktopApi {
+  checkChromePermissions(id:string):Promise<import('./contracts/chrome').ChromePermissionStatus>;
+  cancelChromePermissions(id:string):Promise<void>;
+  openChromeExtensions():Promise<void>;
+  captureContext(channel:import('./source-manager').CaptureContextChannel):Promise<import('./source-context-outbox').SourceContextState>;
+  saveCaptureContext(channel:import('./source-manager').CaptureContextChannel,input:{expectedVersion:number;description:string}):Promise<import('./source-context-outbox').SourceContextState>;
   setupChromeCapture():Promise<{extensionId:string;extensionDirectory:string;manifestPath:string}>;
   initialAppearance: import('@mote/shared').AppearanceSnapshot;
   setAppearance(preference: import('@mote/shared').AppearancePreference): Promise<import('@mote/shared').AppearanceSnapshot>;
@@ -178,6 +183,6 @@ export interface DesktopApi {
   openDataFolder(): Promise<void>;
   exportMetadata(): Promise<void>;
   exportQueue(): Promise<{ canceled: boolean; path?: string }>;
-  importQueue(): Promise<{ canceled: boolean; imported?: number }>;
+  importQueue(): Promise<{canceled:true}|{canceled:false;state:'imported';imported:number}|{canceled:false;state:'incomplete';phase:'validation'|'saving'|'cleanup';imported:number;total?:number;currentRecordUnconfirmed:boolean;error:string}>;
   onStatus(callback: (status: Status) => void): () => void;
 }

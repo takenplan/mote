@@ -1,0 +1,68 @@
+import {describeCaptureSelection} from './app-capture-ui';
+import {moteText} from '@mote/shared/i18n';
+import type {Status} from './contracts';
+
+/** Rearranges existing controls without copying their values or changing their owners. */
+export function mountSettingsWorkspace(root:Document=document):void {
+  const id=(name:string)=>root.getElementById(name)!;
+  const element=<K extends keyof HTMLElementTagNameMap>(tag:K,text?:string,className?:string)=>{const node=root.createElement(tag);if(text)node.textContent=text;if(className)node.className=className;return node;};
+  const page=(name:string,title:string,form=false)=>{
+    const node=element('section',undefined,'page settings-workspace'+(form?' settings-page':''));node.dataset.page=name;node.hidden=true;
+    const header=element('header',undefined,'page-header'),heading=element('h1',title);heading.tabIndex=-1;heading.dataset.pageTitle='';header.append(heading);node.append(header);
+    (form?id('settings-fields'):id('main-content')).append(node);return node;
+  };
+  const list=()=>element('div',undefined,'settings-menu');
+  const row=(target:string,title:string,description?:string,summaryId?:string)=>{
+    const button=element('button',undefined,'settings-row');button.type='button';button.dataset.nav=target;
+    const copy=element('span',undefined,'settings-row-copy');copy.append(element('strong',title));if(description){const summary=element('span',description);if(summaryId)summary.id=summaryId;copy.append(summary);}button.append(copy,element('span','›','chevron'));return button;
+  };
+  const heading=(text:string)=>element('h2',text,'settings-group-label');
+  const landing=root.querySelector<HTMLElement>('[data-page="settings"]')!;
+  const preferences=page('preferences',moteText('外观与语言'));
+  const appearance=id('appearance').closest('label')!,language=id('language').closest('label')!;preferences.append(appearance,language);
+  const preferenceActions=element('div',undefined,'actions spaced');
+  const apply=element('button',moteText('应用偏好'),'primary');apply.id='preferences-apply';apply.type='button';
+  const reset=element('button',moteText('还原修改'),'secondary');reset.id='preferences-reset';reset.type='button';preferenceActions.append(apply,reset);preferences.append(preferenceActions);
+  const runtime=element('details',undefined,'disclosure spaced');runtime.append(element('summary',moteText('运行环境')),id('environment'));const credentials=element('p',undefined,'helper');credentials.id='preferences-credentials';runtime.append(credentials);preferences.append(runtime);
+  const guide=id('home-feature-guide').closest('.home-feature-guide')!,feedback=id('open-feedback');
+  const direct=list();direct.append(row('screen',moteText('屏幕记录'),moteText('记录时长'),'settings-capture-summary'),row('sync',moteText('发送设置'),moteText('实时、定时、批量或仅手动上传'),'settings-sync-summary'),row('privacy',moteText('隐私与过滤'),moteText('遮挡、内容过滤与上传前检查')),row('permissions',moteText('系统权限'),moteText('辅助功能、屏幕录制')),row('connection',moteText('连接与存储'),moteText('中央节点、连接邀请与设备名称'),'settings-connection-summary'));
+  const central=list(),centralButton=row('',moteText('模型与服务、自动处理'),moteText('在中央工作台配置'));delete centralButton.dataset.nav;centralButton.id='settings-central-models';centralButton.lastElementChild!.textContent='↗';central.append(centralButton);
+  landing.replaceChildren(element('header',undefined,'page-header'));const h1=element('h1',moteText('设置'));h1.tabIndex=-1;h1.dataset.pageTitle='';landing.firstElementChild!.append(h1);landing.append(element('p',moteText('这台 Mac'),'page-subtitle'),direct,heading(moteText('中央设置')),central,heading(moteText('此 Mac')),row('mac-options',moteText('偏好与本机维护'),moteText('外观、采集高级设置、诊断与更新')),guide);
+  const options=page('mac-options',moteText('此 Mac 设置')),optionsList=list();optionsList.append(row('preferences',moteText('外观与语言')),row('capture',moteText('采集高级设置')),row('chrome',moteText('Chrome 页面采集')),row('developer',moteText('帮助与诊断')),row('about',moteText('关于 Mote')),row('activity',moteText('本机统计')),row('statistics',moteText('本机状态详情')));options.append(optionsList);
+  const about=root.querySelector('[data-page="about"]')!;about.append(feedback);
+  const connection=root.querySelector<HTMLElement>('[data-page="connection"]')!;connection.querySelector('[data-page-title]')!.textContent=moteText('连接与存储');
+  const summary=element('section',undefined,'panel connection-storage-summary');summary.append(element('h2',moteText('这台 Mac')));const facts=element('h2');facts.id='connection-storage-facts';summary.append(facts,element('p',moteText('确认上传后，待传副本会释放。来源文件夹里的原文件保留。'),'helper'));const contentActions=element('div',undefined,'actions spaced');const pendingAction=element('button',moteText('查看待发内容'),'primary');pendingAction.type='button';pendingAction.dataset.nav='work';const centralContent=element('button',moteText('查看中央资料'),'secondary');centralContent.type='button';centralContent.id='connection-central-content';contentActions.append(pendingAction,centralContent);summary.append(contentActions);const connectionList=list();connectionList.append(row('backup',moteText('备份与恢复'),moteText('本机待传队列')),row('storage',moteText('更换存储位置'),moteText('迁移本机记录与图片')));connection.insertBefore(summary,connection.children[1]??null);connection.insertBefore(connectionList,summary.nextSibling);const connectionDetails=element('details',undefined,'disclosure connection-details');connectionDetails.id='connection-details';connectionDetails.open=true;connectionDetails.append(element('summary',moteText('连接设置')));for(const panel of Array.from(connection.querySelectorAll<HTMLElement>(':scope>.panel:not(.connection-storage-summary)')))connectionDetails.append(panel);connection.append(connectionDetails);const manual=root.querySelector<HTMLElement>('[data-page=connection].settings-page')!;connectionDetails.append(manual);manual.removeAttribute('data-page');manual.classList.remove('page');manual.hidden=false;for(const control of Array.from(manual.querySelectorAll('input,select,textarea,button'))){control.setAttribute('form','settings');for(const type of ['input','change'])control.addEventListener(type,()=>id('settings').dispatchEvent(new Event(type,{bubbles:true})));}
+  const backup=page('backup',moteText('备份与恢复'));const backupCard=element('section',undefined,'panel');backupCard.append(element('h2',moteText('本机待传队列')));const backupFacts=element('p',undefined,'helper');backupFacts.id='backup-facts';backupCard.append(backupFacts);const actions=element('div',undefined,'actions spaced');actions.append(id('export'),id('import'));backupCard.append(actions);const details=element('details',undefined,'disclosure spaced');details.append(element('summary',moteText('备份包含什么')),element('p',moteText('队列备份包含已脱敏截图与 OCR，不含访问令牌。中央仓库请在服务端导出。')));backupCard.append(details);backup.append(backupCard);
+  const other=element('details',undefined,'disclosure spaced');other.append(element('summary',moteText('其他导出与本机目录')));const otherActions=element('div',undefined,'actions spaced');otherActions.append(id('export-metadata'),id('export-central'),id('data-folder'));other.append(otherActions);backup.append(other);
+  const result=element('section',undefined,'panel backup-operation');result.id='backup-operation';result.hidden=true;result.setAttribute('aria-live','polite');backup.append(result);
+  const oldStorage=root.querySelector('.storage-tools')!;oldStorage.remove();
+  const scopePanel=id('default-collection').closest('.panel')!;const scopeSection=element('section',undefined,'page settings-page');scopeSection.dataset.page='screen';scopeSection.hidden=true;scopeSection.append(scopePanel);id('settings-fields').prepend(scopeSection);
+  const storage=page('storage',moteText('本机存储位置'),true);storage.append(id('capture-directory').closest('.panel')!);
+  const capture=root.querySelector('[data-page="capture"] [data-page-title]');if(capture)capture.textContent=moteText('采集高级设置');const advanced=id('capture-advanced');advanced.replaceWith(...Array.from(advanced.children).filter(node=>node.tagName!=='SUMMARY'));
+  const diagnostics=root.querySelector('[data-page="developer"] [data-page-title]');if(diagnostics)diagnostics.textContent=moteText('帮助与诊断');const diagnosticDetails=id('diagnostics-enabled').closest('details')!;diagnosticDetails.replaceWith(...Array.from(diagnosticDetails.children).filter(node=>node.tagName!=='SUMMARY'));
+
+}
+
+export function renderSettingsWorkspace(status:Status,root:Document=document):void {
+  const set=(id:string,text:string)=>{const node=root.getElementById(id);if(node)node.textContent=text;};
+  const pending=status.queueDepth;
+  set('capture-default-summary',describeCaptureSelection(status.config.defaultCollection));set('settings-capture-summary',describeCaptureSelection(status.config.defaultCollection));
+  set('backup-facts',moteText('{0} 条本机待发送记录',pending));
+  set('connection-storage-facts',moteText('{0} 项待发送',status.sync.pendingRecords));
+  const connected=Boolean(status.config.serverUrl&&status.config.tokenConfigured),connectionDetails=root.getElementById('connection-details') as HTMLDetailsElement;if(connectionDetails.dataset.connected!==String(connected)){connectionDetails.dataset.connected=String(connected);connectionDetails.open=!connected;}
+  set('preferences-credentials',status.credentialStorage==='json'?moteText('Dev 凭据保存在私有本地文件。'):moteText('凭据由操作系统保护。'));
+}
+
+export function showBackupOperation(kind:'import'|'export',phase:'working'|'canceled'|'complete'|'error',message:string,root:Document=document):void {
+  const panel=root.getElementById('backup-operation')!;panel.hidden=false;panel.dataset.phase=phase;panel.setAttribute('aria-busy',String(phase==='working'));panel.replaceChildren();
+  const heading=root.createElement('h2');heading.textContent=kind==='import'?moteText('从备份恢复'):moteText('导出待上传队列');
+  const text=root.createElement('p');text.textContent=message;panel.append(heading,text);
+  if(phase==='working'){const progress=root.createElement('progress');progress.setAttribute('aria-label',heading.textContent);panel.append(progress);}
+  if(phase==='complete'&&kind==='import'){const note=root.createElement('p');note.className='helper';note.textContent=moteText('导入没有改变原来的发送设置。');panel.append(note);}
+  if(phase==='error'&&kind==='import'){
+    const actions=root.createElement('div');actions.className='actions';
+    const retry=root.createElement('button');retry.type='button';retry.className='primary';retry.textContent=moteText('重新选择备份');retry.addEventListener('click',()=>root.getElementById('import')!.click());
+    const content=root.createElement('button');content.type='button';content.className='secondary';content.textContent=moteText('检查本机内容');content.addEventListener('click',()=>root.querySelector<HTMLButtonElement>('.main-nav [data-nav="records"]')!.click());actions.append(retry,content);panel.append(actions);
+  }
+  for(const id of ['export','import'])(root.getElementById(id) as HTMLButtonElement).disabled=phase==='working';
+}

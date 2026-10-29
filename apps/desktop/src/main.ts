@@ -1,5 +1,6 @@
 import {centralMemoryTopics,centralMemoryTopicPage,centralMemoryTopicDetail,centralMemoryTopicEvidence} from './memory-topics';
 import {ChromeCaptureBridge} from './chrome-bridge';
+import {CHROME_EXTENSION_ID} from './chrome-constants';
 import {registerChromeNativeHost} from './chrome-registration';
 import {appearancePreference,resolveColorScheme,linearUiTheme,type AppearancePreference} from '@mote/shared';
 import { connectionToken, loginRequest, loginVerifier } from './login-session';
@@ -48,7 +49,7 @@ import { createChromiumUpdateFetch } from './electron-update-fetch';
 import { acknowledgeInstalledUpdate } from './update-install';
 import { QueueStorage } from './queue-storage';
 import { SettingsCoordinator } from './settings-coordinator';
-import { DurableQueue } from './queue';
+import { QueueImportFailure, DurableQueue } from './queue';
 import { BackgroundJobs } from './background-jobs';
 import {ensureStorageFormat} from './storage-format';
 import { browseCaptures, captureDetail, captureImage, type BrowseRequest, type CaptureLocation } from './capture-browser';
@@ -386,6 +387,15 @@ else {
     handle('mote:captures-browse', input => browseWithConnection(config => browseCaptures(queue, config, input as BrowseRequest)));
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
+    let chromePermissionCheck:{id:string;controller:AbortController}|undefined;
+    handle('mote:chrome-permissions',async id=>{
+      if(typeof id!=='string'||!/^([0-9a-f]{8}-)([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id))throw Error('Invalid Chrome check identity');
+      chromePermissionCheck?.controller.abort();const check={id,controller:new AbortController()},origins=[...settings.chromeOrigins];chromePermissionCheck=check;
+      try{const result=await chromeCaptureBridge?.permissionStatus(origins,check.controller.signal)??{state:'disconnected' as const,origins:[]};return JSON.stringify(settings.chromeOrigins)===JSON.stringify(origins)?result:{state:'stale',origins:[]};}
+      finally{if(chromePermissionCheck===check)chromePermissionCheck=undefined;}
+    });
+    handle('mote:chrome-permissions-cancel',id=>{const check=chromePermissionCheck;if(check&&check.id===id)check.controller.abort();});
+    handle('mote:chrome-extensions',async()=>{if(process.platform!=='darwin')throw Error('Chrome capture requires macOS');await promisify(execFile)('open',['-a','Google Chrome',`chrome://extensions/?id=${CHROME_EXTENSION_ID}`]);});
     handle('mote:chrome-setup',async()=>{
       if(process.platform!=='darwin')throw Error('Chrome capture requires macOS');
       const extensionDirectory=app.isPackaged?join(process.resourcesPath,'chrome-extension'):join(__dirname,'..','chrome-extension');
@@ -606,6 +616,8 @@ else {
       const selected=await dialog.showSaveDialog(window!,{defaultPath:'mote-local-metadata.json'});
       if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(queue.exportMetadata()),{mode:0o600});
     });
+    handle('mote:capture-context',channel=>localSources!.captureContext(channel as import('./source-manager').CaptureContextChannel));
+    handle('mote:capture-context-save',(channel,input)=>serialize(()=>localSources!.saveCaptureContext(channel as import('./source-manager').CaptureContextChannel,input)));
     handle('mote:export-queue', async () => {
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出已脱敏待上传队列（包含个人资料）"), defaultPath: `mote-queue-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
@@ -616,9 +628,15 @@ else {
       const selected = await dialog.showOpenDialog(window!, { title: moteText("导入 Mote 电脑端队列备份"), properties: ['openFile'], filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePaths[0]) return { canceled: true };
       const path = selected.filePaths[0];
-      const imported = await queue.importArchiveFile(path, value => backgroundJobs.progress('mote:import-queue', value));
-      updateUi(clientStatus()); void collector.upload();
-      return { canceled: false, imported };
+      try {
+        const imported = await queue.importArchiveFile(path, value => backgroundJobs.progress('mote:import-queue', value));
+        updateUi(clientStatus()); void collector.upload();
+        return { canceled: false, state:'imported', imported };
+      } catch(error) {
+        updateUi(clientStatus());
+        if(error instanceof QueueImportFailure)return {canceled:false,state:'incomplete',...error.report,error:error.message};
+        throw error;
+      }
     }));
     tray = new Tray(trayIcon());
     tray.on('click', showWindow);

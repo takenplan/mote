@@ -21,6 +21,13 @@ import { decideSync } from './sync-policy';
 import { FileWatcher, type FileWatchEvent } from './file-watcher';
 import {INGRESS_VERSION_HEADERS} from './ingress-protocol';
 import {SourceContextOutbox,type SourceContextState} from './source-context-outbox';
+export const captureContextChannels=['screen','structured','activity','notifications'] as const;
+export type CaptureContextChannel=typeof captureContextChannels[number];
+export function captureContextIdentity(deviceId:string,channel:CaptureContextChannel):string {
+  const prefixes={screen:'screen',structured:'ui-page',activity:'activity',notifications:'notification'};
+  if(!captureContextChannels.includes(channel))throw Error('Invalid capture context channel');
+  return prefixes[channel]+':'+sourceHash(JSON.stringify(deviceId));
+}
 type SourceConnection = LoginSettings & Pick<Config, 'serverUrl' | 'token' | 'deviceId'> & Partial<Pick<Config, 'syncPaused' | 'syncMode' | 'syncIntervalMinutes' | 'syncBatchSize'>>;
 export function sourceDefinition(source: LocalSource): SourceDefinition {
   const { id, name, kind, deviceId, platform, retention, enabled, initialSync } = source;
@@ -74,7 +81,7 @@ export class LocalSourceManager {
       if (this.metadataDirty.size) this.metadataDirtyAt = saved.metadataDirtyAt ?? (await stat(join(this.directory, 'sources.json'))).mtime.toISOString();
     } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
     await this.nodeBinding.initialize(this.connection, this.sources.length > 0);
-    this.contexts=new SourceContextOutbox(join(this.directory,'nodes',this.binding,'contexts.json'));await this.contexts.initialize();
+    this.contexts=this.contextOutbox(this.binding,this.connection.deviceId);await this.contexts.initialize();
     for(const source of this.sources)if(this.contexts.pending(source.id))this.markMetadataDirty(source.id);
     // Include paused sources when guarding a node change: they can still own durable pending bodies.
     for (const source of this.sources) { const engine = new SourceSync(join(this.directory, 'nodes', this.binding, source.id + '.json')); await engine.initialize(); this.engines.set(source.id, engine); if(source.syncContinuously===false){const completed=engine.oneTimeCompletedAt(sourcePolicy(source));if(completed)source.importCompletedAt=completed;} }
@@ -82,10 +89,22 @@ export class LocalSourceManager {
     this.timer = setInterval(() => { void this.refreshWatchers(); void this.sync(false); }, 5000); this.timer.unref();
     void this.sync(false);
   }
+  private contextOutbox(binding:string,deviceId:string):SourceContextOutbox {
+    return new SourceContextOutbox(join(this.directory,'nodes',binding,'contexts.json'),id=>{
+      const channel=captureContextChannels.find(channel=>captureContextIdentity(deviceId,channel)===id);
+      return channel?'/api/devices/'+encodeURIComponent(deviceId)+'/capture-context/'+channel:'/api/sources/'+encodeURIComponent(id)+'/context';
+    });
+  }
+  private captureContextIds():string[]{return captureContextChannels.map(channel=>captureContextIdentity(this.connection.deviceId,channel));}
+  captureContext(channel:CaptureContextChannel):Promise<SourceContextState>{return this.readContext(captureContextIdentity(this.connection.deviceId,channel));}
+  saveCaptureContext(channel:CaptureContextChannel,input:unknown):Promise<SourceContextState>{return this.saveContext(captureContextIdentity(this.connection.deviceId,channel),input);}
   status(): SourceStatus[] { return this.sources.map<SourceStatus>(source => ({ state: source.enabled ? 'idle' : 'paused', message: source.enabled ? moteText("等待首次同步") : moteText("本机已暂停"), pending: 0, items: 0, skipped: 0, ...this.states.get(source.id), ...this.engines.get(source.id)?.status(), source: structuredClone(source), context:this.contexts?.get(source.id), ...(!source.enabled ? { state: 'paused' as const, message: moteText("本机已暂停") } : {}) })).map(row => ({...row, message: statusMessage(row.blocked?moteText("中央记录冲突或已删除，本机副本保留待处理。"):row.message), facts:nativeStatusView({pending:row.pending+(row.blocked??0),lastAcknowledgedAt:row.lastAcknowledgedAt,syncState:!this.connection.serverUrl||!connectionToken(this.connection)?'unconfigured':row.blocked&&row.state!=='syncing'?'blocked':row.state==='permission_required'?'blocked':row.state==='syncing'?'uploading':row.state==='idle'&&row.pending>0?'waiting':row.state,errorCode:row.blocked?'retained_conflict':row.state==='permission_required'?'permission_required':row.state==='error'?'source_unavailable':null,scanComplete:row.scanComplete,knownItems:row.items,skipped:row.skipped})})); }
   pendingContent(): {source:LocalSource;item:import('./source-types').SourceItem;key:string}[] { return this.sources.flatMap(source => this.engines.get(source.id)?.pendingContent().map(item => ({source:structuredClone(source),item,key:sourceHash(`${item.externalId}\0${item.revision}`)})) ?? []); }
   async sourceContext(id:string):Promise<SourceContextState>{
     if(!this.sources.some(source=>source.id===id))throw Error(moteText('来源不存在'));
+    return this.readContext(id);
+  }
+  private async readContext(id:string):Promise<SourceContextState>{
     if(this.stopped||this.connectionHeld)throw Error(moteText('操作未完成，请检查权限与配置后重试'));
     if(this.contextTask)await this.contextTask.catch(()=>{});
     const controller=new AbortController();this.contextController=controller;
@@ -94,6 +113,9 @@ export class LocalSourceManager {
   }
   async saveSourceContext(id:string,input:unknown):Promise<SourceContextState>{
     if(!this.sources.some(source=>source.id===id))throw Error(moteText('来源不存在'));
+    return this.saveContext(id,input);
+  }
+  private async saveContext(id:string,input:unknown):Promise<SourceContextState>{
     if(this.stopped||this.connectionHeld)throw Error(moteText('操作未完成，请检查权限与配置后重试'));
     await this.interrupt();
     this.markMetadataDirty(id);
@@ -101,7 +123,7 @@ export class LocalSourceManager {
     try{const state=await task;await this.persist();void this.sync(true);return state;}finally{if(this.contextTask===task)this.contextTask=undefined;}
   }
   pendingForHistory(sourceId: string, versionKey: string): import('./source-types').SourceItem | undefined { return this.engines.get(sourceId)?.pendingForHistory(versionKey); }
-  connectionActivity(): { pending: number; inFlight: boolean } { return { pending: [...this.engines.values()].reduce((sum, engine) => sum + engine.status().pending, 0)+this.sources.filter(source=>this.contexts?.pending(source.id)).length, inFlight: Boolean(this.task || this.uploadTask || this.permissionTask || this.contextTask) }; }
+  connectionActivity(): { pending: number; inFlight: boolean } { return { pending: [...this.engines.values()].reduce((sum, engine) => sum + engine.status().pending, 0)+this.sources.filter(source=>this.contexts?.pending(source.id)).length+this.captureContextIds().filter(id=>this.contexts?.pending(id)).length, inFlight: Boolean(this.task || this.uploadTask || this.permissionTask || this.contextTask) }; }
   async holdConnection(): Promise<() => void> {
     if (this.connectionHeld || this.permissionTask) throw new Error(moteText("本地来源授权尚未结束，请稍后重试连接"));
     this.connectionHeld = true;
@@ -126,8 +148,9 @@ export class LocalSourceManager {
     const rows = this.sources.map(source => ({ source, status: this.engines.get(source.id)?.status(), eligible: source.enabled && this.readable.has(source.id) && this.states.get(source.id)?.state !== 'paused' }));
     const pendingRecords = rows.reduce((sum, row) => sum + (row.status?.pending ?? 0) + (row.status?.blocked ?? 0), 0);
     const eligibleRecords = rows.filter(row => row.eligible).reduce((sum, row) => sum + (row.status?.pending ?? 0), 0);
-    const pendingUpdates = rows.filter(row => row.source.enabled && (this.metadataDirty.has(row.source.id)||this.contexts.pending(row.source.id))).length;
-    const eligibleUpdates = rows.filter(row => row.eligible && (this.metadataDirty.has(row.source.id)||this.contexts.pending(row.source.id))).length;
+    const captureUpdates=this.captureContextIds().filter(id=>this.contexts.pending(id)).length;
+    const pendingUpdates = captureUpdates+rows.filter(row => row.source.enabled && (this.metadataDirty.has(row.source.id)||this.contexts.pending(row.source.id))).length;
+    const eligibleUpdates = captureUpdates+rows.filter(row => row.eligible && (this.metadataDirty.has(row.source.id)||this.contexts.pending(row.source.id))).length;
     const held = rows.find(row => !row.eligible && ((row.status?.pending ?? 0) > 0 || (row.source.enabled && (this.metadataDirty.has(row.source.id)||this.contexts.pending(row.source.id)))));
     const heldReason = rows.some(row=>row.status?.blocked)?moteText("中央记录冲突或已删除，本机副本保留待处理。"):held ? !held.source.enabled ? moteText("本地来源已暂停，待传版本保留在本机") : this.states.get(held.source.id)?.state === 'paused' ? moteText("中央已暂停来源，待传版本保留在本机") : moteText("等待来源权限或恢复可读取状态，待传版本保留在本机") : undefined;
     const oldestPendingAt = rows.flatMap(row => row.status?.oldestPendingAt ? [row.status.oldestPendingAt] : []).sort()[0];
@@ -196,7 +219,7 @@ export class LocalSourceManager {
       await atomicSourceJson(join(this.directory, 'sources.json'), { version: DESKTOP_STORAGE_VERSION, sources: this.sources, metadataDirty: [...dirty], metadataDirtyAt: this.metadataDirtyAt ?? new Date().toISOString() });
       const engines = new Map<string, SourceSync>();
       for (const source of this.sources) { const engine = new SourceSync(join(this.directory, 'nodes', binding, source.id + '.json')); await engine.initialize(); engines.set(source.id, engine); }
-      const contexts=new SourceContextOutbox(join(this.directory,'nodes',binding,'contexts.json'));await contexts.initialize();this.contexts=contexts;
+      const contexts=this.contextOutbox(binding,connection.deviceId);await contexts.initialize();this.contexts=contexts;
       this.binding = binding; this.engines = engines; this.states.clear(); this.readable.clear(); this.metadataDirty = dirty; this.metadataDirtyAt ??= new Date().toISOString();
     }
     if (!retainingBinding) await this.nodeBinding.commit(connection, !switchingBucket && (this.connectionActivity().pending > 0));
@@ -217,6 +240,10 @@ export class LocalSourceManager {
     return this.task;
   }
   private async run(force: boolean, signal: AbortSignal): Promise<void> {
+    if(!this.managedUploads&&!this.connection.syncPaused&&this.connection.serverUrl&&connectionToken(this.connection)){
+      const policy=decideSync({...this.connection,syncMode:this.connection.syncMode??'realtime',syncIntervalMinutes:this.connection.syncIntervalMinutes??15,syncBatchSize:this.connection.syncBatchSize??20},this.pendingStats(),Date.now(),force);
+      if(policy.ready)for(const id of this.captureContextIds())if(this.contexts.pending(id))try{await this.contexts.flush(id,this.request(signal),signal);this.metadataDirty.delete(id);await this.persist();}catch{signal.throwIfAborted();}
+    }
     for (const source of this.sources) {
       if (!source.enabled || signal.aborted) continue;
       if(source.kind==='local-files'&&source.retention==='snapshot'&&!source.centralProcessingConsent){
@@ -345,6 +372,11 @@ export class LocalSourceManager {
       // Snapshot source membership, then rotate one bounded transport slice per
       // source. Large originals retain their server-acknowledged parts on yield.
       let pending=[...this.sources]; let failure: unknown;const recovered=new Set<string>();
+      for(const id of this.captureContextIds()){
+        if(!this.contexts.pending(id))continue;
+        try{await this.contexts.flush(id,this.request(combined,history?.onBytes),combined);this.metadataDirty.delete(id);await this.persist();}
+        catch(error){combined.throwIfAborted();failure??=error;}
+      }
       while(pending.length){
         const again:LocalSource[]=[];
         for (const source of pending) {

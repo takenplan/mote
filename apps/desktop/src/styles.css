@@ -1117,3 +1117,62 @@ input,select,textarea { accent-color:var(--mote-accent); }
 .workspace-source-editor .source-selection-row{min-height:83px}.workspace-source-editor .source-selection-row strong{font-size:13px;font-weight:500;line-height:1.8}.workspace-source-editor .source-selection-row small{font-size:11px;line-height:1.8;margin-top:5px}
 .workspace-source-editor .source-description-field{margin:20px 0 36px}.workspace-source-editor .source-description-field>span,.source-policy-fields>label>span:first-child,.source-destination-field>span:first-child{font-size:12px;font-weight:500}.workspace-source-editor .source-description-field small{font-size:11px}
 .workspace-source-editor input,.workspace-source-editor textarea,.workspace-source-editor select{border-color:var(--mote-border)}
+
+/* Final Mac settings retain the desktop shell and existing form ownership. */
+[data-page="settings"] .settings-row,.settings-workspace .settings-row{padding:18px 0;border-radius:0;background:transparent;border-bottom:1px solid var(--border);min-height:68px}
+[data-page="settings"] .settings-menu,.settings-workspace .settings-menu{border:0;background:transparent;box-shadow:none}
+[data-page="settings"] .settings-group-label{margin-top:34px;font-size:14px;font-weight:550}
+[data-page="settings"]>.settings-row{width:100%;margin-top:0}
+[data-page="settings"] .home-feature-guide{margin-top:28px}
+.settings-workspace .language-selector{display:flex;justify-content:space-between;align-items:center;max-width:600px;margin:24px 0}
+.settings-workspace .language-selector select{max-width:320px}
+.connection-storage-summary .settings-row{min-height:54px;padding:12px 0}
+.backup-operation progress{width:100%;margin-top:16px}
+.backup-operation[data-phase="error"]{border-color:var(--danger)}
+@media(max-width:700px){.settings-workspace .language-selector{display:block}.settings-workspace .language-selector select{max-width:100%;margin-top:8px}}
+.workspace-source-editor input,.workspace-source-editor textarea,.workspace-source-editor select{border-color:var(--mote-border)}
+
+/* Mac Chrome maintenance: final source's narrow, left-aligned settings form. */
+.chrome-workspace {max-width:960px;margin:0 auto;padding:36px 40px 48px;}
+.chrome-head {display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px;}
+.chrome-workspace h1 {font-size:27px;font-weight:540;line-height:1.5;letter-spacing:-.6px;margin:0;}
+.chrome-head button {font-size:12px;padding:0;color:var(--text-muted);}
+.chrome-workspace > p {font-size:13px;line-height:1.65;margin:12px 0 22px;}
+.chrome-field {display:grid;gap:8px;font-size:13px;margin:22px 0;}
+.chrome-field textarea {min-height:112px;padding:11px 12px;font:inherit;line-height:1.6;}
+.chrome-actions {gap:8px;flex-wrap:wrap;margin:24px 0;}
+.chrome-actions button {font-size:12px;min-height:34px;}
+.chrome-advanced {border-top:1px solid var(--mote-border);padding:16px 0;font-size:13px;}
+.chrome-advanced textarea {margin:14px 0;}
+.chrome-permission-row {display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--mote-border);font-size:13px;overflow-wrap:anywhere;}
+@media(max-width:900px){.chrome-workspace{padding:28px;}}
+.work-pending-list .content-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left}
+.work-pending-list .content-row>span:first-child{min-width:0;display:grid;gap:6px}
+.work-pending-list .content-row small{color:var(--text-secondary);font-size:12px}
+.work-delivery-tabs{display:flex;gap:8px;margin:8px 0 24px}
+[data-page="work"]>.sync-summary{margin-top:16px}
+.capture-state-bar{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:18px 0 24px;border-bottom:1px solid var(--mote-border)}
+.capture-state-bar h2{font-size:14px}.capture-state-bar p{font-size:12px;color:var(--mote-muted);margin:7px 0 0}
+.capture-workspace .status-card{padding:0;margin:0 0 20px}
+.capture-default-scope{padding:18px 0;border-bottom:1px solid var(--mote-border);margin-bottom:26px}
+.capture-default-scope summary{display:flex;gap:18px;align-items:center;justify-content:space-between;cursor:pointer;font-weight:550}
+.capture-default-scope small{color:var(--mote-muted);font-size:12px;font-weight:400}
+.capture-default-scope #default-collection{margin-top:18px}
+.capture-maintenance{margin-top:26px}.capture-maintenance .collection-controls{margin-top:14px}
+[data-page="screen"].settings-page>.panel{padding-top:0}
+[data-page="screen"] .section-title{display:flex;justify-content:space-between;align-items:center}
+.capture-state-bar{border:1px solid var(--mote-border);border-radius:6px;background:var(--mote-surface);padding:18px 20px}
+.capture-default-scope{border:1px solid var(--mote-border);border-radius:6px;background:var(--mote-surface);padding:16px 20px}
+[data-page="screen"] .app-capture-toolbar>input{flex:0 1 300px}
+[data-page="screen"] .app-capture-filters{margin-left:auto}
+[data-page="screen"] .app-capture-split{grid-template-columns:215px minmax(0,1fr);gap:0;border:1px solid var(--mote-border);border-radius:6px;background:var(--mote-surface);overflow:hidden}
+[data-page="screen"] .app-capture-list{padding:8px;border-right:1px solid var(--mote-border)}
+[data-page="screen"] .app-capture-detail{border:0;border-radius:0;padding:24px}
+[data-page="screen"] .app-capture-app{border:0;padding:12px;gap:5px;min-height:66px}
+[data-page="screen"] .app-capture-app-heading small{display:none}
+[data-page="screen"] .app-capture-detail .app-capture-channel{border:0;padding:12px 0;margin:0}
+[data-page="screen"] .app-capture-capabilities{margin:18px 0 12px}
+@media(max-width:760px){[data-page="screen"] .app-capture-split{grid-template-columns:1fr}[data-page="screen"] .app-capture-list{border-right:0;border-bottom:1px solid var(--mote-border)}}
+[data-page="settings"]>.settings-menu{border-top:1px solid var(--mote-border)}
+[data-page="settings"]>.settings-row{border-top:1px solid var(--mote-border)}
+[data-page="settings"] .settings-group-label{color:var(--mote-ink);font-weight:600}

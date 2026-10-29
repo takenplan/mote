@@ -14,7 +14,7 @@ beforeEach(async()=>{directory=await mkdtemp(join(tmpdir(),'mote-bridge-fixture-
 afterEach(async()=>{for(const child of children)child.kill();await bridge.close();await rm(directory,{recursive:true,force:true});});
 const request=(structured=true)=>({observationId:'d70b6b4c-3d83-483d-a52d-0806b781a131',appId:'com.google.Chrome',pid:123,origins:['https://fixture.example'],masks:[],observedAt:new Date().toISOString(),structured});
 async function connectHost(reply:(message:any)=>any){
- const child=spawn(process.execPath,['--import','tsx',resolve('src/chrome-native-host.ts'),`chrome-extension://${CHROME_EXTENSION_ID}/`],{env:{...process.env,MOTE_CHROME_BRIDGE_DESCRIPTOR:join(directory,'chrome-bridge.json')},stdio:['pipe','pipe','pipe']});children.push(child);let pending=Buffer.alloc(0);let messages:any[]=[];let errors='';child.stderr.on('data',c=>errors+=c);child.stdout.on('data',(chunk:Buffer)=>{pending=Buffer.concat([pending,chunk]);while(pending.length>=4&&pending.length>=pending.readUInt32LE(0)+4){const size=pending.readUInt32LE(0),m=JSON.parse(pending.subarray(4,size+4).toString());pending=pending.subarray(size+4);messages.push(m);const response=reply(m);if(response){const b=Buffer.from(JSON.stringify(response)),h=Buffer.alloc(4);h.writeUInt32LE(b.length);child.stdin.write(Buffer.concat([h,b]));}}});
+ const child=spawn(process.execPath,['--import','tsx',resolve('src/chrome-native-host.ts'),`chrome-extension://${CHROME_EXTENSION_ID}/`],{env:{...process.env,MOTE_CHROME_BRIDGE_DESCRIPTOR:join(directory,'chrome-bridge.json')},stdio:['pipe','pipe','pipe']});children.push(child);let pending=Buffer.alloc(0);let messages:any[]=[];let errors='';child.stderr.on('data',c=>errors+=c);child.stdout.on('data',(chunk:Buffer)=>{pending=Buffer.concat([pending,chunk]);while(pending.length>=4&&pending.length>=pending.readUInt32LE(0)+4){const size=pending.readUInt32LE(0),m=JSON.parse(pending.subarray(4,size+4).toString());pending=pending.subarray(size+4);messages.push(m);void Promise.resolve(reply(m)).then(response=>{if(response){const b=Buffer.from(JSON.stringify(response)),h=Buffer.alloc(4);h.writeUInt32LE(b.length);child.stdin.write(Buffer.concat([h,b]));}});}});
  for(let i=0;i<100;i++){if((bridge as any).peers.size&&[...(bridge as any).peers][children.length-1]?.ready)return {child,messages};if(child.exitCode!==null)throw Error(`Relay exited ${errors}`);await new Promise(r=>setTimeout(r,20));}throw Error(`Relay failed to connect ${errors}`);
 }
 describe('Chrome capture private process relay',()=>{
@@ -40,4 +40,35 @@ describe('Chrome capture private process relay',()=>{
   const descriptor=join(directory,'chrome-bridge.json');await chmod(descriptor,0o644);await expect(readBridgeDescriptor(descriptor)).rejects.toThrow('ownership');await chmod(descriptor,0o600);
   const installed=await registerChromeNativeHost({profileDirectory:directory,extensionDirectory:resolve('chrome-extension'),electronExecutable:process.execPath,nativeHostScript:resolve('src/chrome-native-host.ts'),homeDirectory:join(directory,'home')});const manifest=JSON.parse(await readFile(installed.manifestPath,'utf8'));expect(manifest.allowed_origins).toEqual([`chrome-extension://${CHROME_EXTENSION_ID}/`]);expect(await readFile(manifest.path,'utf8')).toContain('ELECTRON_RUN_AS_NODE=1');
  });
+});
+
+describe('Chrome origin permission recheck',()=>{
+ it('reports only the exact requested origin grants through the native relay without a capture lease',async()=>{
+  const calls:string[]=[];const permissionStatus=new Function((await readFile(resolve('chrome-extension/permissions.js'),'utf8')).replace('export async function permissionStatus','return async function permissionStatus'))();
+  const host=await connectHost(message=>permissionStatus(message,{contains:async(value:any)=>{calls.push(value.origins[0]);return value.origins[0]==='https://fixture.example/*';}}));
+  const origins=['https://fixture.example','http://localhost:4123'];const result=await bridge.permissionStatus(origins,new AbortController().signal);
+  expect(result.state).toBe('checked');expect(result.origins).toEqual([{origin:origins[0],allowed:true},{origin:origins[1],allowed:false}]);
+  expect(calls).toEqual(origins.map(origin=>origin+'/*'));expect(host.messages).toHaveLength(1);expect(Object.keys(host.messages[0]).sort()).toEqual(['id','origins','type']);expect(host.messages[0].type).toBe('permission-status');expect((bridge as any).leases.size).toBe(0);
+ });
+ it('leaves disconnected, ambiguous, and timed-out checks unconfirmed',async()=>{
+  const origins=['https://fixture.example'];expect((await bridge.permissionStatus(origins,new AbortController().signal)).state).toBe('disconnected');
+  await connectHost(()=>undefined);expect(await bridge.permissionStatus(origins,new AbortController().signal)).toEqual({state:'unavailable',origins:[]});
+  await connectHost(()=>undefined);expect(await bridge.permissionStatus(origins,new AbortController().signal)).toEqual({state:'ambiguous',origins:[]});
+ });
+ it('invalidates permission replies after cancellation or a peer epoch change',async()=>{
+  let finish!:(value:any)=>void;let message:any;await connectHost(value=>{message=value;return new Promise(resolve=>{finish=resolve;});});
+  const controller=new AbortController(),first=bridge.permissionStatus(['https://fixture.example'],controller.signal);for(let i=0;!message&&i<50;i++)await new Promise(r=>setTimeout(r,10));controller.abort();expect(await first).toEqual({state:'canceled',origins:[]});finish({type:'permission-status',id:message.id,status:'ok',origins:[{origin:'https://fixture.example',allowed:true}]});
+  message=undefined;const second=bridge.permissionStatus(['https://fixture.example'],new AbortController().signal);for(let i=0;!message&&i<50;i++)await new Promise(r=>setTimeout(r,10));await connectHost(()=>undefined);finish({type:'permission-status',id:message.id,status:'ok',origins:[{origin:'https://fixture.example',allowed:true}]});expect(await second).toEqual({state:'stale',origins:[]});
+ });
+ it.each([{origins:[]},{origins:[{origin:'https://another.example',allowed:true}]},{origins:[{origin:'https://fixture.example',allowed:true},{origin:'https://extra.example',allowed:true}]}])('rejects an incomplete or different permission scope %j',async ({origins})=>{
+  await connectHost(message=>({type:'permission-status',id:message.id,status:'ok',origins}));expect(await bridge.permissionStatus(['https://fixture.example'],new AbortController().signal)).toEqual({state:'unavailable',origins:[]});
+ });
+});
+
+it('keeps a concurrent origin check busy and rejects a valid capture reply as permission proof',async()=>{
+ let finish!:(value:any)=>void,message:any;await connectHost(value=>{message=value;return new Promise(resolve=>{finish=resolve;});});
+ const first=bridge.permissionStatus(['https://fixture.example'],new AbortController().signal);
+ for(let i=0;!message&&i<50;i++)await new Promise(resolve=>setTimeout(resolve,10));
+ expect(await bridge.permissionStatus(['https://fixture.example'],new AbortController().signal)).toEqual({state:'busy',origins:[]});
+ finish({id:message.id,status:'ok',binding,pages:[]});expect(await first).toEqual({state:'unavailable',origins:[]});
 });

@@ -1,3 +1,8 @@
+import {createWorkPendingUi} from './work-pending-ui';
+import {queueImportPresentation} from './queue-import-presentation';
+import {createChromeCaptureUi} from './chrome-capture-ui';
+import {createCaptureContextUi} from './capture-context-ui';
+import {renderSettingsWorkspace,showBackupOperation} from './settings-workspace';
 import {createMemoryTopicsUi} from './memory-topics-ui';
 import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
@@ -13,10 +18,11 @@ import { renderAskAnswer, renderAskCitation, renderAskScope } from './ask-presen
 import {prependConversationTurns} from './ask-conversation';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {builtinUiRules} from '@mote/shared';
-import {createAppCaptureUi} from './app-capture-ui';
+import {createAppCaptureUi,describeCaptureSelection} from './app-capture-ui';
 import {normalizeAppCollectionRules} from './app-collection';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
 const desktopApi = window.mote;
+const captureContextUi=createCaptureContextUi(desktopApi);
 document.getElementById('ui-page-builtins')!.addEventListener('click',()=>{byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(builtinUiRules,null,2);appCaptureUi.refreshRules();markSettingsDirty();});
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let currentStatus: import('./contracts').Status;
@@ -41,7 +47,7 @@ let wasRunningBeforeSave = false;
 let pageRevision = 0;
 let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
-const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
+const settingsPages = new Set<Page>(['screen','connection', 'sync', 'capture', 'privacy', 'developer','storage','chrome']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
 const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation});
 let contentOrigin:Page='records';
@@ -51,6 +57,8 @@ const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasC
 });
 function refreshContent():Promise<void>{return libraryUi.refresh();}
 const sourceWorkspace=createSourceWorkspaceUi(desktopApi,{openDetail:()=>showPage('source-detail'),edit:id=>void editSource(id),toggle:row=>sourceAction(()=>desktopApi.updateSource(row.source.id,{...row.source,enabled:!row.source.enabled})),content:()=>{byId<HTMLSelectElement>('content-scope').value='local';showPage('records');},read:item=>libraryUi.open(item)});
+const workPendingUi=createWorkPendingUi(desktopApi,item=>void libraryUi.open(item),()=>showPage('uploads'));
+const chromeCaptureUi=createChromeCaptureUi(desktopApi);
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
 const permissionsUi=createPermissionsUi(desktopApi);
@@ -60,8 +68,10 @@ let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
 function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true, preserveContentPosition = false): boolean {
+  if(page==='compression'&&currentPage==='capture')preserveSettingsDraft=true;
   if (page === 'notes' && !quickNote && desktopApi.openQuickNote) { void desktopApi.openQuickNote(); return false; }
   if (quickNote && page !== 'notes') return false;
+  if(page!==currentPage&&currentPage==='preferences'&&document.querySelector<HTMLElement>('[data-page=preferences]')?.dataset.dirty==='true'){if(!window.confirm(moteText('有未保存的修改。离开并丢弃修改？')))return false;byId('preferences-reset').click();}
   if (!navigation.navigate(page, () => preserveSettingsDraft || !settingsDirty || !settingsPages.has(currentPage) || window.confirm(moteText("有未保存的修改。离开并丢弃修改？")))) return false;
   if (settingsPages.has(currentPage)) pageScroll.delete(currentPage);
   else pageScroll.set(currentPage, window.scrollY);
@@ -77,15 +87,17 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
       if (!settingsApplying) void desktopApi.cancelConnection().catch(() => {});
     }
   }
+  if(currentPage==='chrome'&&page!=='chrome')chromeCaptureUi.hide();
   if(currentPage==='source-editor'&&page!=='source-editor')invalidateSourceEditor();
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
-  if (currentPage === 'work' && page !== 'work') workActivityUi.hide();
+  if (currentPage === 'work' && page !== 'work') {workActivityUi.hide();workPendingUi.hide();}
   if (currentPage === 'permissions' && page !== 'permissions') permissionsUi.hide();
   if (currentPage === 'content-reader' && page !== 'content-reader') libraryUi.close(false);
   currentPage = page;
   if(initialized) renderOperations(currentStatus.operations??[]);
+  if(page==='chrome')chromeCaptureUi.refresh();
   if (page === 'uploads') syncHistoryUi.show();
-  if (page === 'work') workActivityUi.show();
+  if (page === 'work') {workActivityUi.show();workPendingUi.show();}
   const selected = navigation.section;
   presentation.update({section:selected});
   for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-page]'))) element.hidden = element.dataset.page !== page;
@@ -107,7 +119,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
   if (page === 'ask' && refreshAskOnEntry) void refreshAsk();
   if (page === 'permissions') permissionsUi.show();
-  if (page === 'privacy') void appCaptureUi.refreshApplications();
+  if (page === 'privacy'||page==='screen') void appCaptureUi.refreshApplications();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records' && !preserveContentPosition) { void loadRecords(); void refreshContent(); }
   if (page === 'overview' && initialized && !preserveContentPosition) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
@@ -119,6 +131,9 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-na
   const page = button.dataset.nav as Page;
   if (pageNames.includes(page)) showPage(page);
 });
+byId('connection-central-content').addEventListener('click',()=>{byId<HTMLSelectElement>('content-scope').value='received';showPage('records');});
+byId('settings-central-models').addEventListener('click',()=>void perform(()=>desktopApi.openCentral('models')));
+byId('chrome-back').addEventListener('click',()=>showPage(navigation.backTarget));
 byId('workspace-back').addEventListener('click', () => showPage(navigation.backTarget));
 function updateNoteAction(): void {
   const action = byId('note-action');
@@ -149,7 +164,7 @@ byId('setup-primary').addEventListener('click', () => { if (showPage('privacy'))
 byId('setup-current').addEventListener('click', () => { reviewCollectionSetup(); byId('start').focus(); });
 byId('pause-sending').addEventListener('click',()=>void perform(async()=>{ const updated=await desktopApi.setSyncPaused(!currentStatus.config.syncPaused); render(updated); }));
 function updateSettingsHint(): void {
-  byId('settings-save-bar').hidden = !settingsPages.has(currentPage);
+  byId('settings-save-bar').hidden = !settingsPages.has(currentPage)||currentPage==='chrome'||currentPage==='screen'&&!settingsDirty;
   byId('settings-pending').hidden = !settingsDirty;
   byId('save-hint').textContent = settingsDirty ? moteText("有未保存的修改，离开前会提醒。保存后立即生效。") : currentStatus?.running ? moteText("保存后立即应用；必要时会短暂暂停并自动恢复采集。") : moteText("设置保存后立即生效；采集保持当前开停状态。");
   byId<HTMLButtonElement>('settings-reset').disabled = !settingsDirty || busy;
@@ -164,7 +179,7 @@ function reserveSettingsFooter(): void {
 }
 new ResizeObserver(reserveSettingsFooter).observe(settingsSaveBar);
 window.addEventListener('resize', reserveSettingsFooter);
-function markSettingsDirty(): void { settingsDirty = true; updateSettingsHint(); }
+function markSettingsDirty(): void { settingsDirty = true;byId('capture-default-summary').textContent=describeCaptureSelection(readChannels(byId('default-collection')));updateSettingsHint(); }
 settingsForm.addEventListener('input', markSettingsDirty);
 settingsForm.addEventListener('change', markSettingsDirty);
 byId('settings-reset').addEventListener('click', () => {
@@ -353,7 +368,7 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
   byId<HTMLInputElement>('confirm-local-backlog').checked = false;
   refreshPresets(); updateSyncOptions(); renderMaskEditor(); updateLocalBacklog();
   updateTokenField();
-  settingsDirty = false; updateSettingsHint();
+  settingsDirty = false; updateSettingsHint();chromeCaptureUi.refresh();
 }
 function renderStorage(): void {
   byId('storage-restart').hidden = !currentStatus?.storage?.recoveryRequired;
@@ -381,7 +396,7 @@ function render(status: import('./contracts').Status): void {
     sourceWorkspace.clear();localSourceRows=[];invalidateSourceEditor();byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLTextAreaElement>('source-initial-description').disabled=true;sourceReadGeneration++;recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
-  currentStatus = status;sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
+  currentStatus = status;workPendingUi.update(status);chromeCaptureUi.update(status);captureContextUi.update(status);renderSettingsWorkspace(status);sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -438,7 +453,7 @@ function render(status: import('./contracts').Status): void {
   byId('retry').hidden = false;
   byId<HTMLButtonElement>('retry').disabled = busy || (status.facts ? !status.facts.sync.allowedActions.includes('retry_sync') : status.sync.state === 'uploading' || status.sync.state === 'unconfigured');
   byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即上传");
-  fields.disabled = busy;
+  fields.disabled = busy;for(const control of Array.from(document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('[form=settings]')))control.disabled=busy;
   byId<HTMLInputElement>('device-name').disabled = busy;
   for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test']) byId<HTMLButtonElement>(id).disabled = busy;
   byId<HTMLButtonElement>('connection-cancel').disabled = busy;
@@ -497,6 +512,7 @@ byId('settings').addEventListener('submit', event => {
       revealField(element); element.reportValidity(); return;
     }
   }
+  if(captureStorageDirectory!==(currentStatus.config.captureStorageDirectory||'')&&!window.confirm(moteText('复制并验证本机待发送内容后切换保存位置。\n从：{0}\n到：{1}',currentStatus.storage?.directory||'',captureStorageDirectory||currentStatus.storage?.defaultDirectory||'')))return;
   let masks: import('./contracts').Rectangle[];
   let appCollectionRules: Record<string, import('./contracts').CollectionMode>;
   try { masks = masksForEditor(); }
@@ -539,7 +555,7 @@ function showCaptureConfirmation():void {
   captureConfirmation.showModal();
 }
 byId('start').addEventListener('click', () => {
-  if (settingsDirty) { showPage('settings'); feedback(moteText("请先保存或还原修改，再开始采集。")); return; }
+  if (settingsDirty) { feedback(moteText("请先保存或还原修改，再开始采集。")); return; }
   showCaptureConfirmation();
 });
 byId('capture-confirm-cancel').addEventListener('click',()=>{captureConfirmation.close();byId('start').focus();});
@@ -559,8 +575,17 @@ byId('permissions').addEventListener('click', () => showPage('permissions'));
 byId('data-folder').addEventListener('click', () => void perform(() => desktopApi.openDataFolder()));
 byId('export-metadata').addEventListener('click',()=>void perform(()=>desktopApi.exportMetadata()));
 byId('export-central').addEventListener('click',()=>void perform(()=>desktopApi.openCentral('vault')));
-byId('export').addEventListener('click', () => void perform(async () => { const result = await desktopApi.exportQueue(); if (!result.canceled) feedback(moteText("队列备份已保存至 {0}", result.path), true); }));
-byId('import').addEventListener('click', () => void perform(async () => { const result = await desktopApi.importQueue(); if (!result.canceled) feedback(moteText("已导入 {0} 条待上传记录，重复记录自动跳过。", result.imported), true); }));
+byId('export').addEventListener('click',()=>void perform(async()=>{
+  showBackupOperation('export','working',moteText('正在处理，请稍候…'));
+  try {const result=await desktopApi.exportQueue();showBackupOperation('export',result.canceled?'canceled':'complete',result.canceled?moteText('已取消'):moteText('队列备份已保存至 {0}',result.path));}
+  catch(error){showBackupOperation('export','error',error instanceof Error?error.message:moteText('操作失败'));throw error;}
+}));
+byId('import').addEventListener('click',()=>void perform(async()=>{
+  if(!window.confirm(moteText('恢复到当前本机队列，继续按当前发送设置处理。是否继续？')))return;
+  showBackupOperation('import','working',moteText('正在处理，请稍候…'));
+  try {const result=queueImportPresentation(await desktopApi.importQueue());showBackupOperation('import',result.phase,result.message);}
+  catch(error){showBackupOperation('import','error',moteText('导入未完成，可能已有记录保存在本机。请检查本机内容后重试所选备份。'));throw error;}
+}));
 desktopApi.onStatus(render);
 void desktopApi.status().then(render).catch(() => feedback(moteText("无法连接采集器进程，请重新打开 Mote。")));
 
@@ -830,7 +855,7 @@ byId('update-cancel').addEventListener('click', () => { void desktopApi.cancelUp
 byId('update-reveal').addEventListener('click', () => void perform(() => desktopApi.revealUpdate()));
 byId('update-notes').addEventListener('click', () => void perform(() => desktopApi.releaseNotes()));
 byId('update-install').addEventListener('click', () => {
-  if (settingsDirty) { showPage('settings'); feedback(moteText("请先保存或还原设置修改，再安装更新。")); return; }
+  if (settingsDirty) { feedback(moteText("请先保存或还原设置修改，再安装更新。")); return; }
   if (noteSaving || noteComposing) { feedback(moteText("请先完成当前随手记输入，再安装更新。")); return; }
   void perform(async () => {
     lockNote(true); byId('local-sources').inert = true;
@@ -1311,5 +1336,3 @@ async function openAskEvidence(id:string):Promise<void>{const conversationId=ask
 byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; askScopeUnavailable = false; renderAsk(); await askHistory(); }); });
 byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
 byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); askScopeUnavailable = false; renderAsk(); }));
-
-byId('chrome-setup').addEventListener('click',()=>void perform(async()=>{const result=await desktopApi.setupChromeCapture();byId('chrome-setup-result').textContent=moteText('扩展目录：{0}；扩展 ID：{1}',result.extensionDirectory,result.extensionId);feedback(moteText('本机桥接已准备。请在 Chrome 扩展程序中加载该目录，并在扩展中授权所选站点。'),true);}));

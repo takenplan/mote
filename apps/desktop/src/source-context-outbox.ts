@@ -15,7 +15,7 @@ export class SourceContextOutbox {
   private operation:Promise<unknown>=Promise.resolve();
   private serial<T>(action:()=>Promise<T>):Promise<T>{const task=this.operation.then(action,action);this.operation=task.catch(()=>{});return task;}
   private values:Record<string,SourceContextState>=Object.create(null);
-  constructor(private readonly path:string){}
+  constructor(private readonly path:string,private readonly endpoint:(id:string)=>string=id=>'/api/sources/'+encodeURIComponent(id)+'/context'){}
   async initialize():Promise<void>{
     try{
       const raw=JSON.parse((await readLocalContent(this.path)).toString('utf8'));
@@ -41,7 +41,7 @@ export class SourceContextOutbox {
   private async readCurrent(id:string,request:SourceRequest,signal:AbortSignal):Promise<SourceContextState>{
     signal.throwIfAborted();
     try{
-      const snapshot=sourceContextSnapshotSchema.parse(await request('/api/sources/'+encodeURIComponent(id)+'/context',undefined,'GET',signal));
+      const snapshot=sourceContextSnapshotSchema.parse(await request(this.endpoint(id),undefined,'GET',signal));
       signal.throwIfAborted();if(snapshot.sourceId!==id)throw Error('Invalid source context identity');
       const prior=this.values[id],ack=prior?.pending&&snapshot.description===prior.pending.description&&snapshot.version===prior.pending.expectedVersion+1;
       await this.commit(id,{snapshot,...(prior?.pending&&!ack?{pending:prior.pending,conflict:prior.conflict||prior.pending.expectedVersion!==snapshot.version}:{})});return this.get(id);
@@ -53,7 +53,7 @@ export class SourceContextOutbox {
     const value=this.values[id];if(!value?.pending)return;
     if(value.conflict)throw Error('Source context version changed; refresh and retry');
     try{
-      const snapshot=sourceContextSnapshotSchema.parse(await request('/api/sources/'+encodeURIComponent(id)+'/context',value.pending,'PATCH',signal));
+      const snapshot=sourceContextSnapshotSchema.parse(await request(this.endpoint(id),value.pending,'PATCH',signal));
       signal.throwIfAborted();if(snapshot.sourceId!==id||snapshot.description!==value.pending.description||(snapshot.version!==value.pending.expectedVersion&&snapshot.version!==value.pending.expectedVersion+1))throw Error('Invalid source context acknowledgement');
       await this.commit(id,{snapshot});
     }catch(error){
