@@ -8837,5 +8837,11 @@ export const english: Readonly<Record<string, string>> = {
   "切换语言会重新加载页面，请先保存未提交的修改。继续？": "Changing the language reloads this page. Save pending edits first. Continue?",
   "无法保存语言偏好，请检查浏览器存储。": "Could not save language preference. Check browser storage.",
   "切换语言会重新加载界面，请先保存未提交的设置。继续？": "Changing the language reloads this window. Save pending settings first. Continue?",
-  "语言保存失败，请重试。": "Could not save the language. Please retry."
+  "语言保存失败，请重试。": "Could not save the language. Please retry.",
+  "显示方式": "Display style",
+  "排版结果": "Formatted result",
+  "标准阅读": "Standard reading",
+  "支持多个文件、文件夹和 ZIP 压缩包。": "Supports multiple files, folders and ZIP archives.",
+  "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。": "Choose files or folders on the import page. Details will identify missing models, processing settings and required confirmation.",
+  "一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Select up to 2,000 files at a time. For larger collections, use a ZIP archive or import in batches."
 };

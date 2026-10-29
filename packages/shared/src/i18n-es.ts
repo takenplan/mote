@@ -8837,5 +8837,11 @@ export const spanish: Readonly<Record<string, string>> = {
   "请为下方路径中的当前应用授权，避免选中其他版本。": "Otorga acceso a la app en la ruta indicada abajo para evitar elegir otra versión.",
   "完整磁盘访问": "Acceso total al disco",
   "在访达中显示": "Mostrar en Finder",
-  "正在打开…": "Abriendo…"
+  "正在打开…": "Abriendo…",
+  "显示方式": "Modo de visualización",
+  "排版结果": "Resultado formateado",
+  "标准阅读": "Lectura estándar",
+  "支持多个文件、文件夹和 ZIP 压缩包。": "Admite varios archivos, carpetas y archivos ZIP.",
+  "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。": "Elige archivos o carpetas en la página de importación. Los detalles indican los modelos que faltan, los ajustes de procesamiento y las confirmaciones necesarias.",
+  "一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Selecciona hasta 2.000 archivos a la vez. Para colecciones más grandes, usa un archivo ZIP o importa por lotes."
 };
