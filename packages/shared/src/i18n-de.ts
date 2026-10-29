@@ -10069,5 +10069,6 @@ export const german: Readonly<Record<string, string>> = {
   "正在回答": "Antwort wird erstellt",
   "运行详情": "Ausführungsdetails",
   "返回对话": "Zurück zum Gespräch",
-  "未能确认发送完成，请检查同步与活动后重试。": "Der Versand konnte nicht bestätigt werden. Prüfe „Synchronisierung und Aktivität“, bevor du es erneut versuchst."
+  "未能确认发送完成，请检查同步与活动后重试。": "Der Versand konnte nicht bestätigt werden. Prüfe „Synchronisierung und Aktivität“, bevor du es erneut versuchst.",
+  "查看结果与依据 →": "Ergebnis und Belege ansehen →"
 };
