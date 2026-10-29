@@ -10,7 +10,8 @@ const importId='638b031c-67a9-437d-a47d-3c3cf7fd16c2',replyId='a3350766-4f13-4f7
 function fixtureContext(id,instruction,answer='Only the narrator in the first paragraph is me.'){
  return {version:1,ownerRelation:'unknown',basis:'default',sourceDeclaration:{sourceId:'generated-source',version:2,ownerRelation:'unknown'},correction:{version:1,ownerRelation:'unknown'},
   declarations:[{id:replyId,version:3,fingerprint:'b'.repeat(64)}],ownerStatements:[{id:replyId,question:'Which speaker is the owner?',answer}],
-  importDeclarations:[{id:importId,version:2,fingerprint:'a'.repeat(64),captureIds:[id]}],importStatements:[{id:importId,version:2,instruction,captureIds:[id]}]};
+  importDeclarations:[{id:importId,version:2,fingerprint:'a'.repeat(64),captureIds:[id]}],importStatements:[{id:importId,version:2,instruction,captureIds:[id]}],
+  recordContextDeclarations:[{captureId:id,version:1,fingerprint:'d'.repeat(64)}],recordContextStatements:[{captureId:id,version:1,description:'Generated exact record context, scoped to this original.'}]};
 }
 async function open(t,context,extra={}){
  const fixture=generatedMaterialPages({text:'Generated narrator planned a walk. The outcome is unknown.'});
@@ -39,6 +40,8 @@ test('two catalog items and tiny material pages omit long statement prose withou
  const catalog=await f.call('material_catalog',{limit:2});assert.equal(catalog.status,200);assert.equal(catalog.body.data.items.length,2);
  assert.ok(JSON.stringify(catalog.body).length<16000);assert.equal(JSON.stringify(catalog.body).includes(instruction),false);
  assert.deepEqual(catalog.body.data.items[0].attributionContext.importDeclarations,f.context.importDeclarations);
+ assert.equal(catalog.body.data.items[0].attributionContext.recordContextStatements,undefined);
+ assert.deepEqual(catalog.body.data.items[0].attributionContext.recordContextDeclarations,f.context.recordContextDeclarations);
  assert.deepEqual(catalog.body.data.items[0].attributionContextLocator,{ref:materialRef});
  for(const length of [1,128]){const result=await f.call('material_read',{ref:materialRef,length});assert.equal(result.status,200);assert.ok(JSON.stringify(result.body).length<16000);assert.equal(JSON.stringify(result.body).includes(instruction),false);
   assert.equal(result.body.data.material.attributionContext.ownerRelation,'unknown');assert.deepEqual(result.body.data.spans[0].attributionContext.correction,f.context.correction);}
@@ -148,4 +151,12 @@ test('default source context pins fence projected originals across edits and cle
  assert.equal(fingerprints[0],legacy);assert.equal(fingerprints[1],legacy);
  assert.equal(new Set(fingerprints.slice(2)).size,3,'an unchanged body or cleared description cannot retain an earlier source version identity');
  assert.ok(fingerprints.slice(2).every(fingerprint=>fingerprint!==legacy));
+});
+
+test('a record-only context changes the evidence fingerprint even with the default unknown owner relation',async t=>{
+ const fixture=generatedMaterialPages({text:'Generated unchanged note'}),record=fixture.originals[0];
+ const legacy=createHash('sha256').update(JSON.stringify([record.ocrText,record.provenance,record.fileEvidence])).digest('hex');
+ const attributionContext={version:1,ownerRelation:'unknown',basis:'default',recordContextDeclarations:[{captureId:record.id,version:1,fingerprint:'d'.repeat(64)}],recordContextStatements:[{captureId:record.id,version:1,description:'Generated exact record context'}]};
+ const bridge=await startBridge({...fixture.reader,evidence:async()=>[{...record,attributionContext}]},{question:'Generated record context',evidenceIds:[record.id],evidenceRanges:[{id:record.id,offset:0,length:record.ocrText.length}]},10);t.after(()=>bridge.close());
+ assert.notEqual(bridge.seedEvidence[0].evidenceFingerprint,legacy);
 });

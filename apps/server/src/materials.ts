@@ -11,6 +11,7 @@ import {materialDependencyStatus,materialRequirementsSchema,type MaterialInputPi
 import {materialIndexRuntime,type MaterialIndexRuntime,type MaterialIndexStatus} from './material-index.js';
 import type {ExecutionEngine} from './execution-engine.js';
 import {ImportAttributionStore} from './import-attribution.js';
+import {RecordContextStore} from './record-context.js';
 import {SourceContextStore} from './source-context.js';
 
 const MATERIAL_PREFIX='mat_';
@@ -90,7 +91,7 @@ const currentEvidenceAllowed=(row:CurrentEvidenceRow|undefined)=>Boolean(row&&!r
 type BlockRow={block_id:string;anchor_id?:string|null;kind:'text'|'asset';format:string|null;payload:string;asset_hash:string|null;mime_type:string|null;member_ids:string;locator:string|null;start_offset:number;end_offset:number};
 const canonicalContext=(value:unknown):unknown=>Array.isArray(value)?value.map(canonicalContext):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonicalContext(item)])):value;
 /** Catalogs and range descriptors carry authority identities, never declaration prose. */
-const contextMetadata=(context:AttributionContext):AttributionContext=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,...metadata}=context;return metadata;};
+const contextMetadata=(context:AttributionContext):AttributionContext=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,recordContextStatements:____,...metadata}=context;return metadata;};
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const parseId=(id:string)=>materialIdSchema.parse(id);
 const parseRevision=(revision:string)=>revisionSchema.parse(revision);
@@ -130,9 +131,11 @@ export class MaterialStore {
   readonly catalog=new MaterialCatalog(this);
   private readonly importAttribution:ImportAttributionStore;
   private readonly sourceContexts:SourceContextStore;
+  private readonly recordContexts:RecordContextStore;
   constructor(readonly store:Store){
     this.importAttribution=new ImportAttributionStore(store);
     this.sourceContexts=new SourceContextStore(store);
+    this.recordContexts=new RecordContextStore(store);
     store.db.exec(`
       CREATE TABLE IF NOT EXISTS material_searchable(material_id TEXT PRIMARY KEY REFERENCES material_heads(id) ON DELETE CASCADE);
       CREATE TABLE IF NOT EXISTS material_evidence(id TEXT PRIMARY KEY,material_id TEXT NOT NULL,revision TEXT NOT NULL,block_id TEXT NOT NULL,invalidated INTEGER NOT NULL DEFAULT 0,FOREIGN KEY(material_id,revision) REFERENCES material_revisions(material_id,revision) ON DELETE CASCADE);
@@ -264,7 +267,7 @@ export class MaterialStore {
       if(!prior||basis(this.contextDraft(prior))!==basis(draft))delete attributionContext.declarations;
     }
     return {...draft,attributionContext,blocks:draft.blocks.map(block=>block.kind==='text'&&block.evidenceContext?{...block,
-      evidenceContext:{...block.evidenceContext,attributionContext}}:block)};
+      evidenceContext:{...block.evidenceContext,attributionContext:this.withImportContext(attributionContext,draft.members.filter(member=>member.kind==='capture'&&block.memberIds.includes(member.id)).map(member=>member.ref.slice('capture:'.length)))}}:block)};
   }
   /** Host-owned projection for originals as well as formal evidence. */
   contextForEvidence(record:CaptureRecord):AttributionContext {
@@ -313,13 +316,14 @@ export class MaterialStore {
     return this.withImportContext(sourceId?this.resolveContext('',sourceId):unknownAttributionContext(),[captureId],true);
   }
   private withImportContext(context:AttributionContext,captureIds:string[],open=false):AttributionContext {
-    const {importDeclarations:_,importStatements:__,sourceContextStatements:___,...base}=context,importDeclarations=this.importAttribution.identities(captureIds);
+    const {importDeclarations:_,importStatements:__,sourceContextStatements:___,recordContextDeclarations:____,recordContextStatements:_____,...base}=context,importDeclarations=this.importAttribution.identities(captureIds);
+    const recordContextDeclarations=this.recordContexts.identities(captureIds),recordContextStatements=open?this.recordContexts.open(recordContextDeclarations):[];
     const importStatements=open?this.importAttribution.open(importDeclarations):[];
     const sourceContextStatements=open?this.sourceContexts.open(context.sourceContextDeclarations??[]):[];
-    return {...base,...(importDeclarations.length?{importDeclarations}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
+    return {...base,...(recordContextDeclarations.length?{recordContextDeclarations}:{}),...(recordContextStatements.length?{recordContextStatements}:{}),...(importDeclarations.length?{importDeclarations}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
   }
   private rangeContext(material:MaterialRecord,memberIds:string[]):AttributionContext {
-    const context=contextMetadata(material.attributionContext??unknownAttributionContext());if(!context.importDeclarations?.length)return context;
+    const context=contextMetadata(material.attributionContext??unknownAttributionContext());if(!context.importDeclarations?.length&&!context.recordContextDeclarations?.length)return context;
     const captureIds=this.store.db.prepare(`SELECT ref FROM material_members WHERE material_id=? AND revision=? AND kind='capture'
       AND id IN (SELECT value FROM json_each(?))`).all(material.id,material.revision,JSON.stringify(memberIds)).map(row=>String(row.ref).slice('capture:'.length));
     return this.withImportContext(context,captureIds);
@@ -399,8 +403,8 @@ export class MaterialStore {
   }
   private openContext(id:string,context:AttributionContext):AttributionContext {
     const ownerStatements=(context.declarations??[]).flatMap(value=>{const row=this.store.db.prepare('SELECT json FROM material_owner_declarations WHERE material_id=? AND id=? AND version=?').get(id,value.id,value.version);if(!row)return [];const body=decodeMemoryPrivate<{question:string;answer:string}>(this.store,JSON.parse(String(row.json)).private);return [{id:value.id,...body}];});
-    const {importStatements:_,sourceContextStatements:__,...base}=context,importStatements=this.importAttribution.open(context.importDeclarations??[]),sourceContextStatements=this.sourceContexts.open(context.sourceContextDeclarations??[]);
-    return {...base,...(ownerStatements.length?{ownerStatements}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
+    const {importStatements:_,sourceContextStatements:__,recordContextStatements:___,...base}=context,recordContextStatements=this.recordContexts.open(context.recordContextDeclarations??[]),importStatements=this.importAttribution.open(context.importDeclarations??[]),sourceContextStatements=this.sourceContexts.open(context.sourceContextDeclarations??[]);
+    return {...base,...(recordContextStatements.length?{recordContextStatements}:{}),...(ownerStatements.length?{ownerStatements}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
   }
   /** Semantic dependencies follow original and excerpt lineage without revoking either original. */
   private invalidateCaptureSemantics(captureId:string){

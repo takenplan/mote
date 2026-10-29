@@ -93,7 +93,7 @@ function project(record: ContextRecord, offset = 0, length = 600, timeZone = 'UT
   const projected:ContextRecord = {
     ...(fileEvidenceSchema.safeParse(record.fileEvidence).success?{fileEvidence:fileEvidenceSchema.parse(record.fileEvidence)}:{}),
     ...(stateSeriesSchema.safeParse(record.stateSeries).success?{stateSeries:stateSeriesSchema.parse(record.stateSeries)}:{}),
-    evidenceFingerprint:createHash('sha256').update(JSON.stringify([text,record.provenance,record.fileEvidence,...(attribution.success&&(attribution.data.basis!=='default'||attribution.data.correction||attribution.data.sourceDeclaration||attribution.data.materialDeclarations||attribution.data.declarations||attribution.data.ownerStatements||attribution.data.importDeclarations||attribution.data.importStatements||attribution.data.sourceContextDeclarations?.length||attribution.data.sourceContextStatements?.length)?[attribution.data]:[])])).digest('hex'),
+    evidenceFingerprint:createHash('sha256').update(JSON.stringify([text,record.provenance,record.fileEvidence,...(attribution.success&&(attribution.data.basis!=='default'||attribution.data.correction||attribution.data.sourceDeclaration||attribution.data.materialDeclarations||attribution.data.declarations||attribution.data.ownerStatements||attribution.data.importDeclarations||attribution.data.importStatements||attribution.data.sourceContextDeclarations?.length||attribution.data.sourceContextStatements?.length||attribution.data.recordContextDeclarations?.length||attribution.data.recordContextStatements?.length)?[attribution.data]:[])])).digest('hex'),
     ...(attribution.success?{attributionContext:attribution.data}:{}),
     ...(record.retrieval?{retrieval:record.retrieval}:{}),
     estimatedReadCharacters:text.length,
@@ -179,7 +179,7 @@ const pinnedMaterialRef=/^material:(mat_[a-f0-9]{64})@([a-f0-9]{64})$/;
  * authorized, lossless disclosure path and never affects original grants. */
 function attributionMetadata(value:unknown){
   const parsed=attributionContextSchema.safeParse(value);if(!parsed.success)return undefined;
-  const {ownerStatements:_owner,importStatements:_import,sourceContextStatements:_source,...metadata}=parsed.data;
+  const {ownerStatements:_owner,importStatements:_import,sourceContextStatements:_source,recordContextStatements:_record,...metadata}=parsed.data;
   return metadata;
 }
 function attributionMetadataResponse(value:unknown,parentLocator?:{id:string}|{ref:string}):unknown {

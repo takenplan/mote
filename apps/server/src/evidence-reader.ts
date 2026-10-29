@@ -34,7 +34,7 @@ import {memorySchema,type Memory} from './memory-schema.js';
 import {combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
 import type {CaptureRead,CaptureContextRead,SourceFileCatalogRead,MaterialRead,MemoryRead,MemoryReadSnapshots,MemoryInputSelection,MemoryReadSnapshot,MemoryReadExposure as MemoryExposure,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
 export type {MemoryReadSnapshot,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
-const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,...metadata}=context;return JSON.stringify(metadata);};
+const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,recordContextStatements:____,...metadata}=context;return JSON.stringify(metadata);};
 
 export {parseEvidenceRef} from '@mote/shared';
 type ScreenOriginalGrant={kind:'material'|'segment';ref:string;scope:Range};

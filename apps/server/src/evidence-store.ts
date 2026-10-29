@@ -127,6 +127,7 @@ export class EvidenceStore {
   }
   async prepare(raw:unknown):Promise<Prepared> {
     const input=captureSchema.parse(raw); input.capturedAt=new Date(input.capturedAt).toISOString();
+    if(input.metadata?.ownerDescription!==undefined)throw new StoreError('Owner descriptions must pass through the private ingress context boundary');
     if(input.metadata?.uiPage?.version===3){
       input.metadata.observedAt=new Date(input.metadata.observedAt).toISOString();
       input.metadata.uiPage.observations.firstAt=new Date(input.metadata.uiPage.observations.firstAt).toISOString();
@@ -213,7 +214,7 @@ export class EvidenceStore {
     try {before?.();const results=prepared.map((p,i)=>{const result=this.insert(p);transaction?.(result,i);return result;});this.db.exec('COMMIT');return results;}
     catch(e){this.db.exec('ROLLBACK');this.sweep();throw e;}
   }
-  async ingestSettled(raw:CaptureInput[],authorize?:()=>void) {
+  async ingestSettled(raw:CaptureInput[],authorize?:()=>void,transaction?:(result:{id:string;duplicate:boolean},index:number)=>void) {
     if(!raw.length||raw.length>CAPTURE_BATCH_MAX_RECORDS)throw new StoreError('Expected 1–500 observations',413);
     if(Buffer.byteLength(JSON.stringify(raw))>CAPTURE_BATCH_MAX_BYTES)throw new StoreError('Observation batch exceeds 32 MiB',413);
     const prepared:PromiseSettledResult<Prepared>[]=[];
@@ -225,7 +226,7 @@ export class EvidenceStore {
       const results=prepared.map((p,i)=>{
         if(p.status==='rejected')return {id:raw[i].id,error:p.reason as unknown};
         this.db.exec('SAVEPOINT capture_member');
-        try{const result=this.insert(p.value);this.captureReceived(p.value.input.deviceId);this.db.exec('RELEASE capture_member');return {id:raw[i].id,result};}
+        try{const result=this.insert(p.value);transaction?.(result,i);this.captureReceived(p.value.input.deviceId);this.db.exec('RELEASE capture_member');return {id:raw[i].id,result};}
         catch(error){failed=true;this.db.exec('ROLLBACK TO capture_member; RELEASE capture_member');return {id:raw[i].id,error};}
       });
       this.db.exec('COMMIT');if(failed)this.sweep();return results;

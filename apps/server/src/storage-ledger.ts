@@ -51,6 +51,7 @@ export class StorageLedger {
     expressions.material_index_garbage='64';
     expressions.import_owner_declarations='length(CAST(json AS BLOB))+256';
     expressions.source_context_declarations='length(CAST(json AS BLOB))+length(CAST(source_id AS BLOB))+256';
+    expressions.record_context_declarations='length(CAST(json AS BLOB))+length(CAST(capture_id AS BLOB))+256';
     expressions.capture_import_declarations='256';
     expressions.memory_recipe_default_upgrades='length(CAST(id AS BLOB))+128';
     expressions.memory_recipe_legacy_scopes='length(CAST(setting_id AS BLOB))+length(CAST(scope AS BLOB))+128';

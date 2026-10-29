@@ -89,7 +89,12 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
       record.source!=='screen'&&record.source!=='ui_page'&&
       store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(provenance.sourceId));
     const memoryMaterialRef=evidenceReader.currentMemoryMaterialRef(record);
-    return {...evidenceReader.context([record])[0],libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
+    const detailed=evidenceReader.context([record])[0];
+    if(credential(req)&&detailed.attributionContext){
+      const {recordContextDeclarations:_,recordContextStatements:__,...context}=detailed.attributionContext;
+      detailed.attributionContext=context;
+    }
+    return {...detailed,libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
       requiresMaterialForMemory,...(memoryMaterialRef?{memoryMaterialRef}:{})};
   });
   app.get('/api/capture-browser/:id/image',async(req,reply)=>{

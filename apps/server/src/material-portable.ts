@@ -3,6 +3,7 @@ import {MaterialStore,materialId,materialManifestSchema,materialEvidenceContextS
 import {StoreError,sha256,type Store} from './store.js';
 import {ImportAttributionStore,portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution.js';
 import {SourceContextStore,portableSourceContextSchema,type PortableSourceContext} from './source-context.js';
+import {RecordContextStore,portableRecordContextSchema,type PortableRecordContext} from './record-context.js';
 
 const hash=z.string().regex(/^[a-f0-9]{64}$/),id=z.string().regex(/^mat_[a-f0-9]{64}$/),uuid=z.string().uuid();
 const text=z.string(),integer=z.number().int().nonnegative(),flag=z.number().int().min(0).max(1),at=z.string().datetime({offset:true});
@@ -30,9 +31,9 @@ const keys={heads:['id'],revisions:['material_id','revision'],blocks:['material_
   members:['material_id','revision','idx'],payloads:['hash'],evidence:['id'],contexts:['anchor_id'],dependencies:['anchor_id','evidence_id'],
   codingSnapshots:['material_id','revision'],indexing:['material_id']} as const;
 const sectionSchema=z.object({version:z.literal(1),...Object.fromEntries(Object.entries(schemas).map(([key,schema])=>[key,z.array(schema).max(400000)])),
-  assets:z.array(z.object({hash,bytes:integer,dataBase64:z.string()}).strict()).max(20000),importAttribution:portableImportAttributionSchema.optional(),sourceContext:portableSourceContextSchema.optional(),checksum:hash}).strict();
+  assets:z.array(z.object({hash,bytes:integer,dataBase64:z.string()}).strict()).max(20000),importAttribution:portableImportAttributionSchema.optional(),sourceContext:portableSourceContextSchema.optional(),recordContext:portableRecordContextSchema.optional(),checksum:hash}).strict();
 type Name=keyof typeof schemas;
-type Portable=Record<Name,Record<string,string|number|null>[]> & {version:1;assets:{hash:string;bytes:number;dataBase64:string}[];importAttribution?:PortableImportAttribution;sourceContext?:PortableSourceContext;checksum:string};
+type Portable=Record<Name,Record<string,string|number|null>[]> & {version:1;assets:{hash:string;bytes:number;dataBase64:string}[];importAttribution?:PortableImportAttribution;sourceContext?:PortableSourceContext;recordContext?:PortableRecordContext;checksum:string};
 const names=Object.keys(schemas) as Name[];
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
 const digest=(value:unknown)=>sha256(JSON.stringify(canonical(value)));
@@ -44,17 +45,19 @@ function groupRows(rows:Portable[Name],key:(row:Portable[Name][number])=>string)
 export function portableMaterialEstimate(store:Store){
   const imports=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='import_owner_declarations'").get()?Number(store.db.prepare('SELECT coalesce(sum(length(CAST(json AS BLOB))),0) n FROM import_owner_declarations').get()!.n):0;
   const contexts=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='source_context_declarations'").get()?Number(store.db.prepare('SELECT coalesce(sum(length(CAST(json AS BLOB))),0) n FROM source_context_declarations').get()!.n):0;
-  if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_heads'").get())return imports+contexts;
+  const records=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='record_context_declarations'").get()?Number(store.db.prepare('SELECT coalesce(sum(length(CAST(json AS BLOB))),0) n FROM record_context_declarations').get()!.n):0;
+  if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_heads'").get())return imports+contexts+records;
   const payload=Number(store.db.prepare('SELECT coalesce(sum(length(CAST(text AS BLOB))),0) n FROM material_block_payloads').get()!.n);
   const assets=Number(store.db.prepare(`SELECT coalesce(sum(a.bytes),0) n FROM assets a WHERE a.hash IN
     (SELECT asset_hash FROM material_blocks UNION SELECT asset_hash FROM material_block_versions)`).get()!.n);
-  return payload+Math.ceil(assets*4/3)+imports+contexts;
+  return payload+Math.ceil(assets*4/3)+imports+contexts+records;
 }
 export function exportPortableMaterials(store:Store):Portable|undefined{
   if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_heads'").get()){
     const imports=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='capture_import_declarations'").get()&&store.db.prepare('SELECT 1 FROM capture_import_declarations LIMIT 1').get();
     const contexts=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='source_context_declarations'").get()&&store.db.prepare('SELECT 1 FROM source_context_declarations LIMIT 1').get();
-    if(!imports&&!contexts)return undefined;
+    const records=store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='record_context_declarations'").get()&&store.db.prepare('SELECT 1 FROM record_context_declarations LIMIT 1').get();
+    if(!imports&&!contexts&&!records)return undefined;
     new MaterialStore(store);
   }
   const body={version:1} as Omit<Portable,'checksum'>;
@@ -66,6 +69,9 @@ export function exportPortableMaterials(store:Store):Portable|undefined{
   }
   if(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='source_context_declarations'").get()){
     const sourceContext=new SourceContextStore(store).export();if(sourceContext.declarations.length)body.sourceContext=sourceContext;
+  }
+  if(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='record_context_declarations'").get()){
+    const recordContext=new RecordContextStore(store).export();if(recordContext.declarations.length)body.recordContext=recordContext;
   }
   return {...body,checksum:digest(body)};
 }
@@ -92,6 +98,8 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
   const materials=new MaterialStore(store),db=store.db;
   const importAttribution=new ImportAttributionStore(store);
   if(portable.importAttribution)importAttribution.restore(portable.importAttribution);
+  const recordContexts=new RecordContextStore(store);
+  if(portable.recordContext)recordContexts.restore(portable.recordContext);
   const heads=new Map(portable.heads.map(row=>[row.id,row])),revisions=new Map(portable.revisions.map(row=>[revisionKey(row),row]));
   const revisionSequences=new Set(portable.revisions.map(row=>JSON.stringify([row.material_id,row.sequence])));
   if(revisionSequences.size!==portable.revisions.length)throw new StoreError('Material archive contains duplicate history sequences');
@@ -110,6 +118,7 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
     const manifest=JSON.parse(String(revision.manifest));
     if(manifest.retired===true){if(manifest.id!==head.id||revision.block_count!==0||revision.member_count!==0)throw new StoreError('Invalid retired material revision');continue;}
     const normalized=materialManifestSchema.parse(manifest);
+    if(normalized.attributionContext?.recordContextStatements!==undefined)throw new StoreError('Material archive contains private record descriptions outside their declaration store');
     if(normalized.attributionContext?.sourceContextStatements!==undefined)throw new StoreError('Material archive contains private source context prose outside its declaration store');
     for(const pin of normalized.attributionContext?.sourceContextDeclarations??[]){
       if(pin.sourceId!==normalized.origin.sourceId||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material source context declaration has unrelated or missing source scope');
@@ -118,6 +127,7 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
     const members=(membersByRevision.get(revisionKey(revision))??[]).sort((a,b)=>Number(a.idx)-Number(b.idx));
     if(members.length!==revision.member_count||members.some((row,i)=>row.idx!==i))throw new StoreError('Material member layout mismatch');
     for(const member of members){if(member.kind==='capture'&&(member.ref!=='capture:'+member.id||!store.evidence([String(member.id)]).length))throw new StoreError('Material archive is missing its original capture');}
+    if(digest(normalized.attributionContext?.recordContextDeclarations??[])!==digest(recordContexts.identities(members.filter(member=>member.kind==='capture').map(member=>String(member.id)))))throw new StoreError('Material record description has unrelated or missing original scope');
     if(normalized.attributionContext?.importDeclarations?.length){
       const expected=importAttribution.identities(members.filter(member=>member.kind==='capture').map(member=>String(member.id)));
       if(digest(normalized.attributionContext.importDeclarations)!==digest(expected))throw new StoreError('Material import declaration has unrelated original scope');
@@ -158,6 +168,11 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
     if(blocks.some(row=>proof(row)!==proof(original)))throw new StoreError('Material evidence anchor refers to divergent block proof');
   }
   for(const row of portable.dependencies)if(!anchors.has(row.anchor_id))throw new StoreError('Material dependency has no anchor');
+  for(const row of portable.contexts){
+    const context=materialEvidenceContextSchema.parse(JSON.parse(String(row.json)));
+    if(context.attributionContext?.recordContextStatements!==undefined)throw new StoreError('Material evidence archive contains private record descriptions outside their declaration store');
+    if(digest(context.attributionContext?.recordContextDeclarations??[])!==digest(recordContexts.identities(dependencies.get(String(row.anchor_id))??[])))throw new StoreError('Material evidence record description has unrelated or missing original scope');
+  }
   for(const row of portable.contexts){if(!anchors.has(row.anchor_id))throw new StoreError('Material context has no anchor');const context=materialEvidenceContextSchema.parse(JSON.parse(String(row.json)));if(context.attributionContext?.sourceContextStatements!==undefined)throw new StoreError('Material evidence archive contains private source context prose outside its declaration store');for(const pin of context.attributionContext?.sourceContextDeclarations??[]){const anchor=anchors.get(row.anchor_id)!,head=heads.get(anchor.material_id)!;if(pin.sourceId!==head.source_id||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material evidence source context declaration has unrelated or missing source scope');}}
   for(const row of portable.codingSnapshots)if(!revisions.has(revisionKey(row)))throw new StoreError('Coding material snapshot has no revision');
   for(const row of portable.indexing)if(!heads.has(row.material_id))throw new StoreError('Material search projection has no head');

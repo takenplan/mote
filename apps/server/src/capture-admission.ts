@@ -3,8 +3,11 @@ import {StoreError} from './store.js';
 import type {FileStore} from './files.js';
 import type {ConnectionCredential} from './connections.js';
 /** Correction provenance is minted only by the owner's reviewed Memory service. */
-export function assertExternalCaptures(inputs:CaptureInput[]){
- for(const input of inputs)if(input.metadata?.memoryCorrection)throw new StoreError('Memory correction provenance is reserved for the host review service',400);
+export function assertExternalCaptures(inputs:CaptureInput[],owner=false){
+ for(const input of inputs){
+  if(input.metadata?.memoryCorrection)throw new StoreError('Memory correction provenance is reserved for the host review service',400);
+  if(input.metadata?.ownerDescription!==undefined&&!owner)throw new StoreError('Only the owner may declare record context',403);
+ }
 }
 
 /** Reference declarations never authorize a device to attach another device's bytes. */

@@ -2,6 +2,7 @@ import type {CaptureInput} from '@mote/shared';
 import type {Store} from './store.js';
 import type {SourceStore} from './sources.js';
 import type {FileStore} from './files.js';
+import {RecordContextStore,withoutOwnerDescription} from './record-context.js';
 
 export const INGRESS_PROTOCOL_VERSION='2';
 /** Scope this gate to collector writes; owner imports and queries are independent. */
@@ -45,14 +46,15 @@ function fileAcknowledgement(ack:FileAck){return {...ack,receipt:fileReceipt(ack
 /** Owns the acknowledgement boundary for all three current physical stores.
  * In particular, a staged file upload has no receipt until commit succeeds. */
 export class IngressService {
-  constructor(private store:Store,private sources:SourceStore,private files:FileStore){}
+  private readonly recordContexts:RecordContextStore;
+  constructor(private store:Store,private sources:SourceStore,private files:FileStore){this.recordContexts=new RecordContextStore(store);}
   async capture(input:CaptureInput,authorize?:()=>void){
-    const ack=await this.store.ingest(input,authorize);
+    const ack=await this.store.ingest(withoutOwnerDescription(input),result=>{authorize?.();this.recordContexts.bind(result.id,input.metadata?.ownerDescription,result.duplicate);});
     this.store.captureReceived(input.deviceId);
     return {...ack,receipt:captureReceipt(ack)};
   }
   async captureSettled(inputs:CaptureInput[],authorize?:()=>void){
-    const committed=await this.store.ingestSettled(inputs,authorize);
+    const committed=await this.store.ingestSettled(inputs.map(withoutOwnerDescription),authorize,(result,index)=>this.recordContexts.bind(result.id,inputs[index].metadata?.ownerDescription,result.duplicate));
     return committed.map(item=>item.result?{...item,result:{...item.result,receipt:captureReceipt(item.result)}}:item);
   }
   async sourceItem(sourceId:string,input:unknown,authorize?:()=>void){
