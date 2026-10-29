@@ -856,6 +856,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       assertSourceContextDependencies(sourceContexts,result.sourceContextDependencies);
       delegation.recordEvidence(work.id,[...(result.evidenceDependencies?.ids??[]),...result.citations.map(citation=>citation.id)]);
       const previous=conversationId?conversations.get(conversationId):undefined,scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone','evidenceIds','anchorEvidenceIds'] as const)if(prepared[key]!==undefined)Object.assign(scope,{[key]:prepared[key]});
+      if(prepared.historicalSelection)Object.assign(scope,prepared.historicalSelection);
       return conversations.append(previous,{question,...scope,attachments:prepared.directImages?.filter(image=>attachmentIds.includes(image.id)).map(({id,name,mimeType})=>({id,name,mimeType}))},result);
     },
     failure:(body,error)=>{

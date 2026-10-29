@@ -15,7 +15,7 @@ const token='generated-history-retention-owner',headers={authorization:`Bearer $
 const config=(dataDir:string):Config=>({dataDir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:50_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});
 const result=(answer:string,ids:string[]=[])=>({answer,citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1 as const,complete:true,ids}});
 
-for(const removal of ['tombstone','capture-delete'] as const)test(`ordinary revisions preserve history across restart; later ${removal} erases all derived generations`,async t=>{
+for(const removal of ['tombstone','capture-delete'] as const)test(`ordinary revisions preserve history across restart; ordinary ${removal} preserves dialogue while privacy erasure clears every generation`,async t=>{
  const dir=await mkdtemp(join(tmpdir(),'mote-history-preservation-')),seen:QueryInput[]=[];let evidenceIds:string[]=[];
  const agent={configured:true,close:async()=>{},query:async(input:QueryInput)=>{seen.push(input);return {...result(seen.length===1?'Generated first proposal; second proposal uses a paper glider.':'Generated discussion of the earlier second proposal.',evidenceIds),citations:evidenceIds.length?[{id:evidenceIds[0],capturedAt:'2026-10-01T00:00:00Z',appName:'Generated history',excerpt:'Generated original evidence.'}]:[]};}};
  let node=await buildApp(config(dir),{backgroundWorker:false,agent});t.after(async()=>{await node.app.close();await rm(dir,{recursive:true,force:true});});
@@ -50,8 +50,21 @@ for(const removal of ['tombstone','capture-delete'] as const)test(`ordinary revi
  if(removal==='tombstone')await node.sources.upsert('generated-history',item('3','',true));else node.store.delete(original.id);
  await assert.rejects(withFixtureOwnerModelWork(node,()=>node.featureServices.queryAgent({question:'Replay a frozen dialogue',conversation:frozen})),/Conversation changed/);assert.equal(seen.length,callsBeforeDeletion,'a revoked frozen history must be refused before model entry');
  const erased=(await node.app.inject({url:`/api/conversations/${conversationId}`,headers})).json();
- assert.ok(erased.turns.every((turn:any)=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/paper glider|earlier second proposal/);
+ assert.ok(erased.turns.every((turn:any)=>turn.evidenceUnavailable&&!turn.evidenceDeleted));assert.match(JSON.stringify(erased),/paper glider|earlier second proposal/);
+ assert.equal((await node.app.inject({url:`/api/conversations/${conversationId}/references/${original.id}`,headers})).json().available,false,'saved citation cannot use the separate owner archive route');
+ assert.equal((await node.app.inject({url:`/api/captures/${original.id}`,headers})).statusCode,removal==='tombstone'?200:404,'independent immutable owner archive semantics stay explicit');
+ assert.deepEqual(await node.featureServices.evidenceReader.agent({diagnostics:node.diagnostics}).evidence({ids:[original.id]}),[],'retained dialogue grants no fresh model original read');
  assert.equal(working.get(conversations.get(conversationId)),undefined);
  const after=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId,question:'Continue with remaining evidence'}});assert.equal(after.statusCode,200,after.body);
+ assert.match(JSON.stringify(seen.at(-1)!.conversation),/paper glider|earlier second proposal/);
+ await node.app.close();node=await buildApp(config(dir),{backgroundWorker:false,agent});
+ const again=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId,question:'Continue after the original was deleted and Central restarted'}});assert.equal(again.statusCode,200,again.body);
+ await withFixtureOwnerModelWork(node,()=>node.working.compact(conversationId,{...defaultLifecycleSettings,recentTurns:0},input=>node.featureServices.queryAgent(input)));
+ assert.ok(node.working.get(node.featureServices.conversations.get(conversationId)));
+ node.store.invalidateConversationAnswers([original.id],true);
+ const privateErasure=node.featureServices.conversations.get(conversationId);assert.ok(privateErasure.turns.filter(turn=>turn.result).every(turn=>turn.evidenceDeleted));
+ assert.doesNotMatch(JSON.stringify(privateErasure),/paper glider|earlier second proposal/);
+ assert.equal(node.store.db.prepare('SELECT count(*) n FROM conversation_retired_roots WHERE id=?').get(original.id)!.n,0);
+ const cleared=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId,question:'Continue after privacy erasure'}});assert.equal(cleared.statusCode,200,cleared.body);
  assert.doesNotMatch(JSON.stringify(seen.at(-1)!.conversation),/paper glider|earlier second proposal/);
 });

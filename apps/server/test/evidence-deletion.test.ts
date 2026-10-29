@@ -37,7 +37,7 @@ async function fixture(t:TestContext){
  // A SQL failure in the last selected revision occurs after earlier invalidation
  // and deletion statements have already executed in the command.
  const order=store.db.prepare("SELECT capture_id FROM file_versions WHERE source_id='generated-files' AND external_id='selected'").all().map(row=>String(row.capture_id));
- const snapshot=()=>Object.fromEntries(['captures','file_versions','file_forgotten','material_heads','material_evidence','material_block_payloads','memories','memory_dependencies','memory_provider_evidence_revocations','conversation_turns','changes'].map(table=>[table,store.db.prepare('SELECT * FROM '+table+' ORDER BY rowid').all()]));
+ const snapshot=()=>Object.fromEntries(['captures','file_versions','file_forgotten','material_heads','material_evidence','material_block_payloads','memories','memory_dependencies','memory_provider_evidence_revocations','conversation_turns','conversation_retired_roots','conversation_retired_turn_roots','changes'].map(table=>[table,store.db.prepare('SELECT * FROM '+table+' ORDER BY rowid').all()]));
  return {directory,store,sources,files,materials,conversations,first,second,other,dependents,order,snapshot,beforeClose:(close:()=>unknown|Promise<unknown>)=>closers.push(close),reopen(){store.close();store=new Store(directory);return store;}};
 }
 
@@ -73,6 +73,9 @@ test('capture deletion HTTP delegates file chunks and captures without changing 
  assert.equal((await node.app.inject({method:'DELETE',url:'/api/captures/'+chunkId})).statusCode,401);
  const first=await node.app.inject({method:'DELETE',url:'/api/captures/'+chunkId,headers});assert.equal(first.statusCode,200,first.body);assert.deepEqual(first.json(),{deleted:2});
  assert.deepEqual((await node.app.inject({method:'DELETE',url:'/api/captures/'+chunkId,headers})).json(),{deleted:0});
+ for(const dependent of f.dependents.slice(0,2)){const turn=f.conversations.get(dependent.conversationId).turns[0];assert.equal(turn.evidenceDeleted,undefined);assert.equal(turn.evidenceUnavailable,true);assert.match(turn.result!.answer,/Generated supported/);}
+ const privacy=await node.app.inject({method:'DELETE',url:'/api/files/'+f.first.id,headers});assert.equal(privacy.statusCode,200,privacy.body);
+ for(const dependent of f.dependents.slice(0,2))assert.equal(f.conversations.get(dependent.conversationId).turns[0].evidenceDeleted,true,'explicit forget also erases history after ordinary physical removal');
  assert.equal((await node.app.inject({method:'DELETE',url:'/api/files/'+f.first.id,headers})).statusCode,404);
  const head='/api/file-sync/v1/head?'+new URLSearchParams({sourceId:'generated-files',externalId:'selected'});
  assert.deepEqual((await node.app.inject({url:head,headers})).json(),{revision:null,forgotten:true});

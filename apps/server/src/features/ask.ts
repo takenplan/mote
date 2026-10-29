@@ -17,6 +17,7 @@ const queryConnections=(input:{modelProfileId?:string;modelOverride?:string})=>{
 };
 app.get('/api/conversations',async req=>conversations.list(z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(1000).optional()}).strict().parse(req.query)));
 app.get('/api/conversations/:id',async req=>conversations.page(z.object({id:z.string().uuid()}).parse(req.params).id,z.object({limit:z.coerce.number().int().min(1).max(50).default(20),cursor:z.string().optional()}).parse(req.query)));
+app.get('/api/conversations/:id/references/:evidenceId',async req=>{const {id,evidenceId}=z.object({id:z.string().uuid(),evidenceId:z.string().uuid()}).parse(req.params);return conversations.referenceAvailability(id,evidenceId);});
 app.delete('/api/conversations/:id',async req=>conversations.delete(z.object({id:z.string().uuid()}).parse(req.params).id));
 app.post('/api/query',async req=>{if(!agent.configured)throw new AgentNotConfiguredError();const id=randomUUID(),input=queryWithAttachmentsSchema.parse(req.body);return modelAuthorizationHost.manual('owner-query:'+id,queryConnections(input),()=>queryRuns.perform(id,input));});
 app.post('/api/query-runs/:id/cancel',async req=>queryRuns.cancel(z.object({id:z.string().uuid()}).parse(req.params).id));

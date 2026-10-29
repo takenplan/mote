@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "引用原文已删除，历史问答仍保留。": "Le document cité a été supprimé. Vos questions et réponses passées sont conservées.",
+  "引用不可用": "Référence indisponible",
+  "返回原对话": "Revenir à la conversation",
   "生成任务": "Tâches de génération",
   "查看发现": "Voir la découverte",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "L'envoi précédent n'est pas confirmé. Réessayez d'abord sa demande d'origine ; votre brouillon actuel sera conservé.",

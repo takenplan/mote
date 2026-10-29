@@ -1,3 +1,4 @@
+import {retiredConversationRoot} from './conversation-retention.js';
 import type {CaptureInput} from '@mote/shared';
 import type {QueryInput} from '@mote/agent';
 import type {ModelSettings} from '@mote/shared/models';
@@ -62,7 +63,7 @@ export class ModelAuthorizationHost {
   }
   disclosure(ids:readonly string[]):ModelDisclosure[]{
     const records=[...this.store.evidence([...ids]),...this.materials.evidence([...ids]),...(this.files?.evidence([...ids])??[])];
-    return records.map(record=>({sourceId:record.provenance?.sourceId??'device:'+record.deviceId,dataKind:'text'}));
+    return [...records.map(record=>({sourceId:record.provenance?.sourceId??'device:'+record.deviceId,dataKind:'text' as const})),...ids.flatMap(id=>{const root=retiredConversationRoot(this.store,id);return root?[{sourceId:root.scope.sourceId??'device:'+root.scope.deviceId,dataKind:'text' as const}]:[];})];
   }
   assertEvidence(ids:readonly string[],kind:'text'|'image'='text'){this.control.assertDisclosure(this.disclosure(ids).map(value=>({...value,dataKind:kind})));}
   async manual<T>(id:string,connections:ModelConnection[],task:(signal:AbortSignal)=>Promise<T>,signal?:AbortSignal,kind:'manual'|'probe'='manual',identities:readonly string[]=[]){

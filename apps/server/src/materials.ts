@@ -1,3 +1,4 @@
+import {forgetRetiredConversationRoots,retiredConversationRoot} from './conversation-retention.js';
 import type {StatementSync} from 'node:sqlite';
 import {MaterialCatalog} from './material-catalog.js';
 import {CODING_DIALOGUE_SCHEMA_VERSION,documentSchema,attributionContextSchema,ownerRelationSchema,unknownAttributionContext,type AttributionContext,type OwnerRelation,type CaptureRecord} from '@mote/shared';
@@ -606,12 +607,12 @@ export class MaterialStore {
   }
   /** A source tombstone makes the old head and all of its derived evidence
    * unavailable in the same receive transaction, before reconstruction starts. */
-  redactUntilRebuilt(id:string):void {
+  redactUntilRebuilt(id:string,options:{ordinarySourceDeletion?:boolean}={}):void {
     const head=this.head(id);if(!head||head.retired)return;
     const evidence=this.evidenceIds(id);
     this.setSearchable(id,false);
     this.store.db.prepare('UPDATE material_heads SET min_visible_sequence=max(min_visible_sequence,sequence+1) WHERE id=?').run(id);
-    for(const anchor of evidence)this.store.invalidateMemoryEvidence(anchor,true);
+    for(const anchor of evidence)this.store.invalidateMemoryEvidence(anchor,true,options.ordinarySourceDeletion===true);
   }
   /** CAS identity used by the host even while a privacy tombstone hides reads. */
   revisionForWrite(id:string):string|null {return this.head(id)?.revision??null;}
@@ -1011,7 +1012,13 @@ export class MaterialStore {
       const head=this.head(id);if(!head)throw new StoreError('Material not found',404);
       if(head.retired){if(ownTransaction)db.exec('COMMIT');return {id,revision:head.revision,retired:true};}
       if(head.revision!==options.expectedRevision)throw new StoreError('Material revision changed; refresh and retry',409);
-      this.setSearchable(id,false);this.store.invalidateConversationAnswers(this.store.db.prepare('SELECT id FROM material_evidence WHERE material_id=?').all(id).map(row=>String(row.id)),true);for(const anchor of this.evidenceIds(id))this.store.invalidateMemoryEvidence(anchor);
+      this.setSearchable(id,false);
+      // Generic retirement keeps its prior clearing contract. An organizer may
+      // run after an ordinary original deletion already retired these exact
+      // anchors; it must not relabel that proven ordinary mutation as privacy.
+      const erase=this.store.db.prepare('SELECT id FROM material_evidence WHERE material_id=?').all(id).map(row=>String(row.id)).filter(anchor=>!retiredConversationRoot(this.store,anchor));
+      if(erase.length)this.store.invalidateConversationAnswers(erase,true);
+      for(const anchor of this.evidenceIds(id))this.store.invalidateMemoryEvidence(anchor);
       const now=new Date().toISOString(),revision=hash(JSON.stringify(['retire',id,head.revision])),sequence=head.sequence+1;
       db.prepare('INSERT INTO material_revisions VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,revision,sequence,JSON.stringify({id,kind:head.kind,retired:true}),now,0,0,0,0,null);
       db.prepare('UPDATE material_heads SET revision=?,sequence=?,retired=1,updated_at=? WHERE id=?').run(revision,sequence,now,id);
@@ -1019,5 +1026,5 @@ export class MaterialStore {
     }catch(error){if(ownTransaction&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   /** Explicit privacy erasure removes all revisions, payloads unique to them and asset refs. */
-  forget(id:string):boolean {parseId(id);this.setSearchable(id,false);for(const anchor of this.store.db.prepare('SELECT id FROM material_evidence WHERE material_id=?').all(id))this.store.invalidateMemoryEvidence(String(anchor.id),true);const result=this.store.db.prepare('DELETE FROM material_heads WHERE id=?').run(id);this.pruneIndexes();return result.changes>0;}
+  forget(id:string):boolean {parseId(id);forgetRetiredConversationRoots(this.store,{materialId:id});this.setSearchable(id,false);for(const anchor of this.store.db.prepare('SELECT id FROM material_evidence WHERE material_id=?').all(id))this.store.invalidateMemoryEvidence(String(anchor.id),true);const result=this.store.db.prepare('DELETE FROM material_heads WHERE id=?').run(id);this.pruneIndexes();return result.changes>0;}
 }

@@ -56,7 +56,7 @@ export class WorkingMemory {
     for(const turn of conversation.turns.slice(start,end)){
       if(turn.status==='failed'||!turn.result){count++;continue;}
       const contextStale=!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies);
-      const entry={turnId:turn.id,question:turn.question,answer:turn.result.answer,scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,...(contextStale?{contextStale:true}:{})};
+      const entry={turnId:turn.id,question:turn.question,answer:turn.result.answer,scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,evidenceUnavailable:turn.evidenceUnavailable,...(contextStale?{contextStale:true}:{})};
       const text=JSON.stringify(entry);if(characters+text.length>60000){
         if(prefix.length)break;
         // One very long answer still needs complete coverage. Summarize its
@@ -67,7 +67,7 @@ export class WorkingMemory {
           while(offset<original.length){
             let end=Math.min(original.length,offset+6000);
             if(end<original.length&&/[\uD800-\uDBFF]/.test(original[end-1]))end--;
-            batches.push([{turnId:turn.id,field,offset,end,total:original.length,text:original.slice(offset,end),scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,...(contextStale?{contextStale:true}:{})}]);offset=end;
+            batches.push([{turnId:turn.id,field,offset,end,total:original.length,text:original.slice(offset,end),scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,evidenceUnavailable:turn.evidenceUnavailable,...(contextStale?{contextStale:true}:{})}]);offset=end;
           }
         }
         count++;break;

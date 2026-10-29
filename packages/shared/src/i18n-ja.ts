@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "引用原文已删除，历史问答仍保留。": "引用元の資料は削除されました。過去の質問と回答は保持されています。",
+  "引用不可用": "引用元を利用できません",
+  "返回原对话": "元の会話に戻る",
   "生成任务": "生成タスク",
   "查看发现": "発見を表示",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "前回の送信結果は未確認。先に元の要求を再試行すること。現在の下書きは保持される。",
