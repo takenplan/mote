@@ -2,6 +2,19 @@ import {moteText} from '@mote/shared/i18n';
 export type InitialContext={request?:string;selectedTimeRange?:{after?:string;before?:string};selectedDeviceId?:string;timeZone?:string;untrustedMemoryLeads?:{id:string;title:string;statement:string;uncertainty?:string}[];conversation?:{turns?:unknown[];omittedTurns?:number};untrustedEvidence?:unknown[]};
 export type TraceEvent={seq:number;at:string;truncated?:boolean;trace?:{type:string;runId?:string;tool?:string;status?:string;payload?:unknown;truncated?:boolean}};
 export type RecordedRead={id?:string;ref?:string;title?:string;text:string;offset?:number;total?:number};
+/** Recorded protocol fields only; never reconstruct an answer from current data. */
+export function recordedResponse(event:TraceEvent):string|undefined {
+ if(event.truncated||event.trace?.truncated||event.trace?.type!=='model.completed')return;
+ const response=(event.trace.payload as {response?:unknown}|undefined)?.response;
+ return typeof response==='string'?response:undefined;
+}
+export function recordedCitationIds(events:readonly TraceEvent[]):string[]{
+ return [...new Set(events.flatMap(event=>{
+  if(event.truncated||event.trace?.truncated||event.trace?.type!=='run.completed'||event.trace.status!=='succeeded')return [];
+  const ids=(event.trace.payload as {citations?:unknown}|undefined)?.citations;
+  return Array.isArray(ids)?ids.filter((id):id is string=>typeof id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)):[];
+ }))];
+}
 export function recordedReads(event:TraceEvent):RecordedRead[]{
  if(event.truncated||event.trace?.truncated||event.trace?.type!=='tool.completed'||event.trace.status==='failed')return [];
  const result=(event.trace.payload as {result?:unknown}|undefined)?.result;

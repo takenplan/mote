@@ -1,10 +1,11 @@
 import {useEffect,useState} from 'react';
-import {Eye,Folder,FileText,ChevronRight,ArrowLeft} from 'lucide-react';
+import {Folder,FileText,ChevronRight,ArrowLeft} from 'lucide-react';
 import {moteText} from '@mote/shared/i18n';
 import {type Api,errorMessage} from './api';
 import {useResource} from './useResource';
 import {Materials} from './Materials';
 import {StartupPreview,RecordedInput} from './agent-view-input';
+import {guideVisit} from './feature-guide-state';
 
 type Scope={deviceId?:string;after?:string;before?:string};
 type Entry={path?:string;ref?:string;id?:string;title?:string;windowTitle?:string;appName?:string;preview?:string;expand?:string;layer?:string;revision?:string;status?:string;coverage?:string};
@@ -62,16 +63,17 @@ function Catalog({api,scope,onOpen}:{api:Api;scope:Scope;onOpen:(ref:string)=>vo
  </div>;
 }
 export function AgentInspector({api,onOpen}:{api:Api;onOpen:(ref:string)=>void}){
- const [tab,setTab]=useState('catalog'),[deviceId,setDeviceId]=useState(''),[after,setAfter]=useState(''),[before,setBefore]=useState('');
- const [runId,setRunId]=useState(()=>new URLSearchParams(location.hash.split('?')[1]).get('runId')??'');
- useEffect(()=>{if(runId)setTab('input');},[]);
+ const empty=()=>({api,tab:'catalog',deviceId:'',after:'',before:'',catalogOpen:false,runId:''});
+ const [stored,setStored]=useState(()=>{const query=new URLSearchParams(location.hash.split('?')[1]);return {...empty(),tab:query.has('runId')||query.get('tab')==='input'?'input':'catalog',runId:query.get('runId')??''};});
+ const current=stored.api===api?stored:empty(),{tab,deviceId,after,before,catalogOpen,runId}=current;
+ const update=(patch:Partial<typeof current>)=>setStored({...current,...patch});
+ useEffect(()=>{const sync=()=>{const query=new URLSearchParams(location.hash.split('?')[1]);setStored(previous=>({...previous.api===api?previous:empty(),tab:query.has('runId')||query.get('tab')==='input'?'input':'catalog',...(query.has('runId')?{runId:query.get('runId')??''}:{})}));};window.addEventListener('hashchange',sync);return()=>window.removeEventListener('hashchange',sync);},[api]);
  const scope:Scope={...(deviceId?{deviceId}:{}),...(after?{after:new Date(after).toISOString()}:{}),...(before?{before:new Date(before).toISOString()}:{})};
- return <div className="agent-inspector"><div className="page-heading"><div className="eyebrow"><Eye size={15}/> Mote / Agent</div><h1>{moteText('Agent 视角')}</h1><p>{moteText('打开它的目录，分清能访问什么、首次收到什么，以及实际读了什么。')}</p></div>
-  <nav className="section-tabs" aria-label={moteText('Agent 视角')}>{[['catalog',moteText('可访问范围')],['startup',moteText('首次上下文')],['materials',moteText('正式资料')],['input',moteText('实际输入与读取轨迹')]].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{label}</button>)}</nav>
-  {tab!=='input'&&<div className="agent-scope"><label>{moteText('设备范围')}<input value={deviceId} placeholder={moteText('全部设备')} onChange={e=>setDeviceId(e.target.value)}/></label><label>{moteText('开始时间')}<input type="datetime-local" value={after} onChange={e=>setAfter(e.target.value)}/></label><label>{moteText('结束时间')}<input type="datetime-local" value={before} onChange={e=>setBefore(e.target.value)}/></label></div>}
-  {tab==='catalog'&&<Catalog key={JSON.stringify(scope)} api={api} scope={scope} onOpen={onOpen}/>}
+ return <div className="agent-inspector agent-final"><div className="page-heading agent-final-heading"><h1>{tab==='input'?moteText('实际输入与工具读取'):moteText('Agent 视角')}</h1><a className="text-button" href={guideVisit(api).returnAvailable?'#/guide':'#/preferences'}>← {moteText('返回')}</a></div>
+  <nav className="section-tabs" aria-label={moteText('Agent 视角')}>{[['catalog',moteText('可访问内容')],['startup',moteText('首次上下文')],['input',moteText('实际输入与读取')]].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>update({tab:id})}>{label}</button>)}</nav>
+  {tab==='catalog'&&<><p className="agent-access-note">{moteText('可访问不代表已进入某次回答。')}</p><div className="agent-access-links"><a href="#/library?view=materials">{moteText('原始资料与正文')}<ChevronRight size={16}/></a><a href="#/library?view=memories">{moteText('精选记忆')}<ChevronRight size={16}/></a></div></>}
+  {tab!=='input'&&<details className="agent-directory-options" open={catalogOpen} onToggle={event=>{if(event.currentTarget.open!==catalogOpen)update({catalogOpen:event.currentTarget.open});}}><summary>{moteText('目录与设备范围')}</summary><div className="agent-scope"><label>{moteText('设备范围')}<input value={deviceId} placeholder={moteText('全部设备')} onChange={e=>update({deviceId:e.target.value})}/></label><label>{moteText('开始时间')}<input type="datetime-local" value={after} onChange={e=>update({after:e.target.value})}/></label><label>{moteText('结束时间')}<input type="datetime-local" value={before} onChange={e=>update({before:e.target.value})}/></label></div>{tab==='catalog'&&catalogOpen&&<Catalog key={JSON.stringify(scope)} api={api} scope={scope} onOpen={onOpen}/>}</details>}
   {tab==='startup'&&<StartupPreview api={api} scope={scope}/>}
-  {tab==='materials'&&<Materials key={JSON.stringify(scope)} api={api} agent scope={scope} onOpen={onOpen}/>}
-  {tab==='input'&&<RecordedInput api={api} runId={runId} setRunId={setRunId}/>}
+  {tab==='input'&&<RecordedInput api={api} runId={runId} setRunId={id=>update({runId:id})} onOpen={onOpen}/>}
  </div>;
 }

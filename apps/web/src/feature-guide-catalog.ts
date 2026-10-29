@@ -3076,7 +3076,7 @@ export const guideSections:GuideSection[] = [
             ],
             "target": {
               "pageId": "agentView",
-              "href": "#/agent",
+              "href": "#/agent?tab=input",
               "collectionId": null,
               "categoryId": null,
               "label": "Agent 能看到什么",

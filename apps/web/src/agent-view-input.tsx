@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
 import {type Api,errorMessage} from './api';
 import {useResource} from './useResource';
-import {recordedContext,recordedReads,traceLabel,type TraceEvent,type InitialContext} from './agent-view-trace';
+import {recordedContext,recordedReads,recordedResponse,recordedCitationIds,traceLabel,type TraceEvent,type InitialContext} from './agent-view-trace';
 
 type Scope={deviceId?:string;after?:string;before?:string};
 type Preview={kind:string;context:InitialContext;system:string;tools:string[];toolDefinitions:unknown;modelCalls:number};
@@ -30,23 +30,36 @@ export function StartupPreview({api,scope}:{api:Api;scope:Scope}){
   {state.data&&<><ContextContents context={state.data.context}/><details><summary>{moteText('可用的只读工具')} · {state.data.tools.length}</summary><div className="agent-tool-list">{state.data.tools.map(tool=><code key={tool}>{tool}</code>)}</div><pre className="feature-json">{JSON.stringify(state.data.toolDefinitions,null,2)}</pre></details><details><summary>{moteText('系统规则与工具')}</summary><pre className="feature-json">{state.data.system}</pre></details><details><summary>{moteText('查看上下文结构')}</summary><pre className="feature-json">{JSON.stringify(state.data.context,null,2)}</pre></details></>}
  </section>;
 }
-export function RecordedInput({api,runId,setRunId}:{api:Api;runId:string;setRunId:(id:string)=>void}){
- const [afterSeq,setAfterSeq]=useState(0);
+type RecordedPage={items:TraceEvent[];nextSeq:number;oldestSeq:number;recording:{enabled:boolean}};
+export function RecordedInput({api,runId,setRunId,onOpen=()=>{}}:{api:Api;runId:string;setRunId:(id:string)=>void;onOpen?:(ref:string)=>void}){
+ const [selection,setSelection]=useState<{api:Api;id:string;firstSeq:number;afterSeq:number;read:number}>(),[tab,setTab]=useState('input');
  const runs=useResource<{items:{runId:string;at:string;type:string;firstSeq:number}[];recording:{enabled:boolean}}>(api,'/api/agent-view/runs');
- const page=useResource<{items:TraceEvent[];nextSeq:number;oldestSeq:number;recording:{enabled:boolean}}>(api,`/api/agent-view/events?afterSeq=${afterSeq}&runId=${encodeURIComponent(runId)}`);
- const choose=(id:string)=>{setRunId(id);setAfterSeq(Math.max(0,(runs.data?.items.find(run=>run.runId===id)?.firstSeq??1)-1));};
- return <section className="panel panel-pad agent-recorded"><h2>{moteText('实际输入与读取轨迹')}</h2><p>{moteText('这里只展示已记录的输入和工具事件；未开启追踪或已过保留期的输入无法还原。')}</p>
-  <div className="agent-run-selection"><label>{moteText('最近保留的运行')}<select value={runs.data?.items.some(run=>run.runId===runId)?runId:''} onChange={e=>choose(e.target.value)}><option value="">{moteText('全部保留事件')}</option>{runs.data?.items.map(run=><option key={run.runId} value={run.runId}>{run.at} · {run.runId}</option>)}</select></label><label>{moteText('运行编号')}<input value={runId} onChange={e=>choose(e.target.value)}/></label></div>
-  {page.data&&<p>{page.data.recording.enabled?moteText('输入追踪已开启'):moteText('输入追踪未开启')} · {moteText('仅显示已保留的事件，不能据此认定完整读取范围。')}</p>}
-  {page.data&&afterSeq<page.data.oldestSeq-1&&<p>{moteText('更早的事件已不在保留范围内。')}</p>}
-  {runs.error!==undefined&&<p role="alert">{errorMessage(runs.error)} <button onClick={runs.refresh}>{moteText('重试')}</button></p>}{page.error!==undefined&&<p role="alert">{errorMessage(page.error)} <button onClick={page.refresh}>{moteText('重试')}</button></p>}
-  <ol className="agent-trace-list">{page.data?.items.map(item=>{const context=recordedContext(item),reads=recordedReads(item);return <li key={item.seq}><div className="agent-trace-heading"><strong>{traceLabel(item.trace?.type??'')}</strong>{item.trace?.tool&&<code>{item.trace.tool}</code>}<time>{item.at}</time></div>
-   {item.trace?.type==='context.assembled'&&<span className="badge green">{moteText('启动时已提供')}</span>}{item.trace?.type==='tool.completed'&&<span className="badge muted">{item.trace.status==='failed'?moteText('读取失败'):moteText('工具调用已完成')}</span>}
-   {(item.truncated||item.trace?.truncated)&&<p>{moteText('记录已截断，不能还原完整输入。')}</p>}{context&&<ContextContents context={context}/>}
-   {reads.map((read,index)=><details key={index}><summary>{read.title??read.ref??read.id??moteText('条目内容')} · {moteText('本次返回内容')}</summary>{read.offset!==undefined&&<p className="fine-print">{moteText('已展开 {0}–{1} / {2} 个字符',read.offset,read.offset+read.text.length,read.total??read.offset+read.text.length)}</p>}<div className="agent-body">{read.text}</div></details>)}
-   <details><summary>{moteText('查看记录内容')}</summary><pre className="feature-json">{JSON.stringify(item.trace?.payload,null,2)}</pre></details>
-  </li>;})}</ol>
-  {page.data&&!page.data.items.length&&<p>{moteText('此页没有已保留的模型输入或工具事件。')}</p>}
-  <div className="processing-actions"><button className="button" onClick={()=>{runs.refresh();page.refresh();}}>{moteText('刷新')}</button>{afterSeq>0&&<button className="button" onClick={()=>setAfterSeq(0)}>{moteText('返回第一页')}</button>}{page.data&&page.data.nextSeq>afterSeq&&<button className="button" onClick={()=>setAfterSeq(page.data!.nextSeq)}>{moteText('下一页')}</button>}</div>
+ const current=selection?.api===api&&selection.id===runId?selection:undefined;
+ const page=useResource<RecordedPage>(api,current?`/api/agent-view/events?afterSeq=${current.afterSeq}&runId=${encodeURIComponent(current.id)}`:null,undefined,current?.read);
+ const choose=(id:string)=>{setSelection(undefined);setTab('input');setRunId(id);};
+ const read=()=>{if(!runId.trim())return;const firstSeq=Math.max(0,(runs.data?.items.find(run=>run.runId===runId)?.firstSeq??1)-1);setSelection({api,id:runId,firstSeq,afterSeq:firstSeq,read:(current?.read??0)+1});setTab('input');};
+ const items=current&&page.data&&!page.error?page.data.items:[],visible=items.filter(item=>tab==='input'?['context.assembled','instructions.assembled'].includes(item.trace?.type??''):tab==='tools'?item.trace?.type==='tool.completed':item.trace?.type==='model.completed');
+ const citations=recordedCitationIds(items);
+ return <section className="agent-recorded"><h2>{moteText('实际输入与工具读取')}</h2>
+  <div className="agent-run-selection"><label>{moteText('已记录的运行')}<select value={runs.data?.items.some(run=>run.runId===runId)?runId:''} onChange={e=>choose(e.target.value)}><option value="">{moteText('运行编号')}</option>{runs.data?.items.map(run=><option key={run.runId} value={run.runId}>{run.at} · {run.runId}</option>)}</select></label><button className="button" disabled={!runId.trim()||page.loading} onClick={read}>{moteText('读取运行记录')}</button><details className="agent-run-manual"><summary>{moteText('运行编号')}</summary><label>{moteText('运行编号')}<input value={runId} onChange={e=>choose(e.target.value)}/></label></details></div>
+  {runs.error!==undefined&&<p role="alert">{errorMessage(runs.error)} <button onClick={runs.refresh}>{moteText('重试')}</button></p>}
+  {!current&&<p role="status">{moteText('尚未读取这次运行')}</p>}
+  {current&&page.loading&&<p role="status">{moteText('正在读取记录')}</p>}
+  {current&&page.error!==undefined&&<p role="alert">{errorMessage(page.error)} <button onClick={page.refresh}>{moteText('重试')}</button></p>}
+  {current&&page.data&&!page.loading&&!page.error&&<>
+   <p className="agent-recording-status">{page.data.recording.enabled?moteText('输入追踪已开启'):moteText('输入追踪未开启')} · {moteText('仅显示已保留的事件，不能据此认定完整读取范围。')}</p>
+   {current.afterSeq<page.data.oldestSeq-1&&<p>{moteText('更早的事件已不在保留范围内。')}</p>}
+   <nav className="agent-recorded-tabs" aria-label={moteText('实际输入与工具读取')}>{[['input',moteText('模型输入')],['tools',moteText('工具读取')],['answer',moteText('输出')]].map(([id,label])=><button key={id} aria-selected={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+   <div className="agent-recorded-content">{visible.map(item=>{const context=recordedContext(item),reads=recordedReads(item),response=recordedResponse(item);return <article key={item.seq} className="agent-recorded-event">
+    {(item.truncated||item.trace?.truncated)&&<p>{moteText('记录已截断，不能还原完整输入。')}</p>}
+    {context&&<ContextContents context={context}/>}
+    {item.trace?.type==='instructions.assembled'&&<details><summary>{moteText('系统规则与工具')}</summary><pre className="feature-json">{JSON.stringify(item.trace.payload,null,2)}</pre></details>}
+    {tab==='tools'&&<details open><summary>{item.trace?.tool??moteText('调用工具')} · {item.trace?.status==='failed'?moteText('读取失败'):moteText('工具调用已完成')}</summary>{reads.map((value,index)=><div key={index}>{value.offset!==undefined&&<p className="fine-print">{moteText('已展开 {0}–{1} / {2} 个字符',value.offset,value.offset+value.text.length,value.total??value.offset+value.text.length)}</p>}<div className="agent-body">{value.text}</div></div>)}<details><summary>{moteText('查看记录内容')}</summary><pre className="feature-json">{JSON.stringify(item.trace?.payload,null,2)}</pre></details></details>}
+    {response!==undefined&&<div className="agent-body">{response}</div>}
+   </article>;})}{!visible.length&&<p>{moteText('此页没有已保留的模型输入或工具事件。')}</p>}
+   {tab==='answer'&&citations.length>0&&<nav className="agent-output-evidence">{citations.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('打开这次回答的原始依据')} {index+1}</button>)}</nav>}</div>
+   <details className="agent-event-details"><summary>{moteText('技术详情')}</summary><ol className="agent-trace-list">{items.map(item=><li key={item.seq}><div className="agent-trace-heading"><strong>{traceLabel(item.trace?.type??'')}</strong>{item.trace?.tool&&<code>{item.trace.tool}</code>}<time>{item.at}</time></div>{(item.truncated||item.trace?.truncated)&&<p>{moteText('记录已截断，不能还原完整输入。')}</p>}<pre className="feature-json">{JSON.stringify(item.trace?.payload,null,2)}</pre></li>)}</ol></details>
+   <div className="processing-actions"><button className="text-button" onClick={()=>{runs.refresh();page.refresh();}}>{moteText('刷新')}</button>{current.afterSeq!==current.firstSeq&&<button className="text-button" onClick={()=>setSelection({...current,afterSeq:current.firstSeq})}>{moteText('返回第一页')}</button>}{page.data.nextSeq>current.afterSeq&&<button className="text-button" onClick={()=>setSelection({...current,afterSeq:page.data!.nextSeq})}>{moteText('下一页')}</button>}</div>
+  </>}
  </section>;
 }
