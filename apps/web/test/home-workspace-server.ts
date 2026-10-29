@@ -9,7 +9,7 @@ import {uploadNoteAttachment} from '../src/note-attachments.js';
 import type {Api} from '../src/api.js';
 const directory=process.argv[2];if(!directory)throw Error('Generated fixture directory required');
 const token=randomBytes(32).toString('hex'),when='2026-10-29T01:00:00.000Z',noteId=randomUUID(),reportId=randomUUID();
-const runtime=await buildApp({dataDir:join(directory,'data'),token,tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('No model calls allowed');},close:async()=>{}}});
+const runtime=await buildApp({dataDir:join(directory,'data'),token,tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,agent:{configured:process.argv[3]==='memory-ask',query:async()=>{if(process.argv[3]!=='memory-ask')throw Error('No model calls allowed');return {runId:randomUUID(),answer:'Generated controlled original reference answer',citations:[],trace:[]};},close:async()=>{}}});
 runtime.app.addHook('onRequest',async(req,reply)=>{
  if(process.argv[3]==='workspace'&&req.url.includes('/api/model-settings')&&req.url.endsWith('/models'))return reply.send({items:[{id:'generated-model',name:'Generated model catalog'}]});
  if(req.url.startsWith('/api/library/browse?')&&existsSync(join(directory,'retire-material.json'))){const target=JSON.parse(readFileSync(join(directory,'retire-material.json'),'utf8')) as {id:string;revision:string};runtime.materials.retire(target.id,{expectedRevision:target.revision});rmSync(join(directory,'retire-material.json'));}
@@ -53,13 +53,16 @@ runtime.featureServices.ownerQuestions.register(provider);
 runtime.featureServices.ownerQuestions.create(provider,{key:'generated-home',operationId:'generated:home',workId:'generated-home',title:'请补充这份资料的背景',prompt:'这份记录来自哪个项目？',evidence:[{id:noteId,quote:'本轮生成的原始资料',offset:0}],choices:[],dependencyIds:[noteId],context:{generated:true}});
 for(const title of ['检查资料阅读路径','核对引用返回路径']){const r=await runtime.app.inject({method:'POST',url:'/api/todos',headers,payload:{id:randomUUID(),title,dueAt:null}});if(r.statusCode!==201)throw Error(r.body);}
 await runtime.connections.mintMcp({serverUrl:'https://generated.invalid',label:'Generated read-only agent',access:'read'},{directory:join(directory,'connectors'),mcpEnabled:true});
-if(process.argv[3]==='workspace'){
- const record=runtime.memories.readEvidence([noteId])[0],quote='先把资料阅读和提问之间的路径走通',offset=record.ocrText.indexOf(quote);
+const memoryIds:string[]=[],memoryNoteIds:string[]=[];
+if(['workspace','memory-ask'].includes(process.argv[3])){
+ const quote='先把资料阅读和提问之间的路径走通';
  for(let index=0;index<3;index++){
-  const id=randomUUID(),memory={version:1,domain:'personal',tier:'episode',kind:'episodic',id,title:['资料阅读与提问要保留返回路径','阅读优先展示原文与原图','先走通一段完整旅程'][index],statement:'这次界面讨论要求从原文发起提问、核对引用，并能回到原来的资料列表位置。',uncertainty:'仅来自本轮生成资料，不代表所有使用场景。',status:index===2?'stale':'published',createdAt:when,model:'controlled-fixture',runId:'controlled-fixture',fingerprint:String(index+1).repeat(64),evidenceIds:[noteId],evidence:[{id:noteId,deviceId:record.deviceId,capturedAt:record.capturedAt,receivedAt:record.receivedAt,offset,length:quote.length,quote,contentHash:memoryEvidenceFingerprint(record)}],admission:{layer:'memory',reason:'Generated visual fixture',scope:'Generated UI validation',attribution:'user'}};
-  runtime.store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(id,when,JSON.stringify(memory));runtime.store.db.prepare('INSERT INTO memory_dependencies(memory_id,evidence_id) VALUES(?,?)').run(id,noteId);
+  let evidenceId=noteId;if(process.argv[3]==='memory-ask'&&index>0){evidenceId=randomUUID();const response=await runtime.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:evidenceId,deviceId:'generated-web',deviceName:'Generated Web',platform:'import',capturedAt:when,text:'Memory '+index+' '+quote+' distinct generated original'}});if(response.statusCode!==201)throw Error(response.body);}
+  const record=runtime.memories.readEvidence([evidenceId])[0],offset=record.ocrText.indexOf(quote);
+  const id=randomUUID(),memory={version:1,domain:'personal',tier:'episode',kind:'episodic',id,title:['资料阅读与提问要保留返回路径','阅读优先展示原文与原图','先走通一段完整旅程'][index],statement:'这次界面讨论要求从原文发起提问、核对引用，并能回到原来的资料列表位置。',uncertainty:'仅来自本轮生成资料，不代表所有使用场景。',status:index===2?'stale':'published',createdAt:when,model:'controlled-fixture',runId:'controlled-fixture',fingerprint:String(index+1).repeat(64),evidenceIds:[evidenceId],evidence:[{id:evidenceId,deviceId:record.deviceId,capturedAt:record.capturedAt,receivedAt:record.receivedAt,offset,length:quote.length,quote,contentHash:memoryEvidenceFingerprint(record)}],admission:{layer:'memory',reason:'Generated visual fixture',scope:'Generated UI validation',attribution:'user'}};
+  runtime.store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(id,when,JSON.stringify(memory));runtime.store.db.prepare('INSERT INTO memory_dependencies(memory_id,evidence_id) VALUES(?,?)').run(id,evidenceId);memoryIds.push(id);memoryNoteIds.push(evidenceId);
  }
 }
 await runtime.app.listen({host:'127.0.0.1',port:0});
-console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,directory,generatedOnly:true,modelCalls:0}));
+console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,memoryIds,memoryNoteIds,directory,generatedOnly:true,modelCalls:0}));
 process.on('SIGTERM',()=>{void runtime.app.close().then(()=>process.exit(0));});

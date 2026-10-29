@@ -1,3 +1,4 @@
+import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
 import {SaveConversationRecord} from './SaveConversationRecord';
 import {useResource} from './useResource';
@@ -41,12 +42,14 @@ interface Conversation extends ConversationSummary {turns: ConversationTurn[];re
 interface OlderTurns {api:Api;id:string;revision?:number;turns:ConversationTurn[];nextCursor:string|null}
 interface HistoryPage {items: ConversationSummary[]; nextCursor?: string | null}
 
-function createQuestionDraft(){
+type ChatAttachment={id:string;name:string;mimeType:string};
+const unsentDrafts=new WeakMap<Api,{question:string;attachments:ChatAttachment[]}>();
+function createQuestionDraft(onChange?:(question:string)=>void){
  let value='';const listeners=new Set<()=>void>();
  return {
   getSnapshot:()=>value,
   subscribe:(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener);};},
-  set:(next:string)=>{if(next===value)return;value=next;listeners.forEach(listener=>listener());},
+  set:(next:string)=>{if(next===value)return;value=next;onChange?.(next);listeners.forEach(listener=>listener());},
  };
 }
 /** Only the controlled composer subscribes to typing. The session still owns
@@ -62,6 +65,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   renderAnswer: (answer: Answer, openReference:(ref:string)=>void) => ReactNode;
   onOpen?: (ref:string)=>void;
 }) {
+  const reference=useOriginalReference(api);
   const [unavailableReference,setUnavailableReference]=useState<{opener:HTMLElement|null}|null>(null);
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
@@ -87,8 +91,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   useEffect(()=>{setClearedScope(null);setUnavailableReference(null);},[api,selectedId]);
   const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error});
   latestDetail.current={api,selectedId,data:detail.data,error:detail.error};
-  const [draft]=useState(createQuestionDraft),setQuestion=draft.set;
-  const [attachments,setAttachments]=useState<{id:string;name:string;mimeType:string}[]>([]);
+  const draftOwner=useRef(api);
+  const [draft]=useState(()=>createQuestionDraft(question=>{const owner=draftOwner.current;unsentDrafts.set(owner,{question,attachments:unsentDrafts.get(owner)?.attachments??[]});})),setQuestion=draft.set;
+  const [attachments,updateAttachments]=useState<ChatAttachment[]>([]);
+  const setAttachments=(next:React.SetStateAction<ChatAttachment[]>)=>updateAttachments(current=>{const value=typeof next==='function'?next(current):next,owner=draftOwner.current;unsentDrafts.set(owner,{question:draft.getSnapshot(),attachments:value});return value;});
   const [uploading,setUploading]=useState(false);
   const attachmentInput=useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false), [loadingOlder,setLoadingOlder]=useState(false), [loadingPage,setLoadingPage] = useState(false);
@@ -118,7 +124,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(errorMessage(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+  useEffect(()=>{draftOwner.current=api;const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
   useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');const incoming=draftQuery.get('questionDraft');if(incoming!==null){selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
@@ -126,6 +132,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     olderRequest.current?.abort();olderRequest.current=null;setLoadingOlder(false);setOlder(null);setPageRevoked(false);
   },[api,selectedId,detail.data?.revision,detailRevoked]);
   useEffect(()=>{if(detail.data&&!detail.loading&&!detail.error)setPageRevoked(false);},[detail.data,detail.loading,detail.error]);
+  useEffect(()=>{if(reference.key){selectionMade.current=true;setSelectedId(null);setRun(null);setOlder(null);setSelectedOwnerQuestion(null);}},[api,reference.key]);
   useEffect(()=>{if(history.data){setItems(history.data.items);setCursor(history.data.nextCursor??null);}else if(history.error){setItems([]);setCursor(null);}},[history.data,history.error]);
   useEffect(()=>{if(!recentRuns.data||selectionMade.current)return;selectionMade.current=true;
     const recent=recentRuns.data.items.find(r=>r.status==='running')??recentRuns.data.items[0];
@@ -201,13 +208,13 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   async function submit(event?: {preventDefault(): void}, sample?: string) {
     event?.preventDefault();
     const text = (sample ?? draft.getSnapshot()).trim();
-    if (!text || busy || uploading || opening || operation.current || !configured) return;
+    if (!text || busy || uploading || opening || operation.current || !configured || !reference.ready) return;
     selectionMade.current=true;
     const controller = new AbortController(); operation.current = controller;
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
     try {
       const id=crypto.randomUUID();
-      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null}:{})}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null}:{})}:reference.origin?{anchorEvidenceIds:reference.ids}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
       let accepted:QueryRun;
       try{accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});}
       catch(e){
@@ -270,6 +277,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
       <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
+      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{moteText('参考原件暂不可用，请清除参考后继续。')}</span>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}{reference.origin.kind==='memory'&&<a className="text-button" href={'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id)}>{moteText('返回记忆')}</a>}<button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
       {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
       {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
       {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}
@@ -290,7 +298,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       <DraftComposer draft={draft}>{question=><ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={setQuestion} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
         {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==attachment.id))}><X size={13}/></button></span>)}</div>}
         <details className="chat-model-options" open={Boolean(modelProfileId||modelOverride)}><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={setModelProfileId} model={modelOverride} onModelChange={setModelOverride} disabled={busy||opening} detachedFromForm/></details>
-        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !configured} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
+        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
       </ConversationComposer>}</DraftComposer>
       {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
     </section>}

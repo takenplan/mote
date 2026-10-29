@@ -33,7 +33,7 @@ test('Memory history uses summary counts and uncertainty links the same verified
  const history=Array.from(d.querySelectorAll('.memory-job-history button'));
  assert.match(history[0].textContent!,/1 条记忆$/);assert.match(history[1].textContent!,/0 条记忆$/);
  await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
- const notes=Array.from(d.querySelectorAll('.review-notes')).find(n=>n.querySelector('h3')?.textContent==='判断的边界')!;
+ const notes=Array.from(d.querySelectorAll('.review-notes')).find(n=>n.querySelector('h3')?.textContent==='适用范围')!;
  const link=notes.querySelector<HTMLButtonElement>('.inline-citation')!;
  assert.equal(link.textContent,'来源 4','duplicate evidence IDs keep the existing last-index numbering');
  await act(async()=>link.click());assert.deepEqual(opened,['capture:'+ids[0]]);

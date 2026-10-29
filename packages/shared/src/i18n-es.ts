@@ -9206,5 +9206,11 @@ export const spanish: Readonly<Record<string, string>> = {
   "手动提取与整理": "Extract and organize manually",
   "历史与管理": "History and management",
   "本页 {0} 条": "{0} rows on this page",
-  "导入状态": "Import status"
+  "导入状态": "Import status",
+  "提取的记忆": "Extracted memory",
+  "适用范围": "Applies to",
+  "参考原件暂不可用，请清除参考后继续。": "The referenced original is unavailable. Clear the reference to continue.",
+  "这条记忆的原始依据": "Original evidence for this memory",
+  "返回记忆": "Back to memory",
+  "问问 AI": "Ask AI"
 };
