@@ -1,0 +1,157 @@
+# 最终原型来源证据与剩余补图范围：独立审查
+
+2026-10-29。对应 [源决定与验收矩阵](../design/ui-final-three-clients-2026-10-29.md) 的 W01–W50、M01–M39、P01–P39。本文记录源画面、受支持访问路径与尚未检查的状态，不是产品验收通过报告。
+
+唯一源对话为 `codex://threads/01a17d84-94a3-7382-b12a-5c656106f534`，完整 39 轮。原工具引用的 156 个不同图片路径中，104 个存在、52 个缺失。另有本轮通知拒绝前已生成的最终稿 10 图；这些已归档于 `docs/validation/ui-final-source-2026-10-29/`。旧原型截图、最终原型截图、真实产品截图必须分别记名。
+
+## 访问状态
+
+被拒绝的是自动浏览器打开本机最终 HTML 的操作，目标为 `file:///Users/utopiafar/.codex/visualizations/2026/10/27/01a17d84-94a3-7382-b12a-5c656106f534/mote-final-workspace.html`。状态为 **denied**。原因是浏览器只允许 http/https，并明确禁止换浏览器、协议、HTTP 服务、CDP 或间接执行绕过。在该拒绝后的旧本机文件阶段，独立审查者只读 HTML、解析 JavaScript 文本、查看已有 PNG；未重试被拒绝的文件操作。下述用户随后提供的 HTTPS 网站是新的获准目标。
+
+此前提出的首批 7 图人工补充请求，已被用户主动提供的网站替代，**不再请求用户重复导出网站已覆盖的状态**。网站未检查项继续由审查者通过可见控件核对；只有网站与已有图均不提供的最终状态，才保留“来源缺图/可见入口缺失”。不得运行隐藏函数、修改原型或自行拼出画面。
+
+## 用户提供的 HTTPS 来源与已验证状态
+
+2026-10-29 03:37 UTC，用户在[执行协调对话](codex://threads/01a1767c-d428-715a-8055-60970a2a00c5)的消息 `Sentinel_b79931f658388191b44f5559409ca9dc` 主动提供[三端 UI 网站](https://mote-ui-01a17d84.n826wty8ft.chatgpt.site/?platform=central&scene=previous#journey/central/home)，并要求“我做成网站了，按这个里面去对比”。协调者通过受支持 CUA 的 IAB 成功打开；独立审查者的环境没有 IAB，按协调者许可通过受支持 CUA Chrome 独立标签访问这个新 HTTPS 目标。未更换协议重试旧文件，旧文件拒绝仍保留。
+
+浏览器显示四个分组：三端界面、首次使用、对话与资料回看、恢复与继续。下表只记独立审查者实际看过画面或操作的状态；“源已见”不能改写为“产品通过”。网站中的网络、场景、示例回执是评审控件，不是产品功能或真实服务结果。
+
+- 环境：Chrome 标签 `2046611746`，支持的 `viewport` 能力设为 1440×1000；03:54 UTC 只读 DOM 复核 `innerWidth/innerHeight` 与文档 client 尺寸均为 1440×1000，DPR 1，浅色、中文。Android 是该视口里的手机原型框，不能视为 390×844 的真实 Android 运行图。
+- 证据载体：本轮独立审查任务 `independent_audit` 的 CUA `getScreenshot()` 工具结果，配套 AX/只读 DOM 与下面的可见操作路径。截图工具输出为 JPEG 图像；未声称已导出本地 PNG，未为归档再调用其他浏览器技术。后续合法本地归档可补充文件名，但不替换本次操作记录。
+- URL 仅作定位。切换客户端后 query 的 `platform` 有时仍保留前一端，例如 Android 原文曾显示 `platform=mac#phone/ct-evidence`；认定当前端时同时看顶部已选客户端与页面内容，不能只看 query。
+
+下表 URL 的共同前缀为 `https://mote-ui-01a17d84.n826wty8ft.chatgpt.site`。03:42–03:51 为本轮前段观察时间窗；03:54–03:57 为补核时间窗，不把时间窗伪称每张图片的精确生成时间。
+
+| 证据 | UTC 时间窗、URL | 可见控件路径与实际画面 | 覆盖与限度 |
+| --- | --- | --- | --- |
+| WEB-S01 | 03:42–03:51；`/continuity?platform=central&scene=deleted#journey/central/ask` | 分组「对话与资料回看」→Central→旅程「引用对应的资料已删除」→历史「周五评审需要准备什么？」。完整旧问答与引用仍在，轻提示“引用原文已删除，历史问答仍保留。”，续问输入与保存入口仍可见。 | W13 源已见；未执行真实产品删除或模型续问 |
+| WEB-S02 | 同上；同分组的 Central 引用原文页 | 点击「2 评审议程.md · 评审资料 · 原文已删除」→“引用原文已删除”，说明原问答仍在，存在「返回原对话」；点击返回成功。 | W07/W13 源已见；不允许恢复被删原文 |
+| WEB-S03 | 同上；`/continuity?platform=central&scene=stale#journey/central/ask` 及其引用页 | 旅程「引用对应的资料已更新」→同一历史：问答仍在，提示“引用资料已更新，这是当时的回答。”；点第 2 引用→“这条引用的历史原文暂不可用”“原引用不会改指更新后的正文。”。 | W13 源已见；不能把新正文偷换到旧引用 |
+| MAC-S01 | 同上；`/continuity?platform=mac&scene=stale#mac/ask`、`scene=deleted#mac/ask` | 顶部切 Mac→分别选更新/删除；完整历史问答、轻提示、继续提问保留，引用指向「在 Central 打开」。 | M09/M10 源已见；只取连续性状态，不以本组缺少后续“更多”入口删掉 S38 功能 |
+| MAC-S02 | 同上；Mac 删除场景进入 Central 引用页 | 点第 2 条「原文已删除 · 在 Central 打开」→Central 不可用提示；顶栏「返回 Mac 对话」可返回原会话。 | M10/W13 跨端返回源已见；真实外部浏览器回跳未测 |
+| PHONE-S01 | 03:42–03:51、03:54–03:55；`/continuity?platform=mac&scene=deleted#phone/ct-evidence` | 切 Android→删除历史仍显示完整回答、提示、引用、保存与续问；点击删除引用后显示原文不可用和两个返回入口；按「返回原对话」成功。 | P17–P19 源已见；query 曾保留 mac，顶部实际选 Android |
+| PHONE-S02 | 03:54–03:55；`/continuity?platform=phone&scene=stale#phone/ask` → `#phone/ct-evidence` | 旅程「引用对应的资料已更新」→完整旧问答与轻提示→第 2 引用→历史原文不可用且不改指新正文→「返回原对话」。工具标题「核对 Android 更新后的历史问答与引用」「记录更新引用提示并进入首次使用来源」。 | P17–P19 更新态源已见；产品未测 |
+| FIRST-S01 | 03:55–03:56；`/first-use?platform=phone&scene=start#phone/home` | 分组「首次使用」→Android→「第一次打开」：先记下一件事、连接、没有自己的 Mote 帮助、采集设置及记录/问一问底栏。工具标题「核对首次使用与原文不可用的源画面」。 | P01/P03/P04 源已见；只取首次使用补充，不取代最终累计日常首页 |
+| FIRST-S02 | 03:55–03:56；`/first-use?platform=phone&scene=unavailable#first/central` | 场景「中央已收到 · 原文不可用」→手机「查看 Central 的接收结果」：Central 标明已接收而原文暂不可用，刷新/资料库入口，进度中“原文可打开”仍未完成，并有返回手机。 | W01/P03/P04 的接收/可读区分源已见；其他五场景及 Mac 首次路径仍待逐项看图 |
+| REC-S01 | 03:56–03:57；`/recovery?platform=central&scene=ask-interrupted#journey/central/ask` | 分组「恢复与继续」→Central→「提问结果未确认」→滚动到新一轮：尚未确认受理、检查结果、重试同一请求；下一轮输入禁用。工具标题「确认恢复提示是否实际可见」包含滚动后的完整提示。 | W12 源已见；没有点演示回执，不视为服务确认/幂等测试 |
+| REC-S02 | 03:56–03:57；`/recovery?platform=central&scene=ask-no-evidence#journey/central/ask` | 旅程「依据不足，继续澄清」→滚动：保留已知回答，新一轮明确没有评审结果并询问澄清方向，继续输入、保存及参考范围仍可见。工具标题「查看继续澄清页的下半部分」。 | W12 源已见；Mac/Android 对应恢复页及本机备份恢复仍待逐项看图 |
+
+### 累计版本适用边界
+
+网站是用户新指定的可视核对目标，但不同分组承担不同补充，不能把某一较早分组当成全部最终 UI。默认「三端界面」承接最后累计收尾；其 `scene=previous` 的可见选项是「日常工作台」，不是重新选择旧设计。首次使用分组补全独立的首次旅程；连续性和恢复分组补全资料生命周期/中断状态。最终累计里的图片提问、单轮更多、整段删除等 S38 新入口，不能因较早分组没有显示就删除。
+
+本机旧 `mote-continuity-workspace.html` 的历史删除分支曾被 S37 否决；**网站目前可见的更新/删除场景已经显示保留完整问答的修正版**，因此不能把旧文件禁用判断套到本网站已查看状态，也不能断言网站与旧文件 hash 完全相同。现有 39 轮中更晚的明确取舍与本轮有界执行授权继续有效。
+
+### 剩余证据工作
+
+此前需要用户补的历史更新/删除图已由 WEB/MAC/PHONE-S 记录覆盖；首次使用和恢复也已有可见选项，取消对应人工导出请求。未列入上表的页面/弹窗/状态仍为**源未逐屏检查**，不能因网站可打开就全部判通过。下面保留的原补图清单改作审查者的逐项捕获工作表：优先网站可见入口，其次已接受同状态图；只有两者都缺失时才向来源提供者请求最小补充。旧 `file://` 动作仍 denied，已成功访问的网站状态不再因此标 blocked。真实产品运行、截图、差异和测试资源清理另记，不能与本节混写。
+
+## 已有画面，不重复导出相同状态
+
+本轮最终 10 图的源 SHA-256 均为 `d6ae147fbb0b2b9df08b52bc8ee60a85e02c4340c7872e45c4878fdb0592819e`，浅色、DPR 1。Web/Mac 原始视口为 1440×1000，Android 为 390×844；Mac 为 `#mac-app` 元素图，Web为整页图。评审工具条不属于产品。
+
+| 现存最终图 | 仅覆盖的源状态 | 矩阵 |
+| --- | --- | --- |
+| Web `home.png` | 日常首页 | W02 |
+| Web `guide.png` | 全部功能默认折叠态 | W50 |
+| Mac 目录中的 `initial.png` | **Central**“需要你补充”默认列表，不是 Mac | W18 列表 |
+| Mac `home.png` | 日常工作台 | M01、M02 |
+| Mac `content.png` | 内容列表默认态 | M01、M06 |
+| Mac `sources.png` | 来源列表默认态 | M01、M12 |
+| Mac `ask.png` | 对话历史列表，**不覆盖会话或引用** | M01、M08 |
+| Mac `sync.png` | 同步与活动默认态 | M01、M23 |
+| Mac `settings.png` | 设置总页 | M01、M26 |
+| Android `prototype-android-home-390.png` | 日常首页 | P01 |
+
+对于前代已接受图，静态解析了对应 HTML 与最终 HTML 中同名渲染函数的最后定义，检查后续覆盖。函数相同只能证明局部仍沿用，不能证明最终全屏相同：最新全局工具、入口、示例状态、字体环境和外层布局仍须按最终源核对。以下原图均在上面的只读源目录；不要求来源提供者重导已覆盖的**相同局部和状态**。
+
+| 可复用的既有图/状态 | 静态证据与复用限度 | 矩阵 |
+| --- | --- | --- |
+| `import-list-qa.png`、`import-preview-qa.png`、`import-touch-preview-qa.png` | `renderImports`、`importStageHtml`、`importPreviewHtml` 相同；详情的返回活动入口有后续覆盖。`import-new-qa.png` 只复用文件区/字段排列，旧高级目录方式不能复用 | W19–W21 |
+| `sources-list-qa.png`、`sources-lark-config-qa.png`、`sources-lark-overview-qa.png`、`sources-touch-config-final-qa.png`、`sources-catalog-dark-final-qa.png` | `renderSources`、`renderSource`、配置/范围/说明渲染相同；`showSource` 后来分流到设备详情，不能以旧来源页覆盖设备页 | W22–W24 |
+| `ai-access-list-qa.png`、`ai-access-create-qa.png`、`ai-access-generated-qa.png`、`ai-access-touch-config-qa.png` | 列表、新建、配置、详情渲染函数均相同；可复用已有状态的内容区域，未拍撤销确认/错误仍缺图 | W30–W31 |
+| `discovery-more-touch-qa.png`、`discovery-more-qa.png` | 只复用“更多→排版结果/标准阅读”控件；最终 `renderDiscovery` 增加行动入口，不能据旧报告图验整页 | W32 |
+| `activity-detail-attention-qa.png`、`activity-memory-result-qa.png`、`activity-touch-detail-qa.png` | `renderActivityDetail` 相同；活动列表后增“需要你补充”，列表不能以旧图验整页 | W34 详情 |
+| `models-profile-qa.png`、`models-touch-profile-qa.png`、`models-modules-qa.png` | 模型详情和模块渲染主体相同；外层“模型与服务”结构、OCR/ASR、本机准备及后台授权有后续取舍，不能复用旧连接总页/授权 Tab | W41 详情、W42 |
+| `mote-settings-automatic-review.png`、`mote-settings-automatic-mobile-review.png` | `renderAutomaticReview` 相同；只复用确认弹窗布局，实际服务和来源列表随状态变化 | W44 确认 |
+| `mote-settings-complete-usage.png`、`mote-settings-usage-mobile.png`、`mote-settings-complete-storage.png`、`mote-settings-storage-mobile.png`、`mote-settings-complete-runtime.png`、`mote-settings-runtime-mobile.png` | 用量、存储、运行页渲染相同。部分宽图不是原对话 imageView 的104项之一，但本机存在；归档前需保留生成来源标识。总设置页后来追加偏好/全部功能/版本入口，不能据旧总页验整页 | W48 内容区域 |
+| `mote-device-status.png`、`mote-device-pair.png`、`mote-device-pair-mobile.png`、`mote-device-dark.png` | `renderDeviceDetail`、`renderDevicePair` 相同；仅对应已拍状态 | W28–W29 |
+| `mote-calendar-automatic-list.png`、`mote-calendar-automatic-detail.png` | 最终自动日程列表/详情主体沿用；旧 `mote-actions-calendar-review.png` 逐项审批已被取代 | W36 已生效/等设备 |
+| `mote-recording-reader.png`、`mote-recording-speakers.png`、`mote-recording-mobile.png`、`mote-recording-dark.png` | 录音正文、说话人、原转写及处理渲染主体相同；最终资料顶栏另有“更多”，正文/说话人弹窗可局部复用 | W37，W38 部分 |
+| `library-complete-*.png`、`memory-polished-*.png` | 原文预览、时间回看、记忆筛选的旧内容区域有参考价值，但 `renderList`、`openRecord`、`renderMemories`、`showMemory` 有后续覆盖；不拿这些图直接验最终阅读器/Memory更多 | W05–W08、W14–W17 部分 |
+
+独立审查者本轮实际查看了最终10图，以及上述表中导入列表/新建、发现更多宽窄、飞书配置、AI配置生成、活动待确认详情、模型详情、自动处理确认、运行诊断、设备邀请、自动日程详情、录音阅读/说话人等代表图。表中其余图的“存在”来自文件核对，不能误写成逐张已独立看图。
+
+## 原补图工作表：入口定位与最低重复原则（已由网站优先取代）
+
+源目录：`/Users/utopiafar/.codex/visualizations/2026/10/27/01a17d84-94a3-7382-b12a-5c656106f534/`。
+
+1. 通常只打开 `mote-final-workspace.html`。顶部选端，再选“旅程”。最终可见选项为：需要你补充、纠正与整理 Memory、特殊资料回看、图片提问与对话更多、插件与方案恢复、本机偏好与维护、诊断/版本与反馈、全部功能入口、已确认的日常工作台。
+2. 首次使用打开 `mote-first-use.html`。它有“第一次打开 / 已连接·尚无资料 / 已有记录·等待网络 / 中央已收到·原文可读 / 中央已收到·原文不可用 / 接收结果暂未核实”六种场景。最终文件没有完整保留其可见入口，不能省略。
+3. 备份和中断打开 `mote-recovery-workspace.html`。可见旅程是本机备份与恢复、从备份恢复、备份校验失败、导入中途失败、更换存储位置、存储介质不可用、Android配置迁移、提问结果未确认、依据不足继续澄清。最终文件会隐藏这里的旅程选择器。
+4. 仅对副本/来源的补图打开 `mote-continuity-workspace.html`，选“本机副本清理后 / 暂停一个来源 / Android移除来源连接”。**不要导出其“资料已删除”作为最终要求**：这个旧分支被 S37 明确否决。最终修正后的删除/更新历史画面若没有可见切换入口，需要来源提供者补正确状态；不能运行隐藏函数制造画面。
+
+每个页面只取一次完整内容；长页按连续滚动补图，不必为了不同入口重复同一实体正文。返回来源、草稿、焦点和重复操作仍需实际产品操作验证，静态截图不能替代。保留顶部评审选择器可辨认来源，但比对时排除该工具条。每张新图需记文件名、客户端、所选旅程/状态、视口、DPR、主题、语言。建议沿现有源尺寸：Web/Mac 1440×1000、Android390×844；窄屏/深色只对尚无对应源图的不同布局状态补充，不能把浅色宽图当窄屏深色证明。
+
+## 待逐项捕获的状态清单
+
+以下为去掉相同状态重复之后的画面清单。单元格中的每个短名各对应一张/一组连续长页图；同一行各图均覆盖该行所列矩阵组。“失败/取消/返回”只在源有独立可见状态时需另图；纯状态保持由产品测试记录，不能凭空要求原型没有的页面。已有图可覆盖的状态不再列。**这不是保证只需这些张数便能完成全部验收的承诺**；源可见入口缺失、未展示状态和源自身冲突必须保留未测。
+
+| 新图短名（每个分号项单独保存） | 人工最短入口与要看到的状态 | 对应矩阵 |
+| --- | --- | --- |
+| `FW-note`；`FW-save-answer` | final → Central → 日常工作台；全局随手记展开“资料说明”；对话中保存一轮回答，显示原问答/本人补充/独立说明 | W04、W11 |
+| `FW-library-final`；`FW-reader-final`；`FW-reader-more`；`FW-search` | 日常工作台→资料库；打开原文及更多；顶栏搜索输入并显示结果。旧列表图可核内容区，最终入口/更多需补 | W03、W05–W08 |
+| `FW-chat`；`FW-chat-citations`；`FW-chat-scope` | final → Central → 图片提问与对话更多；实际会话、引用展开、证据范围。返回同一实体不另导重复原文 | W09 |
+| `FW-images-upload`；`FW-images-failed`；`FW-turn-more`；`FW-chat-delete`；`FW-chat-delete-failed` | 同旅程；图片选择/上传，用可见“示例结果”选择失败；单轮更多；整段删除确认及失败保留。图片移除无独立布局可在产品记录 | W10–W11 |
+| `FW-memory-list`；`FW-memory-detail`；`FW-memory-edit`；`FW-memory-history`；`FW-memory-delete` | final → Central → 纠正与整理Memory；列表→单条→纠正/历史与有效时间/删除确认 | W14–W16 |
+| `FW-extract`；`FW-integrate`；`FW-memory-work`；`FW-memory-work-failed` | 同旅程或资料更多；手动提取、从当前记忆整理、处理中/失败。使用示例结果，不触发真实模型 | W08、W17 |
+| `FW-question-detail`；`FW-question-failed`；`FW-question-history`；`FW-question-unknown` | final → 需要你补充；已有列表无需重导。打开问题，分别回答失败、历史、我也不知道的结果 | W18 |
+| `FW-import-advanced-final`；`FW-import-delete` | 日常工作台→资料库→导入→添加资料展开更多，无服务器目录；已有导入→删除确认。已有列表/解析预览局部不重导 | W20–W21 |
+| `FW-source-unseen`；`FW-source-auth`；`FW-access-revoke` | 来源中仅补现存图未覆盖的 Google/Gmail/MCP/NAS/录音配置及授权/断开独立弹窗；AI接入补撤销确认/错误。各来源保存各自文件，不能一张代表所有连接器 | W23–W27、W31 |
+| `FW-discovery-final`；`FW-activity-final` | 日常工作台→发现详情与活动列表；补最终行动入口和“需要你补充”入口。More控件与未变化的活动详情不重导 | W32–W35 |
+| `FW-calendar-other-states` | 日程列表分别打开缺时间、失败、待核实或依据变化的不同详情；已生效/等设备已有图无需重导。每个有区别的状态独立文件 | W36 |
+| `FW-recording-unseen` | 录音更多→原转写/逐段纠正/处理设置/关联日程，仅补现存读图与说话人图未覆盖的状态 | W37–W38 |
+| `FW-segments`；`FW-segment`；`FW-app-activity`；`FW-media`；`FW-coding` | final → 特殊资料回看；四类页面，其中截图片段还需单条展开 | W39 |
+| `FW-settings-final`；`FW-services-final`；`FW-processing-final` | 日常工作台→设置；总页新入口、模型与服务当前连接列表、资料处理总页。旧Provider详情/模块及授权确认局部可复用 | W40–W44 |
+| `FW-local-image`；`FW-local-audio`；`FW-local-failed` | 资料处理→图片/录音→本机准备；分别准备/可用/失败恢复。已有图中只显示下载结束或旧技术地址的不能替代完整链路 | W43、W45 |
+| `FW-plugin-recovery`；`FW-plugin-failed`；`FW-plugin-capabilities`；`FW-agent-trace` | final → 插件与方案恢复；默认/准备失败及重试、实际能力、已记录输入。旧Memory设置的相同区域不重导 | W46–W47 |
+| `FW-preferences`；`FW-signin`；`FW-version`；`FW-guide-search`；`FW-guide-empty` | final → 本机偏好与维护/诊断版本/全部功能；退出确认后登录、版本状态、搜索展开与无结果。guide默认态已有 | W49–W50 |
+| `FM-note`；`FM-menu-bar` | final→Mac→日常工作台→随手记。菜单栏真实预览若final无可见入口，使用已接受的 `mote-mac-role-exploration.html`→轻量落点→只用菜单栏；不导“已定工作台”旧优先级作目标 | M04–M05 |
+| `FM-content-detail`；`FM-content-empty`；`FM-source-detail` | final→Mac→内容/来源→单项；空或不可读状态只按可见操作导出。6张根页不重导 | M06–M07、M16 |
+| `FM-chat`；`FM-chat-scope`；`FM-save-answer` | Mac历史→会话→范围/引用/保存；Central原文复用FW-reader，不为Mac再复制同一中央画面 | M08–M10 |
+| `FM-add-source`；`FM-file-form`；`FM-folder-form`；`FM-description`；`FM-coding`；`FM-calendar` | 来源→添加→各已有本机来源；展开高级与选填说明。文件选择取消仅在产品实际检查，不要求用户选择个人文件 | M13–M19 |
+| `FM-capture`；`FM-capture-review`；`FM-privacy`；`FM-permissions` | 设置/来源→屏幕记录→规则和开始复核；隐私、权限。默认继承/自定义有不同布局时分图 | M20–M22 |
+| `FM-sync-history`；`FM-send-policy`；`FM-connection-storage` | 同步→接收历史/发送设置；设置→连接与存储 | M23–M25、M27 |
+| `FM-device-options`；`FM-preferences`；`FM-advanced`；`FM-preview`；`FM-chrome` | final→Mac→本机偏好与维护→各子页；预览生成后比较与未保存状态 | M32–M36 |
+| `FM-diagnostics`；`FM-about-prod`；`FM-about-dev`；`FM-update-failed` | final→Mac→诊断/版本；可见安装包选择Prod/Dev，模拟失败。不要真实安装 | M37–M38 |
+| `FP-menu`；`FP-record`；`FP-record-attachments`；`FP-share-conflict` | final→Android→日常工作台→菜单/记录；展开说明、图片/录音/文件状态；有旧草稿时系统分享冲突只能用原型可见演示入口 | P02、P06 |
+| `FP-library`；`FP-memory`；`FP-original` | 菜单→资料与记忆→两类及原文；本机/Central区别 | P11–P12 |
+| `FP-sources`；`FP-source-add`；`FP-file`；`FP-folder`；`FP-source-detail` | 菜单→采集与同步→来源/添加/文件/文件夹/详情；选填说明及高级展开 | P07–P10 |
+| `FP-capture`；`FP-app-rule`；`FP-capture-review`；`FP-permissions` | 采集与同步→屏幕与应用→规则/开始复核；本机维护→权限 | P13–P14、P27 |
+| `FP-sync`；`FP-upload-detail`；`FP-sync-recovery` | 采集与同步→当前/上传历史→单项；检查与补传页 | P15–P16、P33 |
+| `FP-chat`；`FP-history`；`FP-chat-scope`；`FP-citation`；`FP-save-answer` | 问一问→历史→同一会话→范围/引用/保存；已有首页无需重导 | P17–P19 |
+| `FP-images`；`FP-images-failed`；`FP-model`；`FP-turn-more`；`FP-chat-delete` | final→Android→图片提问与对话更多；选择图片/失败/单次模型/单轮详情/删除确认 | P17、P21 |
+| `FP-discovery`；`FP-tasks-calendar` | 菜单→发现历史/日程与待办；仅原型真实可见入口。已有Central页面不自动视为Android原生设计 | P22–P23 |
+| `FP-settings`；`FP-device-options`；`FP-appearance`；`FP-statistics`；`FP-history-retention` | final→Android→本机偏好与维护；设置根页、这台手机及子页 | P24–P25、P32–P33 |
+| `FP-image-settings`；`FP-image-preview`；`FP-dedupe-empty`；`FP-dedupe-results`；`FP-dedupe-compare`；`FP-dedupe-delete` | 本机维护→图像质量/预览/去重；只使用原型样例结果，结果/待决定区/确认分别保存 | P28–P30 |
+| `FP-calendar-range`；`FP-calendar-permission` | 本机维护→本机日历；授权/选择日历后的范围与说明 | P31 |
+| `FP-diagnostics`；`FP-logs`；`FP-about-prod`；`FP-about-dev`；`FP-update-failed` | final→Android→诊断版本；对应维护页及可见Prod/Dev/失败模拟 | P26、P33–P34 |
+
+首次使用、跨端及恢复共用下表；其中 `{端}` 展开为实际有该页面的 Android/Mac/Central，每张图仍独立标端，不能拿手机图代替Mac。不要导出只因平台选择自动跳回Central而出现的重复页面。
+
+| 新图短名 | 文件、可见场景与必要状态 | 对应矩阵 |
+| --- | --- | --- |
+| `FIRST-{端}-start`；`FIRST-{端}-connected`；`FIRST-{端}-offline`；`FIRST-{端}-readable`；`FIRST-{端}-unavailable`；`FIRST-{端}-unverified` | first-use：依次选六场景；只截有差异的实际端页面，相同已保存原文不重复 | W01、M03、P03–P04 |
+| `FIRST-{端}-connect`；`FIRST-{端}-target-review`；`FIRST-{端}-help` | first-use：未连接→连接/示例邀请→目标确认；Central安装帮助。只在可见入口支持的端导出 | M03、M27、P04–P05 |
+| `COPY-{端}-released`；`SOURCE-{端}-paused`；`SOURCE-android-remove-confirm`；`SOURCE-android-removed` | continuity：本机副本清理/暂停来源/Android移除连接；原文不可用与去Central入口，不使用其旧“删除资料”历史场景 | M07、M16、M24、P10–P12、P15 |
+| `REC-{端}-backup`；`REC-{端}-restore-picker`；`REC-{端}-restore-preview`；`REC-{端}-invalid`；`REC-{端}-partial`；`REC-{端}-working`；`REC-{端}-restored` | recovery：Android/Mac分别导本机备份、从备份恢复、校验失败、中途失败；用可见示例回执生成工作/结果画面 | M28–M29、P35–P36 |
+| `REC-{端}-export`；`REC-{端}-export-failed`；`REC-phone-config-preview`；`REC-phone-config-result` | recovery：导出流程；Android配置迁移，对比与结果 | M30、P37 |
+| `REC-{端}-location`；`REC-{端}-migrate-confirm`；`REC-{端}-migrating`；`REC-{端}-space-error`；`REC-{端}-disk-unavailable`；`REC-mac-cleanup`；`REC-mac-uncertain` | recovery：更换位置/介质不可用；示例回执中Mac还含旧副本待清理、切换状态待恢复 | M31、P38 |
+| `ASK-{端}-unconfirmed`；`ASK-{端}-stopping`；`ASK-{端}-failed`；`ASK-{端}-clarify` | recovery：提问结果未确认/依据不足继续澄清，三端各自样式；保留同请求检查/重试入口 | W12、M11、P20 |
+| `HISTORY-{端}-changed`；`HISTORY-{端}-deleted` | **网站已提供修正状态，不再请求补图**；见 WEB-S01–03、MAC-S01–02、PHONE-S01–02。本机旧 continuity 图仍不能替代网站修正版；不执行隐藏函数 | W13、M10、P18–P19 |
+
+最后仍须检查所有改动相关的窄窗、深色、空/加载/错误/权限拒绝状态。已有代表图仅减少相同局部重复导出，不能自动把未提供的状态变成通过。Android已有Central原生消费者（P39）、Mac低频既有入口（M39）需逐入口功能验收；源若只规定保留能力而没有独立端画面，应明确“功能可验、最终视觉依据缺失”，不得自行发明界面再宣布一致。
+
+## 本轮新增功能授权的验收维度
+
+协调者已转达新增授权；因此不再将普通删除保留问答、既有授权范围内的非create日程、独立说明链路、完整OCR/ASR准备整体视为未授权。对应源未看图与产品未验收状态仍分别记录。验收至少增加：普通删除与隐私遗忘/撤权分支区分；日程目标设备/日历/版本/撤销和幂等；说明独立持久化、传输、恢复和模型上下文且不混原文；OCR/ASR依赖准备、下载、启动、健康检查和失败恢复。真实合同测试与可视状态分别记录，不能用原型示例回执替代。
