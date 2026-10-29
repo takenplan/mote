@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import type {CapturePreview,CaptureTimelinePage} from '@mote/shared';
 import React,{act} from 'react';
 import {JSDOM} from 'jsdom';
 import {configureLocale} from '@mote/shared/i18n';
@@ -76,24 +78,24 @@ for(const status of [403,404,503])test('rolling time selection retains display o
 });
 
 const when='2026-10-14T01:00:00Z';
-const capture=(title:string)=>({id:title,capturedAt:when,deviceName:'Generated device',source:'note',windowTitle:title,textPreview:'Generated original',hasImage:false});
-const page=(title?:string,nextCursor:string|null=null)=>({items:title?[capture(title)]:[],totalCount:title?3:0,nextCursor});
+const capture=(title:string):CapturePreview=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-'+createHash('sha256').update(title).digest('hex').slice(0,12),capturedAt:when,deviceId:'generated-device',deviceName:'Generated device',platform:'other',source:'note',appName:'随手记',windowTitle:title,textPreview:'Generated original',hasImage:false,durationMs:0,ocr:{status:'not_applicable'}});
+const page=(title?:string,nextCursor:string|null=null):CaptureTimelinePage=>{const record=title?capture(title):undefined;return {revision:'generated-current-revision',items:record?[{type:'record',id:'opaque-date-row-'+record.id,day:'2026-10-14',firstAt:when,lastAt:when,sampleCount:null,record}]:[],nextCursor};};
 const devices=[{deviceId:'generated-device',deviceName:'Generated device',platform:'other',status:'online',queueDepth:0,lastSeenAt:when}];
 for(const empty of [false,true])test('record timeline retains '+(empty?'empty':'populated')+' content while its current page refreshes',async t=>{
  const {root,d}=await fixture(t),{api,reads}=transport();
  const render=(revision:number)=>act(async()=>root.render(React.createElement(RecordTimeline,{api,devices,onOpen:()=>{},revision,library:true})));
- await render(0);assert.match(d.body.textContent!,/正在找回这些片刻/);
+ await render(0);assert.match(d.body.textContent!,/正在读取…/);assert.ok(reads[0].path.startsWith('/api/capture-browser/timeline?'));const initial=new URL(reads[0].path,'http://fixture').searchParams;for(const key of ['after','before','timeZone'])assert.ok(initial.get(key),'timeline scope includes '+key);
  await act(async()=>reads[0].reply.resolve(page(empty?undefined:'Generated first page',empty?null:'next')));
  const node=d.querySelector(empty?'.empty':'.library-record')!;assert.ok(node);
- await render(1);assert.equal(reads.length,2);assert.equal(d.querySelector(empty?'.empty':'.library-record'),node);assert.doesNotMatch(d.body.textContent!,/正在找回这些片刻/);
+ await render(1);assert.equal(reads.length,2);assert.equal(d.querySelector(empty?'.empty':'.library-record'),node);assert.doesNotMatch(d.body.textContent!,/正在读取…/);
  await act(async()=>reads[1].reply.resolve(page(empty?undefined:'Generated first page',empty?null:'next')));
  if(empty)return;
  const next=Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='下一页')!;
- await act(async()=>next.click());assert.match(d.body.textContent!,/正在找回这些片刻/);assert.equal(new URL(reads[2].path,'http://fixture').searchParams.get('cursor'),'next');
- await render(2);assert.equal(reads[2].signal.aborted,false);assert.equal(reads.length,3,'an update hint lets the requested page finish');assert.match(d.body.textContent!,/正在找回这些片刻/);
- await act(async()=>reads[2].reply.resolve(page('Generated second page')));assert.equal(new URL(reads[3].path,'http://fixture').searchParams.get('cursor'),'next','the coalesced refresh keeps the requested page');assert.match(d.body.textContent!,/第 2 页/);assert.doesNotMatch(d.body.textContent!,/正在找回这些片刻/);
+ await act(async()=>next.click());assert.match(d.body.textContent!,/正在读取…/);assert.equal(new URL(reads[2].path,'http://fixture').searchParams.get('cursor'),'next');
+ await render(2);assert.equal(reads[2].signal.aborted,false);assert.equal(reads.length,3,'an update hint lets the requested page finish');assert.match(d.body.textContent!,/正在读取…/);
+ await act(async()=>reads[2].reply.resolve(page('Generated second page')));assert.equal(new URL(reads[3].path,'http://fixture').searchParams.get('cursor'),'next','the coalesced refresh keeps the requested page');assert.match(d.body.textContent!,/第 2 页/);assert.doesNotMatch(d.body.textContent!,/正在读取…/);
  await act(async()=>reads[3].reply.resolve(page('Generated second page')));
- const second=d.querySelector('.library-record');await render(3);assert.equal(new URL(reads[4].path,'http://fixture').searchParams.get('cursor'),'next');assert.equal(d.querySelector('.library-record'),second);assert.doesNotMatch(d.body.textContent!,/正在找回这些片刻/);
+ const second=d.querySelector('.library-record');await render(3);assert.equal(new URL(reads[4].path,'http://fixture').searchParams.get('cursor'),'next');assert.equal(d.querySelector('.library-record'),second);assert.doesNotMatch(d.body.textContent!,/正在读取…/);
  await act(async()=>reads[4].reply.resolve(page('Generated second page')));assert.match(d.body.textContent!,/第 2 页/);
 });
 test('record timeline update hints cannot starve a slow page read',async t=>{
@@ -111,10 +113,10 @@ test('record timeline fences filters and late reads and withdraws revoked data b
  await render(0);await act(async()=>reads[0].reply.resolve(page('Generated old scope')));await render(1);
  const device=d.querySelector<HTMLSelectElement>('[aria-label="筛选设备"]')!;
  await act(async()=>{device.value='generated-device';device.dispatchEvent(new w.Event('change',{bubbles:true}));});
- assert.equal(reads[1].signal.aborted,true);assert.doesNotMatch(d.body.textContent!,/Generated old scope/);assert.match(d.body.textContent!,/正在找回这些片刻/);
+ assert.equal(reads[1].signal.aborted,true);assert.doesNotMatch(d.body.textContent!,/Generated old scope/);assert.match(d.body.textContent!,/正在读取…/);
  await act(async()=>reads[1].reply.resolve(page('LATE OLD SCOPE')));assert.doesNotMatch(d.body.textContent!,/LATE OLD SCOPE/);
  await act(async()=>reads[2].reply.resolve(page('Generated selected scope')));await render(2);
  await act(async()=>reads[3].reply.reject(new ApiError('Generated permission revoked',403)));assert.doesNotMatch(d.body.textContent!,/Generated selected scope/);assert.match(d.body.textContent!,/Generated permission revoked/);
- await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated selected scope/);assert.match(d.body.textContent!,/正在找回这些片刻/);
+ await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated selected scope/);assert.match(d.body.textContent!,/正在读取…/);
  await act(async()=>reads[4].reply.resolve(page()));assert.ok(d.querySelector('.empty'));
 });

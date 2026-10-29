@@ -37,8 +37,9 @@ test('full host counts stay truthful while a folded group lazily pages exact pro
 
 test('dated projection identities never become original IDs and known samples use the host total',async t=>{
  const {root,d}=await fixture(t),opened:string[]=[];
- const api=apiWith(()=>page([{type:'record',id:'signed-day-row-not-a-uuid',day:'2026-10-29',...member()},group({id:'known-count',sampleCount:305,recordCount:71})]));
- await act(async()=>root.render(view(api,ref=>opened.push(ref))));await act(async()=>d.querySelector<HTMLButtonElement>('.library-time-record')!.click());assert.deepEqual(opened,['capture:'+id]);assert.equal(d.querySelector('.library-time-record')!.getAttribute('data-reference'),'capture:'+id);assert.match(d.querySelector('.library-time-count')!.textContent!,/305 个样本/);assert.match(d.querySelector('.library-time-count')!.textContent!,/71 条记录/);
+ const note={...member(),record:{...member().record,source:'note' as const,windowTitle:'',appName:'随手记',textPreview:'Generated literal note title'}};
+ const api=apiWith(()=>page([{type:'record',id:'signed-day-row-not-a-uuid',day:'2026-10-29',...note},group({id:'known-count',sampleCount:305,recordCount:71})]));
+ await act(async()=>root.render(view(api,ref=>opened.push(ref))));await act(async()=>d.querySelector<HTMLButtonElement>('.library-time-record')!.click());assert.deepEqual(opened,['capture:'+id]);assert.equal(d.querySelector('.library-time-record strong')!.textContent,'Generated literal note title');assert.equal(d.querySelector('.library-time-record')!.getAttribute('data-reference'),'capture:'+id);assert.match(d.querySelector('.library-time-count')!.textContent!,/305 个样本/);assert.match(d.querySelector('.library-time-count')!.textContent!,/71 条记录/);
 });
 
 test('all filters remain scoped and new filters or owners cannot send a prior cursor or publish a late group',async t=>{
