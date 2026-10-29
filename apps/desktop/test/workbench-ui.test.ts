@@ -145,3 +145,12 @@ it('does not replace the selected first note with a different capture returned b
   ui.setHomeRows([{key:'queue:'+conversation.id,source:'note',title:'Generated first original',preview:'',observedAt:new Date().toISOString()}]);await flush();
   expect(el('home-first-record-state').textContent).toBe('接收结果待核实');expect(el('home-first-record-preview').textContent).toBe('');
 });
+
+it('keeps receipt confirmation from the exact current-device remote row when the first body read fails',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>{throw Error('Generated first body HTTP503');});
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  ui.setHomeRows([{key:'capture:'+conversation.id,source:'note',title:'Current-device received row',preview:'',observedAt:new Date().toISOString()}]);await flush();
+  expect(el('home-first-record-state').textContent).toBe('中央已收到');expect(el('home-first-copy').textContent).toBe('资料已收到，原文暂不可用。');expect(el('home-first-record-preview').textContent).toBe('');
+});
