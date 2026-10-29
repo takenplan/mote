@@ -9852,5 +9852,9 @@ export const english: Readonly<Record<string, string>> = {
   "日程信息已变化，请读取最新内容后再继续。": "Event information has changed. Load the latest version before continuing.",
   "补充时间": "Add times",
   "保存信息": "Save information",
-  "检查保存结果": "Check save result"
+  "检查保存结果": "Check save result",
+  "第一份发现会保存在这里，之后可以随时回看。": "Your first finding will be saved here for you to revisit.",
+  "这份发现当前不可用，请从历史选择其他发现。": "This finding is unavailable. Choose another from history.",
+  "选择一份发现，回到当时的线索。": "Choose a finding to revisit its context.",
+  "报告已归档，可在发现历史中查看。": "The report is archived in finding history."
 };

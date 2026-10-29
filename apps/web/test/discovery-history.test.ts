@@ -50,7 +50,7 @@ test('real owner HTTP history reaches older pages and exact reports, then remove
  await api.request('/api/notes/'+noteId,{method:'DELETE'});
  // Deletion has no execution-event guarantee. The mounted report's bounded
  // revalidation must withdraw it and refresh history without a manual reload.
- await until(()=>!d.querySelector('.insight-report')&&d.body.textContent!.includes('这份洞察当前不可用'));
+ await until(()=>!d.querySelector('.insight-report')&&d.body.textContent!.includes('这份发现当前不可用'));
  await until(()=>d.querySelectorAll('.workspace-list .workspace-select').length===0);
  assert.equal(win.location.hash,'#/library/insights?insight='+ids[66],'a disappeared report never silently selects another result');
 });
@@ -62,7 +62,7 @@ test('late exact reads, unavailable selections and a different owner session can
  await act(async()=>root.render(view(api)));assert.equal(d.querySelector('.insight-report'),null);
  await act(async()=>{win.location.hash='#/library/insights?insight=second';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>!!d.querySelector('.insight-report'));
  await act(async()=>finish(report('first','Generated stale first report')));assert.match(d.querySelector('.insight-report')!.textContent!,/Generated second report/);assert.doesNotMatch(d.body.textContent!,/Generated stale first report/);
- await act(async()=>{win.location.hash='#/library/insights?insight=missing';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>d.body.textContent!.includes('这份洞察当前不可用'));assert.equal(d.querySelector('.insight-report'),null);
+ await act(async()=>{win.location.hash='#/library/insights?insight=missing';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>d.body.textContent!.includes('这份发现当前不可用'));assert.equal(d.querySelector('.insight-report'),null);
  await act(async()=>{win.location.hash='#/library/insights?insight=second';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>!!d.querySelector('.insight-report'));
  const denied=fake(path=>path.startsWith('/api/insights')?Promise.reject(new ApiError('Generated owner session denied',403)):{items:[]});
  await act(async()=>root.render(view(denied)));await tick();assert.equal(d.querySelector('.insight-report'),null);assert.doesNotMatch(d.body.textContent!,/Generated second report/);
@@ -81,7 +81,7 @@ test('a changed history cursor discards older rows and reloads the first page; t
  await act(async()=>button(d,'加载更多').click());assert.match(d.body.textContent!,/连接暂时中断，请检查网络/);assert.equal(d.querySelectorAll('.workspace-list .workspace-select').length,1);
  await act(async()=>button(d,'加载更多').click());assert.equal(d.querySelectorAll('.workspace-list .workspace-select').length,2);
  await act(async()=>button(d,'加载更多').click());await until(()=>d.querySelectorAll('.workspace-list .workspace-select').length===0);assert.ok(firstReads>=2);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/Generated older finding/);
- await until(()=>!d.querySelector('.insight-report'));assert.match(d.body.textContent!,/这份洞察当前不可用/,'cursor invalidation also revalidates the explicitly selected report');
+ await until(()=>!d.querySelector('.insight-report'));assert.match(d.body.textContent!,/这份发现当前不可用/,'cursor invalidation also revalidates the explicitly selected report');
 });
 
 test('an old owner pagination response cannot enter a different Central session even if transport ignores cancellation',async t=>{

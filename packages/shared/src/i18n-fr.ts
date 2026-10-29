@@ -9852,5 +9852,9 @@ export const french: Readonly<Record<string, string>> = {
   "日程信息已变化，请读取最新内容后再继续。": "Les informations de l’événement ont changé. Rechargez la dernière version avant de continuer.",
   "补充时间": "Ajouter les horaires",
   "保存信息": "Enregistrer les informations",
-  "检查保存结果": "Vérifier l’enregistrement"
+  "检查保存结果": "Vérifier l’enregistrement",
+  "第一份发现会保存在这里，之后可以随时回看。": "Votre première découverte sera conservée ici pour la consulter à nouveau.",
+  "这份发现当前不可用，请从历史选择其他发现。": "Cette découverte est indisponible. Choisissez-en une autre dans l’historique.",
+  "选择一份发现，回到当时的线索。": "Choisissez une découverte pour retrouver son contexte.",
+  "报告已归档，可在发现历史中查看。": "Le rapport est archivé dans l’historique des découvertes."
 };

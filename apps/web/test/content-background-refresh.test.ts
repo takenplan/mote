@@ -108,7 +108,7 @@ for(const populated of [false,true])test(`Insight ${populated?'populated':'empty
  const {root,d,apiWith}=await fixture(t),first=deferred(),refresh=deferred();let refreshing=false;
  const api=apiWith(path=>path==='/api/insights?limit=30'?(refreshing?refresh.promise:first.promise):{items:[]});
  await act(async()=>root.render(insightView(api)));assert.match(d.querySelector('.workspace-list')!.textContent!,/正在读取/);
- await act(async()=>first.resolve({items:populated?[report]:[]}));await act(async()=>button(d,'新建洞察').click());const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
+ await act(async()=>first.resolve({items:populated?[report]:[]}));await act(async()=>button(d,'生成回顾').click());const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
  refreshing=true;await act(async()=>resources(api).invalidate(path=>path==='/api/insights?limit=30'));
  assert.doesNotMatch(list.textContent!,/正在读取/);assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);assert.equal(d.querySelector('textarea'),compose);assert.equal(compose!.disabled,false);assert.equal(d.querySelector('.insights-page')!.getAttribute('aria-busy'),'false');
  await act(async()=>refresh.resolve({items:populated?[report]:[]}));assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);
@@ -127,7 +127,7 @@ test('an Insight completion refreshes history and notifies its shell once',async
  await act(async()=>root.render(insightView(api,{onChanged:()=>changes++})));assert.equal(runReads,1);
  await act(async()=>completion.resolve({...running,status:'completed',result:report}));
  assert.equal(runReads,1,'the running-to-completed effect transition cannot replay the terminal read');assert.equal(historyReads,2);assert.equal(changes,1);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/正在读取/);
- await act(async()=>historyRefresh.resolve({items:[report]}));assert.match(d.querySelector('.insight-report')!.textContent!,/Generated report body/);assert.equal(changes,1);
+ await act(async()=>historyRefresh.resolve({items:[report]}));assert.equal(d.querySelector('.insight-report'),null,'A background completion does not take the owner out of history');assert.match(d.querySelector('.workspace-list')!.textContent!,/Generated report body/);assert.equal(changes,1);
 });
 
 for(const kind of ['Memory','Insight'] as const)test(`${kind} mounts once at a nonzero shell revision and refreshes once for a later revision`,async t=>{

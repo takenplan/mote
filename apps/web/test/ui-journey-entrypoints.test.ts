@@ -81,11 +81,11 @@ test('a Home finding opens that exact report, reaches its evidence and does not 
   assert.match(d.querySelector('.insight-report')!.textContent!, /Generated chosen finding/, 'a separate background analysis cannot replace the report the owner opened');
 
   await act(async () => { location.hash = '#/library/insights'; }); await tick();
-  assert.match(d.querySelector('.insight-report')!.textContent!, /Generated unrelated report/, 'opening the history defaults to an existing result');
+  assert.equal(d.querySelector('.insight-report'),null,'The history opens as a list instead of silently choosing a result');assert.match(d.querySelector('.workspace-list')!.textContent!,/Generated unrelated report/);
   await act(async () => { location.hash = '#/library/insights?insight=unavailable'; }); await tick();
   assert.equal(d.querySelector('.insight-report'), null, 'an unavailable exact report cannot silently open a different result');
-  assert.match(d.body.textContent!, /这份洞察当前不可用/);
-  await act(async () => button(d, '新建洞察').click()); await tick();
+  assert.match(d.body.textContent!, /这份发现当前不可用/);
+  await act(async () => button(d,'发现历史').click());await tick();await act(async()=>button(d,'生成回顾').click());await tick();
   assert.ok(d.querySelector('.insight-compose'), 'generation controls appear after an explicit New action');
   assert.deepEqual(writes, [], 'opening the composer does not start model work');
 });

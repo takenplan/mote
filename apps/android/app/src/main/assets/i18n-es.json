@@ -9851,5 +9851,9 @@
   "日程信息已变化，请读取最新内容后再继续。": "La información del evento ha cambiado. Carga la versión más reciente antes de continuar.",
   "补充时间": "Añadir horarios",
   "保存信息": "Guardar información",
-  "检查保存结果": "Comprobar el guardado"
+  "检查保存结果": "Comprobar el guardado",
+  "第一份发现会保存在这里，之后可以随时回看。": "Tu primer hallazgo se guardará aquí para volver a consultarlo.",
+  "这份发现当前不可用，请从历史选择其他发现。": "Este hallazgo no está disponible. Elige otro del historial.",
+  "选择一份发现，回到当时的线索。": "Elige un hallazgo para volver a su contexto.",
+  "报告已归档，可在发现历史中查看。": "El informe está archivado en el historial de hallazgos."
 }
