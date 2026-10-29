@@ -1,4 +1,13 @@
 {
+  "原始转写保留。": "La transcription originale est conservée.",
+  "已有授权范围内的来源与原文": "Sources et originaux dans le périmètre autorisé",
+  "记忆及其原文依据": "Souvenirs et leurs sources originales",
+  "先提供目录和能力，原文按需读取。": "Le catalogue et les capacités sont fournis en premier. Les originaux sont lus à la demande.",
+  "首次上下文预览": "Aperçu du contexte initial",
+  "个人上下文目录、检索工具和当前可访问范围。": "Catalogue du contexte personnel, outils de recherche et périmètre actuellement accessible.",
+  "展开示例结构": "Développer l’exemple de structure",
+  "查看实际输入与工具读取": "Voir les entrées réelles et les lectures des outils",
+  "这次实际交付的上下文": "Contexte réellement fourni lors de cette exécution",
   "保存内容": "Contenu enregistré",
   "允许读取的日历": "Calendriers accessibles en lecture",
   "可读取资源": "Ressources accessibles en lecture",

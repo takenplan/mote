@@ -1,4 +1,13 @@
 {
+  "原始转写保留。": "The original transcript is retained.",
+  "已有授权范围内的来源与原文": "Sources and originals within the existing authorization",
+  "记忆及其原文依据": "Memories and their original evidence",
+  "先提供目录和能力，原文按需读取。": "The catalog and capabilities come first. Originals are read as needed.",
+  "首次上下文预览": "Initial context preview",
+  "个人上下文目录、检索工具和当前可访问范围。": "Personal context catalog, retrieval tools and the currently accessible scope.",
+  "展开示例结构": "Expand example structure",
+  "查看实际输入与工具读取": "View actual input and tool reads",
+  "这次实际交付的上下文": "Context actually delivered in this run",
   "保存内容": "Saved content",
   "允许读取的日历": "Calendars Mote may read",
   "可读取资源": "Readable resources",

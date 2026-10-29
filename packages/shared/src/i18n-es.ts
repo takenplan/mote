@@ -1,5 +1,14 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "原始转写保留。": "Se conserva la transcripción original.",
+  "已有授权范围内的来源与原文": "Fuentes y originales dentro de la autorización existente",
+  "记忆及其原文依据": "Recuerdos y sus fuentes originales",
+  "先提供目录和能力，原文按需读取。": "Primero se proporcionan el catálogo y las capacidades. Los originales se leen según sea necesario.",
+  "首次上下文预览": "Vista previa del contexto inicial",
+  "个人上下文目录、检索工具和当前可访问范围。": "Catálogo del contexto personal, herramientas de búsqueda y alcance accesible actual.",
+  "展开示例结构": "Expandir estructura de ejemplo",
+  "查看实际输入与工具读取": "Ver entrada real y lecturas de herramientas",
+  "这次实际交付的上下文": "Contexto entregado realmente en esta ejecución",
   "保存内容": "Contenido guardado",
   "允许读取的日历": "Calendarios permitidos para lectura",
   "可读取资源": "Recursos disponibles para lectura",
