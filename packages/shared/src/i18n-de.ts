@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "此版本暂无文字正文。": "Diese Version enthält noch keinen Text.",
+  "本页暂无文字正文。": "Diese Seite enthält keinen Text.",
   "导出已取消，记录与设置保留。": "Export abgebrochen. Aufzeichnungen und Einstellungen bleiben erhalten.",
   "图片上传失败": "Bild-Upload fehlgeschlagen",
   "上传结果尚未确认": "Upload-Ergebnis ist unbestätigt",

@@ -234,12 +234,30 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }) { (value, current) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = value.getJSONObject("material"); ui.text(item.getString("title"), NativeFontRole.TITLE_MOBILE)
-            ui.text(MoteI18n.text("版本 {0}", item.opt("sequence"))); ui.text(value.getString("text"))
+            ui.text(MoteI18n.text("版本 {0}", item.opt("sequence")))
+            val spans=value.getJSONArray("spans");val pageText=value.getString("text")
+            val hasBody=(0 until spans.length()).any { index -> val span=spans.getJSONObject(index);span.getString("kind")=="text" && span.getJSONObject("pageRange").let { it.getInt("end")>it.getInt("start") } }
+            if(!hasBody)ui.text(MoteI18n.text(if(item.optInt("blockCount")==item.optInt("assetCount"))"此版本暂无文字正文。" else "本页暂无文字正文。"))
+            for(index in 0 until spans.length()) {
+                val span=spans.getJSONObject(index)
+                if(span.getString("kind")=="text") {
+                    val range=span.getJSONObject("pageRange");val literal=pageText.substring(range.getInt("start"),range.getInt("end"))
+                    if(literal.isNotEmpty())ui.text(literal).tag="material-literal:"+span.getString("blockId")
+                }
+                span.optJSONObject("asset")?.let { asset ->
+                    val card=ui.card();card.tag="material-asset:"+span.getString("blockId")
+                    ui.text(item.getString("title"),NativeFontRole.SECTION,card)
+                    ui.text(asset.getString("mimeType"),NativeFontRole.SUPPORT,card)
+                    ui.text(MoteI18n.text(if(item.getJSONObject("retention").getString("original")=="retained")"原件已保留" else "原件不可用"),NativeFontRole.META,card)
+                }
+            }
             val reference="material:"+item.getString("id")+"@"+item.getString("revision")
             ui.button(MoteI18n.text("围绕这份资料提问")) { screens.askAboutMaterial(reference) }.tag="material-ask"
-            values(item.getJSONObject("origin"), ui.card())
+            ui.disclosure(MoteI18n.text("更多")) { more ->
+            values(item.getJSONObject("origin"), ui.card(more))
+            for(index in 0 until spans.length())spans.getJSONObject(index).optJSONObject("asset")?.let { values(it,ui.card(more)) }
             item.optJSONObject("attributionContext")?.let { context ->
-                val card = ui.card(); ui.text(MoteI18n.text("内容与我的关系") + " · " + relationLabel(context.optString("ownerRelation")), parent = card)
+                val card = ui.card(more); ui.text(MoteI18n.text("内容与我的关系") + " · " + relationLabel(context.optString("ownerRelation")), parent = card)
                 val basis = when (context.optString("basis")) {
                     "owner_material" -> MoteI18n.text("你对这份资料的声明")
                     "owner_source" -> MoteI18n.text("你对来源的声明")
@@ -255,12 +273,13 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                     }
                 } else ui.button(MoteI18n.text("查看当前版本"), parent = card) { material(id, current.getString("revision")) }
             }
+            }
             val range = value.getJSONObject("textRange")
             if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { material(id, item.getString("revision"), range.getInt("nextOffset")) }
             ui.button(MoteI18n.text("来源与处理")) {
                 val target = ui.card()
                 paged("/api/materials/" + enc(id) + "/members?limit=20&revision="+enc(item.getString("revision")), target) { member, card ->
-                    ui.button(member.optString("kind"), parent = card) { evidence(member.getString("ref")) }
+                    ui.button(MoteI18n.text("查看原文"), parent = card) { evidence(member.getString("ref")) }
                 }
             }
         }

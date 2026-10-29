@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "此版本暂无文字正文。": "Cette version ne contient pas encore de texte.",
+  "本页暂无文字正文。": "Cette page ne contient pas de texte.",
   "导出已取消，记录与设置保留。": "Exportation annulée. Les enregistrements et réglages sont conservés.",
   "图片上传失败": "Échec de l’envoi de l’image",
   "上传结果尚未确认": "Résultat de l’envoi non confirmé",

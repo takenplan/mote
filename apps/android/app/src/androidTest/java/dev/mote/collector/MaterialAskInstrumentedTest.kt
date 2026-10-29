@@ -45,7 +45,9 @@ class MaterialAskInstrumentedTest {
     private fun openMaterial():ActivityScenario<CentralActivity> {
         val scenario=ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","materials"))
         click(scenario,"Actual Material list row"){it.tag=="material-open:"+fixture.getString("nativeMaterialId")}
-        ready(scenario,"Pinned reader ready"){a -> !a.isWorking && shown(a).any { it.tag=="material-ask" }};screenshot(scenario,"pinned-material-reader");return scenario
+        ready(scenario,"Pinned reader ready"){a -> !a.isWorking && shown(a).any { it.tag=="material-ask" }};val page=api.get("/api/materials/"+fixture.getString("nativeMaterialId")+"/read?offset=0&length=4000&revision="+control("state").getString("nativeMaterialRef").substringAfter('@'))
+        scenario.onActivity { a->val spans=page.getJSONArray("spans");for(index in 0 until spans.length()){val span=spans.getJSONObject(index);if(span.getString("kind")=="text"){val range=span.getJSONObject("pageRange");assertEquals(page.getString("text").substring(range.getInt("start"),range.getInt("end")),shown(a).filterIsInstance<TextView>().single{it.tag=="material-literal:"+span.getString("blockId")}.text.toString())}} }
+        screenshot(scenario,"pinned-material-reader");return scenario
     }
     private fun choose(s:ActivityScenario<CentralActivity>):String {
         val ref=control("state").getString("nativeMaterialRef")
@@ -130,7 +132,16 @@ class MaterialAskInstrumentedTest {
         val read=api.get("/api/materials/"+fixture.getString("nativeMaterialId")+"/read?revision="+ref.substringAfter('@')+"&length=12000")
         assertEquals("asset",read.getJSONArray("spans").getJSONObject(0).getString("kind"))
         openMaterial().use { s ->
+            val hash=read.getJSONArray("spans").getJSONObject(0).getJSONObject("asset").getString("hash")
+            s.onActivity { a->assertTrue(shown(a).filterIsInstance<TextView>().any{it.text.toString()=="此版本暂无文字正文。"});assertTrue(shown(a).filterIsInstance<TextView>().any{it.text.toString()=="text/plain"});assertTrue(shown(a).filterIsInstance<TextView>().any{it.text.toString()=="原件已保留"});assertFalse(shown(a).filterIsInstance<TextView>().any{it.text.contains(hash) || it.text.toString().startsWith("[asset ") || it.text.toString().startsWith("sourceId ·")}) }
             screenshot(s,"asset-only-material-reader")
+            clickText(s,"更多  ›");ready(s,"Actual asset hash is available only in expanded details"){a->shown(a).filterIsInstance<TextView>().any{it.text.contains(hash)}};screenshot(s,"asset-only-expanded-real-metadata");clickText(s,"更多  ›")
+            clickText(s,"来源与处理");ready(s,"Pinned member original route"){a->!a.isWorking && shown(a).filterIsInstance<TextView>().any{it.text.toString()=="查看原文"}}
+            val monitor=instrumentation.addMonitor(CaptureRecordsActivity::class.java.name,null,false)
+            try { clickText(s,"查看原文");val reader=instrumentation.waitForMonitorWithTimeout(monitor,10_000) as? CaptureRecordsActivity;assertNotNull(reader)
+                until("Existing member reader preserves the actual original"){main{views(reader!!.window.decorView).filterIsInstance<TextView>().any{it.text.toString()=="Generated original discovery record: completion remains unknown."}}};main{reader!!.finish()}
+            } finally { instrumentation.removeMonitor(monitor) }
+            ready(s,"Return keeps exact pinned Material"){a->shown(a).any{it.tag=="material-ask"}}
             assertEquals(ref,choose(s));question(s,"Generated native question using asset-only Material")
             screenshot(s,"asset-only-material-scope");click(s,"Send"){it.contentDescription=="发送"}
             until("Asset-only pinned read and actual controlled answer"){saved().optString("runStatus")=="completed"}

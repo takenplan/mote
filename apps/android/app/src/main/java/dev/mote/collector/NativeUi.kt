@@ -92,19 +92,21 @@ internal object MoteUi {
         // Native text editing drawables are retained by the View; retint them in place.
         listOf(textCursorDrawable, textSelectHandle, textSelectHandleLeft, textSelectHandleRight).filterNotNull().forEach { it.mutate().setTint(MoteTheme.accent) }
     }
-    fun field(field: EditText): EditText = field.apply {
-        NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
-            MoteUi.textColor(this, NativeColorRole.INK); inputColors(this); minimumHeight = context.moteDp(MoteTheme.controlHeight)
-        } }
-        textColor(this, NativeColorRole.INK); inputColors(this); type(this, NativeFontRole.BODY)
-        backgroundTintList = null
-        background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, NativeColorRole.BACKGROUND, NativeRadiusRole.CONTROL, true, NativeColorRole.BORDER))
-            addState(intArrayOf(android.R.attr.state_focused), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.ACCENT))
-            addState(intArrayOf(), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER))
+    private fun inputBackground(field:EditText) {
+        field.backgroundTintList=null
+        field.background=android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(-android.R.attr.state_enabled),shape(field.context,NativeColorRole.BACKGROUND,NativeRadiusRole.CONTROL,true,NativeColorRole.CONTROL_BORDER))
+            addState(intArrayOf(android.R.attr.state_focused),shape(field.context,NativeColorRole.SURFACE,NativeRadiusRole.CONTROL,true,NativeColorRole.ACCENT))
+            addState(intArrayOf(),shape(field.context,NativeColorRole.SURFACE,NativeRadiusRole.CONTROL,true,NativeColorRole.CONTROL_BORDER))
         }
-        setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
-        minimumHeight = context.moteDp(MoteTheme.controlHeight)
+    }
+    fun field(field: EditText): EditText = field.apply {
+        NativePresentationStyles.remember(this,"field") { value -> (value as EditText).apply {
+            MoteUi.textColor(this,NativeColorRole.INK);inputColors(this);inputBackground(this);minimumHeight=context.moteDp(MoteTheme.controlHeight)
+        } }
+        textColor(this,NativeColorRole.INK);inputColors(this);type(this,NativeFontRole.BODY);inputBackground(this)
+        setPadding(context.moteDp(MoteTheme.spacePanel),context.moteDp(MoteTheme.spaceItem),context.moteDp(MoteTheme.spacePanel),context.moteDp(MoteTheme.spaceItem))
+        minimumHeight=context.moteDp(MoteTheme.controlHeight)
     }
 
     fun select(spinner: Spinner): Spinner = spinner.apply {

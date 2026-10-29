@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "此版本暂无文字正文。": "このバージョンにはまだ本文がありません。",
+  "本页暂无文字正文。": "このページには本文がありません。",
   "导出已取消，记录与设置保留。": "書き出しをキャンセルしました。記録と設定は保持されています。",
   "图片上传失败": "画像のアップロードに失敗",
   "上传结果尚未确认": "アップロード結果は未確認です",

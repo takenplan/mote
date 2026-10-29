@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "此版本暂无文字正文。": "Esta versión aún no tiene cuerpo de texto.",
+  "本页暂无文字正文。": "Esta página no tiene cuerpo de texto.",
   "导出已取消，记录与设置保留。": "Exportación cancelada. Se conservan los registros y los ajustes.",
   "图片上传失败": "Error al subir la imagen",
   "上传结果尚未确认": "El resultado de la subida no está confirmado",

@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "此版本暂无文字正文。": "This version has no text body yet.",
+  "本页暂无文字正文。": "This page has no text body.",
   "导出已取消，记录与设置保留。": "Export cancelled. Records and settings are retained.",
   "图片上传失败": "Image upload failed",
   "上传结果尚未确认": "Upload result is unconfirmed",
