@@ -28,7 +28,7 @@ async function run(){
  await window.loadURL(base+'/#/today');phase('product-loaded');await wc.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});phase('viewport-ready');await click('登录 Mote');await until(()=>js(`!!document.querySelector('.connect-modal input[type=password]')`),'login form');
  await input('.connect-modal input[type=password]',fixture.token);await click('登录并继续');
  await until(()=>js(`document.querySelector('[data-onboarding-state]')?.dataset.onboardingState==='ready'&&document.querySelectorAll('.home-material-row').length===3&&document.querySelector('.home-conversation-row')`),'real Home records and verified device original');
- const initialCatalog=await request('/api/library/catalog?limit=3');const total=initialCatalog.sources.reduce((sum,source)=>sum+source.count,0);
+ const initialCatalog=await request('/api/library/browse?limit=3');const total=String(initialCatalog.items.length)+(initialCatalog.nextCursor?'+':'');
  assert.equal(await js(`document.querySelector('.home-summary strong').firstChild.textContent`),String(total));
  assert.equal(await js(`document.querySelector('.central-onboarding').closest('details').className`),'home-extensions');
  assert.equal(await js(`document.querySelector('.central-onboarding').closest('details').open`),false);

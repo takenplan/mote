@@ -358,14 +358,15 @@ export class EvidenceStore {
   }
   previews(range:Range={}) {
     const page=this.list(range);
-    const items:CapturePreview[]=page.items.map(record=>({id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,
+    const items=page.items.map(record=>this.preview(record));
+    return {...page,items};
+  }
+  preview(record:CaptureRecord):CapturePreview {return {id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,
       capturedAt:record.capturedAt,source:record.source,appId:record.appId,appName:record.appName,windowTitle:record.windowTitle.slice(0,300),
       ...(record.stateSeries?{stateSummary:{count:record.stateSeries.samples.length,lastAt:record.stateSeries.samples.at(-1)!.at}}:{}),durationMs:record.durationMs,hasImage:Boolean(record.blobHash),ocr:captureOcrState(record),
       sizeBytes:Buffer.byteLength(record.ocrText)+(record.blobHash?Number(this.db.prepare('SELECT bytes FROM blobs WHERE hash=?').get(record.blobHash)?.bytes??0):Number(record.provenance?.metadata?.file?.sizeBytes??0)),
       ...(record.metadata?.media?{media:record.metadata.media}:{}),
-      textPreview:(record.source==='media'?(record.metadata?.media?.sessions.map(s=>[s.title,s.artist,s.appName].filter(Boolean).join(' · ')).join(' / ')||({available:moteText("未观察到媒体会话"),disabled:moteText("媒体采集已关闭"),permission_required:moteText("媒体权限未授予"),unavailable:moteText("媒体信息暂不可用")}[record.metadata?.media?.status??'unavailable'])):record.source==='notification'||record.source==='device_event'?systemEventText(record.metadata):record.ocrText).slice(0,160)}));
-    return {...page,items};
-  }
+      textPreview:(record.source==='media'?(record.metadata?.media?.sessions.map(s=>[s.title,s.artist,s.appName].filter(Boolean).join(' · ')).join(' / ')||({available:moteText("未观察到媒体会话"),disabled:moteText("媒体采集已关闭"),permission_required:moteText("媒体权限未授予"),unavailable:moteText("媒体信息暂不可用")}[record.metadata?.media?.status??'unavailable'])):record.source==='notification'||record.source==='device_event'?systemEventText(record.metadata):record.ocrText).slice(0,160)};}
   gallery(range:{after:string;before:string;deviceId?:string;appId?:string;cursor?:string;limit:number}, albums:boolean) {
     const filters=['captured_at>=?','captured_at<?',"(NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=capture_gallery.id) OR EXISTS(SELECT 1 FROM source_heads h WHERE h.capture_id=capture_gallery.id AND h.deleted=0) OR id IN (SELECT capture_id FROM file_heads))"];const args:(string|number)[]=[new Date(range.after).toISOString(),new Date(range.before).toISOString()];
     if(range.deviceId){filters.push('device_id=?');args.push(range.deviceId);}

@@ -48,7 +48,7 @@ async function run(){
     if(path==='/api/insights'){json(res,{items:[]});return;}
     if(path==='/api/sources'){json(res,{items:[]});return;}
     if(path==='/api/connections'){json(res,{items:[],mcp:{enabled:true,writeEnabled:false,writeSourceIds:[]}});return;}
-    if(path==='/api/library/catalog'){json(res,{schemaVersion:1,types:[],sources:[],items:[],nextCursor:null});return;}
+    if(path==='/api/library/browse'){json(res,{schemaVersion:1,types:[],sources:[],items:[],nextCursor:null});return;}
     if(path==='/api/context/search'){json(res,{items:[{ref:'memory:generated-search-result',title:'Generated searchable memory',snippet:'Generated evidence excerpt',kind:'memory'}],nextCursor:null});return;}
     if(path==='/api/context/read'){json(res,{items:[{id:'generated-search-result',ref:'memory:generated-search-result',kind:'memory',title:'Generated searchable memory',text:'Generated evidence body for retrieval journey',textRange:{offset:0,total:43,nextOffset:null}}],missingRefs:[]});return;}
     if(path==='/api/configuration'){json(res,{profile:'generated-fixture',groups:[]});return;}

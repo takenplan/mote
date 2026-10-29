@@ -876,7 +876,7 @@ export class MaterialStore {
     }catch(error){if(ownTransaction&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
 
-  list(args:{sourceId?:string;kind?:string;type?:LibraryMaterialType;deviceId?:string;after?:string;before?:string;limit?:number;cursor?:string;query?:string;order?:'source'|'library'}={}):MaterialPage {
+  list(args:{id?:string;sourceId?:string;kind?:string;type?:LibraryMaterialType;deviceId?:string;after?:string;before?:string;limit?:number;cursor?:string;query?:string;order?:'source'|'library'}={}):MaterialPage {
     const limit=args.limit??30;if(!Number.isInteger(limit)||limit<1||limit>100)throw new StoreError('Invalid material page size');
     const clauses=[`h.retired=0`,`h.sequence>=h.min_visible_sequence`],values:(string|number)[]=[];
     if(args.query){const terms=args.query.trim().split(/\s+/).filter(Boolean);for(const term of terms){
@@ -912,6 +912,7 @@ export class MaterialStore {
       }
     }}
     for(const [key,column] of [['sourceId','source_id'],['kind','kind'],['deviceId','device_id']] as const)if(args[key]){clauses.push(`h.${column}=?`);values.push(args[key]!);}
+    if(args.id){clauses.push('h.id=?');values.push(parseId(args.id));}
     if(args.type){const predicate=materialTypePredicate(args.type);clauses.push(predicate.sql);values.push(...predicate.values);}
     const librarySort='COALESCE(h.last_at,h.updated_at)';
     if(args.after){const after=new Date(args.after).toISOString();clauses.push(args.order==='library'?`${librarySort}>=?`:'h.last_at>=?');values.push(after);}

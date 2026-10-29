@@ -26,7 +26,7 @@ function apiWith(first:()=>unknown,other?:(path:string)=>unknown){return {reques
 
 test('pairing, arbitrary catalog content and MCP grant do not complete onboarding; loading is not success',async t=>{
  const f=await fixture(t);let finish!:(value:unknown)=>void;
- const pending=new Promise(done=>finish=done),api=apiWith(()=>pending,path=>path==='/api/connections'?{items:[{scope:'mcp-read'}]}:path.startsWith('/api/library/catalog')?{items:[{id:'unrelated-web-material'}]}:{items:[{id:'source-only'}]});
+ const pending=new Promise(done=>finish=done),api=apiWith(()=>pending,path=>path==='/api/connections'?{items:[{scope:'mcp-read'}]}:path.startsWith('/api/library/browse')?{items:[],nextCursor:null}:{items:[{id:'source-only'}]});
  await f.render(api);
  assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'loading');assert.equal(f.d.querySelector('.central-first-steps .completed'),null);assert.match(f.d.querySelector('[role=status]')!.textContent!,/正在读取采集记录/);
  await act(async()=>finish(result('unverified')));
@@ -47,17 +47,10 @@ test('retained exact device original needs no model or MCP, uses Central receive
  fail=false;await act(async()=>button(f.d,'刷新').click());await f.tick();assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'ready');
 });
 
-test('Home totals require complete catalog facets and never sum a truncated or failed response',async t=>{
- const f=await fixture(t);
- const total=()=>f.d.querySelector('.home-summary strong')!.firstChild!.textContent;
- for(const [catalog,expected] of [
-  [{items:[],sources:[{count:4},{count:3}],sourcesTruncated:false},'7'],
-  [{items:[],sources:[{count:4}],sourcesTruncated:true},'—'],
-  [{items:[],sources:[{count:4}]},'—'],
-  [{items:[],sources:[{count:-1}],sourcesTruncated:false},'—'],
-  [{items:[],sources:[],sourcesTruncated:false},'0'],
- ] as const){await f.render(apiWith(()=>result(),path=>path.startsWith('/api/library/catalog')?catalog:{items:[]}));assert.equal(total(),expected);}
- await f.render(apiWith(()=>result(),path=>{if(path.startsWith('/api/library/catalog'))throw new ApiError('Generated unavailable catalog',503);return {items:[]};}));
+test('Home counts visible browse rows and marks further pages without claiming facet totals',async t=>{
+ const f=await fixture(t),total=()=>f.d.querySelector('.home-summary strong')!.firstChild!.textContent;
+ for(const [catalog,expected] of [[{items:[],sources:[{count:4000}],sourcesTruncated:false,nextCursor:null},'0'],[{items:[],sources:[{count:4000}],sourcesTruncated:true,nextCursor:'more'},'0+']] as const){await f.render(apiWith(()=>result(),path=>path.startsWith('/api/library/browse')?catalog:{items:[]}));assert.equal(total(),expected);assert.match(f.d.querySelector('.home-summary')!.textContent!,/当前可见资料/);}
+ await f.render(apiWith(()=>result(),path=>{if(path.startsWith('/api/library/browse'))throw new ApiError('Generated unavailable catalog',503);return {items:[]};}));
  assert.equal(total(),'—');assert.match(f.d.querySelector('.home-read-error')!.textContent!,/Generated unavailable catalog/);
 });
 

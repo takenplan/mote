@@ -9196,5 +9196,15 @@ export const english: Readonly<Record<string, string>> = {
   "查看待发内容": "View pending content",
   "更换存储位置": "Change storage location",
   "迁移本机记录与图片": "Move local records and images",
-  "{0} 项待发送": "{0} items pending sending"
+  "{0} 项待发送": "{0} items pending sending",
+  "返回导入列表": "Back to imports",
+  "导入详情": "Import details",
+  "当前可见资料": "Currently visible materials",
+  "当前范围内暂无资料。": "No materials in this range.",
+  "保存记录或导入资料后，可以在这里查看。": "Save a note or import materials to view them here.",
+  "搜索记忆": "Search memories",
+  "手动提取与整理": "Extract and organize manually",
+  "历史与管理": "History and management",
+  "本页 {0} 条": "{0} rows on this page",
+  "导入状态": "Import status"
 };

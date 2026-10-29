@@ -62,7 +62,7 @@ test('a Home finding opens that exact report, reaches its evidence and does not 
     if (path === '/api/insight-runs') return {items: [{id: 'background-run', status: 'running', scope: {}, createdAt: when, updatedAt: when, events: []}]};
     if (path === '/api/insight-runs/background-run') return background;
     if (path === '/api/connections') return {items: []};
-    if (path.startsWith('/api/library/catalog')) return {items: [captureId]};
+    if (path.startsWith('/api/library/browse')) return {items: [],nextCursor:null};
     return {items: []};
   });
   await act(async () => root.render(React.createElement(Overview, {api, status: {} as Status, devices: [], recent: [], insights: [other, report], activity: {apps: [], devices: [], totalDurationMs: 0, captures: 0}, onPage: () => {}, onOpen: ref => opened.push(ref), range: {}, onMedia: () => {}})));

@@ -28,7 +28,7 @@ export class MaterialCatalog {
   private secret=randomBytes(32);
   constructor(private materials:MaterialStore){}
   private initialized=false;
-  private generation(){
+  generation(){
     const db=this.materials.store.db;
     if(!this.initialized){
       db.exec(`CREATE TABLE IF NOT EXISTS material_catalog_generation(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL);
@@ -49,6 +49,8 @@ export class MaterialCatalog {
       return z.object({scope:z.string(),generation:z.string(),inner:z.string()}).strict().parse(JSON.parse(Buffer.from(payload,'base64url').toString()));
     }catch{throw new StoreError('Invalid library cursor',400);}
   }
+  sealPosition(value:{scope:string;generation:string;inner:string}){return this.seal(value);}
+  openPosition(cursor:string){return this.open(cursor);}
   list(args:CatalogQuery,ownerIdentity:string){
     const {cursor,...filter}=args,generation=this.generation();
     const scope=hash([ownerIdentity,{sourceId:filter.sourceId??null,kind:filter.kind??null,type:filter.type??null,deviceId:filter.deviceId??null,after:filter.after??null,before:filter.before??null,query:filter.query??null,limit:filter.limit??24},this.registry.revision]);

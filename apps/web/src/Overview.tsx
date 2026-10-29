@@ -1,3 +1,4 @@
+import {OriginalNoteRow,type OwnerBrowsePage} from './owner-library-browse';
 import {useState} from 'react';
 import {featureRequirementsAvailable} from '@mote/shared';
 import {DiscoveryLink,DiscoveryProvider,useDiscoveryState} from './DiscoveryLink';
@@ -12,7 +13,6 @@ import {HomeMaterialRow,type RecentMaterial} from './HomeMaterialRow';
 import {ownerQuestionListPath} from './owner-question-route';
 
 type FirstDeviceData={state:'waiting'|'unverified'|'received_unavailable'|'ready';originalAvailable:boolean;checkedDevices:number;checkedRecords:number;windowLimited:boolean;candidate?:{id:string;deviceId:string;deviceName:string;source:string;capturedAt:string;receivedAt:string}};
-type Catalog={items:RecentMaterial[];sources?:{id:string;label:string;count:number}[];sourcesTruncated?:boolean};
 type Conversation={id:string;title:string;updatedAt:string;turnCount:number};
 
 export function Overview({api,status,devices,insights,onPage,onOpen}: {
@@ -29,7 +29,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  const canPreviewMaterial=supports('/api/materials/:id/members')&&supports('/api/files/:id')&&supports('/api/files/:id/content');
  const sources=useResource<{items:{id:string;name?:string;status?:{state:string}}[]}>(api,'/api/sources');
  const connections=useResource<{items:{scope:string;revokedAt?:string;expiresAt?:string}[]}>(api,'/api/connections');
- const catalog=useResource<Catalog>(api,'/api/library/catalog?limit=3');
+ const catalog=useResource<OwnerBrowsePage>(api,'/api/library/browse?limit=3');
  const conversations=useResource<{items:Conversation[]}>(api,canConversations?'/api/conversations?limit=3':null);
  const questions=useResource<{items:{id:string}[];nextCursor?:string|null}>(api,canQuestions?ownerQuestionListPath():null);
  const actions=useResource<{items:{status:string;resolution?:string;event?:{start?:string|null;end?:string|null}}[];nextCursor:number|null}>(api,canActions?'/api/actions?cursor=0':null);
@@ -48,9 +48,9 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  const issues=sourceItems?.filter(item=>['error','permission_required'].includes(item.status?.state??''))??[];
  const grants=connections.error===undefined?connections.data?.items.filter(item=>item.scope==='mcp-read'&&!item.revokedAt&&(!item.expiresAt||Date.parse(item.expiresAt)>Date.now())):undefined;
  const knownCatalog=catalog.error===undefined?catalog.data:undefined;
- // Facets are metadata-only and bounded. A partial facet page is never an exact total.
- const materialCount=knownCatalog?.sourcesTruncated===false&&knownCatalog.sources?.every(source=>Number.isSafeInteger(source.count)&&source.count>=0)?knownCatalog.sources.reduce((sum,source)=>sum+source.count,0):undefined;
- const recentMaterials=knownCatalog?.items.filter(item=>item.id&&item.ref&&item.title&&item.origin)??[];
+ // This is the visible browse page, never a receipt or processing total.
+ const materialCount=knownCatalog?String(knownCatalog.items.length)+(knownCatalog.nextCursor?'+':''):undefined;
+ const recentMaterials=knownCatalog?.items??[];
  const pendingQuestions=questions.error===undefined?questions.data?.items:undefined;
  const knownActions=actions.error===undefined&&actions.data?.nextCursor===null?actions.data.items:undefined;
  const activeActions=knownActions?.filter(item=>!item.resolution&&['proposed','approved','executing','uncertain'].includes(item.status));
@@ -77,7 +77,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
    <input aria-label={moteText('搜索资料或提问')} placeholder={moteText('想找什么，或问点什么…')} maxLength={500} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className="button primary">{moteText('搜索')}</button><button type="button" className="button ghost" disabled={!hasPage('ask')} onClick={()=>{window.location.hash='/ask'+(query.trim()?'?questionDraft='+encodeURIComponent(query.trim()):'');}}>{moteText('问一问')}<ArrowUpRight size={13}/></button>
   </form>
   <section className="home-summary" aria-label={moteText('运行状态')}>
-   <button onClick={()=>onPage('archive')}><span>{moteText('已有资料')}</span><strong>{materialCount??'—'}<small>{moteText('份')}</small></strong></button>
+   <button onClick={()=>onPage('archive')}><span>{moteText('当前可见资料')}</span><strong>{materialCount??'—'}<small>{moteText('份')}</small></strong></button>
    <button onClick={()=>onPage('sources')}><span>{moteText('来源与设备')}</span><strong>{sourceItems?sourceItems.length+devices.length:'—'}<small>{moteText('项')}</small></strong></button>
    <button onClick={()=>onPage('connections')}><span>{moteText('AI 接入')}</span><strong>{grants?.length??'—'}<small>{moteText('个有效授权')}</small></strong></button>
   </section>
@@ -90,7 +90,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
    {discovery?<DiscoveryLink className="home-insight" target={{pageId:'insights',href:'#/library/insights?insight='+encodeURIComponent(discovery.runId)}}><Sparkles size={22}/><span><small className="home-discovery-label">{moteText('AI 发现')}</small><strong>{discovery.artifact?.title||moteText('你最近的洞察')}</strong><span className="home-discovery-copy">{answerPreview(discovery,180)}</span><small>{moteText('{0} 份依据',discovery.citations.length)}{discovery.createdAt&&<> · <time dateTime={discovery.createdAt}>{dateTime(discovery.createdAt)}</time></>}</small></span><ChevronRight size={15}/></DiscoveryLink>:<p className="home-empty">{moteText('暂无发现')}</p>}
   </section>
   <section className="home-recent"><div className="section-heading"><h2>{moteText('最近资料')}</h2><button className="text-button" onClick={()=>onPage('archive')}>{moteText('查看全部')}<ArrowRight size={13}/></button></div>
-   <div className="home-material-list">{recentMaterials.map(item=><HomeMaterialRow key={item.ref} api={api} item={item} label={knownCatalog?.sources?.find(source=>source.id===item.origin.sourceId)?.label} deviceName={devices.find(device=>device.deviceId===item.origin.deviceId)?.deviceName} onOpen={onOpen} canRead={canReadMaterial} canPreview={canPreviewMaterial}/>)}</div>
+   <div className="home-material-list">{recentMaterials.map(entry=>entry.entryType==='capture'?<OriginalNoteRow key={entry.ref} entry={entry} onOpen={onOpen} home/>:<HomeMaterialRow key={entry.ref} api={api} item={entry.material as RecentMaterial} label={knownCatalog?.sources?.find(source=>source.id===entry.material.origin.sourceId)?.label} deviceName={devices.find(device=>device.deviceId===entry.material.origin.deviceId)?.deviceName} onOpen={onOpen} canRead={canReadMaterial} canPreview={canPreviewMaterial}/>)}</div>
    {catalog.loading&&!catalog.data?<p role="status" className="home-empty">{moteText('正在读取…')}</p>:!catalog.error&&!recentMaterials.length&&<button className="text-button home-empty" onClick={()=>onPage('imports')}>{moteText('导入资料')}<ArrowRight size={13}/></button>}
   </section>
   {canConversations&&<section className="home-conversations"><div className="section-heading"><h2>{moteText('最近对话')}</h2><button className="text-button" onClick={()=>onPage('ask')}>{moteText('查看全部')}<ArrowRight size={13}/></button></div>

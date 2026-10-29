@@ -3,7 +3,7 @@ import {importQueue,validateImportFiles,type ImportQueueEntry} from './import-qu
 import {readImportDrop} from './import-drop';
 import {ImportQueueRow,ImportQueueDetail} from './ImportQueueEntry';
 import { moteText } from '@mote/shared/i18n';
-import React,{useEffect,useState,useRef,useSyncExternalStore} from 'react';
+import React,{useEffect,useLayoutEffect,useState,useRef,useSyncExternalStore} from 'react';
 import {Check,FileArchive,FileText,FolderOpen,LoaderCircle,Plus,RefreshCw,Trash2,X} from 'lucide-react';
 import type {ImportJob,ImportStatus} from '@mote/shared';
 import {ApiError,type Api,bytes,dateTime,errorMessage} from './api';
@@ -26,7 +26,11 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [loadError,setLoadError]=useState('');
   const loadedApi=useRef<Api|null>(null);
   const [items,setItems]=useState<ImportJob[]>([]),[selected,setSelected]=useState('');
-  const [creating,setCreating]=useState(true);
+  const [creating,setCreating]=useState(false);
+  const [listFilter,setListFilter]=useState('all');
+  const listPosition=useRef<{scroll:number;opener:HTMLElement|null}|undefined>(undefined);
+  const rememberList=()=>{if(!creating&&!selected)listPosition.current={scroll:window.scrollY,opener:document.activeElement as HTMLElement|null};};
+  useLayoutEffect(()=>{if(creating||selected){if(window.scrollY)window.scrollTo({top:0});return;}const position=listPosition.current;if(position){listPosition.current=undefined;position.opener?.isConnected&&position.opener.focus({preventScroll:true});if(window.scrollY!==position.scroll)window.scrollTo({top:position.scroll});}},[creating,selected]);
   const [files,setFiles]=useState<File[]>([]),[name,setName]=useState(''),[instruction,setInstruction]=useState('');
   const [sourcePackId,setSourcePackId]=useState(''),[imageProfileId,setImageProfileId]=useState('');
   const imagePlans=useResource<{policy:{profiles:import('@mote/shared').ProcessingProfile[]};processors:{id:string;stage:string;mediaTypes:string[]}[]}>(api,'/api/file-processing');
@@ -48,7 +52,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [revision,setRevision]=useState(0);
   useEffect(()=>{const controller=new AbortController();scope.current=controller;return()=>controller.abort();},[api]);
   useEffect(()=>{confirmGeneration.current++;setConfirmError(null);},[api,selected]);
-  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(true);setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
+  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(false);setListFilter('all');listPosition.current=undefined;setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
   useEffect(()=>{
     if(queueVersion.current===queueState.completedVersion)return;
     queueVersion.current=queueState.completedVersion;
@@ -108,20 +112,22 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   function controlMemory(action:'retry'|'pause'|'resume'|'cancel'){if(!memoryJob||!active)return;void mutate(active.id,async signal=>{await api.request('/api/memory-jobs/'+encodeURIComponent(memoryJob.id)+'/'+action,{method:'POST',signal});},undefined,reloadMemory);}
   function remove(){
     if(!active||deleteConfirm!==active.id)return;const id=active.id;
-    void mutate(id,async signal=>{await api.raw('/api/imports/'+encodeURIComponent(id),{method:'DELETE',signal});},undefined,()=>{setItems(current=>current.filter(item=>item.id!==id));if(selectedRef.current===id){setSelected('');setCreating(true);}setDeleteConfirm(current=>current===id?'':current);setRevision(value=>value+1);});
+    void mutate(id,async signal=>{await api.raw('/api/imports/'+encodeURIComponent(id),{method:'DELETE',signal});},undefined,()=>{setItems(current=>current.filter(item=>item.id!==id));if(selectedRef.current===id){setSelected('');setCreating(false);}setDeleteConfirm(current=>current===id?'':current);setRevision(value=>value+1);});
   }
-  return <section className="imports-page" aria-busy={loading}>
-    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText("导入")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button" onClick={()=>{setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("新建导入")}</button></div>
+  return <section className={"imports-page final-imports"+(creating?" import-creating":selected?" import-selected":"")} aria-busy={loading}>
+    {(creating||selected)&&<button className="text-button import-list-back" onClick={()=>{setCreating(false);setSelected('');}}>{moteText("返回导入列表")}</button>}
+    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText(creating?"添加资料":selected?"导入详情":"导入资料")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button" onClick={()=>{rememberList();setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("新建导入")}</button></div>
     {loadError&&<div className="error-banner" role="alert">{loadError}<button className="text-button" onClick={()=>setRevision(v=>v+1)}>{moteText("刷新状态")}</button></div>}
+    {!creating&&!selected&&<nav className="import-status-tabs" aria-label={moteText("导入状态")}>{[['all',moteText("全部")],['attention',moteText("需要处理")],['completed',moteText("已完成")]].map(([value,label])=><button key={value} aria-pressed={listFilter===value} onClick={()=>setListFilter(value)}>{label}</button>)}</nav>}
     <div className="workspace-layout">
       <aside className="workspace-list import-queue-list" aria-label={moteText("导入队列")}>
         <div className="workspace-list-heading"><h2>{moteText("导入队列")}</h2><button className="icon-button" aria-label={moteText("刷新导入记录")} onClick={()=>setRevision(v=>v+1)}><RefreshCw size={15}/></button></div>
         <p className="import-queue-hint">{moteText('可连续添加资料，每份资料独立处理。')}</p>
-        {queueState.entries.filter(entry=>entry.state!=='submitted').map(entry=><ImportQueueRow key={entry.id} entry={entry} queue={queue} selected={!creating&&selected===entry.id} onSelect={()=>{setSelected(entry.id);setCreating(false);setError('');}} onEdit={editEntry}/>)}
+        {queueState.entries.filter(entry=>entry.state!=='submitted').map(entry=><ImportQueueRow key={entry.id} entry={entry} queue={queue} selected={!creating&&selected===entry.id} onSelect={()=>{rememberList();setSelected(entry.id);setCreating(false);setError('');}} onEdit={editEntry}/>)}
         {loading&&<p className="muted">{moteText("正在读取…")}</p>}
         {!loading&&!loadError&&!items.length&&!queueState.entries.length&&<p className="muted">{moteText("你的第一份导入会保留在这里，随时查看进度与原件。")}</p>}
         {items.length>0&&<h3 className="import-history-heading">{moteText('已归档的导入')}</h3>}
-        {items.map(job=><button key={job.id} className={'workspace-select '+(!creating&&selected===job.id?'active':'')} onClick={()=>{setSelected(job.id);setCreating(false);setError('');}}><strong>{job.name}</strong><span className={'status-label '+(['failed','awaiting_confirmation','needs_configuration'].includes(job.status)?'attention':'')}>{working(job)&&<LoaderCircle size={12} className="spin"/>}{label(job)}</span><small>{dateTime(job.createdAt)} · {job.archive.files}{' '}{moteText("个文件")}</small></button>)}
+        {items.filter(job=>listFilter==='all'||listFilter==='completed'&&job.status==='completed'||listFilter==='attention'&&['failed','awaiting_confirmation','needs_configuration'].includes(job.status)).map(job=><button key={job.id} className={'workspace-select '+(!creating&&selected===job.id?'active':'')} onClick={()=>{rememberList();setSelected(job.id);setCreating(false);setError('');}}><strong>{job.name}</strong><span className={'status-label '+(['failed','awaiting_confirmation','needs_configuration'].includes(job.status)?'attention':'')}>{working(job)&&<LoaderCircle size={12} className="spin"/>}{label(job)}</span><small>{dateTime(job.createdAt)} · {job.archive.files}{' '}{moteText("个文件")}</small></button>)}
       </aside>
       <div className="workspace-content">
       {creating?<form className="panel import-form" onSubmit={e=>{e.preventDefault();void create();}}>
