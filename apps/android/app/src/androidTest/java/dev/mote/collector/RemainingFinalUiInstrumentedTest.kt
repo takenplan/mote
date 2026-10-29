@@ -279,7 +279,7 @@ class RemainingFinalUiInstrumentedTest {
         }}}}
         val settings=Settings(context)
         try{
-            ConnectionGuard.change(context,origin,bindLocal=true){settings.saveConnection(origin,tokenA,"Generated owner calendar guard",true)}
+            until("generated fixture connection change reaches the existing idle boundary"){try{ConnectionGuard.change(context,origin,bindLocal=true){settings.saveConnection(origin,tokenA,"Generated owner calendar guard",true)};true}catch(error:ConnectionFailure){if(error.category!="busy")throw error;false}}
             ActivityScenario.launch<CalendarActionsActivity>(Intent(context,CalendarActionsActivity::class.java)).use{scenario->
                 until("A real native card read from controlled HTTP"){text(secret)};click("核对变更");until("owned confirmation dialog"){text("确认变更")}
                 val oldPositive=main{visible().filterIsInstance<android.widget.Button>().single{it.text.toString()=="确认变更"}}

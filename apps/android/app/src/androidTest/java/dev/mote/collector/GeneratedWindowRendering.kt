@@ -200,6 +200,8 @@ internal object GeneratedWindowRendering {
             "gap-library-local-light", "gap-library-local-dark", "gap-library-central-unavailable-dark" -> Triple("library","real-location-choice","我的资料")
             "gap-library-exact-original-dark" -> Triple("reader","exact-local-original","Generated exact local library original")
             "gap-library-memory-handoff-dark" -> Triple("library","memory-handoff","查看中心整理的记忆。")
+            "gap-processing-language-en", "gap-processing-language-zh-CN" -> Triple("processing","retained-language-draft","JPEG 质量")
+            "gap-actions-owner-denied-withdrawn-dark", "gap-actions-owner-late-read-rejected-dark" -> Triple("actions","former-owner-withdrawn","日程")
             "gap-processing-default-light", "gap-processing-default-dark" -> Triple("processing","default-hierarchy","JPEG 质量")
             "gap-diagnostics-default-light", "gap-diagnostics-default-dark", "gap-diagnostics-advanced-draft-dark" -> Triple("diagnostics","current-range-and-retained-draft","诊断与支持")
             "gap-actions-calendar-light", "gap-actions-calendar-dark" -> Triple("actions","calendar-default","尚未发现日程。上传资料或继续采集后会自动分析。")
