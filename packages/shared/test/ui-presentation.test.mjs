@@ -48,14 +48,17 @@ test('data-only themes and complete core navigation are validated before registr
   assert.equal(host.getSnapshot().theme.tokens.accent,linearUiTheme.tokens.accent);
   assert(Object.isFrozen(host.getSnapshot().theme.tokens));
 });
-test('every client names shared primary destinations with the same words and distinct glyphs',()=>{
+test('clients preserve shared destination identities and the final platform-specific labels',()=>{
   const repo=new URL('../../../',import.meta.url),read=path=>readFileSync(new URL(path,repo),'utf8');
   const glyphs=Object.values(uiDestinationPresentation).map(item=>item.icon);
   assert.equal(new Set(glyphs).size,glyphs.length,'Each destination needs its own glyph');
-  // Mac ships static navigation before the renderer mounts; it must already use the shared names.
+  // The final Mac workspace intentionally says 工作台/内容. Its underlying
+  // destinations still match the shared contract before the renderer mounts.
   const html=read('apps/desktop/src/index.html'),mainNav=html.slice(html.indexOf('<nav class="main-nav"'),html.indexOf('</nav>'));
-  assert.deepEqual([...mainNav.matchAll(/<span data-i18n>([^<]+)<\/span>/g)].map(match=>match[1]),desktopUiLayout.primary.map(id=>uiDestinationPresentation[id].label));
-  assert.match(html,/data-nav="work"[^>]*>.*?<span data-i18n>活动<\/span>/);
+  const macLabels={home:'工作台',library:'内容'},macRoutes={home:'overview',library:'records',sources:'sources',ask:'ask'};
+  assert.deepEqual([...mainNav.matchAll(/data-nav="([^"]+)"/g)].map(match=>match[1]),desktopUiLayout.primary.map(id=>macRoutes[id]));
+  assert.deepEqual([...mainNav.matchAll(/<span data-i18n>([^<]+)<\/span>/g)].map(match=>match[1]),desktopUiLayout.primary.map(id=>macLabels[id]??uiDestinationPresentation[id].label));
+  assert.match(html,/data-nav="work"[^>]*>.*?<span data-i18n>同步与活动<\/span>/);
   // Android declares its tabs natively; route ids map to the same destinations.
   const kotlin=read('apps/android/app/src/main/java/dev/mote/collector/PrimaryNavigation.kt');
   const tabs=Object.fromEntries([...kotlin.matchAll(/^\s+[A-Z]+\("([^"]+)", "[^"]+", "[A-Z]+", "([a-z]+)"\)/gm)].map(match=>[match[2],match[1]]));
