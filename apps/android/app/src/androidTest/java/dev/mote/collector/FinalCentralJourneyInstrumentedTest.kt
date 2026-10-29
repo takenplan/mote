@@ -85,9 +85,24 @@ class FinalCentralJourneyInstrumentedTest {
         UploadWorker.schedule(context,Settings(context).read(),true)
         until("Real Central receipt required",120_000) { context.queue().capture(id)?.optBoolean("uploaded") == true }
         val remote=api.get("/api/capture-browser/$id")
-        assertEquals(original,remote.getString("ocrText")); assertEquals(description,remote.getJSONObject("metadata").getString("ownerDescription"))
+        assertEquals(original,remote.getString("ocrText")); assertEquals(listOf(description),NativeRecordDescription.read(remote,true))
         output.resolve("save-result.json").writeText(JSONObject().put("generatedOnly",true).put("sourceRecordId",id).put("deviceId",Settings(context).deviceId).put("descriptionVerified",true).put("centralReceived",true).toString(2))
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { screenshot("home-after-save") }
+    }
+    /** Reopens the already ACKed native record; never creates or uploads a second note. */
+    @Test fun verifyPersistedIndependentDescriptionInCentralReader() {
+        val config=configuration();val api=connect(config);val id=config.getString("existingRecordId")
+        val local=requireNotNull(context.queue().capture(id));assertTrue("Original local ACK remains durable",local.getBoolean("uploaded"))
+        val original=local.getString("ocrText");val description=local.getJSONObject("metadata").getString("ownerDescription")
+        val remote=api.get("/api/capture-browser/$id");assertEquals(original,remote.getString("ocrText"));assertEquals(listOf(description),NativeRecordDescription.read(remote,true));assertFalse(remote.getJSONObject("metadata").has("ownerDescription"));assertFalse(original.contains(description))
+        ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","notes")).use {
+            until("Actual Central notes list contains this received original"){main{(currentOrNull() as? CentralActivity)?.isWorking==false&&shown().filterIsInstance<TextView>().any{it.text.toString()==original}}}
+            main{val label=shown().filterIsInstance<TextView>().single{it.text.toString()==original};val card=label.parent as ViewGroup;views(card).filterIsInstance<TextView>().single{it.text.toString()=="查看原文"}.performClick()}
+            until("Public CentralLibrary route renders exact original and independent declaration"){main{currentOrNull() is CaptureRecordsActivity&&shown().filterIsInstance<TextView>().any{it.text.toString()==original}&&shown().filterIsInstance<TextView>().any{it.text.toString()==description}}};screenshot("received-record-independent-description")
+            main{shown().single{it.contentDescription=="返回上一页"}.performClick()}
+            until("Return to same Central notes and durable receipt"){main{currentOrNull() is CentralActivity&&shown().filterIsInstance<TextView>().any{it.text.toString()==original}}&&context.queue().capture(id)?.optBoolean("uploaded")==true};screenshot("received-record-return")
+        }
+        output.resolve("save-result.json").writeText(JSONObject().put("generatedOnly",true).put("sourceRecordId",id).put("deviceId",Settings(context).deviceId).put("descriptionVerified",true).put("centralReceived",true).put("readOnlyVerification",true).put("descriptionTransport","attributionContext.recordContextStatements").put("publicCentralReaderVerified",true).toString(2))
     }
     @Test fun continueSharedConversationAndReturnFromExactCitation() {
         val config=configuration(); val api=connect(config); val id=config.getString("conversationId"); val question=config.getString("question")
