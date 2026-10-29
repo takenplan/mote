@@ -66,9 +66,11 @@ export function MemoryIntegration({api,candidate,verificationPending=false}:{api
     <h2>{moteText('整理所选记忆')}</h2>
     {eligible?<><p>{moteText('从当前精选记忆开始，模型会按需检索你仍可读取的相关资料和原文；结果可能为空，也可能产生经独立审核的新记忆。')}</p>
     <p><strong>{candidate!.title}</strong> · {moteText('仅选择此卡作为整合起点')}</p>
+    <details className="run-details memory-processing-options"><summary>{moteText('处理选项')}</summary>
     <label>{moteText('整理方案')}<select aria-label={moteText('整理方案')} value={chosen?chosen.id+'@'+chosen.version:''} disabled={busy||!!active&&state?.status!=='cancelled'} onChange={event=>setRecipeKey(event.target.value)}>{available.length?available.map(item=><option key={item.id+'@'+item.version} value={item.id+'@'+item.version}>{recipeLabel(item)} · {moteText('版本 {0}',item.version)}</option>):<option value="">{moteText('没有可用的整理方案')}</option>}</select><span className="memory-integration-selection" aria-hidden="true">{chosen?<>{recipeLabel(chosen)} · {moteText('版本 {0}',chosen.version)}</>:moteText('没有可用的整理方案')}</span></label>
     <p>{moteText('使用 Memory 功能默认模型：{0}',configured?(profile!.name+' · '+model):moteText('未配置'))}{' · '}{timeout===null?moteText('未设 Agent 总时限'):typeof timeout==='number'?moteText('Agent 总时限 {0} 秒',Math.round(timeout/1000)):moteText('时限未提供')}</p>
     <p className="muted">{moteText('单次最多 {0} 条；自动整理当前{1}。手动运行不会开启自动整理。',limit??'—',lifecycle.data?.settings?.consolidation?.enabled?moteText('已开启'):moteText('已关闭'))}</p>
+    </details>
     <a className="button subtle" href="#/system/models">{moteText('前往模型与服务配置')}</a></>:<p className="muted">{moteText('请先选择一条当前有效的精选记忆。')}</p>}
     {(lifecycle.error||recipes.error||models.error||error)&&<p role="alert" className="notice error">{error||errorMessage(lifecycle.error||recipes.error||models.error)}</p>}
     {eligible&&!configured&&!models.loading&&<p role="status">{moteText('先配置 Memory 功能默认模型，再开始手动整理。')}</p>}

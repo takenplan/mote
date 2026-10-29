@@ -35,9 +35,16 @@ test('manual recipe choices travel only with this extraction request and survive
     assert.fail('Unexpected request '+path);
   },setAgentTimeout:()=>{}} as Api;
   await act(async()=>root.render(React.createElement(Memories,{api,range:{after:'2026-09-01T00:00:00Z'},onOpen:()=>{}})));
+  const options=d.querySelector<HTMLDetailsElement>('.memory-processing-options')!;assert.equal(options.open,false,'processing options start folded independently of the manual entry');
+  await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='手动提取与整理')!.click());
+  assert.equal(d.querySelector<HTMLDetailsElement>('.memory-management')!.open,true);assert.equal(options.open,false);
+  await act(async()=>options.querySelector('summary')!.click());assert.equal(options.open,true);
   for(const input of d.querySelectorAll<HTMLInputElement>('.manual-memory-recipes input'))await act(async()=>input.click());
   const submit=()=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='提取当前范围的记忆')!.click());
+  await act(async()=>options.querySelector('summary')!.click());assert.equal(options.open,false);
   await submit();assert.deepEqual(writes[0].body.recipes,[personal,coding]);assert.equal(writes[0].body.after,'2026-09-01T00:00:00Z');assert.equal(writes[0].path,'/api/memory-jobs');
+  assert.equal(options.open,false,'an unsuccessful request does not expose the advanced options');
+  await act(async()=>options.querySelector('summary')!.click());
   assert.equal(d.querySelectorAll('.manual-memory-recipes input:checked').length,2);assert.match(d.body.textContent!,/Generated request failure/);
   await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='恢复默认提取方式')!.click());
   await submit();assert.equal(writes[1].body.recipes,undefined);assert.ok(writes.every(write=>write.path==='/api/memory-jobs'));
@@ -154,4 +161,25 @@ for(const outcome of ['success','failure'] as const)test('a late deletion '+outc
  const click=(text:string)=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent===text||button.querySelector('strong')?.textContent===text)!.click());await act(async()=>root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}})));await click(first.title);await click('更多');await click('删除记忆');await click('确认删除');
  await act(async()=>{window.location.hash='#/library?view=memories&memory='+second.id;window.dispatchEvent(new window.HashChangeEvent('hashchange'));});assert.match(d.querySelector('.memory-detail')!.textContent!,/Generated original B/);assert.equal(d.querySelector('[role=alertdialog]'),null,'route selection closes the previous record confirmation');
  await act(async()=>{if(outcome==='success')resolve({deleted:1,externalErase:'unknown',physicalEraseVerified:false});else reject(Error('Generated old deletion failure'));});assert.match(d.querySelector('.memory-detail')!.textContent!,/Generated original B/);assert.doesNotMatch(d.body.textContent!,/Generated old deletion failure|外部清除仍待确认/);assert.equal(d.querySelector('[role=alertdialog]'),null);
+});
+
+
+test('proposed status filters the current server page and resets its previous cursor without hiding search',async t=>{
+ const {root,d}=await fixture(t),paths:string[]=[];
+ const api={request:async(path:string)=>{
+  if(path.startsWith('/api/memories?')){paths.push(path);const q=new URL('http://localhost'+path).searchParams;return {items:[],nextCursor:q.has('status')?null:'generated-cursor'};}
+  if(path==='/api/model-settings')return modelView();
+  if(['/api/memory-recipes','/api/memory-jobs','/api/context-trees'].includes(path))return {items:[]};
+  if(path==='/api/memory-settings')return {settings:{consolidation:{maxItems:30}},extensions:[]};
+  if(path==='/api/execution-settings')return {queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}};
+  if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};
+  assert.fail('Unexpected request '+path);
+ }} as Api;
+ await act(async()=>root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}})));
+ const click=(text:string)=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent?.trim()===text)!.click());
+ await click('下一页');assert.equal(new URL('http://localhost'+paths.at(-1)).searchParams.get('cursor'),'generated-cursor');
+ await click('筛选 ⌄');await click('待重新处理');
+ const selected=new URL('http://localhost'+paths.at(-1)).searchParams;assert.equal(selected.get('status'),'proposed');assert.equal(selected.has('cursor'),false);
+ assert.equal(d.querySelector('.workspace-list-heading h2')?.textContent,'待重新处理');assert.match(d.body.textContent!,/当前筛选下没有匹配/);assert.equal(d.querySelector('#memory-search')!.closest('[hidden]'),null);
+ await click('待重新处理 ×');assert.equal(new URL('http://localhost'+paths.at(-1)).searchParams.has('status'),false);
 });
