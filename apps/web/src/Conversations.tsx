@@ -115,7 +115,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const end = useRef<HTMLDivElement>(null);
   const [run,setRun]=useState<QueryRun|null>(null),[pollError,setPollError]=useState('');
   const settledReceipts=useRef(new Set<string>());
-  const activeRun=useRef<{api:Api;id?:string;status?:QueryRun['status']}>({api});activeRun.current={api,id:run?.id,status:run?.status};
+  const activeRun=useRef<{api:Api;id?:string}>({api});activeRun.current={api,id:run?.id};
 
   async function loadHistory(next?: string) {
     historyRequest.current?.abort();
@@ -153,6 +153,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   },[targetTurn,conversation?.id,conversation?.turns.length,conversation?.nextCursor,opening,detail.error,error]);
 
   function receiveRun(current:QueryRun){
+    // Every receipt path obeys the same confirmed-terminal fence. Late running
+    // or duplicate terminal replies cannot revive busy state or repeat navigation.
+    if(settledReceipts.current.has(current.id))return;
     const retained=queryRecovery.get(api),owned=retained?.id===current.id?retained:undefined;
     setRun(current);setPollError('');setError('');
     if(current.status==='running'){
@@ -181,8 +184,6 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
         const current=await readResource<QueryRun>(api,`/api/query-runs/${run.id}`,controller.signal);
         if(controller.signal.aborted)return;
         if(current.id!==run.id)throw Error(moteText('中央响应格式无效，请刷新后重试。'));
-        // A late running read cannot undo an already acknowledged stop.
-        if(activeRun.current.id===current.id&&activeRun.current.status&&activeRun.current.status!=='running'&&current.status==='running')return;
         receiveRun(current);
         if(current.status==='running')timer=setTimeout(()=>void update(),1000);
       }catch(e){if(!controller.signal.aborted){unconfirmed(e);timer=setTimeout(()=>void update(),3000);}}
