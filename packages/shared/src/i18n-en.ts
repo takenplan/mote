@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "已写入日历": "Added to calendar",
+  "已更新日历": "Updated in calendar",
+  "已取消日程": "Calendar event cancelled",
+  "已标记完成": "Marked complete",
   "{0} 个样本": "{0} samples",
   "{0} 张图片": "{0} images",
   "{0} 条记录": "{0} records",

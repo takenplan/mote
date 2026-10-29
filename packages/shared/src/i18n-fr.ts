@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "已写入日历": "Ajouté au calendrier",
+  "已更新日历": "Mis à jour dans le calendrier",
+  "已取消日程": "Événement annulé",
+  "已标记完成": "Marqué comme terminé",
   "{0} 个样本": "{0} échantillons",
   "{0} 张图片": "{0} images",
   "{0} 条记录": "{0} enregistrements",

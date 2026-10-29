@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const russian: Readonly<Record<string, string>> = {
+  "已写入日历": "Добавлено в календарь",
+  "已更新日历": "Обновлено в календаре",
+  "已取消日程": "Событие отменено",
+  "已标记完成": "Отмечено как выполненное",
   "{0} 个样本": "{0} образцов",
   "{0} 张图片": "{0} изображений",
   "{0} 条记录": "{0} записей",
