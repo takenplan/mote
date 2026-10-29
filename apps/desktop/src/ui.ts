@@ -396,7 +396,7 @@ function renderOperations(jobs:NonNullable<import('./contracts').Status['operati
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||currentPage!=='overview'&&job.startedAt>=pageEnteredAt);
   byId('background-progress').hidden = !operations.length;
-  byId('background-progress').textContent = operations.map(job => job.state === 'running' ? `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000))}` : job.state === 'failed' ? moteText('操作未完成，请检查权限与配置后重试') : moteText('已完成')).join('；');
+  byId('background-progress').textContent = operations.map(job => job.state === 'running' ? `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000))}` : job.state === 'failed' ? moteText('操作未完成，请检查权限与配置后重试') : moteText('处理结束')).join('；');
 }
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
