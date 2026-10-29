@@ -587,6 +587,8 @@ Q1 最终源层级 `11c13faf` 的 clean 实际构建记录 17 图、22 次受控
 
 真实模型预检：协调者于 **04:32:42 UTC** 通过仓库 `codexModels` → `/opt/homebrew/bin/codex app-server` 的 `initialize`/`model/list` 只读目录确认 8 个模型中包含 `id=gpt-6.1-terra`、显示名 `GPT-6.1 Terra`；reasoning 为 low/medium/high/xhigh/max/ultra，默认 low，目录服务层为 fast。证据为执行工作区忽略目录中的 `.mote/terra-catalog-preflight.json`。本次预检没有创建 thread/turn，没有模型推理，未读出凭据。**目录可用不等于真实调用成功；下表真实模型旅程当前全部未执行。** 不把桌面工具模型名、展示标签或 mock 响应当作实际 provider/model，不静默降级。
 
+后续原生调用预检使用隔离 Central `6d73f3a0`：真实 QueryRun `05029312-cf1c-4b4b-b77a-99d2a15bd1ba` 已完成，原生 `codex.model.selected` 回执确认 `gpt-6.1-terra`、high reasoning，1 次推理、21,709ms，实际工具为 `material_catalog`、`material_read`。生成笔记的地点、验证码与计划时间已核实；引用打开确切正文，pinned Material 的 origin 与原始笔记关联、正文逐字一致。最初将 citation ID 等同 raw note ID 的测试假设失败，已按现有 Material block 身份合同更正验证，并保留失败说明，不计成模型重跑。根 ignored `.mote/terra-native-transport-preflight-6d73f3a0/actual-query-result.json` 和同目录 `report.json` 保留证据，服务已关闭。这是模型/检索预检，**不填下表作最终三端 UI 通过**。该检查又暴露虚拟引用的删除身份、零回执误报和原文读取缺版本问题；均按现有同一原件、确切版本合同修复，未新增整份 Material 删除或保留政策。
+
 每次执行填写唯一 run ID、UTC、最终提交/构建/APK hash、真实入口、生成输入原文或本轮文件及 hash、范围和实体 ID、实际 provider/model ID 与 reasoning。后端记录请求/会话/任务 ID、持久结果及真实回执；前端记录实际用户可见结果、草稿/返回/重复操作；视觉单列原对话中已认可原型/已有允许图片及对应场景、产品截图及视口/DPR/主题/语言/差异；不再打开网站、发布预览或绕过受限访问。模型生成措辞可变化，验收依据是事实、证据身份、动作范围和状态，不要求模型输出逐字等于示例。费用/token 未提供时记未知，不捏造估价。证据不得包含令牌或用户私有资料。
 
 模型需要列中“是”为本旅程有实际新推理；“否（复用）”只复用明确 run ID 的真实结果，交互仍需自己执行；“分支”须在对应子状态标明实际调用是否发生。没有模型的页面也须完成真实客户端→服务端/本机存储的旅程，不能省略。“不适用”只能用于确实无需的维度，不能替代失败或未测。中断、撤权、取消与重启用真实服务状态控制；必要故障注入单独标注，不能声称模型供应商真的故障。重复请求检查服务端身份与实际调用计数，不靠界面禁用推断。
