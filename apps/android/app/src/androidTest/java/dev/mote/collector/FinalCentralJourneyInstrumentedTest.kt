@@ -93,7 +93,8 @@ class FinalCentralJourneyInstrumentedTest {
         val prior=api.get("/api/conversations/$id?limit=50").getJSONArray("turns"); val priorIds=(0 until prior.length()).map { prior.getJSONObject(it).getString("id") }.toSet()
         require(prior.length() > 0)
         ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
-            until("Shared conversation and composer loaded") { main { (current() as? CentralActivity)?.isWorking == false && shown().filterIsInstance<EditText>().any { it.contentDescription == "你的问题" && it.isEnabled } } }
+            until("Shared conversation and composer loaded") { main { (current() as? CentralActivity)?.let { !it.isWorking && it.selectedAskConversationId==id } == true && shown().filterIsInstance<EditText>().any { it.contentDescription == "你的问题" && it.isEnabled } } }
+            main { assertEquals("Explicit shared conversation must be selected before any model admission",id,(current() as CentralActivity).selectedAskConversationId) }
             screenshot("shared-conversation-before")
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(question) }; click("发送")
             var turn: JSONObject?=null

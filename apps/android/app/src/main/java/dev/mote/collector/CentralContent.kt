@@ -35,7 +35,22 @@ internal class CentralContent(
     internal fun takeTodoDraft(): String? = pendingTodoDraft?.let { value->pendingTodoDraft=null;if(value.origin==server&&value.generation==accessGeneration)value.text else null }
 
     fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
-    fun takeAskConversation(): String? = activity.intent.getStringExtra("conversationId")?.also { activity.intent.removeExtra("conversationId") }
+    // The intent belongs to the owner/session that received it, including while another run is unresolved.
+    fun captureAskConversationIntent() {
+        if(activity.intent.hasExtra("conversationId") && !activity.intent.hasExtra("moteConversationGeneration")) {
+            val selected=CentralAccess.resolve(this)
+            activity.intent.putExtra("moteConversationOrigin",selected.server).putExtra("moteConversationGeneration",selected.generation)
+        }
+    }
+    fun requestedAskConversation():String? {
+        val id=activity.intent.getStringExtra("conversationId") ?: return null
+        if(runCatching { java.util.UUID.fromString(id) }.isFailure || activity.intent.getStringExtra("moteConversationOrigin")!=server || activity.intent.getLongExtra("moteConversationGeneration",-1)!=accessGeneration) { clearAskConversationIntent();return null }
+        return id
+    }
+    fun clearAskConversationIntent() { listOf("conversationId","moteConversationOrigin","moteConversationGeneration").forEach(activity.intent::removeExtra) }
+    fun acceptAskConversation(id:String) { if(requestedAskConversation()==id)clearAskConversationIntent() }
+    internal val selectedAskConversationId get()=screens?.selectedAskConversationId
+
     fun takeAskEvidence(): String? {
         val evidence=activity.intent.getStringExtra("evidenceId") ?: return null
         val expected=activity.intent.getStringExtra("evidenceOrigin")
@@ -124,6 +139,7 @@ internal class CentralContent(
     }
 
     init {
+        captureAskConversationIntent()
         browserLoginId = state?.getString("browserLoginId"); browserVerifier = state?.getString("browserVerifier"); browserGeneration = state?.getLong("browserGeneration") ?: -1L
         browserDurationMs = state?.getLong("browserDurationMs", 2592000000L) ?: 2592000000L
         page = state?.getString("centralPage") ?: initialPage

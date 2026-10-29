@@ -179,15 +179,17 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         ui.button(MoteI18n.text("Agent 视角")) { ui.navigate("agentView") }
     }
 
+    internal val selectedAskConversationId get()=askState.optString("conversationId").takeIf { it.isNotBlank() && lastConversation?.optString("id")==it }
     private fun loadAsk() {
         val api = client
+        val requestedConversation=ui.requestedAskConversation()
         ui.work(MoteI18n.text("正在读取对话…"), {
             val state = CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; askStore.read() }
             NativeAskImages.recover(state)
             val remote = runCatching {
                 val runs = api.get("/api/query-runs").getJSONArray("items")
                 if (!state.has("runId") && !state.has("pending")) {
-                    val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" }
+                    val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" && (requestedConversation==null || it.optString("conversationId")==requestedConversation) }
                     recent?.let { state.put("runId", it.getString("id")).put("runStatus","running"); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
                 }
                 val history = api.get("/api/conversations?limit=30").also { it.getJSONArray("items") }
@@ -211,7 +213,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 ui.button(MoteI18n.text("重试"), parent = messages ?: body) { refresh() }
                 ui.requestFailure(error)
             }
-            ui.takeAskConversation()?.let(::selectConversation)
+            ui.requestedAskConversation()?.let { selectConversation(it,fromIntent=true) }
             if (askState.has("runId") || askState.has("pending")) ui.scheduleAskPoll()
         }
     }
@@ -302,9 +304,12 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun newConversation(discardConfirmed: Boolean = false) {
         if (askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
         if (!discardConfirmed && (askState.optString("question").isNotBlank() || NativeAskImages.count(askState)>0)) {
+            val selected=CentralAccess.resolve(ui);val expected=selected.server to selected.generation
+            fun current():Boolean=CentralAccess.resolve(ui).let { (it.server to it.generation)==expected }
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
-                .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
+                .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> if(current())newConversation(true) }.show(); return
         }
+        ui.clearAskConversationIntent()
         listOf("runId","conversationId","runStatus","activeRequest","failureDetails","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty","imageUploads").forEach(askState::remove)
         askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
     }
@@ -347,19 +352,23 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }.show()
         }.show()
     }
-    private fun selectConversation(id: String, discardConfirmed: Boolean = false) {
+    private fun selectConversation(id: String, discardConfirmed: Boolean = false, fromIntent:Boolean=false) {
+        if(fromIntent && ui.requestedAskConversation()!=id)return
         if (runCatching { UUID.fromString(id) }.isFailure) { ui.notice(MoteI18n.text("请求的资源不存在或已删除。")); return }
-        if (askState.optString("conversationId") == id) { refresh(); return }
+        if (askState.optString("conversationId") == id) { ui.acceptAskConversation(id);refresh(); return }
         if (askState.has("pending") || askState.optString("runStatus") == "running") {
             ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return
         }
         if (!discardConfirmed && (askState.optString("question").isNotBlank() || NativeAskImages.count(askState)>0)) {
+            val selected=CentralAccess.resolve(ui);val expected=selected.server to selected.generation
+            fun current():Boolean=CentralAccess.resolve(ui).let { (it.server to it.generation)==expected } && (!fromIntent || ui.requestedAskConversation()==id)
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容"))
                 .setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
-                .setNegativeButton(MoteI18n.text("继续编辑"), null)
-                .setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> selectConversation(id, true) }.show()
+                .setNegativeButton(MoteI18n.text("继续编辑")) { _,_->if(current()&&fromIntent){ui.clearAskConversationIntent();controlsAsk()} }
+                .setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> if(current())selectConversation(id, true,fromIntent) }.show()
             return
         }
+        if(fromIntent)ui.acceptAskConversation(id)else ui.clearAskConversationIntent()
         askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
         listOf("runId", "runStatus", "activeRequest", "failureDetails", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty","imageUploads").forEach(askState::remove)
         question?.setText(""); persistAsk(); refresh()
@@ -396,9 +405,10 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
     private fun controlsAsk() {
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
+        val requested=ui.requestedAskConversation()
         question?.isEnabled = !busy
         preset?.isEnabled = !busy; model?.isEnabled = !busy
-        send?.isEnabled = !busy && NativeAskImages.pending(askState).length()==0 && question?.text?.isNotBlank() == true
+        send?.isEnabled = !busy && (requested==null || askState.optString("conversationId")==requested) && NativeAskImages.pending(askState).length()==0 && question?.text?.isNotBlank() == true
         addAskImage?.isEnabled = !busy && NativeAskImages.count(askState)<4
         askImagesView?.let { host -> fun update(view:android.view.View) { if(view is Button)view.isEnabled=!busy && (view.tag?.toString()?.startsWith("ask-image-remove:")==true || !ui.isWorking);if(view is android.view.ViewGroup)for(i in 0 until view.childCount)update(view.getChildAt(i)) };update(host) }
         retryRun?.visibility = if (askState.has("pending")) android.view.View.VISIBLE else android.view.View.GONE
@@ -416,6 +426,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
     private data class AskAdmission(val run:JSONObject?=null,val materialRejected:Boolean=false)
     private fun submitAsk(validatedMaterial: String? = null) {
+        val target=ui.requestedAskConversation()
+        if(!askState.has("pending") && target!=null && target!=askState.optString("conversationId")) { selectConversation(target,fromIntent=true);return }
         val api = client
         if(!askState.has("pending") && NativeAskImages.pending(askState).length()>0) { ui.notice(MoteI18n.text("请先重试或移除尚未上传完成的图片。"));return }
         val reference=NativeAskEvidenceScope.material(askState)
@@ -494,7 +506,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         if(run.getString("status") in NativeAskRunState.terminal)askState.remove("activeRequest")
         persistAsk(); controlsAsk()
         if (run.getString("status") == "running") ui.scheduleAskPoll()
-        else askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { loadConversation(it) }
+        else ui.requestedAskConversation()?.let { selectConversation(it,fromIntent=true) } ?: askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { loadConversation(it) }
     }
     private fun loadConversation(id: String, cursor: String? = null) {
         val api = client

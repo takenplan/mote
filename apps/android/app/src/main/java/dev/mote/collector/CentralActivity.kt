@@ -9,6 +9,7 @@ open class CentralActivity : MoteActivity() {
     private lateinit var content: CentralContent
     internal val client get() = content.client
     internal val isWorking get() = content.isWorking
+    internal val selectedAskConversationId get() = content.selectedAskConversationId
     internal fun navigate(page: String) = content.navigate(page)
 
     override fun onCreate(state: Bundle?) {
@@ -25,7 +26,7 @@ open class CentralActivity : MoteActivity() {
     override fun onPause() { content.pause(); super.onPause() }
     override fun onDestroy() { content.close(); super.onDestroy() }
     override fun onSaveInstanceState(state: Bundle) { content.saveState(state); super.onSaveInstanceState(state) }
-    override fun onNewIntent(next: Intent) { super.onNewIntent(next); intent = next; next.getStringExtra("insightId")?.let(content::openInsight) ?: next.getStringExtra("page")?.let(content::navigate) }
+    override fun onNewIntent(next: Intent) { super.onNewIntent(next); intent = next; content.captureAskConversationIntent();next.getStringExtra("insightId")?.let(content::openInsight) ?: next.getStringExtra("page")?.let(content::navigate) }
     @android.annotation.SuppressLint("GestureBackNavigation")
     @Deprecated("Native back navigation") override fun onBackPressed() { navigateBack() }
     private fun navigateBack() { if (!content.back()) finish() }

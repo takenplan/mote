@@ -340,7 +340,8 @@ class MainActivity : MoteActivity() {
             updateFirstUse()
         }) { id ->
             // The same native Ask state owns the draft and the selected conversation.
-            intent.putExtra("conversationId", id)
+            intent.removeExtra("moteConversationOrigin");intent.removeExtra("moteConversationGeneration");intent.putExtra("conversationId", id)
+            centralContent?.captureAskConversationIntent()
             showPage(Page.ASK)
         }.also(content::addView)
         content = pageContent
@@ -1816,7 +1817,7 @@ class MainActivity : MoteActivity() {
     }
 
     override fun onNewIntent(next: Intent) {
-        super.onNewIntent(next); intent = next
+        super.onNewIntent(next); intent = next;centralContent?.captureAskConversationIntent()
         if (::pagesHost.isInitialized) next.getStringExtra("page")?.let { value -> requestedPage(value) }?.let {
             showPage(it, connectionEntryOrigin = if (it == Page.CONNECTION && next.getBooleanExtra("returnToCentral", false)) ConnectionOrigin.CENTRAL_CALLER else null)
             if (next.getStringExtra("page") == "OBSERVATIONS" && currentPage == Page.PRIVACY) pagesHost.post { showObservations() }
