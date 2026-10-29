@@ -35,6 +35,5 @@
 .final-search .search-memory-row>svg{align-self:center}
 .content[data-page=search]>.workspace-tools{display:none}
 @media(max-width:560px){.final-search .view-tabs button{font-size:11px;padding:5px 8px}.final-search .search-memory-row{grid-template-columns:28px minmax(0,1fr) 12px;gap:11px;padding:17px 0}.final-search .search-memory-symbol{width:27px;height:32px;font-size:17px}.final-search .search-memory-title strong{font-size:13px}.final-search .search-memory-row .search-memory-summary{font-size:11px;line-height:1.85}}
-.final-search .library-detail .evidence-reader>.reader-top-actions>.evidence-back{display:none}
 .final-search .page-heading>a,.final-search .search-options>.text-button{color:var(--mote-muted);text-decoration:none;font-size:12px}
 .final-search:has(.library-browser.has-selection) .search-surface>.page-heading,.final-search:has(.library-browser.has-selection) .workspace-search,.final-search:has(.library-browser.has-selection) .search-options,.final-search:has(.library-browser.has-selection) .search-filters{display:none}
