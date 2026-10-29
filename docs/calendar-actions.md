@@ -46,4 +46,10 @@
 
 fixture 的假模型输出测试宿主契约，不等同真实模型提取准确率。真实手机/个人日历、真实云模型与跨日历账户同步需分别报告，未运行时不得宣称通过。
 
+2026-10-29：`managed-calendar.test.ts` 的 13 个真实 HTTP/SQLite、桌面执行器场景通过；生成模型输出和桌面 native API 是边界替身。`apps/android/test-fixtures/managed-calendar-native.ts` 复用同一中央 fixture，配合 `ManagedCalendarNativeInstrumentedTest` 在本轮专用 Android 17 模拟器 `emulator-5680` 上通过一个综合场景：实际 Calendar Provider 创建、同一 externalId 更新、取消、Mote 内完成、丢回执后撤权与重建执行器补回执，以及标题、标记或所属日历被手工修改后拒绝取消。两个临时本地日历和操作日志在 finally 删除，原连接与权限恢复；未使用个人日历或真实模型。
+
+真实 Provider 验证发现 `/events/<id>` 不接受 update/delete 的 selection。执行器使用事件集合 URI，把 `_id`、原日历、原内容、原时间及无重复规则一并作为条件，并要求只改变一行。参与人仍在写入前核查，不宣称跨应用修改和参与人检查具有完整数据库事务隔离。Mac EventKit 的真实系统日历写入、实体手机及日历账户同步在本轮未测。
+
+复现时仅在自有空模拟器运行：先启动上述 TypeScript fixture，再将其动态 loopback 端口显式 reverse 到该模拟器；使用相同任务调试签名构建 development APK 与 `-Pmote.testBuildType=development` 的 AndroidTest APK。仅临时授予该测试包日历权限，以 `managedCalendarNativeFixture=true` 和 fixtureOrigin 参数运行指定测试类。测试会拒绝非 development 包、非模拟器、已存在的可写日历或已开启采集的配置。运行后恢复权限、移除 exact reverse 端口并关闭 fixture。
+
 2026-09-16：使用 `scripts/test-calendar-live.mjs <私有模型配置>` 对真实 DeepSeek Flash 执行 6 个合成文本案例，修正后全部通过。首次历史日程误报促成明确过期校验；这是有限样本验证，不代表总体准确率。没有读取个人资料库或写入真实日历。

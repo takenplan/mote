@@ -134,16 +134,19 @@ class CalendarActions(private val context: Context, private val foreground: Bool
                             check(current["title"] == expected.getString("title") && current["dtstart"] == oldTimes.first.toString() && current["dtend"] == oldTimes.second.toString() && current["allDay"] == (if (expected.getBoolean("allDay")) "1" else "0") && current["eventLocation"] == expected.getString("location") && current["description"] == oldDescription && current["rrule"].isNullOrEmpty() && current["rdate"].isNullOrEmpty()) { MoteI18n.text("系统日历已被修改，请重新核实") }
                             context.contentResolver.query(CalendarContract.Attendees.CONTENT_URI, arrayOf("_id"), "event_id=?", arrayOf(existingId.toString()), null)?.use { check(it.count == 0) { MoteI18n.text("不修改包含参与人的日程") } } ?: error(MoteI18n.text("无法核实日程参与人"))
                             save("attempting")
-                            val selection = "calendar_id=? AND title=? AND dtstart=? AND dtend=? AND allDay=? AND coalesce(eventLocation,'')=? AND coalesce(description,'')=? AND deleted=0"
-                            val args = arrayOf(calendarId.toString(), expected.getString("title"), oldTimes.first.toString(), oldTimes.second.toString(), if (expected.getBoolean("allDay")) "1" else "0", expected.getString("location"), oldDescription)
-                            val changed = if (action.getString("kind") == "calendar.cancel") context.contentResolver.delete(uri, selection, args) else {
+                            // Calendar Provider accepts a selection on the collection URI,
+                            // not on /events/<id>. Keep identity and the observed original
+                            // in the same predicate so a concurrent edit cannot be overwritten.
+                            val selection = "_id=? AND calendar_id=? AND title=? AND dtstart=? AND dtend=? AND allDay=? AND coalesce(eventLocation,'')=? AND coalesce(description,'')=? AND coalesce(rrule,'')='' AND coalesce(rdate,'')='' AND deleted=0"
+                            val args = arrayOf(existingId.toString(), calendarId.toString(), expected.getString("title"), oldTimes.first.toString(), oldTimes.second.toString(), if (expected.getBoolean("allDay")) "1" else "0", expected.getString("location"), oldDescription)
+                            val changed = if (action.getString("kind") == "calendar.cancel") context.contentResolver.delete(CalendarContract.Events.CONTENT_URI, selection, args) else {
                                 check(end > Instant.now().toEpochMilli()) { MoteI18n.text("日程已过期") }
                                 val values = ContentValues().apply {
                                     put(CalendarContract.Events.TITLE, event.getString("title")); put(CalendarContract.Events.DTSTART, start); put(CalendarContract.Events.DTEND, end)
                                     put(CalendarContract.Events.EVENT_TIMEZONE, if (event.getBoolean("allDay")) "UTC" else event.getString("timeZone")); put(CalendarContract.Events.ALL_DAY, if (event.getBoolean("allDay")) 1 else 0)
                                     put(CalendarContract.Events.EVENT_LOCATION, event.getString("location")); put(CalendarContract.Events.DESCRIPTION, CalendarActionRules.description(related.getString("actionId"), event, operation))
                                 }
-                                context.contentResolver.update(uri, values, selection, args)
+                                context.contentResolver.update(CalendarContract.Events.CONTENT_URI, values, selection, args)
                             }
                             check(changed == 1) { MoteI18n.text("原日程已改变，请核实修改结果") }
                         }
