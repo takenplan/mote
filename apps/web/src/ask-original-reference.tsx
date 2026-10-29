@@ -11,13 +11,15 @@ function readOrigin():Origin|null{const query=new URLSearchParams(window.locatio
 const unavailable=()=>moteText('参考原件暂不可用，请清除参考后继续。');
 /** Re-read the selected entity and every exact original. A displayed evidence
  * subset never becomes the scope, and a newer Material never replaces a pin. */
-export async function verifiedOriginals(api:Api,origin:Origin,signal:AbortSignal){
+export async function verifiedOriginals(api:Api,origin:Origin,signal:AbortSignal):Promise<{ids:string[];title:string;materialRef?:string}>{
  let ids:string[],title:string;
  if(origin.kind==='material'){
   const match=/^material:(mat_[a-f0-9]{64})@([a-f0-9]{64})$/.exec(origin.id);if(!match)throw Error(unavailable());
   const material=await api.request<Material>('/api/materials/'+match[1],{signal});
-  if(material.ref!==origin.id||material.revision!==match[2]||material.coverage.state!=='complete'||material.memorySource?.status!=='ready')throw Error(unavailable());
-  ids=material.memorySource.evidenceIds;title=material.title;
+  if(material.ref!==origin.id||material.revision!==match[2])throw Error(unavailable());
+  const page=await api.request<{material:Material}>(`/api/materials/${match[1]}/read?revision=${match[2]}&offset=0&length=2`,{signal});
+  if(page.material.ref!==origin.id)throw Error(unavailable());
+  return {ids:[],title:material.title,materialRef:origin.id};
  }else{
   if(!uuid.test(origin.id))throw Error(unavailable());
   const memory=origin.kind==='memory'?await api.request<{title:string;evidenceIds?:string[];evidenceCount?:number;evidence?:{id:string}[]}>('/api/memories/'+origin.id,{signal}):undefined;
@@ -32,7 +34,7 @@ export async function verifiedOriginals(api:Api,origin:Origin,signal:AbortSignal
  return {ids:[...new Set(ids)],title};
 }
 export function useOriginalReference(api:Api){
- const [origin,setOrigin]=useState(readOrigin),[read,setRead]=useState<{owner:Api;key:string;ids:string[];title:string;error?:string}>();
+ const [origin,setOrigin]=useState(readOrigin),[read,setRead]=useState<{owner:Api;key:string;ids:string[];title:string;materialRef?:string;error?:string}>();
  const key=origin?origin.kind+':'+origin.id:'';
  useEffect(()=>{const sync=()=>setOrigin(readOrigin());window.addEventListener('hashchange',sync);return()=>window.removeEventListener('hashchange',sync);},[]);
  useEffect(()=>{if(!origin){setRead(undefined);return;}const controller=new AbortController();setRead(undefined);
@@ -40,6 +42,6 @@ export function useOriginalReference(api:Api){
  },[api,key]);
  const current=read?.owner===api&&read.key===key?read:undefined;
  function clear(){setOrigin(null);setRead(undefined);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const field of ['fromMemory','fromMaterial','fromCapture'])query.delete(field);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}
- async function verify(signal:AbortSignal){if(!origin)return;const fresh=await verifiedOriginals(api,origin,signal);if(!current||JSON.stringify([...fresh.ids].sort())!==JSON.stringify([...current.ids].sort()))throw Error(unavailable());}
- return {key,origin,returnRoute:referenceReturns.get(api)?.get(key),ids:current?.ids??[],title:current?.title??'',error:current?.error,loading:Boolean(origin&&!current),ready:!origin||Boolean(current&&!current.error&&current.ids.length),clear,verify};
+ async function verify(signal:AbortSignal){if(!origin)return;const fresh=await verifiedOriginals(api,origin,signal);if(!current||fresh.materialRef!==current.materialRef||JSON.stringify([...fresh.ids].sort())!==JSON.stringify([...current.ids].sort()))throw Error(unavailable());}
+ return {key,origin,returnRoute:referenceReturns.get(api)?.get(key),ids:current?.ids??[],materialRef:current?.materialRef,title:current?.title??'',error:current?.error,loading:Boolean(origin&&!current),ready:!origin||Boolean(current&&!current.error&&(current.materialRef||current.ids.length)),clear,verify};
 }

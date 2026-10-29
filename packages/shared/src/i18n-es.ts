@@ -9601,5 +9601,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "原文可打开": "Original can be opened",
   "之后需要时再配置": "Configure later when needed",
   "问一问与自动理解": "Questions and automatic understanding",
-  "保存原文已经可以使用": "Saving originals is already available"
+  "保存原文已经可以使用": "Saving originals is already available",
+  "参考资料": "Reference material"
 };

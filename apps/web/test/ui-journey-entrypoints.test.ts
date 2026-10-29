@@ -169,10 +169,11 @@ test('source device pairing and AI access use distinct routes and inventories wi
   assert.deepEqual(writes, [{path: '/api/connections/reader'}], 'the existing selected-credential revocation API is preserved');
 });
 
-for (const kind of ['anchor', 'strict'] as const) test(`a restored ${kind} conversation can clear its reference only between turns and submits both explicit nulls`, async t => {
+for (const kind of ['anchor', 'strict', 'material'] as const) test(`a restored ${kind} conversation can clear its reference only between turns and submits explicit scope nulls`, async t => {
   const conversationId = 'generated-' + kind;
   const {root, d, tick} = await fixture(t, '#/ask?' + new URLSearchParams({conversation: conversationId, questionDraft: 'Generated follow-up'}));
-  const scope = kind === 'anchor' ? {anchorEvidenceIds: [captureId]} : {evidenceIds: [captureId]};
+  const materialRef='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64);
+  const scope = kind === 'anchor' ? {anchorEvidenceIds: [captureId]} : kind === 'material'?{anchorMaterialRef:materialRef}:{evidenceIds: [captureId]};
   const summary = {id: conversationId, title: 'Generated restored conversation', createdAt: when, updatedAt: when, turnCount: 1, scope, status: 'completed'};
   const detail = {...summary, revision: 1, nextCursor: null, turns: [{id: 'generated-turn', question: 'Generated original question', status: 'completed', createdAt: when, result: {runId: 'generated-old', answer: 'Generated original answer', trace: [], citations: []}}]};
   const completed = {id: 'generated-completed', status: 'completed', conversationId, createdAt: when, updatedAt: when, events: []};
@@ -192,15 +193,16 @@ for (const kind of ['anchor', 'strict'] as const) test(`a restored ${kind} conve
     return {items: []};
   });
   await act(async () => root.render(React.createElement(Conversations, {api, configured: true, devices: [], renderAnswer: answer => answer.answer, onOpen: ref => opened.push(ref)})));
-  const scopeBar = () => d.querySelector(kind === 'anchor' ? '[aria-label="参考记录"]' : '[aria-label="查询范围"]')!;
-  const clearLabel = kind === 'anchor' ? '清除参考记录' : '清除范围';
+  const scopeBar = () => d.querySelector(kind === 'anchor' ? '[aria-label="参考记录"]' : kind === 'material'?'[aria-label="参考资料"]':'[aria-label="查询范围"]')!;
+  const clearLabel = kind !== 'strict' ? '清除参考记录' : '清除范围';
   assert.ok(scopeBar());
   await act(async () => scopeBar().querySelector<HTMLButtonElement>('button')!.click());
-  assert.deepEqual(opened, ['capture:' + captureId]);
+  assert.deepEqual(opened, [kind==='material'?materialRef:'capture:' + captureId]);
   const submit = async () => { await act(async () => d.querySelector<HTMLTextAreaElement>('[aria-label="向 Mote 提问"]')!.closest('form')!.dispatchEvent(new window.Event('submit', {bubbles: true, cancelable: true}))); };
   await submit();
   assert.equal(submissions.length, 1);
   assert.equal(Object.hasOwn(submissions[0].input, 'anchorEvidenceIds'), false, 'an unchanged scope is inherited from the restored conversation');
+  assert.equal(Object.hasOwn(submissions[0].input,'anchorMaterialRef'),false);
   assert.equal(button(d, clearLabel).disabled, true, 'a pending admitted turn keeps its reference fixed');
   await act(async () => button(d, clearLabel).click());
   assert.doesNotMatch(scopeBar().textContent!, /全部资料/);
@@ -218,6 +220,7 @@ for (const kind of ['anchor', 'strict'] as const) test(`a restored ${kind} conve
   assert.equal(submissions[1].input.conversationId, conversationId);
   assert.equal(submissions[1].input.anchorEvidenceIds, null);
   assert.equal(submissions[1].input.evidenceIds, null);
+  assert.equal(submissions[1].input.anchorMaterialRef,null);
 });
 
 test('an in-flight chat upload and drafts remain owned by their authenticated API across a node switch',async t=>{
