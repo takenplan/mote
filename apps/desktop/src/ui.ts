@@ -607,8 +607,8 @@ byId('export').addEventListener('click',()=>void perform(async()=>{
 }));
 byId('import').addEventListener('click',()=>void perform(async()=>{
   showPage('restore');
-  if(!window.confirm(moteText('恢复到当前本机队列，继续按当前发送设置处理。是否继续？')))return;
   const visit=backupOperationUi.begin('import',moteText('正在处理，请稍候…'),currentStatus.operations);
+  if(!window.confirm(moteText('恢复到当前本机队列，继续按当前发送设置处理。是否继续？'))){backupOperationUi.finish(visit,'canceled',moteText('已取消'));return;}
   try {const outcome=await desktopApi.importQueue(),result=queueImportPresentation(outcome);backupOperationUi.finish(visit,result.phase,result.message,outcome.canceled?undefined:outcome.file,!outcome.canceled&&outcome.state==='incomplete'?outcome.error:undefined);}
   catch(error){backupOperationUi.finish(visit,'error',moteText('导入未完成，可能已有记录保存在本机。请检查本机内容后重试所选备份。'),undefined,error instanceof Error?error.message:String(error));throw error;}
 }));
@@ -1160,7 +1160,7 @@ refreshExtensionChoices();
 let compressionRevision=0, compressionWidth=2560, compressionBusy=false;
 function compressionZoom():void {
   const zoom=readInput('compression-zoom');
-  for(const id of ['compression-before','compression-after']){const img=byId<HTMLImageElement>(id);img.style.width=zoom==='fit'?'100%':`${compressionWidth*Number(zoom)}px`;img.style.maxWidth='none';}
+  for(const id of ['compression-before','compression-after']){const img=byId<HTMLImageElement>(id);img.parentElement!.dataset.zoomed=String(zoom!=='fit');img.style.width=zoom==='fit'?'100%':`${compressionWidth*Number(zoom)}px`;img.style.maxWidth='none';}
 }
 async function refreshCompression():Promise<void>{
   const revision=++compressionRevision,quality=numberInput('compression-quality');
@@ -1169,12 +1169,12 @@ async function refreshCompression():Promise<void>{
   try{const result=await desktopApi.compressionPreview(quality,numberInput('compression-side'));if(revision!==compressionRevision||currentPage!=='compression')return;
     byId<HTMLImageElement>('compression-before').src=result.original;byId<HTMLImageElement>('compression-after').src=result.compressed;byId('compression-before').hidden=false;byId('compression-after').hidden=false;compressionWidth=result.originalWidth;compressionZoom();
     const ratio=result.compressedBytes/result.originalBytes;
-    byId('compression-stats').textContent=moteText("{0} × {1} → {2} × {3} · 边长缩放 {4}% · PNG {5} KB → JPEG {6} KB · 文件大小为原图的 {7}%（{8} {9}%）", result.originalWidth, result.originalHeight, result.width, result.height, (result.width/result.originalWidth*100).toFixed(1), (result.originalBytes/1024).toFixed(1), (result.compressedBytes/1024).toFixed(1), (ratio*100).toFixed(1), ratio<=1?moteText("减少"):moteText("增加"), (Math.abs(1-ratio)*100).toFixed(1));
+    byId('compression-stats').textContent='';byId('compression-result-caption').textContent='JPEG · '+quality+' · '+numberInput('compression-side')+' px · '+result.compressedBytes.toLocaleString(getLocale())+' bytes';byId('compression-metrics').textContent=moteText("{0} × {1} → {2} × {3} · 边长缩放 {4}% · PNG {5} KB → JPEG {6} KB · 文件大小为原图的 {7}%（{8} {9}%）", result.originalWidth, result.originalHeight, result.width, result.height, (result.width/result.originalWidth*100).toFixed(1), (result.originalBytes/1024).toFixed(1), (result.compressedBytes/1024).toFixed(1), (ratio*100).toFixed(1), ratio<=1?moteText("减少"):moteText("增加"), (Math.abs(1-ratio)*100).toFixed(1));
     byId<HTMLButtonElement>('compression-apply').disabled=false;
   }catch(error){if(revision===compressionRevision&&currentPage==='compression')renderReadableFailure(byId('compression-stats'),moteText('预览失败，请调整参数重试'),error instanceof Error?error.message:String(error));}
   finally{compressionBusy=false;byId<HTMLButtonElement>('compression-refresh').disabled=false;}
 }
-function invalidateCompression():void{compressionRevision++;byId<HTMLButtonElement>('compression-apply').disabled=true;byId<HTMLButtonElement>('compression-refresh').disabled=compressionBusy;for(const id of ['compression-before','compression-after']){const image=byId<HTMLImageElement>(id);image.hidden=true;image.removeAttribute('src');}byId('compression-stats').textContent=moteText('调整参数后比较清晰度。');}
+function invalidateCompression():void{compressionRevision++;byId('compression-metrics').textContent='';byId('compression-result-caption').textContent='JPEG';byId<HTMLButtonElement>('compression-apply').disabled=true;byId<HTMLButtonElement>('compression-refresh').disabled=compressionBusy;for(const id of ['compression-before','compression-after']){const image=byId<HTMLImageElement>(id);image.hidden=true;image.removeAttribute('src');}byId('compression-stats').textContent=moteText('调整参数后比较清晰度。');}
 for(const id of ['compression-quality','compression-side']){byId(id).addEventListener('input',invalidateCompression);byId(id).addEventListener('change',invalidateCompression);}
 byId('compression-refresh').addEventListener('click',()=>{if(!compressionBusy)void refreshCompression();});
 byId('compression-zoom').addEventListener('change',compressionZoom);

@@ -25,3 +25,7 @@ it('keeps a new operation independent from a late earlier result and a different
 it('does not call a retry until the owner explicitly selects that action, and does not send a file parameter',()=>{
  const button=dom.window.document.getElementById('import')!,retry=vi.fn();button.addEventListener('click',retry);const visit=view.begin('import','Generated pending');view.finish(visit,'error','Generated failure',{name:'unknown-size.json',path:'/generated/unknown-size.json'});expect(panel().textContent).not.toContain('0 bytes');expect(retry).not.toHaveBeenCalled();panel().querySelector<HTMLButtonElement>('.actions .primary')!.click();expect(retry).toHaveBeenCalledOnce();
 });
+it('clears a prior selected file when the next operation is canceled before its picker is invoked',()=>{
+ const a=view.begin('import','Generated A');view.finish(a,'error','Generated failure',file);expect(panel().querySelector('.backup-operation-file')).not.toBeNull();
+ const b=view.begin('import','Generated B');view.finish(b,'canceled','Generated confirmation canceled');expect(panel().hidden).toBe(true);expect(panel().querySelector('.backup-operation-file')).toBeNull();expect(dom.window.document.getElementById('restore-selection')!.hidden).toBe(false);
+});
