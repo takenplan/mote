@@ -1,4 +1,5 @@
 import {retainConversationRoots,retainedConversationResult} from './conversation-retention.js';
+import {captureSessionMembersSql} from './capture-session-members.js';
 import {installVaultSchema} from './vault-schema-installation.js';
 import {centralOcrState} from './central-ocr-state.js';
 import {CAPTURE_BATCH_MAX_RECORDS,CAPTURE_BATCH_MAX_BYTES} from './capture-limits.js';
@@ -361,6 +362,13 @@ export class EvidenceStore {
     const items=page.items.map(record=>this.preview(record));
     return {...page,items};
   }
+  /** Shared existing raw-browse visibility and filters for a read-only projection. */
+  captureBrowseScope(range:Range){
+    const {cursor:_,after,before,...scope}=range,base=this.clauses({...scope,capturedOrder:true});
+    if(!after||!before)throw new StoreError('Timeline requires a bounded range');
+    const start=new Date(after).toISOString(),end=new Date(before).toISOString();
+    return {where:base.where+` AND ((captured_at>=? AND captured_at<?) OR EXISTS(SELECT 1 FROM json_each(captures.json,'$.stateSeries.samples') observation WHERE unixepoch(json_extract(observation.value,'$.at'),'subsec')>=unixepoch(?,'subsec') AND unixepoch(json_extract(observation.value,'$.at'),'subsec')<unixepoch(?,'subsec')))`,values:[...base.values,start,end,start,end]};
+  }
   preview(record:CaptureRecord):CapturePreview {return {id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,
       capturedAt:record.capturedAt,source:record.source,appId:record.appId,appName:record.appName,windowTitle:record.windowTitle.slice(0,300),
       ...(record.stateSeries?{stateSummary:{count:record.stateSeries.samples.length,lastAt:record.stateSeries.samples.at(-1)!.at}}:{}),durationMs:record.durationMs,hasImage:Boolean(record.blobHash),ocr:captureOcrState(record),
@@ -402,17 +410,7 @@ export class EvidenceStore {
     if(range.deviceId)args.push(range.deviceId);
     // Partition before pagination. App switches remain boundaries even if the user
     // subsequently opens only one app's session; overlapping devices never mix.
-    const cte=`WITH observed AS (
-      SELECT *,LAG(app_id) OVER w AS previous_app,LAG(captured_at) OVER w AS previous_at
-      FROM capture_gallery WHERE captured_at>=? AND captured_at<? ${range.deviceId?'AND device_id=?':''}
-      WINDOW w AS (PARTITION BY device_id ORDER BY captured_at,id)
-    ), segmented AS (
-      SELECT *,SUM(CASE WHEN previous_at IS NULL OR app_id='' OR app_id!=previous_app OR
-        (julianday(captured_at)-julianday(previous_at))*86400000>300000.1 THEN 1 ELSE 0 END)
-        OVER (PARTITION BY device_id ORDER BY captured_at,id) AS segment FROM observed
-    ), members AS (
-      SELECT *,FIRST_VALUE(id) OVER (PARTITION BY device_id,segment ORDER BY captured_at,id) AS session_id FROM segmented
-    )`;
+    const cte=captureSessionMembersSql(range.deviceId);
     let position:{at:string;id:string}|undefined;
     if(range.cursor){try{position=z.object({at:z.string().datetime(),id:z.string().uuid()}).strict().parse(JSON.parse(Buffer.from(range.cursor,'base64url').toString()));}catch{throw new StoreError('Invalid session cursor');}}
     if(range.sessionId){

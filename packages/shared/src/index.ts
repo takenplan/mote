@@ -129,6 +129,7 @@ export type CapturePreview = Pick<CaptureRecord,'id'|'deviceId'|'deviceName'|'pl
   stateSummary?: {count:number;lastAt:string}; hasImage: boolean; ocr: OcrState; textPreview: string; sizeBytes?: number;
   media?: MediaMetadata;
 };
+export type {CaptureTimelineGroup,CaptureTimelineRecord,CaptureTimelinePage,CaptureTimelineMember,CaptureTimelineMembers} from './capture-timeline.js';
 export const heartbeatSchema = z.object({
   deviceId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_.:-]+$/), deviceName: z.string().min(1).max(200), platform: platformSchema,
   status: z.enum(['capturing','paused','permission_required','error','offline']),
