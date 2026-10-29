@@ -43,7 +43,7 @@ class CalendarActionsActivity : MoteActivity() {
         val body = moteDetailPageContent(primary=null,title=MoteI18n.text("日程与待办"),onBack=::navigateBack) { calendarBody->
             LinearLayout(this).apply {
                 orientation=LinearLayout.VERTICAL
-                tabs=NativeSectionTabs(this@CalendarActionsActivity,listOf("calendar" to "日程","todos" to "待办"),"action-tabs",::selectTab);addView(tabs)
+                tabs=NativeSectionTabs(this@CalendarActionsActivity,listOf("calendar" to "日程","todos" to "待办"),"action-tabs",::selectTab).apply{setPadding(moteDp(20),0,moteDp(20),0)};addView(tabs)
                 tabHost=FrameLayout(this@CalendarActionsActivity);addView(tabHost,LinearLayout.LayoutParams(-1,0,1f))
                 calendarScroll=ScrollView(this@CalendarActionsActivity).apply{isFillViewport=true;addView(calendarBody)};tabHost.addView(calendarScroll,FrameLayout.LayoutParams(-1,-1))
             }

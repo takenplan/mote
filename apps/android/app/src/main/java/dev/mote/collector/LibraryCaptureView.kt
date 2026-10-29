@@ -50,7 +50,7 @@ internal class LibraryCaptureView(
     private var anchorTop = state?.getInt("anchorTop") ?: 0
     init {
         lateinit var locations: NativeSectionTabs
-        locations=NativeSectionTabs(activity,listOf("local" to "本机","central" to "中央资料"),"library-locations") { value->location=value;locations.select(value);render() }
+        locations=NativeSectionTabs(activity,listOf("local" to "本机","central" to "中央资料"),"library-locations",changed={value->location=value;locations.select(value);render()},choiceStyle=true)
         locations.select(location);parent.addView(locations)
         val options = SecondaryUi.disclosure(parent,MoteI18n.text("筛选"),"library-filters",state?.getBoolean("filtersExpanded") ?: false)
         val types = listOf("" to "全部记录", "file" to "文件", "source" to "来源资料", "material" to "整理资料", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
