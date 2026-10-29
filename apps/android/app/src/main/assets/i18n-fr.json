@@ -9611,5 +9611,6 @@
   "检查结果": "Vérifier le résultat",
   "用原请求重试": "Réessayer la demande initiale",
   "重新编辑问题": "Modifier à nouveau la question",
-  "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurer la question échouée remplacera votre brouillon actuel. Continuer ?"
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurer la question échouée remplacera votre brouillon actuel. Continuer ?",
+  "返回当前提问": "Revenir à la question en cours"
 }

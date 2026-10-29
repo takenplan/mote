@@ -398,7 +398,7 @@ function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
     sourceWorkspace.clear();localSourceRows=[];invalidateSourceEditor();byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLTextAreaElement>('source-initial-description').disabled=true;sourceReadGeneration++;recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
-    askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;askStopPending=false;askPendingMessage='';byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
+    askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;askStopPending=false;askRunLookupPending=false;askPendingMessage='';byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status;workPendingUi.update(status);chromeCaptureUi.update(status);captureContextUi.update(status);renderSettingsWorkspace(status);sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
@@ -1168,14 +1168,14 @@ let askRun: import('./ask').AskRun | undefined;
 let askConversation: import('./ask').AskConversation | undefined;
 let askScopeUnavailable = false;
 let askView:'history'|'conversation'='history';
-let askSubmittedQuestion='',askStopPending=false,askPendingMessage='';
+let askSubmittedQuestion='',askStopPending=false,askRunLookupPending=false,askPendingMessage='';
 let askBusy = false, askGeneration = 0, askCursor: string | undefined;
 let askPendingInput: {id: string; question: string; conversationId?: string} | undefined;
 let askTimer: ReturnType<typeof setTimeout> | undefined;
 function languageDraftScope():string{return JSON.stringify([currentStatus.config.serverUrl,currentStatus.config.deviceId,currentStatus.config.authSourceBinding??null]);}
-window.addEventListener('mote-language-changing',event=>{if(!readInput('ask-question')&&!askConversation&&!askPendingInput)return;try{keepLanguageAskDraft(sessionStorage,{scope:languageDraftScope(),question:readInput('ask-question'),view:askView,...(askPendingInput?{pendingRequest:askPendingInput}:{}),...(askConversation?{conversationId:askConversation.id}:{})});}catch{event.preventDefault();}});
+window.addEventListener('mote-language-changing',event=>{if(!readInput('ask-question')&&!askConversation&&!askPendingInput&&askRun?.status!=='running')return;try{keepLanguageAskDraft(sessionStorage,{scope:languageDraftScope(),question:readInput('ask-question'),view:askView,...(askRun?.status==='running'?{unresolvedRun:{id:askRun.id,...(askRun.conversationId?{conversationId:askRun.conversationId}:{}),...(askStopPending?{stopPending:true as const}:{})}}:{}),...(askPendingInput?{pendingRequest:askPendingInput}:{}),...(askConversation?{conversationId:askConversation.id}:{})});}catch{event.preventDefault();}});
 window.addEventListener('mote-language-change-failed',()=>{try{dropLanguageAskDraft(sessionStorage);}catch{}});
-function restoreLanguageAskDraft():void{try{const saved=takeLanguageAskDraft(sessionStorage,languageDraftScope());if(!saved)return;byId<HTMLTextAreaElement>('ask-question').value=saved.question;askView=saved.pendingRequest?'conversation':saved.view;askPendingInput=saved.pendingRequest;renderAsk();if(saved.conversationId&&currentStatus.config.tokenConfigured)void askAction(()=>loadAskConversation(saved.conversationId!));else renderAsk();}catch{/* No unrelated session may be restored. */}}
+function restoreLanguageAskDraft():void{try{const saved=takeLanguageAskDraft(sessionStorage,languageDraftScope());if(!saved)return;byId<HTMLTextAreaElement>('ask-question').value=saved.question;askView=saved.pendingRequest||saved.unresolvedRun?'conversation':saved.view;askPendingInput=saved.pendingRequest;if(saved.unresolvedRun){askRun={id:saved.unresolvedRun.id,status:'running',events:[],...(saved.unresolvedRun.conversationId?{conversationId:saved.unresolvedRun.conversationId}:{})};askStopPending=Boolean(saved.unresolvedRun.stopPending);askRunLookupPending=true;}renderAsk();if(saved.conversationId&&currentStatus.config.tokenConfigured)void askAction(()=>loadAskConversation(saved.conversationId!));else renderAsk();}catch{/* No unrelated session may be restored. */}}
 
 function mayReplaceAskDraft(next:string):boolean {
   const draft=readInput('ask-question');
@@ -1211,15 +1211,16 @@ function askControls(): void {
   workbenchUi.setBusy(askBusy||Boolean(running)||Boolean(askPendingInput));
   byId<HTMLButtonElement>('ask-send').disabled = askBusy || running || Boolean(askPendingInput) || !readInput('ask-question').trim();
   byId('ask-draft-state').textContent=readInput('ask-question').trim()?moteText('未发送 · 此窗口中的草稿'):'';
+  byId('ask-resume-current').hidden=askView!=='history'||!askPendingInput&&!running;
   byId('ask-refresh').hidden=askView==='history'&&!byId('ask-error').textContent;
   byId<HTMLButtonElement>('ask-new').disabled = askBusy || running || Boolean(askPendingInput);
   byId<HTMLButtonElement>('ask-login').disabled = askBusy;
   byId<HTMLButtonElement>('ask-logout').disabled = askBusy;
   byId('ask-edit-failed').hidden=askBusy||running||Boolean(askPendingInput)||!failedAskQuestion();
   byId('ask-stop').hidden = !running;byId<HTMLButtonElement>('ask-stop').disabled=askBusy||askStopPending;
-  byId('ask-pending').hidden=!askPendingInput&&!askStopPending;
+  byId('ask-pending').hidden=!askPendingInput&&!askStopPending&&!askRunLookupPending;
   byId('ask-pending-original').textContent=askPendingInput?.question??'';
-  byId('ask-pending-message').textContent=askPendingMessage||(askStopPending?moteText('停止结果尚未确认。'):moteText('结果尚未确认，请检查或重试原请求。'));
+  byId('ask-pending-message').textContent=askPendingMessage||(askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askStopPending?moteText('停止结果尚未确认。'):moteText('结果尚未确认，请检查或重试原请求。'));
   byId<HTMLButtonElement>('ask-check-existing').disabled=askBusy;byId<HTMLButtonElement>('ask-retry-existing').disabled=askBusy;byId('ask-retry-existing').hidden=!askPendingInput;
   byId<HTMLButtonElement>('ask-turns-more').disabled = askBusy || running;
   byId('ask-turns-more').hidden = !askConversation?.nextCursor;
@@ -1246,7 +1247,7 @@ function renderAsk(): void {
   }
   if(askRun?.status==='running'&&askSubmittedQuestion){const pending=document.createElement('article'),question=document.createElement('h3');question.textContent=askSubmittedQuestion;pending.append(question);messages.append(pending);}
   const last = askRun?.events?.at(-1);
-  setText('ask-progress', !askRun ? '' : askRun.status === 'running'&&askStopPending?moteText('正在停止，等待中央确认…'):askRun.status === 'running' ? last?.message ?? (last?.tool ? `${moteText('正在读取资料')} · ${last.tool}` : moteText('中央节点正在回答…')) : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? askRun.error?.message ?? moteText('回答未完成') : moteText('回答已完成'));
+  setText('ask-progress', !askRun ? '' : askRun.status === 'running'&&askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askRun.status === 'running'&&askStopPending?moteText('正在停止，等待中央确认…'):askRun.status === 'running' ? last?.message ?? (last?.tool ? `${moteText('正在读取资料')} · ${last.tool}` : moteText('中央节点正在回答…')) : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? askRun.error?.message ?? moteText('回答未完成') : moteText('回答已完成'));
   askControls();
 }
 async function loadAskConversation(id: string): Promise<void> {
@@ -1288,7 +1289,7 @@ async function askAction(action: () => Promise<void>): Promise<void> {
   finally { askBusy = false; askControls(); }
 }
 async function refreshAsk(): Promise<void> {
-  if(askPendingInput){await askAction(checkPendingAsk);return;}
+  if(askPendingInput){askView='conversation';renderAsk();await askAction(checkPendingAsk);return;}
   const connected = askConnectionState();
   if (!connected) {
     clearTimeout(askTimer);
@@ -1300,7 +1301,7 @@ async function refreshAsk(): Promise<void> {
     try { await askHistory(); } catch (error) { setText('ask-login-status', moteText('请求失败，请重试')); throw error; }
     setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl));
     const page = await askCall<{items: import('./ask').AskRun[]}>('runs');
-    askRun = page.items.find(item => item.status === 'running') ?? askRun;
+    if(!askRun)askRun=page.items.find(item=>item.status==='running');
     if (askRun?.status==='running'&&askRun.conversationId) {askView='conversation';await loadAskConversation(askRun.conversationId);}
     else if (askConversation) await loadAskConversation(askConversation.id);
     renderAsk(); if (askRun?.status === 'running') scheduleAskPoll();
@@ -1321,7 +1322,7 @@ function scheduleAskPoll(): void {
     if (currentPage !== 'ask' || !askRun || generation !== askGeneration) return;
     try {
       const run = await askCall<import('./ask').AskRun>('run', {id: askRun.id});
-      if (generation !== askGeneration) return;if(run.notFound){setText('ask-error',moteText('尚未找到这次提交；可以用原请求重试。'));return;}askRun = run;if(run.status!=='running')askStopPending=false;
+      if (generation !== askGeneration) return;if(run.notFound){askRunLookupPending=true;askPendingMessage=moteText('请刷新检查结果，避免重复发送。');renderAsk();return;}askRun = run;askRunLookupPending=false;if(run.status!=='running')askStopPending=false;
       if (run.status !== 'running' && run.conversationId) {
         const conversation = await askCall<import('./ask').AskConversation>('conversation', {id: run.conversationId});
         if (generation !== askGeneration) return; askConversation = conversation; askScopeUnavailable = false; await askHistory();
@@ -1336,7 +1337,7 @@ byId('ask-form').addEventListener('submit', event => {
   const question = readInput('ask-question').trim(); if (!question) return;
   void askAction(async () => {
     const input = askPendingInput?.question === question && askPendingInput.conversationId === askConversation?.id ? askPendingInput : {id: crypto.randomUUID(), question, ...(askConversation ? {conversationId: askConversation.id} : {})};
-    askPendingInput = input;askPendingMessage=moteText('正在提交问题…');askSubmittedQuestion=question;askRun=undefined;askStopPending=false;renderAsk();
+    askPendingInput = input;askPendingMessage=moteText('正在提交问题…');askSubmittedQuestion=question;askRun=undefined;askStopPending=false;askRunLookupPending=false;renderAsk();
     let admitted:import('./ask').AskRun;try { admitted = await askCall('start', input); }
     catch { admitted = await askCall('start', input); } // Same admission ID after an ambiguous network response.
     await acceptPendingAsk(input,admitted);
@@ -1346,21 +1347,22 @@ byId('ask-refresh').addEventListener('click', () => void refreshAsk());
 byId('ask-more').addEventListener('click', () => void askAction(() => askHistory(true)));
 byId('ask-turns-more').addEventListener('click', () => void askAction(olderAskTurns));
 async function acceptPendingAsk(input:NonNullable<typeof askPendingInput>,run:import('./ask').AskRun):Promise<void>{
-  if(askPendingInput!==input)return;askRun=run;askSubmittedQuestion=input.question;askPendingInput=undefined;askPendingMessage='';askStopPending=false;
+  if(askPendingInput!==input)return;askRun=run;askSubmittedQuestion=input.question;askPendingInput=undefined;askPendingMessage='';askStopPending=false;askRunLookupPending=false;
   if(readInput('ask-question').trim()===input.question)byId<HTMLTextAreaElement>('ask-question').value='';
   renderAsk();if(run.conversationId)await loadAskConversation(run.conversationId);if(run.status==='running')scheduleAskPoll();else await askHistory();
 }
 async function checkPendingAsk():Promise<void>{
-  const input=askPendingInput,id=input?.id??(askStopPending?askRun?.id:undefined),generation=askGeneration;if(!id)return;
+  const input=askPendingInput,id=input?.id??(askStopPending||askRunLookupPending?askRun?.id:undefined),generation=askGeneration;if(!id)return;
   askPendingMessage=moteText('正在检查结果…');askControls();const run=await askCall<import('./ask').AskRun>('run',{id});if(generation!==askGeneration||input&&askPendingInput!==input)return;
-  if(run.notFound){askPendingMessage=moteText('尚未找到这次提交；可以用原请求重试。');askControls();return;}
-  if(input)await acceptPendingAsk(input,run);else if(askRun?.id===id){askRun=run;askStopPending=false;askPendingMessage='';renderAsk();if(run.conversationId)await loadAskConversation(run.conversationId);if(run.status==='running')scheduleAskPoll();}
+  if(run.notFound){askRunLookupPending=!input;askPendingMessage=input?moteText('尚未找到这次提交；可以用原请求重试。'):moteText('请刷新检查结果，避免重复发送。');askControls();return;}
+  if(input)await acceptPendingAsk(input,run);else if(askRun?.id===id){askRun=run;askStopPending=false;askRunLookupPending=false;askPendingMessage='';renderAsk();if(run.conversationId)await loadAskConversation(run.conversationId);if(run.status==='running')scheduleAskPoll();}
 }
 byId('ask-edit-failed').addEventListener('click',()=>{const question=failedAskQuestion();if(!question||askBusy||askPendingInput||askRun?.status==='running')return;if(readInput('ask-question').trim()&&readInput('ask-question')!==question&&!window.confirm(moteText('将失败问题带回输入框，会替换当前草稿。继续？')))return;byId<HTMLTextAreaElement>('ask-question').value=question;askControls();byId('ask-question').focus();});
 byId('ask-check-existing').addEventListener('click',()=>void askAction(checkPendingAsk));
 byId('ask-retry-existing').addEventListener('click',()=>void askAction(async()=>{const input=askPendingInput;if(input)await acceptPendingAsk(input,await askCall('start',input));}));
-byId('ask-stop').addEventListener('click', () => void askAction(async () => { if(!askRun||askStopPending)return;const id=askRun.id,generation=askGeneration;askStopPending=true;askPendingMessage='';renderAsk();const run=await askCall<import('./ask').AskRun>('cancel',{id});if(generation!==askGeneration||askRun?.id!==id)return;askRun=run;askStopPending=run.status==='running';renderAsk();scheduleAskPoll(); }));
+byId('ask-stop').addEventListener('click', () => void askAction(async () => { if(!askRun||askStopPending)return;const id=askRun.id,generation=askGeneration;askStopPending=true;askPendingMessage='';renderAsk();const run=await askCall<import('./ask').AskRun>('cancel',{id});if(generation!==askGeneration||askRun?.id!==id)return;askRun=run;askRunLookupPending=false;askStopPending=run.status==='running';renderAsk();scheduleAskPoll(); }));
 byId('ask-new').addEventListener('click', () => { if (askBusy || askPendingInput || askRun?.status === 'running'||!mayReplaceAskDraft('')) return; askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; askScopeUnavailable = false;askPendingInput=undefined;askSubmittedQuestion='';askView='conversation';byId<HTMLTextAreaElement>('ask-question').value='';renderAsk();byId('ask-question').focus(); });
+byId('ask-resume-current').addEventListener('click',()=>{askView='conversation';renderAsk();});
 byId('ask-back').addEventListener('click',()=>{askView='history';renderAsk();void askAction(()=>askHistory());});
 byId('ask-question').addEventListener('input',askControls);
 const askReferenceDialog=byId<HTMLDialogElement>('ask-reference-dialog');

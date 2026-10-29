@@ -36,3 +36,10 @@ it('carries an uncertain admission ID separately from a later unsent draft witho
   const storage=session(),draft={scope:'generated-owner/device',question:'Later unsent input',view:'conversation' as const,pendingRequest:{id:'612585bd-2c32-4406-83eb-5aeed1b8ef8f',question:'Original admitted question'}};
   keepLanguageAskDraft(storage,draft);expect(takeLanguageAskDraft(storage,draft.scope)).toEqual(draft);expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
 });
+
+
+it('carries an admitted unresolved run as identity only and never fabricates a request body',()=>{
+  const storage=session(),draft={scope:'generated-owner/device',question:'Later local draft',view:'conversation' as const,unresolvedRun:{id:'612585bd-2c32-4406-83eb-5aeed1b8ef8f',conversationId:'192585bd-2c32-4406-83eb-5aeed1b8ef8f',stopPending:true as const}};
+  keepLanguageAskDraft(storage,draft);const restored=takeLanguageAskDraft(storage,draft.scope)!;
+  expect(restored).toEqual(draft);expect(restored.pendingRequest).toBeUndefined();expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
+});

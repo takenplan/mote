@@ -9612,5 +9612,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "检查结果": "Comprobar resultado",
   "用原请求重试": "Reintentar solicitud original",
   "重新编辑问题": "Volver a editar la pregunta",
-  "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurar la pregunta fallida reemplazará tu borrador actual. ¿Continuar?"
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurar la pregunta fallida reemplazará tu borrador actual. ¿Continuar?",
+  "返回当前提问": "Volver a la pregunta actual"
 };

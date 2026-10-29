@@ -9612,5 +9612,6 @@ export const german: Readonly<Record<string, string>> = {
   "检查结果": "Ergebnis prüfen",
   "用原请求重试": "Ursprüngliche Anfrage wiederholen",
   "重新编辑问题": "Frage erneut bearbeiten",
-  "将失败问题带回输入框，会替换当前草稿。继续？": "Die fehlgeschlagene Frage ersetzt deinen aktuellen Entwurf. Fortfahren?"
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Die fehlgeschlagene Frage ersetzt deinen aktuellen Entwurf. Fortfahren?",
+  "返回当前提问": "Zur aktuellen Frage zurück"
 };
