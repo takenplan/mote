@@ -539,6 +539,8 @@ byId('settings').addEventListener('submit', event => {
   void perform(async () => {
     const token = readInput('token').trim();
     settingsApplying = true; wasRunningBeforeSave = currentStatus.running; render(currentStatus);
+    const captureSave=captureContextUi.prepareSave();
+    try {
     let updated: import('./contracts').Status;
     try { updated = await desktopApi.configure({
       syncPaused:currentStatus.config.syncPaused, captureStorageDirectory,
@@ -559,7 +561,8 @@ byId('settings').addEventListener('submit', event => {
       ...(token ? { token } : {}),
     });
     } finally { settingsApplying = false; wasRunningBeforeSave = false; }
-    render(updated); await captureContextUi.save(); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
+    render(updated); await captureSave.persist(); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
+    } finally {captureSave.release();}
   });
 });
 const captureConfirmation=byId<HTMLDialogElement>('capture-confirm-dialog');
