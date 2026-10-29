@@ -24,6 +24,7 @@ import java.util.UUID
 /** One explicit Save boundary for all manual and shared records. */
 class RecordEditorActivity : MoteActivity() {
     private lateinit var field: EditText
+    private lateinit var description: EditText
     private lateinit var status: TextView
     private lateinit var attachmentsView: LinearLayout
     private lateinit var save: Button
@@ -46,30 +47,54 @@ class RecordEditorActivity : MoteActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         task = UiTask(this, io, ownsExecutor = false)
         attachmentTask = UiTask(this, io, ownsExecutor = false)
-        val body = moteDetailPage(primary = null, title = MoteI18n.text("记下"))
+        save = MoteUi.button(Button(this).apply { text = MoteI18n.text("保存"); setOnClickListener { submit() } }, true)
+        NativePresentationStyles.bind(save, "record-save") { (it as Button).apply { minWidth = moteDp(58); minimumWidth = minWidth; minHeight = moteDp(36); minimumHeight = minHeight; textSize = 11f; setPadding(moteDp(10),0,moteDp(10),0); background = MoteUi.clickable(this@RecordEditorActivity, NativeColorRole.INK, 6, false) } }
+        MoteUi.textColor(save, NativeColorRole.BACKGROUND)
+        val body = moteDetailPage(primary = null, title = MoteI18n.text("随手记"), headerAction = save)
+        body.setPadding(moteDp(20), moteDp(25), moteDp(20), moteDp(32))
+        val meta = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        meta.addView(TextView(this).apply { text = MoteI18n.text("文字、照片或录音"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED) }, LinearLayout.LayoutParams(0,-2,1f))
+        meta.addView(TextView(this).apply { text = MoteI18n.text("保存到此手机"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED) })
+        body.addView(meta)
         val form = body
         field = EditText(this).apply {
             hint = MoteI18n.text("记下此刻的想法…"); contentDescription = MoteI18n.text("正在想什么")
             gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            filters = arrayOf(android.text.InputFilter.LengthFilter(100000)); MoteUi.field(this); minLines = 6
-            NativePresentationStyles.remember(this, "record-editor-lines") { (it as EditText).minLines = 6 }
+            filters = arrayOf(android.text.InputFilter.LengthFilter(100000)); MoteUi.field(this); minLines = 8
+            NativePresentationStyles.bind(this, "record-editor-lines") { (it as EditText).apply { minLines = 8; background = null; setPadding(0, moteDp(24), 0, moteDp(20)) } }
         }; form.addView(field)
         attachmentsView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; form.addView(attachmentsView)
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; form.addView(actions)
-        var actionIndex = 0
-        fun action(label: String, run: () -> Unit): Button {
-            if (actionIndex % 2 == 0) actions.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL })
-            val row = actions.getChildAt(actions.childCount - 1) as LinearLayout
-            return MoteUi.button(Button(this).apply { text = MoteI18n.text(label); setOnClickListener { if (ready && !task.busy && !attachmentTask.busy && (recorder == null || label == "录音")) run() } }).also {
-                row.addView(it, LinearLayout.LayoutParams(0, -2, 1f).apply { if (actionIndex % 2 == 1) marginStart = moteDp(8); bottomMargin = moteDp(8) }); actionIndex++
-            }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; form.addView(actions)
+        fun action(symbol: String, label: String, run: () -> Unit): Button = MoteUi.action(Button(this).apply {
+            text = symbol + "\n" + MoteI18n.text(label); contentDescription = MoteI18n.text(label)
+            setOnClickListener { if (ready && !task.busy && !attachmentTask.busy && (recorder == null || label == "录音")) run() }
+        }, MoteUi.ButtonRole.TEXT).also { button ->
+            NativePresentationStyles.bind(button, "record-media-action") { (it as Button).apply { minHeight = moteDp(78); textSize = 11f; setPadding(0, moteDp(8),0,moteDp(8)) } }
+            actions.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
         }
-        action("拍照") { if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera() else requestPermissions(arrayOf(Manifest.permission.CAMERA), 21) }
-        action("从相册选择") { pick("image/*", 11) }
-        microphone = action("录音") { if (recorder != null) stopRecording() else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording() else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 22) }
-        action("添加文件") { pick("*/*", 12) }
+        action("▣", "拍照") { if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera() else requestPermissions(arrayOf(Manifest.permission.CAMERA), 21) }
+        action("▧", "相册") { pick("image/*", 11) }
+        microphone = action("♩", "录音") { if (recorder != null) stopRecording() else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording() else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 22) }
+        action("⌕", "文件") { pick("*/*", 12) }
+        val explanation = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+        description = EditText(this).apply {
+            tag = "record-description"; hint = MoteI18n.text("例如：这是我的日记，记录我自己的经历。"); contentDescription = MoteI18n.text("资料说明")
+            MoteUi.textInput(this, android.text.InputType.TYPE_CLASS_TEXT, multiline = true); filters = arrayOf(android.text.InputFilter.LengthFilter(12000)); MoteUi.field(this); minLines = 3
+        }
+        explanation.addView(description)
+        explanation.addView(TextView(this).apply { text = MoteI18n.text("仅用于理解这条记录。"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED) })
+        form.addView(TextView(this).apply {
+            text = "▸ " + MoteI18n.text("资料说明（选填）"); contentDescription = MoteI18n.text("资料说明（选填）"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
+            minHeight = moteDp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+            setOnClickListener { val expanded = explanation.visibility != android.view.View.VISIBLE; explanation.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE; text = (if (expanded) "▾ " else "▸ ") + MoteI18n.text("资料说明（选填）") }
+        }, LinearLayout.LayoutParams(-1,-2).apply { topMargin = moteDp(20) })
+        form.addView(explanation)
         status = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) }; form.addView(status)
-        save = MoteUi.button(Button(this).apply { text = MoteI18n.text("保存"); setOnClickListener { submit() } }, true); form.addView(save)
+        description.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) { if (ready) persist() }
+        })
         field.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -77,15 +102,17 @@ class RecordEditorActivity : MoteActivity() {
         })
         enabled(false)
         task.start("", {}, { store.draft() }) { outcome -> outcome.onSuccess { draft ->
-            attachments = draft.getJSONArray("attachments"); origin = draft.getJSONObject("origin"); field.setText(draft.getString("text")); ready = true; enabled(!attachmentTask.busy); renderAttachments()
+            attachments = draft.getJSONArray("attachments"); origin = draft.getJSONObject("origin"); field.setText(draft.getString("text")); description.setText(draft.optString("description")); ready = true; enabled(!attachmentTask.busy); renderAttachments()
             if (state == null) importIntent(intent)
             if (cameraResultReady) stageCamera() else if (state == null) recoverPendingMedia()
         }.onFailure { status.text = it.message; enabled(false) } }
     }
-    private fun enabled(value: Boolean) { field.isEnabled = value; save.isEnabled = value }
+    private fun enabled(value: Boolean) { field.isEnabled = value; description.isEnabled = value; save.isEnabled = value && canSubmit() }
+    private fun canSubmit() = recorder == null && (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank())
     private fun persist() {
-        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString())
-        io.execute { runCatching { store.edit(text, files, source) }.onFailure { error -> runOnUiThread { status.text = error.message } } }
+        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString()
+        save.isEnabled = canSubmit() && !task.busy && !attachmentTask.busy
+        io.execute { runCatching { store.edit(text, files, source, noteDescription) }.onFailure { error -> runOnUiThread { status.text = error.message } } }
     }
     private fun pick(mime: String, request: Int) {
         @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true), request)
@@ -145,7 +172,7 @@ class RecordEditorActivity : MoteActivity() {
                 val bytes = contentResolver.openInputStream(uri)!!.use { input -> readBounded(input) }
                 store.stage(bytes, name, contentResolver.getType(uri) ?: "application/octet-stream")
             }
-            val draft = store.draft(); val files = draft.getJSONArray("attachments"); require(files.length() + added.size <= 10); added.forEach { files.put(it) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin")); files
+            val draft = store.draft(); val files = draft.getJSONArray("attachments"); require(files.length() + added.size <= 10); added.forEach { files.put(it) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description")); files
         }) { result -> enabled(true); result.onSuccess { items -> attachments = items; renderAttachments() }.onFailure { status.text = it.message } }
     }
     private fun readBounded(input: java.io.InputStream): ByteArray {
@@ -153,9 +180,10 @@ class RecordEditorActivity : MoteActivity() {
         while (true) { val n = input.read(buffer); if (n < 0) break; require(out.size() + n <= CentralAttachments.MAX_BYTES); out.write(buffer, 0, n) }; return out.toByteArray()
     }
     private fun stage(bytes: () -> ByteArray, name: String, mime: String, attachmentId: String? = null, onStored: () -> Unit = {}): Boolean {
-        enabled(false); return attachmentTask.start("", {}, { val added = store.stage(bytes(), name, mime, attachmentId); val draft = store.draft(); val files = draft.getJSONArray("attachments"); if ((0 until files.length()).none { files.getJSONObject(it).getString("id") == added.getString("id") }) { require(files.length() < 10); files.put(added) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin")); onStored(); files }) { result -> enabled(true); result.onSuccess { attachments = it; renderAttachments(); recoverPendingMedia() }.onFailure { status.text = it.message; renderAttachments() } }
+        enabled(false); return attachmentTask.start("", {}, { val added = store.stage(bytes(), name, mime, attachmentId); val draft = store.draft(); val files = draft.getJSONArray("attachments"); if ((0 until files.length()).none { files.getJSONObject(it).getString("id") == added.getString("id") }) { require(files.length() < 10); files.put(added) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description")); onStored(); files }) { result -> enabled(true); result.onSuccess { attachments = it; renderAttachments(); recoverPendingMedia() }.onFailure { status.text = it.message; renderAttachments() } }
     }
     private fun renderAttachments() {
+        save.isEnabled = ready && canSubmit() && !task.busy && !attachmentTask.busy
         attachmentsView.removeAllViews()
         if (origin.optString("text").isNotBlank()) {
             val title = MoteI18n.text(if (origin.optString("kind") == "conversation") "对话摘录" else "引用原文")
@@ -192,26 +220,26 @@ class RecordEditorActivity : MoteActivity() {
             val directory = File(filesDir, "record-pending").apply { mkdirs() }; val file = File.createTempFile("record-microphone-", ".m4a", directory); recordingFile = file
             store.holdMedia(mediaDescriptor(file, "audio/mp4"))
             recorder = MediaRecorder().apply { setAudioSource(MediaRecorder.AudioSource.MIC); setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); setAudioEncoder(MediaRecorder.AudioEncoder.AAC); setMaxFileSize(CentralAttachments.MAX_BYTES.toLong()); setOutputFile(file.absolutePath); prepare(); start() }
-            microphone.text = MoteI18n.text("停止录音"); save.isEnabled = false
+            microphone.text = "■\n" + MoteI18n.text("停止录音"); microphone.contentDescription = MoteI18n.text("停止录音"); save.isEnabled = false
         }.onFailure { recorder?.release(); recorder = null; recordingFile?.delete(); recordingFile = null; status.text = it.message }
     }
     private fun stopRecording() {
         val active = recorder ?: return; recorder = null
         val file = recordingFile; recordingFile = null
-        val stopped = runCatching { active.stop() }; active.release(); microphone.text = MoteI18n.text("录音"); save.isEnabled = ready
+        val stopped = runCatching { active.stop() }; active.release(); microphone.text = "♩\n" + MoteI18n.text("录音"); microphone.contentDescription = MoteI18n.text("录音"); save.isEnabled = ready && canSubmit()
         if (file == null) return
         if (stopped.isSuccess && file.length() > 0) stagePending(mediaDescriptor(file, "audio/mp4")) else { file.delete(); io.execute { store.finishMedia(mediaDescriptor(file, "audio/mp4").getString("id")) } }
     }
     private fun importIntent(value: Intent, replaceExisting: Boolean = false) {
         if (value.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE) && !value.hasExtra("recordText")) return
-        val existing = field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank()
+        val existing = field.text.isNotBlank() || description.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank()
         if (existing && !replaceExisting) {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("已有未保存草稿"))
                 .setNegativeButton(MoteI18n.text("继续编辑"), null)
                 .setPositiveButton(MoteI18n.text("替换草稿")) { _, _ -> importIntent(value, true) }.show()
             return
         }
-        ready = false; attachments = JSONArray(); field.setText(""); ready = true
+        ready = false; attachments = JSONArray(); field.setText(""); description.setText(""); ready = true
         val text = value.getStringExtra("recordText") ?: value.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
         if (value.hasExtra("recordText")) {
             origin = JSONObject().put("kind", "conversation").put("text", text.take(100000)); value.getStringExtra("conversationId")?.let { origin.put("conversationId", it.take(200)) }
@@ -228,16 +256,16 @@ class RecordEditorActivity : MoteActivity() {
     private fun submit() {
         if (!ready || task.busy || attachmentTask.busy || recorder != null) return
         if (store.pendingMedia().length() > 0) { status.text = MoteI18n.text("请先处理未保存的附件"); return }
-        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); enabled(false)
+        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString(); enabled(false)
         task.start("", {}, {
             ConnectionGuard.sync {
-                store.edit(text, files, source)
+                store.edit(text, files, source, noteDescription)
                 val settings = Settings(applicationContext); val config = settings.read(); config.validate()
                 val event = store.prepare(settings.dataOrigin()) { draft ->
                     JSONObject().put("id", UUID.randomUUID().toString()).put("deviceId", settings.deviceId).put("deviceName", config.deviceName)
                         .put("platform", "android").put("capturedAt", Instant.now().toString()).put("durationMs", 0)
                         .put("appId", "dev.mote.notes").put("appName", MoteI18n.text("随手记")).put("source", "note").put("ocrText", draft.getString("text"))
-                        .put("metadata", JSONObject().put("version", 1).put("observedAt", Instant.now().toString()).put("noteOrigin", draft.getJSONObject("origin")))
+                        .put("metadata", JSONObject().put("version", 1).put("observedAt", Instant.now().toString()).put("noteOrigin", draft.getJSONObject("origin")).also { metadata -> draft.optString("description").takeIf { it.isNotBlank() }?.let { metadata.put("ownerDescription", it) } })
                         .put("privacy", JSONObject().put("excluded", false).put("redacted", false).put("mode", "none"))
                 }
                 applicationContext.queue().enqueue(event, null, config.maxQueueMiB * 1024L * 1024L)

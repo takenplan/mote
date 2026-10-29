@@ -470,6 +470,10 @@ class CaptureRecordsActivity : MoteActivity() {
                     record.optJSONObject("stateSeries")?.optJSONArray("samples")?.let { samples ->
                         text(content, MoteI18n.text("相同状态合并为 {0} 次观察，最近一次：{1}。统计逐次使用实测时长，观察间隙不计为连续使用。", samples.length(), time(samples.getJSONObject(samples.length() - 1).getString("at"))), MoteTheme.fontSupport.toFloat())
                     }
+                    record.optJSONObject("metadata")?.optString("ownerDescription")?.takeIf { it.isNotBlank() }?.let { description ->
+                        text(content, MoteI18n.text("资料说明"), MoteTheme.fontSupport.toFloat())
+                        text(content, description, MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)
+                    }
                     val media = record.optJSONObject("metadata")?.optJSONObject("media")
                     if (record.optString("source") == "media") {
                         text(content, CapturePreview.mediaLabel(record), MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)

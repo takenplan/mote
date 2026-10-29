@@ -125,4 +125,28 @@ class RecordDraftStoreTest {
         reopened.finishMedia(media.getString("id")); assertEquals(0, reopened.pendingMedia().length())
     }
 
+    @Test fun ownerDescriptionSurvivesRestartSeparatelyAndDoesNotMakeAnEmptyRecordSubmittable() {
+        val directory = folder.newFolder(); val store = RecordDraftStore(directory, cipher)
+        store.edit("", JSONArray(), JSONObject().put("kind", "manual"), "Only background, not a record")
+        assertThrows(IllegalArgumentException::class.java) { store.prepare("", ::event) }
+        store.edit("My comment", JSONArray(), JSONObject().put("kind", "share").put("text", "Original quote"), "The quoted words belong to another author")
+        val reopened = RecordDraftStore(directory, cipher)
+        assertEquals("My comment", reopened.draft().getString("text"))
+        assertEquals("Original quote", reopened.draft().getJSONObject("origin").getString("text"))
+        assertEquals("The quoted words belong to another author", reopened.draft().getString("description"))
+        assertFalse(directory.listFiles()!!.any { String(it.readBytes()).contains("another author") })
+    }
+    @Test fun changingDescriptionCreatesANewPreparedIdentityAndLengthFailureKeepsTheDraft() {
+        val store = RecordDraftStore(folder.newFolder(), cipher)
+        store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "First description")
+        val first = store.prepare("", ::event)
+        store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "Corrected description")
+        val second = store.prepare("", ::event)
+        assertNotEquals(first.getString("id"), second.getString("id"))
+        assertEquals("Record", second.getString("ocrText"))
+        assertThrows(IllegalArgumentException::class.java) { store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "x".repeat(12001)) }
+        assertEquals("Corrected description", store.draft().getString("description"))
+        store.finish(second.getString("id")); assertEquals("", store.draft().getString("description"))
+    }
+
 }
