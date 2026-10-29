@@ -30,12 +30,16 @@ async function fixture(t:TestContext,count=4){
  }
  let planning=0,extraction=0,reviews=0;const seen:QueryInput[]=[];
  const zero=(input:QueryInput,runId:string):QueryResult=>({runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)})});
- const pipeline=new MemoryPipeline({store,memories,executor:engine,concurrency:()=>2,requireAdmission:true,admission:{automaticAllowed:job=>work.authorized(job),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['material'],materialAllowedForMemory:()=>true},models:{configured:()=>true,model:()=> 'synthetic'},phases:{query:async input=>{seen.push(input);extraction++;return zero(input,'generated-extraction');},review:(input,draft)=>reviewMemory(input,draft,async next=>{reviews++;return zero(next,'generated-review');})}});
+ let extractionHook:((input:QueryInput)=>Promise<void>)|undefined;
+ const pipeline=new MemoryPipeline({store,memories,executor:engine,concurrency:()=>2,requireAdmission:true,admission:{automaticAllowed:job=>work.authorized(job),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['material'],materialAllowedForMemory:()=>true},models:{configured:()=>true,model:()=> 'synthetic'},phases:{query:async input=>{seen.push(input);extraction++;if(extractionHook)await extractionHook(input);return zero(input,'generated-extraction');},review:(input,draft)=>reviewMemory(input,draft,async next=>{reviews++;return zero(next,'generated-review');})}});
  let planningHook:((input:QueryInput,catalog:MemoryWorkCandidate[])=>Promise<void>)|undefined;
  let allow:((candidate:MemoryWorkCandidate)=>boolean)=()=>true;
  const adapter=registerMemoryDelegation({runtime,pipeline,work,sourcePipelines,allowCandidate:candidate=>allow(candidate),query:async input=>{planning++;const catalog=(input.taskContext!.memoryWork as {catalog:MemoryWorkCandidate[]}).catalog;if(planningHook)await planningHook(input,catalog);else await input.hostControlChannel!.execute('delegation_submit',{units:[{id:'joint',capabilityId:'memory.package',title:'Inspect selected originals',goal:'Inspect the complete synthetic set',input:{members:catalog.map(candidate=>candidate.key),instruction:'Preserve separate source identities and verify every input'}}]});return {runId:'generated-plan',answer:'The bounded input catalog was delegated.',citations:[],trace:[]};}});
  t.after(async()=>{await engine.close();await adapter.close();await runtime.close();await pipeline.close();await sourcePipelines.close();store.close();rmSync(directory,{recursive:true,force:true});});
- return {store,engine,runtime,sourcePipelines,work,pipeline,adapter,seen,planned:()=>work.drainPlanned(pipeline,true,adapter.plan,64,()=>true,adapter.onCreated,undefined,candidate=>allow(candidate)),counts:()=>({planning,extraction,reviews}),setPlanning(hook:NonNullable<typeof planningHook>){planningHook=hook;},setAllowed(hook:typeof allow){allow=hook;},async finish(){await Promise.all(pipeline.list().filter(job=>['queued','running'].includes(job.status)).map(job=>pipeline.run(job.id)));for(let tick=0;tick<30;tick++){await runtime.tick();await sourcePipelines.drainMemory(pipeline,true);if(runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status)))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Synthetic Memory work did not settle');}};
+ const finishProducts=()=>Promise.all(pipeline.list().filter(job=>['queued','running'].includes(job.status)).map(job=>pipeline.run(job.id)));
+ // Draining admits remaining ordinary jobs asynchronously, including jobs with
+ // no delegation owner. Their actual review/receipt completion is also required.
+ return {store,engine,runtime,sourcePipelines,work,pipeline,adapter,seen,planned:()=>work.drainPlanned(pipeline,true,adapter.plan,64,()=>true,adapter.onCreated,undefined,candidate=>allow(candidate)),counts:()=>({planning,extraction,reviews}),setPlanning(hook:NonNullable<typeof planningHook>){planningHook=hook;},setExtraction(hook:NonNullable<typeof extractionHook>){extractionHook=hook;},setAllowed(hook:typeof allow){allow=hook;},async finish(){await finishProducts();for(let tick=0;tick<30;tick++){await runtime.tick();await sourcePipelines.drainMemory(pipeline,true);await finishProducts();if(runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status)))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Synthetic Memory work did not settle');}};
 }
 
 for(const historicalAuthority of ['stale','revoked'] as const)test(`resumed Memory rejoins its plan behind a full page of ${historicalAuthority} historical status units`,async t=>{
@@ -154,13 +158,26 @@ test('completed Memory plans reuse saved packages and complete independent revie
 
 test('overlapping recovered plans never claim one original twice and remaining originals stay eligible',async t=>{
  const f=await fixture(t,4),catalog=f.work.catalog();
+ let entered!:()=>void,release!:()=>void;const remainingEntered=new Promise<void>(resolve=>entered=resolve),remainingHeld=new Promise<void>(resolve=>release=resolve);
+ f.setExtraction(async input=>{if((input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members.length===1){entered();await remainingHeld;}});
  const a=await f.adapter.plan(catalog.slice(0,3)),b=await f.adapter.plan(catalog.slice(1));assert.equal(a.length,1);assert.equal(b.length,1);
  await f.runtime.tick();await new Promise(resolve=>setTimeout(resolve,100));f.adapter.reconcile();
  assert.equal(f.pipeline.list().length,1,'the overlapping package must not partially claim its remaining original');
- await f.finish();assert.equal(await f.planned(),0);
+ let finished=false;const finishing=f.finish().then(()=>{finished=true;});
+ try{
+  await remainingEntered;
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,3,'the remaining original has not yet acquired its reviewed completion receipt');
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_input_authorizations WHERE job_id IS NOT NULL').get()!.n,4,'all four inputs are claimed exactly once before the last execution completes');
+  for(let tick=0;tick<30&&!f.runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status));tick++){await f.runtime.tick();await new Promise(resolve=>setTimeout(resolve,100));}
+  assert.ok(f.runtime.list().every(owner=>['succeeded','failed','blocked','stale'].includes(owner.status)),'the recovered delegation owners reached their real terminal boundary');
+  await new Promise<void>(resolve=>setImmediate(resolve));assert.equal(finished,false,'terminal recovered plans cannot finish while the remaining ordinary job has no review receipt');
+ }
+ finally{release();await finishing;}
+ assert.equal(await f.planned(),0);
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,4);
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_input_authorizations WHERE job_id IS NOT NULL').get()!.n,4);
  assert.equal(f.pipeline.list().length,2);assert.equal(f.pipeline.list().every(job=>job.status==='completed'),true);
+ assert.deepEqual(f.counts(),{planning:2,extraction:2,reviews:2},'the recovered and remaining packages each execute and review once');
 });
 
 // This corpus runs alongside three other server test files in the workspace suite.
