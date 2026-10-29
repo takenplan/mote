@@ -23,6 +23,11 @@ runtime.app.addHook('onRequest',async(req,reply)=>{
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated version unavailable'});
  if(req.url==='/api/software-update'&&existsSync(join(directory,'version-mismatch')))return reply.send({currentVersion:'0.0.0-generated'});
  if(req.url==='/api/devices/first-data'&&existsSync(join(directory,'first-data-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated receipt read unavailable'});
+ if(req.method==='GET'&&/^\/api\/memories\/[^/?]+(?:\?.*)?$/.test(req.url)&&existsSync(join(directory,'memory-history-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated Memory history unavailable'});
+ if(req.url.startsWith('/api/memories/')&&req.url.endsWith('/correct')&&existsSync(join(directory,'memory-correction-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated correction temporarily unavailable'});
+ if(req.url.startsWith('/api/memories/')&&req.url.endsWith('/correct')&&existsSync(join(directory,'memory-correction-delay')))await new Promise(resolve=>setTimeout(resolve,700));
+ if(req.url.startsWith('/api/memories/')&&req.method==='DELETE'&&existsSync(join(directory,'memory-delete-fault')))return reply.code(403).send({error:'forbidden',message:'Generated Memory delete denied'});
+ if(req.url.startsWith('/api/memories/')&&req.url.endsWith('/text')&&existsSync(join(directory,'memory-export-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated Memory export unavailable'});
  if(req.url.includes('/export')&&existsSync(join(directory,'raw-export-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated raw export unavailable'});
  if(req.url.endsWith('/corrections')&&existsSync(join(directory,'correction-fault')))return reply.code(409).send({error:'conflict',message:'Generated correction conflict'});
  if(req.url.startsWith('/api/captures/')&&req.method==='DELETE'&&existsSync(join(directory,'deny-delete')))return reply.code(403).send({error:'forbidden',message:'Generated original deletion denied'});
