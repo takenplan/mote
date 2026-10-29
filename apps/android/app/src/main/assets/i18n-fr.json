@@ -10067,5 +10067,6 @@
   "报告已归档，可在发现历史中查看。": "Le rapport est archivé dans l’historique des découvertes.",
   "正在回答": "Réponse en cours",
   "运行详情": "Détails de l’exécution",
-  "返回对话": "Revenir à la conversation"
+  "返回对话": "Revenir à la conversation",
+  "未能确认发送完成，请检查同步与活动后重试。": "L’envoi n’a pas pu être confirmé. Vérifiez Synchronisation et activité avant de réessayer."
 }

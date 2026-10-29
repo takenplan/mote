@@ -10068,5 +10068,6 @@ export const english: Readonly<Record<string, string>> = {
   "报告已归档，可在发现历史中查看。": "The report is archived in finding history.",
   "正在回答": "Answering",
   "运行详情": "Run details",
-  "返回对话": "Back to conversation"
+  "返回对话": "Back to conversation",
+  "未能确认发送完成，请检查同步与活动后重试。": "Sending has not been confirmed. Check Sync & activity before retrying."
 };

@@ -10068,5 +10068,6 @@ export const german: Readonly<Record<string, string>> = {
   "报告已归档，可在发现历史中查看。": "Der Bericht ist im Fundverlauf archiviert.",
   "正在回答": "Antwort wird erstellt",
   "运行详情": "Ausführungsdetails",
-  "返回对话": "Zurück zum Gespräch"
+  "返回对话": "Zurück zum Gespräch",
+  "未能确认发送完成，请检查同步与活动后重试。": "Der Versand konnte nicht bestätigt werden. Prüfe „Synchronisierung und Aktivität“, bevor du es erneut versuchst."
 };

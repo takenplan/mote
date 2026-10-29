@@ -1,3 +1,4 @@
+import {canSendFromTray,showTraySendFailure} from './tray-send';
 import {centralMemoryTopics,centralMemoryTopicPage,centralMemoryTopicDetail,centralMemoryTopicEvidence} from './memory-topics';
 import {describeBackupFile} from './queue-backup-identity';
 import {ChromeCaptureBridge} from './chrome-bridge';
@@ -172,7 +173,7 @@ function updateUi(status: Status): void {
     { label: moteText("打开中央仓库"), click: () => showClientPage('central') },
     { label: moteText("设置…"), click: () => showClientPage('settings') },
     { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else showClientPage('capture-start'); } },
-    { label: moteText("立即发送"), enabled: !status.config.syncPaused&&status.sync.state!=='uploading', click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
+    { label: moteText("立即发送"), enabled: canSendFromTray(status), click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>showTraySendFailure(error,options=>dialog.showMessageBox(options))); } },
     { type: 'separator' },
     { label: moteText("退出 Mote（停止采集和上传）"), click: () => app.quit() },
   ]));
