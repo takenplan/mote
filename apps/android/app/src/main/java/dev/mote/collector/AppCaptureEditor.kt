@@ -29,9 +29,13 @@ internal class AppCaptureEditor(
     private val listSurface = LinearLayout(activity).apply { orientation = VERTICAL }
     private val detailSurface = LinearLayout(activity).apply { orientation = VERTICAL; visibility = GONE }
     private val status = label("", NativeFontRole.SUPPORT, NativeColorRole.MUTED)
-    private val rows = ListView(activity).apply { divider = null; tag = "app-capture-list" }
+    private val rows = ListView(activity).apply {
+        NativePresentationStyles.bind(this,"app-list-divider") { (it as ListView).divider = android.graphics.drawable.ColorDrawable(MoteUi.divider) }
+        dividerHeight = activity.moteDp(1); tag = "app-capture-list"
+    }
     private val scopeButtons = linkedMapOf<AppCapturePresentation.Scope, Button>()
-    private val search = MoteUi.field(EditText(activity)).apply { hint = MoteI18n.text("搜索应用名称"); setSingleLine() }
+    private val filters = LinearLayout(activity).apply { orientation = VERTICAL }
+    private val search = MoteUi.field(EditText(activity)).apply { hint = MoteI18n.text("搜索应用"); setSingleLine(); contentDescription = MoteI18n.text("搜索应用") }
     private var shown = emptyList<AppCapturePresentation.App>()
 
     init {
@@ -48,7 +52,7 @@ internal class AppCaptureEditor(
                 scopeButtons[scope] = action
                 line.addView(action, LayoutParams(0, -2, 1f).apply { setMargins(0, dp(4), dp(4), 0) })
             }
-            listSurface.addView(line)
+            filters.addView(line)
         }
         listSurface.addView(status, LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(8) })
         listSurface.addView(rows, LayoutParams(-1, dp(360)))
@@ -64,6 +68,8 @@ internal class AppCaptureEditor(
     }
 
     fun state() = state
+    /** Existing advanced filters remain available in the owning page's disclosure. */
+    fun advancedFilters(): View = filters
     override fun onDetachedFromWindow() { loader.close(); super.onDetachedFromWindow() }
     fun restore(value: State?) {
         if (value == null) return
@@ -92,7 +98,7 @@ internal class AppCaptureEditor(
             }
         }) { result ->
             result.onSuccess { apps = it; ready = true; refresh() }
-                .onFailure { status.text = MoteI18n.text("应用列表读取失败，请重试"); button(listSurface, MoteI18n.text("重试")) { loadApps() } }
+                .onFailure { status.visibility = VISIBLE; status.text = MoteI18n.text("应用列表读取失败，请重试"); button(listSurface, MoteI18n.text("重试")) { loadApps() } }
         }
     }
 
@@ -117,7 +123,7 @@ internal class AppCaptureEditor(
             listSurface.visibility = if (selected == null) VISIBLE else GONE
             detailSurface.visibility = if (selected == null) GONE else VISIBLE
             if (selected != null) catalog(current).firstOrNull { it.id == selected }?.let { renderDetail(current, it) }
-        }.onFailure { status.text = MoteI18n.text("请先修正页面规则 JSON"); listSurface.visibility = VISIBLE; detailSurface.visibility = GONE; detailChanged(false) }
+        }.onFailure { status.visibility = VISIBLE; status.text = MoteI18n.text("请先修正页面规则 JSON"); listSurface.visibility = VISIBLE; detailSurface.visibility = GONE; detailChanged(false) }
     }
 
     private fun refreshList(current: AppCapturePresentation.Snapshot? = snapshot()) {
@@ -125,7 +131,8 @@ internal class AppCaptureEditor(
         runCatching {
             val all = catalog(current)
             shown = AppCapturePresentation.visible(current, all, state.scope, state.query)
-            status.text = if (ready) MoteI18n.text("{0} 个应用 · 点击查看采集项与规则", shown.size) else MoteI18n.text("正在读取已安装应用…")
+            status.text = if (ready && shown.isEmpty()) MoteI18n.text("没有匹配的应用") else if (ready) "" else MoteI18n.text("正在读取已安装应用…")
+            status.visibility = if (status.text.isEmpty()) GONE else VISIBLE
             scopeButtons.forEach { (scope, button) ->
                 val count = AppCapturePresentation.visible(current, all, scope, "").size
                 val name = listOf("全部应用", "单独设置", "字段规则", "需处理")[scope.ordinal]
@@ -141,17 +148,24 @@ internal class AppCaptureEditor(
                     val app = getItem(position)
                     val mode = AppCapturePresentation.mode(current, app.id)
                     return LinearLayout(activity).apply {
-                        orientation = VERTICAL; tag = "app-capture:${app.id}"; setPadding(dp(12), dp(12), dp(12), dp(12))
-                        background = MoteUi.clickable(activity)
+                        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; tag = "app-capture:${app.id}"; setPadding(0, dp(18), 0, dp(18))
+                        background = MoteUi.clickable(activity,NativeColorRole.BACKGROUND,0,false)
                         contentDescription = MoteI18n.text("{0}，{1}，{2}，点击更改", app.label, app.id, modeLabel(mode))
-                        addView(label(app.label, NativeFontRole.ROW))
-                        addView(label(MoteI18n.text("已选：{0} · {1}", modeLabel(mode), if (AppCapturePresentation.configured(current, app.id)) MoteI18n.text("单独设置") else MoteI18n.text("沿用默认")), NativeFontRole.SUPPORT, NativeColorRole.MUTED))
-                        addView(badge(capability(current, app), needsWarning(current, app)))
+                        addView(label(app.label.take(1),NativeFontRole.ACTION,NativeColorRole.MUTED).apply {
+                            gravity = Gravity.CENTER; background = MoteUi.shape(activity,NativeColorRole.SURFACE,4,true)
+                        },LayoutParams(dp(30),dp(32)).apply { marginEnd = dp(12) })
+                        addView(LinearLayout(activity).apply {
+                            orientation = VERTICAL
+                            addView(label(app.label,NativeFontRole.ACTION))
+                            addView(label((if (AppCapturePresentation.configured(current,app.id)) MoteI18n.text("单独设置") else MoteI18n.text("沿用默认")) + " · " + modeLabel(mode),NativeFontRole.META,NativeColorRole.MUTED))
+                            if (needsWarning(current,app)) addView(label(capability(current,app),NativeFontRole.META,NativeColorRole.WARNING))
+                        },LayoutParams(0,-2,1f))
+                        addView(label("›",NativeFontRole.SUPPORT,NativeColorRole.MUTED),LayoutParams(dp(18),-2))
                         setOnClickListener { select(app.id) }
                     }
                 }
             }
-        }.onFailure { status.text = MoteI18n.text("请先修正页面规则 JSON") }
+        }.onFailure { status.visibility = VISIBLE; status.text = MoteI18n.text("请先修正页面规则 JSON") }
     }
 
     private fun renderDetail(current: AppCapturePresentation.Snapshot, app: AppCapturePresentation.App) {

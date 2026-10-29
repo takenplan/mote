@@ -51,8 +51,8 @@ object MoteNavigation {
         page in groups.drop(2).flatMap { it.pages } -> "about".takeUnless { page == it }
         else -> null
     }
-    fun isFirstUse(hasConnection: Boolean, captureEnabled: Boolean, lastCapture: String?, hasRecords: Boolean) =
-        !hasConnection && !captureEnabled && lastCapture == null && !hasRecords
+    fun isFirstUse(hasConnection: Boolean, captureEnabled: Boolean, lastCapture: String?, hasRecords: Boolean, centralConfirmedEmpty: Boolean = false) =
+        (!hasConnection || centralConfirmedEmpty) && !captureEnabled && lastCapture == null && !hasRecords
 }
 
 /** Runtime interruption is actionable even after the service has safely disabled capture. */

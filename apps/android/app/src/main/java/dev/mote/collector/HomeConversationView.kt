@@ -7,7 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** A read of existing conversation summaries; it never submits a question or starts capture. */
-internal class HomeConversationView(private val activity: MoteActivity, private val open: (String) -> Unit) : LinearLayout(activity) {
+internal class HomeConversationView(private val activity: MoteActivity, private val archiveEmpty: (Boolean) -> Unit = {}, private val open: (String) -> Unit) : LinearLayout(activity) {
     private val task = UiTask(activity)
     private var generation = -1L
     private var origin = ""
@@ -29,7 +29,7 @@ internal class HomeConversationView(private val activity: MoteActivity, private 
             clear(); label(MoteI18n.text("对话暂不可读取，请稍后重试。")); return
         }
         if (access.generation != generation || access.server != origin) {
-            epoch++; clear(); nextRead = 0L; generation = access.generation; origin = access.server
+            epoch++; clear(); archiveEmpty(false); nextRead = 0L; generation = access.generation; origin = access.server
         }
         if (access.client == null) {
             message(if (access.server.isBlank()) MoteI18n.text("连接中央后查看对话。") else MoteI18n.text("登录中央后查看对话。"))
@@ -52,12 +52,19 @@ internal class HomeConversationView(private val activity: MoteActivity, private 
                 java.time.Instant.parse(item.getString("updatedAt"))
                 require(item.get("turnCount") is Number && item.getInt("turnCount") >= 0)
             }
-            rows
+            val emptyArchive = rows.length() == 0 && runCatching {
+                val storage = access.client.get("/api/status").getJSONObject("storage")
+                storage.has("captures") && storage.get("captures") is Number && storage.getLong("captures") == 0L &&
+                    access.client.get("/api/library/catalog?limit=1").getJSONArray("items").length() == 0 &&
+                    access.client.get("/api/files?limit=1").getJSONArray("items").length() == 0
+            }.getOrDefault(false)
+            rows to emptyArchive
         }) { outcome ->
             if (closed || !active || stamp != epoch || activity.isDestroyed || activity.isFinishing) return@start
             val current = runCatching { CentralAccess.resolve(activity) }.getOrNull()
             if (current == null || current.generation != generation || current.server != origin || current.client == null) { clear(); nextRead = 0L; return@start }
-            outcome.onSuccess { rows ->
+            outcome.onSuccess { (rows, emptyArchive) ->
+                archiveEmpty(emptyArchive)
                 if (rendered == rows.toString()) return@onSuccess
                 clear(); rendered = rows.toString()
                 if (rows.length() == 0) label(MoteI18n.text("还没有对话。"))
@@ -93,6 +100,7 @@ internal class HomeConversationView(private val activity: MoteActivity, private 
                 }
             }.onFailure {
                 // A failed or revoked read is not an empty history, and must not expose old-target rows.
+                archiveEmpty(false)
                 message(MoteI18n.text("对话暂不可读取，请稍后重试。"))
             }
         }

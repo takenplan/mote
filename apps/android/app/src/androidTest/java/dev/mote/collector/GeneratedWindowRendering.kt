@@ -112,7 +112,9 @@ internal object GeneratedWindowRendering {
                 val isolated = Bitmap.createBitmap(button.width, button.height, Bitmap.Config.ARGB_8888)
                 try {
                     button.draw(Canvas(isolated))
-                    val expectedBorder = MoteUi.controlBorder
+                    val primary = button.isEnabled && button.getTag(R.id.mote_button_role) == MoteUi.ButtonRole.PRIMARY
+                    val expectedBorder = if (primary) MoteTheme.primaryBackground else MoteUi.controlBorder
+                    geometry.put("pixelEdgeContract", if (primary) "enabled primary solid fill" else "outlined control border")
                     val tolerance = 32 // Allows edge anti-aliasing while separating #8090a5 from the white surface.
                     val rows = minOf(button.height, maxOf(4, button.context.moteDp(2) + 1))
                     val center = button.width / 2
@@ -144,7 +146,7 @@ internal object GeneratedWindowRendering {
                                 else errors += "Top border lost at button($x,$y)/app($appX,$appY): child=${rgba(childPixel)}, overlay=${appPixel?.let(::rgba)}, maxRgbDifference=$difference"
                             }
                         }
-                        if (columnBorderSamples == 0) errors += "Isolated button.draw has no control border in top $rows rows at x=$x"
+                        if (columnBorderSamples == 0) errors += "Isolated button.draw has no expected ${if (primary) "primary fill" else "control border"} in top $rows rows at x=$x"
                     }
                     geometry.put("topEdgePixels", JSONObject().put("comparison", "button.draw versus actual overlay.draw in the application window bitmap")
                         .put("expectedControlBorder", rgba(expectedBorder)).put("rgbTolerance", tolerance).put("minimumAlpha", 192)
@@ -173,6 +175,15 @@ internal object GeneratedWindowRendering {
             "home-first-use-draft" -> Triple("home", "first-use", "先记下一件事。")
             "capture-context-local" -> Triple("capture", "local-context", "采集来源说明")
             "ask-turn-details" -> Triple("ask", "turn-details", "本轮详情")
+            "home-connected-empty" -> Triple("home", "connected-empty", "已连接你的 Mote")
+            "connection-entry" -> Triple("connection", "empty", "把记录接到一起")
+            "connection-review" -> Triple("connection", "review", "这是你的 Mote 吗？")
+            "final-settings" -> Triple("settings", "content", "偏好与本机维护")
+            "final-device-options" -> Triple("device-options", "content", "外观与语言")
+            "final-appearance" -> Triple("appearance", "content", "切换只影响界面，已有输入、附件和授权保留。")
+            "final-permissions" -> Triple("permissions", "content", "授权后仍需明确开始。")
+            "final-capture-range" -> Triple("capture", "content", "应用时长、截图与结构化内容分别选择。")
+            "final-observations" -> Triple("capture", "observations", "通知与设备信息")
             "feishu-preview" -> Triple("lark", "content", "实际发现的文档")
             "feishu-archived" -> Triple("lark", "content", "已归档 2 篇文档 · 6 条活动线索 · 0 项待处理 · 0 项失败")
             "home" -> Triple("home", "empty", "还没有内容。选一个动作，留下第一份资料。")

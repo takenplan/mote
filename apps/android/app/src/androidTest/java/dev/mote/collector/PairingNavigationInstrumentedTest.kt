@@ -41,8 +41,20 @@ class PairingNavigationInstrumentedTest {
         if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) }
     }
     private fun editor(activity: Activity, hint: String) = views(activity.window.decorView).filterIsInstance<EditText>().single { it.hint?.toString() == hint }
-    private fun click(activity: Activity, text: String) = views(activity.window.decorView).filterIsInstance<TextView>()
-        .single { it.isShown && it.isClickable && it.text.toString() == (if (text == "设置") "设置" else if (text == "概览") "首页" else text) }.performClick()
+    private fun click(activity: Activity, text: String) {
+        if (text == "设置") {
+            val main = activity as MainActivity
+            repeat(4) {
+                if (views(main.window.decorView).none { it.isShown && it.tag == "home-menu-action" } &&
+                    views(main.window.decorView).none { it.isShown && it.tag == "menu:设置" }) main.onBackPressed()
+            }
+            if (views(main.window.decorView).none { it.isShown && it.tag == "menu:设置" }) main.openGeneratedMenu()
+            views(main.window.decorView).single { it.isShown && it.tag == "menu:设置" }.performClick()
+            return
+        }
+        views(activity.window.decorView).filterIsInstance<TextView>()
+            .single { it.isShown && it.isClickable && it.text.toString() == (if (text == "概览") "首页" else text) }.performClick()
+    }
     private fun menu(activity: Activity, label: String) {
         if (views(activity.window.decorView).none { it.isShown && it.tag == "menu:$label" }) {
             views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == "高级与维护" }.performClick()
@@ -113,7 +125,7 @@ class PairingNavigationInstrumentedTest {
                 instrumentation.removeMonitor(monitor)
                 waitUntil {
                     var ready = false
-                    instrumentation.runOnMainSync { ready = views(connection.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "确认连接此节点" } }
+                    instrumentation.runOnMainSync { ready = views(connection.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "核对连接" } }
                     ready
                 }
                 val invitation = JSONObject().put("format", "mote.connection").put("version", 1).put("serverUrl", node)
@@ -121,7 +133,7 @@ class PairingNavigationInstrumentedTest {
                 // Use the real scanner child, recreate its parent, then let Android deliver the result.
                 instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.CAMERA)
                 val scanMonitor = instrumentation.addMonitor(ConnectionScanActivity::class.java.name, null, false)
-                instrumentation.runOnMainSync { click(connection, "扫描连接二维码") }
+                instrumentation.runOnMainSync { click(connection, "扫描二维码") }
                 val scanner = instrumentation.waitForMonitorWithTimeout(scanMonitor, 10_000) as? ConnectionScanActivity ?: error("Scan page did not open")
                 instrumentation.removeMonitor(scanMonitor)
                 val rebuiltMonitor = instrumentation.addMonitor(ConnectionActivity::class.java.name, null, false)
@@ -136,16 +148,7 @@ class PairingNavigationInstrumentedTest {
                 }
                 instrumentation.runOnMainSync {
                     assertEquals("https://old.generated.invalid", settings.read().server)
-                    click(rebuilt, "确认连接此节点")
-                }
-                waitUntil {
-                    var confirmed = false
-                    instrumentation.runOnMainSync {
-                        val confirm = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>()
-                            .singleOrNull { it.isShown && it.isClickable && it.text.toString() == "连接" }
-                        if (confirm != null) { confirm.performClick(); confirmed = true }
-                    }
-                    confirmed
+                    click(rebuilt, "确认连接")
                 }
                 assertTrue(verifying.await(20, TimeUnit.SECONDS))
                 instrumentation.runOnMainSync { rebuilt.finish() }

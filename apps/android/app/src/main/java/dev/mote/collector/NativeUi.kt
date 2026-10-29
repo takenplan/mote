@@ -359,7 +359,7 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = moteDp(66) }
     header.addView(TextView(this).apply {
         text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
-        MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.ACCENT)
+        MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.MUTED)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
         setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }

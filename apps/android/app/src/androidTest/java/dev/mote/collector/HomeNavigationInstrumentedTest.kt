@@ -151,6 +151,34 @@ class HomeNavigationInstrumentedTest {
         }
     }
 
+    @Test fun connectedEmptyArchiveShowsFirstUseOnlyAfterSuccessfulArchiveReads() {
+        val settings = Settings(context)
+        require(context.queue().depth() == 0 && context.localSources().sources().isEmpty())
+        ConversationFixture().use { fixture ->
+            fixture.emptyArchive = true
+            settings.save(settings.read().copy(server = fixture.origin, token = "generated-home-owner-token-1234567890", debugHttp = true, syncMode = "manual", authSignedOut = false), confirmCentralEndpoint = true)
+            try {
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+                    waitFor(scenario,"Confirmed empty connected archive shows its welcome") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString() == "先记下一件事。" } }
+                    scenario.onActivity { activity ->
+                        assertTrue(shown(activity).filterIsInstance<TextView>().any { it.text.toString() == "已连接你的 Mote" })
+                        assertFalse(shown(activity).filterIsInstance<TextView>().any { it.text.toString() == "还没有自己的 Mote？" })
+                        assertFalse(settings.enabled)
+                    }
+                    screenshot(scenario,"home-connected-empty")
+                }
+                fixture.archiveFailure = true
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+                    waitFor(scenario,"History read completed") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString() == "还没有对话。" } }
+                    scenario.onActivity { activity ->
+                        assertFalse("An unavailable inventory must not be declared empty",shown(activity).filterIsInstance<TextView>().any { it.text.toString() == "先记下一件事。" })
+                        assertFalse(settings.enabled)
+                    }
+                }
+            } finally { settings.save(settings.read().copy(server = "", token = "", debugHttp = false), confirmCentralEndpoint = true) }
+        }
+    }
+
     @Test fun turnDetailsAndCitationReturnRetainDraftAndUnavailableHistoryStaysReadable() {
         ConversationFixture().use { fixture ->
             fixture.includeCitations = true
@@ -216,6 +244,8 @@ class HomeNavigationInstrumentedTest {
         @Volatile var includeCitations = false
         @Volatile var referenceAvailable = true
         @Volatile var captureReads = 0
+        @Volatile var emptyArchive = false
+        @Volatile var archiveFailure = false
         private val evidence = "3f4cf6ee-b09b-4fcf-a718-c0944f4b46cc"
         private val executor = Executors.newSingleThreadExecutor()
         init { executor.submit {
@@ -224,12 +254,13 @@ class HomeNavigationInstrumentedTest {
                 val first = input.readLine().orEmpty(); val path = first.split(' ').getOrElse(1) { "" }
                 while (!input.readLine().isNullOrBlank()) Unit
                 val isHistory = path.startsWith("/api/conversations?")
-                val isFailure = failure == "all" || failure == "http" && isHistory
+                val isFailure = failure == "all" || failure == "http" && isHistory || archiveFailure && path == "/api/status"
                 val body = when {
                     isFailure -> JSONObject().put("error", "generated_failure")
                     isHistory && failure == "missing-items" -> JSONObject().put("unrelated", true)
                     isHistory && failure == "invalid-id" -> JSONObject().put("items", JSONArray().put(JSONObject().put("id", "not-a-conversation-id")))
-                    path.startsWith("/api/conversations?") -> JSONObject().put("items", JSONArray().put(JSONObject().put("id", conversation).put("title", "周五评审需要准备什么？").put("updatedAt", "2026-10-28T10:00:00Z").put("turnCount", 1)))
+                    path.startsWith("/api/conversations?") -> JSONObject().put("items", JSONArray().apply { if (!emptyArchive) put(JSONObject().put("id", conversation).put("title", "周五评审需要准备什么？").put("updatedAt", "2026-10-28T10:00:00Z").put("turnCount", 1)) })
+                    path == "/api/status" -> JSONObject().put("storage",JSONObject().put("captures",0))
                     path.contains("/references/") -> JSONObject().put("id",evidence).put("available",referenceAvailable)
                     path.startsWith("/api/capture-browser/") -> { captureReads++; JSONObject().put("id",evidence).put("appName","Generated source").put("ocrText","Generated original content").put("capturedAt","2026-10-28T10:00:00Z").put("metadata",JSONObject()) }
                     path.startsWith("/api/conversations/") -> { openedId = path.substringAfter("/api/conversations/").substringBefore('?'); JSONObject().put("id", conversation).put("scope", JSONObject()).put("turns", JSONArray().put(JSONObject().put("question", "周五评审需要准备什么？").put("result", JSONObject().put("answer", "这是已提交的生成回答。").put("modelSelection",JSONObject().put("model","generated-model")).put("citations", JSONArray().apply { if (includeCitations) put(JSONObject().put("id",evidence).put("appName","Generated source").put("capturedAt","2026-10-28T10:00:00Z")) })))) }

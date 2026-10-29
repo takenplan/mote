@@ -55,6 +55,9 @@ class PrimaryNavigationTest {
         assertFalse(MoteNavigation.isFirstUse(false, false, "2026-10-01T10:00:00Z", false))
         assertFalse(MoteNavigation.isFirstUse(false, true, null, false))
         assertFalse(MoteNavigation.isFirstUse(true, false, null, false))
+        assertTrue(MoteNavigation.isFirstUse(true, false, null, false, centralConfirmedEmpty = true))
+        assertFalse(MoteNavigation.isFirstUse(true, false, null, true, centralConfirmedEmpty = true))
+        assertFalse(MoteNavigation.isFirstUse(true, true, null, false, centralConfirmedEmpty = true))
     }
     @Test fun interruptedCaptureRemainsActionableAfterSafeStopWhileIntentionalPauseIsQuiet() {
         assertTrue(CaptureAttention.show(false, "permission_required", false, true, false))

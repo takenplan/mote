@@ -272,10 +272,12 @@ class RecordEditorActivity : MoteActivity() {
                 store.finish(event.getString("id")); runCatching { UploadWorker.schedule(applicationContext, config) }
                 event.getString("id")
             } ?: error(MoteI18n.text("请稍后重试"))
-        }) { result -> result.onSuccess { setResult(RESULT_OK, Intent().putExtra("recordId", it)); finish() }.onFailure { enabled(true); status.text = it.message } }
+        }) { result -> result.onSuccess { NativeRecordReceipt.recordId = it; setResult(RESULT_OK, Intent().putExtra("recordId", it)); finish() }.onFailure { enabled(true); status.text = it.message } }
     }
     override fun onPause() { if (recorder != null) stopRecording(); player?.release(); player = null; super.onPause() }
 }
+/** This session's receipt points to a real local row; it never claims a Central acknowledgement. */
+internal object NativeRecordReceipt { @Volatile var recordId: String? = null }
 internal fun android.app.Activity.openRecordEditor(text: String? = null, conversationId: String? = null) {
     startActivity(Intent(this, RecordEditorActivity::class.java).apply { text?.let { putExtra("recordText", it) }; conversationId?.let { putExtra("conversationId", it) } })
 }
