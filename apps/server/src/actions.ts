@@ -23,6 +23,7 @@ export class ActionSettingsSaveError extends Error {
   constructor(readonly code:string,readonly statusCode:number,readonly revokedDeviceIds:string[],readonly authorizationRevision:number,readonly revision:number|undefined){super('Action authorization was revoked; refresh the settings before retrying');this.name='ActionSettingsSaveError';}
 }
 const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
+const informationSchema=z.object({version:z.number().int().positive().max(Number.MAX_SAFE_INTEGER),start:calendarDraftSchema.shape.start.unwrap(),end:calendarDraftSchema.shape.end.unwrap(),timeZone:calendarDraftSchema.shape.timeZone.unwrap()}).strict();
 const fingerprint=(r:CaptureRecord)=>sha256(JSON.stringify([r.id,r.ocrText,r.metadata,r.provenance,(r as CaptureRecord & {fileEvidence?:{captureId:string}}).fileEvidence]));
 type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 /** Host-owned durable proposals and execution receipts. The query agent has only a read-only comparison catalog, never mutation tools. */
@@ -177,6 +178,25 @@ export class Actions {
   deliveries(deviceId:string){return (this.store.db.prepare("SELECT json FROM action_proposals WHERE json_extract(json,'$.target.deviceId')=? AND json_extract(json,'$.status') IN ('approved','executing') ORDER BY rowid LIMIT 20").all(deviceId) as {json:string}[]).map(r=>this.validate(JSON.parse(r.json))).filter(a=>!a.managed&&['approved','executing'].includes(a.status));}
   targets():ActionTarget[]{return (this.store.db.prepare('SELECT json FROM action_targets ORDER BY device_id').all() as {json:string}[]).map(r=>JSON.parse(r.json));}
   registerTarget(raw:unknown){const target=z.object({deviceId:z.string().min(1).max(200),deviceName:z.string().min(1).max(200),calendars:z.array(calendarChoiceSchema).max(200)}).strict().parse(raw);const value={...target,updatedAt:new Date().toISOString()};this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(value)));this.store.db.prepare('INSERT INTO action_targets VALUES(?,?) ON CONFLICT(device_id) DO UPDATE SET json=excluded.json').run(value.deviceId,JSON.stringify(value));return value;}
+  /** Complete only missing schedule facts. Execution, semantic uncertainty and
+   * destination authority remain with the existing confirmation/grant paths. */
+  information(id:string,raw:unknown,authorize:(action:ActionProposal)=>void=()=>{}){
+    const input=informationSchema.parse(raw),db=this.store.db;
+    // Preserve get()'s existing durable evidence invalidation before a rejected
+    // edit, then reread under the writer lock for the actual CAS mutation.
+    this.get(id);
+    const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+    try{
+      const a=this.get(id);authorize(a);
+      if(a.status!=='proposed'||a.resolution||a.managed||a.operationId||!['calendar.create','calendar.update'].includes(a.kind)||a.version!==input.version||a.version===Number.MAX_SAFE_INTEGER)throw new StoreError(moteText("建议已更新或已处理，请刷新后重新确认"),409);
+      const fields=['start','end','timeZone'] as const;
+      if(!fields.some(key=>a.event[key]===null)||fields.some(key=>a.event[key]!==null&&a.event[key]!==input[key]))throw new StoreError(moteText("建议已更新或已处理，请刷新后重新确认"),409);
+      const event={...a.event,start:input.start,end:input.end,timeZone:input.timeZone};
+      calendarEventSchema.parse(event);
+      a.event=event;a.version++;
+      const saved=this.save(a);if(own)db.exec('COMMIT');return saved;
+    }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+  }
   confirm(id:string,raw:unknown,managed=false){
     const input=z.object({version:z.number().int().positive(),event:calendarDraftSchema,target:z.object({deviceId:z.string().min(1).max(200),calendarId:z.string().min(1).max(1000)}).strict().optional()}).strict().parse(raw),a=this.get(id);
     // A replay is accepted only for exactly the same reviewed payload and target.
@@ -337,6 +357,7 @@ export function registerActions(app:FastifyInstance,actions:Actions,connections:
   app.post('/api/actions/retry',async()=>{actions.retry();void actions.tick();return {ok:true};});
   app.post('/api/actions/targets',{bodyLimit:65536},async req=>{const raw=req.body as {deviceId:string};const c=credential(req);if(c)connections.assertOwnDevice(c,raw);return actions.registerTarget(raw);});
   app.post('/api/actions/:id/confirm',{bodyLimit:16384},async req=>{access(req);const raw=req.body as {target?:{deviceId?:unknown}};if(raw?.target?.deviceId)own(req,z.string().parse(raw.target.deviceId));return actions.confirm((req.params as {id:string}).id,req.body);});
+  app.post('/api/actions/:id/information',{bodyLimit:16384},async req=>{access(req);return actions.information((req.params as {id:string}).id,req.body,action=>{for(const target of [action.target,action.related?.target])if(target)own(req,target.deviceId);});});
   app.post('/api/actions/:id/dismiss',async req=>{access(req);return actions.dismiss((req.params as {id:string}).id,z.object({version:z.number().int().positive()}).strict().parse(req.body).version);});
   app.post('/api/actions/:id/claim',async req=>{const v=z.object({deviceId:z.string()}).strict().parse(req.body);return actions.claim((req.params as {id:string}).id,own(req,v.deviceId));});
   app.post('/api/actions/:id/receipt',async req=>{const v=z.object({deviceId:z.string(),operationId:z.string(),status:z.enum(['succeeded','uncertain']),externalId:z.string().optional()}).strict().parse(req.body);const {deviceId,...receipt}=v;return actions.receipt((req.params as {id:string}).id,own(req,deviceId),receipt);});

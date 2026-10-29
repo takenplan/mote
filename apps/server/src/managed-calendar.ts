@@ -15,11 +15,11 @@ export class ManagedCalendar {
    if(action.status!=='proposed'||action.managed||action.resolution||action.uncertainty)continue;
    if(['calendar.create','calendar.update'].includes(action.kind)&&(!calendarEventSchema.safeParse(action.event).success||calendarExpired(action.event)))continue;
    if(action.kind!=='calendar.create'&&!action.related)continue;
-   // A native relation can only use its original destination. Unexported
-   // proposals may be resolved locally; this never assigns them a device.
+   // Any fixed proposal or native relation retains its original destination.
+   // Unexported proposals may be resolved locally; this never assigns them a device.
    if(action.related?.externalId&&!action.related.target)continue;
    const records=this.actions.read(action.evidence.map(item=>item.id));if(records.length!==action.evidence.length||!records.length)continue;
-   const matching=grants.filter(grant=>(!action.related?.target||action.related.target.deviceId===grant.target.deviceId&&action.related.target.calendarId===grant.target.calendarId)&&records.every(record=>this.capabilities.inputs.allows(grant,record)));
+   const matching=grants.filter(grant=>[action.target,action.related?.target].every(target=>!target||target.deviceId===grant.target.deviceId&&target.calendarId===grant.target.calendarId)&&records.every(record=>this.capabilities.inputs.allows(grant,record)));
    // Overlapping grants never silently choose a different plugin or destination.
    if(matching.length!==1)continue;
    const grant=matching[0],db=this.store.db;db.exec('BEGIN IMMEDIATE');
