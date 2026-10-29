@@ -19,13 +19,13 @@ const label=(job:ImportJob)=>job.status==='completed'&&job.media?.length?moteTex
 const mediaStates:Record<string,string>={waiting:moteText('等待内容提取'),running:moteText('正在提取内容'),succeeded:moteText('内容提取完成'),failed:moteText('内容提取失败'),blocked:moteText('等待配置或处理条件'),cancelled:moteText('已取消')};
 const memoryStates:Record<string,string>={waiting:moteText('等待记忆整理'),waiting_for_model:moteText('等待配置或处理条件'),paused:moteText('已暂停'),cancelled:moteText('已取消'),running:moteText('记忆整理中'),completed:moteText('记忆整理完成'),failed:moteText('记忆整理失败'),disabled:moteText('未启用自动记忆')};
 
-export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersion=0}:{refreshVersion?:number;api:Api;onOpen:(id:string)=>void;onMemories:()=>void;onSettings:()=>void;onChanged:()=>void}){
+export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersion=0,initialJobId}:{refreshVersion?:number;api:Api;onOpen:(id:string)=>void;onMemories:()=>void;onSettings:()=>void;onChanged:()=>void;initialJobId?:string}){
   const queue=importQueue(api);
   const queueState=useSyncExternalStore(queue.subscribe,queue.getSnapshot,queue.getSnapshot);
   const queueVersion=useRef(queueState.completedVersion);
   const [loadError,setLoadError]=useState('');
   const loadedApi=useRef<Api|null>(null);
-  const [items,setItems]=useState<ImportJob[]>([]),[selected,setSelected]=useState('');
+  const [items,setItems]=useState<ImportJob[]>([]),[selected,setSelected]=useState(initialJobId??'');
   const [creating,setCreating]=useState(false);
   const [listFilter,setListFilter]=useState('all');
   const listPosition=useRef<{scroll:number;opener:HTMLElement|null}|undefined>(undefined);
@@ -42,7 +42,8 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [confirmError,setConfirmError]=useState<{jobId:string;message:string}|null>(null);
   const confirmGeneration=useRef(0);
   const localEntry=queueState.entries.find(item=>item.id===selected);
-  const active=items.find(item=>item.id===selected)||localEntry?.job;
+  const ownedItems=loadedApi.current===api?items:[];
+  const active=ownedItems.find(item=>item.id===selected)||localEntry?.job;
   const busy=Boolean(active&&pending.has(active.id));
   const [actionErrors,setActionErrors]=useState<Record<string,string>>({});
   const pendingJobs=useRef(new Set<string>());
@@ -53,6 +54,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   useEffect(()=>{const controller=new AbortController();scope.current=controller;return()=>controller.abort();},[api]);
   useEffect(()=>{confirmGeneration.current++;setConfirmError(null);},[api,selected]);
   useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(false);setListFilter('all');listPosition.current=undefined;setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
+  useEffect(()=>{if(initialJobId){setSelected(initialJobId);setCreating(false);}},[api,initialJobId]);
   useEffect(()=>{
     if(queueVersion.current===queueState.completedVersion)return;
     queueVersion.current=queueState.completedVersion;
@@ -72,10 +74,10 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
         const merged=[...submitted.filter(job=>!result.items.some(item=>item.id===job.id)),...result.items];
         loadedApi.current=api;setItems(merged);queue.acknowledge(result.items.map(item=>item.id));setLoadError('');setLoading(false);
         if(merged.some(working))timer=setTimeout(()=>void load(),2000);
-      }catch(e){if(!controller.signal.aborted){setLoadError(errorMessage(e));setLoading(false);if(e instanceof ApiError&&[401,403].includes(e.status)){loadedApi.current=null;setItems([]);setSelected('');}else timer=setTimeout(()=>void load(),8000);}}
+      }catch(e){if(!controller.signal.aborted){setLoadError(errorMessage(e));setLoading(false);if(e instanceof ApiError&&([401,403].includes(e.status)||initialJobId&&[404,410].includes(e.status))){loadedApi.current=null;setItems([]);setSelected(initialJobId??'');}else timer=setTimeout(()=>void load(),8000);}}
     }
     void load();return()=>{controller.abort();clearTimeout(timer);};
-  },[api,queue,revision,refreshVersion]);
+  },[api,queue,revision,refreshVersion,initialJobId]);
   function addFiles(next:File[]){
     const total=[...files,...next],failure=validateImportFiles(total);
     if(failure){setError(failure);return;}
@@ -125,9 +127,9 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
         <p className="import-queue-hint">{moteText('可连续添加资料，每份资料独立处理。')}</p>
         {queueState.entries.filter(entry=>entry.state!=='submitted').map(entry=><ImportQueueRow key={entry.id} entry={entry} queue={queue} selected={!creating&&selected===entry.id} onSelect={()=>{rememberList();setSelected(entry.id);setCreating(false);setError('');}} onEdit={editEntry}/>)}
         {loading&&<p className="muted">{moteText("正在读取…")}</p>}
-        {!loading&&!loadError&&!items.length&&!queueState.entries.length&&<p className="muted">{moteText("你的第一份导入会保留在这里，随时查看进度与原件。")}</p>}
-        {items.length>0&&<h3 className="import-history-heading">{moteText('已归档的导入')}</h3>}
-        {items.filter(job=>listFilter==='all'||listFilter==='completed'&&job.status==='completed'||listFilter==='attention'&&['failed','awaiting_confirmation','needs_configuration'].includes(job.status)).map(job=><button key={job.id} className={'workspace-select '+(!creating&&selected===job.id?'active':'')} onClick={()=>{rememberList();setSelected(job.id);setCreating(false);setError('');}}><strong>{job.name}</strong><span className={'status-label '+(['failed','awaiting_confirmation','needs_configuration'].includes(job.status)?'attention':'')}>{working(job)&&<LoaderCircle size={12} className="spin"/>}{label(job)}</span><small>{dateTime(job.createdAt)} · {job.archive.files}{' '}{moteText("个文件")}</small></button>)}
+        {!loading&&!loadError&&!ownedItems.length&&!queueState.entries.length&&<p className="muted">{moteText("你的第一份导入会保留在这里，随时查看进度与原件。")}</p>}
+        {ownedItems.length>0&&<h3 className="import-history-heading">{moteText('已归档的导入')}</h3>}
+        {ownedItems.filter(job=>listFilter==='all'||listFilter==='completed'&&job.status==='completed'||listFilter==='attention'&&['failed','awaiting_confirmation','needs_configuration'].includes(job.status)).map(job=><button key={job.id} className={'workspace-select '+(!creating&&selected===job.id?'active':'')} onClick={()=>{rememberList();setSelected(job.id);setCreating(false);setError('');}}><strong>{job.name}</strong><span className={'status-label '+(['failed','awaiting_confirmation','needs_configuration'].includes(job.status)?'attention':'')}>{working(job)&&<LoaderCircle size={12} className="spin"/>}{label(job)}</span><small>{dateTime(job.createdAt)} · {job.archive.files}{' '}{moteText("个文件")}</small></button>)}
       </aside>
       <div className="workspace-content">
       {creating?<form className="panel import-form" onSubmit={e=>{e.preventDefault();void create();}}>
@@ -172,7 +174,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
         <details className="import-originals"><summary>{moteText("已保留的原件（")}{active.files.length}）</summary>{active.files.map(file=><div key={file.id} className="file-row"><FileText size={15}/><div><strong>{file.relativePath||file.name}</strong><small>{bytes(file.sizeBytes)}</small></div><ArchivedFileButton api={api} id={file.id} name={file.name}/></div>)}</details>
         {active.captureIds.length>0&&<details className="import-originals"><summary>{moteText("已归档的记录（")}{active.captureIds.length}）</summary><div className="evidence-buttons">{active.captureIds.map((id,index)=><button className="button subtle" key={id} onClick={()=>onOpen(formatEvidenceRef('capture',id))}>{moteText("查看记录")}{' '}{index+1}</button>)}</div></details>}
         <div className="import-delete">{deleteConfirm===active.id?<><p>{moteText("删除这次导入及不再使用的资料、原件和依赖记忆？其他导入或证据仍引用的共享资料与原件会保留。此操作无法撤销。")}</p><div className="source-toolbar"><button className="button danger" disabled={busy||intakeWorking(active)} onClick={()=>void remove()}>{moteText("确认删除整次导入")}</button><button className="button subtle" disabled={busy} onClick={()=>setDeleteConfirm('')}>{moteText("取消")}</button></div></>:<button className="text-button danger-text" disabled={busy||intakeWorking(active)} onClick={()=>setDeleteConfirm(active.id)}><Trash2 size={13}/>{moteText("删除这次导入")}</button>}</div>
-      </article>:localEntry?<ImportQueueDetail entry={localEntry} queue={queue} onEdit={editEntry}/>:<div className="panel workspace-empty"><FolderOpen size={30}/><h2>{moteText("选择一次导入，查看它的来处与进度。")}</h2><button className="button" onClick={()=>setCreating(true)}>{moteText("添加资料")}</button></div>}
+      </article>:localEntry?<ImportQueueDetail entry={localEntry} queue={queue} onEdit={editEntry}/>:initialJobId===selected?<div className="panel workspace-empty" role="status"><h2>{moteText(loading?"正在读取…":loadError?"暂不可用":"这次导入当前不可用。")}</h2></div>:<div className="panel workspace-empty"><FolderOpen size={30}/><h2>{moteText("选择一次导入，查看它的来处与进度。")}</h2><button className="button" onClick={()=>setCreating(true)}>{moteText("添加资料")}</button></div>}
       </div>
     </div>
   </section>;
