@@ -406,10 +406,12 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
         }
     }
-    private val topics by lazy { CentralMemoryTopics(screens, {
-        memoryDeletionNotice?.takeIf { it.first === client }?.let { ui.text(it.second) }
-        ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
-        ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
+    private val topics by lazy { CentralMemoryTopics(screens, { target, management ->
+        if (management) ui.button(MoteI18n.text("记忆设置"), parent = target) { CentralAdmin(screens).memorySettings() }
+        else {
+            memoryDeletionNotice?.takeIf { it.first === client }?.let { ui.text(it.second, parent = target) }
+            ui.button(MoteI18n.text("手动提取记忆"), parent = target) { CentralAdmin(screens).memoryJobs() }
+        }
     }, ::memoryStatus) { id, back, accept -> memory(id, back, accept) } }
     private fun memories() = topics.show()
     fun saveTopics(out: android.os.Bundle) = topics.save(out)
