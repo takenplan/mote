@@ -9829,5 +9829,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "需要核对": "Se necesita revisión",
   "待设备同步": "Esperando la sincronización del dispositivo",
   "完成 {0}": "Completar {0}",
-  "重新打开 {0}": "Volver a abrir {0}"
+  "重新打开 {0}": "Volver a abrir {0}",
+  "返回原文": "Volver al original"
 };
