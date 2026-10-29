@@ -8864,5 +8864,11 @@ export const french: Readonly<Record<string, string>> = {
   "查看全部 →": "Tout voir →",
   "本机采集与同步 →": "Collecte et synchronisation locales →",
   "对话暂不可读取，请稍后重试。": "Les conversations sont temporairement indisponibles. Réessayez plus tard.",
-  "内容暂不可完整读取，请重试。": "Une partie du contenu est temporairement indisponible. Réessayez."
+  "内容暂不可完整读取，请重试。": "Une partie du contenu est temporairement indisponible. Réessayez.",
+  "显示方式": "Mode d’affichage",
+  "排版结果": "Résultat mis en page",
+  "标准阅读": "Lecture standard",
+  "支持多个文件、文件夹和 ZIP 压缩包。": "Prend en charge plusieurs fichiers, dossiers et archives ZIP.",
+  "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。": "Choisissez des fichiers ou des dossiers sur la page d’importation. Les détails indiquent les modèles manquants, les paramètres de traitement et les confirmations nécessaires.",
+  "一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Sélectionnez jusqu’à 2 000 fichiers à la fois. Pour des collections plus volumineuses, utilisez une archive ZIP ou importez en plusieurs lots."
 };

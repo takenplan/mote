@@ -8863,5 +8863,11 @@
   "查看全部 →": "View all →",
   "本机采集与同步 →": "Local capture & sync →",
   "对话暂不可读取，请稍后重试。": "Conversations are temporarily unavailable. Please try again later.",
-  "内容暂不可完整读取，请重试。": "Some content is temporarily unavailable. Please retry."
+  "内容暂不可完整读取，请重试。": "Some content is temporarily unavailable. Please retry.",
+  "显示方式": "Display style",
+  "排版结果": "Formatted result",
+  "标准阅读": "Standard reading",
+  "支持多个文件、文件夹和 ZIP 压缩包。": "Supports multiple files, folders and ZIP archives.",
+  "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。": "Choose files or folders on the import page. Details will identify missing models, processing settings and required confirmation.",
+  "一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Select up to 2,000 files at a time. For larger collections, use a ZIP archive or import in batches."
 }

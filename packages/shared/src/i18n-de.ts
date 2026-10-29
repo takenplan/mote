@@ -8864,5 +8864,11 @@ export const german: Readonly<Record<string, string>> = {
   "查看全部 →": "Alle anzeigen →",
   "本机采集与同步 →": "Lokale Erfassung und Synchronisierung →",
   "对话暂不可读取，请稍后重试。": "Unterhaltungen sind vorübergehend nicht verfügbar. Bitte versuche es später erneut.",
-  "内容暂不可完整读取，请重试。": "Einige Inhalte sind vorübergehend nicht verfügbar. Bitte versuche es erneut."
+  "内容暂不可完整读取，请重试。": "Einige Inhalte sind vorübergehend nicht verfügbar. Bitte versuche es erneut.",
+  "显示方式": "Anzeigeformat",
+  "排版结果": "Formatiertes Ergebnis",
+  "标准阅读": "Standardansicht",
+  "支持多个文件、文件夹和 ZIP 压缩包。": "Unterstützt mehrere Dateien, Ordner und ZIP-Archive.",
+  "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。": "Wählen Sie auf der Importseite Dateien oder Ordner aus. In den Details werden fehlende Modelle, Verarbeitungseinstellungen und erforderliche Bestätigungen angezeigt.",
+  "一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Wählen Sie bis zu 2.000 Dateien gleichzeitig aus. Verwenden Sie für größere Sammlungen ein ZIP-Archiv oder importieren Sie sie in mehreren Chargen."
 };

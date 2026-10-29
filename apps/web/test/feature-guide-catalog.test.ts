@@ -26,7 +26,9 @@ const authoredText=[
 
 test('the guide contains every reviewed group and capability ID exactly once',()=>{
   assert.deepEqual(groups.map(group=>group.id).sort(),ids('G',16));
-  assert.deepEqual(units.map(unit=>unit.id).sort(),[...ids('A',36),...ids('C',42)]);
+  assert.deepEqual(units.map(unit=>unit.id).sort(),[...ids('A',36).filter(id=>id!=='A01'),...ids('C',42)]);
+  assert.equal(units.length,77,'the final guide retires only server-directory import');
+  assert.ok(!authoredText.some(value=>/服务器目录|从中央机器的目录导入/.test(value)));
   assert.equal(new Set(guideSections.map(section=>section.id)).size,guideSections.length);
   for(const group of groups){
     assert.ok(group.units.length>0,group.id);
