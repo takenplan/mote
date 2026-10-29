@@ -100,7 +100,8 @@ class FinalCalendarJourneyInstrumentedTest {
         }
         val previous = settings.read()
         require(CalendarActions(context).permissions()) { "Explicitly grant calendar permission to this generated Dev package before prepare" }
-        require(CalendarActions(context).calendars().length() == 0) { "A dedicated empty generated CalendarProvider is required; never publish unrelated calendars" }
+        requireNotNull(context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf("_id"), null, null, null)).use { require(it.count == 0) { "A dedicated empty generated CalendarProvider is required; never publish unrelated calendars" } }
+        require(CalendarActions(context).calendars().length() == 0)
         val record = JSONObject().put("schema", 1).put("sessionId", config.getString("sessionId")).put("origin", config.getString("origin")).put("deviceId", settings.deviceId)
             .put("account", "generated-final-calendar-" + UUID.randomUUID()).put("priorConfiguration", ConfigurationArchive.encode(previous, true))
             .put("priorAuthSignedOut", previous.authSignedOut).put("priorAuthExpiresAt", previous.authExpiresAt).put("priorAuthProcess", previous.authProcess)
