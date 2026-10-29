@@ -39,9 +39,12 @@ class SourcesActivity : MoteActivity() {
         val content = moteDetailPage(title = MoteI18n.text(if (detailSourceId == null) "采集与同步" else "来源详情"))
         operationStatus = SecondaryUi.text(content, "", muted = true).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
         if (detailSourceId == null) {
-            val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }.also(content::addView)
+            val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; isBaselineAligned = false }.also(content::addView)
             heading.addView(TextView(this).apply { text = MoteI18n.text("这台手机的来源"); MoteUi.type(this, NativeFontRole.SECTION, medium = true) }, LinearLayout.LayoutParams(0, -2, 1f))
-            SecondaryUi.action(heading, MoteI18n.text("＋ 添加")) { chooseSource() }.tag = "sources-add"
+            SecondaryUi.action(heading, MoteI18n.text("＋ 添加")) { chooseSource() }.apply {
+                tag = "sources-add"
+                (layoutParams as LinearLayout.LayoutParams).apply { topMargin = 0; marginEnd = 0 }
+            }
         }
         list = SecondaryUi.column(content)
         if (detailSourceId == null) {
@@ -193,7 +196,8 @@ class SourcesActivity : MoteActivity() {
         }
         SecondaryUi.row(list, MoteI18n.text("查看待上传队列")) { startActivity(Intent(this, SyncQueueActivity::class.java).putExtra("sourceId", source.id)) }
         SecondaryUi.row(list, MoteI18n.text("中央资料库")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "archive")) }
-        SecondaryUi.action(list, MoteI18n.text("移除连接")) { confirmRemove(source) }.tag = "source-remove"
+        val connection = SecondaryUi.disclosure(list, MoteI18n.text("连接管理"), "source-connection")
+        SecondaryUi.action(connection, MoteI18n.text("移除连接")) { confirmRemove(source) }.tag = "source-remove"
     }
     private fun resolveCalendarContext(source: LocalSource) {
         if (task.busy) return

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "连接管理": "Connection management",
   "检查结果": "Check result",
   "先留下，再慢慢想。": "Save it now, reflect later.",
   "查看 Central 的接收结果": "View Central receipt",

@@ -9613,5 +9613,6 @@
   "重新编辑问题": "Volver a editar la pregunta",
   "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurar la pregunta fallida reemplazará tu borrador actual. ¿Continuar?",
   "返回当前提问": "Volver a la pregunta actual",
-  "查看 Central 的接收结果": "Ver la recepción en Central"
+  "查看 Central 的接收结果": "Ver la recepción en Central",
+  "连接管理": "Gestión de conexiones"
 }

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "连接管理": "接続管理",
   "检查结果": "結果を確認",
   "先留下，再慢慢想。": "まず残して、ゆっくり考えましょう。",
   "查看 Central 的接收结果": "Central の受信結果を確認",

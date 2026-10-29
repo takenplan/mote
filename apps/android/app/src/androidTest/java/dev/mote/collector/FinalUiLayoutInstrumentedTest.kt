@@ -99,6 +99,25 @@ class FinalUiLayoutInstrumentedTest {
             scenario.onActivity { a -> assertEquals(View.VISIBLE,views(a.window.decorView).single { it.tag == "library-filters:content" }.visibility); assertFalse(Settings(context).enabled) }
         }
     }
+    @Test fun sourceAddActionKeepsItsWholeBorderAcrossLanguageAndAppearance() {
+        for (language in listOf("zh-CN","en","de")) for (appearance in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+            MoteI18n.select(context,language); MoteAppearance.select(context,appearance)
+            ActivityScenario.launch(SourcesActivity::class.java).use { scenario ->
+                until("source header ready") { var ready=false; scenario.onActivity { a -> ready=views(a.window.decorView).any { it.tag=="sources-add" && it.isShown } }; ready }
+                frames(scenario)
+                scenario.onActivity { a ->
+                    val button=views(a.window.decorView).filterIsInstance<Button>().single { it.tag=="sources-add" }
+                    val bounds=Rect(); assertTrue(button.getGlobalVisibleRect(bounds))
+                    assertEquals("Source add width $language/$appearance",button.width,bounds.width())
+                    assertEquals("Source add border $language/$appearance",button.height,bounds.height())
+                    assertEquals(0,button.layout.getEllipsisCount(button.layout.lineCount-1))
+                    val root=a.window.decorView; val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+                    try { root.draw(android.graphics.Canvas(bitmap)); File(context.filesDir,"ui-final-layout").apply { mkdirs() }.resolve("sources-$language-${appearance.name.lowercase()}.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) } } finally { bitmap.recycle() }
+                }
+            }
+        }
+        MoteI18n.select(context,"zh-CN"); MoteAppearance.select(context,AppearancePreference.LIGHT)
+    }
     @Test fun appearanceSelectionsKeepTheirWholeOutlineInLightAndDark() {
         ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","APPEARANCE")).awaitMainUi().use { scenario ->
             try {

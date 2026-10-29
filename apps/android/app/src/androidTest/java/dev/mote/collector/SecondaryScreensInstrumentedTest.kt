@@ -124,6 +124,8 @@ class SecondaryScreensInstrumentedTest {
             assertFalse(saved.enabled); assertEquals(source.daysBefore, saved.daysBefore); assertEquals(source.daysAfter, saved.daysAfter)
         }
         ActivityScenario.launch<SourcesActivity>(Intent(context, SourcesActivity::class.java).putExtra("detailSourceId", source.id)).use { scenario ->
+            assertFalse(main { visible().any { it.tag == "source-remove" } })
+            clickTag("source-connection")
             clickTag("source-remove")
             clickText(MoteI18n.text("取消"))
             assertTrue(context.localSources().sources().any { it.id == source.id })

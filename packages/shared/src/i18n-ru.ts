@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const russian: Readonly<Record<string, string>> = {
+  "连接管理": "Управление подключением",
   "检查结果": "Проверить результат",
   "先留下，再慢慢想。": "Сохраните сейчас, обдумайте позже.",
   "查看 Central 的接收结果": "Посмотреть результат получения в Central",
