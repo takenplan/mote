@@ -32,14 +32,18 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
   const failure = (error: unknown) => error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText('状态读取失败，请重试。');
   const showFailure=(id:string,error:unknown)=>renderReadableFailure(el(id),moteText('操作未完成，请检查权限与配置后重试'),failure(error));
   const setText = (id: string, s: string) => { el(id).textContent = s; };
+  let readScope='';
+  const scope=()=>JSON.stringify([current?.authorizationGeneration,current?.config.serverUrl,current?.config.deviceId,current?.config.tokenConfigured,current?.config.authSignedOut,current?.config.authExpiresAt,(el('upload-day') as HTMLInputElement).value,days,offset,source,outcome]);
+  function showReadFacts(){const available=readScope===scope();for(const node of Array.from(el('upload-history-root').querySelectorAll<HTMLElement>('.upload-status,.upload-metrics,.upload-overview-grid,#upload-run-list,.records-pagination,#upload-retention-note')))node.hidden=!available;return available;}
+  showReadFacts();
   async function refresh() {
     if (!active || refreshing) return;
-    refreshing = true; const generation = ++refreshGeneration;
+    refreshing = true; const generation = ++refreshGeneration,requestedScope=scope();if(!showReadFacts())setText('upload-error',moteText('正在读取…'));
     try {
       const day = (el('upload-day') as HTMLInputElement).value;
       const [page, week, rows] = await Promise.all([api.syncHistory({ day, days, offset, source, outcome }), api.syncHistory({ day, days: 7 }), api.syncHistoryPending()]);
-      if (!active || generation !== refreshGeneration) return;
-      pending = rows; render(page, week); setText('upload-error', '');
+      if (!active || generation !== refreshGeneration||requestedScope!==scope()) return;
+      pending = rows;readScope=requestedScope;render(page, week);showReadFacts();setText('upload-error', '');
     } catch (error) { if (generation === refreshGeneration) renderReadableFailure(el('upload-error'),moteText('状态读取失败，请重试。'),failure(error)); }
     finally { if (generation === refreshGeneration) refreshing = false; }
   }
@@ -124,6 +128,6 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
   return {
     show() { active = true; void refresh(); if (!timer) timer = setInterval(() => void refresh(), 5000); },
     hide() { active = false; refreshGeneration++; refreshing = false; if (timer) clearInterval(timer); timer = undefined; closeReceipt(); closeContent(); },
-    update(status: Status) { const changed = current && (current.authorizationGeneration !== status.authorizationGeneration || current.config.authSignedOut !== status.config.authSignedOut || current.config.authExpiresAt !== status.config.authExpiresAt || current.config.serverUrl !== status.config.serverUrl || current.config.deviceId !== status.config.deviceId || current.config.tokenConfigured !== status.config.tokenConfigured); current = status; if (changed) { closeReceipt(); closeContent(); resetFilters(); } },
+    update(status: Status) { const changed = current && (current.authorizationGeneration !== status.authorizationGeneration || current.config.authSignedOut !== status.config.authSignedOut || current.config.authExpiresAt !== status.config.authExpiresAt || current.config.serverUrl !== status.config.serverUrl || current.config.deviceId !== status.config.deviceId || current.config.tokenConfigured !== status.config.tokenConfigured); current = status; if (changed) {readScope='';showReadFacts();closeReceipt();closeContent();resetFilters();} },
   };
 }

@@ -1,0 +1,21 @@
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {JSDOM} from 'jsdom';
+import {readFileSync} from 'node:fs';
+import {createSyncHistoryUi} from '../src/sync-history-ui';
+import type {DesktopApi,Status} from '../src/contracts';
+let dom:JSDOM,api:DesktopApi,ui:ReturnType<typeof createSyncHistoryUi>;
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+const status=(generation=1)=>({authorizationGeneration:generation,config:{serverUrl:'http://127.0.0.1:1',deviceId:'generated-device',tokenConfigured:true},sync:{state:'manual',message:'Generated manual'}} as Status);
+const page=()=>({items:[],total:0,offset:0,received:7,bytes:4096,since:'2026-10-30T00:00:00Z',days:[],sources:[]});
+const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
+beforeEach(()=>{dom=new JSDOM(readFileSync(new URL('../src/index.html',import.meta.url),'utf8'));vi.stubGlobal('document',dom.window.document);for(const id of ['upload-content-dialog','upload-receipt-dialog'])el<HTMLDialogElement>(id).close=()=>{};api={syncHistory:vi.fn(async()=>page()),syncHistoryPending:vi.fn(async()=>[])} as unknown as DesktopApi;ui=createSyncHistoryUi(api,()=>{});ui.update(status());});
+afterEach(()=>{ui.hide();dom.window.close();vi.unstubAllGlobals();});
+it('does not present initial zero placeholders as read facts after a first request failure',async()=>{
+ vi.mocked(api.syncHistory).mockRejectedValue(Error('HTTP503 generated'));ui.show();await flush();expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(true);expect(document.querySelector<HTMLElement>('.upload-status')!.hidden).toBe(true);expect(el('upload-run-list').hidden).toBe(true);expect(el('upload-error').firstChild!.textContent).toBe('状态读取失败，请重试。');expect(el('upload-error').querySelector<HTMLDetailsElement>('details')!.open).toBe(false);
+});
+it('retains a verified same-range page on a refresh failure but withdraws it synchronously on a new range',async()=>{
+ ui.show();await flush();expect(el('upload-received').textContent).toBe('7');expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(false);vi.mocked(api.syncHistory).mockRejectedValue(Error('HTTP503 generated'));el('upload-refresh').click();await flush();expect(el('upload-received').textContent).toBe('7');expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(false);el<HTMLInputElement>('upload-day').value='2000-01-01';el('upload-day').dispatchEvent(new dom.window.Event('change'));expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(true);await flush();expect(el('upload-run-list').hidden).toBe(true);
+});
+it('withdraws an old owner page and rejects a late reply without reviving its facts',async()=>{
+ ui.show();await flush();const releases:((value:ReturnType<typeof page>)=>void)[]=[];vi.mocked(api.syncHistory).mockImplementation(()=>new Promise(resolve=>{releases.push(resolve);}));el('upload-refresh').click();await flush();ui.update(status(2));expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(true);releases[0]({...page(),received:99});releases[1]({...page(),received:99});await flush();expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(true);expect(el('upload-received').textContent).not.toBe('99');releases[2]({...page(),received:3});releases[3]({...page(),received:3});await flush();expect(document.querySelector<HTMLElement>('.upload-metrics')!.hidden).toBe(false);expect(el('upload-received').textContent).toBe('3');
+});
