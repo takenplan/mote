@@ -81,7 +81,7 @@ class StorageActivity : MoteActivity() {
     private fun migrate(choice: QueueStorageChoice) {
         val current = config ?: return
         working = true; content.removeAllViews()
-        migrationLabel = TextView(this).apply { text = MoteI18n.text("正在迁移并验证记录，请保持存储介质连接…"); content.addView(this) }
+        migrationLabel = SecondaryUi.text(content, MoteI18n.text("正在迁移并验证记录，请保持存储介质连接…")).apply { tag="storage-migration-progress"; accessibilityLiveRegion=android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
         content.addView(android.widget.ProgressBar(this))
         RuntimeSettings.apply(this, current, change = { QueueStorage(applicationContext).migrate(choice.id) }) { result ->
             migrationLabel = null; working = false; if (isDestroyed) return@apply
