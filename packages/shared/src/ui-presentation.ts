@@ -8,7 +8,7 @@ export type UiThemePack=UiReference & {tokens:Readonly<Record<string,string>>;sc
 export type UiLayoutProfile=UiReference & {
   primary:readonly UiDestination[];
   initial:UiDestination;
-  navigation:'sidebar'|'top'|'bottom'|'adaptive';
+  navigation:'sidebar'|'top'|'bottom'|'adaptive'|'home';
   detail:'split'|'stack';
 };
 export type UiLayoutPack<T>=UiLayoutProfile & {implementation:T};
@@ -16,7 +16,7 @@ export type UiPresentationSnapshot<T>={theme:UiThemePack;layout:UiLayoutPack<T>;
 export const linearUiTheme:UiThemePack=Object.freeze({id:'mote.linear',version:'1',tokens:Object.freeze({...linearThemeTokens}),schemes:Object.freeze({light:Object.freeze({...linearLightThemeTokens}),dark:Object.freeze({...linearThemeTokens})})});
 export const defaultUiLayout:UiLayoutProfile=Object.freeze({id:'mote.central',version:'1',primary:Object.freeze(['home','library','sources','connections'] as UiDestination[]),initial:'home',navigation:'adaptive',detail:'split'});
 export const desktopUiLayout:UiLayoutProfile=Object.freeze({...defaultUiLayout,id:'mote.desktop',primary:Object.freeze(['home','library','sources','ask'] as UiDestination[])});
-export const androidUiLayout:UiLayoutProfile=Object.freeze({...defaultUiLayout,id:'mote.android',primary:Object.freeze(['home','library','ask','sources'] as UiDestination[])});
+export const androidUiLayout:UiLayoutProfile=Object.freeze({...defaultUiLayout,id:'mote.android',primary:Object.freeze(['home'] as UiDestination[]),navigation:'home',detail:'stack'});
 /** Semantic glyph roles; each client maps them to its own icon set. */
 export type UiDestinationIcon='home'|'library'|'ask'|'sources'|'agent'|'activity';
 /** One owner-facing name and glyph per destination, so every client uses the same words. */
@@ -49,7 +49,8 @@ export function validateUiTheme(pack:UiThemePack):UiThemePack {
 function layout<T>(pack:UiLayoutPack<T>,required:readonly UiDestination[]=pack.primary):UiLayoutPack<T>{
   reference(pack);
   const destinations:UiDestination[]=['home','library','ask','sources','connections','activity'];
-  if(pack.primary.length!==4||required.length!==4||new Set(pack.primary).size!==required.length||!pack.primary.every(id=>destinations.includes(id))||!required.every(id=>pack.primary.includes(id))||!required.includes(pack.initial)||!['sidebar','top','bottom','adaptive'].includes(pack.navigation)||!['split','stack'].includes(pack.detail)||pack.implementation==null)throw Error('Incompatible layout contract');
+  if(required.length<1||pack.primary.length!==required.length||new Set(pack.primary).size!==required.length||!pack.primary.every(id=>destinations.includes(id))||!required.every(id=>pack.primary.includes(id))||!required.includes(pack.initial)||!['sidebar','top','bottom','adaptive','home'].includes(pack.navigation)||!['split','stack'].includes(pack.detail)||pack.implementation==null)throw Error('Incompatible layout contract');
+  if((pack.navigation==='home')!==(pack.primary.length===1)||pack.navigation==='home'&&(pack.initial!=='home'||pack.primary[0]!=='home'||pack.detail!=='stack'))throw Error('Incompatible home layout contract');
   return Object.freeze({...pack,primary:Object.freeze([...pack.primary])});
 }
 

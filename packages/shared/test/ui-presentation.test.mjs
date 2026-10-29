@@ -48,6 +48,20 @@ test('data-only themes and complete core navigation are validated before registr
   assert.equal(host.getSnapshot().theme.tokens.accent,linearUiTheme.tokens.accent);
   assert(Object.isFrozen(host.getSnapshot().theme.tokens));
 });
+test('Android home-only presentation can change providers without restoring retired primary tabs',()=>{
+  const host=new UiPresentationHost({theme:linearUiTheme,layout:{...androidUiLayout,implementation:{name:'phone'}}});
+  assert.deepEqual(host.getSnapshot().layout.primary,['home']);
+  const replacement={...androidUiLayout,id:'fixture.phone',implementation:{name:'generated-phone'}};
+  const remove=host.registerLayout(replacement);host.activate({theme:linearUiTheme,layout:replacement});
+  assert.equal(host.getSnapshot().layout.navigation,'home');assert.equal(host.getSnapshot().layout.detail,'stack');
+  for(const invalid of [
+    {...replacement,id:'fixture.tabs',primary:['home','library','ask','sources'],navigation:'bottom'},
+    {...replacement,id:'fixture.start',initial:'ask'},
+    {...replacement,id:'fixture.split',detail:'split'},
+    {...replacement,id:'fixture.bottom',navigation:'bottom'},
+  ])assert.throws(()=>host.registerLayout(invalid),/layout contract/);
+  remove();assert.equal(host.getSnapshot().layout.id,androidUiLayout.id);
+});
 test('clients preserve shared destination identities and the final platform-specific labels',()=>{
   const repo=new URL('../../../',import.meta.url),read=path=>readFileSync(new URL(path,repo),'utf8');
   const glyphs=Object.values(uiDestinationPresentation).map(item=>item.icon);
