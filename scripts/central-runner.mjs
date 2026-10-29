@@ -2,7 +2,6 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync, statSync, renameSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { startMediaWorkers } from './media-workers.mjs';
 import { readConfigDocument } from '../packages/shared/src/config-file.ts';
 import { logRetentionFromDocument } from '../apps/server/src/log-retention-config.mjs';
 
@@ -52,8 +51,6 @@ function safeWrite(line) {
 }
 if (size(logPath) >= maxBytes) rotate();
 const child = spawn(process.execPath, [entry, marker], { cwd: process.cwd(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
-const workers = startMediaWorkers({ report: event => { safeWrite(JSON.stringify({event}) + '\n'); flush(); } });
-function stopWorkers(){void workers.close();}
 const events = new Set(['server.listening', 'server.stopped', 'server.stop_failed', 'server.start_failed']);
 const categories = new Set(['data_directory_in_use', 'port_in_use', 'permission', 'startup', 'shutdown', 'configuration']);
 const fields = new Set(['MOTE_CONFIG_FILE', 'version', 'revision', 'server', 'storage', 'execution', 'diagnostics', 'models', 'connectors', 'plugins', 'updates', 'media']);
@@ -91,6 +88,6 @@ for (const stream of ['stdout', 'stderr']) {
   child[stream].on('end', () => { if (discarded) safeLine('', stream, discarded); else if (pending) safeLine(pending, stream); flush(); });
 }
 child.on('error', () => { safeWrite('{"event":"process.spawn_failed"}\n'); flush(); process.exitCode = 1; });
-child.on('close', (code, signal) => { stopWorkers();flush(); process.exitCode = process.exitCode || code || (signal ? 1 : 0); });
-process.on('SIGTERM', () => {stopWorkers();child.kill('SIGTERM');});
-process.on('SIGINT', () => {stopWorkers();child.kill('SIGINT');});
+child.on('close', (code, signal) => { flush(); process.exitCode = process.exitCode || code || (signal ? 1 : 0); });
+process.on('SIGTERM', () => {child.kill('SIGTERM');});
+process.on('SIGINT', () => {child.kill('SIGINT');});

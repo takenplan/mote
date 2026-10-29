@@ -84,3 +84,4 @@
 .breadcrumb,.breadcrumb strong,.eyebrow { color:var(--mote-muted); }
 .settings-surface .button { border-color:var(--mote-border); }
 .settings-surface .button.primary { border-color:var(--mote-accent); }
+.media-preparation{padding:22px 0;border-top:1px solid var(--mote-border);margin-top:20px}.media-preparation-row{display:flex;align-items:center;justify-content:space-between;gap:20px}.media-preparation-row p{font-size:13px;color:var(--mote-muted);margin:6px 0 0}.media-preparation>progress{width:min(320px,100%);height:5px;margin:14px 12px 0 0;accent-color:var(--mote-accent)}.media-preparation>p[role=alert]{font-size:13px}.media-preparation-row strong{font-size:14px}

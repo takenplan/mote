@@ -33,6 +33,7 @@ import type {MaintenanceWorker} from './maintenance.js';
 import type {MaterialOrganizerRuntime} from './material-organizers.js';
 import type {MaterialMemoryWork} from './material-memory-work.js';
 import type {MaterialStore} from './materials.js';
+import type {MediaPreparation} from './media-preparation.js';
 import type {MediaAssets} from './media-assets.js';
 import type {MemoryStore} from './memory.js';
 import type {MemoryPipeline} from './memory-pipeline.js';
@@ -103,6 +104,7 @@ export interface FeatureServices {
   materialMemoryWork:MaterialMemoryWork;
   materials:MaterialStore;
   mediaAssets:MediaAssets;
+  mediaPreparation:MediaPreparation;
   memories:MemoryStore;
   memoryPipeline:MemoryPipeline;
   modelSettings:ModelSettingsStore;

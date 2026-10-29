@@ -45,12 +45,12 @@ test('source library and version records remain mounted while the same reads ref
 test('local audio models share one poll, pause while hidden, and never abort slow reads',async t=>{
  const {root,d}=await fixture(t),refresh=deferred(),pendingSettings=deferred();
  const timers=new Map<number,()=>void>();let timerId=0;
- t.mock.method(globalThis,'setTimeout',((callback:()=>void,delay:number)=>{assert.equal(delay,2000);timers.set(++timerId,callback);return timerId;}) as typeof setTimeout);
+ t.mock.method(globalThis,'setTimeout',((callback:()=>void,delay:number)=>{assert.ok([2000,10000].includes(delay));timers.set(++timerId,callback);return timerId;}) as typeof setTimeout);
  t.mock.method(globalThis,'clearTimeout',((id:number)=>timers.delete(id)) as typeof clearTimeout);
  const advance=async()=>act(async()=>{const pending=Array.from(timers.values());timers.clear();pending.forEach(callback=>callback());});
  let ready=false;const mediaReads:AbortSignal[]=[];
- const media=()=>({dialogue:{state:'ready',runtimeReady:ready,bytes:1,totalBytes:1,source:'generated'},'speaker-wespeaker':{state:ready?'ready':'downloading',runtimeReady:ready,bytes:1,totalBytes:2}});
- const api=apiWith((path,init)=>{if(path==='/api/sources')return {items:[]};if(path==='/api/file-processing')return pendingSettings.promise;assert.equal(path,'/api/media-models');mediaReads.push(init!.signal as AbortSignal);return mediaReads.length===2?refresh.promise:media();});
+ const media=()=>({dialogue:{state:ready?'ready':'starting',runtimeReady:ready,model:{state:'ready',bytes:1,totalBytes:1}},'speaker-wespeaker':{state:ready?'ready':'models',runtimeReady:ready,model:{state:ready?'ready':'downloading',bytes:1,totalBytes:2}}});
+ const api=apiWith((path,init)=>{if(path==='/api/sources')return {items:[]};if(path==='/api/file-processing')return pendingSettings.promise;assert.equal(path,'/api/media-preparation');mediaReads.push(init!.signal as AbortSignal);return mediaReads.length===2?refresh.promise:media();});
  await act(async()=>root.render(React.createElement(FileProcessingSettings,{api})));
  assert.equal(timers.size,1,'two updating model states must not create independent timers');
  Object.defineProperty(d,'hidden',{value:true,configurable:true});await advance();assert.equal(mediaReads.length,1,'hidden pages pause polling');
@@ -59,7 +59,7 @@ test('local audio models share one poll, pause while hidden, and never abort slo
  await advance();await advance();assert.equal(mediaReads.length,2,'a read slower than multiple polling intervals must finish before another starts');assert.equal(mediaReads[1].aborted,false);
  await act(async()=>refresh.resolve(media()));assert.equal(timers.size,1,'polling continues while either runtime is preparing');
  ready=true;await advance();
- assert.equal(mediaReads.length,3);assert.equal(timers.size,0,'polling stops when both runtimes are ready');
+ assert.equal(mediaReads.length,3);assert.equal(timers.size,1,'visible readiness checks continue after installation so a stopped worker is not shown as permanently ready');
 });
 
 test('entering model profiles with an existing settings revision reads once and later revisions refresh once',async t=>{

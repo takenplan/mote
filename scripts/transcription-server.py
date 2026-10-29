@@ -16,6 +16,26 @@ from tempfile import TemporaryDirectory
 from mote_execution_facts import ExecutionFacts, execution_status, erase_execution
 
 
+def stop_recognizer(worker):
+    """Reap only this worker's recognizer and its private normalization group."""
+    if worker is None or worker.pid is None:
+        return
+    def stop_group(sig):
+        if hasattr(os, 'killpg'):
+            try:
+                os.killpg(worker.pid, sig)
+                return
+            except ProcessLookupError:
+                pass  # The process may not have reached setsid yet.
+        if worker.is_alive():
+            worker.kill() if sig == signal.SIGKILL else worker.terminate()
+    stop_group(signal.SIGTERM)
+    worker.join(2)
+    # A recognizer can exit before its ffmpeg child. Reap the remaining group.
+    stop_group(signal.SIGKILL)
+    worker.join()
+
+
 def recognize(path, stage, settings, budget, speakers, sender):
     try:
         if hasattr(os, 'setsid'):
@@ -61,6 +81,19 @@ def main():
     mp = multiprocessing.get_context('spawn')
     busy = threading.BoundedSemaphore(1)
     facts = ExecutionFacts(Path(args.model).parent / 'execution-facts', 'asr')
+    stopping = threading.Event()
+    lifecycle = threading.Lock()
+
+    def shutdown_owned(_signum, _frame):
+        stopping.set()
+        with lifecycle:
+            workers = mp.active_children()
+        for worker in workers:
+            stop_recognizer(worker)
+        # In-flight execution facts stay unresolved, rather than faking success.
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, shutdown_owned)
 
     class Handler(BaseHTTPRequestHandler):
         def end_headers(self):
@@ -195,7 +228,10 @@ def main():
                         self.receipt_id = request_id
                         facts.started(request_id)
                     failure_code = 'processing_failed'
-                    worker.start()
+                    with lifecycle:
+                        if stopping.is_set():
+                            raise InterruptedError('Worker is stopping')
+                        worker.start()
                     sender.close()
                     try:
                         if not receiver.poll(timeout):
@@ -225,18 +261,7 @@ def main():
             finally:
                 if worker is not None and worker.pid is not None:
                     worker.join(0.2)
-                    if worker.is_alive():
-                        if hasattr(os, 'killpg'):
-                            try:
-                                os.killpg(worker.pid, signal.SIGTERM)
-                            except ProcessLookupError:
-                                worker.terminate()
-                        else:
-                            worker.terminate()
-                        worker.join(5)
-                        if worker.is_alive():
-                            worker.kill()
-                            worker.join()
+                    stop_recognizer(worker)
                 if receiver is not None:
                     receiver.close()
                 if sender is not None:
