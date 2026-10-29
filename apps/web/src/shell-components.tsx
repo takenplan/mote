@@ -399,7 +399,7 @@ export function EvidenceDialog({
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
-  const readerAlive=useRef(true);
+  const readerAlive=useRef(true),readerPanel=useRef<HTMLElement>(null);
   useEffect(()=>{readerAlive.current=true;return()=>{readerAlive.current=false;};},[]);
   const readerVisit=useRef({api,id});
   if(readerVisit.current.api!==api||readerVisit.current.id!==id)readerVisit.current={api,id};
@@ -417,7 +417,7 @@ export function EvidenceDialog({
   }, [onClose,readerTools]);
   useEffect(() => {
     if(embedded)return;
-    const panel = document.querySelector<HTMLElement>('.evidence-modal');
+    const panel=readerPanel.current;
     return panel?containDialogFocus(panel,document.activeElement as HTMLElement|null):undefined;
   }, [embedded]);
   async function remove() {
@@ -453,6 +453,7 @@ export function EvidenceDialog({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section
+        ref={readerPanel}
         className={embedded?"evidence-modal evidence-reader":"modal evidence-modal evidence-reader"}
         role={embedded?"region":"dialog"}
         aria-modal={embedded?undefined:true}

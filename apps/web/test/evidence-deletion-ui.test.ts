@@ -8,8 +8,8 @@ import type {Api,Capture} from '../src/api.js';
 
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const original:Capture={id,source:'note',platform:'macos',capturedAt:'2026-10-29T01:00:00Z',appName:'Generated note',windowTitle:'Generated original',deviceId:'generated-device',deviceName:'Generated',ocrText:'  Literal generated note\nNo deletion claim without a receipt.  ',durationMs:0,blobHash:null,indexingStatus:'indexed',privacy:{redacted:false,mode:'none'},deletion:{available:true,kind:'capture'}};
-async function fixture(t:any,remove:()=>Promise<unknown>,capture=original){
- const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/library',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
+async function fixture(t:any,remove:()=>Promise<unknown>,capture=original,embeddedBackground=false){
+ const dom=new JSDOM('<!doctype html>'+(embeddedBackground?'<main class="embedded-evidence"><section class="evidence-modal evidence-reader" role="region"><button>Generated embedded original</button></section></main>':'')+'<div id="root"></div>',{url:'http://localhost/#/library',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  dom.window.localStorage.setItem('mote.language','zh-CN');dom.window.HTMLElement.prototype.getClientRects=()=>[{}] as unknown as DOMRectList;
  const root=createRoot(dom.window.document.querySelector('#root')!),writes:string[]=[],events={closed:0,deleted:0};
@@ -18,7 +18,7 @@ async function fixture(t:any,remove:()=>Promise<unknown>,capture=original){
  await render();t.after(async()=>{await act(async()=>root.unmount());dom.window.close();for(const [key,descriptor]of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}});
  const d=dom.window.document;
  async function confirm(){await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.danger-text')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.evidence-footer .danger')!.click());}
- return {d,api,render,writes,events,confirm,unmountReader:async()=>{await act(async()=>root.render(null));}};
+ return {d,api,root,render,writes,events,confirm,unmountReader:async()=>{await act(async()=>root.render(null));}};
 }
 
 test('a virtual original without a unique deletion capability stays readable with no delete control',async t=>{
@@ -48,4 +48,10 @@ for(const outcome of ['success','failure'] as const)test('a late '+outcome+' for
 for(const outcome of ['success','failure'] as const)test('an unmounted reader cannot affect a newly opened reader after a late '+outcome,async t=>{
  let resolve!:(value:unknown)=>void,reject!:(error:Error)=>void;const pending=new Promise((yes,no)=>{resolve=yes;reject=no;}),f=await fixture(t,()=>pending);await f.confirm();await f.unmountReader();await f.render(f.api,other);
  await act(async()=>{if(outcome==='success')resolve({deleted:1});else reject(Error('Generated unmounted reader failure'));await pending.catch(()=>{});});assert.deepEqual(f.events,{closed:0,deleted:0});assert.equal(f.d.querySelector('.deletion-diagnostic'),null);assert.equal(f.d.querySelector('.evidence-text pre')!.textContent,original.ocrText);assert.equal(f.writes.length,1);
+});
+
+test('a modal original over an embedded reader owns its own focus boundary and keeps the background inert',async t=>{
+ const f=await fixture(t,async()=>({deleted:1}),original,true);
+ const foreground=f.d.querySelector<HTMLElement>('.evidence-reader-backdrop')!,background=f.d.querySelector<HTMLElement>('.embedded-evidence')!;
+ assert.equal(foreground.closest('[inert]')===null,true,'the current modal must remain interactive');assert.ok(background.closest('[inert]'),'background embedded reader must be inert');assert.ok(foreground.contains(f.d.activeElement));
 });
