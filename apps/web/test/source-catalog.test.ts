@@ -187,7 +187,7 @@ test('unregistered source destinations render disabled cards with no Today fallb
 test('SourceCatalog and the full Guide render English after a locale switch without changing capability or group identities',async t=>{
   const f=await fixture(t,{capabilities:[capability(activityId),capability(codingId),capability(providerDetailId)],coding:true});
   await f.render();
-  assert.match(f.d.body.textContent!,/新增数据源/);
+  assert.match(f.d.body.textContent!,/添加来源/);
   f.setLocale('en');
   await f.render();
   assert.doesNotMatch(f.d.body.textContent!,/\p{Script=Han}/u);

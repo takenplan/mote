@@ -1,6 +1,7 @@
 import {recordingBindingText,recordingSyncText} from './recording-status';
 import {moteText} from '@mote/shared/i18n';
 import { ArrowRight, FileText, FolderInput, Link2, Mail, Mic, Monitor, Plus } from 'lucide-react';
+import {useEffect} from 'react';
 import type { RecordingStatus } from '@mote/shared';
 import type { Api } from './api';
 import { errorMessage } from './api';
@@ -13,6 +14,7 @@ export function SourceCatalog({ api, onPage }: {
     api: Api;
     onPage: (page: Page) => void;
 }) {
+    useEffect(()=>{if(document.head.querySelector('link[data-mote-source-final]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./source-final.css',import.meta.url).href;link.dataset.moteSourceFinal='true';document.head.append(link);},[]);
     const discovery = useDiscoveryState(api);
     // ConnectorRegistry mounts its status transport globally; it does not publish HTTP route capabilities.
     const recordingTarget={pageId:'recordings',href:'#/connections/recordings'};
@@ -29,17 +31,19 @@ export function SourceCatalog({ api, onPage }: {
         { title: moteText("MCP 资料服务"), body: moteText("从服务列出的可读资源中，选择一次导入到 Mote。"), note: moteText("填写地址后选择资源，不自动调用外部写入工具。"), target: {pageId:'sources',href:'#/connections?setup=mcp'}, icon: Link2 },
         { title: moteText("外部文件 / NAS 引用"), body: moteText("只保存原件位置、标题与时间；正文仍在外部来源。"), note: moteText("想分析正文时，在可访问原件的客户端保存快照。"), target: {pageId:'sources',href:'#/connections?setup=reference'}, icon: Link2 },
     ];
-    return <DiscoveryProvider state={discovery}><div className="discovery-source-catalog"><div className="page-heading split-heading"><div><div className="eyebrow">{moteText("只连接你选择的内容")}</div><h1>{moteText("新增数据源")}</h1><p>{moteText("先选资料从哪里来。每个来源都会说明授权、同步范围和保存方式。")}</p></div><DiscoveryLink target={{pageId:'sources',href:'#/connections'}} className="button subtle" arrow>{moteText("管理已接入来源")}</DiscoveryLink></div>
+    return <DiscoveryProvider state={discovery}><div className="discovery-source-catalog"><div className="page-heading split-heading"><div><div className="eyebrow">{moteText("只连接你选择的内容")}</div><h1>{moteText("添加来源")}</h1><p>{moteText("先选资料从哪里来。每个来源都会说明授权、同步范围和保存方式。")}</p></div><DiscoveryLink target={{pageId:'sources',href:'#/connections'}} className="button subtle" arrow>{moteText("管理已接入来源")}</DiscoveryLink></div>
     <section aria-label={moteText("录音数据源")}><div className="section-heading"><div><h2>{moteText("录音与转写")}</h2><p>{moteText("照常用录音笔；厂商上传并转写后，Mote 归档已有内容。")}</p></div><Mic size={23}/></div>{recordingAvailability.state!=='available' && <p role="status">{discoveryAvailabilityText(recordingAvailability.state)}</p>}{registry.error !== undefined && <p role="alert">{errorMessage(registry.error)}</p>}{registry.loading && !registry.data && <p role="status">{moteText("正在读取录音来源…")}</p>}<div className="discovery-source-grid">{recorders.map(([statusKey,status]) => <RecorderCard key={statusKey} statusKey={statusKey} status={status}/>)}</div></section>
-    <section aria-label={moteText("其他数据源")}><div className="section-heading"><h2>{moteText("设备、文件与在线资料")}</h2><Plus size={22}/></div><div className="discovery-source-grid">{cards.map(card => <DiscoveryLink key={card.title} className="panel discovery-source-card" disabledAs="div" target={card.target}><card.icon size={24}/><h3>{card.title}</h3><p>{card.body}</p><small>{card.note}</small><span className="discovery-card-action">{card.action || moteText("打开设置")}<ArrowRight size={16}/></span></DiscoveryLink>)}</div></section>
+    <section aria-label={moteText("其他数据源")}><div className="section-heading"><h2>{moteText("设备、文件与在线资料")}</h2><Plus size={22}/></div><div className="discovery-source-grid">{cards.map(card => <article key={card.title} className="source-catalog-entry"><DiscoveryLink className="panel discovery-source-card" disabledAs="div" target={card.target}><card.icon size={24}/><h3>{card.title}</h3><p>{card.body}</p><span className="discovery-card-action">{card.action || moteText("打开设置")}<ArrowRight size={16}/></span></DiscoveryLink><details><summary>{moteText('技术详情')}</summary><p>{card.note}</p></details></article>)}</div></section>
     <section className="panel discovery-source-boundary"><h2>{moteText("把 Mote 资料交给其他 Chatbot")}</h2><p>{moteText("这是对外授权。可生成只读 MCP 连接来检索归档；指定来源的写回需另行开启。")}</p><DiscoveryLink target={{pageId:'connections',href:'#/connections/access'}} className="button subtle" arrow>{moteText("管理 Chatbot / MCP 连接")}</DiscoveryLink><DiscoveryLink target={{pageId:'featureGuide',href:'#/guide'}} className="text-button">{moteText("查看所有功能与设置 →")}</DiscoveryLink></section>
   </div></DiscoveryProvider>;
 }
 
 /** recordingManifest owns the provider-suffix ID/status key and its matching detail route. */
 function RecorderCard({statusKey,status}:{statusKey:string;status:RecordingStatus}){
- const content=<><Mic size={24}/><span className="badge muted">{recordingBindingText(status)}</span><h3>{recorderNames[status.provider]?moteText(recorderNames[status.provider]):status.label??status.provider}</h3><p className="recording-sync-status">{recordingSyncText(status)}</p><p>{moteText('选择首次历史范围和持续同步，归档转写并备份原始音频。')}</p><small>{status.provider==='dingtalk'?moteText('中央节点需 DWS CLI 授权；真实账号适配仍待验证。'):status.provider==='feishu'?moteText('中央节点需 Lark CLI 的妙记读取与媒体导出授权。'):moteText('按此来源说明完成中央账号授权。')}</small><span className="discovery-card-action">{moteText('查看接入与同步')}<ArrowRight size={16}/></span></>;
+ const content=<><Mic size={24}/><span className="badge muted">{recordingBindingText(status)}</span><h3>{recorderNames[status.provider]?moteText(recorderNames[status.provider]):status.label??status.provider}</h3><p className="recording-sync-status">{recordingSyncText(status)}</p><span className="discovery-card-action">{moteText('查看接入与同步')}<ArrowRight size={16}/></span></>;
+ const details=<details><summary>{moteText('技术详情')}</summary><p>{moteText('选择首次历史范围和持续同步，归档转写并备份原始音频。')}</p><p>{status.provider==='dingtalk'?moteText('中央节点需 DWS CLI 授权；真实账号适配仍待验证。'):status.provider==='feishu'?moteText('中央节点需 Lark CLI 的妙记读取与媒体导出授权。'):moteText('按此来源说明完成中央账号授权。')}</p></details>;
+
  const identityMatches=/^[a-z][a-z0-9-]{0,63}$/.test(statusKey)&&statusKey===status.provider+'-recordings';
- if(!identityMatches)return <div className="panel discovery-source-card discovery-link-unavailable" aria-disabled="true">{content}<small className="discovery-availability">{discoveryAvailabilityText('unavailable')}</small></div>;
- return <DiscoveryLink className="panel discovery-source-card" disabledAs="div" target={{pageId:'recordings',href:'#/connections/recordings?provider='+encodeURIComponent(status.provider),requires:[{id:'connector:'+statusKey,version:'1',host:'server'}]}}>{content}</DiscoveryLink>;
+ if(!identityMatches)return <article className="source-catalog-entry"><div className="panel discovery-source-card discovery-link-unavailable" aria-disabled="true">{content}<small className="discovery-availability">{discoveryAvailabilityText('unavailable')}</small></div>{details}</article>;
+ return <article className="source-catalog-entry"><DiscoveryLink className="panel discovery-source-card" disabledAs="div" target={{pageId:'recordings',href:'#/connections/recordings?provider='+encodeURIComponent(status.provider),requires:[{id:'connector:'+statusKey,version:'1',host:'server'}]}}>{content}</DiscoveryLink>{details}</article>;
 }

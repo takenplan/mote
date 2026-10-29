@@ -29,6 +29,7 @@ test('restoring recording source intake shows disabled sync and leads to its exp
  const source={id:status.sourceId,name:'Generated recorder',kind:'generated.recordings',enabled:false,status:{state:'idle'}};
  const writes:{path:string;body:unknown}[]=[],api={request:async(path:string,init?:RequestInit)=>{
   if(init?.method){writes.push({path,body:JSON.parse(String(init.body))});assert.equal(path,'/api/sources/'+source.id);source.enabled=true;return source;}
+  if(path.startsWith('/api/source-items?'))return {items:[],nextCursor:null};
   if(path==='/api/sources')return {items:[structuredClone(source)]};
   if(path==='/api/connectors/status')return {'generated-recordings':structuredClone(status)};
   if(path.endsWith('/context'))return {sourceId:source.id,version:0,description:''};
@@ -37,6 +38,7 @@ test('restoring recording source intake shows disabled sync and leads to its exp
  }} as unknown as Api;
  await act(async()=>root.render(React.createElement(Sources,{api,onOpen:()=>{},onImport:()=>{}})));
  assert.equal(dom.window.document.querySelector('.source-configuration p[role=status]')?.textContent,'来源接入已暂停');
+ await act(async()=>dom.window.document.querySelector<HTMLButtonElement>('.source-final-tabs button:last-child')!.click());
  const button=Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='恢复接入');assert.ok(button);
  await act(async()=>button.click());
  assert.match(dom.window.document.querySelector('aside')!.textContent!,/录音同步未启用/);
@@ -61,6 +63,7 @@ for(const [name,change,expected] of [
  let unavailable=false;
  const paths:string[]=[],api={request:async(path:string,init?:RequestInit)=>{
   assert.equal(init?.method,undefined,'viewing or refreshing state must not check credentials, connect or sync');paths.push(path);
+  if(path.startsWith('/api/source-items?'))return {items:[],nextCursor:null};
   if(path==='/api/sources')return {items:[{id:'generated-recordings',name:'Generated recorder',kind:'generated.recordings',enabled:true,status:{state:'idle'}}]};
   if(path==='/api/connectors/status')return unavailable?{}:{'generated-recordings':structuredClone(status)};
   if(path.endsWith('/context'))return {sourceId:'generated-recordings',version:0,description:''};
