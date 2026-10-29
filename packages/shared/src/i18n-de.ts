@@ -10071,5 +10071,7 @@ export const german: Readonly<Record<string, string>> = {
   "返回对话": "Zurück zum Gespräch",
   "未能确认发送完成，请检查同步与活动后重试。": "Der Versand konnte nicht bestätigt werden. Prüfe „Synchronisierung und Aktivität“, bevor du es erneut versuchst.",
   "查看结果与依据 →": "Ergebnis und Belege ansehen →",
-  "暂时无法确认当前目录": "Der aktuelle Ordner kann nicht bestätigt werden"
+  "暂时无法确认当前目录": "Der aktuelle Ordner kann nicht bestätigt werden",
+  "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Beenden Sie zuerst Ihre aktuelle Eingabe. Die Installation stoppt die lokale Erfassung und Uploads; vorhandene Daten bleiben erhalten.",
+  "继续安装": "Installation fortsetzen"
 };

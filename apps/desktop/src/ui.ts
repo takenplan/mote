@@ -1,3 +1,4 @@
+import {createUpdateInstallUi} from './update-install-ui';
 import {renderStorageLocation} from './storage-location-ui';
 import {appendDiagnostic,renderReadableFailure} from './ui-diagnostic';
 import {sourceSelectionResult} from './source-selection-result';
@@ -873,8 +874,24 @@ void refreshSources().catch(() => { byId('source-feedback').textContent = moteTe
 setInterval(() => { void refreshSources().catch(() => {}); }, 3000);
 
 let updateState: import('./updater').UpdateStatus | undefined;
+const updateInstallUi=createUpdateInstallUi(document,{
+  status:()=>desktopApi.updateStatus(),
+  allowed(){
+    if(settingsDirty){feedback(moteText('请先保存或还原设置修改，再安装更新。'));return false;}
+    if(noteSaving||noteComposing){feedback(moteText('请先完成当前随手记输入，再安装更新。'));return false;}
+    return true;
+  },
+  async install(){await perform(async()=>{
+    lockNote(true);byId('local-sources').inert=true;
+    try{
+      if(draft&&!draft.prepared)draft=await desktopApi.updateNoteDraft({...draft,text:readInput('note-text'),description:readInput('note-description'),mood:draft.mood??'',revision:draft.revision+1});
+      await desktopApi.installUpdate();
+    }finally{lockNote(false);byId('local-sources').inert=false;}
+  });},
+  failed(){feedback(moteText('更新未完成，现有 App 与资料保持不变。请检查网络、磁盘空间后重试。'));},
+});
 function renderUpdate(value: import('./updater').UpdateStatus): void {
-  updateState = value;
+  updateState = value;updateInstallUi.update(value);
   byId('about-client').textContent='Mote for Mac · '+(value.manualDownload?'Dev':'Prod');byId('about-version').textContent=value.currentVersion;byId('about-update-heading').textContent=value.manualDownload?moteText('Dev 构建'):moteText('应用更新');
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
   byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
@@ -902,17 +919,7 @@ byId('update-download').addEventListener('click', () => void perform(async () =>
 byId('update-cancel').addEventListener('click', () => { void desktopApi.cancelUpdate().then(renderUpdate).catch(error => feedback(String(error))); });
 byId('update-reveal').addEventListener('click', () => void perform(() => desktopApi.revealUpdate()));
 byId('update-notes').addEventListener('click', () => void perform(() => desktopApi.releaseNotes()));
-byId('update-install').addEventListener('click', () => {
-  if (settingsDirty) { feedback(moteText("请先保存或还原设置修改，再安装更新。")); return; }
-  if (noteSaving || noteComposing) { feedback(moteText("请先完成当前随手记输入，再安装更新。")); return; }
-  void perform(async () => {
-    lockNote(true); byId('local-sources').inert = true;
-    try {
-      if (draft && !draft.prepared) { draft = await desktopApi.updateNoteDraft({ ...draft, text: readInput('note-text'), description:readInput('note-description'), mood: draft?.mood??'', revision: draft.revision + 1 }); }
-      await desktopApi.installUpdate();
-    } finally { lockNote(false); byId('local-sources').inert = false; }
-  });
-});
+byId('update-install').addEventListener('click',()=>updateInstallUi.open());
 void desktopApi.updateStatus().then(renderUpdate).catch(() => {});
 // One polling request at a time, even if a slow disk or worker delays a reply.
 let statusReading = false;

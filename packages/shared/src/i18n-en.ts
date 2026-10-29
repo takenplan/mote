@@ -10071,5 +10071,7 @@ export const english: Readonly<Record<string, string>> = {
   "返回对话": "Back to conversation",
   "未能确认发送完成，请检查同步与活动后重试。": "Sending has not been confirmed. Check Sync & activity before retrying.",
   "查看结果与依据 →": "View result and evidence →",
-  "暂时无法确认当前目录": "The current folder could not be confirmed"
+  "暂时无法确认当前目录": "The current folder could not be confirmed",
+  "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Finish your current input first. Installation stops local collection and uploads while preserving existing material.",
+  "继续安装": "Continue installation"
 };
