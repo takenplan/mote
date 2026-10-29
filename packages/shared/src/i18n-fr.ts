@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "保存分享": "Enregistrer le contenu partagé",
+  "引用与我的补充分开保存": "L’original cité et mon commentaire sont enregistrés séparément",
+  "未保存的草稿": "Brouillon non enregistré",
+  "离开页面会停止录音，并保留草稿。": "Quitter cette page arrête l’enregistrement et conserve le brouillon.",
   "连接管理": "Gestion des connexions",
   "检查结果": "Vérifier le résultat",
   "先留下，再慢慢想。": "Gardez-le maintenant, réfléchissez ensuite.",

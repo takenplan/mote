@@ -9614,5 +9614,9 @@
   "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurer la question échouée remplacera votre brouillon actuel. Continuer ?",
   "返回当前提问": "Revenir à la question en cours",
   "查看 Central 的接收结果": "Voir la réception dans Central",
-  "连接管理": "Gestion des connexions"
+  "连接管理": "Gestion des connexions",
+  "保存分享": "Enregistrer le contenu partagé",
+  "引用与我的补充分开保存": "L’original cité et mon commentaire sont enregistrés séparément",
+  "未保存的草稿": "Brouillon non enregistré",
+  "离开页面会停止录音，并保留草稿。": "Quitter cette page arrête l’enregistrement et conserve le brouillon."
 }

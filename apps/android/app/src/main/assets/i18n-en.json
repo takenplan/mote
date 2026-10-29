@@ -9614,5 +9614,9 @@
   "将失败问题带回输入框，会替换当前草稿。继续？": "Restoring the failed question will replace your current draft. Continue?",
   "返回当前提问": "Return to current question",
   "查看 Central 的接收结果": "View Central receipt",
-  "连接管理": "Connection management"
+  "连接管理": "Connection management",
+  "保存分享": "Save shared content",
+  "引用与我的补充分开保存": "The quoted original and my comment are saved separately",
+  "未保存的草稿": "Unsaved draft",
+  "离开页面会停止录音，并保留草稿。": "Leaving this page stops recording and keeps the draft."
 }

@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "保存分享": "共有内容を保存",
+  "引用与我的补充分开保存": "引用元と自分の補足は別々に保存されます",
+  "未保存的草稿": "未保存の下書き",
+  "离开页面会停止录音，并保留草稿。": "このページを離れると録音を停止し、下書きを保持します。",
   "连接管理": "接続管理",
   "检查结果": "結果を確認",
   "先留下，再慢慢想。": "まず残して、ゆっくり考えましょう。",

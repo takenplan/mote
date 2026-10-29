@@ -27,11 +27,15 @@ class RecordEditorActivity : MoteActivity() {
     private lateinit var description: EditText
     private lateinit var status: TextView
     private lateinit var attachmentsView: LinearLayout
+    private lateinit var originView: LinearLayout
     private lateinit var save: Button
     private lateinit var microphone: Button
+    private lateinit var draftState: TextView
+    private lateinit var recordingNote: TextView
     private var attachments = JSONArray()
     private var origin = JSONObject().put("kind", "manual")
     private var ready = false
+    private var originExpanded = true
     private val io = QuickNotes.io
     private lateinit var task: UiTask
     private lateinit var attachmentTask: UiTask
@@ -44,6 +48,7 @@ class RecordEditorActivity : MoteActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         cameraPath = state?.getString("cameraPath"); cameraResultReady = state?.getBoolean("cameraResultReady") ?: false
+        originExpanded = state?.getBoolean("originExpanded",true) ?: true
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         task = UiTask(this, io, ownsExecutor = false)
         attachmentTask = UiTask(this, io, ownsExecutor = false)
@@ -53,10 +58,12 @@ class RecordEditorActivity : MoteActivity() {
         val body = moteDetailPage(primary = null, title = MoteI18n.text("随手记"), headerAction = save)
         body.setPadding(moteDp(20), moteDp(25), moteDp(20), moteDp(32))
         val meta = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        meta.addView(TextView(this).apply { text = MoteI18n.text("文字、照片或录音"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED) }, LinearLayout.LayoutParams(0,-2,1f))
+        draftState = TextView(this).apply { text = MoteI18n.text("文字、照片或录音"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); tag = "record-draft-state" }
+        meta.addView(draftState, LinearLayout.LayoutParams(0,-2,1f))
         meta.addView(TextView(this).apply { text = MoteI18n.text("保存到此手机"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED) })
         body.addView(meta)
         val form = body
+        originView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; form.addView(originView)
         field = EditText(this).apply {
             hint = MoteI18n.text("记下此刻的想法…"); contentDescription = MoteI18n.text("正在想什么")
             gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -89,6 +96,7 @@ class RecordEditorActivity : MoteActivity() {
             setOnClickListener { val expanded = explanation.visibility != android.view.View.VISIBLE; explanation.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE; text = (if (expanded) "▾ " else "▸ ") + MoteI18n.text("资料说明（选填）") }
         }, LinearLayout.LayoutParams(-1,-2).apply { topMargin = moteDp(20) })
         form.addView(explanation)
+        recordingNote = TextView(this).apply { text = MoteI18n.text("离开页面会停止录音，并保留草稿。"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); visibility = android.view.View.GONE; tag = "record-leave-notice" }; form.addView(recordingNote)
         status = TextView(this).apply { MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) }; form.addView(status)
         description.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -107,11 +115,16 @@ class RecordEditorActivity : MoteActivity() {
             if (cameraResultReady) stageCamera() else if (state == null) recoverPendingMedia()
         }.onFailure { status.text = it.message; enabled(false) } }
     }
-    private fun enabled(value: Boolean) { field.isEnabled = value; description.isEnabled = value; save.isEnabled = value && canSubmit() }
+    private fun enabled(value: Boolean) { field.isEnabled = value; description.isEnabled = value; save.isEnabled = value && canSubmit(); renderDraftState() }
+    private fun renderDraftState() {
+        draftState.text = MoteI18n.text(if (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank() || description.text.isNotBlank()) "未保存的草稿" else "文字、照片或录音")
+        recordingNote.visibility = if (recorder != null) android.view.View.VISIBLE else android.view.View.GONE
+    }
     private fun canSubmit() = recorder == null && (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank())
     private fun persist() {
         val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString()
         save.isEnabled = canSubmit() && !task.busy && !attachmentTask.busy
+        renderDraftState()
         io.execute { runCatching { store.edit(text, files, source, noteDescription) }.onFailure { error -> runOnUiThread { status.text = error.message } } }
     }
     private fun pick(mime: String, request: Int) {
@@ -128,7 +141,7 @@ class RecordEditorActivity : MoteActivity() {
             }.onFailure { file.delete(); status.text = it.message } }
         }.onFailure { cameraPath?.let { File(it).delete() }; cameraPath = null; status.text = it.message }
     }
-    override fun onSaveInstanceState(out: Bundle) { cameraPath?.let { out.putString("cameraPath", it) }; out.putBoolean("cameraResultReady", cameraResultReady); super.onSaveInstanceState(out) }
+    override fun onSaveInstanceState(out: Bundle) { cameraPath?.let { out.putString("cameraPath", it) }; out.putBoolean("cameraResultReady", cameraResultReady); out.putBoolean("originExpanded",originExpanded); super.onSaveInstanceState(out) }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
         if (results.firstOrNull() != PackageManager.PERMISSION_GRANTED) { status.text = MoteI18n.text("权限未授予"); return }
@@ -184,17 +197,24 @@ class RecordEditorActivity : MoteActivity() {
     }
     private fun renderAttachments() {
         save.isEnabled = ready && canSubmit() && !task.busy && !attachmentTask.busy
+        renderDraftState()
         attachmentsView.removeAllViews()
+        originView.removeAllViews()
+        val hasOrigin = origin.optString("text").isNotBlank()
+        field.hint = MoteI18n.text(if(hasOrigin) "我的补充" else "记下此刻的想法…")
+        (window.decorView.findViewWithTag<android.view.View>("detail-title") as? TextView)?.text = MoteI18n.text(if(hasOrigin) if(origin.optString("kind")=="conversation") "保存为记录" else "保存分享" else "随手记")
         if (origin.optString("text").isNotBlank()) {
             val title = MoteI18n.text(if (origin.optString("kind") == "conversation") "对话摘录" else "引用原文")
-            val quote = TextView(this).apply { tag = "record-origin-fulltext"; text = origin.getString("text"); MoteUi.type(this, NativeFontRole.BODY); setTextIsSelectable(true); visibility = android.view.View.GONE }
-            attachmentsView.addView(TextView(this).apply {
-                tag = "record-origin-toggle"; text = "$title ▸"; contentDescription = title
-                MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.ACCENT)
+            val quote = TextView(this).apply { tag = "record-origin-fulltext"; text = origin.getString("text"); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this,NativeColorRole.INK); setTextIsSelectable(true); visibility = if(originExpanded) android.view.View.VISIBLE else android.view.View.GONE }
+            val separation = TextView(this).apply { text = MoteI18n.text("引用与我的补充分开保存"); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.MUTED); visibility = quote.visibility }
+            originView.addView(TextView(this).apply {
+                tag = "record-origin-toggle"; text = title + if(originExpanded) " ▾" else " ▸"; contentDescription = title
+                MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
                 minHeight = moteDp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
-                setOnClickListener { val expanded = quote.visibility != android.view.View.VISIBLE; quote.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE; text = title + if (expanded) " ▾" else " ▸" }
+                setOnClickListener { originExpanded = !originExpanded; quote.visibility = if (originExpanded) android.view.View.VISIBLE else android.view.View.GONE; separation.visibility = quote.visibility; text = title + if (originExpanded) " ▾" else " ▸" }
             })
-            attachmentsView.addView(quote)
+            originView.addView(quote)
+            originView.addView(separation)
         }
         val pending = store.pendingMedia()
         for (index in 0 until pending.length()) {
@@ -221,12 +241,14 @@ class RecordEditorActivity : MoteActivity() {
             store.holdMedia(mediaDescriptor(file, "audio/mp4"))
             recorder = MediaRecorder().apply { setAudioSource(MediaRecorder.AudioSource.MIC); setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); setAudioEncoder(MediaRecorder.AudioEncoder.AAC); setMaxFileSize(CentralAttachments.MAX_BYTES.toLong()); setOutputFile(file.absolutePath); prepare(); start() }
             microphone.text = "■\n" + MoteI18n.text("停止录音"); microphone.contentDescription = MoteI18n.text("停止录音"); save.isEnabled = false
+            renderDraftState()
         }.onFailure { recorder?.release(); recorder = null; recordingFile?.delete(); recordingFile = null; status.text = it.message }
     }
     private fun stopRecording() {
         val active = recorder ?: return; recorder = null
         val file = recordingFile; recordingFile = null
         val stopped = runCatching { active.stop() }; active.release(); microphone.text = "♩\n" + MoteI18n.text("录音"); microphone.contentDescription = MoteI18n.text("录音"); save.isEnabled = ready && canSubmit()
+        renderDraftState()
         if (file == null) return
         if (stopped.isSuccess && file.length() > 0) stagePending(mediaDescriptor(file, "audio/mp4")) else { file.delete(); io.execute { store.finishMedia(mediaDescriptor(file, "audio/mp4").getString("id")) } }
     }
@@ -239,7 +261,7 @@ class RecordEditorActivity : MoteActivity() {
                 .setPositiveButton(MoteI18n.text("替换草稿")) { _, _ -> importIntent(value, true) }.show()
             return
         }
-        ready = false; attachments = JSONArray(); field.setText(""); description.setText(""); ready = true
+        ready = false; attachments = JSONArray(); originExpanded = true; field.setText(""); description.setText(""); ready = true
         val text = value.getStringExtra("recordText") ?: value.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
         if (value.hasExtra("recordText")) {
             origin = JSONObject().put("kind", "conversation").put("text", text.take(100000)); value.getStringExtra("conversationId")?.let { origin.put("conversationId", it.take(200)) }

@@ -9614,5 +9614,9 @@
   "将失败问题带回输入框，会替换当前草稿。继续？": "Die fehlgeschlagene Frage ersetzt deinen aktuellen Entwurf. Fortfahren?",
   "返回当前提问": "Zur aktuellen Frage zurück",
   "查看 Central 的接收结果": "Empfang in Central ansehen",
-  "连接管理": "Verbindungsverwaltung"
+  "连接管理": "Verbindungsverwaltung",
+  "保存分享": "Geteilten Inhalt speichern",
+  "引用与我的补充分开保存": "Das zitierte Original und mein Kommentar werden getrennt gespeichert",
+  "未保存的草稿": "Ungespeicherter Entwurf",
+  "离开页面会停止录音，并保留草稿。": "Beim Verlassen dieser Seite wird die Aufnahme gestoppt und der Entwurf gespeichert."
 }

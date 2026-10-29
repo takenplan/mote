@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "保存分享": "Guardar contenido compartido",
+  "引用与我的补充分开保存": "El original citado y mi comentario se guardan por separado",
+  "未保存的草稿": "Borrador sin guardar",
+  "离开页面会停止录音，并保留草稿。": "Al salir de esta página se detiene la grabación y se conserva el borrador.",
   "连接管理": "Gestión de conexiones",
   "检查结果": "Comprobar resultado",
   "先留下，再慢慢想。": "Guárdalo ahora y reflexiona después.",

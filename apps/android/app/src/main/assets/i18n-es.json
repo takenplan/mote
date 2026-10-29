@@ -9614,5 +9614,9 @@
   "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurar la pregunta fallida reemplazará tu borrador actual. ¿Continuar?",
   "返回当前提问": "Volver a la pregunta actual",
   "查看 Central 的接收结果": "Ver la recepción en Central",
-  "连接管理": "Gestión de conexiones"
+  "连接管理": "Gestión de conexiones",
+  "保存分享": "Guardar contenido compartido",
+  "引用与我的补充分开保存": "El original citado y mi comentario se guardan por separado",
+  "未保存的草稿": "Borrador sin guardar",
+  "离开页面会停止录音，并保留草稿。": "Al salir de esta página se detiene la grabación y se conserva el borrador."
 }

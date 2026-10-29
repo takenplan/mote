@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "保存分享": "Save shared content",
+  "引用与我的补充分开保存": "The quoted original and my comment are saved separately",
+  "未保存的草稿": "Unsaved draft",
+  "离开页面会停止录音，并保留草稿。": "Leaving this page stops recording and keeps the draft.",
   "连接管理": "Connection management",
   "检查结果": "Check result",
   "先留下，再慢慢想。": "Save it now, reflect later.",

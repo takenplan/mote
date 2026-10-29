@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "保存分享": "Geteilten Inhalt speichern",
+  "引用与我的补充分开保存": "Das zitierte Original und mein Kommentar werden getrennt gespeichert",
+  "未保存的草稿": "Ungespeicherter Entwurf",
+  "离开页面会停止录音，并保留草稿。": "Beim Verlassen dieser Seite wird die Aufnahme gestoppt und der Entwurf gespeichert.",
   "连接管理": "Verbindungsverwaltung",
   "检查结果": "Ergebnis prüfen",
   "先留下，再慢慢想。": "Jetzt festhalten, später in Ruhe nachdenken.",

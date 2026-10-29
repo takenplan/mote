@@ -218,9 +218,11 @@ class RecordAskJourneyInstrumentedTest {
             until("Source label separates the exact conversation excerpt") { main { visibleViews().any { it.tag == "record-origin-toggle" } } }
             main {
                 val quote = views(activity().window.decorView).single { it.tag == "record-origin-fulltext" } as TextView
-                assertFalse("Original excerpt starts collapsed", quote.isShown)
-                assertEquals("Collapsed source remains complete and literal", turn.getString("question") + "\n\n" + raw, quote.text.toString())
+                assertTrue("Original excerpt starts open above my supplement", quote.isShown)
+                assertEquals("Source remains complete and literal", turn.getString("question") + "\n\n" + raw, quote.text.toString())
             }
+            click("Collapse exact conversation excerpt") { it.tag == "record-origin-toggle" }
+            until("Source excerpt collapsed") { main { views(activity().window.decorView).single { it.tag == "record-origin-fulltext" }.visibility == View.GONE } }
             click("Expand exact conversation excerpt") { it.tag == "record-origin-toggle" }
             until("Expanded original is fully available") { main { visibleViews().any { it.tag == "record-origin-fulltext" && (it as TextView).text.toString() == turn.getString("question") + "\n\n" + raw } } }
             click("Collapse exact conversation excerpt") { it.tag == "record-origin-toggle" }
