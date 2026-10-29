@@ -7,7 +7,8 @@ require('../../../scripts/fixture-language.cjs');
  * conversationId?,expectedMarker?,evidenceRef?,noteText?,noteDescription?,
  * deleteAfterSubmit?:false,searchQuery?:string,materialRef?:string,
  * expectedCitationIds?:string[],verifySavedNoteCitation?:boolean,inspectRun?:boolean,
- * existingRunId?:string,savedNoteId?:string}). An existingRunId reuses a genuine
+ * existingRunId?:string,savedNoteId?:string,
+ * unavailableCitation?:{turnId:string,id:string}}). An existingRunId reuses a genuine
  * persisted run for UI repairs and never submits another inference.
  * Optional MOTE_FINAL_UI_OUTPUT selects private output.
  * The Central remains running for other clients; only this browser is cleaned up.
@@ -44,6 +45,11 @@ async function run(){
   await route('#/library?view=materials&selected='+encodeURIComponent(scenario.materialRef));await until(()=>js(`!!document.querySelector('.material-reader-ask')`),'exact versioned Material reader');await snap('whole-material-reader');await js(`document.querySelector('.material-reader-ask').click()`);await until(()=>js(`!!document.querySelector('.ask-original-reference')&&!document.querySelector('.ask-original-reference [role=status]')&&!document.querySelector('.ask-original-reference [role=alert]')`),'verified complete Material reference');
  }else await route('#/ask'+(scenario.conversationId?'?conversation='+encodeURIComponent(scenario.conversationId):''));
  await until(()=>js(`!!document.querySelector('[aria-label="向 Mote 提问"]')`),'Ask composer');if(scenario.conversationId)await until(()=>js(`document.querySelectorAll('.conversation-turn').length>0`),'existing cross-client turns');await snap('ask-before-submit');
+ if(scenario.unavailableCitation){
+  const prior=await request('/api/conversations/'+encodeURIComponent(scenario.conversationId)),retained=prior.turns.find(value=>value.id===scenario.unavailableCitation.turnId),index=retained?.result?.citations.findIndex(value=>value.id===scenario.unavailableCitation.id);assert.ok(retained&&index>=0,'The historical answer retains its exact citation identity');
+  const missing=await fetch(new URL('/api/capture-browser/'+encodeURIComponent(scenario.unavailableCitation.id),base),{headers:{Authorization:'Bearer '+token}});assert.equal(missing.status,404,'The ordinarily deleted original must remain unavailable');
+  await js(`(()=>{const el=document.querySelectorAll('#conversation-turn-${retained.id} .citation')[${index}];if(!el||!el.getClientRects().length)throw Error('Missing visible retained historical citation');el.click();})()`);await until(()=>js(`!!document.querySelector('.evidence-modal [role=alert]')`),'truthful unavailable historical original');await snap('historical-original-unavailable');await js(`document.querySelector('[aria-label="关闭证据详情"]').click()`);await until(()=>js(`!document.querySelector('.evidence-modal')&&!!document.querySelector('#conversation-turn-${retained.id}')`),'same historical turn return');report.checks.push('Ordinary deletion retains the historical answer/citation; its exact original returns404 and the reader discloses unavailability without a replacement');
+ }
  let run;if(scenario.existingRunId){run=await request('/api/query-runs/'+encodeURIComponent(scenario.existingRunId));report.reusedActualRun=true;await route('#/ask?conversation='+encodeURIComponent(run.conversationId));}
  else{await input('[aria-label="向 Mote 提问"]',scenario.question);assert.equal(await js(`document.querySelector('[aria-label="发送问题"]').disabled`),false);await js(`document.querySelector('[aria-label="发送问题"]').click()`);report.submitted=true;await snap('ask-submitted');await until(async()=>{const list=await request('/api/query-runs');run=list.items.find(value=>!previous.has(value.id));return !!run;},'real query admission');}report.runId=run.id;
  await until(async()=>{run=await request('/api/query-runs/'+encodeURIComponent(run.id));return ['completed','failed','cancelled'].includes(run.status);},'real Terra completion',630000);assert.equal(run.status,'completed','Actual Terra run must complete');assert.ok(run.conversationId&&run.turnId);if(scenario.conversationId)assert.equal(run.conversationId,scenario.conversationId,'Continue the same cross-client conversation');
