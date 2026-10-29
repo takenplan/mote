@@ -189,7 +189,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val remote = runCatching {
                 val runs = api.get("/api/query-runs").getJSONArray("items")
                 if (!state.has("runId") && !state.has("pending")) {
-                    val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" && (requestedConversation==null || it.optString("conversationId")==requestedConversation) }
+                    val selectedConversation=requestedConversation ?: state.optString("conversationId").takeIf { it.isNotBlank() }
+                    val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" && (selectedConversation==null || it.optString("conversationId")==selectedConversation) }
                     recent?.let { state.put("runId", it.getString("id")).put("runStatus","running"); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
                 }
                 val history = api.get("/api/conversations?limit=30").also { it.getJSONArray("items") }
