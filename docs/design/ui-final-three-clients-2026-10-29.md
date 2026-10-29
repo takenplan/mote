@@ -598,13 +598,17 @@ Q1 最终源层级 `11c13faf` 的 clean 实际构建记录 17 图、22 次受控
 
 本次所有者再次明确顺序与模型：**全部相关 UI 整合后，再把几端串起来做一轮真实回归；模型调用固定使用本机 Codex Server 的 `gpt-6.1-terra`。** 三端使用同一隔离 Central 和生成资料，已提交对话、原文身份与真实回执连续；各端草稿仍留各端。不接受其他模型、假回答或分散后端替代该轮串联。没有新推理的页面可以复用已记录的真实结果，但仍要实际操作该入口。
 
-本节当前同步点为 `5765dbfd`：第 3/6 节已有的分组运行/仪器/受控故障证据不填入下表冒充最终运行。**全 128 组最终三端真实集中回归尚未开始，仍为 0/128**；根需在候选冻结、同一隔离 Central 与实际 `gpt-6.1-terra` 会话就绪后逐行回填。当前 Mac EventKit `granted`/`localSourceCount=0` 只证明已检查权限而无可用本地来源，按所有者范围停止真实写改取消；对应最小子步骤保持未验，其余本轮生成资料链继续。安全自然高度发现 HTML 的集成、只读宿主引用桥接的补齐目标也不能替代最终页面与返回实测。
+本节当前同步点为 `7d976fa0`：最终同实例真实批次已开始，第3/6节的旧分组运行不填作本批新执行。**完整逐状态验收组仍为0/128；已有本批真实子状态，按下表实际证据记录，不能再称集中回归尚未开始。** 本批run `f1e0f926-a28c-4b2e-b16e-8a3a4b71db58` 使用同一隔离vault、loopback origin和生成资料，真实模型均由本机Codex App Server的原生选择回执确认gpt-6.1-terra/high；代码、构建、APK与调用各保实际版本。当前 Mac EventKit `granted`/`localSourceCount=0` 只证明已检查权限而无可用本地来源，按所有者范围停止真实写改取消；对应最小子步骤保持未验，其余本轮生成资料链继续。安全自然高度发现 HTML 的集成、只读宿主引用桥接的补齐目标也不能替代最终页面与返回实测。
+
+本批启动源为 `3f79a1a3`，编译后的Web/Desktop和10068 Android以各自hash记录。源 `293d547e` 的同实例重启仅重新载入10069/C30静态资源，原origin、vault、token、会话、note与4条实际结果保留；旧内存trace不会重建，已实读的Web运行记录图及截断限制保留。原临时分发fetch wrapper已还原，5次受控分发命中不称真实GitHub；插件本身走真实resolve/install/digest/check/enable且尚未授执行范围。
+
+首个Web实际调用用时16,283ms，Mac同会话新轮16,124ms；H10长资料15,693ms，三次material_read读取当前31块准确版本。Android首次在另一条全局running存在时把指定会话65b误投到6bb，实际call4虽完成但该旅程失败；`293d547e`→`7d976fa0`修显式/已选目标与owner/ownedbody守卫，3种受控风险经Mac独审。修后实际call5用时19,666ms且正确写入65b第3轮；引用按钮多轮重名的仪器selector修复只复用该turn、不重发模型。发现actualcall6用时34,030ms并归档真实HTML，但实际默认排版固定450内滚动，高度/来源桥接仍在返修，不能计视觉通过。
 
 ### 执行批次和证据要求
 
 协调者在三端相关实现集成后固定一个提交与构建批次，使用本轮隔离 Central、专用客户端 profile 和生成资料执行。先跑最短三端共用的真实问答，再扩展剩余旅程；不在每个小 PR 重跑全仓、性能或真实模型。每个旅程保留第 3 节全部页面、弹窗和状态，不得只验正常成功态。第 7 节 77 个 Central ID 和 33 项历史原生能力通过下表关联，均须有至少一个可追溯结果；同一能力映射到多行时，不能用其中一行代替其余不同入口。
 
-真实模型预检：协调者于 **04:32:42 UTC** 通过仓库 `codexModels` → `/opt/homebrew/bin/codex app-server` 的 `initialize`/`model/list` 只读目录确认 8 个模型中包含 `id=gpt-6.1-terra`、显示名 `GPT-6.1 Terra`；reasoning 为 low/medium/high/xhigh/max/ultra，默认 low，目录服务层为 fast。证据为执行工作区忽略目录中的 `.mote/terra-catalog-preflight.json`。本次预检没有创建 thread/turn，没有模型推理，未读出凭据。**目录可用不等于真实调用成功；下表真实模型旅程当前全部未执行。** 不把桌面工具模型名、展示标签或 mock 响应当作实际 provider/model，不静默降级。
+真实模型预检：协调者于 **04:32:42 UTC** 通过仓库 `codexModels` → `/opt/homebrew/bin/codex app-server` 的 `initialize`/`model/list` 只读目录确认 8 个模型中包含 `id=gpt-6.1-terra`、显示名 `GPT-6.1 Terra`；reasoning 为 low/medium/high/xhigh/max/ultra，默认 low，目录服务层为 fast。证据为执行工作区忽略目录中的 `.mote/terra-catalog-preflight.json`。本次预检没有创建 thread/turn，没有模型推理，未读出凭据。**目录可用不等于真实调用成功；预检当时没有推理。本批实际调用与逐旅程结果以下表为准。** 不把桌面工具模型名、展示标签或 mock 响应当作实际 provider/model，不静默降级。
 
 后续原生调用预检使用隔离 Central `6d73f3a0`：真实 QueryRun `05029312-cf1c-4b4b-b77a-99d2a15bd1ba` 已完成，原生 `codex.model.selected` 回执确认 `gpt-6.1-terra`、high reasoning，1 次推理、21,709ms，实际工具为 `material_catalog`、`material_read`。生成笔记的地点、验证码与计划时间已核实；引用打开确切正文，pinned Material 的 origin 与原始笔记关联、正文逐字一致。最初将 citation ID 等同 raw note ID 的测试假设失败，已按现有 Material block 身份合同更正验证，并保留失败说明，不计成模型重跑。根 ignored `.mote/terra-native-transport-preflight-6d73f3a0/actual-query-result.json` 和同目录 `report.json` 保留证据，服务已关闭。这是模型/检索预检，**不填下表作最终三端 UI 通过**。该检查又暴露虚拟引用的删除身份、零回执误报和原文读取缺版本问题；均按现有同一原件、确切版本合同修复，未新增整份 Material 删除或保留政策。
 
@@ -636,19 +640,19 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 
 ### 三端逐旅程执行表
 
-以下为 **2026-10-29 最终集中回归的待执行快照**。旅程与源定位、全部子状态以第 3 节同 ID 行及第 8 节 40 个 turn 索引（39 个有用户发言）为准；能力 ID 来自第 7 节，`Mac Mxx`/`Android Axx` 是历史能力 ID，不能与本轮旅程 ID 混用。“§3”表示该旅程本身的源要求，不代表凭空新增能力。每行输入项在执行时补实际 input/run ID，后续填写本表或在该格链接对应 PR/本轮证据，不再创建另一份状态总表。
+以下为 **2026-10-30 最终集中回归的执行中快照**。旅程与源定位、全部子状态以第 3 节同 ID 行及第 8 节 40 个 turn 索引（39 个有用户发言）为准；能力 ID 来自第 7 节，`Mac Mxx`/`Android Axx` 是历史能力 ID，不能与本轮旅程 ID 混用。“§3”表示该旅程本身的源要求，不代表凭空新增能力。每行输入项在执行时补实际 input/run ID，后续填写本表或在该格链接对应 PR/本轮证据，不再创建另一份状态总表。
 
 | 旅程 / 关联保留能力 | 模型需要 | 计划输入 / 实际 run | 实际 provider / model | 前端结果 | 后端结果 | 视觉结果 | 失败 → 修复重测 | 最终状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | W01 / C03 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W02 / C03、C02 | 否；复用 W09/W33 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W03 / §3 | 否；复用 W09 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W04 / C12、C13 | 否 | F01；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W05 / C14、C19 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| W02 / C03、C02 | 否；复用 W09/W33 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Web真实owner登录/home | 否；复用真实结果 | home及真实最近入口；未遍历全部首次/异常 | 同一Central真实读取 | [web-first-r3](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r3/result.json) home，深色实际viewport/DPR按report | 未将页面入口代替全组状态 | 局部已验，余状态待验 |
+| W03 / §3 | 否；复用 W09 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；global search → 精确原文 → 原搜索 | 否；未新增推理 | 当前保存资料的typed capture/Material路径和查询返回正确 | 原文身份与query保持；实际GET非fixture | [web-first-r3](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r3/result.json) | 原r2模型后的脚本cursor失败另记，不否定已成功搜索子状态 | 局部已验，余状态待验 |
+| W04 / C12、C13 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Web note ce41bad7-cbd1-48f2-9381-7e6e9e4311fe | 否；后续call1读取此原文 | 正文与独立description从真实dialog保存 | 真实notes ACK；说明在attributionContext，非正文/metadata | [web-first-r2](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r2/result.json) | 首次CDP前置挂起0model；恢复后确切保存1条 | 局部已验，余状态待验 |
+| W05 / C14、C19 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；资料入口与31块reader | 否；复用H10 | 默认入口/所选Material可达；筛选/分页所有状态未全验 | 真实Material/read API | [long-material](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/long-material/result.json)及目录77入口 | 不据入口计功能完整 | 局部已验，余状态待验 |
 | W06 / C17 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W07 / A11、C15、C17 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W08 / C16、C17、C18 | 分支：提取时是；阅读/删除否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W09 / C20 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| W07 / A11、C15、C17 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；capture/Material/citation reader | 否；复用call1/2/3 | Web typed原文、H10原文、Mac真Webhandoff均精确返回 | 原文字节/引用身份按真实GET核 | [web-first-r3](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r3/result.json) / [long-material](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/long-material/result.json) / [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 物理前台浏览器返回未证 | 局部已验，余状态待验 |
+| W08 / C16、C17、C18 | 分支：提取时是；阅读/删除否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；H10 reader→Ask；删除尚待H01 | 分支未作提取；Ask用真实call3 | 31块资料传准确版本引用，非截成30 UUID | conversation.scope.anchorMaterialRef准确；未出现anchorEvidenceIds | [long-material](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/long-material/result.json) | 本轮完整提取/删除状态待续 | 局部已验，余状态待验 |
+| W09 / C20 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；QueryRun 31c4289c-201d-4c4c-b3a0-3eb5d417e2d5；H10 88e34833-bb9a-451a-9db2-4529d72c3365 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 真实提问/持久结果/引用原文往返；宽窄实际图 | call1 c469a7f6-32e6-46c4-9a34-f5bffdc7189c；H10 eaefb7eb-4901-4f98-acbd-6b32a33ffc7c；事实/准确来源核 | [web-first-r3](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r3/result.json) / [long-material](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/long-material/result.json) | 运行记录脚本原afterSeq=0错；改沿UI firstSeq-1复用同run，0新call通过 | 局部已验，余状态待验 |
 | W10 / C22 | 是 | F04；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W11 / C21 | 否；复用 W09 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W12 / C21 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
@@ -671,8 +675,8 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 | W29 / C05、C06 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W30 / A08 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W31 / A08 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W32 / C27 | 分支：追问时是；阅读复用 W33 | F05；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W33 / C27 | 是 | F05；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| W32 / C27 | 分支：追问时是；阅读复用 W33 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Discovery1ba9b5c7→712033dd | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 历史/草稿跨设置返回/真实生成入档；排版高度未达标 | 真实已归档HTML/引用与native call6，非fixture回答 | [discovery](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/discovery/result.json) failure.png保持失败 | 固定450内滚动，桥接返修中；不重复生成 | 已确认不一致：排版高度待修 |
+| W33 / C27 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Discovery1ba9b5c7 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 生成前草稿去设置再回保持；按钮只实际提交1次 | 真正requestId/responseId一致；原生Terra call6完成 | [discovery](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/discovery/result.json) | 排版后续尚未验收，不把模型成功算UI通过 | 局部已验，余状态待验 |
 | W34 / C28、A25 | 否；复用 W17/W33 | F05；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W35 / C29 | 否 | F08；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W36 / C30 | 是 | F08；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
@@ -686,20 +690,20 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 | W44 / C36 | 分支：授权后的 LLM 处理是 | F09；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W45 / §3 | 否 | F09；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W46 / A18、C33、C34、C35 | 分支：实际记忆工作是；安装否 | F09；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W47 / A26、A27、A28 | 否；复用 W09/W17 | F09；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| W47 / A26、A27、A28 | 否；复用 W09/W17 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；实际agentRun c469a7f6-32e6-46c4-9a34-f5bffdc7189c | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执；页面复用0新call | 显式读取后实际输入/工具/输出/原文返回 | 实读5页含run.completed；真实truncated已提示，未重构 | [web-first-r3](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/web-first-r3/result.json) | 错误测试cursor0改为产品firstSeq-1；未改后端过滤/保留 | 局部已验，余状态待验 |
 | W48 / A25、C39、C40、C41、A31、A32、A33、A29、A30、A34、A35 | 否 | F10；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | W49 / C01、A36 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| W50 / C02、C42 | 否 | F10；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| W50 / C02、C42 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；目录77项+补C20/C30 | 否；0新模型 | 77实际入口进入/返回；C30最终稿文案闭合 | 实际GET，非effect；飞书自动check POST被只读阻断不算正常授权页 | [目录主批](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/readonly-directory/result.json)、[C20](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/readonly-directory-c20/result.json)、[C30](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/readonly-directory-c30-r2/result.json) | C20最初runner严格hash误判；C30初次旧静态404后同vault恢复，仅该条重验 | 局部已验，余状态待验 |
 | M01 / §3 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M02 / §3 | 否；复用 M09 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M03 / Mac M15 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M04 / Mac M01、Mac M17 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M05 / Mac M02 | 否 | F01；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| M05 / Mac M02 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Mac note 937a00d5-9332-45c2-8ca4-c57b76474aad | 否；独立真实notes传输 | 原生note本机保存、独立说明→发送→Central确切回执原文 | 真实note UUID/received回执run a95d1917-2c10-44fe-b8cc-95a7726404ca | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 其余录音/附件/失败原生状态未由该笔证明 | 局部已验，余状态待验 |
 | M06 / Mac M03、Mac M04、Mac M14 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M07 / Mac M03、Mac M04 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M08 / Mac M13 | 否；复用 M09 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M09 / Mac M13 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M10 / Mac M13 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| M08 / Mac M13 | 否；复用 M09 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；同conversation 65b2b0f6-232e-4e3d-b5cb-1ec3b9d83988 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执；history复用 | 从实际history选中Web既有会话，新轮保留原turn | prior 91526f1e-e28c-4846-9226-07221085c9fe → 新 99bc27d7-ac1a-439e-8b6b-b760840b4383 | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 分页/全部异常仍待本批 | 局部已验，余状态待验 |
+| M09 / Mac M13 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；正确Mac continuation 99bc27d7-ac1a-439e-8b6b-b760840b4383 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 准确新轮而非旧同问回答；原对话保留 | 原生call2 c1d89ca9-9db5-47bc-bbc0-486a715368cc；正确同conversation | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 新轮ID排除prior；历史同citation按新轮index定位 | 局部已验，余状态待验 |
+| M10 / Mac M13 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；原文 ce41bad7-cbd1-48f2-9381-7e6e9e4311fe | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执；读原文复用 | 准确引用→真hiddenWeb login/read→同会话，原生state保留 | 实际原文GET与字节核，未替换回执 | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | OS browser-launch边界捕获；physicalForegroundReturn=false | 局部已验，余状态待验 |
 | M11 / Mac M13 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M12 / §3 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M13 / §3 | 否 | F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
@@ -712,8 +716,8 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 | M20 / Mac M09 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M21 / Mac M09 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M22 / Mac M09 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M23 / Mac M11、Mac M12 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| M24 / Mac M12 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| M23 / Mac M11、Mac M12 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Mac note同步/待发→history | 否 | 已存本机队列→立即发送→真实received历史 | 真实receipt/run/note identity | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 未据note回执称解析完成 | 局部已验，余状态待验 |
+| M24 / Mac M12 | 否 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；exact received a95d1917-2c10-44fe-b8cc-95a7726404ca | 否 | 具体记录→Central正文与独立说明→回执返回 | 收到的确切note原文一致 | [mac-live](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/mac-live/result.json) | 其他unknown/paging/error仍分组证据，非此笔重跑 | 局部已验，余状态待验 |
 | M25 / Mac M12 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M26 / §3 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | M27 / Mac M15 | 否 | F00；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
@@ -745,9 +749,9 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 | P14 / Android A05 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | P15 / Android A07、Android A08、Android A09 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | P16 / Android A09 | 否 | F07；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| P17 / Android A10 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| P18 / Android A10 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| P19 / Android A10 | 否；复用 P17 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| P17 / Android A10 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；正确run8b0b10e2→turn4969dd04 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 已真实写入原65b第3轮，Send前actualtarget guard通过；引用只读resume已过 | call5 df5106c4；原错误call4在6bb保持失败 | android-live原失败与android-live-repaired实际图分开 | global adopt误投→01b/d4修→正确新call；多引用selector仅test修/0新call | 返修后局部已验，余状态待验 |
+| P18 / Android A10 | 是 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Web→Mac→Android原65b3turn | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 指定会话跨端续问已正确，原Web/Mac轮仍在 | 正确turn4969/realQueryRun8b0；失败wrong6bb不算 | [Android本批](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/android-live-repaired/report.json) | 受控A/B并发、ownedunknown/body与owner迟到3风险独审；真实新轮单独核 | 局部已验，余状态待验 |
+| P19 / Android A10 | 否；复用 P17 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；existingturn4969原文ce41bad7 | 否；只读复用call5 | 准确新轮引用原文→同65b/同turn，未发draft保留；保存问答本批未做 | GET真实capture/完整snapshot及该turn引用序列核 | [只读续验](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/android-live-repaired/persisted-turn-resume) | save raw note已ACK但旧test metadata断言错；reader独立context显示返修，不重建note | 局部已验，余状态待验 |
 | P20 / Android A10 | 是 | F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | P21 / Android A10 | 是 | F04；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | P22 / Android A11 | 否；复用 W33 | F05；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
@@ -777,9 +781,9 @@ OCR/ASR 本次在任务专属的复制缓存上重新启动真实 worker，处�
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | H01 普通删除保留问答 / W08/W11–13/W18/W21/M09–11/P18–20 | 是：删除后续问 | F02+F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 | H02 同范围日程管理 / W36/M19/P23/P31 | 是：真实提案；完成的本地状态不伪造设备写 | F08；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| H03 独立说明 / W04/W08/W20–23/M05/M14/M17/P06–08/P13/P19/P31 | 是：证明模型上下文独立可见 | F01+F02；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| H03 独立说明 / W04/W08/W20–23/M05/M14/M17/P06–08/P13/P19/P31 | 是：证明模型上下文独立可见 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；Webnote ce41bad7-cbd1-48f2-9381-7e6e9e4311fe / Macnote 937a00d5-9332-45c2-8ca4-c57b76474aad | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 原文/说明独立可见，真实模型attribution_context读取，Mac回执原文分离 | call1/2真实上下文与exact note ACK | 上述Web/Mac图；Androidraw a1d231e0已ACK且context有说明 | Android远端metadata旧读者未展示当前context，UI窄修中；不改wire/重复保存 | 局部已验，余状态待验 |
 | H04 完整本机 OCR/ASR 准备 / W37–38/W43–45 | 本机识别模型必需；后续理解/提问用 Terra | F06+F09；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
-| H10 整份精确版本资料提问 / W09–13/M09–11/P17–21 | 是：实际分页读取及同会话续问 | F02+F03；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
+| H10 整份精确版本资料提问 / W09–13/M09–11/P17–21 | 是：实际分页读取及同会话续问 | 本批 f1e0f926-a28c-4b2e-b16e-8a3a4b71db58；启动3f79/恢复293d；31块ref material:mat_727242eb15a4fa9fbc48049adbd9611849411319212cb4056e661962cdeb4fc5@a9c4be7a55556707419228ac4877ae4c881d36a13338e1f396845b4464ebfa54 | 本机Codex App Server / gpt-6.1-terra / high；原生model与threadModel回执 | 整份准确版本由reader传到Ask，读第16/31并返回原文 | 真实3次material_read与准确引用；不截30；call3 eaefb7eb-4901-4f98-acbd-6b32a33ffc7c | [long-material](/Users/utopiafar/.codex/worktrees/c1a8/mote/.mote/final-shared-terra-20261030-0256/long-material/result.json) | 不把wrong Native6bb误投续问算正确跨端；其余继承/变化分支待验 | 局部已验，余状态待验 |
 | H11 安排详情补缺时间 / W36/M19/P23/P31 的同一 Mote 入口 | 分支：原提案用 Terra；填写与保存信息本身不调用模型 | F08；未执行 | 未执行 | 未执行 | 未执行 | 未执行 | 未发生／未重测 | 未测 |
 
 H01 必须分别验证普通物理删除、外部来源 tombstone 与显式隐私忘记/撤权/到期；保留的历史问答不授予重新读已不可用原文的权利。历史引用先按会话/引用身份和当前可用性校验，不能通过通用原文链接绕回；原独立 owner 归档合同不因此伪称已擦除。strict 范围内原文全删时，真实搜索/读取授权集合为空，不能扩大为全资料；混合有效、普通删除、未知缺失、隐私删除的 ID 分别核对。需要你补充的已提交回答和资料变化反馈也须覆盖。
