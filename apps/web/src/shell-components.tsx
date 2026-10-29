@@ -599,7 +599,7 @@ export function AnswerView({
         <span>{moteText("根据你的上下文")}</span>
       </div>}
       <div className="markdown">
-        <AnswerMarkdown answer={answer} onOpen={onOpen} />
+        <AnswerMarkdown answer={answer} onOpen={onOpen} numericCitations={compact}/>
       </div>
       {answer.citations.length > 0 && (
         <div className="citations">

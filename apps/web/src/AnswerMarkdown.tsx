@@ -21,7 +21,7 @@ export function answerPreview(answer:Answer,limit=100) {
 }
 
 /** Format only verified citation IDs in prose; preserve code and authored links. */
-export function citationLinks(citations:Answer['citations']) {
+export function citationLinks(citations:Answer['citations'],numeric=false) {
   const indexes=new Map(citations.map((citation,index)=>[citation.id,index+1]));
   return () => (tree:MarkdownNode) => {
     function visit(parent:MarkdownNode) {
@@ -32,7 +32,7 @@ export function citationLinks(citations:Answer['citations']) {
         for (const match of node.value.matchAll(/\[([^\]\n]{1,300})\]/g)) {
           const index=indexes.get(match[1]);if(index===undefined)continue;
           if (match.index>start) result.push({type:'text',value:node.value.slice(start,match.index)});
-          result.push({type:'link',url:citationHref(match[1]),children:[{type:'text',value:moteText("来源 {0}", index)}]});
+          result.push({type:'link',url:citationHref(match[1]),children:[{type:'text',value:numeric?String(index):moteText("来源 {0}", index)}]});
           start=match.index+match[0].length;
         }
         if (!start) return [node];
@@ -44,7 +44,7 @@ export function citationLinks(citations:Answer['citations']) {
   };
 }
 
-export function AnswerMarkdown({answer,onOpen}:{answer:Answer;onOpen:(id:string)=>void}) {
+export function AnswerMarkdown({answer,onOpen,numericCitations=false}:{answer:Answer;onOpen:(id:string)=>void;numericCitations?:boolean}) {
   const citationIds=JSON.stringify(answer.citations.map(citation=>citation.id));
   const verified=useMemo(()=>new Map((JSON.parse(citationIds) as string[]).map(id=>[citationHref(id),id])),[citationIds]);
   // Stable renderer types keep the focused citation mounted when the shared
@@ -58,5 +58,5 @@ export function AnswerMarkdown({answer,onOpen}:{answer:Answer;onOpen:(id:string)
         : <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
     },
   }),[verified,onOpen]);
-  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,citationLinks(answer.citations)]} components={components}>{answer.answer}</ReactMarkdown>;
+  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,citationLinks(answer.citations,numericCitations)]} components={components}>{answer.answer}</ReactMarkdown>;
 }
