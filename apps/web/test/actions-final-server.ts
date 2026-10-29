@@ -12,8 +12,8 @@ const f=await fixture({after:fn=>{cleanup=fn as ()=>Promise<void>;}} as Paramete
   if(req.method==='POST'&&req.url.startsWith('/api/actions/')&&req.url.endsWith('/confirm')&&existsSync(join(controls,'confirm-fault')))return reply.code(503).send({error:'service_unavailable'});
   if(req.method==='PATCH'&&req.url.startsWith('/api/todos/')&&existsSync(join(controls,'todo-patch-fault')))return reply.code(503).send({error:'service_unavailable'});
  });
- node.app.addHook('preHandler',async req=>{if(req.method==='POST'&&req.url==='/api/todos')writeFileSync(join(controls,'todo-trace'),JSON.stringify(req.body)+'\n',{flag:'a',mode:0o600});});
- node.app.addHook('onSend',async(req,reply,payload)=>{if(req.method==='POST'&&req.url==='/api/todos'&&existsSync(join(controls,'todo-lost-receipt'))){rmSync(join(controls,'todo-lost-receipt'));reply.code(503);return JSON.stringify({error:'service_unavailable'});}return payload;});
+ node.app.addHook('preHandler',async(req,reply)=>{if(req.method==='POST'&&req.url.endsWith('/information')){writeFileSync(join(controls,'information-trace'),JSON.stringify(req.body)+'\n',{flag:'a',mode:0o600});if(existsSync(join(controls,'information-fault')))return reply.code(503).send({error:'service_unavailable'});}if(req.method==='POST'&&req.url==='/api/todos')writeFileSync(join(controls,'todo-trace'),JSON.stringify(req.body)+'\n',{flag:'a',mode:0o600});});
+ node.app.addHook('onSend',async(req,reply,payload)=>{if(req.method==='POST'&&req.url.endsWith('/information')&&reply.statusCode<300&&existsSync(join(controls,'information-lost-receipt'))){rmSync(join(controls,'information-lost-receipt'));reply.code(503);return JSON.stringify({error:'service_unavailable'});}if(req.method==='POST'&&req.url==='/api/todos'&&existsSync(join(controls,'todo-lost-receipt'))){rmSync(join(controls,'todo-lost-receipt'));reply.code(503);return JSON.stringify({error:'service_unavailable'});}return payload;});
 }});
 await f.request('/api/actions/targets',{deviceId:'generated-device',deviceName:'Generated device',calendars:[{id:'generated-calendar',title:'Generated calendar'}]});
 const dates={start:'2099-09-18T15:00:00Z',end:'2099-09-18T16:00:00Z'};
