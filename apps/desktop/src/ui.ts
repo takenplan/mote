@@ -1140,13 +1140,14 @@ function compressionZoom():void {
 }
 async function refreshCompression():Promise<void>{
   const revision=++compressionRevision,quality=numberInput('compression-quality');
+  for(const id of ['compression-before','compression-after']){const image=byId<HTMLImageElement>(id);image.hidden=true;image.removeAttribute('src');}
   byId('compression-quality-label').textContent=String(quality);byId('compression-stats').textContent=moteText("正在生成压缩预览…");byId<HTMLButtonElement>('compression-apply').disabled=true;
-  try{const result=await desktopApi.compressionPreview(quality,numberInput('compression-side'));if(revision!==compressionRevision)return;
-    byId<HTMLImageElement>('compression-before').src=result.original;byId<HTMLImageElement>('compression-after').src=result.compressed;compressionWidth=result.originalWidth;compressionZoom();
+  try{const result=await desktopApi.compressionPreview(quality,numberInput('compression-side'));if(revision!==compressionRevision||currentPage!=='compression')return;
+    byId<HTMLImageElement>('compression-before').src=result.original;byId<HTMLImageElement>('compression-after').src=result.compressed;byId('compression-before').hidden=false;byId('compression-after').hidden=false;compressionWidth=result.originalWidth;compressionZoom();
     const ratio=result.compressedBytes/result.originalBytes;
     byId('compression-stats').textContent=moteText("{0} × {1} → {2} × {3} · 边长缩放 {4}% · PNG {5} KB → JPEG {6} KB · 文件大小为原图的 {7}%（{8} {9}%）", result.originalWidth, result.originalHeight, result.width, result.height, (result.width/result.originalWidth*100).toFixed(1), (result.originalBytes/1024).toFixed(1), (result.compressedBytes/1024).toFixed(1), (ratio*100).toFixed(1), ratio<=1?moteText("减少"):moteText("增加"), (Math.abs(1-ratio)*100).toFixed(1));
     byId<HTMLButtonElement>('compression-apply').disabled=false;
-  }catch(error){if(revision===compressionRevision)byId('compression-stats').textContent=error instanceof Error?error.message:moteText("预览失败，请调整参数重试");}
+  }catch(error){if(revision===compressionRevision&&currentPage==='compression')byId('compression-stats').textContent=moteText("预览失败，请调整参数重试");}
 }
 let compressionTimer:ReturnType<typeof setTimeout>|undefined;
 for(const id of ['compression-quality','compression-side'])byId(id).addEventListener('input',()=>{clearTimeout(compressionTimer);compressionRevision++;byId<HTMLButtonElement>('compression-apply').disabled=true;compressionTimer=setTimeout(()=>void refreshCompression(),180);});
