@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {JSDOM} from 'jsdom';
+import {configureLocale,getLocale} from '@mote/shared/i18n';
+import {MemoryDetailPage} from '../src/Memories';
+import type {Api} from '../src/api';
+import {modelView} from './fixtures/model-settings';
+const at='2026-10-29T00:00:00.000Z',a='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',b='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const memory=(id:string)=>({id,title:'Generated Memory '+id[0],statement:'Complete generated original statement '+id[0],uncertainty:'Generated evidence only',status:'published',version:1,fingerprint:id[0].repeat(64),createdAt:at,evidence:[],evidenceIds:[],admission:{layer:'memory'}});
+async function fixture(t:import('node:test').TestContext){
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/#/search?q=generated',pretendToBeVisual:true}),prior=new Map<string,PropertyDescriptor|undefined>(),locale=getLocale();configureLocale(()=> 'zh-CN');
+ for(const[key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){prior.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
+ Object.assign(dom.window.HTMLElement.prototype,{scrollIntoView:()=>{},attachEvent:()=>{},detachEvent:()=>{}});dom.window.scrollTo=()=>{};
+ const root=createRoot(dom.window.document.getElementById('root')!);t.after(async()=>{await act(async()=>root.unmount());configureLocale(()=>locale);for(const[key,value]of prior)if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);dom.window.close();});return{root,d:dom.window.document};
+}
+function api(overrides:(path:string,init?:RequestInit)=>unknown=()=>undefined,seen:{path:string;method:string}[]=[]):Api{return{request:async(path:string,init?:RequestInit)=>{seen.push({path,method:init?.method??'GET'});const value=overrides(path,init);if(value!==undefined)return value;if(path==='/api/model-settings')return modelView();if(path==='/api/memory-settings')return{settings:{consolidation:{enabled:false,maxItems:5}},extensions:[]};if(/^\/api\/memories\/[^/?]+\?/.test(path))return memory(path.split('/')[3].split('?')[0]);return{items:[],nextCursor:null};}} as Api;}
+const click=async(d:Document,label:string)=>act(async()=>{const button=[...d.querySelectorAll('button')].find(button=>button.textContent===label);assert.ok(button,label);button.click();});
+test('an exact external Memory selection reuses its real detail, More and evidence without admitting a task',async t=>{
+ const{root,d}=await fixture(t),seen:{path:string;method:string}[]=[],owner=api(undefined,seen);let returned=0;
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,scope:{deviceId:'generated-device',after:at},onOpen:()=>{},onBack:()=>returned++})));
+ assert.equal(d.querySelector('.memory-detail-heading h2')?.textContent,'Generated Memory a');assert.match(d.querySelector('.memory-detail')!.textContent!,/Complete generated original statement a/);
+ assert.ok(seen.some(read=>read.path.startsWith('/api/memories/'+a+'?')&&read.path.includes('deviceId=generated-device')&&read.path.includes('after=')));
+ await click(d,'更多');assert.match(d.querySelector('.memory-detail')!.textContent!,/纠正这条记忆|历史与有效时间|展开证据/);assert.equal(seen.some(read=>read.method!=='GET'),false);
+ await click(d,'返回');await click(d,'返回');assert.equal(returned,1);assert.equal(Boolean(d.querySelector('.memory-detail-heading')),false);
+});
+test('unmounting an exact Memory detail during committed deletion cannot close a new owner or rewrite its query',async t=>{
+ const{root,d}=await fixture(t);let resolve!:(value:unknown)=>void,oldBack=0,nextBack=0;
+ const old=api((_path,init)=>init?.method==='DELETE'?new Promise(done=>resolve=done):undefined),next=api();
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:old,id:a,onOpen:()=>{},onBack:()=>oldBack++})));
+ await click(d,'更多');await click(d,'删除记忆');await click(d,'确认删除');
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:next,id:b,onOpen:()=>{},onBack:()=>nextBack++})));
+ await act(async()=>resolve({externalErase:'acknowledged',physicalEraseVerified:false}));
+ assert.equal(d.querySelector('.memory-detail-heading h2')?.textContent,'Generated Memory b');assert.equal(oldBack,0);assert.equal(nextBack,0);assert.equal(window.location.hash,'#/search?q=generated');
+});
+test('successful detail deletion returns once and does not reinitialize the deleted initial ID',async t=>{
+ const{root,d}=await fixture(t);let returned=0;const seen:{path:string;method:string}[]=[],owner=api((_path,init)=>init?.method==='DELETE'?{}:undefined,seen);
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>returned++})));
+ await click(d,'更多');await click(d,'删除记忆');await click(d,'确认删除');
+ assert.equal(returned,1);assert.equal(Boolean(d.querySelector('.memory-detail-heading')),false);const afterDelete=seen.filter(read=>read.path.startsWith('/api/memories/'+a+'?')).length;
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>returned++})));
+ assert.equal(returned,1);assert.equal(Boolean(d.querySelector('.memory-detail-heading')),false);assert.equal(seen.filter(read=>read.path.startsWith('/api/memories/'+a+'?')).length,afterDelete);
+});
