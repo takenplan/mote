@@ -23,9 +23,10 @@ const now='2026-09-01T08:00:00Z';
 function importJob(extra:Record<string,unknown>={}){return {id:'import-generated',name:'Generated originals',status:'completed',createdAt:now,updatedAt:now,instruction:'',archive:{files:1,bytes:9},warnings:[],files:[],captureIds:['cccccccc-cccc-4ccc-8ccc-cccccccccccc'],progress:{total:1,processed:1,imported:1,duplicates:0},...extra};}
 function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{const api={request:async(path:string,init?:RequestInit)=>path.startsWith('/api/operations/changes')?{ids:[],cursor:0,hasMore:false,reset:false}:read(path,init),setAgentTimeout:()=>{}} as Api;fixtureApis.add(api);return api;}
 function view(api:Api,extra:Record<string,unknown>={}){return React.createElement(Imports,{api,onOpen:()=>{},onMemories:()=>{},onSettings:()=>{},onChanged:()=>{},...extra});}
-async function select(d:Document,files:File[]){if(!d.querySelector('input[type=file]'))await act(async()=>button(d,'新建导入').click());const input=d.querySelector<HTMLInputElement>('input[type=file]')!;Object.defineProperty(input,'files',{value:files,configurable:true});await act(async()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));}
+async function form(d:Document){if(!d.querySelector('.import-form')){if(button(d,'返回导入列表'))await act(async()=>button(d,'返回导入列表').click());await act(async()=>button(d,'新建导入').click());}}
+async function select(d:Document,files:File[]){await form(d);const input=d.querySelector<HTMLInputElement>('input[type=file]')!;Object.defineProperty(input,'files',{value:files,configurable:true});await act(async()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));}
 async function submit(d:Document){await act(async()=>d.querySelector('form')!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));}
-async function instruction(d:Document,value:string){if(!d.querySelector('textarea'))await act(async()=>button(d,'新建导入').click());await act(async()=>{const input=d.querySelector('textarea')!;Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new window.Event('input',{bubbles:true}));});}
+async function instruction(d:Document,value:string){await form(d);await act(async()=>{const input=d.querySelector('textarea')!;Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new window.Event('input',{bubbles:true}));});}
 async function until(check:()=>boolean){for(let i=0;i<100;i++){if(check())return;await act(async()=>new Promise(resolve=>setTimeout(resolve,10)));}assert.ok(check(),'Generated UI operation did not settle');}
 
 test('media admission distinguishes extraction, search and Memory and retries the existing file',async t=>{
@@ -93,7 +94,7 @@ test('import history failures recover without false empty state, and revoked his
  failure=403;await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新导入记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated originals/);assert.match(d.body.textContent!,/403/);
 });
 
-test('uploads freeze a batch while the next form stays available, and resume into one import',async t=>{
+test('upload submission opens its exact queued batch while another draft remains independent',async t=>{
  const {root,d}=await fixture(t);const uploads:string[]=[],writes:any[]=[];let first=true,signal:AbortSignal|undefined;
  const api=apiWith((path,init)=>{
   if(path==='/api/imports'&&init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return importJob();}
@@ -104,9 +105,9 @@ test('uploads freeze a batch while the next form stays available, and resume int
   throw Error('Unexpected '+path);
  });
  await act(async()=>root.render(view(api)));await select(d,[new File(['generated'],'original.txt')]);await submit(d);
- assert.equal(button(d,'新建导入').disabled,false);assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);assert.equal(d.querySelectorAll('.selected-files .file-row').length,0);
+ assert.equal(d.querySelector('.import-form'),null,'submission opens the selected upload instead of an empty composer');assert.match(d.querySelector('.import-upload-detail')!.textContent!,/original.txt/);assert.equal(button(d,'新建导入').disabled,false);assert.equal(button(d,'服务器目录'),undefined);
  await act(async()=>button(d,'暂停上传').click());assert.equal(signal!.aborted,true);assert.match(d.body.textContent!,/上传已暂停/);assert.equal(d.querySelectorAll('.import-queue-item').length,1);assert.equal(writes.length,0);
- await select(d,[new File(['generated next draft'],'next-draft.txt')]);await act(async()=>button(d,'继续上传').click());await until(()=>writes.length===1);assert.equal(d.querySelectorAll('.selected-files .file-row').length,1);assert.equal(writes.length,1);assert.deepEqual(writes[0].archivedFileIds,['archived-generated']);assert.equal(writes[0].processing,'automatic');assert.equal(uploads[0],uploads[1]);assert.match(writes[0].requestId,/^[0-9a-f-]{36}$/);assert.match(d.body.textContent!,/记录已保存/);assert.equal(d.querySelector('[role=alert]'),null);
+ await select(d,[new File(['generated next draft'],'next-draft.txt')]);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);await act(async()=>button(d,'返回导入列表').click());await act(async()=>d.querySelector<HTMLButtonElement>('.import-queue-item .workspace-select')!.click());await act(async()=>button(d,'继续上传').click());await until(()=>writes.length===1);assert.equal(writes.length,1);assert.deepEqual(writes[0].archivedFileIds,['archived-generated']);assert.equal(writes[0].processing,'automatic');assert.equal(uploads[0],uploads[1]);assert.match(writes[0].requestId,/^[0-9a-f-]{36}$/);assert.match(d.body.textContent!,/记录已保存/);assert.equal(d.querySelector('[role=alert]'),null);await form(d);assert.equal(d.querySelectorAll('.selected-files .file-row').length,1,'the separate next draft survives reading and resuming the first batch');
 });
 
 test('page navigation keeps uploads alive and returning shows the same batch',async t=>{
@@ -127,7 +128,7 @@ test('lost import-create response retries its frozen request while another batch
   throw Error('Unexpected '+path);
  });
  await act(async()=>root.render(view(api)));await select(d,[new File(['one'],'one.txt')]);await instruction(d,guidance);await submit(d);
- await until(()=>writes.length===1);assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'preview');assert.equal(d.querySelector('textarea')!.value,'');
+ await until(()=>writes.length===1);assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'preview');assert.equal(d.querySelector('.import-form'),null);await form(d);assert.equal(d.querySelector('textarea')!.value,'');
  await instruction(d,'Generated different guidance for the next batch');await act(async()=>button(d,'重试提交').click());await until(()=>writes.length===2);assert.deepEqual(writes[0],writes[1]);
  await select(d,[new File(['two'],'two.txt')]);await submit(d);await until(()=>writes.length===3);assert.notEqual(writes[1].requestId,writes[2].requestId);assert.equal(writes[2].instruction,'Generated different guidance for the next batch');
  assert.equal(d.querySelectorAll('.import-queue-item').length,2);assert.equal(d.querySelector('.imports-page > [role=alert]'),null);
@@ -159,7 +160,7 @@ test('choosing a Source Pack keeps the single editable guidance field and submit
  await act(async()=>{parsing.value='';parsing.dispatchEvent(new window.Event('change',{bubbles:true}));});assert.equal(d.querySelector('textarea')!.value,guidance);
  await act(async()=>{parsing.value='fixture.pack';parsing.dispatchEvent(new window.Event('change',{bubbles:true}));});
  await select(d,[new File(['Generated fixed-parser original'],'generated-pack.custom')]);await submit(d);await until(()=>writes.length===1);
- assert.equal(writes[0].sourcePackId,'fixture.pack');assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'automatic');assert.equal(d.querySelector('textarea')!.value,'');
+ assert.equal(writes[0].sourcePackId,'fixture.pack');assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'automatic');assert.equal(d.querySelector('.import-form'),null);await form(d);assert.equal(d.querySelector('textarea')!.value,'');
 });
 
 test('import detail exposes memory pause, resume and cancel and keeps original evidence navigation',async t=>{

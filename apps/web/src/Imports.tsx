@@ -107,7 +107,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   function update(job:ImportJob){setItems(current=>[job,...current.filter(item=>item.id!==job.id)]);setRevision(v=>v+1);}
   function create(){
     if(readingFiles||!files.length)return;
-    try{queue.enqueue({source:{kind:'files',files},name,instruction,sourcePackId,imageProfileId});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setError('');}
+    try{const id=queue.enqueue({source:{kind:'files',files},name,instruction,sourcePackId,imageProfileId});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setError('');setSelected(id);setCreating(false);}
     catch(error){setError(importFailure(error));}
   }
   function editEntry(entry:ImportQueueEntry){
