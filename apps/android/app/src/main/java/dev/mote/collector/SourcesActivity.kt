@@ -62,6 +62,7 @@ class SourcesActivity : MoteActivity() {
             intent.getStringExtra("addAction")?.takeIf { it in setOf("FILE", "FOLDER") }?.let { action ->
                 startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", action)); finish()
             }
+            if (intent.getBooleanExtra("addCalendar", false)) connectCalendar()
             intent.getStringExtra("sourceId")?.let { id ->
                 task.start(MoteI18n.text("正在读取来源…"), { operationStatus.text = it }, { localSources().sources().firstOrNull { it.id == id } }) { result -> result.getOrNull()?.let { edit(it) } }
             }
@@ -135,12 +136,13 @@ class SourcesActivity : MoteActivity() {
     }
     private data class SourceRow(val source: LocalSource, val summary: String, val presentationStatus: String, val local: List<org.json.JSONObject>, val localTotal: Int, val contextConflict: Boolean)
     private fun chooseSource() {
-        val labels = arrayOf(MoteI18n.text("导入文件"), MoteI18n.text("同步文件夹"), MoteI18n.text("连接本机日历"), MoteI18n.text("连接飞书文档"))
+        val labels = arrayOf(MoteI18n.text("导入文件"), MoteI18n.text("同步文件夹"), MoteI18n.text("连接本机日历"), MoteI18n.text("连接飞书文档"), MoteI18n.text("屏幕与应用活动"))
         MoteDialogBuilder(this).setTitle(MoteI18n.text("添加来源")).setItems(labels) { _, index ->
             when (index) {
                 0, 1 -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", if (index == 0) "FILE" else "FOLDER"))
                 2 -> connectCalendar()
                 3 -> startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "lark"))
+                4 -> startActivity(Intent(this, MainActivity::class.java).putExtra("page", "CAPTURE"))
             }
         }.setNegativeButton(MoteI18n.text("取消"), null).show()
     }
@@ -190,7 +192,7 @@ class SourcesActivity : MoteActivity() {
             }
         }
         SecondaryUi.row(list, MoteI18n.text("查看待上传队列")) { startActivity(Intent(this, SyncQueueActivity::class.java).putExtra("sourceId", source.id)) }
-        SecondaryUi.row(list, MoteI18n.text("中央资料库")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "library")) }
+        SecondaryUi.row(list, MoteI18n.text("中央资料库")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "archive")) }
         SecondaryUi.action(list, MoteI18n.text("移除连接")) { confirmRemove(source) }.tag = "source-remove"
     }
     private fun resolveCalendarContext(source: LocalSource) {

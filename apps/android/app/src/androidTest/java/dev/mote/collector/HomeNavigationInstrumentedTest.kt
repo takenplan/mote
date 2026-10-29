@@ -209,16 +209,24 @@ class HomeNavigationInstrumentedTest {
                         overlays.single().findViewById<View>(android.R.id.button1).performClick()
                         shown(activity).single { it.contentDescription == "查看引用 1 · Generated source" }.performClick()
                     }
-                    waitFor(scenario,"Available exact citation must load its original capture") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString() == "Generated original content" } }
-                    assertEquals(1,fixture.captureReads)
-                    scenario.onActivity { it.onBackPressed() }
+                    waitFor(scenario,"Available exact citation must load its original capture") {
+                        android.view.inspector.WindowInspector.getGlobalWindowViews().filter { root -> root.isShown && root.hasWindowFocus() }.flatMap(::views).filterIsInstance<TextView>().any { row -> row.text.toString() == "Generated original content" }
+                    }
+                    assertEquals(2,fixture.captureReads)
+                    instrumentation.runOnMainSync {
+                        val root=android.view.inspector.WindowInspector.getGlobalWindowViews().single { it.isShown && it.hasWindowFocus() }
+                        val labels=views(root).filterIsInstance<TextView>().map { it.text.toString() }
+                        assertTrue(labels.contains("Generated separate description"))
+                        assertTrue(labels.indexOf("Generated original content") < labels.indexOf("Generated separate description"))
+                        views(root).single { it.contentDescription == "返回上一页" }.performClick()
+                    }
                     waitFor(scenario,"Returning from evidence retains the same draft") { shown(it).filterIsInstance<EditText>().any { field -> field.text.toString() == "Generated retained follow-up" } }
                     fixture.referenceAvailable = false
                     scenario.onActivity { shown(it).single { row -> row.contentDescription == "查看引用 1 · Generated source" }.performClick() }
                     waitFor(scenario,"Unavailable reference explains that history stays") {
                         android.view.inspector.WindowInspector.getGlobalWindowViews().any { root -> views(root).filterIsInstance<TextView>().any { row -> row.text.toString() == "引用原文已删除，历史问答仍保留。" } }
                     }
-                    assertEquals("Unavailable references may not fall back to the owner archive",1,fixture.captureReads)
+                    assertEquals("Unavailable references may not fall back to the owner archive",2,fixture.captureReads)
                     scenario.onActivity { activity ->
                         val overlay = android.view.inspector.WindowInspector.getGlobalWindowViews().single { root -> views(root).filterIsInstance<TextView>().any { row -> row.text.toString() == "引用不可用" } }
                         overlay.findViewById<View>(android.R.id.button1).performClick()
@@ -236,6 +244,82 @@ class HomeNavigationInstrumentedTest {
         }
     }
 
+    @Test fun aReaderFromAnotherOriginCannotAnchorANewQuestionOnTheCurrentNode() {
+        ConversationFixture().use { fixture ->
+            val settings=Settings(context); val before=settings.read()
+            settings.save(before.copy(server=fixture.origin,token="generated-home-owner-token-1234567890",debugHttp=true,syncMode="manual",syncPaused=true,authSignedOut=false),confirmCentralEndpoint=true)
+            try {
+                ActivityScenario.launch<CentralActivity>(android.content.Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("evidenceId","3f4cf6ee-b09b-4fcf-a718-c0944f4b46cc").putExtra("evidenceOrigin","https://generated-other.invalid")).use { scenario ->
+                    val end=SystemClock.elapsedRealtime()+15_000; var ready=false
+                    while (!ready && SystemClock.elapsedRealtime()<end) { scenario.onActivity { a -> ready=views(a.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "访问凭据已失效，请重新连接。" } }; if(!ready) Thread.sleep(40) }
+                    assertTrue("The stale origin is explained on the real composer",ready)
+                    scenario.onActivity { a ->
+                        val labels=views(a.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                        assertTrue(labels.contains("＋ 参考资料")); assertFalse(labels.any { it.startsWith("参考这条记录") || it.startsWith("仅查这条记录") })
+                    }
+                    assertEquals(0,fixture.captureReads)
+                }
+            } finally { settings.save(before,confirmCentralEndpoint=true) }
+        }
+    }
+
+    @Test fun sharedReaderReturnsToTheSameLongAnswerScrollAndUnsentQuestion() {
+        ConversationFixture().use { fixture ->
+            fixture.includeCitations=true; fixture.longAnswer=true
+            val settings=Settings(context); val before=settings.read()
+            settings.save(before.copy(server=fixture.origin,token="generated-home-owner-token-1234567890",debugHttp=true,syncMode="manual",syncPaused=true,authSignedOut=false),confirmCentralEndpoint=true)
+            try {
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+                    waitFor(scenario,"Existing long conversation loaded") { shown(it).any { row -> row.tag == "home-conversation:$conversation" } }
+                    scenario.onActivity { a -> shown(a).single { it.tag == "home-conversation:$conversation" }.performClick() }
+                    waitFor(scenario,"Long answer loaded") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString().contains("Generated original answer paragraph 70") } }
+                    var position=0
+                    scenario.onActivity { a ->
+                        shown(a).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated unsent question at the cited answer")
+                        val scroll=views(a.window.decorView).filterIsInstance<android.widget.ScrollView>().single { it.isShown && it.findViewWithTag<View>("central-body") != null }
+                        scroll.scrollTo(0,scroll.getChildAt(0).height); position=scroll.scrollY; assertTrue("The real long answer is scrolled",position>0)
+                        shown(a).single { it.contentDescription == "查看引用 1 · Generated source" }.performClick()
+                    }
+                    val end=SystemClock.elapsedRealtime()+15_000; var ready=false
+                    while (!ready && SystemClock.elapsedRealtime()<end) { instrumentation.runOnMainSync { ready=android.view.inspector.WindowInspector.getGlobalWindowViews().filter { it.isShown && it.hasWindowFocus() }.flatMap(::views).filterIsInstance<TextView>().any { it.text.toString() == "Generated original content" } }; if(!ready) Thread.sleep(40) }
+                    assertTrue("Actual shared reader must show its original",ready)
+                    instrumentation.runOnMainSync { views(android.view.inspector.WindowInspector.getGlobalWindowViews().single { it.isShown && it.hasWindowFocus() }).single { it.contentDescription == "返回上一页" }.performClick() }
+                    waitFor(scenario,"Return retains the unsent question") { shown(it).filterIsInstance<EditText>().any { field -> field.text.toString() == "Generated unsent question at the cited answer" } }
+                    scenario.onActivity { a -> val scroll=views(a.window.decorView).filterIsInstance<android.widget.ScrollView>().single { it.isShown && it.findViewWithTag<View>("central-body") != null }; assertEquals("Return preserves the actual answer scroll",position,scroll.scrollY) }
+                }
+            } finally { settings.save(before,confirmCentralEndpoint=true) }
+        }
+    }
+
+    @Test fun citationPinChangesShowAnErrorAndReturnToTheUnchangedConversationDraft() {
+        ConversationFixture().use { fixture ->
+            fixture.includeCitations=true; fixture.changeVersionOnSecondRead=true
+            val settings=Settings(context); val before=settings.read()
+            settings.save(before.copy(server=fixture.origin,token="generated-home-owner-token-1234567890",debugHttp=true,syncMode="manual",syncPaused=true,authSignedOut=false),confirmCentralEndpoint=true)
+            try {
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+                    waitFor(scenario,"Existing conversation loaded") { shown(it).any { row -> row.tag == "home-conversation:$conversation" } }
+                    scenario.onActivity { a -> shown(a).single { it.tag == "home-conversation:$conversation" }.performClick() }
+                    waitFor(scenario,"Original citation available") { shown(it).any { row -> row.contentDescription == "查看引用 1 · Generated source" } }
+                    scenario.onActivity { a -> shown(a).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated pin-race draft"); shown(a).single { it.contentDescription == "查看引用 1 · Generated source" }.performClick() }
+                    val end=SystemClock.elapsedRealtime()+15_000
+                    var rejected=false
+                    while (!rejected && SystemClock.elapsedRealtime()<end) {
+                        instrumentation.runOnMainSync {
+                            val labels=android.view.inspector.WindowInspector.getGlobalWindowViews().filter { it.isShown && it.hasWindowFocus() }.flatMap(::views).filterIsInstance<TextView>().map { it.text.toString() }
+                            assertFalse("Changed record must not be presented as the cited original",labels.contains("Generated original content"))
+                            rejected=labels.any { it.contains("分页内容已变化") }
+                        }
+                        if (!rejected) Thread.sleep(40)
+                    }
+                    assertTrue("Actual second read changed the pinned version",rejected); assertEquals(2,fixture.captureReads)
+                    instrumentation.runOnMainSync { views(android.view.inspector.WindowInspector.getGlobalWindowViews().single { it.isShown && it.hasWindowFocus() }).single { it.contentDescription == "返回上一页" }.performClick() }
+                    waitFor(scenario,"Return preserves the original draft and answer") { shown(it).filterIsInstance<EditText>().any { field -> field.text.toString() == "Generated pin-race draft" } && shown(it).filterIsInstance<TextView>().any { field -> field.text.toString() == "这是已提交的生成回答。" } }
+                }
+            } finally { settings.save(before,confirmCentralEndpoint=true) }
+        }
+    }
+
     private inner class ConversationFixture : AutoCloseable {
         private val listener = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         val origin = "http://127.0.0.1:${listener.localPort}"
@@ -244,6 +328,8 @@ class HomeNavigationInstrumentedTest {
         @Volatile var includeCitations = false
         @Volatile var referenceAvailable = true
         @Volatile var captureReads = 0
+        @Volatile var changeVersionOnSecondRead = false
+        @Volatile var longAnswer = false
         @Volatile var emptyArchive = false
         @Volatile var archiveFailure = false
         private val evidence = "3f4cf6ee-b09b-4fcf-a718-c0944f4b46cc"
@@ -262,8 +348,8 @@ class HomeNavigationInstrumentedTest {
                     path.startsWith("/api/conversations?") -> JSONObject().put("items", JSONArray().apply { if (!emptyArchive) put(JSONObject().put("id", conversation).put("title", "周五评审需要准备什么？").put("updatedAt", "2026-10-28T10:00:00Z").put("turnCount", 1)) })
                     path == "/api/status" -> JSONObject().put("storage",JSONObject().put("captures",0))
                     path.contains("/references/") -> JSONObject().put("id",evidence).put("available",referenceAvailable)
-                    path.startsWith("/api/capture-browser/") -> { captureReads++; JSONObject().put("id",evidence).put("appName","Generated source").put("ocrText","Generated original content").put("capturedAt","2026-10-28T10:00:00Z").put("metadata",JSONObject()) }
-                    path.startsWith("/api/conversations/") -> { openedId = path.substringAfter("/api/conversations/").substringBefore('?'); JSONObject().put("id", conversation).put("scope", JSONObject()).put("turns", JSONArray().put(JSONObject().put("question", "周五评审需要准备什么？").put("result", JSONObject().put("answer", "这是已提交的生成回答。").put("modelSelection",JSONObject().put("model","generated-model")).put("citations", JSONArray().apply { if (includeCitations) put(JSONObject().put("id",evidence).put("appName","Generated source").put("capturedAt","2026-10-28T10:00:00Z")) })))) }
+                    path.startsWith("/api/capture-browser/") -> { captureReads++; JSONObject().put("id",evidence).put("deviceId","generated-source-device").put("source","note").put("libraryVersion", (if (changeVersionOnSecondRead && captureReads >= 2) "b" else "a").repeat(64)).put("appName","Generated source").put("ocrText","Generated original content").put("capturedAt","2026-10-28T10:00:00Z").put("metadata",JSONObject().put("ownerDescription","Generated separate description")) }
+                    path.startsWith("/api/conversations/") -> { openedId = path.substringAfter("/api/conversations/").substringBefore('?'); JSONObject().put("id", conversation).put("scope", JSONObject()).put("turns", JSONArray().put(JSONObject().put("question", "周五评审需要准备什么？").put("result", JSONObject().put("answer", "这是已提交的生成回答。" + if (longAnswer) "\n\n" + (1..70).joinToString("\n\n") { "Generated original answer paragraph $it" } else "").put("modelSelection",JSONObject().put("model","generated-model")).put("citations", JSONArray().apply { if (includeCitations) put(JSONObject().put("id",evidence).put("appName","Generated source").put("capturedAt","2026-10-28T10:00:00Z")) })))) }
                     path.startsWith("/api/model-settings") -> JSONObject().put("profiles", JSONArray())
                     else -> JSONObject().put("items", JSONArray())
                 }.toString().toByteArray()

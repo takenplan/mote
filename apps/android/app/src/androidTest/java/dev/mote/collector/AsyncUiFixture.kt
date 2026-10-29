@@ -83,10 +83,29 @@ fun Activity.openGeneratedAdd(action: MoteAddAction) {
         views(window.decorView).single { it.isShown && it.tag == "home-record-action" }.performClick()
         return
     }
+    if (action == MoteAddAction.SCREEN) {
+        openGeneratedMenu()
+        views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("设置") }.performClick()
+        views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("采集范围") }.performClick()
+        return
+    }
     openGeneratedMenu()
     views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("采集与同步") }.performClick()
-    val key = when (action) { MoteAddAction.SCREEN -> "按应用配置"; MoteAddAction.FILE -> "导入文件"; MoteAddAction.FOLDER -> "同步文件夹"; MoteAddAction.FEISHU -> "飞书来源"; else -> error("Unexpected action") }
-    views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text(key) }.performClick()
+    val deadline = SystemClock.elapsedRealtime() + 10_000
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val choose = object : Runnable {
+        override fun run() {
+            val source = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).filterIsInstance<SourcesActivity>().singleOrNull()
+            if (source == null) { check(SystemClock.elapsedRealtime() < deadline) { "Actual source list did not open" }; handler.postDelayed(this,40); return }
+            views(source.window.decorView).single { it.tag == "sources-add" }.performClick()
+            val key = when (action) { MoteAddAction.FILE -> "导入文件"; MoteAddAction.FOLDER -> "同步文件夹"; MoteAddAction.FEISHU -> "连接飞书文档"; else -> error("Unexpected action") }
+            val list = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<android.widget.ListView>().single { it.isShown }
+            val position = (0 until list.adapter.count).single { list.adapter.getItem(it).toString() == MoteI18n.text(key) }
+            list.performItemClick(list.getChildAt(position),position,list.adapter.getItemId(position))
+        }
+    }
+    handler.post(choose)
 }
 
 /** Home is the default light entry; each secondary page has an ordinary back path. */

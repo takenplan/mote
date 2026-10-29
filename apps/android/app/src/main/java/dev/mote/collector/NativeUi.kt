@@ -94,7 +94,7 @@ internal object MoteUi {
     }
     fun field(field: EditText): EditText = field.apply {
         NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
-            MoteUi.textColor(this, NativeColorRole.INK); inputColors(this); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
+            MoteUi.textColor(this, NativeColorRole.INK); inputColors(this); minimumHeight = context.moteDp(MoteTheme.controlHeight)
         } }
         textColor(this, NativeColorRole.INK); inputColors(this); type(this, NativeFontRole.BODY)
         backgroundTintList = null
@@ -104,8 +104,7 @@ internal object MoteUi {
             addState(intArrayOf(), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER))
         }
         setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
-        minHeight = context.moteDp(MoteTheme.controlHeight)
-        minimumHeight = minHeight
+        minimumHeight = context.moteDp(MoteTheme.controlHeight)
     }
 
     fun select(spinner: Spinner): Spinner = spinner.apply {
@@ -175,7 +174,11 @@ internal object MoteUi {
             is Spinner -> select(view)
             is Button -> if (view !is CompoundButton) {
                 action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
-                (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }
+                (view.layoutParams as? LinearLayout.LayoutParams)?.let {
+                    // A bottom margin in a vertically centered horizontal row shifts
+                    // the child above its parent and clips its top border.
+                    it.bottomMargin = if ((view.parent as? LinearLayout)?.orientation == LinearLayout.VERTICAL) view.context.moteDp(8) else 0
+                }
                 // The native dialog bar bottom-aligns actions. Baseline alignment also
                 // subtracts the custom bottom margin, moving their top into its padding.
                 if (view.id in setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3))

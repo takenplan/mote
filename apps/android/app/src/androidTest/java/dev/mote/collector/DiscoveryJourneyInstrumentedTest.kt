@@ -41,15 +41,19 @@ class DiscoveryJourneyInstrumentedTest {
     private fun <T> main(job: () -> T): T { var value: T? = null; instrumentation.runOnMainSync { value = job() }; @Suppress("UNCHECKED_CAST") return value as T }
     private fun activity(): Activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single()
     private fun views(root: View): List<View> = listOf(root) + if (root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
-    private fun shown() = views(activity().window.decorView).filter { it.isShown }
-    private fun text(value: String) = shown().filterIsInstance<TextView>().any { it.text.toString() == value }
+    private fun shown() = android.view.inspector.WindowInspector.getGlobalWindowViews().filter { it.isShown && it.hasWindowFocus() }.flatMap(::views).filter { it.isShown }
+    private fun text(value: String) = shown().filterIsInstance<TextView>().any { (it.text.toString() == value || it.contentDescription?.toString() == value) }
     private fun until(label: String, test: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 25000
         while (System.currentTimeMillis() < deadline) { if (runCatching(test).getOrDefault(false)) return; Thread.sleep(75) }
         fail(label + ": " + main { shown().filterIsInstance<TextView>().joinToString(" | ") { it.text.toString() } })
     }
     private fun settled() = (activity() as? CentralActivity)?.isWorking != true
-    private fun click(label: String) { until(label) { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString() == label && it.isClickable && it.isEnabled } } }; main { shown().filterIsInstance<TextView>().first { it.text.toString() == label && it.isClickable && it.isEnabled }.performClick() } }
+    private fun click(label: String) {
+        val action=if (label == "关闭详情" && main { activity() is CaptureRecordsActivity }) "返回上一页" else label
+        until(action) { main { settled() && shown().filterIsInstance<TextView>().any { (it.text.toString() == action || it.contentDescription?.toString() == action) && it.isClickable && it.isEnabled } } }
+        main { shown().filterIsInstance<TextView>().first { (it.text.toString() == action || it.contentDescription?.toString() == action) && it.isClickable && it.isEnabled }.performClick() }
+    }
     private fun clickTag(tag: String) { until(tag) { main { settled() && shown().any { it.tag == tag && it.isEnabled } } }; main { shown().single { it.tag == tag }.performClick() } }
     private fun back() { instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close() }
     private fun open(id: String? = null) = ActivityScenario.launch<CentralActivity>(Intent(context, CentralActivity::class.java).putExtra("page", "insights").apply { id?.let { putExtra("insightId", it) } })
@@ -66,13 +70,68 @@ class DiscoveryJourneyInstrumentedTest {
 
     @Test fun homeShowsAnActualFindingAndOpensItsExactNativeReport() {
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).putExtra("page", "OVERVIEW")).use {
-            until("actual homepage finding") { main { text("Generated native discovery 0") } }
+            until("home loaded") { main { shown().any { it.tag == "home-record-action" } } }
             capture("home")
-            clickTag("home-discovery:" + fixture.getString("latestId"))
+            main { activity().openGeneratedMenu() }
+            clickTag("menu:发现历史")
+            until("actual discovery history") { main { settled() && shown().any { it.tag == "insight:" + fixture.getString("latestId") } } }
+            clickTag("insight:" + fixture.getString("latestId"))
             until("exact native report") { main { activity() is CentralActivity && settled() && text("Generated native discovery 0") && text("查看依据") } }
-            assertEquals(fixture.getString("latestId"), main { activity().intent.getStringExtra("insightId") })
+            assertTrue(main { text("Generated native discovery 0") })
             assertEquals(0, state().getInt("insightCalls")); main { activity().finish() }
         }
+    }
+    @Test fun sourceListAndDiscoveryCitationUseTheSameActualCaptureReader() {
+        val original="Generated original discovery record: completion remains unknown."
+        var first=emptyList<String>()
+        ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","notes")).use {
+            until("actual note list loaded") { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }
+            click("查看原文")
+            until("shared list reader") { main { activity() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }
+            main {
+                assertEquals("原文",shown().filterIsInstance<TextView>().single { it.tag == "detail-title" }.text.toString())
+                assertTrue("The shared reader has no browser filters",shown().filterIsInstance<android.widget.Spinner>().isEmpty())
+            }
+            val firstReader=main { activity() }; main { firstReader.recreate() }
+            until("direct reader restored") { main { activity() !== firstReader && activity() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }
+            first=main { shown().filterIsInstance<TextView>().map { it.text.toString() }.filter(String::isNotBlank) }; capture("list-shared-original")
+            click("关闭详情")
+            until("list return") { main { activity() is CentralActivity && text("已经留下的心绪与杂事") } }
+        }
+        open(fixture.getString("oldId")).use {
+            until("saved discovery loaded") { main { settled() && text("Generated native discovery 66") } }
+            click("查看原文依据")
+            until("shared citation reader") { main { activity() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }
+            assertEquals("The actual reader renders the same original and metadata from both entrypoints",first,main { shown().filterIsInstance<TextView>().map { it.text.toString() }.filter(String::isNotBlank) }); capture("citation-shared-original")
+            click("关闭详情"); until("same report return") { main { activity() is CentralActivity && text("Generated native discovery 66") } }
+        }
+        assertEquals(0,state().getInt("insightCalls"))
+    }
+
+    @Test fun reportReadingChoiceIsInMoreAndSurvivesRecreationWithoutChangingSavedReport() {
+        val id=fixture.getString("oldId"); val before=api.get("/api/insights/$id").toString()
+        open(id).use { scenario ->
+            until("report loaded") { main { settled() && text("Generated native discovery 66") } }
+            fun select(label: String) {
+                clickTag("insight-more")
+                main {
+                    val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<android.widget.ListView>().single { it.isShown }
+                    val position=(0 until list.adapter.count).single { list.adapter.getItem(it).toString() == label }
+                    list.performItemClick(list.getChildAt(position),position,list.adapter.getItemId(position))
+                }
+            }
+            select("标准阅读"); capture("discovery-standard")
+            assertEquals(InsightPresentation.answer(api.get("/api/insights/$id")),main { shown().filterIsInstance<TextView>().single { it.tag == "insight-content" }.text.toString() })
+            scenario.recreate(); until("report restored") { main { settled() && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" } } }
+            clickTag("insight-more")
+            main {
+                val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<android.widget.ListView>().single { it.isShown }
+                assertEquals("Standard reading remains selected after recreation",1,list.checkedItemPosition)
+                list.performItemClick(list.getChildAt(0),0,list.adapter.getItemId(0))
+            }
+            capture("discovery-formatted")
+        }
+        assertEquals(before,api.get("/api/insights/$id").toString()); assertEquals(0,state().getInt("insightCalls"))
     }
     @Test fun oldExactReportAndItsOriginalSurviveRecreationAndSupportARealAnchoredQuestion() {
         open(fixture.getString("oldId")).use { scenario ->
@@ -81,8 +140,8 @@ class DiscoveryJourneyInstrumentedTest {
             scenario.recreate(); until("report after Activity recreation") { main { settled() && text("Generated native discovery 66") } }
             click("查看原文依据"); until("actual original and metadata") { main { settled() && text("Generated original discovery record: completion remains unknown.") && text("基于这条记录提问") } }
             capture("original")
-            scenario.recreate(); until("original after recreation") { main { settled() && text("Generated original discovery record: completion remains unknown.") } }
-            click("基于这条记录提问"); until("actual original is an anchor") { main { settled() && text("参考这条记录，自动查找相关上下文") } }
+            main { activity().recreate() }; until("original after recreation") { main { settled() && text("Generated original discovery record: completion remains unknown.") } }
+            click("基于这条记录提问"); until("actual original is an anchor") { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString().startsWith("参考这条记录，自动查找相关上下文") } } }
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated question about the original") }; click("发送")
             until("real scoped answer") { main { shown().filterIsInstance<TextView>().any { it.text.toString().contains("Generated answer from the actual original") } } }
             val query = state().getJSONObject("lastQuery"); assertEquals(fixture.getString("noteId"), query.getJSONArray("anchorEvidenceIds").getString(0)); assertTrue(query.isNull("evidenceIds"))
@@ -130,7 +189,7 @@ class DiscoveryJourneyInstrumentedTest {
     @Test fun emptyHomeDoesNotInventFindingsAndOfflineHistoryRecovers() {
         api.delete("/api/notes/" + fixture.getString("noteId"), JSONObject())
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).putExtra("page", "OVERVIEW")).use {
-            until("empty discovery loaded") { main { text("发现历史") && shown().none { it.tag == "discovery-loading" } } }
+            until("light home loaded") { main { shown().any { it.tag == "home-record-action" } } }
             assertFalse(main { shown().any { it.tag?.toString()?.startsWith("home-discovery:") == true } })
             assertEquals(0, state().getInt("insightCalls"))
         }

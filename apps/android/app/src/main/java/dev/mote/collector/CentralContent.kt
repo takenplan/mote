@@ -20,10 +20,20 @@ internal class CentralContent(
     initialPage: String = "ask",
     private val openLocalPage: ((String) -> Unit)? = null,
 ) : ContextWrapper(activity) {
+    fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?) = CentralCaptureReader.open(activity,origin,row,conversationId)
+    fun requestedFileId(): String? = activity.intent.getStringExtra("fileId")
+    fun requestedFileOriginMatches(): Boolean = activity.intent.getStringExtra("fileOrigin") == server
     fun recordNew() = activity.openRecordEditor()
     fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
     fun takeAskConversation(): String? = activity.intent.getStringExtra("conversationId")?.also { activity.intent.removeExtra("conversationId") }
-    fun takeAskEvidence(): String? = activity.intent.getStringExtra("evidenceId")?.also { activity.intent.removeExtra("evidenceId") }
+    fun takeAskEvidence(): String? {
+        val evidence=activity.intent.getStringExtra("evidenceId") ?: return null
+        val expected=activity.intent.getStringExtra("evidenceOrigin")
+        activity.intent.removeExtra("evidenceId"); activity.intent.removeExtra("evidenceOrigin")
+        if (expected != null && expected != server) { notice(MoteI18n.text("访问凭据已失效，请重新连接。")); return null }
+        return evidence
+    }
+
     val root: LinearLayout
     private lateinit var backButton: TextView
     val isDestroyed get() = activity.isDestroyed
@@ -160,7 +170,7 @@ internal class CentralContent(
         collectionBar = LinearLayout(this).apply { tag = "central-collection-scope"; orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(moteDp(16), 0, moteDp(16), moteDp(8)) }
         shell.header(collectionBar)
         scroll = ScrollView(this).apply { isFillViewport = true }
-        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(24)) }
+        body = LinearLayout(this).apply { tag = "central-body"; orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(24)) }
         scroll.addView(body); shell.content(scroll)
         composer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "ask-composer" }
         shell.footer(composer)
@@ -228,6 +238,7 @@ internal class CentralContent(
         state.putBundle("insightState", Bundle().also { screens?.saveInsightState(it) ?: restoredInsightState?.let(it::putAll) })
     }
     fun back(): Boolean {
+        if (page == "files" && requestedFileId() != null) return false
         if (screens?.back() == true) { updateBackButton(); return true }
         val previous = if (pageHistory.isNotEmpty()) pageHistory.removeAt(pageHistory.lastIndex) else MoteNavigation.centralParent(page)
         if (previous == null) return false

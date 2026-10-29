@@ -80,6 +80,7 @@ class RecordEditorInstrumentedTest {
     @Test fun recordStopPreviewKeepsActualEncodedAudioDraft() {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("recordEditorFixture") == "true")
         require(Build.FINGERPRINT.contains("emu64a") && context.packageName.endsWith(".dev"))
+        MoteI18n.select(context,"zh-CN")
         instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.RECORD_AUDIO)
         ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
             waitUntil("Editor loaded") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<EditText>().singleOrNull { it.contentDescription == "正在想什么" }?.isEnabled == true }; ready }

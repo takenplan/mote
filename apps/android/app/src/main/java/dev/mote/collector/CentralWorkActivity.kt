@@ -199,7 +199,7 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
                     text(answer.optString("answer"))
                     val refs = answer.optJSONArray("citations") ?: JSONArray()
                     for (citation in 0 until refs.length()) refs.getJSONObject(citation).let { ref ->
-                        text(ref.optString("excerpt")); button(MoteI18n.text("查看原文依据")) { screens.openConversationEvidence(id, ref.getString("id")) { screens.openWorkEvidence(ref.getString("id")) } }
+                        text(ref.optString("excerpt")); button(MoteI18n.text("查看原文依据")) { screens.openConversationEvidence(id, ref.getString("id")) { screens.openWorkEvidence(ref.getString("id"),id) } }
                     }
                 }
             }

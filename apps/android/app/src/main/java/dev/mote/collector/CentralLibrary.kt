@@ -160,9 +160,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }
         }
     }
-    fun captureEvidence(id: String, onBack: (() -> Unit)? = null) {
-        if (onBack == null) evidence(CentralEvidenceReference.capture(id)) else capture(id, onBack = onBack)
-    }
+    fun captureEvidence(id: String, conversationId: String? = null) { capture(id, conversationId = conversationId) }
     fun evidence(reference: String, offset: Int = 0) {
         require(reference.isNotBlank() && reference.length <= 4096)
         val materialRef = Regex("^material:(mat_[a-f0-9]{64})(?:@([a-f0-9]{64}))?$").matchEntire(reference)
@@ -183,15 +181,19 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             for (i in 0 until refs.length()) ui.button(MoteI18n.text("查看原始记录") + " · " + refs.getString(i).takeLast(8)) { evidence(refs.getString(i)) }
         }
     }
-    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, onBack: (() -> Unit)? = null) {
+    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, conversationId: String? = null) {
         val api = client
         ui.work(MoteI18n.text("正在读取原文…"), {
             val row = api.get("/api/capture-browser/" + enc(id))
             row to topicMemoryId?.let { api.get("/api/memories/" + enc(it)) }
         }) { (row, memory) ->
             if (memory != null && accept != null && !accept(memory)) return@work
-            body.removeAllViews(); screens.setBack(onBack ?: { screens.refresh() })
-            if (onBack != null) { ui.hideAskComposer(); ui.detailTitle(MoteI18n.text("原文")) }
+            if (row.optString("source") in setOf("screen","note","activity","ui_page","notification","media","device_event")) {
+                check(row.getString("id") == id)
+                ui.openCaptureReader(api.server,row,conversationId)
+                return@work
+            }
+            body.removeAllViews(); screens.setBack { screens.refresh() }
             ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
             ui.button(MoteI18n.text("基于这条记录提问")) { screens.askAbout(id) }
             val metadata = row.optJSONObject("metadata")
@@ -271,6 +273,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("处理设置")) { CentralAdmin(screens).fileSettings() }
     }
+    fun openFile(id: String) { java.util.UUID.fromString(id); file(id) }
     private fun file(id: String, offset: Int = 0) {
         val api = client
         ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->

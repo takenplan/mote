@@ -66,8 +66,8 @@ internal class NativeUiPackRegistry {
         val supplied = provider.snapshot
         val value = supplied.copy(primary = java.util.Collections.unmodifiableList(supplied.primary.toList()))
         require(value.identity !in layouts) { "Duplicate native layout provider" }
-        require(value.primary.size == 4 && value.primary.toSet() == setOf("home", "library", "ask", "sources")) { "Native layout must preserve all four primary destinations exactly once" }
-        require(value.initial in value.primary && value.navigation in setOf("adaptive", "bottom") && value.detail in setOf("split", "stack")) { "Unsupported native layout capability" }
+        require(value.primary == listOf("home")) { "Native layout has one home; management destinations remain secondary" }
+        require(value.initial == "home" && value.navigation == "home" && value.detail == "stack") { "Unsupported native layout capability" }
         layouts[value.identity] = value
     }
     @Synchronized fun bind(value: NativeUiBinding, fallbackReason: String? = null) {

@@ -65,7 +65,7 @@ class MaintenanceScreensInstrumentedTest {
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a"))
         val settings = Settings(context); val before = settings.read(); val language = MoteI18n.preference()
         require(!settings.enabled && !CaptureAccessibilityService.connected && !ProjectionService.running)
-        try { MoteI18n.select(context, "zh-CN"); block() }
+        try { settings.save(before.copy(server = "", token = "", syncPaused = true), confirmCentralEndpoint = true); MoteI18n.select(context, "zh-CN"); block() }
         finally { settings.save(before, confirmCentralEndpoint = true); MoteI18n.select(context, language) }
     }
     private fun png(color: Int): ByteArray {

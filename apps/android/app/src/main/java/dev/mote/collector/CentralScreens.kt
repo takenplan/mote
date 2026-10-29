@@ -63,7 +63,10 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             "notes" -> loadNotes()
             "overview" -> overview()
             "activity" -> activity.show()
-            "archive", "timeline", "materials", "coding", "files", "memories", "insights", "sources" -> library.show(page)
+            "files" -> ui.requestedFileId()?.let { id ->
+                if (ui.requestedFileOriginMatches()) library.openFile(id) else ui.text(MoteI18n.text("访问凭据已失效，请重新连接。"))
+            } ?: library.show(page)
+            "archive", "timeline", "materials", "coding", "memories", "insights", "sources" -> library.show(page)
             else -> admin.show(page)
         }
     }
@@ -83,7 +86,11 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
     fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
-    fun openWorkEvidence(ref: String) = library.evidence(CentralEvidenceReference.normalize(ref))
+    fun openWorkEvidence(ref: String, conversationId: String? = null) {
+        val normalized=CentralEvidenceReference.normalize(ref)
+        val captureId=CentralEvidenceReference.captureId(normalized)
+        if (captureId != null && conversationId != null) library.captureEvidence(captureId,conversationId) else library.evidence(normalized)
+    }
     fun clearPrivateState() { askState = JSONObject(); askHistory = JSONObject(); askHistoryReadable = false; modelSettings = JSONObject(); lastConversation = null; question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); library.clearTopics(); insights.clear(); body.removeAllViews() }
     fun refresh() { if (currentPage == "insights") insights.returnFromEvidence(); ui.navigate(currentPage) }
     fun insightRequest(prompt: String): JSONObject = CentralDraftWrites.barrier {
@@ -471,15 +478,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         dialog = MoteDialogBuilder(ui).setTitle(MoteI18n.text("本轮详情")).setView(ScrollView(ui).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭"),null).show()
     }
     private fun openAskCitation(conversationId: String, evidenceId: String) {
-        val position = ui.contentScroll()
-        openConversationEvidence(conversationId,evidenceId) {
-            library.captureEvidence(evidenceId) {
-                clearBack(); ui.restoreAskHeader(); buildAsk(askHistory)
-                lastConversation?.takeIf { it.optString("id") == conversationId }?.let(::renderConversation)
-                ui.restoreContentScroll(position)
-                if (askBusy()) ui.scheduleAskPoll()
-            }
-        }
+        openConversationEvidence(conversationId,evidenceId) { library.captureEvidence(evidenceId,conversationId) }
     }
     fun openConversationEvidence(conversationId: String, evidenceId: String, open: () -> Unit) {
         val api = client
@@ -662,15 +661,6 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }
             try { file.inputStream().use { current.setDataSource(it.fd) }; current.prepareAsync() }
             catch (error: Throwable) { close(); throw error }
-        }
-    }
-
-    fun openConversationEvidence(conversationId: String, evidenceId: String, open: () -> Unit) {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { CentralConversationReference.available(api, conversationId, evidenceId) }) { available ->
-            if (available) open()
-            else MoteDialogBuilder(ui).setTitle(MoteI18n.text("引用不可用")).setMessage(MoteI18n.text("引用原文已删除，历史问答仍保留。"))
-                .setPositiveButton(MoteI18n.text("返回原对话"), null).show()
         }
     }
 

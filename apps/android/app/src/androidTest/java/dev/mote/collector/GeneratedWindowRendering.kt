@@ -27,7 +27,7 @@ internal object GeneratedWindowRendering {
             "正在读取草稿…", "正在连接本机存储，文件整理将在后台继续…", "正在读取来源…", "正在读取内容…",
             "正在读取详情…", "记录已读取，正在加载图片…", "正在读取 App 与时间…", "加载预览…",
             "正在读取运行状态…", "正在读取已保存连接…", "正在读取存储位置…", "正在读取日志…",
-            "正在读取本机同步状态…", "正在读取本机统计…", "正在生成压缩预览…", "正在读取日程建议…").map { MoteI18n.text(it) }.toSet() +
+            "正在读取本机同步状态…", "正在读取本机统计…", "正在生成压缩预览…", "正在读取日程建议…", "正在读取已安装应用…").map { MoteI18n.text(it) }.toSet() +
             listOf("本机记录", "中央归档").map { MoteI18n.text("正在读取{0}…", MoteI18n.text(it)) }
         return views(root).filterIsInstance<TextView>().none { it.isShown && it.text.toString() in pending }
     }
@@ -247,7 +247,7 @@ internal object GeneratedWindowRendering {
                 when (centralPage) {
                     "overview" -> Triple(centralPage, "content", "模型已配置")
                     "files" -> Triple(centralPage, "empty", "当前范围内暂无条目。没有列出不代表不存在。")
-                    "notes" -> Triple(centralPage, "restriction", "图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。")
+                    "notes" -> Triple(centralPage, "content", "已经留下的心绪与杂事")
                     else -> Triple(centralPage, "content", title)
                 }
             } else error("A new generated scene needs an explicit readiness contract: $name")

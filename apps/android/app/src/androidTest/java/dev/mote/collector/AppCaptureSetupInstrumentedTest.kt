@@ -25,8 +25,8 @@ class AppCaptureSetupInstrumentedTest {
         add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) }
     }
     private fun dialogViews() = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views)
-    private fun button(label: String) = dialogViews().filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == label }
-    private fun menu(activity: MainActivity, label: String) = views(activity.window.decorView).single { it.isShown && it.tag == "menu:$label" }.performClick()
+    private fun button(label: String) = dialogViews().filterIsInstance<TextView>().singleOrNull { it.isShown && it.isClickable && it.text.toString() == label } ?: error("Missing action $label: " + dialogViews().filterIsInstance<TextView>().filter { it.isShown }.joinToString(" | ") { it.text.toString() })
+    private fun menu(activity: MainActivity, label: String) { if (label == "权限与后台运行") button("系统权限").performClick() else views(activity.window.decorView).single { it.isShown && it.tag == "menu:$label" }.performClick() }
     private fun waitFor(condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + 10000
         while (!condition()) { check(SystemClock.elapsedRealtime() < deadline) { "Setup did not finish" }; Thread.sleep(30) }
@@ -44,7 +44,7 @@ class AppCaptureSetupInstrumentedTest {
     }
     private fun openApp(scenario: ActivityScenario<MainActivity>, id: String = context.packageName) {
         scenario.onActivity { activity ->
-            views(activity.window.decorView).filterIsInstance<EditText>().single { it.hint?.toString() == "搜索应用名称" }.setText(id)
+            views(activity.window.decorView).filterIsInstance<EditText>().single { it.hint?.toString() == "搜索应用" }.setText(id)
         }
         waitFor {
             var selected = false
@@ -94,8 +94,8 @@ class AppCaptureSetupInstrumentedTest {
             }
             scenario.recreate(); scenario.awaitMainUi()
             scenario.onActivity { activity ->
-                assertTrue(views(activity.window.decorView).single {row->row.tag=="primary:SOURCES"}.isSelected)
-                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any {it.isShown&&it.text.toString()=="记录屏幕"})
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { row -> row.tag == "local-page-title" && row.text.toString() == "采集范围" })
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any {it.isShown&&it.text.toString()=="采集范围"})
                 assertFalse(settings.enabled);assertFalse(settings.capturePreviewSeen())
             }
         }
@@ -119,12 +119,12 @@ class AppCaptureSetupInstrumentedTest {
             assertEquals(AppCollectionMode.ACTIVITY,settings.read().collectionRules.apps[context.packageName])
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {button("返回应用列表").performClick()}
-            scenario.onActivity {activity ->views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="使用本机 OCR 补充结构化内容"}.performClick()}
+            scenario.onActivity {activity -> button("资料说明与其他设置").performClick(); views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="本机 OCR 补充"}.performClick()}
             assertFalse(settings.read().localContentOcr);assertFalse(settings.enabled)
             scenario.recreate();scenario.awaitMainUi()
             scenario.onActivity {activity ->
-                assertTrue(views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="使用本机 OCR 补充结构化内容"}.isChecked)
-                button("保存并预览").performClick()
+                assertTrue(views(activity.window.decorView).filterIsInstance<CheckBox>().single {it.text.toString()=="本机 OCR 补充"}.isChecked)
+                button("资料说明与其他设置").performClick(); button("高级采集设置").performClick(); button("保存并预览").performClick()
             }
             waitFor {settings.read().localContentOcr&&settings.read().collectionRules.apps[context.packageName]==AppCollectionMode.SCREENSHOT_STRUCTURED}
             waitFor {var shown=false;instrumentation.runOnMainSync {shown=dialogViews().filterIsInstance<TextView>().any {it.isShown&&it.text.contains("这里是生成的格式示例")}};shown}
@@ -215,7 +215,7 @@ class AppCaptureSetupInstrumentedTest {
             }
             scenario.onActivity { activity ->
                 assertFalse(views(activity.window.decorView).filterIsInstance<Spinner>().any {it.isShown&&it.tag=="uiPageMode"})
-                button("保存并预览").performClick()
+                button("资料说明与其他设置").performClick(); button("高级采集设置").performClick(); button("保存并预览").performClick()
             }
             waitFor { settings.read().uiPageRules != "[]" }
             waitFor {
@@ -279,7 +279,7 @@ class AppCaptureSetupInstrumentedTest {
                 assertTrue(current.filterIsInstance<CheckBox>().single { it.tag == "app-inherit:${context.packageName}" }.isChecked)
                 assertFalse(current.filterIsInstance<CheckBox>().single { it.tag == "app-channel:${context.packageName}:2" }.isChecked)
                 button("返回应用列表").performClick()
-                views(activity.window.decorView).single { it.tag == "app-scope:RULES" }.performClick()
+                button("资料说明与其他设置").performClick(); views(activity.window.decorView).single { it.tag == "app-scope:RULES" }.performClick()
                 button("保存设置").performClick()
             }
             waitFor { context.packageName !in settings.read().collectionRules.apps }
@@ -292,9 +292,10 @@ class AppCaptureSetupInstrumentedTest {
         val rule = AppPageSetup.fieldRule(context.packageName, version, "article", mapOf("title" to "generated:id/title", "body" to "generated:id/body"))
         settings.save(settings.read().copy(uiPageRules = rule, appCollectionRules = AppCollectionRules(AppCollectionMode.ACTIVITY,
             mapOf(context.packageName to AppCollectionMode.STRUCTURED)).json()))
-        val intent = android.content.Intent(context, MainActivity::class.java).putExtra("page", "CAPTURE")
+        val intent = android.content.Intent(context, MainActivity::class.java).putExtra("page", "SETTINGS")
         ActivityScenario.launch<MainActivity>(intent).awaitMainUi().use { scenario ->
             scenario.onActivity { activity ->
+                menu(activity,"偏好与本机维护"); button("高级与维护").performClick(); menu(activity,"采集与存储")
                 views(activity.window.decorView).filterIsInstance<CheckBox>().single { it.text.toString() == "使用投屏模式（只截图，每次需授权）" }.performClick()
                 activity.openMoteLocalPage("PRIVACY")
             }
@@ -318,11 +319,11 @@ class AppCaptureSetupInstrumentedTest {
             }
             scenario.recreate(); scenario.awaitMainUi()
             scenario.onActivity { activity ->
-                button("返回原配置页面").performClick()
-                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "记录屏幕" })
-                menu(activity, "权限与后台运行"); button("返回首页继续记录").performClick()
-                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "个人资料库" })
-                assertTrue(views(activity.window.decorView).single { row -> row.tag == "primary:HOME" }.isSelected)
+                button("返回采集范围").performClick()
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "采集范围" })
+                menu(activity, "权限与后台运行"); button("返回采集范围").performClick(); activity.openGeneratedHome()
+                assertTrue(views(activity.window.decorView).any { it.isShown && it.tag == "home-record-action" })
+                assertFalse(views(activity.window.decorView).any { row -> row.isShown && row.tag?.toString()?.startsWith("primary:") == true })
                 assertFalse(Settings(context).enabled)
             }
         }

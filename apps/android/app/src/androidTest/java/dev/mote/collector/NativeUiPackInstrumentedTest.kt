@@ -67,12 +67,12 @@ class NativeUiPackInstrumentedTest {
             Thread.sleep(30)
         }
         var labels = ""; scenario.onActivity { labels = visible(it).filterIsInstance<TextView>().joinToString(" | ") { row -> row.text.toString() } }
-        fail("$description: $labels")
+        fail("$description: $labels | titleColor=" + run { var color = ""; scenario.onActivity { a -> color = visible(a).filterIsInstance<TextView>().filter { it.tag == "local-page-title" }.joinToString { "${it.currentTextColor}/${MoteTheme.ink} enabled=${it.isEnabled}" } }; color })
     }
     private fun variant(): NativeUiBinding {
         val suffix = UUID.randomUUID().toString()
         val theme = NativeThemeSnapshot(NativeUiIdentity("fixture.native.$suffix", "1"), NativeUiPacks.registry.theme().tokens + mapOf("background" to "#11202a", "ink" to "#dceef3", "primary-background" to "#cbe4c9", "primary-ink" to "#142515", "font" to "monospace", "control-height-mobile" to "56px"))
-        val layout = NativeLayoutSnapshot(NativeUiIdentity("fixture.native.$suffix", "1"), listOf("sources", "activity", "ask", "library"), "sources", "bottom", "stack")
+        val layout = NativeLayoutSnapshot(NativeUiIdentity("fixture.native.$suffix", "1"), listOf("home"), "home", "home", "stack")
         NativeUiPacks.registry.register(object : NativeThemeProvider { override val snapshot = theme })
         NativeUiPacks.registry.register(object : NativeLayoutProvider { override val snapshot = layout })
         themes.add(theme.identity); layouts.add(layout.identity)
@@ -95,10 +95,16 @@ class NativeUiPackInstrumentedTest {
                 assertEquals(Color.parseColor("#1c1b1a"), MoteTheme.background)
                 render(activity, "home-default")
             }
-            for (destination in listOf("采集与同步", "资料与记忆", "设置")) {
+            for (destination in listOf("资料与记忆", "设置")) {
                 scenario.onActivity { activity -> activity.openGeneratedMenu(); visible(activity).single { it.tag == "menu:$destination" }.performClick() }
                 scenario.onActivity { assertFalse(visible(it).any { row -> row.tag == "home-record-action" }); assertFalse(Settings(it).enabled) }
             }
+            val sourceMonitor = instrumentation.addMonitor(SourcesActivity::class.java.name,null,false)
+            try {
+                scenario.onActivity { a -> a.openGeneratedMenu(); visible(a).single { it.tag == "menu:采集与同步" }.performClick() }
+                val source = instrumentation.waitForMonitorWithTimeout(sourceMonitor,10_000) as SourcesActivity
+                instrumentation.runOnMainSync { assertNotNull(source.window.decorView.findViewWithTag<View>("sources-add")); source.finish() }
+            } finally { instrumentation.removeMonitor(sourceMonitor) }
             scenario.onActivity { it.openGeneratedHome() }
             scenario.recreate(); scenario.awaitMainUi()
             await(scenario, "The light home survives recreation") { visible(it).any { row -> row.tag == "home-record-action" } }

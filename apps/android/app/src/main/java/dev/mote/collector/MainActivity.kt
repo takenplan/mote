@@ -108,7 +108,7 @@ class MainActivity : MoteActivity() {
         PRIVACY("采集范围", "SETTINGS"), PERMISSIONS("系统权限与后台运行", "DEVICE_OPTIONS"),
         DEVICE_OPTIONS("这台手机", "SETTINGS"), APPEARANCE("外观与语言", "DEVICE_OPTIONS"),
         ABOUT("关于、更新与反馈", "DEVICE_OPTIONS"), DEVELOPER("开发者选项", "DEVICE_OPTIONS"),
-        DIAGNOSTICS("诊断与支持", "DEVELOPER")
+        DIAGNOSTICS("诊断与支持", "DEVICE_OPTIONS")
     ;
         val title get() = MoteI18n.text(titleKey)
         fun belongsToSettings(): Boolean = this == SETTINGS || parent?.let { valueOf(it).belongsToSettings() } == true
@@ -356,7 +356,7 @@ class MainActivity : MoteActivity() {
         lightMenu(MoteI18n.text("日程与待办"), "overview") { startActivity(Intent(this, CalendarActionsActivity::class.java)) }
         text("", NativeFontRole.META).apply { (layoutParams as LinearLayout.LayoutParams).height = dp(10) }
         caption(MoteI18n.text("这台手机"))
-        lightMenu(MoteI18n.text("采集与同步"), "sources") { showPage(Page.SOURCES) }
+        lightMenu(MoteI18n.text("采集与同步"), "sources") { startActivity(Intent(this,SourcesActivity::class.java)) }
         lightMenu(MoteI18n.text("设置"), "settings") { showPage(Page.SETTINGS) }
         val captureControl = lightControl(MoteI18n.text("屏幕采集"), MoteI18n.text("查看")) {
             if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
@@ -525,7 +525,7 @@ class MainActivity : MoteActivity() {
         val kind = MoteI18n.text(if (note) "随手记" else "采集记录")
         val provenance = if (title == kind) timestamp else "$kind · $timestamp"
         addContentRow(parent, title, NativeRecordPreview.text(item), "library-record:" + item.getString("id"), if (note) "notes" else "capture", listOf(provenance, location).filter(String::isNotBlank).joinToString(" · ")) {
-            startActivity(Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordVersion", LibraryCaptureProjection.version(item)).putExtra("recordObservationCount", LibraryCaptureProjection.observations(item)).putExtra("recordRemote", remote).putExtra("recordOrigin", scope).putExtra("recordDeviceId", item.optString("deviceId")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()))
+            startActivity(Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("directReader",true).putExtra("recordVersion", LibraryCaptureProjection.version(item)).putExtra("recordObservationCount", LibraryCaptureProjection.observations(item)).putExtra("recordRemote", remote).putExtra("recordOrigin", scope).putExtra("recordDeviceId", item.optString("deviceId")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()))
         }
     }
 
@@ -579,7 +579,7 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("记录与后台"))
         settingsRow(MoteI18n.text("系统权限与后台运行"),MoteI18n.text("按需授权，返回后明确开始")) { showPage(Page.PERMISSIONS) }
         settingsRow(MoteI18n.text("图像质量与去重"),MoteI18n.text("保存设置、预览与批量比较")) { showPage(Page.PROCESSING) }
-        settingsRow(MoteI18n.text("本机日历"),MoteI18n.text("授权后选择读取范围")) { startActivity(Intent(this,SourcesActivity::class.java)) }
+        settingsRow(MoteI18n.text("本机日历"),MoteI18n.text("授权后选择读取范围")) { startActivity(Intent(this,SourcesActivity::class.java).putExtra("addCalendar",true)) }
         section(MoteI18n.text("核对与支持"))
         settingsRow(MoteI18n.text("本机统计"),MoteI18n.text("空间与实际采集计数")) { startActivity(Intent(this,StorageStatisticsActivity::class.java)) }
         settingsRow(MoteI18n.text("上传历史保存时长"),MoteI18n.text("只清理日志，不删除资料")) { startActivity(Intent(this,UploadHistorySettingsActivity::class.java)) }
@@ -774,6 +774,14 @@ class MainActivity : MoteActivity() {
         }
         content.addView(imageDedupeMode, LinearLayout.LayoutParams(-1, dp(56))); track(imageDedupeMode, "imageDedupeMode")
         help(MoteI18n.text("图片去重说明"), MoteI18n.text("与同一应用最近保存的画面比较。重处理前命中时仅记录应用活动，不保存或审查当前图片，也不沿用旧文字。开启图片对比诊断时保留审查后的对比链路。近似档位可能忽略细小变化；重启后重新建立基准。"))
+        menu(MoteI18n.text("图片压缩预览"), MoteI18n.text("质量、文件大小、缩放比例与放大对比"), "chart") {
+            @Suppress("DEPRECATION") startActivityForResult(Intent(this, CompressionPreviewActivity::class.java), 105)
+        }
+        imageDedupeDiagnosticsEnabled = check(MoteI18n.text("临时保留图片去重对比记录"), config.imageDedupeDiagnosticsEnabled)
+        help(MoteI18n.text("图片对比诊断说明"), MoteI18n.text("默认关闭。开启并保存后，将已去重图片及对比原图临时保存在本机，供核对分数与判断依据。最多 20 组、32 MiB，24 小时后到期；读取时清理，系统可能延后后台清理。关闭并保存后清空。保留的都是通过隐私检查和遮罩后的图片。"))
+        menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
+        menu(MoteI18n.text("查看图片去重记录"), MoteI18n.text("对比两张图片、分数与依据，可随时清空"), "chart") { startActivity(Intent(this, ImageDedupeDiagnosticsActivity::class.java)) }
+
 
     }
 
@@ -907,6 +915,10 @@ class MainActivity : MoteActivity() {
         heading.first.visibility = View.GONE
         val appEditorHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(appEditorHost)
         val globalSettings = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(globalSettings); content = globalSettings
+        var advancedPrivacyExpanded = false
+        var captureExtrasExpanded = false
+        var captureExtras: View? = null
+        var captureExtrasToggle: View? = null
         val regular = content
         val rawRules = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级：手工编辑包名规则")) { rawRules.visibility = if (rawRules.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
@@ -975,7 +987,9 @@ class MainActivity : MoteActivity() {
                     @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 106) }
             }, detailChanged = { detail ->
                 appOverview.visibility = if (detail) View.GONE else View.VISIBLE
-                globalSettings.visibility = if (detail) View.GONE else View.VISIBLE
+                globalSettings.visibility = if (!detail && advancedPrivacyExpanded) View.VISIBLE else View.GONE
+                captureExtras?.visibility = if (!detail && captureExtrasExpanded) View.VISIBLE else View.GONE
+                captureExtrasToggle?.visibility = if (detail) View.GONE else View.VISIBLE
             })
         appEditorHost.addView(appCaptureEditor)
         text(MoteI18n.text("仅对已选择结构化内容的应用启用。截图关闭时，临时像素只在本机识别后释放，不保存、不上传图片。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
@@ -1020,7 +1034,8 @@ class MainActivity : MoteActivity() {
         content = appConfigurationContent
         globalSettings.visibility = View.GONE
         val extras = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        MoteUi.action(button(MoteI18n.text("资料说明与其他设置")) { extras.visibility = if (extras.visibility == View.VISIBLE) View.GONE else View.VISIBLE },MoteUi.ButtonRole.TEXT).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
+        captureExtras = extras
+        captureExtrasToggle = MoteUi.action(button(MoteI18n.text("资料说明与其他设置")) { captureExtrasExpanded = !captureExtrasExpanded; extras.visibility = if (captureExtrasExpanded) View.VISIBLE else View.GONE },MoteUi.ButtonRole.TEXT).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
         content.addView(extras); content = extras
         text(MoteI18n.text(if (config.mode == "projection") "采集方式：投屏模式" else "采集方式：无障碍模式"),NativeFontRole.META,NativeColorRole.MUTED)
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -1030,7 +1045,7 @@ class MainActivity : MoteActivity() {
         (localContentOcr.parent as ViewGroup).removeView(localContentOcr); localContentOcr.text = MoteI18n.text("本机 OCR 补充"); content.addView(localContentOcr)
         text(MoteI18n.text("仅对已选结构化内容的应用生效。截图关闭时，临时像素识别后释放；截图按独立选择保存和发送。"),NativeFontRole.META,NativeColorRole.MUTED)
         content.addView(appCaptureEditor.advancedFilters())
-        MoteUi.action(button(MoteI18n.text("高级采集设置")) { globalSettings.visibility = if (globalSettings.visibility == View.VISIBLE) View.GONE else View.VISIBLE },MoteUi.ButtonRole.TEXT)
+        MoteUi.action(button(MoteI18n.text("高级采集设置")) { advancedPrivacyExpanded = !advancedPrivacyExpanded; globalSettings.visibility = if (advancedPrivacyExpanded) View.VISIBLE else View.GONE },MoteUi.ButtonRole.TEXT)
         (globalSettings.parent as ViewGroup).removeView(globalSettings); content.addView(globalSettings)
         content = appConfigurationContent
         (startRange.parent as ViewGroup).removeView(startRange); content.addView(startRange)
@@ -1072,11 +1087,6 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("图片压缩预览"), MoteI18n.text("质量、文件大小、缩放比例与放大对比"), "chart") {
             @Suppress("DEPRECATION") startActivityForResult(Intent(this, CompressionPreviewActivity::class.java), 105)
         }
-        section(MoteI18n.text("图片去重排查"))
-        imageDedupeDiagnosticsEnabled = check(MoteI18n.text("临时保留图片去重对比记录"), config.imageDedupeDiagnosticsEnabled)
-        help(MoteI18n.text("图片对比诊断说明"), MoteI18n.text("默认关闭。开启并保存后，将已去重图片及对比原图临时保存在本机，供核对分数与判断依据。最多 20 组、32 MiB，24 小时后到期；读取时清理，系统可能延后后台清理。关闭并保存后清空。保留的都是通过隐私检查和遮罩后的图片。"))
-        menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
-        menu(MoteI18n.text("查看图片去重记录"), MoteI18n.text("对比两张图片、分数与依据，可随时清空"), "chart") { startActivity(Intent(this, ImageDedupeDiagnosticsActivity::class.java)) }
         section(MoteI18n.text("调试连接"))
         http = check(MoteI18n.text("允许调试局域网 HTTP（明文，仅私有 IP）"), config.debugHttp).apply { isEnabled = BuildConfig.DEBUG }
         section(MoteI18n.text("构建与运行环境"))
@@ -1200,7 +1210,7 @@ class MainActivity : MoteActivity() {
         Page.STORAGE -> current.copy(maxQueueMiB = number(maxQueue, 8..4096), uploadedRetentionDays = number(uploadedRetention, 0..365))
         Page.PROCESSING -> current.copy(
             jpegQuality = number(jpegQuality, 40..95), captureMaxSide = number(captureMaxSide, 640..2560),
-            imageDedupeMode = imageDedupeModes[imageDedupeMode.selectedItemPosition])
+            imageDedupeMode = imageDedupeModes[imageDedupeMode.selectedItemPosition], imageDedupeDiagnosticsEnabled = imageDedupeDiagnosticsEnabled.isChecked)
         Page.PRIVACY -> current.copy(
             localContentOcr = localContentOcr.isChecked, uiPageMode=current.uiPageMode, uiPageRules=checked(uiPageRules){uiPageRules.text.toString().also{UiPageRules.parse(it)}},
             excludedPackages = excludes.text.toString(), masks = checked(masks) { masks.text.toString().also { Mask.parse(it) } },
@@ -1208,7 +1218,7 @@ class MainActivity : MoteActivity() {
             ocrMode = OcrPolicy.modes[ocrMode.selectedItemPosition], ocrAppModes = checked(ocrAppModes) { ocrAppModes.text.toString().also { OcrPolicy.validate(OcrPolicy.modes[ocrMode.selectedItemPosition], it) } },
             metadataEnabled = metadataEnabled.isChecked, uploadGate = UploadGateConfig(gateEnabled.isChecked, gateText.text.toString(), listOf("hold", "drop", "allow")[gateFailure.selectedItemPosition]))
         Page.DIAGNOSTICS -> current.copy(diagnosticsEnabled = diagnosticEnabled.isChecked, diagnosticsIntervalSeconds = number(diagnosticInterval, 15..3600))
-        Page.DEVELOPER -> current.copy(debugHttp = http.isChecked, imageDedupeDiagnosticsEnabled = imageDedupeDiagnosticsEnabled.isChecked)
+        Page.DEVELOPER -> current.copy(debugHttp = http.isChecked)
         else -> current
     }
     private fun number(field: EditText, range: IntRange): Int = checked(field) {
@@ -1772,7 +1782,6 @@ class MainActivity : MoteActivity() {
 
     private fun pageBackTarget(page: Page): Page? = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.LOCAL_ASK) Page.ASK
         else if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.LOCAL_ACTIVITY) Page.ACTIVITY
-        else if (page == Page.DIAGNOSTICS && !RuntimeProfile.current.developerTools) Page.DEVICE_OPTIONS
         else page.parent?.let(Page::valueOf)
 
     private fun navigatePageBack(page: Page) {

@@ -20,10 +20,11 @@ internal class CentralInsights(private val screens: CentralScreens) {
     private var detailScroll = 0
     private var prompt = ""
     private var report: JSONObject? = null
+    private var formatted = true
     private var lastRun = ""
     private var evidenceRef: String? = null
     private var resumeValidation = false
-    fun select(id: String) { require(InsightPresentation.validId(id)); selected = id; mode = "detail"; detailScroll = 0; report = null }
+    fun select(id: String) { require(InsightPresentation.validId(id)); selected = id; mode = "detail"; detailScroll = 0; report = null; formatted = true }
     fun clear() { selected = null; runId = null; report = null; prompt = ""; evidenceRef = null; mode = "history"; cursors = mutableListOf(null); lastRun = ""; historyScroll = 0; detailScroll = 0; resumeValidation = false }
     fun pause() { resumeValidation = true }
     fun resume() { if (resumeValidation) {
@@ -39,13 +40,14 @@ internal class CentralInsights(private val screens: CentralScreens) {
     fun save(out: Bundle) {
         if (mode == "detail") detailScroll = ui.contentScroll() else if (mode == "history") historyScroll = ui.contentScroll()
         out.putString("mode", mode); out.putString("selected", selected); out.putString("runId", runId); out.putString("prompt", prompt)
-        out.putString("evidence", evidenceRef)
+        out.putString("evidence", evidenceRef); out.putBoolean("formatted",formatted)
         out.putStringArrayList("cursors", ArrayList(cursors.map { it.orEmpty() })); out.putInt("historyScroll", historyScroll); out.putInt("detailScroll", detailScroll)
     }
     fun restore(value: Bundle) {
         selected = value.getString("selected")?.takeIf(InsightPresentation::validId); runId = value.getString("runId")?.takeIf(InsightPresentation::validId)
         mode = value.getString("mode").takeIf { it in setOf("history", "detail", "create", "run", "evidence") } ?: "history"
         evidenceRef = value.getString("evidence")?.takeIf { CentralEvidenceReference.captureId(it) != null }
+        formatted = value.getBoolean("formatted",true)
         prompt = value.getString("prompt").orEmpty().take(8000)
         cursors = value.getStringArrayList("cursors")?.map { it.takeIf(String::isNotBlank) }?.toMutableList()?.takeIf { it.isNotEmpty() } ?: mutableListOf(null)
         historyScroll = value.getInt("historyScroll"); detailScroll = value.getInt("detailScroll")
@@ -125,7 +127,20 @@ internal class CentralInsights(private val screens: CentralScreens) {
     private fun drawReport(value: JSONObject) {
         ui.text(InsightPresentation.title(value), NativeFontRole.TITLE_MOBILE)
         ui.text(value.optString("createdAt"), NativeFontRole.SUPPORT)
-        ui.text(InsightPresentation.answer(value))
+        val answer = InsightPresentation.answer(value)
+        val content = ui.text("").apply { tag = "insight-content"; setTextIsSelectable(true); setLineSpacing(0f,1.3f) }
+        fun renderAnswer() {
+            if (!formatted) { content.text = answer; return }
+            val display = NativeAnswerPresentation.format(answer, emptyList())
+            content.text = android.text.SpannableString(display.text).apply {
+                display.emphasis.forEach { mark -> setSpan(android.text.style.StyleSpan(if (mark.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.ITALIC),mark.start,mark.end,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+            }
+        }
+        renderAnswer()
+        MoteUi.action(ui.button(MoteI18n.text("更多")) {
+            MoteDialogBuilder(ui).setTitle(MoteI18n.text("显示方式"))
+                .setSingleChoiceItems(arrayOf(MoteI18n.text("排版结果"),MoteI18n.text("标准阅读")),if (formatted) 0 else 1) { dialog, which -> formatted = which == 0; renderAnswer(); dialog.dismiss() }.show()
+        },MoteUi.ButtonRole.TEXT).tag = "insight-more"
         value.optJSONObject("snapshot")?.let { snapshot ->
             ui.disclosure(MoteI18n.text("资料范围与覆盖")) { target ->
                 ui.text(MoteI18n.text("资料截止时间") + " · " + snapshot.optString("asOf"), parent = target)
@@ -140,7 +155,7 @@ internal class CentralInsights(private val screens: CentralScreens) {
             val citation = citations.getJSONObject(i); val id = citation.optString("id")
             val card = ui.card(); ui.text(citation.optString("appName") + " · " + citation.optString("contentAt", citation.optString("capturedAt")), parent = card)
             ui.text(citation.optString("excerpt"), parent = card)
-            ui.button(MoteI18n.text("查看原文依据"), parent = card) { detailScroll = ui.contentScroll(); evidenceRef = CentralEvidenceReference.capture(id); mode = "evidence"; screens.openWorkEvidence(evidenceRef!!) }
+            ui.button(MoteI18n.text("查看原文依据"), parent = card) { detailScroll = ui.contentScroll(); evidenceRef = null; mode = "detail"; screens.openWorkEvidence(CentralEvidenceReference.capture(id)) }
         }
         ui.button(MoteI18n.text("刷新")) { readReport() }
         ui.disclosure(MoteI18n.text("生成信息与检索过程")) { target -> CentralAdmin(screens).values(JSONObject().put("runId", value.optString("runId")).put("trace", value.optJSONArray("trace") ?: JSONArray()), target) }

@@ -88,7 +88,7 @@ internal object SecondaryUi {
 private class SecondaryActions(context: android.content.Context) : ViewGroup(context) {
     override fun generateDefaultLayoutParams() = MarginLayoutParams(-2, -2)
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasureSpec); var x = 0; var y = 0; var line = 0
+        val width = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight; var x = 0; var y = paddingTop; var line = 0
         for (i in 0 until childCount) {
             val child = getChildAt(i); if (child.visibility == GONE) continue
             measureChildWithMargins(child, widthMeasureSpec, 0, heightMeasureSpec, 0)
@@ -97,15 +97,15 @@ private class SecondaryActions(context: android.content.Context) : ViewGroup(con
             if (x > 0 && x + w > width) { x = 0; y += line; line = 0 }
             x += w; line = maxOf(line, h)
         }
-        setMeasuredDimension(width, resolveSize(y + line, heightMeasureSpec))
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), resolveSize(y + line + paddingBottom, heightMeasureSpec))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        var x = 0; var y = 0; var line = 0
+        var x = paddingLeft; var y = paddingTop; var line = 0
         for (i in 0 until childCount) {
             val child = getChildAt(i); if (child.visibility == GONE) continue
             val p = child.layoutParams as MarginLayoutParams
             val w = child.measuredWidth + p.leftMargin + p.rightMargin; val h = child.measuredHeight + p.topMargin + p.bottomMargin
-            if (x > 0 && x + w > width) { x = 0; y += line; line = 0 }
+            if (x > paddingLeft && x + w > width - paddingRight) { x = paddingLeft; y += line; line = 0 }
             child.layout(x + p.leftMargin, y + p.topMargin, x + p.leftMargin + child.measuredWidth, y + p.topMargin + child.measuredHeight)
             x += w; line = maxOf(line, h)
         }

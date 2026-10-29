@@ -174,6 +174,10 @@ class FileContentActivity : MoteActivity() {
         val original = if (local != null) local.first.drop(offset).take(4000) else detail.capture?.optString("ocrText")?.takeIf { it.isNotBlank() } ?: item.optString("text")
         if (original.isNotBlank()) text(original, 16f)
         else text(MoteI18n.text("本机保留文件信息与待发原始字节；正文由中央整理后显示。"), MoteTheme.fontSupport.toFloat())
+        if (detail.source.description.isNotBlank()) {
+            text(MoteI18n.text("资料说明"), MoteTheme.fontSupport.toFloat())
+            text(detail.source.description, MoteTheme.fontBody.toFloat())
+        }
         if (local != null) {
             text(MoteI18n.text(if (local.second && offset + 4000 >= local.first.length) "已显示本机保存原文的最后一页" else "正在预览本机保存的原文，尚未显示完整内容"), 12f)
             if (offset + 4000 < local.first.length) button(MoteI18n.text("继续展开")) { offset += 4000; load() }

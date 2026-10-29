@@ -102,7 +102,7 @@ class ConnectionActivity : MoteActivity() {
         }
         val scan = button(MoteI18n.text("扫描二维码")) { armPicker(1); startActivityForResult(Intent(this, ConnectionScanActivity::class.java), 1) }
         val choose = button(MoteI18n.text("选择邀请文件")) { armPicker(2); startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain")), 2) }
-        input = EditText(this).apply { hint = MoteI18n.text("粘贴 JSON 或 mote://connect…"); minLines = 3; maxLines = 7; isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        input = EditText(this).apply { hint = MoteI18n.text("粘贴 JSON 或 mote://connect…"); MoteUi.textInput(this,android.text.InputType.TYPE_CLASS_TEXT,multiline = true); minLines = 3; maxLines = 7; isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
             filters = arrayOf(android.text.InputFilter.LengthFilter(ConnectionInvitation.MAX_BYTES * 2)) }; root.addView(input)
         allowHttp = CheckBox(this).apply { text = MoteI18n.text("开发调试：允许本机 loopback HTTP 邀请"); isChecked = config.debugHttp; isEnabled = BuildConfig.DEBUG }; root.addView(allowHttp)
         val inspect = button(MoteI18n.text("核对连接"),primary = true) { parseInput() }
@@ -147,15 +147,14 @@ class ConnectionActivity : MoteActivity() {
         root.setPadding(moteDp(20),moteDp(28),moteDp(20),moteDp(28))
         text(MoteI18n.text("把记录接到一起"),22f).apply { MoteUi.type(this,NativeFontRole.TITLE_MOBILE); MoteUi.textColor(this,NativeColorRole.INK) }
         text(MoteI18n.text("在中央工作台的「设备」里获取连接邀请。"),13f).apply { MoteUi.textColor(this,NativeColorRole.MUTED); setPadding(0,moteDp(6),0,moteDp(24)) }
-        val choices = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        val choices = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL; isBaselineAligned = false }
         choices.addView(scan,LinearLayout.LayoutParams(0,-2,1f).apply { marginEnd = moteDp(8) })
         choices.addView(choose,LinearLayout.LayoutParams(0,-2,1f)); root.addView(choices)
         text(MoteI18n.text("或粘贴邀请"),11f).apply { MoteUi.textColor(this,NativeColorRole.MUTED); setPadding(0,moteDp(24),0,moteDp(10)) }
         MoteUi.field(input); root.addView(input,LinearLayout.LayoutParams(-1,moteDp(130)))
-        val actions = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0,moteDp(12),0,moteDp(20)) }
-        actions.addView(inspect,LinearLayout.LayoutParams(-2,-2))
-        actions.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("稍后连接"); setOnClickListener { if (!working && !task.busy) finish() } },MoteUi.ButtonRole.TEXT),LinearLayout.LayoutParams(-2,-2).apply { marginStart = moteDp(8) })
-        root.addView(actions)
+        val actions = SecondaryUi.actions(root).apply { setPadding(0,moteDp(12),0,moteDp(20)) }
+        actions.addView(inspect,android.view.ViewGroup.MarginLayoutParams(-2,-2))
+        actions.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("稍后连接"); setOnClickListener { if (!working && !task.busy) finish() } },MoteUi.ButtonRole.TEXT),android.view.ViewGroup.MarginLayoutParams(-2,-2).apply { marginStart = moteDp(8) })
         preview.visibility = View.GONE; confirmAction.visibility = View.GONE
         root.addView(preview); root.addView(confirmAction); root.addView(status)
         if (initial.status == "unchecked" && !config.hasSyncConnection()) status.text = ""
@@ -177,10 +176,10 @@ class ConnectionActivity : MoteActivity() {
         reviewText(MoteI18n.text("这台设备将可以访问你的全部资料和设置。\n新保存的记录将按当前发送设置同步到这里。"),NativeFontRole.SUPPORT)
         val consent = reviewText(MoteI18n.text("将使用已有设备 ID 和当前采集设置，不会清空设置、队列或模型。首次连接会把尚未绑定的本机资料绑定到此节点；已绑定其他节点的待同步资料不能改投。"),NativeFontRole.SUPPORT)
         consent.textSize = 11f
-        val reviewActions = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        reviewActions.addView(confirmAction,LinearLayout.LayoutParams(-2,-2))
-        reviewActions.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("返回修改"); setOnClickListener { if (!working && !task.busy) showInvitation() } },MoteUi.ButtonRole.SECONDARY),LinearLayout.LayoutParams(-2,-2).apply { marginStart = moteDp(8) })
-        reviewForm.addView(reviewActions); root.addView(invitationForm); root.addView(reviewForm); root.addView(status)
+        val reviewActions = SecondaryUi.actions(reviewForm)
+        reviewActions.addView(confirmAction,android.view.ViewGroup.MarginLayoutParams(-2,-2))
+        reviewActions.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("返回修改"); setOnClickListener { if (!working && !task.busy) showInvitation() } },MoteUi.ButtonRole.SECONDARY),android.view.ViewGroup.MarginLayoutParams(-2,-2).apply { marginStart = moteDp(8) })
+        root.addView(invitationForm); root.addView(reviewForm); root.addView(status)
         MoteUi.styleTree(root)
         retainedEditor?.let { retained ->
             input.setText(retained.input); name.setText(retained.name); allowHttp.isChecked = retained.debugHttp; retainedEditor = null
