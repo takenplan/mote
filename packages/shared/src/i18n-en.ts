@@ -1,5 +1,15 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "将文件拖到这里": "Drop files here",
+  "文档、聊天导出、ZIP 和媒体文件": "Documents, chat exports, ZIP and media files",
+  "（选填）": "(optional)",
+  "默认使用文件或文件夹名称": "Uses the file or folder name by default",
+  "可说明作者、时间、资料格式，以及哪些内容属于你。": "You can describe the author, time, format and which content is yours.",
+  "更多选项": "More options",
+  "本次图片处理": "Image processing for this import",
+  "上传完成前请保持当前浏览器打开。": "Keep this browser open until the upload finishes.",
+  "发现本机目录": "Local directory found",
+  "未发现本机目录": "No local directory found",
   "原始转写保留。": "The original transcript is retained.",
   "已有授权范围内的来源与原文": "Sources and originals within the existing authorization",
   "记忆及其原文依据": "Memories and their original evidence",

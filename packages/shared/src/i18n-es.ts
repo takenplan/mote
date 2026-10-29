@@ -1,5 +1,15 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "将文件拖到这里": "Arrastre los archivos aquí",
+  "文档、聊天导出、ZIP 和媒体文件": "Documentos, exportaciones de chats, ZIP y archivos multimedia",
+  "（选填）": "(opcional)",
+  "默认使用文件或文件夹名称": "Usa el nombre del archivo o carpeta de forma predeterminada",
+  "可说明作者、时间、资料格式，以及哪些内容属于你。": "Puede indicar el autor, la fecha, el formato y qué contenido le pertenece.",
+  "更多选项": "Más opciones",
+  "本次图片处理": "Procesamiento de imágenes para esta importación",
+  "上传完成前请保持当前浏览器打开。": "Mantenga abierto este navegador hasta que termine la carga.",
+  "发现本机目录": "Directorio local encontrado",
+  "未发现本机目录": "No se encontró un directorio local",
   "原始转写保留。": "Se conserva la transcripción original.",
   "已有授权范围内的来源与原文": "Fuentes y originales dentro de la autorización existente",
   "记忆及其原文依据": "Recuerdos y sus fuentes originales",
