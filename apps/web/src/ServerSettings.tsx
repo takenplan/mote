@@ -1,7 +1,6 @@
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {RuntimeSettings} from './RuntimeSettings';
-import {PerceptionSettings} from './PerceptionSettings';
 import {AutomaticActivitySettings} from './AutomaticActivitySettings';
 import { moteText } from '@mote/shared/i18n';
 import { useEffect, useState } from 'react';
@@ -14,7 +13,8 @@ import {ConfigurationBuilder, type ConfigCategory} from './ConfigurationBuilder'
 import {MemorySettings} from './MemorySettings';
 import {ModelProfiles} from './ModelProfiles';
 import {ModelAssignments} from './ModelAssignments';
-import {ModelAuthorizationSettings} from './ModelAuthorizationSettings';
+import {AutomaticProcessing} from './AutomaticProcessing';
+import {MaterialProcessing} from './MaterialProcessing';
 import {ModelStartGuide} from './ModelStartGuide';
 import {useHashChoice} from './useHashChoice';
 import {settingsCategoryFromHash} from './route-query';
@@ -47,16 +47,16 @@ function EffectiveField({field}:{field:ConfigurationField}) {
  return <div className="effective-field" data-config-key={field.key}><div><strong>{field.label}</strong><small>{field.description}</small></div><div>{field.visibility==='secret-status'?<span className={`badge ${value?'green':'muted'}`}>{value?moteText("已配置"):moteText("未配置")}</span>:<span>{value===null||value===''?moteText("未设置"):field.unit==='bytes'&&typeof value==='number'?bytes(value):Array.isArray(value)?value.join('、')||moteText("未设置"):typeof value==='boolean'?value?moteText("已开启"):moteText("已关闭"):String(value)}{typeof value==='number'&&field.unit&&field.unit!=='bytes'?` ${{days:moteText("天"),hours:moteText("小时"),seconds:moteText("秒"),ms:moteText("毫秒"),tokens:'tokens',files:moteText("个"),entries:moteText("条")}[field.unit]||field.unit}`:''}</span>}<small>{origins[field.source]}{field.effect?' · '+effects[field.effect]:''}</small>{pending&&<small>{moteText('文件中保存的值：{0}',field.visibility==='secret-status'?field.savedValue?moteText('已配置'):moteText('未配置'):Array.isArray(field.savedValue)?field.savedValue.join('、'):String(field.savedValue??''))}</small>}</div></div>;
 }
 export function ServerSettings({api,onNavigate,onModelApplied}:{api:Api;onNavigate:(page:SettingsDestination)=>void;onModelApplied:()=>void}) {
- const [category,setCategory]=useHashChoice('category',settingsCategoryFromHash),[revision,setRevision]=useState(0),[modelDetail,setModelDetail]=useState(false),[serviceDetail,setServiceDetail]=useState(false);
+ const [category,setCategory]=useHashChoice('category',settingsCategoryFromHash),[revision,setRevision]=useState(0),[modelDetail,setModelDetail]=useState(false),[serviceDetail,setServiceDetail]=useState(false),[materialDetail,setMaterialDetail]=useState(false);
  const activeCategory=category??'providers',isTab=['providers','model','processing'].includes(activeCategory);
  const configuration=useResource<ServerConfiguration>(api,'/api/configuration'),sourceResource=useResource<{items:SourceConnection[]}>(api,category==='connectors'?'/api/sources':null);
  const config=configuration.data,busy=configuration.loading,error=configuration.error,sources=sourceResource.data?.items??[],sourcesError=sourceResource.error?errorMessage(sourceResource.error):'';
  const refresh=()=>{resources(api).invalidate(key=>key==='/api/configuration'||key==='/api/sources'||key==='/api/file-processing'||key==='/api/media-models'||key.startsWith('/api/model-settings'));setRevision(n=>n+1);};
  useEffect(()=>{const heading=document.querySelector<HTMLElement>('.server-settings h1');if(heading?.getClientRects().length){heading.tabIndex=-1;heading.focus({preventScroll:true});}},[category]);
- const selected=categories.find(item=>item.id===activeCategory),detail=activeCategory==='providers'&&(modelDetail||serviceDetail);
+ const selected=categories.find(item=>item.id===activeCategory),detail=activeCategory==='providers'&&(modelDetail||serviceDetail)||['images','audio','documents'].includes(activeCategory)&&materialDetail;
  return <div className="server-settings final-model-settings" aria-busy={busy||sourceResource.loading}>
   <div hidden={detail}>
-   <button className="text-button workspace-back" onClick={()=>{if(!isTab)setCategory(['images','audio','documents','file-processing'].includes(activeCategory)?'processing':null);else onNavigate('about');}}><ArrowLeft size={15}/>{isTab?moteText('返回上级'):moteText('模型与服务')}</button>
+   <button className="text-button workspace-back" onClick={()=>{if(!isTab)setCategory(['images','audio','documents','file-processing'].includes(activeCategory)?'processing':null);else onNavigate('about');}}><ArrowLeft size={15}/>{isTab?moteText('返回上级'):['images','audio','documents','file-processing'].includes(activeCategory)?moteText('资料处理'):moteText('模型与服务')}</button>
    <div className="page-heading settings-heading"><div><h1>{isTab?moteText('模型与服务'):selected?.title}</h1></div></div>
    {isTab&&<nav className="model-settings-tabs" aria-label={moteText('模型与服务')} role="tablist">{(['providers','model','processing'] as const).map(id=><button key={id} role="tab" aria-selected={activeCategory===id} aria-controls={'model-tab-'+id} onClick={()=>setCategory(id)}>{categories.find(item=>item.id===id)!.title}</button>)}</nav>}
   </div>
@@ -64,9 +64,9 @@ export function ServerSettings({api,onNavigate,onModelApplied}:{api:Api;onNaviga
   {config&&<ConfigurationState config={config}/>}
   {activeCategory==='providers'&&<div id="model-tab-providers" role="tabpanel"><ModelStartGuide contextualOnly step="connection"/><div hidden={serviceDetail}><ModelProfiles api={api} revision={revision} onDetailChange={setModelDetail} onApplied={()=>{setRevision(value=>value+1);onModelApplied();}}/></div><div hidden={modelDetail}><ProcessingServices api={api} onDetailChange={setServiceDetail} onProcessing={()=>setCategory('processing')}/></div></div>}
   {activeCategory==='model'&&<div id="model-tab-model" role="tabpanel"><ModelStartGuide contextualOnly step="module"/><ModelAssignments api={api} revision={revision} onApplied={()=>{setRevision(value=>value+1);onModelApplied();}} onManage={()=>setCategory('providers')}/><details className="discovery-settings-advanced"><summary>{moteText('高级：任务执行与并发（Harness）')}</summary><RuntimeSettings api={api} kind="execution"/></details><details className="discovery-settings-advanced" open={new URLSearchParams(window.location.hash.split('?')[1]).get('section')==='automatic'||undefined}><summary>{moteText('高级：记忆、洞察与自动处理节奏')}</summary><AutomaticActivitySettings api={api}/><MemorySettings api={api} onPlans={()=>onNavigate('extensions')}/></details></div>}
-  {activeCategory==='processing'&&<div id="model-tab-processing" role="tabpanel"><ProcessingOverview api={api} onSelect={setCategory}/><ModelAuthorizationSettings api={api}/></div>}
-  {activeCategory==='images'&&<PerceptionSettings api={api} onMemory={()=>setCategory('model')} onAdvanced={()=>setCategory('file-processing')}/>}
-  {['audio','documents','file-processing'].includes(activeCategory)&&<FileProcessingSettings api={api}/>}
+  {activeCategory==='processing'&&<div id="model-tab-processing" role="tabpanel"><ProcessingOverview api={api} onSelect={setCategory}/><AutomaticProcessing api={api}/></div>}
+  {['images','audio','documents'].includes(activeCategory)&&<MaterialProcessing key={activeCategory} api={api} kind={activeCategory as 'images'|'audio'|'documents'} onDetailChange={setMaterialDetail}/>}
+  {activeCategory==='file-processing'&&<FileProcessingSettings api={api}/>}
   {config&&['storage','embedding','connectors'].includes(activeCategory)&&<><ConfigurationBuilder api={api} config={config} category={activeCategory as ConfigCategory} sources={sources} sourcesError={sourcesError} onApplied={refresh}/><section className="panel effective-settings"><div className="section-heading"><div><h2>{moteText('当前生效值')}</h2><p>{moteText('来自运行中的中央节点；需要重启的设置同时显示文件中保存的值。')}</p></div><span className="badge muted">{moteText('只读')}</span></div>{config.groups.find(group=>group.id===activeCategory)?.fields.map(field=><EffectiveField key={field.key} field={field}/>)}</section></>}
   {isTab&&!detail&&<details className="model-maintenance-settings"><summary>{moteText('高级设置')}</summary><div className="model-maintenance-links">{categories.filter(item=>['storage','embedding','connectors'].includes(item.id)).map(item=><button className="text-button" key={item.id} onClick={()=>setCategory(item.id)}>{item.title}<ArrowRight size={14}/></button>)}<button className="text-button" disabled={busy} onClick={refresh}><RefreshCw size={14}/>{moteText('刷新生效配置')}</button></div></details>}
  </div>;
