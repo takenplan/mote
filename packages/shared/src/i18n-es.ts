@@ -9856,5 +9856,8 @@ export const spanish: Readonly<Record<string, string>> = {
   "第一份发现会保存在这里，之后可以随时回看。": "Tu primer hallazgo se guardará aquí para volver a consultarlo.",
   "这份发现当前不可用，请从历史选择其他发现。": "Este hallazgo no está disponible. Elige otro del historial.",
   "选择一份发现，回到当时的线索。": "Elige un hallazgo para volver a su contexto.",
-  "报告已归档，可在发现历史中查看。": "El informe está archivado en el historial de hallazgos."
+  "报告已归档，可在发现历史中查看。": "El informe está archivado en el historial de hallazgos.",
+  "正在回答": "Respondiendo",
+  "运行详情": "Detalles de ejecución",
+  "返回对话": "Volver a la conversación"
 };
