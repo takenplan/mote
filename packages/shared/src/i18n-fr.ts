@@ -1,5 +1,13 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "{0} 个样本": "{0} échantillons",
+  "{0} 张图片": "{0} images",
+  "{0} 条记录": "{0} enregistrements",
+  "时间回看内容已变化，请重新读取当前范围。": "Le contenu de la chronologie a changé. Rechargez la période actuelle.",
+  "本页 {0} 项": "{0} éléments sur cette page",
+  "组内记录分页": "Pages des enregistrements du groupe",
+  "请选择有效日期，最多查看 32 天。": "Choisissez une période valide de 32 jours maximum.",
+  "这组记录当前不可用，请重新读取当前范围。": "Ce groupe est actuellement indisponible. Rechargez la période actuelle.",
   "你": "Vous",
   "后续活动暂不可读取，请稍后重试。": "L’activité de suivi est temporairement indisponible. Réessayez plus tard.",
   "回答已记录": "Réponse enregistrée",

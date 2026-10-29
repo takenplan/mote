@@ -1,4 +1,12 @@
 {
+  "{0} 个样本": "{0} Stichproben",
+  "{0} 张图片": "{0} Bilder",
+  "{0} 条记录": "{0} Einträge",
+  "时间回看内容已变化，请重新读取当前范围。": "Der Inhalt der Zeitleiste hat sich geändert. Laden Sie den aktuellen Zeitraum erneut.",
+  "本页 {0} 项": "{0} Elemente auf dieser Seite",
+  "组内记录分页": "Seiten der Einträge in dieser Gruppe",
+  "请选择有效日期，最多查看 32 天。": "Wählen Sie einen gültigen Zeitraum von höchstens 32 Tagen.",
+  "这组记录当前不可用，请重新读取当前范围。": "Diese Gruppe ist derzeit nicht verfügbar. Laden Sie den aktuellen Zeitraum erneut.",
   "你": "Du",
   "后续活动暂不可读取，请稍后重试。": "Die weitere Aktivität ist vorübergehend nicht verfügbar. Versuche es später erneut.",
   "回答已记录": "Antwort erfasst",

@@ -1,4 +1,12 @@
 {
+  "{0} 个样本": "{0} samples",
+  "{0} 张图片": "{0} images",
+  "{0} 条记录": "{0} records",
+  "时间回看内容已变化，请重新读取当前范围。": "Timeline content has changed. Reload the current range.",
+  "本页 {0} 项": "{0} items on this page",
+  "组内记录分页": "Records within this group",
+  "请选择有效日期，最多查看 32 天。": "Choose a valid date range of up to 32 days.",
+  "这组记录当前不可用，请重新读取当前范围。": "This group is currently unavailable. Reload the current range.",
   "你": "You",
   "后续活动暂不可读取，请稍后重试。": "Follow-up activity is temporarily unavailable. Try again later.",
   "回答已记录": "Answer recorded",
