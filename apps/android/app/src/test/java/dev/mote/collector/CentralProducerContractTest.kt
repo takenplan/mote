@@ -163,4 +163,25 @@ class CentralProducerContractTest {
         assertEquals(200, begins().single().status)
         assertEquals(0, exchanges.count { it.path.contains("/parts/") || it.path.endsWith("/commit") })
     }
+
+    @Test fun ordinaryDeletionKeepsTheRealSavedAnswerButDeniesItsHistoricalReference() {
+        val conversationId = System.getenv("MOTE_KOTLIN_CONTRACT_CONVERSATION").orEmpty()
+        val evidenceId = System.getenv("MOTE_KOTLIN_CONTRACT_HISTORY_EVIDENCE").orEmpty()
+        assertEquals(conversationId, UUID.fromString(conversationId).toString())
+        assertEquals(evidenceId, UUID.fromString(evidenceId).toString())
+        val api = client()
+        assertTrue(CentralConversationReference.available(api, conversationId, evidenceId))
+        assertFalse(CentralConversationReference.available(api, conversationId, UUID.randomUUID().toString()))
+        assertThrows(CentralFailure::class.java) { CentralConversationReference.available(client(collector), conversationId, evidenceId) }
+        api.delete("/api/captures/$evidenceId")
+        val turn = api.get("/api/conversations/$conversationId").getJSONArray("turns").getJSONObject(0)
+        val shown = CentralConversationPresentation.read(turn)
+        assertEquals(MoteI18n.text("引用原文已删除，历史问答仍保留。"), shown.notice)
+        assertEquals("Generated saved answer", shown.result!!.getString("answer"))
+        assertEquals(evidenceId, shown.result.getJSONArray("citations").getJSONObject(0).getString("id"))
+        assertFalse(CentralConversationReference.available(api, conversationId, evidenceId))
+        assertEquals(404, assertThrows(CentralFailure::class.java) { api.get("/api/captures/$evidenceId") }.status)
+        assertFalse(turn.optBoolean("evidenceDeleted"))
+        assertEquals(evidenceId, turn.getJSONObject("scope").getJSONArray("evidenceIds").getString(0))
+    }
 }

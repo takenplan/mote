@@ -9,6 +9,7 @@ internal object CentralConversationPresentation {
         val result = turn.optJSONObject("result") ?: return Turn(null, null)
         return when {
             turn.optBoolean("evidenceDeleted") -> Turn(MoteI18n.text("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。"), null)
+            turn.optBoolean("evidenceUnavailable") -> Turn(MoteI18n.text("引用原文已删除，历史问答仍保留。"), result)
             turn.optBoolean("evidenceStale") -> Turn(MoteI18n.text("这是历史版本，当前资料已更新。"), result)
             else -> Turn(null, result)
         }

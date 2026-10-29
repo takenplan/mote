@@ -282,17 +282,23 @@ test('image progress keeps ready OCR visible after vision failure and reports a 
  await act(async()=>button(d,'补齐未完成步骤').click());assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false}]);
 });
 
-test('ordinary evidence revisions preserve the visible historical answer and citation; later deletion clears both',async t=>{
- const {root,d}=await fixture(t);let revision=1;
+test('ordinary revisions and deletion retain historical answers, deny unavailable reference navigation, and privacy erasure clears both',async t=>{
+ const {root,d}=await fixture(t);let revision=1;const opened:string[]=[],referenceReads:string[]=[];
  const api=apiWith(path=>{
   if(path==='/api/conversations?limit=30')return {items:[summary('generated-history')]};if(path==='/api/query-runs')return {items:[]};
-  if(path==='/api/conversations/generated-history')return {...summary('generated-history'),revision,nextCursor:null,turns:[{id:'generated-turn',question:'Generated original question',status:'completed',createdAt:when,evidenceStale:revision===2,evidenceDeleted:revision===3,result:{answer:revision===3?'Cleared':'GENERATED HISTORICAL PROPOSAL',citations:revision===3?[]:[{id:'generated-original',excerpt:'GENERATED OLD QUOTE'}],trace:[],runId:'generated-history'}}]};return {items:[]};
+  if(path==='/api/conversations/generated-history/references/generated-original'){referenceReads.push(path);return {id:'generated-original',available:revision<3};}
+  if(path==='/api/conversations/generated-history')return {...summary('generated-history'),revision,nextCursor:null,turns:[{id:'generated-turn',question:'Generated original question',status:'completed',createdAt:when,evidenceStale:revision>=2,evidenceUnavailable:revision>=3,evidenceDeleted:revision===4,result:{answer:revision===4?'Cleared':'GENERATED HISTORICAL PROPOSAL',citations:revision===4?[]:[{id:'generated-original',excerpt:'GENERATED OLD QUOTE'}],trace:[],runId:'generated-history'}}]};return {items:[]};
  });
- await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:(answer:any)=>answer.answer+' '+answer.citations.map((citation:any)=>citation.excerpt).join(' ')})));
+ await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],onOpen:ref=>opened.push(ref),renderAnswer:(answer:any,open)=>React.createElement('div',{},answer.answer,...answer.citations.map((citation:any)=>React.createElement('button',{key:citation.id,onClick:()=>open('capture:'+citation.id)},citation.excerpt)))})));
  await act(async()=>d.querySelector<HTMLButtonElement>('.conversation-item')!.click());
+ await act(async()=>button(d,'GENERATED OLD QUOTE').click());assert.deepEqual(opened,['capture:generated-original']);
  revision=2;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
  assert.match(d.body.textContent!,/这是历史版本，当前资料已更新/);assert.match(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL.*GENERATED OLD QUOTE/);
  revision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
+ assert.match(d.body.textContent!,/引用原文已删除，历史问答仍保留/);assert.doesNotMatch(d.body.textContent!,/这是历史版本，当前资料已更新/);
+ await act(async()=>button(d,'GENERATED OLD QUOTE').click());assert.deepEqual(opened,['capture:generated-original']);assert.equal(referenceReads.length,2);assert.match(d.querySelector('[role="dialog"]')!.textContent!,/引用不可用.*引用原文已删除/);
+ await act(async()=>button(d,'返回原对话').click());assert.equal(d.querySelector('[role="dialog"]'),null);assert.match(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL.*GENERATED OLD QUOTE/);assert.equal(d.querySelector<HTMLTextAreaElement>('.ask-form textarea')!.disabled,false);
+ revision=4;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
  assert.match(d.body.textContent!,/相关证据已删除/);assert.doesNotMatch(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL|GENERATED OLD QUOTE/);
 });
 
