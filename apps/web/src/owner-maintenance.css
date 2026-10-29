@@ -26,7 +26,7 @@
 .owner-presets { display:inline-flex; padding:2px; border:1px solid var(--mote-border); border-radius:5px; }
 .owner-presets button { font-size:12px; line-height:19.8px; padding:5px 9px; border-radius:3px; color:var(--mote-muted); }
 .owner-presets button[aria-pressed=true] { background:#e8e4dd; color:var(--mote-ink); }
-[data-theme=dark] .owner-presets button[aria-pressed=true] { background:var(--mote-surface-hover); }
+[data-color-scheme=dark] .owner-presets button[aria-pressed=true] { background:var(--mote-surface-hover); }
 .owner-usage-summary { width:100%; border-collapse:collapse; font-size:12px; text-align:left; }
 .owner-usage-summary th { font-size:11px; line-height:1.65; color:var(--mote-muted); font-weight:400; padding:13px 10px 13px 0; border-bottom:1px solid var(--mote-border); }
 .owner-usage-summary td { padding:17px 10px 17px 0; border-bottom:1px solid var(--mote-border); vertical-align:middle; }
@@ -53,7 +53,7 @@
 .owner-maintenance-page .content-storage .check-field { display:flex; align-items:center; justify-content:space-between; flex-direction:row-reverse; padding:18px 0; border-bottom:1px solid var(--mote-border); gap:20px; font-size:14px; }
 .owner-maintenance-page .content-storage .check-field input { margin:0; flex-shrink:0; }
 .content-storage input[role=switch] { appearance:none; width:34px; height:21px; border:1px solid var(--mote-border); border-radius:12px; background:#e8e4dd; padding:0; cursor:pointer; }
-[data-theme=dark] .content-storage input[role=switch]:not(:checked) { background:var(--mote-surface-hover); }
+[data-color-scheme=dark] .content-storage input[role=switch]:not(:checked) { background:var(--mote-surface-hover); }
 .content-storage input[role=switch]::after { content:''; display:block; width:13px; height:13px; margin:3px; border-radius:50%; background:var(--mote-muted); }
 .content-storage input[role=switch]:checked { background:var(--mote-accent); border-color:var(--mote-accent); }
 .content-storage input[role=switch]:checked::after { transform:translateX(13px); background:var(--mote-surface); }

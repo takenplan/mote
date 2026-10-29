@@ -42,7 +42,7 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, chil
         anchor.download = mode ? `mote-${mode}.tar.gz` : `mote-${new Date().toISOString().slice(0, 10)}.json`;
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return moteText("资料已导出，包含记录、影像与校验信息。");
+        return mode === 'metadata' ? moteText('资料已导出') : moteText("资料已导出，包含记录、影像与校验信息。");
     }
     async function importFile(file?: File) {
         if (!file)
