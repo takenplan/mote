@@ -163,6 +163,7 @@ class FinalCalendarJourneyInstrumentedTest {
             val allowed = grant(config, record); var action = receipt(config, id); assertEquals(id, action.getString("id")); assertEquals(kind, action.getString("kind")); target(action, record)
             assertEquals(allowed.getString("id"), action.getJSONObject("managed").getString("grantId")); assertEquals(allowed.getLong("revision"), action.getJSONObject("managed").getLong("grantRevision"))
             val deadline = SystemClock.elapsedRealtime() + 120_000
+            var executorTriggeredByTest = false
             if (kind != "calendar.complete" && action.getString("status") != "succeeded") {
                 var delivery: JSONObject? = null
                 while (delivery == null && SystemClock.elapsedRealtime() < deadline) {
@@ -177,6 +178,7 @@ class FinalCalendarJourneyInstrumentedTest {
                     // Exact same production executor used inside deliver/worker; no blanket queue consumption.
                     // Any lost/uncertain receipt propagates. This test never automatically repeats a write.
                     record.put("pending", JSONObject().put("id", id).put("kind", kind).put("operationId", operationId)); writePrivate(stateFile, record)
+                    executorTriggeredByTest = true
                     CalendarActions(context).execute(id, operationId)
                 }
             }
@@ -195,7 +197,7 @@ class FinalCalendarJourneyInstrumentedTest {
                 assertTrue(actual.getString("description").contains(CalendarActionRules.marker(related?.getString("actionId") ?: id)))
             }
             val result = JSONObject().put("id", id).put("kind", kind).put("receipt", action).put("nativeEventPresent", actual != null).put("nativeExternalId", nativeId)
-                .put("calendarId", record.getString("calendarId")).put("osMutationClaimed", kind != "calendar.complete").put("executorTriggeredByTest", true).put("unattendedWorkerScheduleProven", false)
+                .put("calendarId", record.getString("calendarId")).put("osMutationClaimed", kind != "calendar.complete").put("executorTriggeredByTest", executorTriggeredByTest).put("unattendedWorkerScheduleProven", false)
             record.remove("pending"); record.getJSONArray("executed").put(result); writePrivate(stateFile, record); results.put(result)
         }
         writeResult("execute-selected", config, JSONObject().put("results", results).put("onlySelectedIds", true).put("realModelInvokedByTest", false))
