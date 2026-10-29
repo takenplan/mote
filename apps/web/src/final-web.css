@@ -349,3 +349,5 @@
 .embedded-evidence>.evidence-reader{max-height:none;overflow:visible}
 
 .correcting-memory .memory-detail>.memory-correction{display:block}.correcting-memory .memory-detail>.memory-correction>h3{margin-bottom:28px}.correcting-memory .memory-correction label{display:grid;gap:9px;font-size:12px;line-height:1.8;margin:18px 0}.correcting-memory .memory-correction label>input,.correcting-memory .memory-correction label>textarea{margin-top:0;font:inherit;padding:10px 12px;border-radius:6px}.correcting-memory .memory-correction textarea{min-height:85px;height:85px;resize:vertical}.correcting-memory .memory-correction .memory-actions{border:0;padding:0;margin-top:20px}.memory-validity-fields{gap:0 24px}
+
+.reader-tools-dialog .evidence-canonical{min-width:0;max-width:100%}.reader-tools-dialog .evidence-canonical pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto}

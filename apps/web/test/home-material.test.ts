@@ -2,6 +2,7 @@ import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
 import {JSDOM} from 'jsdom';
+import {LibraryMaterialRow} from '../src/LibraryBrowse';
 import {HomeMaterialRow,type RecentMaterial} from '../src/HomeMaterialRow';
 import type {Api} from '../src/api';
 const capture='11111111-1111-4111-8111-111111111111';
@@ -15,12 +16,12 @@ async function fixture(t:TestContext){
  t.after(async()=>{await act(async()=>root.unmount());URL.createObjectURL=create;URL.revokeObjectURL=revoke;for(const [key,value] of prior){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  function ObserveCommit(){React.useLayoutEffect(()=>{commits.push(dom.window.document.querySelector('img')?.getAttribute('src')??null);});return null;}
  const render=async(api:Api,canPreview=true,material=item)=>{await act(async()=>root.render(React.createElement(React.Fragment,null,React.createElement(HomeMaterialRow,{api,item:material,canPreview,canRead:true,onOpen:ref=>opened.push(ref)}),React.createElement(ObserveCommit))));};
- return {d:dom.window.document,render,opened,urls,revoked,commits};
+ return {d:dom.window.document,root,render,opened,urls,revoked,commits};
 }
 function apiFor(reads:string[],options:{size?:number;retained?:boolean;raw?:Api['raw']}={}){
  return {request:async(path:string)=>{
   reads.push(path);
-  if(path.includes('/read?'))return {text:'Generated exact original excerpt'};
+  if(path.includes('/read?'))return {material:{ref:item.ref},text:'Generated exact original excerpt',spans:[{kind:'text',format:'plain',pageRange:{start:0,end:32}}]};
   if(path.includes('/members?'))return {items:[{kind:'capture',ref:'capture:'+capture}]};
   if(path==='/api/files/'+capture)return {hasOriginal:options.retained??true,sizeBytes:options.size??4,item:{mimeType:'image/png'}};
   return {items:[],ids:[],cursor:0,hasMore:false,reset:false};
@@ -64,4 +65,14 @@ test('authored note previews honor typed spans and keep owner JSON body literal 
  const reads:string[]=[],current={request:async(path:string)=>{reads.push(path);return response(note.ref,body);}}as Api;await f.render(current,false,note);assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);assert.doesNotMatch(f.d.body.textContent!,/generated-storage-metadata/);assert.ok(reads[0].includes('revision=note-one&offset=0&length=240'));
  await act(async()=>finish(response(note.ref,'Generated old owner body')));assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);
  const replacement={...note,ref:'material:generated-material@note-two',revision:'note-two'};await f.render(current,false,replacement);assert.equal(f.d.querySelector('.home-material-excerpt'),null,'a mismatched response ref cannot stand in for the replacement');
+});
+
+test('Home and Library reuse exact declared file source presentation and discard late owner or changed-ref excerpts',async t=>{
+ const f=await fixture(t),file={...item,coverage:{state:'complete' as const},retention:{original:'retained' as const},id:'mat_'+'a'.repeat(64),revision:'b'.repeat(64),ref:'material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),schemaVersion:2},body='{"captureId":"This JSON is original text, not host metadata"}';
+ const inventory={schemaVersion:1,revision:1,features:[],capabilities:[{id:'http:GET:/api/materials/:id/source-view',version:'1',state:'active',surface:'data',featureId:'mote.sources'}]};
+ const response=(ref:string,text:string)=>({material:{...file,ref,blockCount:2},items:[{type:'source',blockId:'source-metadata',text:''},{type:'text',blockId:'body',text}],next:null});let finish!:(value:unknown)=>void,aborted=false;
+ const old={request:async(path:string,init?:RequestInit)=>path==='/api/features'?inventory:path.includes('/source-view?')?new Promise(resolve=>{finish=resolve;init?.signal?.addEventListener('abort',()=>aborted=true);}):{material:{ref:file.ref},text:'host envelope',spans:[{kind:'text',format:'json',pageRange:{start:0,end:13}}]}} as Api;
+ await f.render(old,false,file);assert.equal(f.d.querySelector('.home-material-excerpt'),null);const reads:string[]=[],current={request:async(path:string)=>{reads.push(path);return path==='/api/features'?inventory:path.includes('/source-view?')?response(file.ref,body):{material:{ref:file.ref},text:'host envelope',spans:[{kind:'text',format:'json',pageRange:{start:0,end:13}}]};}} as Api;await f.render(current,false,file);assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);assert.equal(aborted,true);await act(async()=>finish(response(file.ref,'Old owner body')));assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);
+ await act(async()=>f.root.render(React.createElement(LibraryMaterialRow,{api:current,item:file,selected:false,onSelect:()=>{},preview:{read:true,image:false}})));assert.equal(f.d.querySelector('.library-record-preview')!.textContent,body);assert.ok(reads.some(path=>path.includes('/source-view?revision='+file.revision)));
+ await f.render(current,false,{...file,ref:file.ref+'changed',revision:'c'.repeat(64)});assert.equal(f.d.querySelector('.home-material-excerpt'),null);
 });
