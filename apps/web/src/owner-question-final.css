@@ -32,3 +32,29 @@
 
 .owner-question-final .button.subtle { background:var(--mote-surface);border:1px solid var(--mote-control-border);color:var(--mote-ink); }
 .owner-question-final .button.primary { background:var(--mote-primary-background);border:1px solid transparent;color:var(--mote-primary-ink); }
+/* The final supplemental-question workspace is a flat document, with its own list. */
+.owner-question-workspace{max-width:880px;margin:0 auto;position:relative;color:var(--mote-ink)}
+.owner-question-workspace-header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px}
+.owner-question-workspace-header h1,.owner-question-workspace .conversation-heading h1{font-size:27px;font-weight:540;line-height:1.4;margin:0;letter-spacing:-.5px}
+.owner-question-workspace-header>a{margin-left:auto;font-size:12px}
+.owner-question-workspace:has(.owner-question-conversation)>.owner-question-workspace-header{position:absolute;right:0;top:6px;z-index:1;margin:0}
+.owner-question-workspace .owner-question-conversation{max-width:none;padding:0;overflow:visible}
+.owner-question-workspace .conversation-heading{padding-right:68px;margin-bottom:17px}
+.owner-question-workspace .owner-question-status{font-size:11px;margin-bottom:22px}
+.owner-question-workspace .owner-question-evidence{border:0;padding:0;margin:22px 0;font-size:12px}
+.owner-question-workspace .owner-question-evidence summary{font-size:12px}
+.owner-question-workspace .owner-question-dialogue{display:block}
+.owner-question-workspace .owner-question-message{border:0;border-radius:0;padding:0;background:none;margin:22px 0}
+.owner-question-workspace .owner-question-message.user{margin:22px 0;padding-left:18px;border-left:2px solid var(--mote-divider);background:none}
+.owner-question-workspace .owner-question-role{font-size:10px;margin:0;color:var(--mote-muted)}
+.owner-question-workspace .owner-question-message p{font-size:14px;line-height:1.9;margin:9px 0}
+.owner-question-workspace .owner-question-history .conversation-list{display:block;border:0;background:none;padding:0}
+.owner-question-workspace .conversation-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 14px;width:100%;padding:18px 2px;border:0;border-bottom:1px solid var(--mote-divider);border-radius:0;background:none;color:var(--mote-ink);text-decoration:none}
+.owner-question-workspace .conversation-item strong{font-size:13px;font-weight:500}
+.owner-question-workspace .conversation-item>span{grid-row:2;font-size:11px;color:var(--mote-muted)}
+.owner-question-workspace .conversation-item>svg{grid-column:2;grid-row:1/3;align-self:center}
+.owner-question-workspace .owner-question-notice{border-radius:5px;font-size:12px;padding:13px 15px}
+.owner-question-workspace .owner-question-form textarea{font-size:13px;line-height:1.7;min-height:108px;border-radius:5px;padding:10px 11px}
+@media(max-width:560px){.owner-question-workspace .owner-question-conversation{padding:0}.owner-question-workspace .owner-question-message.user{margin-left:0}.owner-question-workspace-header h1,.owner-question-workspace .conversation-heading h1{font-size:25px}}
+.owner-question-workspace .conversation-heading{border:0;box-shadow:none;padding:0 68px 0 0;background:none;min-height:0;line-height:1.5;margin-bottom:28px}
+.owner-question-workspace .processing-actions:empty{display:none}

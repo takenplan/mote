@@ -1370,12 +1370,12 @@ export const guideSections:GuideSection[] = [
             ],
             "target": {
               "pageId": "ask",
-              "href": "#/ask",
+              "href": "#/ask?question=",
               "collectionId": null,
               "categoryId": null,
-              "label": "问一问",
-              "path": "问一问中的待澄清问题；活动详情 / 资料来源上下文 → 需要你补充",
-              "where": "在问一问历史、活动详情或资料上下文查找「需要你补充」的问题入口。具体问题链接由现有对象提供。"
+              "label": "需要你补充",
+              "path": "需要你补充 → 待回答 / 全部记录；活动详情 / 资料来源上下文",
+              "where": "打开补充问题列表，或从活动详情和资料上下文进入对应问题。"
             },
             "otherTargets": [
               {

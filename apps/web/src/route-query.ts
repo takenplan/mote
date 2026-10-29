@@ -18,11 +18,13 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
  const page=pages.find(entry=>(entry.route??entry.id)===route||entry.aliases?.includes(route));
  if(!page)return;
  const query=new URLSearchParams(queryText);
- const allowed=new Set(['origin','view','evidence','source','sourceId','kind','type','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight','query','cursor','memory','selected']);
+ const allowed=new Set(['origin','view','evidence','source','sourceId','kind','type','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight','query','cursor','memory','selected','memoryCursor','history','deviceId']);
  for(const [key,value] of query){
   if(!allowed.has(key)||query.getAll(key).length!==1)return;
   if(key==='selected'&&page.id!=='archive')return;
   if(key==='query'&&page.id!=='search')return;
+  if(key==='memoryCursor'&&page.id!=='search')return;
+  if(key==='history'&&(page.id!=='ask'||value!=='1'))return;
   if(key==='cursor'&&!['search','archive'].includes(page.id))return;
   if(key==='memory'&&page.id!=='archive')return;
   if(key==='origin'&&(page.id!=='archive'||value!=='notes'))return;

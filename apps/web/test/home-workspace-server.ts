@@ -57,7 +57,7 @@ for(const [index,title,text] of [[1,'评审议程.md','先检查用户能否找�
  materialRefs.push(material.ref);
 }
 // Persist original notes through the same production owner API used by the UI.
-if(process.argv[3]==='library')for(let index=1;index<29;index++){
+if(['library','home-search-questions'].includes(process.argv[3]))for(let index=1;index<(process.argv[3]==='home-search-questions'?32:29);index++){
  const response=await runtime.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:randomUUID(),deviceId:'generated-phone',deviceName:'本轮生成手机',platform:'android',capturedAt:when,text:'本轮生成记录 '+String(index+1).padStart(2,'0')+'：返回列表应保留筛选、页码、滚动和焦点。'}});
  if(response.statusCode!==201)throw Error(response.body);
 }
@@ -70,12 +70,12 @@ runtime.featureServices.ownerQuestions.create(provider,{key:'generated-home',ope
 for(const title of ['检查资料阅读路径','核对引用返回路径']){const r=await runtime.app.inject({method:'POST',url:'/api/todos',headers,payload:{id:randomUUID(),title,dueAt:null}});if(r.statusCode!==201)throw Error(r.body);}
 await runtime.connections.mintMcp({serverUrl:'https://generated.invalid',label:'Generated read-only agent',access:'read'},{directory:join(directory,'connectors'),mcpEnabled:true});
 const memoryIds:string[]=[],memoryNoteIds:string[]=[];
-if(['workspace','memory-ask'].includes(process.argv[3])){
+if(['workspace','memory-ask','home-search-questions'].includes(process.argv[3])){
  const quote='先把资料阅读和提问之间的路径走通';
- for(let index=0;index<3;index++){
+ for(let index=0;index<(process.argv[3]==='home-search-questions'?31:3);index++){
   let evidenceId=noteId;if(process.argv[3]==='memory-ask'&&index>0){evidenceId=randomUUID();const response=await runtime.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:evidenceId,deviceId:'generated-web',deviceName:'Generated Web',platform:'import',capturedAt:when,text:'Memory '+index+' '+quote+' distinct generated original'}});if(response.statusCode!==201)throw Error(response.body);}
   const record=runtime.memories.readEvidence([evidenceId])[0],offset=record.ocrText.indexOf(quote);
-  const id=randomUUID(),memory={version:1,domain:'personal',tier:'episode',kind:'episodic',id,title:['资料阅读与提问要保留返回路径','阅读优先展示原文与原图','先走通一段完整旅程'][index],statement:'这次界面讨论要求从原文发起提问、核对引用，并能回到原来的资料列表位置。',uncertainty:'仅来自本轮生成资料，不代表所有使用场景。',status:index===2?'stale':'published',createdAt:when,model:'controlled-fixture',runId:'controlled-fixture',fingerprint:String(index+1).repeat(64),evidenceIds:[evidenceId],evidence:[{id:evidenceId,deviceId:record.deviceId,capturedAt:record.capturedAt,receivedAt:record.receivedAt,offset,length:quote.length,quote,contentHash:memoryEvidenceFingerprint(record)}],admission:{layer:'memory',reason:'Generated visual fixture',scope:'Generated UI validation',attribution:'user'}};
+  const id=randomUUID(),memory={version:1,domain:'personal',tier:'episode',kind:'episodic',id,title:['资料阅读与提问要保留返回路径','阅读优先展示原文与原图','先走通一段完整旅程'][index%3]+(index>=3?' '+index:''),statement:'这次界面讨论要求从原文发起提问、核对引用，并能回到原来的资料列表位置。',uncertainty:'仅来自本轮生成资料，不代表所有使用场景。',status:index===2?'stale':'published',createdAt:when,model:'controlled-fixture',runId:'controlled-fixture',fingerprint:index<9?String(index+1).repeat(64):sha256('generated-memory-'+index),evidenceIds:[evidenceId],evidence:[{id:evidenceId,deviceId:record.deviceId,capturedAt:record.capturedAt,receivedAt:record.receivedAt,offset,length:quote.length,quote,contentHash:memoryEvidenceFingerprint(record)}],admission:{layer:'memory',reason:'Generated visual fixture',scope:'Generated UI validation',attribution:'user'}};
   runtime.store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(id,when,JSON.stringify(memory));runtime.store.db.prepare('INSERT INTO memory_dependencies(memory_id,evidence_id) VALUES(?,?)').run(id,evidenceId);memoryIds.push(id);memoryNoteIds.push(evidenceId);
  }
 }
@@ -100,6 +100,12 @@ if(process.argv[3]==='recording'){
  for(const speaker of ['SPEAKER_0','SPEAKER_1'])runtime.files.saveAsset(diarization,'speaker_samples/'+speaker+'.wav','audio/wav',waveform);
  runtime.store.db.prepare("UPDATE file_jobs SET state='succeeded',summary_state='skipped',error=NULL WHERE capture_id=?").run(recordingId);
 }
+const questionIds:string[]=[],activeRunIds:string[]=[];
+if(process.argv[3]==='home-search-questions'){
+ const provider={id:'fixture.final-question',version:'1',installationEpoch:'generated-final',validate:()=>true,answer:(_record:unknown,reply:{action:string})=>reply.action==='unknown'?{kind:'closed' as const,outcome:'本次追问结束，原始资料保留。'}:{kind:'continued' as const,continuationId:'generated-no-model-continuation',outcome:'回答已记录，继续处理状态以实际活动为准。'}};runtime.featureServices.ownerQuestions.register(provider);
+ for(let i=0;i<3;i++){const q=runtime.featureServices.ownerQuestions.create(provider,{key:String(i),operationId:'generated:question:'+i,workId:'generated-final-question-'+i,materialId:materialRefs[0].split('@')[0].replace('material:',''),materialRef:materialRefs[0],title:'这份资料里的讲述者是你吗？'+(i?' '+i:''),prompt:'请确认这份资料中，谈到工作安排的是不是你。',reason:'原文没有可靠的身份对应。',evidence:[{id:documentId,quote:'先检查用户能否找到内容',ref:'capture:'+documentId}],choices:[{id:'owner',label:'是我在讲述',answer:'是我在讲述工作安排。'},{id:'other',label:'是其他人',answer:'这段是其他人在讲述。'}],dependencyIds:[documentId],context:{generated:true}});questionIds.push(q.id);if(i===2)runtime.featureServices.ownerQuestions.obsolete(q.id);}
+ for(let i=0;i<2;i++){const id=randomUUID();runtime.insightRuns.start(id,{},async(_observe,signal)=>new Promise((_resolve,reject)=>{signal.addEventListener('abort',()=>reject(signal.reason),{once:true});}));activeRunIds.push(id);}
+}
 await runtime.app.listen({host:'127.0.0.1',port:0});
-console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,memoryIds,memoryNoteIds,recordingId,directory,generatedOnly:true,modelCalls:0}));
+console.log(JSON.stringify({server:runtime.app.server.address(),token,noteId,reportId,conversationId:conversation.id,materialRefs,memoryIds,memoryNoteIds,questionIds,activeRunIds,recordingId,directory,generatedOnly:true,modelCalls:0}));
 process.on('SIGTERM',()=>{void runtime.app.close().then(()=>process.exit(0));});

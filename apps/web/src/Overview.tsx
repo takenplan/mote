@@ -11,7 +11,10 @@ import {type Page} from './navigation';
 import {FeatureHome} from './features/home';
 import {useResource} from './useResource';
 import {HomeMaterialRow,type RecentMaterial} from './HomeMaterialRow';
-import {ownerQuestionListPath} from './owner-question-route';
+import {ownerQuestionListPath,ownerQuestionRoute} from './owner-question-route';
+import {openQuestionDraft} from './open-question-draft';
+import {useWorkspaceStyle} from './workspace-final-style';
+import type {InsightRun} from './InsightProgress';
 
 type Conversation={id:string;title:string;updatedAt:string;turnCount:number};
 
@@ -19,12 +22,14 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  api:Api;status:Status;devices:Device[];activity:Activity;recent:Capture[];insights:Answer[];
  onPage:(page:Page)=>void;onOpen:(id:string)=>void;range:Range;onMedia:()=>void;
 }){
+ useWorkspaceStyle();
  const [query,setQuery]=useState('');
  const availability=useDiscoveryState(api);
  const hasPage=(id:string)=>availability.pages.some(page=>page.id===id);
  const supports=(path:string)=>!availability.inventoryError&&featureRequirementsAvailable(['http:GET:'+path],availability.inventory);
  const canConversations=hasPage('ask')&&supports('/api/conversations'),canQuestions=hasPage('ask')&&supports('/api/owner-questions');
  const canActions=hasPage('actions')&&supports('/api/actions'),canTodos=hasPage('actions')&&supports('/api/todos');
+ const canInsightRuns=hasPage('insights')&&supports('/api/insight-runs');
  const canReadMaterial=supports('/api/materials/:id/read');
  const canPreviewMaterial=supports('/api/materials/:id/members')&&supports('/api/files/:id')&&supports('/api/files/:id/content');
  const sources=useResource<{items:{id:string;name?:string;status?:{state:string}}[]}>(api,'/api/sources');
@@ -32,6 +37,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  const catalog=useResource<OwnerBrowsePage>(api,'/api/library/browse?limit=3');
  const conversations=useResource<{items:Conversation[]}>(api,canConversations?'/api/conversations?limit=3':null);
  const questions=useResource<{items:{id:string}[];nextCursor?:string|null}>(api,canQuestions?ownerQuestionListPath():null);
+ const insightRuns=useResource<{items:InsightRun[]}>(api,canInsightRuns?'/api/insight-runs':null,5000);
  const actions=useResource<{items:{status:string;resolution?:string;event?:{start?:string|null;end?:string|null}}[];nextCursor:number|null}>(api,canActions?'/api/actions?cursor=0':null);
  const todos=useResource<{items:{status:string}[];nextCursor:string|null}>(api,canTodos?'/api/todos?status=open':null);
  const firstData=useResource<FirstDeviceData>(api,'/api/devices/first-data',undefined,String(status.storage?.captures??0)+':'+devices.map(device=>device.deviceId).sort().join(','));
@@ -47,6 +53,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
  // still shows loading; a failed read immediately returns it to the main area.
  const foldReceipt=retained?.state==='ready'&&retained.originalAvailable&&Boolean(sample);
  const discovery=insights.find(item=>item.citations.length>0);
+ const activeDiscovery=insightRuns.error===undefined?insightRuns.data?.items.find(item=>item.status==='running'):undefined;
  const sourceItems=sources.error===undefined?sources.data?.items:undefined;
  const issues=sourceItems?.filter(item=>['error','permission_required'].includes(item.status?.state??''))??[];
  const grants=connections.error===undefined?connections.data?.items.filter(item=>item.scope==='mcp-read'&&!item.revokedAt&&(!item.expiresAt||Date.parse(item.expiresAt)>Date.now())):undefined;
@@ -78,7 +85,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
   {firstUse?<FirstUseHome api={api} data={firstData.data} error={firstData.error} loading={firstData.loading} configured={status.agent.configured} onRefresh={firstData.refresh} onPage={onPage} onOpen={onOpen}/>:<>
   {!foldReceipt&&firstReceipt}
   <form className="home-find" role="search" aria-label={moteText('搜索资料或提问')} onSubmit={event=>{event.preventDefault();if(query.trim())window.location.hash='/search?query='+encodeURIComponent(query.trim());}}>
-   <input aria-label={moteText('搜索资料或提问')} placeholder={moteText('想找什么，或问点什么…')} maxLength={500} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className="button primary">{moteText('搜索')}</button><button type="button" className="button ghost" disabled={!hasPage('ask')} onClick={()=>{window.location.hash='/ask'+(query.trim()?'?questionDraft='+encodeURIComponent(query.trim()):'');}}>{moteText('问一问')}<ArrowUpRight size={13}/></button>
+   <input aria-label={moteText('搜索资料或提问')} placeholder={moteText('想找什么，或问点什么…')} maxLength={500} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className="button primary">{moteText('搜索')}</button><button type="button" className="button ghost" disabled={!hasPage('ask')} onClick={()=>openQuestionDraft(api,query.trim())}>{moteText('问一问')}<ArrowUpRight size={13}/></button>
   </form>
   <section className="home-summary" aria-label={moteText('运行状态')}>
    <button onClick={()=>onPage('archive')}><span>{moteText('当前可见资料')}</span><strong>{materialCount??'—'}<small>{moteText('份')}</small></strong></button>
@@ -87,12 +94,14 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
   </section>
   {[catalog,sources,connections].map((resource,index)=>resource.error!==undefined&&<p className="home-read-error" role="alert" key={index}>{errorMessage(resource.error)}<button className="text-button" onClick={resource.refresh}>{moteText('重新读取')}</button></p>)}
   {issues.map(issue=><button className="home-source-issue" key={issue.id} onClick={()=>onPage('sources')}><span><i/>{issue.name||moteText('来源')} · {moteText('需要处理')}</span><span>{moteText('查看')}<ArrowRight size={13}/></span></button>)}
-  {(Boolean(pendingQuestions?.length)||questions.error!==undefined)&&<div className="home-owner-question"><button className="text-button" onClick={()=>onPage('ask')}>{moteText('需要你补充')}{pendingQuestions?.length?<> · {moteText('{0} 条',pendingQuestions.length+(questions.data?.nextCursor?'+':''))}</>:null}<ArrowRight size={13}/></button>{questions.error!==undefined&&<p role="alert">{errorMessage(questions.error)}</p>}</div>}
+  {(Boolean(pendingQuestions?.length)||questions.error!==undefined)&&<div className="home-owner-question"><button className="text-button" onClick={()=>{window.location.hash=ownerQuestionRoute();}}>{moteText('需要你补充')}{pendingQuestions?.length?<> · {moteText('{0} 条',pendingQuestions.length+(questions.data?.nextCursor?'+':''))}</>:null}<ArrowRight size={13}/></button>{questions.error!==undefined&&<p role="alert">{errorMessage(questions.error)}<button className="text-button" onClick={questions.refresh}>{moteText('重新读取')}</button></p>}</div>}
   {(canActions||canTodos)&&<button className="home-action-entry" onClick={()=>onPage('actions')}><span><strong>{moteText('待办与日程')}</strong><small>{activeActions?moteText('{0} 条日程',activeActions.length):moteText('日程')}{Boolean(actionAttention?.length)&&<> · {moteText('{0} 项需处理',actionAttention!.length)}</>} · {knownTodos?moteText('{0} 项待办',knownTodos.filter(item=>item.status==='open').length):moteText('待办')}</small></span><span>{moteText('查看')}<ArrowRight size={13}/></span></button>}
   {(actions.error!==undefined||todos.error!==undefined)&&<p className="home-read-error" role="alert">{errorMessage(actions.error??todos.error)}<button className="text-button" onClick={()=>{actions.refresh();todos.refresh();}}>{moteText('重新读取')}</button></p>}
   <section className="home-discovery"><div className="section-heading"><h2>{moteText('精选发现')}</h2><div className="home-section-actions"><DiscoveryLink className="text-button" target={{pageId:'insights',href:'#/library/insights?insight=new'}}>{moteText('生成回顾')}</DiscoveryLink><button className="text-button" onClick={()=>onPage('insights')}>{moteText('发现历史')}<ArrowRight size={13}/></button></div></div>
    {discovery?<DiscoveryLink className="home-insight" target={{pageId:'insights',href:'#/library/insights?insight='+encodeURIComponent(discovery.runId)}}><Sparkles size={22}/><span><small className="home-discovery-label">{moteText('AI 发现')}</small><strong>{discovery.artifact?.title||moteText('你最近的洞察')}</strong><span className="home-discovery-copy">{answerPreview(discovery,180)}</span><small>{moteText('{0} 份依据',discovery.citations.length)}{discovery.createdAt&&<> · <time dateTime={discovery.createdAt}>{dateTime(discovery.createdAt)}</time></>}</small></span><ChevronRight size={15}/></DiscoveryLink>:<p className="home-empty">{moteText('暂无发现')}</p>}
   </section>
+  {activeDiscovery&&<DiscoveryLink className="home-run-link" target={{pageId:'insights',href:'#/library/insights?insight='+encodeURIComponent(activeDiscovery.id)}}><span className="discovery-spinner" aria-hidden="true"/><span className="run-link-label">{moteText('回顾生成中')}</span><span>{moteText('查看进度')} →</span></DiscoveryLink>}
+  {insightRuns.error!==undefined&&<p className="home-read-error" role="alert">{errorMessage(insightRuns.error)}<button className="text-button" onClick={insightRuns.refresh}>{moteText('重新读取')}</button></p>}
   <section className="home-recent"><div className="section-heading"><h2>{moteText('最近资料')}</h2><button className="text-button" onClick={()=>onPage('archive')}>{moteText('查看全部')}<ArrowRight size={13}/></button></div>
    <div className="home-material-list">{recentMaterials.map(entry=>entry.entryType==='capture'?<OriginalNoteRow key={entry.ref} entry={entry} onOpen={onOpen} home/>:<HomeMaterialRow key={entry.ref} api={api} item={entry.material as RecentMaterial} label={knownCatalog?.sources?.find(source=>source.id===entry.material.origin.sourceId)?.label} deviceName={devices.find(device=>device.deviceId===entry.material.origin.deviceId)?.deviceName} onOpen={onOpen} canRead={canReadMaterial} canPreview={canPreviewMaterial}/>)}</div>
    {catalog.loading&&!catalog.data?<p role="status" className="home-empty">{moteText('正在读取…')}</p>:!catalog.error&&!recentMaterials.length&&<button className="text-button home-empty" onClick={()=>onPage('imports')}>{moteText('导入资料')}<ArrowRight size={13}/></button>}

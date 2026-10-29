@@ -247,3 +247,20 @@ test('paging never sends a prior host cursor when work, material, operations or 
   assert.ok(reads.length>boundary);assert.ok(reads.slice(boundary).every(read=>!read.query.has('cursor')),'new host first reads must not carry the previous host cursor');
  }
 });
+
+test('a supplemental draft and unresolved reply identity survive leaving the question without entering another owner',async t=>{
+ const {root,d}=await fixture(t),writes:any[]=[],api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));throw new TypeError('Generated lost reply acknowledgement');}return structuredClone(generated);}} as Api;
+ const view=(owner:Api)=>React.createElement(OwnerQuestionConversation,{api:owner,id:generated.id,onOpen:()=>{},standalone:true});
+ await act(async()=>root.render(view(api)));await act(async()=>button(d,'我是讲述者').click());await act(async()=>send(d).click());assert.equal(writes.length,1);
+ await act(async()=>root.render(null));await act(async()=>root.render(view(api)));assert.equal(d.querySelector('textarea')!.value,generated.choices[0].answer);assert.equal(button(d,'我是讲述者').getAttribute('aria-pressed'),'true');await act(async()=>send(d).click());assert.deepEqual(writes[1],writes[0],'remount retries exact UUID, choice and revision');
+ const other={request:async()=>structuredClone(generated)} as Api;await act(async()=>root.render(view(other)));assert.equal(d.querySelector('textarea')!.value,'');assert.equal(button(d,'我是讲述者').getAttribute('aria-pressed'),'false');assert.equal(writes.length,2);
+ await act(async()=>root.render(view(api)));assert.equal(d.querySelector('textarea')!.value,generated.choices[0].answer);
+});
+
+test('standalone Ask questions retain feature capability withdrawal and cannot acquire a replacement material title',async t=>{
+ const {root,d,w}=await fixture(t);await featuresReady;const {Ask}=await import('../src/Ask');let enabled=true;
+ const capabilities=['http:GET:/api/owner-questions','http:GET:/api/owner-questions/:id','http:POST:/api/owner-questions/:id/reply'];
+ const api={request:async(path:string)=>{if(path==='/api/features')return {schemaVersion:1,revision:1,features:[],capabilities:enabled?capabilities.map(id=>({id,version:'1',surface:'data',featureId:'mote.owner-questions',state:'active'})):[]};if(path.startsWith('/api/materials/'))return {material:{ref:'material:replacement@new',title:'Generated replacement title'}};if(path.startsWith('/api/owner-questions?'))return {items:[generated],nextCursor:null};return generated;}} as Api;
+ w.history.replaceState(null,'','#/ask?question='+generated.id);await act(async()=>root.render(React.createElement(Ask,{api,status:{agent:{configured:false}} as any,devices:[],onOpen:()=>{},onInsights:()=>{},onSettings:()=>{}})));assert.ok(d.querySelector('.owner-question-workspace h1'));assert.equal(d.querySelector('.conversation-toolbar'),null);assert.equal(d.querySelector('.model-notice'),null);assert.doesNotMatch(d.body.textContent!,/Generated replacement title/);
+ enabled=false;await act(async()=>resources(api).get('/api/features').refresh());assert.equal(d.querySelector('.owner-question-form'),null);assert.match(d.body.textContent!,/专用视图暂不可用/);
+});

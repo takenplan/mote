@@ -110,3 +110,11 @@ test('an unconfirmed generation retains its exact request across history, remoun
  await until(()=>bodies.length===2);assert.deepEqual(bodies[1],bodies[0],'A later range cannot change the unconfirmed request body or ID');
  assert.equal(win.location.hash,'#/library/insights?insight=new');
 });
+
+test('an explicit active discovery A never restores newer B and a denied exact run stays unavailable',async t=>{
+ const {root,d,win,view,until}=await fixture(t,'#/library/insights?insight=run-a'),reads:string[]=[];
+ const running=(id:string)=>({id,status:'running',createdAt:when,updatedAt:when,scope:{},events:[]});
+ let denied=false;const api=fake(path=>{reads.push(path);if(path===INSIGHT_HISTORY_PATH)return {items:[],nextCursor:null};if(path==='/api/insight-runs')return {items:[running('run-b'),running('run-a')]};if(path==='/api/insights/run-a')throw new ApiError('Generated not published',404);if(path==='/api/insight-runs/run-a'){if(denied)throw new ApiError('Generated A forbidden',403);return running('run-a');}return {items:[]};});
+ await act(async()=>root.render(view(api)));await until(()=>!!d.querySelector('.insight-progress'));assert.equal(reads.some(path=>path==='/api/insight-runs/run-b'),false);assert.equal(win.location.hash,'#/library/insights?insight=run-a');
+ denied=true;const {resources}=await import('../src/resource-cache');await act(async()=>resources(api).invalidate(key=>key==='/api/insight-runs/run-a'));await until(()=>!d.querySelector('.insight-progress'));assert.equal(win.location.hash,'#/library/insights?insight=run-a');assert.equal(reads.some(path=>path==='/api/insight-runs/run-b'),false);assert.match(d.body.textContent!,/这份发现当前不可用/);
+});
