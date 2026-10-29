@@ -164,8 +164,8 @@ test('current featured Memory detail offers the manual consolidation entry, whil
  assert.ok(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'));
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='从这条记忆开始整理')!.click());
  assert.match(d.querySelector('#manual-memory-integration')!.textContent!,/仅选择此卡作为整合起点/);
- assert.equal(Array.from(d.querySelectorAll('#manual-memory-integration button')).find(b=>b.textContent==='整理这条记忆')!.disabled,false,'the current feature default is configured');
- await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-workspace-final button')).find(b=>b.textContent==='← 返回我的记忆')!.click());
+ assert.equal(Array.from(d.querySelectorAll('#manual-memory-integration button')).find(b=>b.textContent==='开始整理')!.disabled,false,'the current feature default is configured');
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-workspace-final button')).find(b=>b.textContent==='← 返回')!.click());
  shown={...item,validUntil:'2020-01-01T00:00:00Z'};
  await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/memories/')));
  assert.equal(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'),false);
@@ -494,7 +494,7 @@ test('Library Memory keeps its selected card and integration panel across a 30-s
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='更多')!.click());
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='从这条记忆开始整理')!.click());
  assert.ok(d.querySelector('#manual-memory-integration'));
- const submit=()=>Array.from(d.querySelectorAll<HTMLButtonElement>('#manual-memory-integration button')).find(button=>button.textContent==='整理这条记忆')!;
+ const submit=()=>Array.from(d.querySelectorAll<HTMLButtonElement>('#manual-memory-integration button')).find(button=>button.textContent==='开始整理')!;
  assert.equal(submit().disabled,false);const selectedReads=detailReads;
  await act(async()=>t.mock.timers.tick(30000));
  assert.ok(d.querySelector('.memory-detail'),'Library selection survives the actual shell poll');
