@@ -31,10 +31,7 @@ const imageId=await uploadNoteAttachment({request:async(path:string,init:Request
  const response=await runtime.app.inject({method:init.method as 'POST'|'PUT',url:path,headers:{...headers,...init.headers},payload:typeof init.body==='string'?JSON.parse(init.body):init.body?Buffer.from(init.body as ArrayBuffer):undefined});
  if(response.statusCode>=400)throw Error(response.body);return response.json();
 }} as Api,new File([imageBytes],'本轮生成图片.png',{type:'image/png',lastModified:Date.parse(when)}),'generated-web');
-const documentId=process.argv[3]==='library'?await uploadNoteAttachment({request:async(path:string,init:RequestInit)=>{
- const response=await runtime.app.inject({method:init.method as 'POST'|'PUT',url:path,headers:{...headers,...init.headers},payload:typeof init.body==='string'?JSON.parse(init.body):init.body?Buffer.from(init.body as ArrayBuffer):undefined});
- if(response.statusCode>=400)throw Error(response.body);return response.json();
-}} as Api,new File(['先检查用户能否找到内容，然后检查能否顺利继续下一步。'],'评审议程.md',{type:'text/markdown',lastModified:Date.parse(when)}),'generated-web'):noteId;
+const documentId=process.argv[3]==='library'?(await runtime.sources.upsert('generated-home-source',{externalId:'generated-library-document',revision:'1',observedAt:when,title:'评审议程.md',text:'先检查用户能否找到内容，然后检查能否顺利继续下一步。',kind:'file',layer:'snapshot',mimeType:'text/markdown'})).id:noteId;
 const materialRefs=[];
 for(const [index,title,text] of [[0,'评审准备记录','先把资料阅读和提问之间的路径走通，再讨论其他页面。'],[1,'评审议程.md','先检查用户能否找到内容，然后检查能否顺利继续下一步。'],[2,'本轮生成图片.png','这份图片由验收脚本创建，不包含个人资料。']] as const){
  const member=index===2?imageId:index===1?documentId:noteId;
