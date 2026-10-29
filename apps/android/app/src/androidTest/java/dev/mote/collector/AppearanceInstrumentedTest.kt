@@ -163,6 +163,10 @@ class AppearanceInstrumentedTest {
         for(page in listOf("CONNECTION","PREVIEW","DIAGNOSTICS")) {
             instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.LIGHT) }
             ActivityScenario.launch<Activity>(Intent(context,if(page=="PREVIEW")CompressionPreviewActivity::class.java else MainActivity::class.java).putExtra("page",page)).use { scenario ->
+                if(page=="CONNECTION") {
+                    waitFor("Actual connection disclosure ready"){var ready=false;scenario.onActivity { ready=visible(it).any { view->view.tag=="connection-settings-toggle" } };ready}
+                    scenario.onActivity { a->visible(a).single { it.tag=="connection-settings-toggle" }.performClick() }
+                }
                 waitFor("Actual $page fields ready"){var ready=false;scenario.onActivity { ready=visible(it).filterIsInstance<EditText>().any{field->field.isEnabled && field.isFocusable && field.keyListener!=null} };ready}
                 lateinit var field:EditText;var originalText="";scenario.onActivity { a->field=visible(a).filterIsInstance<EditText>().first{it.isEnabled && it.isFocusable && it.keyListener!=null};originalText=field.text.toString();assertTrue("Editable $page field must accept focus before switching",field.requestFocus());field.setSelection(0,field.text.length);MoteAppearance.select(context,AppearancePreference.DARK) }
                 instrumentation.waitForIdleSync();val frame=java.util.concurrent.CountDownLatch(1);scenario.onActivity { a->a.window.decorView.postOnAnimation{a.window.decorView.postOnAnimation{frame.countDown()}} };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))

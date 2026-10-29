@@ -119,6 +119,7 @@ class NativeUiPackInstrumentedTest {
             var previous: MainActivity? = null
             scenario.onActivity { activity ->
                 previous = activity
+                visible(activity).single { it.tag == "connection-settings-toggle" }.performClick()
                 visible(activity).filterIsInstance<EditText>().single { it.tag == "设备名称" }.setText("Generated unsaved name")
                 visible(activity).filterIsInstance<EditText>().single { it.hint == "建议通过邀请获取本设备凭据" }.setText("generated-unsaved-token-1234567890")
                 NativeUiPacks.registry.bind(binding)

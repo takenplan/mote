@@ -142,6 +142,7 @@ class NavigationInstrumentedTest {
             navigate(scenario,"设置")
             scenario.onActivity { activity ->
                 menu(activity,"连接与同步")
+                views(activity.window.decorView).single { it.isShown && it.tag=="connection-settings-toggle" }.performClick()
                 editor(activity,"https://mote.example.com").setText("https://127.0.0.1:1")
                 editor(activity,"建议通过邀请获取本设备凭据").setText("generated-navigation-fixture-token-1234567890")
             }

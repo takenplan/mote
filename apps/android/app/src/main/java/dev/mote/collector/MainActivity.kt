@@ -45,6 +45,8 @@ class MainActivity : MoteActivity() {
     private lateinit var centralConnectionTitle: TextView
     private lateinit var centralConnectionStatus: TextView
     private lateinit var connectionSummary: TextView
+    private var connectionSettingsExpanded = false
+    private var connectionSettingsPanel: LinearLayout? = null
     private lateinit var saveBar: LinearLayout
     private var applyingSettings = false
     private var pendingSubmission: Map<String, String>? = null
@@ -190,6 +192,7 @@ class MainActivity : MoteActivity() {
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { navigateBack() }
         centralState = savedInstanceState?.getBundle("centralContent")
         activityState = savedInstanceState?.getBundle("activityContent")
+        connectionSettingsExpanded = savedInstanceState?.getBoolean("connectionSettingsExpanded") ?: false
         permissionReturnPage = savedInstanceState?.getString("permissionReturnPage")?.let { value -> Page.entries.find { it.name == value } } ?: Page.SETTINGS
         connectionOrigin = savedInstanceState?.getString("connectionOrigin")?.let { value -> ConnectionOrigin.entries.find { it.name == value } }
             ?: if (savedInstanceState == null && intent.getStringExtra("page") == "CONNECTION" && intent.getBooleanExtra("returnToCentral", false)) ConnectionOrigin.CENTRAL_CALLER else null
@@ -209,6 +212,9 @@ class MainActivity : MoteActivity() {
         }
     }
     private fun buildUi(config: CollectorConfig, savedInstanceState: Bundle?, retained: RetainedDraft?) {
+        // Expansion belongs to the same in-memory connection visit as its private draft.
+        // A process restore or changed node/credential starts with the default disclosure.
+        connectionSettingsExpanded = connectionSettingsExpanded && retained?.config?.let { it.server == config.server && it.connectionToken() == config.connectionToken() } == true
         loadedServer = config.server; loadedConfig = config
         val root = NativeAppShell(this).apply { moteInsets() }
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(MoteTheme.spacePage), 0, dp(MoteTheme.spacePage), 0) }
@@ -661,9 +667,12 @@ class MainActivity : MoteActivity() {
     private fun buildConnection(config: CollectorConfig) {
         page(Page.CONNECTION, MoteI18n.text("可先只在本机记录，需要时再连接中央档案"))
         section(MoteI18n.text("中央节点"))
+        connectionSummary = text("", NativeFontRole.SUPPORT, NativeColorRole.MUTED).apply { tag = "connection-current-status" }
         menu(MoteI18n.text("扫码或导入邀请"), MoteI18n.text("推荐使用中央节点生成的一次性邀请"), "sync") { discardPageDraft(); startActivity(Intent(this, ConnectionActivity::class.java)) }
+        val manual = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = if(connectionSettingsExpanded) View.VISIBLE else View.GONE; tag = "connection-settings-panel" }.also { connectionSettingsPanel = it }
+        button(MoteI18n.text("连接设置")) { connectionSettingsExpanded = manual.visibility != View.VISIBLE; manual.visibility = if(connectionSettingsExpanded) View.VISIBLE else View.GONE }.apply { tag = "connection-settings-toggle" }
+        content.addView(manual); val connectionContent = content; content = manual
         section(MoteI18n.text("节点与设备"))
-        connectionSummary = text("", NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         server = field(MoteI18n.text("节点 URL（可留空，仅在本机记录）"), config.server, "https://mote.example.com", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         token = field(MoteI18n.text("访问令牌（未连接时可留空）"), "", MoteI18n.text("建议通过邀请获取本设备凭据"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         fun showTokenField() {
@@ -693,7 +702,7 @@ class MainActivity : MoteActivity() {
                 if (!settings.read().hasSyncConnection()) throw ConnectionFailure("authentication")
                 ConnectionClient(applicationContext).test()
             }) { result ->
-                verification.text = if (result.isSuccess) MoteI18n.text("登录成功，可使用所有中央功能。")
+                verification.text = if (result.isSuccess) MoteI18n.text("已连接中央节点")
                     else MoteI18n.text("采集连接验证未通过，请检查已保存的地址、凭据和网络后重试。")
                 refreshStatus()
             }
@@ -704,12 +713,13 @@ class MainActivity : MoteActivity() {
                 else startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview"))
             }
         }
+        content = connectionContent
         button(MoteI18n.text("立即重试同步"), true) { retrySync() }
         menu(MoteI18n.text("待上传队列"), MoteI18n.text("查看采集、随手记和来源待发条目"), "sync") { startActivity(Intent(this, SyncQueueActivity::class.java)) }
         menu(MoteI18n.text("同步与恢复"), MoteI18n.text("两端检查、补传与冲突处理"), "sync") { startActivity(Intent(this, SyncRecoveryActivity::class.java)) }
         val advancedSync = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级同步设置")) { advancedSync.visibility = if (advancedSync.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
-        content.addView(advancedSync); val connectionContent = content; content = advancedSync
+        content.addView(advancedSync); content = advancedSync
         section(MoteI18n.text("统一同步方式"))
         text(MoteI18n.text("所有采集记录和来源文件共用以下同步设置。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         syncMode = Spinner(this).apply {
@@ -1108,7 +1118,7 @@ class MainActivity : MoteActivity() {
     private fun buildAbout() {
         page(Page.ABOUT, MoteI18n.text("Mote · 让经历留有线索"))
         card(MoteUi.tint) {
-            text("Mote", NativeFontRole.TITLE)
+            text("Mote · ${RuntimeProfile.current.name}", NativeFontRole.TITLE).apply { tag = "about-build-profile" }
             text(MoteI18n.text("你的个人上下文档案"), NativeFontRole.BODY)
             text(MoteI18n.text("版本 {0}", BuildConfig.VERSION_NAME), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         }
@@ -1499,7 +1509,7 @@ class MainActivity : MoteActivity() {
                     status.text = snapshot.status
                     totalsStatus.text = snapshot.totals; if (::technicalStatus.isInitialized) technicalStatus.text = snapshot.technical
                     centralConnectionTitle.text = snapshot.connectionTitle; centralConnectionStatus.text = snapshot.connection
-                    if (::connectionSummary.isInitialized) connectionSummary.text = snapshot.connection
+                    if (::connectionSummary.isInitialized) connectionSummary.text = snapshot.connectionTitle + "\n" + snapshot.connection
                     if (::mediaStatus.isInitialized) mediaStatus.text = snapshot.media
                     updateSaveBar()
                 }.onFailure { captureProgress.visibility = View.GONE; status.text = MoteI18n.text("状态暂不可读取，已有记录保留在本机；稍后自动重试") }
@@ -1567,6 +1577,7 @@ class MainActivity : MoteActivity() {
             settings.syncState() == "error" -> settings.uploadStatus()
             pending != null && pending > 0 -> MoteI18n.text("待同步 {0} 条 · 节点：{1}", pending, c.server)
             connectionState == "unchecked" -> MoteI18n.text("节点已保存，但尚未完成最近一次连接验证：{0}", c.server)
+            connectionState != "connected" -> MoteI18n.text("采集连接验证未通过，请检查已保存的地址、凭据和网络后重试。")
             else -> MoteI18n.text("节点：{0} · 最近一次验证成功", c.server)
         }
         val captureState = state + if (c?.screenCollectionEnabled == true && settings.enabled) "\n" + MoteI18n.text("屏幕采集：{0}", settings.screenStatus()) else ""
@@ -1821,6 +1832,7 @@ class MainActivity : MoteActivity() {
         outState.putBundle("library", libraryView?.saveState() ?: libraryState)
         outState.putString("page", currentPage.name)
         outState.putString("permissionReturnPage", permissionReturnPage.name)
+        outState.putBoolean("connectionSettingsExpanded", connectionSettingsPanel?.visibility == View.VISIBLE)
         if (currentPage == Page.CONNECTION) connectionOrigin?.let { outState.putString("connectionOrigin", it.name) }
         pageRuleImportTarget?.let { (id, version) -> outState.putString("pageRuleImportApp", id); outState.putString("pageRuleImportVersion", version) }
         outState.putBundle("centralContent", Bundle().also { state ->
@@ -1888,6 +1900,10 @@ class MainActivity : MoteActivity() {
     private fun reloadSettings(config: CollectorConfig) {
         initializing = true; applyingConnectionFields = true
         try {
+            if(config.server != loadedConfig.server || config.connectionToken() != loadedConfig.connectionToken()) {
+                connectionSettingsExpanded = false
+                connectionSettingsPanel?.visibility = View.GONE
+            }
             val editablePages = controlPages.values.toSet()
             editablePages.forEach { page -> pages.remove(page)?.let(pagesHost::removeView) }
             controls.forEach { if (it is EditText) fieldLabels.remove(it) }

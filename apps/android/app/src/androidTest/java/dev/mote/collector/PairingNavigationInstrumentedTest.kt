@@ -118,6 +118,7 @@ class PairingNavigationInstrumentedTest {
                 val monitor = instrumentation.addMonitor(ConnectionActivity::class.java.name, null, false)
                 scenario.onActivity { activity ->
                     click(activity, "设置"); menu(activity, "连接与同步")
+                    views(activity.window.decorView).single { it.isShown && it.tag=="connection-settings-toggle" }.performClick()
                     editor(activity, "https://mote.example.com").setText("https://discard.generated.invalid")
                     assertTrue(saveVisible(activity)); menu(activity, "扫码或导入邀请")
                 }
@@ -161,6 +162,7 @@ class PairingNavigationInstrumentedTest {
                 scenario.awaitUiText(node)
                 scenario.onActivity { activity ->
                     assertEquals(node, editor(activity, "https://mote.example.com").text.toString())
+                    assertEquals("A different committed connection returns to the default disclosure",View.GONE,activity.window.decorView.findViewWithTag<View>("connection-settings-panel").visibility)
                     assertTrue(editor(activity, "建议通过邀请获取本设备凭据").text.isEmpty())
                     assertEquals(View.GONE, editor(activity, "建议通过邀请获取本设备凭据").visibility)
                     assertFalse(saveVisible(activity))
