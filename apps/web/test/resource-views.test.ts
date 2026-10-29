@@ -19,7 +19,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {requestMemoryIntegration} from '../../server/src/memory-integration.js';
 const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
 function deferred(){let resolve!:(value:any)=>void,reject!:(value:unknown)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
-async function fixture(t:any){const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}dom.window.localStorage.setItem('mote.language','zh-CN');const root=createRoot(dom.window.document.getElementById('root')!);t.after(async()=>{await act(async()=>root.unmount());for(const [key,descriptor] of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});return {root,document:dom.window.document};}
+async function fixture(t:any){const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}dom.window.scrollTo=()=>{};dom.window.localStorage.setItem('mote.language','zh-CN');const root=createRoot(dom.window.document.getElementById('root')!);t.after(async()=>{await act(async()=>root.unmount());for(const [key,descriptor] of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});return {root,document:dom.window.document};}
 function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{return {request:async(path:string,init?:RequestInit)=>{if(path.startsWith('/api/actions/by-evidence/'))return {items:[],hasMore:false};if(path==='/api/context-trees')return {items:[{id:'topics',version:'1',label:'主题',nodes:[{id:'personal',label:'个人'}]}]};if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};if(path==='/api/model-settings')return modelView();if(path==='/api/memory-jobs')return {items:[]};if(path==='/api/execution-settings')return {queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}};if(path==='/api/file-processing')return null;if(path==='/api/connectors/status')return {};return await read(path,init);},setAgentTimeout:()=>{}} as Api;}
 const memory=(id:string)=>({id,title:'Generated '+id[0],statement:'Current evidence '+id[0],status:'published',createdAt:'2020-01-01T00:00:00Z',evidenceIds:[]});
 test('Memory history uses summary counts and uncertainty links the same verified citations as its statement',async t=>{
@@ -162,15 +162,17 @@ test('current featured Memory detail offers the manual consolidation entry, whil
  await act(async()=>d.querySelector('.workspace-select')!.dispatchEvent(new window.MouseEvent('click',{bubbles:true})));
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='更多')!.click());
  assert.ok(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'));
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='从这条记忆开始整理')!.click());
  assert.match(d.querySelector('#manual-memory-integration')!.textContent!,/仅选择此卡作为整合起点/);
  assert.equal(Array.from(d.querySelectorAll('#manual-memory-integration button')).find(b=>b.textContent==='整理这条记忆')!.disabled,false,'the current feature default is configured');
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-workspace-final button')).find(b=>b.textContent==='← 返回我的记忆')!.click());
  shown={...item,validUntil:'2020-01-01T00:00:00Z'};
  await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/memories/')));
  assert.equal(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'),false);
  shown={...item,admission:{layer:'observation'}};
  await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/memories/')));
  assert.equal(Array.from(d.querySelectorAll('.memory-detail button')).some(b=>b.textContent==='从这条记忆开始整理'),false);
- assert.equal(d.querySelector('#manual-memory-integration'),null);
+ assert.equal(Boolean(d.querySelector('#manual-memory-integration')?.closest('.memory-work-stage:not([hidden])')),false);
 });
 test('material corrections hide cached prose while pending and explicitly link historical revisions to the current one',async t=>{
  const {root,document:d}=await fixture(t);let state='ready';const opened:string[]=[];
@@ -488,7 +490,10 @@ test('Library Memory keeps its selected card and integration panel across a 30-s
  const render=(period='week',deviceId?:string)=>root.render(React.createElement(LibraryShell,{period,deviceId}));
  await act(async()=>render());
  await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
- assert.ok(d.querySelector('.memory-detail'));assert.ok(d.querySelector('#manual-memory-integration'));
+ assert.ok(d.querySelector('.memory-detail'));
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='更多')!.click());
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.memory-detail button')).find(b=>b.textContent==='从这条记忆开始整理')!.click());
+ assert.ok(d.querySelector('#manual-memory-integration'));
  const submit=()=>Array.from(d.querySelectorAll<HTMLButtonElement>('#manual-memory-integration button')).find(button=>button.textContent==='整理这条记忆')!;
  assert.equal(submit().disabled,false);const selectedReads=detailReads;
  await act(async()=>t.mock.timers.tick(30000));

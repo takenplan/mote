@@ -9,6 +9,7 @@ import {MemoryProgress,type MemoryJob} from '../src/MemoryProgress.js';
 import type {Api} from '../src/api.js';
 import {configureLocale,getLocale} from '@mote/shared/i18n';
 import {failureMessage} from '../src/failure-message.js';
+import {captureDateRange,localDateInput} from '../src/capture-presentation';
 
 async function fixture(t:import('node:test').TestContext){
   const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
@@ -28,6 +29,8 @@ test('manual recipe choices travel only with this extraction request and survive
     if(init?.method==='POST'){writes.push({path,body:JSON.parse(String(init.body))});throw Error('Generated request failure');}
     if(path==='/api/memory-recipes')return {items:[{...personal,available:true},{...coding,available:true}]};
     if(path==='/api/model-settings')return modelView();
+    if(path==='/api/memory-settings')return {settings:{consolidation:{enabled:false,maxItems:5}},extensions:[]};
+    if(path.startsWith('/api/library/browse?'))return {items:[],nextCursor:null};
     if(path.startsWith('/api/memories?'))return {items:[],nextCursor:null};
     if(path==='/api/memory-jobs')return {items:[]};
     if(path==='/api/execution-settings')return {queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}};
@@ -35,14 +38,14 @@ test('manual recipe choices travel only with this extraction request and survive
     assert.fail('Unexpected request '+path);
   },setAgentTimeout:()=>{}} as Api;
   await act(async()=>root.render(React.createElement(Memories,{api,range:{after:'2026-09-01T00:00:00Z'},onOpen:()=>{}})));
-  const options=d.querySelector<HTMLDetailsElement>('.memory-processing-options')!;assert.equal(options.open,false,'processing options start folded independently of the manual entry');
-  await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='手动提取与整理')!.click());
-  assert.equal(d.querySelector<HTMLDetailsElement>('.memory-management')!.open,true);assert.equal(options.open,false);
+  await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='手动提取记忆')!.click());
+  await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='按时间范围提取')!.click());
+  const options=d.querySelector<HTMLDetailsElement>('.memory-work-scope .memory-processing-options')!;assert.equal(options.open,false,'processing options start folded independently of the work page');
   await act(async()=>options.querySelector('summary')!.click());assert.equal(options.open,true);
   for(const input of d.querySelectorAll<HTMLInputElement>('.manual-memory-recipes input'))await act(async()=>input.click());
-  const submit=()=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='提取当前范围的记忆')!.click());
+  const submit=()=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='开始提取')!.click());
   await act(async()=>options.querySelector('summary')!.click());assert.equal(options.open,false);
-  await submit();assert.deepEqual(writes[0].body.recipes,[personal,coding]);assert.equal(writes[0].body.after,'2026-09-01T00:00:00Z');assert.equal(writes[0].path,'/api/memory-jobs');
+  await submit();assert.deepEqual(writes[0].body.recipes,[personal,coding]);assert.equal(writes[0].body.after,captureDateRange(localDateInput(new Date('2026-09-01T00:00:00Z')),localDateInput(new Date())).after);assert.equal(writes[0].path,'/api/memory-jobs');
   assert.equal(options.open,false,'an unsuccessful request does not expose the advanced options');
   await act(async()=>options.querySelector('summary')!.click());
   assert.equal(d.querySelectorAll('.manual-memory-recipes input:checked').length,2);assert.match(d.body.textContent!,/Generated request failure/);
