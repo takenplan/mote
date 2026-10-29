@@ -8941,5 +8941,7 @@ export const english: Readonly<Record<string, string>> = {
   "例如：这是我的日记，记录当天的经历和感受。": "For example: This is my diary, recording the day’s experiences and feelings.",
   "仅用于理解这条记录。": "Used only to understand this record.",
   "文档": "Document",
-  "音频": "Audio"
+  "音频": "Audio",
+  "Coding 会话": "Coding sessions",
+  "邮件": "Email"
 };

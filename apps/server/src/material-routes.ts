@@ -1,4 +1,4 @@
-import {ownerRelationSchema} from '@mote/shared';
+import {ownerRelationSchema,libraryMaterialTypes} from '@mote/shared';
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
 import {MaterialStore,formatMaterialRef} from './materials.js';
@@ -11,6 +11,7 @@ const listQuery=z.object({query:z.string().min(1).max(500).optional(),sourceId:z
   deviceId:z.string().min(1).max(128).optional(),after:z.string().datetime({offset:true}).optional(),
   before:z.string().datetime({offset:true}).optional(),limit:z.coerce.number().int().min(1).max(100).optional(),
   cursor:z.string().max(4096).optional()}).strict();
+const catalogQuery=listQuery.extend({type:z.enum(libraryMaterialTypes).optional()});
 const readQuery=z.object({revision:revision.optional(),offset:z.coerce.number().int().min(0).optional(),
   length:z.coerce.number().int().min(1).max(12000).optional()}).strict();
 const memberQuery=z.object({revision:revision.optional(),offset:z.coerce.number().int().min(0).optional(),
@@ -20,7 +21,7 @@ const memberQuery=z.object({revision:revision.optional(),offset:z.coerce.number(
 export function registerMaterialRoutes(app:FastifyInstance,materials:MaterialStore,organizers?:MaterialOrganizerRuntime){
   if(organizers)app.get('/api/materials/status',async()=>organizers.status());
   app.get('/api/library/descriptor',async()=>materials.catalog.registry.describe());
-  app.get('/api/library/catalog',async req=>materials.catalog.list(listQuery.parse(req.query),String(req.headers.authorization??'')));
+  app.get('/api/library/catalog',async req=>materials.catalog.list(catalogQuery.parse(req.query),String(req.headers.authorization??'')));
   app.patch('/api/materials/:id/context',async req=>{const materialId=id.parse((req.params as {id:string}).id);const body=z.object({expectedRevision:revision,ownerRelation:ownerRelationSchema.nullable()}).strict().parse(req.body);return materials.correctContext(materialId,body.expectedRevision,body.ownerRelation);});
   app.get('/api/materials',async req=>materials.list(listQuery.parse(req.query)));
   app.post('/api/materials/:id/index/retry',async req=>{

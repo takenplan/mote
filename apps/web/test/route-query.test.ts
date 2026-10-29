@@ -12,9 +12,9 @@ test('category and plugin state handle query removal and exact allowlists',()=>{
  assert.equal(pluginTabFromHash('#/system/plugins'),'installed');
 });
 test('contextual task and question returns preserve the registered route and identifier',()=>{
- for(const hash of ['#/ask?question=generated','#/activity?work=generated','#/library?view=files&evidence=generated','#/system/models?category=model','#/library/insights?insight=generated-report'])assert.equal(validatedReturnTarget(hash,pages,collections),hash);
+ for(const hash of ['#/ask?question=generated','#/library?view=materials&type=image','#/activity?work=generated','#/library?view=files&evidence=generated','#/system/models?category=model','#/library/insights?insight=generated-report'])assert.equal(validatedReturnTarget(hash,pages,collections),hash);
 });
 test('invalid, removed or mismatched return destinations never gain a fallback link',()=>{
- for(const hash of ['https://example.test','javascript:alert(1)','#//example.test','#/missing','#/library?view=missing','#/ask?category=providers','#/ask?work=generated','#/ask?question=a&question=b','#/ask?returnTo=https://example.test','#/ask?insight=generated-report'])assert.equal(validatedReturnTarget(hash,pages,collections),undefined);
+ for(const hash of ['https://example.test','javascript:alert(1)','#//example.test','#/missing','#/ask?type=image','#/library?type=unknown','#/library?view=missing','#/ask?category=providers','#/ask?work=generated','#/ask?question=a&question=b','#/ask?returnTo=https://example.test','#/ask?insight=generated-report'])assert.equal(validatedReturnTarget(hash,pages,collections),undefined);
  assert.equal(validatedReturnTarget('#/ask',pages.filter(page=>page.id!=='ask'),collections),undefined);
 });

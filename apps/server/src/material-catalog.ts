@@ -1,5 +1,5 @@
 import {createHash,createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
-import type {LibraryTypeDescriptor,LibrarySourceFacet} from '@mote/shared';
+import type {LibraryTypeDescriptor,LibrarySourceFacet,LibraryMaterialType} from '@mote/shared';
 import type {Context} from '@deepseek-ai/cordis';
 import {z} from 'zod';
 import type {MaterialStore} from './materials.js';
@@ -21,7 +21,7 @@ export class MaterialCatalogRegistry {
 }
 declare module '@deepseek-ai/cordis' {interface Context {moteMaterialCatalog:MaterialCatalogRegistry;}}
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export type CatalogQuery={sourceId?:string;kind?:string;deviceId?:string;after?:string;before?:string;query?:string;limit?:number;cursor?:string};
+export type CatalogQuery={sourceId?:string;kind?:string;type?:LibraryMaterialType;deviceId?:string;after?:string;before?:string;query?:string;limit?:number;cursor?:string};
 /** Rebuildable owner projection over the existing Material authority, never another content store. */
 export class MaterialCatalog {
   readonly registry=new MaterialCatalogRegistry();
@@ -51,7 +51,7 @@ export class MaterialCatalog {
   }
   list(args:CatalogQuery,ownerIdentity:string){
     const {cursor,...filter}=args,generation=this.generation();
-    const scope=hash([ownerIdentity,{sourceId:filter.sourceId??null,kind:filter.kind??null,deviceId:filter.deviceId??null,after:filter.after??null,before:filter.before??null,query:filter.query??null,limit:filter.limit??24},this.registry.revision]);
+    const scope=hash([ownerIdentity,{sourceId:filter.sourceId??null,kind:filter.kind??null,type:filter.type??null,deviceId:filter.deviceId??null,after:filter.after??null,before:filter.before??null,query:filter.query??null,limit:filter.limit??24},this.registry.revision]);
     const position=cursor?this.open(cursor):undefined;
     if(position&&(position.scope!==scope||position.generation!==generation))throw new StoreError('Library cursor changed; restart browsing',409);
     const page=this.materials.list({...filter,limit:filter.limit??24,cursor:position?.inner,order:'source'});

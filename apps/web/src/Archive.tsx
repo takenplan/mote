@@ -33,7 +33,7 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
     const entries = webFeatures.collections(), entry = entries.find(item => item.id === tab);
     const availability = useDiscoveryState(api);
     const [browseOwner,setBrowseOwner]=useState(api);
-    useEffect(()=>{if(browseOwner===api)return;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setBrowseOwner(api);},[api,browseOwner]);
+    useEffect(()=>{if(browseOwner===api)return;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','type','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setBrowseOwner(api);},[api,browseOwner]);
     const [selection, setSelection] = useState<{
         owner: Api;
         view: string;

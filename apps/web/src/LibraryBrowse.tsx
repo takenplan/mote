@@ -1,7 +1,7 @@
 import {ActionResults} from './ActionResults';
 import {NoteOrigin,NoteAttachments} from './NoteOrigin';
 import {StructuredObservation} from './StructuredObservation';
-import type { LibraryTypeDescriptor, LibrarySourceFacet } from '@mote/shared';
+import {libraryMaterialTypes,type LibraryMaterialType,type LibraryTypeDescriptor,type LibrarySourceFacet} from '@mote/shared';
 import { FeatureCard, FeatureActions } from './features/runtime';
 import { ImageProgress } from './ImageProgress';
 import { materialKind, materialKindOptions, sourceDisplay } from './material-presentation';
@@ -22,6 +22,10 @@ import { SourceDocumentDetails } from './SourceDocumentDetails';
 import { Empty, ErrorNotice, OriginalImage, Spinner } from './shell-components';
 import { useResource } from './useResource';
 import { useMaterialPreview } from './HomeMaterialRow';
+function libraryTypeLabel(value:string){
+    const labels:Record<LibraryMaterialType,string>={note:moteText('随手记'),document:moteText('文档'),image:moteText('图片'),coding:moteText('Coding 会话'),transcript:moteText('转写'),email:moteText('邮件'),calendar:moteText('日程'),reference:moteText('引用')};
+    return labels[value as LibraryMaterialType]??value;
+}
 function validLibraryDay(value:string){
     if(!value)return true;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
@@ -96,16 +100,16 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
     browseNavigation?: ReactNode;
     materialPreview?: {read:boolean;image:boolean};
 }) {
-    const readFilters = () => {const query=new URLSearchParams(window.location.hash.split('?')[1]??'');return {owner:api,sourceId:query.get('sourceId')??'',deviceId:query.get('deviceId')??'',kind:query.get('kind')??'',after:query.get('after')??'',before:query.get('before')??'',cursor:query.get('cursor')??undefined};};
+    const readFilters = () => {const query=new URLSearchParams(window.location.hash.split('?')[1]??'');return {owner:api,sourceId:query.get('sourceId')??'',deviceId:query.get('deviceId')??'',kind:query.get('kind')??'',type:query.get('type')??'',after:query.get('after')??'',before:query.get('before')??'',cursor:query.get('cursor')??undefined};};
     const [filters, setFilters] = useState(readFilters);
     const [filterOpen,setFilterOpen]=useState(false);
     const filterOwner=useRef(api);
-    const current = filters.owner === api ? filters : { owner: api, sourceId: '', deviceId: '', kind: '', after: '', before: '', cursor: undefined };
+    const current = filters.owner === api ? filters : { owner: api, sourceId: '', deviceId: '', kind: '', type: '', after: '', before: '', cursor: undefined };
     const invalidDate=!validLibraryDay(current.after)||!validLibraryDay(current.before);
-    const update = (patch: Partial<typeof current>) => { onBrowseChanged?.();const next={...current,cursor:undefined,...patch};setFilters(next);const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);for(const key of ['sourceId','deviceId','kind','after','before','cursor'] as const){if(next[key])query.set(key,next[key]!);else query.delete(key);}window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));};
-    useEffect(() => { if(filterOwner.current!==api){filterOwner.current=api;setFilterOpen(false);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setFilters(readFilters());}const sync = () => setFilters(readFilters()); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, [api]);
+    const update = (patch: Partial<typeof current>) => { onBrowseChanged?.();const next={...current,cursor:undefined,...patch};setFilters(next);const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);for(const key of ['sourceId','deviceId','kind','type','after','before','cursor'] as const){if(next[key])query.set(key,next[key]!);else query.delete(key);}window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));};
+    useEffect(() => { if(filterOwner.current!==api){filterOwner.current=api;setFilterOpen(false);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','type','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setFilters(readFilters());}const sync = () => setFilters(readFilters()); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, [api]);
     const query = new URLSearchParams({ limit: '24' });
-    for (const key of ['sourceId', 'deviceId', 'kind', 'cursor'] as const)
+    for (const key of ['sourceId', 'deviceId', 'kind', 'type', 'cursor'] as const)
         if (current[key])
             query.set(key, current[key]!);
     if (current.after&&!invalidDate)
@@ -123,18 +127,18 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
         items: Material[];
         nextCursor: string | null;
     }>(api, invalidDate?null:'/api/library/catalog?' + query, undefined, revision);
-    const activeFilters=([['sourceId',current.sourceId?sourceDisplay(current.sourceId,page.data?.sources.find(source=>source.id===current.sourceId)?.label):''],['deviceId',devices.find(device=>device.deviceId===current.deviceId)?.deviceName??current.deviceId],['kind',current.kind?materialKind(current.kind,page.data?.types.find(type=>type.kind===current.kind)?.label):''],['after',current.after?moteText('从')+' '+current.after:''],['before',current.before?moteText('至')+' '+current.before:'']] as const).filter(([,label])=>label);
+    const activeFilters=([['sourceId',current.sourceId?sourceDisplay(current.sourceId,page.data?.sources.find(source=>source.id===current.sourceId)?.label):''],['deviceId',devices.find(device=>device.deviceId===current.deviceId)?.deviceName??current.deviceId],['type',current.type?libraryTypeLabel(current.type):''],['kind',current.kind?materialKind(current.kind,page.data?.types.find(type=>type.kind===current.kind)?.label):''],['after',current.after?moteText('从')+' '+current.after:''],['before',current.before?moteText('至')+' '+current.before:'']] as const).filter(([,label])=>label);
     const kinds=[...new Map([...materialKindOptions(),...(page.data?.items.filter(item=>!materialKindOptions().some(type=>type.kind===item.kind)).map(item=>({kind:item.kind,label:materialKind(item.kind)}))??[]),...(page.data?.types??[])].map(type=>[type.kind,type])).values()];
     const groups=new Map<string,Material[]>();
     for(const item of page.data?.items??[]){const at=item.origin.lastAt??item.origin.firstAt??item.updatedAt;const day=at&&Number.isFinite(Date.parse(at))?new Date(at).toLocaleDateString(getLocale(),{year:'numeric',month:'long',day:'numeric'}):moteText('资料');groups.set(day,[...(groups.get(day)??[]),item]);}
     return <section className="library-materials">
     <div className="library-list-heading">{viewNavigation??<h2>{moteText('资料')}</h2>}<div className="library-filter-actions"><button className="text-button" aria-expanded={filterOpen||invalidDate} aria-controls="library-catalog-filters" onClick={()=>setFilterOpen(!filterOpen)}>{moteText('筛选')}{activeFilters.length>0&&' · '+activeFilters.length}<ChevronDown size={12}/></button><button className="icon-button" disabled={page.loading} onClick={page.refresh} aria-label={moteText('刷新')}><RefreshCw size={13}/></button></div></div>
     <div className="library-catalog-filters" id="library-catalog-filters" hidden={!filterOpen&&!invalidDate}>
-      <label>{moteText('来源')}<select value={current.sourceId} onChange={event => update({ sourceId: event.target.value })}><option value="">{moteText('全部来源')}</option>{current.sourceId && !page.data?.sources.some(source => source.id === current.sourceId) && <option value={current.sourceId}>{sourceDisplay(current.sourceId)}</option>}{page.data?.sources.map(source => <option key={source.id} value={source.id}>{sourceDisplay(source.id, source.label)} · {source.count}</option>)}</select></label>
+      <label>{moteText('来源')}<select value={current.sourceId} onChange={event => update({ sourceId: event.target.value })}><option value="">{moteText('全部来源')}</option>{current.sourceId && !page.data?.sources.some(source => source.id === current.sourceId) && <option value={current.sourceId}>{sourceDisplay(current.sourceId)}</option>}{page.data?.sources.map(source => <option key={source.id} value={source.id}>{sourceDisplay(source.id, source.label)}</option>)}</select></label>
       <label>{moteText('设备')}<select value={current.deviceId} onChange={event => update({ deviceId: event.target.value })}><option value="">{moteText('全部设备')}</option>{devices.map(device => <option key={device.deviceId} value={device.deviceId}>{device.deviceName}</option>)}</select></label>
-      <label>{moteText('类型')}<select value={current.kind} onChange={event=>update({kind:event.target.value})}><option value="">{moteText('全部类型')}</option>{current.kind&&!kinds.some(type=>type.kind===current.kind)&&<option value={current.kind}>{materialKind(current.kind)}</option>}{kinds.map(type=><option key={type.kind} value={type.kind}>{materialKind(type.kind,type.label)}</option>)}</select></label>
-      <button className="text-button" onClick={() => update({ sourceId: '', deviceId: '',kind:'', after: '', before: '' })}>{moteText('清除筛选')}</button>
-      <details className="library-date-filters" open={invalidDate||undefined}><summary>{moteText('日期范围')}</summary><div><label>{moteText('从')}<input type="date" aria-invalid={!validLibraryDay(current.after)||undefined} value={current.after} onChange={event => update({ after: event.target.value })}/></label><label>{moteText('至')}<input type="date" aria-invalid={!validLibraryDay(current.before)||undefined} min={validLibraryDay(current.after)?current.after:undefined} value={current.before} onChange={event => update({ before: event.target.value })}/></label></div></details>
+      <label>{moteText('类型')}<select value={current.type} onChange={event=>update({type:event.target.value})}><option value="">{moteText('全部类型')}</option>{current.type&&!libraryMaterialTypes.includes(current.type as LibraryMaterialType)&&<option value={current.type}>{libraryTypeLabel(current.type)}</option>}{libraryMaterialTypes.map(type=><option key={type} value={type}>{libraryTypeLabel(type)}</option>)}</select></label>
+      <button className="text-button" onClick={() => update({ sourceId: '', deviceId: '',kind:'',type:'', after: '', before: '' })}>{moteText('清除筛选')}</button>
+      <details className="library-date-filters" open={invalidDate||undefined}><summary>{moteText('更多筛选')}</summary><div><label>{moteText('资料类型')}<select value={current.kind} onChange={event=>update({kind:event.target.value})}><option value="">{moteText('全部类型')}</option>{current.kind&&!kinds.some(type=>type.kind===current.kind)&&<option value={current.kind}>{materialKind(current.kind)}</option>}{kinds.map(type=><option key={type.kind} value={type.kind}>{materialKind(type.kind,type.label)}</option>)}</select></label><label>{moteText('从')}<input type="date" aria-invalid={!validLibraryDay(current.after)||undefined} value={current.after} onChange={event => update({ after: event.target.value })}/></label><label>{moteText('至')}<input type="date" aria-invalid={!validLibraryDay(current.before)||undefined} min={validLibraryDay(current.after)?current.after:undefined} value={current.before} onChange={event => update({ before: event.target.value })}/></label></div></details>
     </div>
     {activeFilters.length>0&&<div className="library-filter-chips">{activeFilters.map(([key,label])=><button key={key} aria-label={moteText('清除{0}筛选',label)} onClick={()=>update({[key]:''})}>{label}<X size={11}/></button>)}</div>}
     {invalidDate&&<p role="alert">{moteText('请选择有效日期')}</p>}

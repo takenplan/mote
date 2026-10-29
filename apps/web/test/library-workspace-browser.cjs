@@ -7,7 +7,7 @@ const {mkdtempSync,mkdirSync,writeFileSync,rmSync,existsSync}=require('node:fs')
 const {join,resolve}=require('node:path');
 const {tmpdir}=require('node:os');
 const assert=require('node:assert/strict');
-const repo=resolve(__dirname,'../../..'),out=join(repo,'.mote/web-library-ui'),directory=mkdtempSync(join(tmpdir(),'mote-web-final-library-'));
+const repo=resolve(__dirname,'../../..'),out=join(repo,'.mote/web-library-types-ui'),directory=mkdtempSync(join(tmpdir(),'mote-web-final-library-'));
 mkdirSync(out,{recursive:true});app.setPath('userData',join(directory,'browser'));app.on('window-all-closed',()=>{});
 let server,window;const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const evidence={revision:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),workingTree:Boolean(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'}).trim()),generatedOnly:true,realBuiltWeb:true,realCentralHttp:true,modelCalls:0,sourceRendered:false,theme:'light',locale:'zh-CN',screenshots:[],checks:[]};
@@ -31,9 +31,11 @@ async function run(){
  assert.equal(await js(`document.querySelectorAll('.library-view-tabs [data-collection-id]').length`),2);await snap('library-wide-default');
  await click('.library-filter-actions button[aria-expanded]');await snap('library-wide-filters');
  await change('.library-catalog-filters label:nth-child(1) select','generated-home-source');
- await change('.library-catalog-filters label:nth-child(3) select','mote.file');
- await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===2&&document.querySelector('.library-record-icon img')?.naturalWidth===48`),'type filter and exact original thumbnail');
- assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('kind')`),'mote.file');await snap('library-wide-file-filter');
+ await change('.library-catalog-filters label:nth-child(3) select','image');
+ await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===1&&document.querySelector('.library-record-icon img')?.naturalWidth===48`),'type filter and exact original thumbnail');
+ assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('type')`),'image');await snap('library-wide-image-filter');
+ assert.deepEqual(await js(`Array.from(document.querySelector('.library-catalog-filters label:nth-child(3) select').options).map(o=>o.value)`),['','note','document','image','coding','transcript','email','calendar','reference']);
+ await change('.library-catalog-filters label:nth-child(3) select','document');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===1&&document.querySelector('.library-record strong')?.textContent==='评审议程.md'`),'persisted document MIME filter');await snap('library-wide-document-filter');
  await click('.library-filter-chips button:nth-child(2)');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===24`),'single chip removes only type');
  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('sourceId')`),'generated-home-source');
  await byText('下一页');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===3`),'next material page');
@@ -48,7 +50,7 @@ async function run(){
  const retired=await js(`(()=>{const ref=new URLSearchParams(location.hash.split('?')[1]).get('selected');const [id,revision]=ref.slice(9).split('@');return {id,revision}})()`);writeFileSync(join(directory,'retire-material.json'),JSON.stringify(retired));
  await click('.workspace-node-menu summary');await click('.workspace-node-menu button[aria-label="刷新资料"]');await until(()=>js(`!window.libraryOpener.isConnected&&document.querySelectorAll('.library-catalog-row').length===24`),'actual refreshed catalog removed the previous opener');await click('.workspace-node-menu summary');
  await byText('返回资料列表');assert.equal(await js(`document.activeElement===document.querySelector('.library-heading')`),true,'retired row returns focus to the list heading');assert.equal(await js('scrollY===window.libraryScroll'),true,'retired row still restores list position');await snap('library-wide-retired-row-return');await js('scrollTo(0,0)');
- evidence.checks.push('real catalog/types/source facets; exact revision original preview and retained image; type/source query scope and individual filter chip; cursor page retained across reader; original opener and scroll restored; real material retirement while reading returns to the list heading and previous scroll');
+ evidence.checks.push('real eight-option MIME/primary-original type filter before pagination, document/image distinction and source facets; exact revision original preview and retained image; type/source query scope and individual filter chip; cursor page retained across reader; original opener and scroll restored; real material retirement while reading returns to the list heading and previous scroll');
  await js(`document.querySelector('.library-date-filters').open=true`);await change('.library-date-filters input[type=date]','2099-01-01');await until(()=>js(`!!document.querySelector('.library-materials .empty')`),'honest empty date range');await snap('library-wide-empty');
  await byText('清除筛选');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===24`),'empty recovery');
  writeFileSync(join(directory,'catalog-fault'),'generated');await click('.library-filter-actions button[aria-label="刷新"]');await until(()=>js(`!!document.querySelector('.library-materials [role=alert]')`),'real 503');await snap('library-wide-read-error');
@@ -56,9 +58,9 @@ async function run(){
  evidence.checks.push('explicit date scope produces empty state; clearing restores full scope; real HTTP 503 remains an error and explicit retry recovers');
  window.setSize(390,844);await wc.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await wc.debugger.sendCommand('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1});
  await click('.library-filter-actions button[aria-expanded]');await js('scrollTo(0,0)');await snap('library-touch-default');
- await click('.library-filter-actions button[aria-expanded]');await change('.library-catalog-filters label:nth-child(3) select','mote.file');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===2`),'touch file filter');await snap('library-touch-filters');
+ await click('.library-filter-actions button[aria-expanded]');await change('.library-catalog-filters label:nth-child(3) select','image');await until(()=>js(`document.querySelectorAll('.library-catalog-row').length===1`),'touch image filter');await snap('library-touch-filters');
  await js(`window.libraryOpener=document.querySelector('.library-record');window.libraryOpener.focus();window.libraryOpener.click()`);await until(()=>js(`!document.querySelector('.library-detail').hidden&&document.querySelector('.material-detail')`),'touch reader');await snap('library-touch-reader-layout');
- await byText('返回资料列表');assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('kind')`),'mote.file');assert.equal(await js('document.activeElement===window.libraryOpener'),true);
+ await byText('返回资料列表');assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('type')`),'image');assert.equal(await js('document.activeElement===window.libraryOpener'),true);
  assert.equal(requests.filter(r=>r.method==='POST'&&['/api/query','/api/query-runs','/api/insights','/api/insight-runs'].includes(r.path)).length,0);
  evidence.checks.push('390×844 touch list/filter/reader shell fit without horizontal overflow; return preserves explicit type scope; no model work');evidence.passed=true;
  console.log(JSON.stringify({passed:true,screenshots:evidence.screenshots.length,generatedOnly:true,sourceRendered:false}));

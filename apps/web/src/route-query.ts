@@ -1,3 +1,4 @@
+import {libraryMaterialTypes,type LibraryMaterialType} from '@mote/shared';
 import type {CollectionEntry,PageEntry} from './features/types';
 
 export const settingsCategories=['providers','model','file-processing','images','storage','embedding','connectors'] as const;
@@ -17,9 +18,10 @@ export function validatedReturnTarget(candidate:string|null|undefined,pages:read
  const page=pages.find(entry=>(entry.route??entry.id)===route||entry.aliases?.includes(route));
  if(!page)return;
  const query=new URLSearchParams(queryText);
- const allowed=new Set(['view','evidence','source','sourceId','kind','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight']);
+ const allowed=new Set(['view','evidence','source','sourceId','kind','type','device','after','before','search','asOf','category','setup','provider','tab','work','question','insight']);
  for(const [key,value] of query){
   if(!allowed.has(key)||query.getAll(key).length!==1)return;
+  if(key==='type'&&(page.id!=='archive'||!libraryMaterialTypes.includes(value as LibraryMaterialType)))return;
   if(key==='view'&&(page.id!=='archive'||!collections.some(entry=>entry.id===value)))return;
   if(key==='category'&&(page.id!=='settings'||!settingsCategories.includes(value as SettingsCategory)))return;
   if(key==='tab'&&(page.id!=='extensions'||!['installed','discover','memory'].includes(value)))return;
