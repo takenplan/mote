@@ -1268,6 +1268,6 @@ body:has([data-page="overview"].first-use-home:not([hidden])) #note-action{displ
 .source-provider-row strong{font-weight:500;flex:1}.source-provider-row>span{color:var(--mote-muted);font-size:11px}.source-provider-row .text-button{font-size:11px}
 .source-provider-statuses:empty{display:none}
 [data-page="source-connect"] #source-rules{border-top:1px solid var(--mote-border);margin-top:24px;padding-top:16px}
-[data-page="source-connect"] #source-rules>summary{color:var(--mote-muted);font-size:12px}
+[data-page="source-connect"] #source-rules>summary{display:list-item;cursor:pointer;color:var(--mote-muted);font-size:12px}
 .backup-count{font-size:42px;letter-spacing:-1.8px;font-weight:450}.backup-count small{display:inline;font-size:13px;margin-left:7px;letter-spacing:0;color:var(--mote-muted)}
 .ui-diagnostic{margin-top:12px;font-size:11px;color:var(--mote-muted);font-weight:400}.ui-diagnostic>summary{cursor:pointer}.ui-diagnostic pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.8;font-family:var(--mote-font-mono)}
