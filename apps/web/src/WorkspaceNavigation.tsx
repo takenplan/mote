@@ -46,6 +46,7 @@ export function WorkspaceNavigation({ page, onPage }: {
 }) {
     const section = sectionFor(page);
     if (section === 'library') {
+        if(page==='archive')return null; // The library owns its view links and secondary tools.
         const tools = sections.library.filter(id => id !== 'archive');
         return <div className="workspace-context">
       {page !== 'archive' && <button className="back-link" aria-label={moteText('返回{0}', pageLabels.archive)} onClick={() => onPage('archive')}><ArrowLeft size={16}/>{moteText('返回上级')}</button>}

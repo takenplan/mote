@@ -26,7 +26,12 @@ export type Material = {
         sourceId: string;
         provider?: string;
         sessionId?: string;
+        deviceId?: string;
+        firstAt?: string;
+        lastAt?: string;
     };
+    createdAt?: string;
+    updatedAt?: string;
     artifacts?: {
         key: string;
         state: string;

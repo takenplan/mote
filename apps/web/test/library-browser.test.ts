@@ -56,14 +56,16 @@ test('explicit library navigation leads directly into rows and source details wi
   const {root,d}=await fixture(t),reads:string[]=[],opened:string[]=[];
   const api=apiWith(path=>{reads.push(path);if(path.startsWith('/api/capture-browser?'))return {items:[row()],nextCursor:null,totalCount:1};if(path.startsWith('/api/capture-browser/'))return capture();throw Error('Unexpected generated request '+path);});
   await act(async()=>root.render(view(api,{onOpen:ref=>opened.push(ref)})));
-  assert.deepEqual(Array.from(d.querySelectorAll('.library-type-filters button'),button=>button.getAttribute('data-collection-id')),webFeatures.collections().filter(entry=>!['coding-status','memories'].includes(entry.id)).map(entry=>entry.id));
-  assert.equal(d.querySelector('[data-collection-id="coding-status"]'),null,'Coding receipts are contextual in Processing tasks; the legacy collection remains registered');
+  assert.deepEqual(new Set(Array.from(d.querySelectorAll('[data-collection-id]'),node=>node.getAttribute('data-collection-id'))),new Set(webFeatures.collections().filter(entry=>entry.id!=='memories').map(entry=>entry.id)),'all registered collections remain reachable in the primary, context or More links');
+  assert.equal(d.querySelector('[data-collection-id="coding-status"]')?.textContent,'Coding 同步状态','the accepted source exposes the existing receipt view as a contextual link');
   assert.ok(webFeatures.collections().some(entry=>entry.id==='coding-status'));
-  assert.equal(d.querySelector('[data-collection-id="segments"]')?.textContent,'片段');assert.equal(d.querySelector('select[aria-label="资料类型"]'),null);assert.equal(d.querySelector('[aria-label="记录视图"]'),null);
+  assert.equal(d.querySelector('[data-collection-id="segments"]')?.textContent,'片段与应用相册');assert.equal(d.querySelector('select[aria-label="资料类型"]'),null);assert.equal(d.querySelector('[aria-label="记录视图"]'),null);
   assert.equal(d.querySelector('.library-detail h3')?.textContent,'选择一条资料');
+  assert.equal(d.querySelector<HTMLElement>('.library-detail')!.hidden,true,'unselected detail is absent from the visible list');
   const record=d.querySelector<HTMLButtonElement>('.library-record')!;record.focus();
   await act(async()=>record.click());
   assert.equal(d.querySelector('.library-browser')?.classList.contains('has-selection'),true);
+  assert.equal(d.querySelector<HTMLElement>('.library-master')!.hidden,true,'the reader replaces the visible list at every viewport');
   assert.match(d.querySelector('.library-detail')!.textContent!,/Generated a/);
   assert.match(d.querySelector('.library-detail')!.textContent!,/Generated device/);
   assert.match(d.querySelector('.library-detail')!.textContent!,/generated\/note.txt/);
@@ -82,10 +84,10 @@ test('two primary library tabs keep registered specialized views secondary and u
  await act(async()=>root.render(view(api,{setTab:tab=>selected.push(tab)})));
  assert.deepEqual(Array.from(d.querySelectorAll('.library-primary-tabs button'),node=>node.textContent),['我的资料','我的记忆']);
  assert.equal(d.querySelector('.library-secondary-views')?.hasAttribute('open'),false);
- assert.equal(d.querySelector('[data-collection-id="coding-status"]'),null);
+ assert.equal(d.querySelector('[data-collection-id="coding-status"]')?.textContent,'Coding 同步状态');
  await act(async()=>button(d,'我的记忆').click());assert.deepEqual(selected,['memories']);
  await act(async()=>root.render(view(api,{tab:'generated-removed-collection'})));
- assert.equal(d.querySelector('.library-secondary-views summary')?.textContent,'资料库分类');
+ assert.equal(d.querySelector('.library-secondary-views summary')?.textContent,'更多');
  assert.match(d.querySelector('.library-content')?.textContent??'',/当前不可用/);
 });
 
@@ -146,6 +148,28 @@ test('formal material selection reads its pinned version through full ReferenceD
   await act(async()=>root.render(view(nextApi,{tab:'materials'})));
   assert.ok(nextPaths.includes('/api/library/catalog?limit=24'),'a new authenticated node starts at its own first page');
   assert.equal(nextPaths.some(path=>path.includes('generated-next')),false);
+});
+
+test('type and source filters remain explicit across chips, pagination and node changes; previews use the pinned original',async t=>{
+ const {root,d,w}=await fixture(t),paths:string[]=[],materialId='mat_'+'1'.repeat(64),revision='2'.repeat(64),ref='material:'+materialId+'@'+revision;
+ const material:Material={id:materialId,ref,revision,kind:'mote.note',schemaVersion:1,title:'Generated preview',sequence:1,textLength:26,blockCount:1,coverage:{state:'complete'},origin:{sourceId:'generated-source'},retention:{original:'kept'}};
+ const api=apiWith(path=>{paths.push(path);if(path.startsWith('/api/library/catalog?'))return {items:[material],types:[{id:'mote.note',kind:'mote.note',schemaVersion:1,label:'随手记'}],sources:[{id:'generated-source',label:'Generated source',count:1}],nextCursor:path.includes('cursor=')?null:'next'};if(path.includes('/read?'))return {text:'Generated exact original'};throw Error(path);});
+ await act(async()=>root.render(React.createElement(LibraryMaterials,{api,revision:0,onSelect:()=>{},materialPreview:{read:true,image:false}})));
+ assert.equal(d.querySelector<HTMLElement>('#library-catalog-filters')!.hidden,true);
+ assert.equal(d.querySelector('.library-record-preview')?.textContent,'Generated exact original');
+ assert.ok(paths.includes('/api/materials/'+materialId+'/read?revision='+revision+'&offset=0&length=240'));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.library-filter-actions button')!.click());
+ const selects=d.querySelectorAll<HTMLSelectElement>('.library-catalog-filters select');
+ await act(async()=>{selects[0]!.value='generated-source';selects[0]!.dispatchEvent(new w.Event('change',{bubbles:true}));});
+ await act(async()=>{selects[2]!.value='mote.note';selects[2]!.dispatchEvent(new w.Event('change',{bubbles:true}));});
+ await act(async()=>button(d,'下一页').click());
+ let query=new URL('http://localhost'+paths.filter(path=>path.startsWith('/api/library/catalog?')).at(-1)!).searchParams;
+ assert.equal(query.get('sourceId'),'generated-source');assert.equal(query.get('kind'),'mote.note');assert.equal(query.get('cursor'),'next');
+ await act(async()=>d.querySelector<HTMLButtonElement>('.library-filter-chips button[aria-label="清除随手记筛选"]')!.click());
+ query=new URLSearchParams(w.location.hash.split('?')[1]);assert.equal(query.get('sourceId'),'generated-source');assert.equal(query.has('kind'),false);assert.equal(query.has('cursor'),false);
+ const otherPaths:string[]=[],otherApi=apiWith(path=>{otherPaths.push(path);return {items:[],nextCursor:null};});
+ await act(async()=>root.render(React.createElement(LibraryMaterials,{api:otherApi,revision:0,onSelect:()=>{},materialPreview:{read:false,image:false}})));
+ assert.deepEqual(otherPaths,['/api/library/catalog?limit=24']);assert.equal(d.querySelector('.library-filter-chips'),null);assert.equal(d.querySelector('.library-record-preview'),null);
 });
 
 test('a deployed type adds card, detail, panel and action without changing the library; disposal keeps generic history readable',async t=>{

@@ -1,5 +1,5 @@
 import {join} from 'node:path';
-import {existsSync} from 'node:fs';
+import {existsSync,readFileSync,rmSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {buildApp} from '../../server/src/app.js';
 import {materialId} from '../../server/src/materials.js';
@@ -10,6 +10,8 @@ const directory=process.argv[2];if(!directory)throw Error('Generated fixture dir
 const token=randomBytes(32).toString('hex'),when='2026-10-29T01:00:00.000Z',noteId=randomUUID(),reportId=randomUUID();
 const runtime=await buildApp({dataDir:join(directory,'data'),token,tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('No model calls allowed');},close:async()=>{}}});
 runtime.app.addHook('onRequest',async(req,reply)=>{
+ if(req.url.startsWith('/api/library/catalog?')&&existsSync(join(directory,'retire-material.json'))){const target=JSON.parse(readFileSync(join(directory,'retire-material.json'),'utf8')) as {id:string;revision:string};runtime.materials.retire(target.id,{expectedRevision:target.revision});rmSync(join(directory,'retire-material.json'));}
+ if(req.url.startsWith('/api/library/catalog?')&&existsSync(join(directory,'catalog-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated catalog read unavailable'});
  if(req.url==='/api/devices/first-data'&&existsSync(join(directory,'first-data-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated receipt read unavailable'});
  if(req.url==='/api/notes'&&req.method==='POST'&&existsSync(join(directory,'deny-note')))return reply.code(403).send({error:'forbidden',message:'Generated note permission denied'});
 });
@@ -33,6 +35,12 @@ const materialRefs=[];
 for(const [index,title,text] of [[0,'评审准备记录','先把资料阅读和提问之间的路径走通，再讨论其他页面。'],[1,'评审议程.md','先检查用户能否找到内容，然后检查能否顺利继续下一步。'],[2,'本轮生成图片.png','这份图片由验收脚本创建，不包含个人资料。']] as const){
  const member=index===2?imageId:noteId;
  const material=runtime.materials.publish({id:materialId('generated-home-source',String(index)),kind:index===0?'mote.note':'mote.file',schemaVersion:1,title,origin:{sourceId:'generated-home-source',externalId:String(index),firstAt:when,lastAt:when,deviceId:'generated-phone'},members:[{id:member,kind:'capture',ref:'capture:'+member}],blocks:[{id:'body',kind:'text',format:'plain',text,memberIds:[member]}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ materialRefs.push(material.ref);
+}
+// The Library acceptance fixture uses the same real server with enough generated
+// originals to exercise cursor pagination. The Home fixture keeps its three rows.
+if(process.argv[3]==='library')for(let index=3;index<27;index++){
+ const material=runtime.materials.publish({id:materialId('generated-home-source',String(index)),kind:'mote.note',schemaVersion:1,title:'本轮生成记录 '+String(index+1).padStart(2,'0'),origin:{sourceId:'generated-home-source',externalId:String(index),firstAt:when,lastAt:when,deviceId:'generated-phone'},members:[{id:noteId,kind:'capture',ref:'capture:'+noteId}],blocks:[{id:'body',kind:'text',format:'plain',text:'本轮生成的原文片段 '+String(index+1)+'：返回列表应保留筛选、页码、滚动和焦点。',memberIds:[noteId]}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
  materialRefs.push(material.ref);
 }
 const citations=[{id:noteId,appName:'本轮生成资料',capturedAt:when,excerpt:'先把资料阅读和提问之间的路径走通。'}];

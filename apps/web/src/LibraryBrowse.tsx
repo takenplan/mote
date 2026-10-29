@@ -4,10 +4,10 @@ import {StructuredObservation} from './StructuredObservation';
 import type { LibraryTypeDescriptor, LibrarySourceFacet } from '@mote/shared';
 import { FeatureCard, FeatureActions } from './features/runtime';
 import { ImageProgress } from './ImageProgress';
-import { materialKind, sourceDisplay } from './material-presentation';
+import { materialKind, materialKindOptions, sourceDisplay } from './material-presentation';
 import { captureOcrState, decodeSourceText, parseEvidenceRef, systemEventText } from '@mote/shared';
-import { moteText } from '@mote/shared/i18n';
-import { ArrowLeft, FileText, RefreshCw, X } from 'lucide-react';
+import { getLocale, moteText } from '@mote/shared/i18n';
+import { ArrowLeft, ChevronDown, ChevronRight, FileText, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { type Api, type Capture, ApiError, dateTime, duration, errorMessage } from './api';
 import { evidencePresentation, ocrPresentation } from './capture-presentation';
@@ -21,13 +21,14 @@ import { ReferenceDetail } from './ReferenceDetail';
 import { SourceDocumentDetails } from './SourceDocumentDetails';
 import { Empty, ErrorNotice, OriginalImage, Spinner } from './shell-components';
 import { useResource } from './useResource';
+import { useMaterialPreview } from './HomeMaterialRow';
 function validLibraryDay(value:string){
     if(!value)return true;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
     const date=new Date(value+'T00:00:00');
     return Number.isFinite(date.getTime())&&date.getFullYear()===Number(value.slice(0,4))&&date.getMonth()+1===Number(value.slice(5,7))&&date.getDate()===Number(value.slice(8,10));
 }
-/** A single object browser: wide screens keep the list, narrow screens return to it. */
+/** Keep the list mounted so returning from the full-width reader preserves its place. */
 export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen, supporting = false }: {
     children: ReactNode;
     reference?: string;
@@ -37,8 +38,8 @@ export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen,
     supporting?: boolean;
 }) {
     return <div className={'library-browser' + (reference ? ' has-selection' : '') + (supporting ? ' supporting' : '')}>
-    <div className="library-master" aria-label={moteText('资料列表')}>{children}</div>
-    <section className="library-detail" aria-label={moteText('资料详情')}>
+    <div className="library-master" aria-label={moteText('资料列表')} hidden={Boolean(reference)}>{children}</div>
+    <section className="library-detail" aria-label={moteText('资料详情')} hidden={!reference}>
       {reference ? <><header className="library-detail-heading"><button className="text-button library-back" onClick={onClose}><ArrowLeft size={16}/>{moteText('返回资料列表')}</button><span>{moteText('资料详情')}</span><button className="icon-button library-close" aria-label={moteText('关闭详情')} onClick={onClose}><X size={17}/></button></header><LibraryReference key={reference} api={api} reference={reference} onOpen={onOpen}/></> : <Empty icon={FileText} title={moteText('选择一条资料')}><p>{moteText('在这里查看内容、原始来源和支持证据。')}</p></Empty>}
     </section>
   </div>;
@@ -84,23 +85,27 @@ function LibraryCaptureDetail({ api, reference, onOpen }: {
   </article>;
 }
 /** Formal material rows pin the exact revision before the full ReferenceDetail reads it. */
-export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseChanged, devices = [] }: {
+export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseChanged, devices = [], viewNavigation, browseNavigation, materialPreview }: {
     api: Api;
     revision: number;
     selected?: string;
     onSelect: (ref: string) => void;
     onBrowseChanged?: () => void;
     devices?: import('./api').Device[];
+    viewNavigation?: ReactNode;
+    browseNavigation?: ReactNode;
+    materialPreview?: {read:boolean;image:boolean};
 }) {
-    const readFilters = () => {const query=new URLSearchParams(window.location.hash.split('?')[1]??'');return {owner:api,sourceId:query.get('sourceId')??'',deviceId:query.get('deviceId')??'',after:query.get('after')??'',before:query.get('before')??'',cursor:query.get('cursor')??undefined};};
+    const readFilters = () => {const query=new URLSearchParams(window.location.hash.split('?')[1]??'');return {owner:api,sourceId:query.get('sourceId')??'',deviceId:query.get('deviceId')??'',kind:query.get('kind')??'',after:query.get('after')??'',before:query.get('before')??'',cursor:query.get('cursor')??undefined};};
     const [filters, setFilters] = useState(readFilters);
+    const [filterOpen,setFilterOpen]=useState(false);
     const filterOwner=useRef(api);
-    const current = filters.owner === api ? filters : { owner: api, sourceId: '', deviceId: '', after: '', before: '', cursor: undefined };
+    const current = filters.owner === api ? filters : { owner: api, sourceId: '', deviceId: '', kind: '', after: '', before: '', cursor: undefined };
     const invalidDate=!validLibraryDay(current.after)||!validLibraryDay(current.before);
-    const update = (patch: Partial<typeof current>) => { onBrowseChanged?.();const next={...current,cursor:undefined,...patch};setFilters(next);const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);for(const key of ['sourceId','deviceId','after','before','cursor'] as const){if(next[key])query.set(key,next[key]!);else query.delete(key);}window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));};
-    useEffect(() => { if(filterOwner.current!==api){filterOwner.current=api;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setFilters(readFilters());}const sync = () => setFilters(readFilters()); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, [api]);
+    const update = (patch: Partial<typeof current>) => { onBrowseChanged?.();const next={...current,cursor:undefined,...patch};setFilters(next);const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);for(const key of ['sourceId','deviceId','kind','after','before','cursor'] as const){if(next[key])query.set(key,next[key]!);else query.delete(key);}window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));};
+    useEffect(() => { if(filterOwner.current!==api){filterOwner.current=api;setFilterOpen(false);const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setFilters(readFilters());}const sync = () => setFilters(readFilters()); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, [api]);
     const query = new URLSearchParams({ limit: '24' });
-    for (const key of ['sourceId', 'deviceId', 'cursor'] as const)
+    for (const key of ['sourceId', 'deviceId', 'kind', 'cursor'] as const)
         if (current[key])
             query.set(key, current[key]!);
     if (current.after&&!invalidDate)
@@ -118,24 +123,33 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
         items: Material[];
         nextCursor: string | null;
     }>(api, invalidDate?null:'/api/library/catalog?' + query, undefined, revision);
-    const coverage = (state: string) => ({ complete: moteText('完整'), partial: moteText('部分内容'), pending: moteText('仍在整理') }[state] ?? state);
+    const activeFilters=([['sourceId',current.sourceId?sourceDisplay(current.sourceId,page.data?.sources.find(source=>source.id===current.sourceId)?.label):''],['deviceId',devices.find(device=>device.deviceId===current.deviceId)?.deviceName??current.deviceId],['kind',current.kind?materialKind(current.kind,page.data?.types.find(type=>type.kind===current.kind)?.label):''],['after',current.after?moteText('从')+' '+current.after:''],['before',current.before?moteText('至')+' '+current.before:'']] as const).filter(([,label])=>label);
+    const kinds=[...new Map([...materialKindOptions(),...(page.data?.items.filter(item=>!materialKindOptions().some(type=>type.kind===item.kind)).map(item=>({kind:item.kind,label:materialKind(item.kind)}))??[]),...(page.data?.types??[])].map(type=>[type.kind,type])).values()];
+    const groups=new Map<string,Material[]>();
+    for(const item of page.data?.items??[]){const at=item.origin.lastAt??item.origin.firstAt??item.updatedAt;const day=at&&Number.isFinite(Date.parse(at))?new Date(at).toLocaleDateString(getLocale(),{year:'numeric',month:'long',day:'numeric'}):moteText('资料');groups.set(day,[...(groups.get(day)??[]),item]);}
     return <section className="library-materials">
-    <div className="library-list-heading"><div><h2>{moteText('全部资料')}</h2></div><button className="icon-button" disabled={page.loading} onClick={page.refresh} aria-label={moteText('刷新')}><RefreshCw size={16}/></button></div>
-    <div className="library-catalog-filters">
+    <div className="library-list-heading">{viewNavigation??<h2>{moteText('资料')}</h2>}<div className="library-filter-actions"><button className="text-button" aria-expanded={filterOpen||invalidDate} aria-controls="library-catalog-filters" onClick={()=>setFilterOpen(!filterOpen)}>{moteText('筛选')}{activeFilters.length>0&&' · '+activeFilters.length}<ChevronDown size={12}/></button><button className="icon-button" disabled={page.loading} onClick={page.refresh} aria-label={moteText('刷新')}><RefreshCw size={13}/></button></div></div>
+    <div className="library-catalog-filters" id="library-catalog-filters" hidden={!filterOpen&&!invalidDate}>
       <label>{moteText('来源')}<select value={current.sourceId} onChange={event => update({ sourceId: event.target.value })}><option value="">{moteText('全部来源')}</option>{current.sourceId && !page.data?.sources.some(source => source.id === current.sourceId) && <option value={current.sourceId}>{sourceDisplay(current.sourceId)}</option>}{page.data?.sources.map(source => <option key={source.id} value={source.id}>{sourceDisplay(source.id, source.label)} · {source.count}</option>)}</select></label>
       <label>{moteText('设备')}<select value={current.deviceId} onChange={event => update({ deviceId: event.target.value })}><option value="">{moteText('全部设备')}</option>{devices.map(device => <option key={device.deviceId} value={device.deviceId}>{device.deviceName}</option>)}</select></label>
-      <label>{moteText('从')}<input type="date" aria-invalid={!validLibraryDay(current.after)||undefined} value={current.after} onChange={event => update({ after: event.target.value })}/></label><label>{moteText('至')}<input type="date" aria-invalid={!validLibraryDay(current.before)||undefined} min={validLibraryDay(current.after)?current.after:undefined} value={current.before} onChange={event => update({ before: event.target.value })}/></label>
-      {(current.sourceId || current.deviceId || current.after || current.before) && <button className="text-button" onClick={() => update({ sourceId: '', deviceId: '', after: '', before: '' })}>{moteText('清除筛选')}</button>}
+      <label>{moteText('类型')}<select value={current.kind} onChange={event=>update({kind:event.target.value})}><option value="">{moteText('全部类型')}</option>{current.kind&&!kinds.some(type=>type.kind===current.kind)&&<option value={current.kind}>{materialKind(current.kind)}</option>}{kinds.map(type=><option key={type.kind} value={type.kind}>{materialKind(type.kind,type.label)}</option>)}</select></label>
+      <button className="text-button" onClick={() => update({ sourceId: '', deviceId: '',kind:'', after: '', before: '' })}>{moteText('清除筛选')}</button>
+      <details className="library-date-filters" open={invalidDate||undefined}><summary>{moteText('日期范围')}</summary><div><label>{moteText('从')}<input type="date" aria-invalid={!validLibraryDay(current.after)||undefined} value={current.after} onChange={event => update({ after: event.target.value })}/></label><label>{moteText('至')}<input type="date" aria-invalid={!validLibraryDay(current.before)||undefined} min={validLibraryDay(current.after)?current.after:undefined} value={current.before} onChange={event => update({ before: event.target.value })}/></label></div></details>
     </div>
+    {activeFilters.length>0&&<div className="library-filter-chips">{activeFilters.map(([key,label])=><button key={key} aria-label={moteText('清除{0}筛选',label)} onClick={()=>update({[key]:''})}>{label}<X size={11}/></button>)}</div>}
     {invalidDate&&<p role="alert">{moteText('请选择有效日期')}</p>}
+    {browseNavigation}
     {page.error !== undefined && <ErrorNotice text={page.error instanceof ApiError && page.error.status === 409 && page.error.code === 'invalid_cursor' ? moteText('资料目录已变化，请返回第一页继续浏览。') : errorMessage(page.error)} retry={() => current.cursor ? update({ cursor: undefined }) : page.refresh()}/>}
     {page.loading && !page.data && <Spinner />}
-    {page.error === undefined && page.data && <><div className="library-record-list">{page.data.items.map(item => {
-                const type = page.data!.types.find(type => type.kind === item.kind && type.schemaVersion === item.schemaVersion);
-                const value = { kind: item.kind, schemaVersion: item.schemaVersion, representation: 'owner-material', ref: item.ref, revision: item.revision, title: item.title, text: '' };
-                const source = page.data!.sources.find(source => source.id === item.origin.sourceId);
-                const fallback = <span className="library-record-copy"><strong>{item.title}</strong><small>{sourceDisplay(item.origin.sourceId, source?.label)} · {materialKind(item.kind, type?.label)}</small><small>{coverage(item.coverage.state)} · {moteText('版本 {0}', item.sequence)}</small>{item.artifacts?.some(artifact => artifact.state !== 'ready') && <small>{moteText('部分产物仍在处理，可先阅读已有内容。')}</small>}</span>;
-                return <div className="library-catalog-row" key={item.id}><button className={'library-record' + (selected === item.ref ? ' selected' : '')} aria-current={selected === item.ref ? 'true' : undefined} onClick={() => onSelect(item.ref)}><span className="library-record-icon"><FileText size={18}/></span><FeatureCard value={value} api={api} onOpen={onSelect} fallback={fallback} catalog={type}/></button><FeatureActions position="card" value={value} api={api} onOpen={onSelect} catalog={type}/></div>;
-            })}</div>{!page.data.items.length && <Empty icon={FileText} title={moteText('当前范围内暂无已发布资料。')}><p>{moteText('已上传但尚未发布的输入，可在上传与处理中查看。')}</p></Empty>}<div className="library-pagination">{current.cursor && <button className="button subtle" disabled={page.loading} onClick={() => update({ cursor: undefined })}>{moteText('返回第一页')}</button>}{page.data.nextCursor && <button className="button subtle" disabled={page.loading} onClick={() => update({ cursor: page.data!.nextCursor! })}>{moteText('下一页')}</button>}</div></>}
+    {page.error === undefined && page.data && <>{[...groups].map(([day,items])=><section className="library-material-day" key={day}><div className="library-day-heading"><h2>{day}</h2><span>{moteText('本页 {0} 份资料',items.length)}</span></div><div className="library-record-list">{items.map(item=><LibraryMaterialRow key={item.id} api={api} item={item} type={page.data!.types.find(type=>type.kind===item.kind&&type.schemaVersion===item.schemaVersion)} source={page.data!.sources.find(source=>source.id===item.origin.sourceId)?.label} device={devices.find(device=>device.deviceId===item.origin.deviceId)?.deviceName} selected={selected===item.ref} onSelect={onSelect} preview={materialPreview}/>)}</div></section>)}{!page.data.items.length && <Empty icon={FileText} title={moteText('当前范围内暂无已发布资料。')}><p>{moteText('已上传但尚未发布的输入，可在上传与处理中查看。')}</p></Empty>}<div className="library-pagination">{current.cursor && <button className="button subtle" disabled={page.loading} onClick={() => update({ cursor: undefined })}>{moteText('返回第一页')}</button>}{page.data.nextCursor && <button className="button subtle" disabled={page.loading} onClick={() => update({ cursor: page.data!.nextCursor! })}>{moteText('下一页')}</button>}</div></>}
   </section>;
+}
+
+function LibraryMaterialRow({api,item,type,source,device,selected,onSelect,preview}:{api:Api;item:Material;type?:LibraryTypeDescriptor;source?:string;device?:string;selected:boolean;onSelect:(ref:string)=>void;preview?:{read:boolean;image:boolean}}){
+    const {image,clearImage,kindLabel,text}=useMaterialPreview(api,item,Boolean(preview?.read),Boolean(preview?.image));
+    const value={kind:item.kind,schemaVersion:item.schemaVersion,representation:'owner-material',ref:item.ref,revision:item.revision,title:item.title,text:''};
+    const at=item.origin.lastAt??item.origin.firstAt??item.updatedAt;
+    const sourceLabel=sourceDisplay(item.origin.sourceId,source);
+    const fallback=<span className="library-record-copy"><strong>{item.title}</strong><small>{type?.label?materialKind(item.kind,type.label):kindLabel} · {sourceLabel}{device&&device!==sourceLabel?' · '+device:''}</small>{text&&<span className="library-record-preview">{text}</span>}{item.coverage.state!=='complete'&&<small>{item.coverage.state==='pending'?moteText('仍在整理'):moteText('部分内容')}</small>}{item.retention.original==='reference'&&!text&&<small>{moteText('仅保留引用')}</small>}{item.artifacts?.some(artifact=>artifact.state!=='ready')&&<small>{moteText('部分产物仍在处理，可先阅读已有内容。')}</small>}</span>;
+    return <div className="library-catalog-row"><button className={'library-record'+(selected?' selected':'')} aria-current={selected?'true':undefined} onClick={()=>onSelect(item.ref)}><span className="library-record-icon">{image?<img src={image} alt="" onError={clearImage}/>:<FileText size={18}/>}</span><FeatureCard value={value} api={api} onOpen={onSelect} fallback={fallback} catalog={type}/><span className="library-record-trailing">{at&&Number.isFinite(Date.parse(at))&&<time dateTime={at}>{dateTime(at,{hour:'2-digit',minute:'2-digit',hour12:false})}</time>}<ChevronRight size={14}/></span></button><FeatureActions position="card" value={value} api={api} onOpen={onSelect} catalog={type}/></div>;
 }

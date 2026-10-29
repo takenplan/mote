@@ -8,13 +8,14 @@ const capture='11111111-1111-4111-8111-111111111111';
 const item={id:'generated-material',ref:'material:generated-material@revision-one',revision:'revision-one',kind:'mote.file',schemaVersion:1,title:'Generated original image',textLength:20,createdAt:'2026-10-29T00:00:00Z',updatedAt:'2026-10-29T00:00:00Z',origin:{sourceId:'generated-source'}} as RecentMaterial;
 
 async function fixture(t:TestContext){
- const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost',pretendToBeVisual:true}),prior=new Map<string,PropertyDescriptor|undefined>(),opened:string[]=[],urls:Blob[]=[],revoked:string[]=[];
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost',pretendToBeVisual:true}),prior=new Map<string,PropertyDescriptor|undefined>(),opened:string[]=[],urls:Blob[]=[],revoked:string[]=[],commits:(string|null)[]=[];
  for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){prior.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  const create=URL.createObjectURL,revoke=URL.revokeObjectURL;URL.createObjectURL=blob=>{urls.push(blob);return 'blob:generated-'+urls.length;};URL.revokeObjectURL=url=>revoked.push(url);
  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!);
  t.after(async()=>{await act(async()=>root.unmount());URL.createObjectURL=create;URL.revokeObjectURL=revoke;for(const [key,value] of prior){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
- const render=async(api:Api,canPreview=true)=>{await act(async()=>root.render(React.createElement(HomeMaterialRow,{api,item,canPreview,canRead:true,onOpen:ref=>opened.push(ref)})));};
- return {d:dom.window.document,render,opened,urls,revoked};
+ function ObserveCommit(){React.useLayoutEffect(()=>{commits.push(dom.window.document.querySelector('img')?.getAttribute('src')??null);});return null;}
+ const render=async(api:Api,canPreview=true,material=item)=>{await act(async()=>root.render(React.createElement(React.Fragment,null,React.createElement(HomeMaterialRow,{api,item:material,canPreview,canRead:true,onOpen:ref=>opened.push(ref)}),React.createElement(ObserveCommit))));};
+ return {d:dom.window.document,render,opened,urls,revoked,commits};
 }
 function apiFor(reads:string[],options:{size?:number;retained?:boolean;raw?:Api['raw']}={}){
  return {request:async(path:string)=>{
@@ -46,4 +47,12 @@ test('a late original from the previous node cannot populate the new node Home t
  const old=apiFor([],{raw:async(_path,init)=>{signal=init?.signal??undefined;return new Promise(done=>resolve=done);}});
  await f.render(old);await f.render(apiFor([],{retained:false}));assert.equal(signal?.aborted,true);
  await act(async()=>resolve(new Response(new Uint8Array([1,2,3,4]))));assert.equal(f.urls.length,0);assert.equal(f.d.querySelector('img'),null);
+});
+
+test('the first committed render withdraws an old image when its permission, revision or node changes',async t=>{
+ const f=await fixture(t),api=apiFor([]);await f.render(api);assert.ok(f.d.querySelector('img'));
+ let next=f.commits.length;await f.render(api,false);assert.equal(f.commits[next],null,'permission withdrawal is synchronous, before passive cleanup');
+ await f.render(api);assert.ok(f.d.querySelector('img'));
+ next=f.commits.length;const changed={...item,revision:'revision-two',ref:'material:generated-material@revision-two'};await f.render(api,true,changed);assert.equal(f.commits[next],null,'an old revision is never committed as the new original');
+ next=f.commits.length;await f.render(apiFor([],{retained:false}),true,changed);assert.equal(f.commits[next],null,'the old authenticated node cannot render into the new one');
 });

@@ -1,4 +1,4 @@
-import { formatEvidenceRef, parseEvidenceRef, type CapturePreview } from '@mote/shared';
+import { featureRequirementsAvailable, formatEvidenceRef, parseEvidenceRef, type CapturePreview } from '@mote/shared';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { ArrowLeft, ArrowRight, Clock3, FileText, Monitor, RefreshCw, Upload } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, } from "react";
@@ -11,6 +11,8 @@ const CaptureSessions = React.lazy(() => import('./CaptureSessions').then(module
 import { sourceLabels } from './Metadata';
 import { CaptureCard, Empty, ErrorNotice, Spinner } from './shell-components';
 import { confirmNavigation } from './unsaved';
+import { DiscoveryLink, DiscoveryProvider, useDiscoveryState } from './DiscoveryLink';
+import { pageLabels, sections } from './navigation';
 export type ArchiveTab = string;
 export function ActivitySummary({ activity }: {
     activity: Activity;
@@ -29,35 +31,52 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
 }) {
     useSyncExternalStore(webFeatures.registry.subscribe, webFeatures.registry.getRevision, webFeatures.registry.getRevision);
     const entries = webFeatures.collections(), entry = entries.find(item => item.id === tab);
+    const availability = useDiscoveryState(api);
     const [browseOwner,setBrowseOwner]=useState(api);
-    useEffect(()=>{if(browseOwner===api)return;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setBrowseOwner(api);},[api,browseOwner]);
-    const collectionGroups = (['browse', 'records', 'views', 'processing'] as const).map(group => ({group, label:({browse:moteText('资料'), records:moteText('原始记录'), views:moteText('专用视图'), processing:moteText('上传与处理')})[group], items:entries.filter(item => (item.group ?? 'views') === group && item.id !== 'coding-status')})).filter(group => group.items.length);
+    useEffect(()=>{if(browseOwner===api)return;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','kind','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setBrowseOwner(api);},[api,browseOwner]);
     const [selection, setSelection] = useState<{
         owner: Api;
         view: string;
         reference: string;
     }|undefined>(()=>{const reference=new URLSearchParams(window.location.hash.split('?')[1]??'').get('selected');return reference?{owner:api,view:tab,reference}:undefined;});
-    const opener = useRef<HTMLElement | null>(null);
+    const listHeading = useRef<HTMLDivElement>(null);
+    const returnPosition=useRef<{owner:Api;view:string;scroll:number;opener:HTMLElement|null}|undefined>(selection?{owner:api,view:tab,scroll:0,opener:null}:undefined);
     const selected = selection?.owner === api && selection.view === entry?.id ? selection.reference : undefined;
-    useEffect(() => { setSelection(previous=>previous?.owner===api&&previous.view===entry?.id?previous:undefined); opener.current = null; }, [api, entry?.id]);
+    useEffect(() => { setSelection(previous=>previous?.owner===api&&previous.view===entry?.id?previous:undefined); }, [api, entry?.id]);
     useEffect(()=>{const changed=()=>{const query=new URLSearchParams(window.location.hash.split('?')[1]??'');if(query.get('view')&&query.get('view')!==entry?.id)return;const reference=query.get('selected');setSelection(reference?{owner:api,view:entry?.id??tab,reference}:undefined);};window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api,entry?.id,tab]);
-    useLayoutEffect(() => { if (!selected && opener.current?.isConnected)
-        opener.current.focus(); }, [selected]);
+    useLayoutEffect(() => {
+        const position=returnPosition.current;if(selected||!position)return;
+        returnPosition.current=undefined;
+        if(position.owner!==api||position.view!==entry?.id)return;
+        (position.opener?.isConnected?position.opener:listHeading.current)?.focus({preventScroll:true});
+        if(window.scrollY!==position.scroll)window.scrollTo({top:position.scroll});
+    }, [api,entry?.id,selected]);
     const rememberSelection = useCallback((reference?:string)=>{const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);if(reference)query.set('selected',reference);else query.delete('selected');window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));},[]);
     const clearSelection = useCallback(() => { setSelection(undefined); rememberSelection(); }, [rememberSelection]);
-    const select = useCallback((ref: string) => { if(!confirmNavigation())return;opener.current = document.activeElement as HTMLElement | null; const parsed = parseEvidenceRef(ref),reference=parsed ? formatEvidenceRef(parsed.kind, parsed.id) : ref; setSelection({ owner: api, view: entry?.id ?? tab, reference });rememberSelection(reference); }, [api, entry?.id, tab,rememberSelection]);
-    const props = { api, devices, range, rangeSelectionKey, activity, revision, onOpen: entry?.layout === 'standalone' ? onOpen : select, onChanged, selectedReference: selected, onBrowseChanged: clearSelection };
+    const select = useCallback((ref: string) => { if(!confirmNavigation())return;returnPosition.current={owner:api,view:entry?.id??tab,scroll:window.scrollY,opener:document.activeElement as HTMLElement|null}; const parsed = parseEvidenceRef(ref),reference=parsed ? formatEvidenceRef(parsed.kind, parsed.id) : ref; setSelection({ owner: api, view: entry?.id ?? tab, reference });rememberSelection(reference);if(window.scrollY)window.scrollTo({top:0}); }, [api, entry?.id, tab,rememberSelection]);
+    const visit=(id:string)=>{clearSelection();setTab(id);};
+    const collectionLink=(id:string,label:string)=> <DiscoveryLink key={id} className={'library-view-link'+(tab===id?' active':'')} target={{pageId:'archive',href:'#/library?view='+id,collectionId:id}} onNavigate={()=>visit(id)}><span data-collection-id={id} aria-current={tab===id?'page':undefined}>{label}</span></DiscoveryLink>;
+    const viewNavigation=<nav className="library-view-tabs" aria-label={moteText('资料视图')}>{collectionLink('materials',moteText('资料'))}{collectionLink('records',moteText('时间回看'))}</nav>;
+    const contextual=['segments','activity','media','coding-status'];
+    const otherCollections=entries.filter(item=>!['materials','records','memories',...contextual].includes(item.id));
+    const otherPages=sections.library.filter(id=>id!=='archive'&&id!=='imports');
+    const browseNavigation=<nav className="library-context-links" aria-label={moteText('更多上下文视图')}>
+      {contextual.filter(id=>entries.some(item=>item.id===id)).map(id=>collectionLink(id,id==='segments'?moteText('片段与应用相册'):id==='coding-status'?moteText('Coding 同步状态'):entries.find(item=>item.id===id)!.label))}
+      {(otherCollections.length>0||otherPages.length>0)&&<details className="library-secondary-views"><summary>{moteText('更多')}</summary><div className="library-type-filters">{otherCollections.map(item=>collectionLink(item.id,item.label))}{otherPages.map(id=><DiscoveryLink key={id} target={{pageId:id,href:'#/'+(webFeatures.page(id)?.route??id)}}>{pageLabels[id]}</DiscoveryLink>)}</div></details>}
+    </nav>;
+    const supports=(path:string)=>availability.inventoryError===undefined&&featureRequirementsAvailable(['http:GET:'+path],availability.inventory);
+    const props = { api, devices, range, rangeSelectionKey, activity, revision, onOpen: entry?.layout === 'standalone' ? onOpen : select, onChanged, selectedReference: selected, onBrowseChanged: clearSelection,viewNavigation,browseNavigation,materialPreview:{read:supports('/api/materials/:id/read'),image:supports('/api/materials/:id/members')&&supports('/api/files/:id')&&supports('/api/files/:id/content')} };
     if(browseOwner!==api)return <Spinner/>;
     const content = <LibraryCollectionBoundary key={entry?.id}>{entry ? <CollectionContent entry={entry} props={props}/> : <p role="status">{moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</p>}</LibraryCollectionBoundary>;
-    return <div className={'archive-page library-archive' + (selected ? ' has-selection' : '')}>
-   <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1></div><a className="button" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>
-   <nav className="segmented-nav library-primary-tabs" aria-label={moteText('资料库')}>
+    return <DiscoveryProvider state={availability}><div className={'archive-page library-archive' + (selected ? ' has-selection' : '')}>
+   <div ref={listHeading} tabIndex={-1} className="page-heading library-heading" hidden={Boolean(selected)}><h1>{moteText('资料库')}</h1><DiscoveryLink className="button" target={{pageId:'imports',href:'#/library/import'}}>{moteText('导入资料')}</DiscoveryLink></div>
+   <nav className="segmented-nav library-primary-tabs" aria-label={moteText('资料库')} hidden={Boolean(selected)}>
      <button className={tab!=='memories'?'active':''} aria-current={tab!=='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('materials');}}>{moteText('我的资料')}</button>
      <button className={tab==='memories'?'active':''} aria-current={tab==='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('memories');}}>{moteText('我的记忆')}</button>
    </nav>
-   {tab!=='memories'&&<details className="library-secondary-views"><summary>{entry?.label??moteText('资料库分类')}</summary><nav className="library-type-filters" aria-label={moteText('资料库分类')}>{collectionGroups.flatMap(group=>group.items).filter(item=>item.id!=='memories').map(item=><button className="button subtle" key={item.id} data-collection-id={item.id} aria-current={item.id===tab?'page':undefined} onClick={()=>{clearSelection();setTab(item.id);}}>{item.label}</button>)}</nav></details>}
+   {tab!=='materials'&&tab!=='memories'&&<div hidden={Boolean(selected)} className="library-view-navigation">{viewNavigation}{browseNavigation}</div>}
    <div className="library-workspace central-library-workspace"><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
- </div>;
+ </div></DiscoveryProvider>;
 }
 class LibraryCollectionBoundary extends React.Component<{
     children: React.ReactNode;
