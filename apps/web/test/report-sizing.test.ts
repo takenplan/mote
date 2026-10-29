@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {REPORT_SIZE_MESSAGE,acceptedReportHeight} from '../src/report-sizing';
+import {REPORT_SIZE_MESSAGE,REPORT_SOURCE_MESSAGE,acceptedReportHeight,acceptedReportSource} from '../src/report-sizing';
 import {reportDocument} from '../src/report-document';
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {JSDOM} from 'jsdom';
+import {InsightReportFrame} from '../src/InsightReportFrame';
+
+const citation={id:'11111111-1111-4111-8111-111111111111',capturedAt:'2026-10-01T00:00:00Z',appName:'Generated original',excerpt:'Generated evidence'};
 
 test('the report remains scriptless by default; resizing allows only one host nonce before untrusted markup',()=>{
  const html='<script>window.generatedAttack=true</script><p>Generated report</p>',plain=reportDocument(html);
@@ -22,4 +28,38 @@ test('only the exact current frame and document may supply a bounded numeric hei
  for(const height of ['200',true,null,NaN,Infinity,-1,0])assert.equal(acceptedReportHeight(message(height),source,token),undefined);
  assert.equal(acceptedReportHeight(message(200,other),source,token),undefined);assert.equal(acceptedReportHeight(message(200,source,'old-document'),source,token),undefined);
  assert.equal(acceptedReportHeight(message(200),null,token),undefined);
+});
+
+test('a source navigation message supplies only an in-range integer into the current parent citation list',()=>{
+ const source={} as Window,token='b'.repeat(32),message=(index:unknown,nextSource:Window=source,nextToken=token)=>({source:nextSource,data:{type:REPORT_SOURCE_MESSAGE,token:nextToken,index,id:'ignored',url:'https://generated.invalid/ignored'}} as MessageEvent);
+ assert.equal(acceptedReportSource(message(0),source,token,2),0);assert.equal(acceptedReportSource(message(1),source,token,2),1);
+ for(const index of ['0',null,true,NaN,Infinity,-1,0.5,2,Number.MAX_SAFE_INTEGER+1])assert.equal(acceptedReportSource(message(index),source,token,2),undefined);
+ assert.equal(acceptedReportSource(message(0,{} as Window),source,token,2),undefined);assert.equal(acceptedReportSource(message(0,source,'old'),source,token,2),undefined);assert.equal(acceptedReportSource(message(0),null,token,2),undefined);assert.equal(acceptedReportSource(message(0),source,token,0),undefined);
+});
+
+test('only verified visible citations receive unpredictable host navigation markers while the plain API stays scriptless',()=>{
+ const dom=new JSDOM(),before=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+ try{
+  const token='c'.repeat(32),html=`<p>Generated [${citation.id}] [unknown]</p><span data-mote-report-source="${token}" data-mote-report-index="999">Model marker</span><code>[${citation.id}]</code><script>window.generatedAttack=true</script>`,plain=reportDocument(html,[citation]),sized=reportDocument(html,[citation],'light',{token,parentOrigin:'http://localhost'}),rendered=new JSDOM(sized),markers=rendered.window.document.querySelectorAll('[data-mote-report-source]');
+  assert.equal(markers.length,1);assert.equal(markers[0].getAttribute('data-mote-report-source'),token);assert.equal(markers[0].getAttribute('data-mote-report-index'),'0');assert.equal(markers[0].getAttribute('role'),'button');assert.equal(markers[0].textContent,'（来源 1）');assert.match(sized,/<code>\[11111111/);assert.match(sized,/\[unknown\]/);assert.match(sized,/window.generatedAttack=true/);
+  assert.doesNotMatch(plain,/data-mote-report-source|data-mote-report-index|<script nonce=/);assert.match(plain,/script-src 'none'/);assert.match(plain,/Generated （来源 1）/);assert.ok(html.includes(`[${citation.id}]`));rendered.window.close();
+ }finally{if(before)Object.defineProperty(globalThis,'document',before);else Reflect.deleteProperty(globalThis,'document');dom.window.close();}
+});
+
+test('a current report maps only its own citations and rejects an old owner listener even when the frame WindowProxy is reused',async t=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();
+ for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const root=createRoot(dom.window.document.getElementById('root')!),opened:string[]=[],ownerA={},ownerB={},listeners:EventListener[]=[];
+ const add=dom.window.addEventListener.bind(dom.window);dom.window.addEventListener=((type:string,listener:EventListener,options?:boolean|AddEventListenerOptions)=>{if(type==='message')listeners.push(listener);add(type,listener,options);}) as typeof dom.window.addEventListener;
+ t.after(async()=>{await act(async()=>root.unmount());for(const [key,value] of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const view=(owner:object,citations=[citation],onOpen=(ref:string)=>opened.push(ref))=>React.createElement(InsightReportFrame,{html:`<p>[${citation.id}]</p>`,citations,scheme:'light',title:'Generated',owner,onOpen});
+ await act(async()=>root.render(view(ownerA)));const frame=dom.window.document.querySelector('iframe')!,source=frame.contentWindow!,token=()=>frame.srcdoc.match(/nonce="([a-f0-9]{32})"/)![1],firstToken=token(),oldListener=listeners.at(-1)!;
+ const message=(index:unknown,nextToken=token(),nextSource:Window=source)=>new dom.window.MessageEvent('message',{source:nextSource,data:{type:REPORT_SOURCE_MESSAGE,token:nextToken,index,url:'https://generated.invalid',id:'not-a-citation'}});
+ await act(async()=>dom.window.dispatchEvent(message(0)));assert.deepEqual(opened,['capture:'+citation.id]);
+ await act(async()=>root.render(view(ownerA,[{...citation}])));assert.equal(token(),firstToken,'A polling copy with identical HTML and citation order does not reload');
+ for(const value of ['0',-1,1,0.2,Infinity])await act(async()=>dom.window.dispatchEvent(message(value)));assert.equal(opened.length,1);
+ await act(async()=>root.render(view(ownerB)));assert.notEqual(token(),firstToken);await act(async()=>{oldListener(message(0,firstToken));dom.window.dispatchEvent(message(0,firstToken));});assert.equal(opened.length,1,'Even an explicitly retained old listener cannot navigate after owner replacement');
+ await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.length,2);
+ const other={...citation,id:'22222222-2222-4222-8222-222222222222'},secondToken=token();await act(async()=>root.render(view(ownerB,[other,citation])));assert.notEqual(token(),secondToken);await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.at(-1),'capture:'+other.id);
+ await act(async()=>root.render(null));await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.length,3,'Unmount removes the navigation listener');
 });
