@@ -17,7 +17,7 @@ function deferred(){let resolve!:(value:any)=>void,reject!:(error:unknown)=>void
 async function fixture(t:any){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>(),apis:Api[]=[];
  for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
- dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
+ dom.window.HTMLElement.prototype.scrollIntoView=()=>{};dom.window.scrollTo=()=>{};
  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!);
  t.after(async()=>{await act(async()=>{root.unmount();for(const api of apis)importQueue(api).close();});for(const [key,value] of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{
@@ -94,14 +94,14 @@ for(const kind of ['capture','material'] as const)test(`Memory selected ${kind} 
  const {root,d,apiWith}=await fixture(t),first=deferred(),refresh=deferred();let refreshing=false;
  const ref=kind==='capture'?'capture:'+id:'material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),path=kind==='capture'?'/api/capture-browser/'+id:'/api/materials/mat_'+'a'.repeat(64);
  d.defaultView!.location.hash='#/library?view=memories&'+new URLSearchParams({[kind==='capture'?'memorySource':'memoryMaterial']:ref});
- const value=kind==='capture'?{id,windowTitle:'Generated chosen source',capturedAt:when,ocrText:'Generated text'}:{ref,title:'Generated chosen source',memorySource:{status:'ready',evidenceIds:[id]}};
+ const value=kind==='capture'?{id,windowTitle:'Generated chosen source',libraryVersion:'generated-current-opaque-pin',capturedAt:when,ocrText:'Generated text'}:{ref,title:'Generated chosen source',memorySource:{status:'ready',evidenceIds:[id]}};
  const api=apiWith(key=>key===path?(refreshing?refresh.promise:first.promise):{items:[],nextCursor:null});
- await act(async()=>root.render(memoryView(api)));assert.match(d.querySelector('.memory-source-selection')!.textContent!,/正在读取/);
- await act(async()=>first.resolve(value));const card=d.querySelector('.memory-source-selection')!,title=card.querySelector('strong');
+ await act(async()=>root.render(memoryView(api)));assert.match(d.querySelector('.memory-work-scope-notice')!.textContent!,/正在读取/);
+ await act(async()=>first.resolve(value));const card=d.querySelector('.memory-work-scope-notice')!,title=card.querySelector('strong');
  refreshing=true;await act(async()=>resources(api).get(path).refresh());
- assert.equal(card.querySelector('strong'),title);assert.doesNotMatch(card.textContent!,/正在读取|所选正式资料已变化/);assert.equal(button(d,'提取所选资料的记忆').disabled,true,'version-dependent extraction waits for verification');
+ assert.equal(card.querySelector('strong'),title);assert.doesNotMatch(card.textContent!,/正在读取|所选正式资料已变化/);assert.equal(button(d,'开始提取').disabled,true,'version-dependent extraction waits for verification');
  await act(async()=>refresh.reject(new ApiError('Generated selected source revoked',403)));
- assert.doesNotMatch(card.textContent!,/Generated chosen source/);assert.match(card.textContent!,/Generated selected source revoked/);assert.equal(button(d,'提取所选资料的记忆').disabled,true);
+ assert.doesNotMatch(card.textContent!,/Generated chosen source/);assert.match(card.textContent!,/Generated selected source revoked/);assert.equal(button(d,'开始提取').disabled,true);
 });
 
 for(const populated of [false,true])test(`Insight ${populated?'populated':'empty'} history and compose stay stable during background reads`,async t=>{
