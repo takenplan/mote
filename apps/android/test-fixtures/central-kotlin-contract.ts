@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawn, type ChildProcess} from 'node:child_process';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
@@ -34,6 +34,10 @@ process.once('SIGTERM', interrupt);
 try {
   central = await buildApp(config, {backgroundWorker: false, agent: {configured: false,
     query: async () => { throw Error('No model belongs in the Kotlin upload contract'); }, close: async () => {}}});
+  const historyEvidence=randomUUID();
+  await central.store.ingest({id:historyEvidence,deviceId:'generated-kotlin-phone',deviceName:'Generated phone',platform:'import',source:'note',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'Generated saved source body'});
+  const history=central.featureServices.conversations.append(undefined,{question:'Generated saved question',evidenceIds:[historyEvidence]},
+    {answer:'Generated saved answer',citations:[{id:historyEvidence,appName:'Generated source',capturedAt:'2026-10-01T00:00:00Z',excerpt:'Generated saved excerpt'}],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[historyEvidence]}});
   const origin = await central.app.listen({host: '127.0.0.1', port: 0});
   const invitation = await central.app.inject({method: 'POST', url: '/api/connections/collector-invitations',
     headers: {authorization: 'Bearer ' + token}, payload: {serverUrl: origin, label: 'Generated Kotlin contract', deviceId: 'generated-kotlin-phone'}});
@@ -47,7 +51,7 @@ try {
     ...(all.length ? [] : ['--tests', 'dev.mote.collector.CentralProducerContractTest'])];
   child = spawn(resolve(root, 'apps/android/gradlew'), args, {cwd: root, stdio: 'inherit', detached: process.platform !== 'win32',
     env: {...process.env, MOTE_KOTLIN_CONTRACT_ORIGIN: origin, MOTE_KOTLIN_CONTRACT_TOKEN: token,
-      MOTE_KOTLIN_CONTRACT_COLLECTOR: granted.json().token}});
+      MOTE_KOTLIN_CONTRACT_COLLECTOR: granted.json().token,MOTE_KOTLIN_CONTRACT_CONVERSATION:history.conversationId,MOTE_KOTLIN_CONTRACT_HISTORY_EVIDENCE:historyEvidence}});
   await new Promise<void>((done, reject) => {
     let failure: Error | undefined;
     let force: ReturnType<typeof setTimeout> | undefined;
@@ -71,7 +75,7 @@ try {
   });
   const report = await readFile(resolve(root, 'apps/android/app/build/test-results/testDebugUnitTest/TEST-dev.mote.collector.CentralProducerContractTest.xml'), 'utf8');
   const suite = report.match(/<testsuite\b[^>]*>/)?.[0] ?? '';
-  assert.ok(Number(suite.match(/\btests="(\d+)"/)?.[1]) >= 5, 'The real Kotlin contract cases must execute');
+  assert.ok(Number(suite.match(/\btests="(\d+)"/)?.[1]) >= 6, 'The real Kotlin contract cases must execute');
   for (const attribute of ['skipped', 'failures', 'errors']) assert.match(suite, new RegExp(`\\b${attribute}="0"`), `Kotlin contract ${attribute}`);
   console.log('Real Fastify → Kotlin upload contract passed (generated SQLite/HTTP; no device or model).');
 } catch (error) {

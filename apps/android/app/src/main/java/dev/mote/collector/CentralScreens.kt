@@ -324,7 +324,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     ui.text(MoteI18n.text("回答"), NativeFontRole.SUPPORT, target)
                     ui.text("", parent = target).apply { text = styled; setTextIsSelectable(true) }
                     for ((index, citation) in citations.withIndex()) {
-                        ui.button("[${index + 1}] " + MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { library.captureEvidence(citation.getString("id")) }
+                        ui.button("[${index + 1}] " + MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { openConversationEvidence(id, citation.getString("id")) { library.captureEvidence(citation.getString("id")) } }
                     }
                     ui.button(MoteI18n.text("存为记录"), parent = target) { ui.recordConversation(turn.getString("question") + "\n\n" + answer.optString("answer"), id) }
                 }
@@ -513,6 +513,15 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }
             try { file.inputStream().use { current.setDataSource(it.fd) }; current.prepareAsync() }
             catch (error: Throwable) { close(); throw error }
+        }
+    }
+
+    fun openConversationEvidence(conversationId: String, evidenceId: String, open: () -> Unit) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { CentralConversationReference.available(api, conversationId, evidenceId) }) { available ->
+            if (available) open()
+            else MoteDialogBuilder(ui).setTitle(MoteI18n.text("引用不可用")).setMessage(MoteI18n.text("引用原文已删除，历史问答仍保留。"))
+                .setPositiveButton(MoteI18n.text("返回原对话"), null).show()
         }
     }
 

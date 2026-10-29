@@ -1,3 +1,4 @@
+import {retainConversationRoots,retainedConversationResult} from './conversation-retention.js';
 import {installVaultSchema} from './vault-schema-installation.js';
 import {centralOcrState} from './central-ocr-state.js';
 import {CAPTURE_BATCH_MAX_RECORDS,CAPTURE_BATCH_MAX_BYTES} from './capture-limits.js';
@@ -262,7 +263,7 @@ export class EvidenceStore {
       if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='image_inputs'").get())for(const id of restored){this.db.prepare('UPDATE image_inputs SET auto_eligible=0 WHERE capture_id=?').run(id);this.db.prepare("UPDATE image_attachment_intents SET state='cancelled' WHERE parent_id=?").run(id);}
       for(const c of connections){const prior=this.db.prepare('SELECT json FROM source_connections WHERE id=?').get(c.id) as {json:string}|undefined;if(prior){const original=JSON.parse(prior.json);if(original.deviceId!==c.deviceId||original.kind!==c.kind)throw new StoreError('Source identity conflict',409);}else this.db.prepare('INSERT INTO source_connections(id,json) VALUES(?,?)').run(c.id,JSON.stringify({...c,enabled:false}));}
       for(const rawVersion of archive.sourceVersions??[]){const v=rawVersion as Record<string,unknown>;if(typeof v.capture_id!=='string'||typeof v.source_id!=='string'||typeof v.external_id!=='string'||typeof v.revision!=='string'||typeof v.hash!=='string'||!(/^[a-f0-9]{64}$/.test(v.hash)))throw new StoreError('Invalid source revision');const e=this.evidence([v.capture_id])[0];if(!e?.provenance||e.provenance.sourceId!==v.source_id||e.provenance.externalId!==v.external_id||e.provenance.revision!==v.revision||!this.db.prepare('SELECT id FROM source_connections WHERE id=?').get(v.source_id))throw new StoreError('Source revision evidence mismatch');const p=e.provenance;const {observedAt:_,...semantic}=sourceItemSchema.parse({externalId:p.externalId,revision:p.revision,observedAt:e.capturedAt,modifiedAt:p.modifiedAt,title:e.windowTitle,text:p.deleted||p.layer==='reference'?'':e.ocrText,uri:p.uri,kind:e.source,layer:p.layer,mimeType:p.mimeType,calendar:p.calendar,deleted:p.deleted,metadata:p.metadata,document:p.document});if(sha256(JSON.stringify(semantic))!==v.hash)throw new StoreError('Source revision checksum mismatch');this.db.prepare('INSERT OR IGNORE INTO source_versions(source_id,external_id,revision,capture_id,hash) VALUES(?,?,?,?,?)').run(v.source_id,v.external_id,v.revision,v.capture_id,v.hash);}
-      for(const rawHead of archive.sourceHeads??[]){const h=rawHead as Record<string,unknown>;if(typeof h.capture_id!=='string'||typeof h.source_id!=='string'||typeof h.external_id!=='string'||typeof h.observed_at!=='string'||!Number.isFinite(Date.parse(h.observed_at))||![0,1].includes(Number(h.deleted)))throw new StoreError('Invalid source pointer');const v=this.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=? AND external_id=? AND capture_id=?').get(h.source_id,h.external_id,h.capture_id);if(!v)throw new StoreError('Source pointer has no revision');const e=this.evidence([h.capture_id])[0];if(!e||Date.parse(h.observed_at)!==Date.parse(e.capturedAt)||Number(h.deleted)!==Number(e.provenance?.deleted))throw new StoreError('Source pointer metadata mismatch');const priorHead=this.db.prepare('SELECT capture_id,observed_at FROM source_heads WHERE source_id=? AND external_id=?').get(h.source_id,h.external_id) as {capture_id:string;observed_at:string}|undefined;if(priorHead&&Date.parse(priorHead.observed_at)===Date.parse(h.observed_at)&&priorHead.capture_id!==h.capture_id)throw new StoreError('Equal observation times contain conflicting source heads',409);const moved=this.db.prepare('INSERT INTO source_heads(source_id,external_id,capture_id,observed_at,deleted) VALUES(?,?,?,?,?) ON CONFLICT(source_id,external_id) DO UPDATE SET capture_id=excluded.capture_id,observed_at=excluded.observed_at,deleted=excluded.deleted WHERE excluded.observed_at>source_heads.observed_at').run(h.source_id,h.external_id,h.capture_id,new Date(h.observed_at).toISOString(),Number(h.deleted));if(moved.changes&&priorHead&&priorHead.capture_id!==h.capture_id){this.invalidateMemoryEvidence(priorHead.capture_id);if(h.deleted)this.invalidateConversationAnswers(this.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=? AND external_id=?').all(h.source_id,h.external_id).map(row=>String(row.capture_id)),true);this.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'supersede',?)").run(priorHead.capture_id,new Date().toISOString());}}
+      for(const rawHead of archive.sourceHeads??[]){const h=rawHead as Record<string,unknown>;if(typeof h.capture_id!=='string'||typeof h.source_id!=='string'||typeof h.external_id!=='string'||typeof h.observed_at!=='string'||!Number.isFinite(Date.parse(h.observed_at))||![0,1].includes(Number(h.deleted)))throw new StoreError('Invalid source pointer');const v=this.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=? AND external_id=? AND capture_id=?').get(h.source_id,h.external_id,h.capture_id);if(!v)throw new StoreError('Source pointer has no revision');const e=this.evidence([h.capture_id])[0];if(!e||Date.parse(h.observed_at)!==Date.parse(e.capturedAt)||Number(h.deleted)!==Number(e.provenance?.deleted))throw new StoreError('Source pointer metadata mismatch');const priorHead=this.db.prepare('SELECT capture_id,observed_at FROM source_heads WHERE source_id=? AND external_id=?').get(h.source_id,h.external_id) as {capture_id:string;observed_at:string}|undefined;if(priorHead&&Date.parse(priorHead.observed_at)===Date.parse(h.observed_at)&&priorHead.capture_id!==h.capture_id)throw new StoreError('Equal observation times contain conflicting source heads',409);const moved=this.db.prepare('INSERT INTO source_heads(source_id,external_id,capture_id,observed_at,deleted) VALUES(?,?,?,?,?) ON CONFLICT(source_id,external_id) DO UPDATE SET capture_id=excluded.capture_id,observed_at=excluded.observed_at,deleted=excluded.deleted WHERE excluded.observed_at>source_heads.observed_at').run(h.source_id,h.external_id,h.capture_id,new Date(h.observed_at).toISOString(),Number(h.deleted));if(moved.changes&&priorHead&&priorHead.capture_id!==h.capture_id){this.invalidateMemoryEvidence(priorHead.capture_id);if(h.deleted)this.invalidateConversationAnswers(this.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=? AND external_id=?').all(h.source_id,h.external_id).map(row=>String(row.capture_id)),'retired');this.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'supersede',?)").run(priorHead.capture_id,new Date().toISOString());}}
       const perceptionRows=z.array(z.object({capture_id:z.string().uuid(),kind:z.literal('ocr'),json:z.string().max(2000000),current:z.number().int().min(0).max(1)})).max(100000).parse(archive.perceptionResults??[]);
       for(const row of perceptionRows){
         const result=z.object({id:z.string().uuid(),fingerprint:z.string().regex(/^[a-f0-9]{64}$/),text:z.string().max(100000),inputHash:z.string(),engine:z.string().max(100),engineVersion:z.string().max(100),configRevision:z.string().max(128),generatedAt:z.string().datetime(),transcript:z.unknown()}).parse(JSON.parse(row.json));
@@ -324,25 +325,25 @@ export class EvidenceStore {
     return Boolean(this.db.prepare('SELECT id FROM captures WHERE id=? AND (NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=captures.id) OR EXISTS(SELECT 1 FROM source_heads h WHERE h.capture_id=captures.id AND h.deleted=0))').get(id));
   }
   /** Called inside the evidence mutation transaction so in-flight extraction cannot revive old claims. */
-  invalidateMemoryEvidence(id:string,deleted=false) {
+  invalidateMemoryEvidence(id:string,deleted=false,preserveDialogue=false) {
     if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='material_evidence_dependencies'").get()){
       this.db.prepare('UPDATE material_evidence SET invalidated=1 WHERE id=?').run(id);
       const derived=this.db.prepare(`SELECT e.id FROM material_evidence_dependencies d JOIN material_evidence e ON e.id=d.anchor_id
         WHERE d.evidence_id=? AND (e.invalidated=0 OR ?)`).all(id,Number(deleted));
-      for(const anchor of derived)this.invalidateMemoryEvidence(String(anchor.id),deleted);
+      for(const anchor of derived)this.invalidateMemoryEvidence(String(anchor.id),deleted,preserveDialogue);
     }
     const excerpts=this.db.prepare('SELECT capture_id FROM file_evidence_links WHERE parent_id=?').all(id) as {capture_id:string}[];
     this.db.prepare('DELETE FROM file_evidence_links WHERE parent_id=?').run(id);
-    for(const excerpt of excerpts){this.invalidateMemoryEvidence(excerpt.capture_id,deleted);this.db.prepare('UPDATE source_heads SET deleted=1 WHERE capture_id=?').run(excerpt.capture_id);if(deleted){this.db.prepare('DELETE FROM captures_fts WHERE rowid=(SELECT rowid FROM captures WHERE id=?)').run(excerpt.capture_id);this.db.prepare('DELETE FROM captures WHERE id=?').run(excerpt.capture_id);}}
+    for(const excerpt of excerpts){this.invalidateMemoryEvidence(excerpt.capture_id,deleted,preserveDialogue);this.db.prepare('UPDATE source_heads SET deleted=1 WHERE capture_id=?').run(excerpt.capture_id);if(deleted){this.db.prepare('DELETE FROM captures_fts WHERE rowid=(SELECT rowid FROM captures WHERE id=?)').run(excerpt.capture_id);this.db.prepare('DELETE FROM captures WHERE id=?').run(excerpt.capture_id);}}
 
     // A revision preserves its previous original for as-of reports. Explicit
     // deletion removes reports conservatively because their lineage may be incomplete.
     if(deleted)this.db.exec('DELETE FROM insights');
-    this.invalidateSemanticEvidence(id,deleted);
+    this.invalidateSemanticEvidence(id,deleted,preserveDialogue);
   }
   /** Changes interpretation without retiring original bytes, text, quote anchors, or linked excerpts. */
-  invalidateSemanticEvidence(id:string,deleted=false) {
-    this.invalidateConversationAnswers([id],deleted);
+  invalidateSemanticEvidence(id:string,deleted=false,preserveDialogue=false) {
+    this.invalidateConversationAnswers([id],deleted&&preserveDialogue?'retired':deleted);
     // The same evidence transaction revokes host visibility and records native
     // cleanup. A separate process may perform retention; no process-local
     // callback or remote request can stand in for this durable outbox.
@@ -602,10 +603,13 @@ export class EvidenceStore {
   }
   /** SQL-only participant in the caller's deletion transaction. All visibility,
    * lineage and provider revocation outbox changes commit or roll back together. */
-  deleteInTransaction(id:string) {
+  deleteInTransaction(id:string,preserveDialogue=false) {
     if(!this.db.isTransaction)throw new StoreError('Evidence deletion requires a transaction');
+    // Resolve every anchor of a Material removed by the capture cascade before
+    // its original identities disappear, including other members of that Material.
+    if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_members'").get())for(const anchor of this.db.prepare("SELECT DISTINCT e.id FROM material_evidence e JOIN material_members m ON m.material_id=e.material_id WHERE m.kind='capture' AND m.ref=?").all('capture:'+id))this.invalidateMemoryEvidence(String(anchor.id),true,preserveDialogue);
     // Resolve lineage before capture cascades erase its formal anchors.
-    if(this.db.prepare('SELECT 1 FROM captures WHERE id=?').get(id))this.invalidateMemoryEvidence(id,true);
+    if(this.db.prepare('SELECT 1 FROM captures WHERE id=?').get(id))this.invalidateMemoryEvidence(id,true,preserveDialogue);
     const result=this.db.prepare('DELETE FROM captures WHERE id=?').run(id);this.db.prepare('DELETE FROM captures_fts WHERE rowid=(SELECT rowid FROM captures WHERE id=?)').run(id);
     if(result.changes)this.db.prepare('INSERT INTO changes(id,operation,changed_at) VALUES(?,?,?)').run(id,'delete',new Date().toISOString());
     if(result.changes)this.db.prepare('UPDATE source_heads SET deleted=1 WHERE capture_id=?').run(id);
@@ -619,7 +623,7 @@ export class EvidenceStore {
   delete(id:string) {
     this.db.exec('BEGIN IMMEDIATE');
     let result:{deleted:number};
-    try{result=this.deleteInTransaction(id);this.db.exec('COMMIT');}
+    try{result=this.deleteInTransaction(id,true);this.db.exec('COMMIT');}
     catch(error){if(this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}
     this.collectDeletedEvidence();return result;
   }
@@ -631,6 +635,8 @@ export class EvidenceStore {
       // Journal/count the selected set before invalidation can delete excerpts
       // through their parent. The whole operation remains one transaction.
       for(const row of removed)this.invalidateMemoryEvidence(row.id,true);
+      const expiredHistory=this.db.prepare('SELECT id FROM conversation_retired_roots WHERE expires_at<?').all(before).map(row=>String(row.id));
+      if(expiredHistory.length)this.invalidateConversationAnswers(expiredHistory,true);
       this.db.prepare('DELETE FROM captures_fts WHERE rowid IN (SELECT rowid FROM captures WHERE context_end < ? AND id NOT IN (SELECT capture_id FROM file_versions))').run(before);
       this.db.prepare('DELETE FROM captures WHERE context_end < ? AND id NOT IN (SELECT capture_id FROM file_versions)').run(before);
       if(removed.length)this.db.exec('UPDATE source_heads SET deleted=1 WHERE capture_id NOT IN (SELECT id FROM captures)');this.db.exec('COMMIT');this.sweep();this.archive.collect();return removed.length;
@@ -663,7 +669,15 @@ export class EvidenceStore {
   }
   /** Ordinary revisions preserve dialogue. Destructive deletion/revocation
    * must opt in, including previously stale generations and their summaries. */
-  invalidateConversationAnswers(evidenceIds?:string[],deleted=false) {
+  invalidateConversationAnswers(evidenceIds?:string[],deleted:boolean|'retired'=false) {
+    if(deleted==='retired'){
+      if(!evidenceIds)throw new StoreError('Ordinary retirement requires exact evidence IDs');
+      // Formal anchors of this exact original keep the same ordinary-deletion
+      // reason before a later organizer retires its now-unavailable material.
+      if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_members'").get())evidenceIds=[...new Set([...evidenceIds,...this.db.prepare("SELECT DISTINCT e.id FROM material_evidence e JOIN material_members m ON m.material_id=e.material_id WHERE m.kind='capture' AND m.ref IN (SELECT 'capture:'||value FROM json_each(?))").all(JSON.stringify(evidenceIds)).map(row=>String(row.id))])];
+      retainConversationRoots(this,evidenceIds);
+    }
+    if(deleted===true){if(evidenceIds)this.db.prepare('DELETE FROM conversation_retired_roots WHERE id IN (SELECT value FROM json_each(?))').run(JSON.stringify(evidenceIds));else this.db.exec('DELETE FROM conversation_retired_roots');}
     // Resolve formal-original lineage before its anchors are removed. Private
     // delegated products and replay prompts retain the same disclosure boundary.
     if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='delegation_dependencies'").get()){
@@ -688,7 +702,11 @@ export class EvidenceStore {
     if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='conversation_turns'").get()){
       const condition=`coalesce(json_extract(json,'$.evidenceDeleted'),0)!=1 AND json_extract(json,'$.result') IS NOT NULL AND ${affected('$.result.evidenceDependencies','conversation_turns')}`;
       const conversations=this.db.prepare('SELECT DISTINCT conversation_id FROM conversation_turns WHERE '+condition).all(...parameters);
-      if(deleted)this.db.prepare(`UPDATE conversation_turns SET json=json_set(json_remove(json,'$.evidenceStale','$.historyEvidenceDependencies'),'$.evidenceDeleted',json('true'),'$.result',json_object('answer',?,'citations',json('[]'),'trace',json('[]'),'runId',coalesce(json_extract(json,'$.result.runId'),''))) WHERE ${condition}`).run(moteText("原始资料已删除或到期，这条历史回答已清除。你可以继续提问，重新检索现有资料。"),...parameters);
+      if(deleted===true)this.db.prepare(`UPDATE conversation_turns SET json=json_set(json_remove(json,'$.evidenceStale','$.evidenceUnavailable','$.historyEvidenceDependencies'),'$.evidenceDeleted',json('true'),'$.result',json_object('answer',?,'citations',json('[]'),'trace',json('[]'),'runId',coalesce(json_extract(json,'$.result.runId'),''))) WHERE ${condition}`).run(moteText("原始资料已删除或到期，这条历史回答已清除。你可以继续提问，重新检索现有资料。"),...parameters);
+      else if(deleted==='retired')for(const row of this.db.prepare(`SELECT id,json FROM conversation_turns WHERE ${condition}`).all(...parameters)){
+        const turn=JSON.parse(String(row.json));turn.evidenceStale=true;turn.evidenceUnavailable=true;turn.result=retainedConversationResult(turn.result);
+        this.db.prepare('UPDATE conversation_turns SET json=? WHERE id=?').run(JSON.stringify(turn),row.id);
+      }
       else this.db.prepare(`UPDATE conversation_turns SET json=json_set(json,'$.evidenceStale',json('true')) WHERE ${condition}`).run(...parameters);
       for(const row of conversations)this.db.prepare("UPDATE conversations SET json=json_set(json,'$.revision',coalesce(json_extract(json,'$.revision'),0)+1) WHERE id=?").run(row.conversation_id);
     }

@@ -1,3 +1,4 @@
+import {containDialogFocus} from './dialog-focus';
 import {SaveConversationRecord} from './SaveConversationRecord';
 import {useResource} from './useResource';
 import {useOperationUpdates} from './useOperationUpdates';
@@ -32,6 +33,8 @@ interface ConversationTurn {
   createdAt: string;
   evidenceDeleted?: boolean;
   evidenceStale?: boolean;
+  evidenceUnavailable?: boolean;
+  unavailableEvidenceIds?: string[];
   attachments?: {id:string;name:string;mimeType:string}[];
 }
 interface Conversation extends ConversationSummary {turns: ConversationTurn[];revision?:number;nextCursor?:string|null}
@@ -56,9 +59,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   api: Api;
   configured: boolean;
   devices: Device[];
-  renderAnswer: (answer: Answer) => ReactNode;
+  renderAnswer: (answer: Answer, openReference:(ref:string)=>void) => ReactNode;
   onOpen?: (ref:string)=>void;
 }) {
+  const [unavailableReference,setUnavailableReference]=useState<{opener:HTMLElement|null}|null>(null);
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [clearedScope,setClearedScope]=useState<{owner:Api;id:string}|null>(null);
@@ -70,8 +74,16 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   // A newer revision can withdraw prior evidence. Never merge copied pages from
   // an older revision while their replacement is still being fetched.
   const conversation=detail.data&&!pageRevoked?{...detail.data,turns:[...(currentOlder?.turns??[]).filter(turn=>!detail.data!.turns.some(next=>next.id===turn.id)),...detail.data.turns],...(currentOlder?{nextCursor:currentOlder.nextCursor}:{})}:null;
+  const openHistoryReference=(ref:string)=>{
+    if(!conversation||!ref.startsWith('capture:')){onOpen(ref);return;}
+    const id=ref.slice('capture:'.length),opener=document.activeElement instanceof HTMLElement?document.activeElement:null,owner=api,conversationId=conversation.id;
+    void api.request<{id:string;available:boolean}>(`/api/conversations/${encodeURIComponent(conversationId)}/references/${encodeURIComponent(id)}`).then(value=>{
+      if(latestDetail.current.api!==owner||latestDetail.current.selectedId!==conversationId)return;
+      if(value.available===true&&value.id===id)onOpen(ref);else setUnavailableReference({opener});
+    }).catch(error=>{if(latestDetail.current.api===owner&&latestDetail.current.selectedId===conversationId)setError(errorMessage(error));});
+  };
   const scopeCleared=clearedScope?.owner===api&&clearedScope.id===conversation?.id;
-  useEffect(()=>setClearedScope(null),[api,selectedId]);
+  useEffect(()=>{setClearedScope(null);setUnavailableReference(null);},[api,selectedId]);
   const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error});
   latestDetail.current={api,selectedId,data:detail.data,error:detail.error};
   const [draft]=useState(createQuestionDraft),setQuestion=draft.set;
@@ -239,6 +251,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     finally {if (!controller.signal.aborted) {setBusy(false); operation.current = null;}}
   }
   return <div className="conversation-layout" aria-busy={loading||opening||recentRuns.loading}>
+    {unavailableReference&&<UnavailableReference opener={unavailableReference.opener} close={()=>setUnavailableReference(null)}/>}
     <aside className="conversation-history panel" aria-label={moteText("对话历史")}>
       <div className="conversation-history-heading"><div className="chat-section-title"><div className="chat-section-icon"><MessageSquare size={15}/></div><div><h2>{moteText("对话历史")}</h2></div></div><button className="icon-button" aria-label={moteText("刷新对话历史")} disabled={loading} onClick={() => void loadHistory()}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
       <button className="button subtle full new-conversation-button" disabled={busy} onClick={startNew}><Plus size={16}/>{moteText("新对话")}</button>
@@ -253,8 +266,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
       <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
-      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
-      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
+      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
+      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
       {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}
       {opening && <p className="loading" role="status"><LoaderCircle size={16} className="spin"/>{moteText("正在打开对话…")}</p>}
       {targetTurn&&conversation&&!opening&&!conversation.nextCursor&&!conversation.turns.some(turn=>turn.id===targetTurn)&&<p role="status">{moteText('原始轮次暂不可读。')}</p>}
@@ -262,7 +275,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {conversation?.nextCursor&&<button className="text-button" disabled={opening} onClick={()=>void loadOlderTurns()}>{moteText("加载更早的对话")}</button>}
       {conversation?.turns.map(turn => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
         <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}{Boolean(turn.attachments?.length)&&<span className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</span>}</span></div>
-        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.result.modelSelection&&<small className="model-used">{turn.result.modelSelection.profileName} · {turn.result.modelSelection.model}</small>}{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result)}<SaveConversationRecord api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} onOpen={onOpen}/></>}</>}
+        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.result.modelSelection&&<small className="model-used">{turn.result.modelSelection.profileName} · {turn.result.modelSelection.model}</small>}{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,openHistoryReference)}<SaveConversationRecord api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} onOpen={onOpen}/></>}</>}
       </article>)}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}
       {run&&<QueryProgress api={api} run={run} error={pollError}/>}
@@ -278,4 +291,12 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
     </section>}
   </div>;
+}
+
+function UnavailableReference({opener,close}:{opener:HTMLElement|null;close:()=>void}){
+ const panel=useRef<HTMLElement>(null);
+ useEffect(()=>panel.current?containDialogFocus(panel.current,opener):undefined,[opener]);
+ return <div className="modal-backdrop" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();close();}}}><section ref={panel} className="modal" role="dialog" aria-modal="true" aria-label={moteText('引用不可用')}>
+  <h2>{moteText('引用不可用')}</h2><p>{moteText('引用原文已删除，历史问答仍保留。')}</p><button className="button" onClick={close}>{moteText('返回原对话')}</button>
+ </section></div>;
 }

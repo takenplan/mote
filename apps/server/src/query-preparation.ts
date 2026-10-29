@@ -22,7 +22,7 @@ export type SavedQuery={hostRequest:unknown;language?:QueryInput['language'];pre
 export interface QueryPreparationDependencies {
   store:Store;
   files:Pick<FileStore,'detail'|'version'>;
-  conversations:Pick<Conversations,'get'|'context'>;
+  conversations:Pick<Conversations,'get'|'context'|'historyContext'|'retiredSelection'>;
   delegation:Pick<DelegationRuntime,'journal'|'recordEvidence'>;
   executor:Pick<ExecutionEngine,'isCurrentGrant'>;
   modelSettings:Pick<ModelSettingsStore,'select'|'view'>;
@@ -58,12 +58,6 @@ export function createQueryPreparation(dependencies:QueryPreparationDependencies
     insightSchema.parse(scope);
     if(selectedIds)scope.evidenceIds=selectedIds;
     if(anchorIds)scope.anchorEvidenceIds=anchorIds;
-    const selectedRecords=selectedQueryEvidence({question,...scope,executionLane:'interactive'});
-    const profile=modelSettings.select('chat',modelProfileId),model=modelOverride??profile.settings.model,contextTime=work.scope.contextTime!;
-    const previousIds=scope.evidenceIds?[]:previous?.turns.slice(-20).flatMap(turn=>turn.attachments?.map(attachment=>attachment.id)??[])??[],previousAvailable=previousIds.filter(id=>{try{return Boolean(files.detail(id).hasOriginal);}catch{return false;}});
-    const directImages=queryImages([...new Set([...attachmentIds,...previousAvailable.slice(-4)])]);
-    const stepId=work.id+':coordinator:'+work.revision,fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
-    const commit=<T>(write:()=>T):T=>{signal.throwIfAborted();const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');try{if(!fence||!executor.isCurrentGrant(stepId,fence))throw new StoreError('Query preparation grant expired',409);const result=write();if(own)store.db.exec('COMMIT');return result;}catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}};
     const allowedHistoryIds=new Set([...(scope.evidenceIds??[]),...attachmentIds]);
     const selectedScope=JSON.stringify([...(scope.evidenceIds??[])].sort());
     const scopedPrevious=previous&&scope.evidenceIds?{...previous,turns:previous.turns.filter(turn=>
@@ -72,11 +66,22 @@ export function createQueryPreparation(dependencies:QueryPreparationDependencies
       turn.result?.evidenceDependencies?.complete===true&&turn.result.evidenceDependencies.ids.every(id=>allowedHistoryIds.has(id))&&
       turn.historyEvidenceDependencies?.complete===true&&turn.historyEvidenceDependencies.ids.every(id=>allowedHistoryIds.has(id))
     )}:undefined;
+    const historySnapshot=previous?conversations.historyContext(scopedPrevious??previous):undefined;
+    const retired=historySnapshot?conversations.retiredSelection(historySnapshot,[...(selectedIds??[]),...(anchorIds??[])]):new Set<string>();
+    const historicalSelection=retired.size?{...(selectedIds?{evidenceIds:[...selectedIds]}:{}),...(anchorIds?{anchorEvidenceIds:[...anchorIds]}:{})}:undefined;
+    if(scope.evidenceIds)scope.evidenceIds=scope.evidenceIds.filter(id=>!retired.has(id));
+    if(scope.anchorEvidenceIds)scope.anchorEvidenceIds=scope.anchorEvidenceIds.filter(id=>!retired.has(id));
+    const selectedRecords=selectedQueryEvidence({question,...scope,executionLane:'interactive'});
+    const profile=modelSettings.select('chat',modelProfileId),model=modelOverride??profile.settings.model,contextTime=work.scope.contextTime!;
+    const previousIds=scope.evidenceIds?[]:previous?.turns.slice(-20).flatMap(turn=>turn.attachments?.map(attachment=>attachment.id)??[])??[],previousAvailable=previousIds.filter(id=>{try{return Boolean(files.detail(id).hasOriginal);}catch{return false;}});
+    const directImages=queryImages([...new Set([...attachmentIds,...previousAvailable.slice(-4)])]);
+    const stepId=work.id+':coordinator:'+work.revision,fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
+    const commit=<T>(write:()=>T):T=>{signal.throwIfAborted();const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');try{if(!fence||!executor.isCurrentGrant(stepId,fence))throw new StoreError('Query preparation grant expired',409);const result=write();if(own)store.db.exec('COMMIT');return result;}catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}};
     const [opening,conversation]=await Promise.all([
       scope.evidenceIds?Promise.resolve({leads:[],evidenceDependencies:{version:1 as const,complete:true,ids:scope.evidenceIds}}):openingMemoryContext(archiveReader,question,{...scope,contextTime}),
       scopedPrevious?Promise.resolve(conversations.context(scopedPrevious,20,Math.max(1000,lifecycleSettings().contextCharacters-question.length))):previous?working.prepare(previous,lifecycleSettings(),question,input=>query({...input,contextTime,traceContext:{...input.traceContext,operationId:work.operationId},executionLane:'interactive',modelProfileId:profile.id,modelOverride:model,signal}),{signal,commit}):undefined,
     ]);
-    const prepared:QueryInput={traceContext:{operationId:work.operationId},language:saved.language??'zh-CN',executionLane:'interactive',question,...scope,...(selectedRecords.length?{processingEvidence:Object.fromEntries(selectedRecords.map(record=>[record.id,memoryEvidenceFingerprint(record)]))}:{}),contextTime,modelProfileId:profile.id,modelOverride:model,directImages,openingMemories:opening.leads,contextEvidenceDependencies:{...opening.evidenceDependencies,ids:[...new Set([...opening.evidenceDependencies.ids,...(scope.anchorEvidenceIds??[])])]},...(conversation?{conversation}:{})};
+    const prepared:QueryInput={traceContext:{operationId:work.operationId},language:saved.language??'zh-CN',executionLane:'interactive',question,...scope,...(historicalSelection?{historicalSelection}:{}),...(historicalSelection?.evidenceIds&&scope.evidenceIds?.length===0?{hostRetrieval:'none' as const}:{}),...(selectedRecords.length?{processingEvidence:Object.fromEntries(selectedRecords.map(record=>[record.id,memoryEvidenceFingerprint(record)]))}:{}),contextTime,modelProfileId:profile.id,modelOverride:model,directImages,openingMemories:opening.leads,contextEvidenceDependencies:{...opening.evidenceDependencies,ids:[...new Set([...opening.evidenceDependencies.ids,...(scope.anchorEvidenceIds??[])])]},...(conversation?{conversation}:{})};
     commit(()=>{
       assertModelEvidence(prepared);
       const freshImages=queryImages(directImages.map(image=>image.id));

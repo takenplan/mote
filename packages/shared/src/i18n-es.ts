@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "引用原文已删除，历史问答仍保留。": "El original citado se eliminó. Tus preguntas y respuestas anteriores se conservan.",
+  "引用不可用": "Referencia no disponible",
+  "返回原对话": "Volver a la conversación",
   "生成任务": "Tareas de generación",
   "查看发现": "Ver descubrimiento",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "El envío anterior no está confirmado. Reintenta primero la solicitud original; el borrador actual se conservará.",

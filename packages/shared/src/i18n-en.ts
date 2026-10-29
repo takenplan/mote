@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "引用原文已删除，历史问答仍保留。": "The cited original was deleted. Your past questions and answers are preserved.",
+  "引用不可用": "Citation unavailable",
+  "返回原对话": "Back to conversation",
   "生成任务": "Generation tasks",
   "查看发现": "View discovery",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "The previous submission is not confirmed. Retry its original request first; your current draft will be kept.",

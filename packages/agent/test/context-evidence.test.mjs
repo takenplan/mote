@@ -23,6 +23,15 @@ const reader=(records=[record,continuation])=>({search:async()=>{throw Error('Ar
 async function send(bridge,tool,args={}){const response=await fetch(bridge.url+'/'+tool,{method:'POST',headers:{authorization:'Bearer '+bridge.token,'content-type':'application/json'},body:JSON.stringify(args)});return {status:response.status,body:await response.json()};}
 async function fixture(t,extra={},records=[record,continuation]){const bridge=await startBridge(reader(records),bounds(extra),24);t.after(()=>bridge.close());return bridge;}
 
+test('a wholly retired interactive selection denies original reads and discovery before any reader call',async t=>{
+ const calls=[];const source={search:async()=>{calls.push('search');return [record];},timeline:async()=>{calls.push('timeline');return [record];},evidence:async()=>{calls.push('evidence');return [record];},activity:async()=>{calls.push('activity');return {};},devices:async()=>{calls.push('devices');return [];}};
+ const input={question:'Explain the saved historical answer',executionLane:'interactive',evidenceIds:[],hostRetrieval:'none',historicalSelection:{evidenceIds:[id]},conversation:{turns:[{question:'Saved question',answer:'Saved answer',scope:{evidenceIds:[id]},createdAt:'2026-10-01T00:00:00Z',evidenceUnavailable:true}],omittedTurns:0,historyContext:{conversationId:randomUUID(),revision:2,turns:[{id:randomUUID(),runId:randomUUID()}],evidenceDependencies:{version:1,complete:true,ids:[id]}}}};
+ const bridge=await startBridge(source,input,24);t.after(()=>bridge.close());assert.deepEqual(bridge.seedEvidence,[]);assert.deepEqual(taskTools(input),[]);
+ for(const [tool,args] of [['evidence',{ids:[]}],['evidence',{ids:[id]}],['evidence',{ids:[continuationId]}],['search_context',{query:'generated'}],['timeline',{}],['context_evidence',{id,offset:0,length:20}],['material_catalog',{}]])assert.equal((await send(bridge,tool,args)).status,400,tool);
+ assert.deepEqual(calls,[],'empty selection must never reach a reader that interprets [] as all records');
+ await assert.rejects(startBridge(source,{...input,historicalSelection:undefined}),/Invalid extraction evidence scope/);assert.deepEqual(calls,[]);
+});
+
 test('legacy bounded sessions retain initial evidence tools and cannot inspect a context catalog',async t=>{
  const bridge=await fixture(t);assert.deepEqual(taskTools(bounds()),['evidence']);
  assert.equal(buildContextEnvelope(bounds(),bridge.seedEvidence).authorizedContextRanges,undefined);

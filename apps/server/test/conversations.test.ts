@@ -113,22 +113,24 @@ test('failed answers remain visible and concurrent or deleted conversations cann
   assert.equal((await app.inject({url:'/api/conversations',headers})).json().items.length,1);
 });
 
-test('capture deletion removes derived history content and prevents in-flight answers restoring it',async t=>{
+test('ordinary capture deletion preserves submitted history but fences in-flight answers; explicit erasure clears retained generations',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'mote-conversation-privacy-'));
-  const seen:QueryInput[]=[];let hold=false,started!:()=>void,complete!:(result:ReturnType<typeof answer>)=>void;
+  const seen:QueryInput[]=[];let hold=false,deleted=false,started!:()=>void,complete!:(result:ReturnType<typeof answer>)=>void;
   const began=new Promise<void>(resolve=>{started=resolve;});
-  const {app,store}=await buildApp(config(dir),{agent:agent(async input=>{seen.push(input);if(hold){started();return new Promise(resolve=>{complete=resolve;});}return {...answer('Generated derived sensitive sentinel'),evidenceDependencies:{version:1,complete:true,ids:[record.id]}};})});
+  const {app,store}=await buildApp(config(dir),{agent:agent(async input=>{seen.push(input);if(hold){started();return new Promise(resolve=>{complete=resolve;});}return {...answer('Generated derived sensitive sentinel'),evidenceDependencies:{version:1,complete:true,ids:deleted?[]:[record.id]}};})});
   t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
   const record={id:randomUUID(),deviceId:'fixture',deviceName:'Fixture',platform:'import',capturedAt:'2026-09-01T00:00:00Z',source:'note',ocrText:'Generated evidence',durationMs:0};
   await store.ingest(record);
   const first=(await app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated question'}})).json();
   hold=true;const pending=app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId:first.conversationId,question:'Held followup'}}).then(value=>value);await began;
-  await app.inject({method:'DELETE',url:`/api/captures/${record.id}`,headers});complete(answer('Generated derived sensitive sentinel'));
+  await app.inject({method:'DELETE',url:`/api/captures/${record.id}`,headers});deleted=true;complete(answer('Generated late answer must not commit'));
   assert.equal((await pending).statusCode,409);
   const detail=await app.inject({url:`/api/conversations/${first.conversationId}`,headers});
-  assert.ok(!detail.body.includes('Generated derived sensitive sentinel'));assert.equal(detail.json().turns[0].evidenceDeleted,true);assert.equal(detail.json().turns[0].question,'Generated question');
-  hold=false;await app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId:first.conversationId,question:'Continue with remaining evidence'}});
-  assert.equal(seen.at(-1)!.conversation!.turns[0].evidenceDeleted,true);assert.ok(!JSON.stringify(seen.at(-1)!.conversation).includes('Generated derived sensitive sentinel'));
+  assert.ok(detail.body.includes('Generated derived sensitive sentinel'));assert.equal(detail.json().turns[0].evidenceUnavailable,true);assert.equal(detail.json().turns[0].evidenceDeleted,undefined);assert.equal(detail.json().turns[0].question,'Generated question');assert.ok(!detail.body.includes('Generated late answer must not commit'));
+  hold=false;const continued=await app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId:first.conversationId,question:'Continue with remaining evidence'}});assert.equal(continued.statusCode,200,continued.body);
+  assert.equal(seen.at(-1)!.conversation!.turns[0].evidenceUnavailable,true);assert.ok(JSON.stringify(seen.at(-1)!.conversation).includes('Generated derived sensitive sentinel'));
+  store.invalidateConversationAnswers([record.id],true);
+  const erased=(await app.inject({url:`/api/conversations/${first.conversationId}`,headers})).json();assert.ok(erased.turns.filter((turn:any)=>turn.result).every((turn:any)=>turn.evidenceDeleted));assert.ok(!JSON.stringify(erased).includes('Generated derived sensitive sentinel'));
 });
 
 test('conversation listing paginates deterministically and model context is bounded while full turns remain stored',t=>{
