@@ -233,3 +233,17 @@ test('retired private question renders no empty fallback message',async t=>{
  await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:()=>{}})));
  assert.equal(d.querySelectorAll('.owner-question-message').length,0);assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/这个问题已失效/);
 });
+
+
+test('paging never sends a prior host cursor when work, material, operations or owner changes',async t=>{
+ const {root,d}=await fixture(t),reads:{owner:string;query:URLSearchParams}[]=[];
+ const makeApi=(owner:string)=>({request:async(path:string)=>{const query=new URLSearchParams(path.split('?')[1]);reads.push({owner,query});return {items:[generated],nextCursor:query.has('cursor')?null:'cursor-'+owner+'-'+reads.length};}} as Api);
+ const first=makeApi('first'),second=makeApi('second');
+ let props:{api:Api;workId?:string;materialId?:string;operationIds?:string[]}={api:first,workId:'work-a'};
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,props)));
+ for(const next of [{api:first,workId:'work-b'},{api:first,materialId:'material-b'},{api:first,operationIds:['memory:operation-b']},{api:second,operationIds:['memory:operation-b']}]){
+  await act(async()=>button(d,'继续展开').click());assert.ok(reads.at(-1)!.query.has('cursor'));
+  const boundary=reads.length;props=next;await act(async()=>root.render(React.createElement(OwnerQuestionLinks,props)));
+  assert.ok(reads.length>boundary);assert.ok(reads.slice(boundary).every(read=>!read.query.has('cursor')),'new host first reads must not carry the previous host cursor');
+ }
+});

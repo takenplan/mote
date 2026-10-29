@@ -15,11 +15,14 @@ const stateLabel=(state:OwnerQuestion['state'])=>({open:moteText('待回答'),de
 
 export function OwnerQuestionLinks({api,workId,materialId,operationIds,history=false,selectedId}:{api:Api;workId?:string;materialId?:string;operationIds?:string[];history?:boolean;selectedId?:string}){
   useOwnerQuestionStyle();
-  const [cursor,setCursor]=useState<string>(),[filter,setFilter]=useState<'pending'|'all'>('pending');
+  const [filter,setFilter]=useState<'pending'|'all'>('pending');
   const operationScope=operationIds?.length?JSON.stringify(operationIds.slice(0,100)):undefined;
+  const scope=JSON.stringify([workId??null,materialId??null,operationScope??null]);
+  const [paging,setPaging]=useState<{api:Api;scope:string;cursor?:string}>(()=>({api,scope}));
+  const cursor=paging.api===api&&paging.scope===scope?paging.cursor:undefined;
+  const setCursor=(cursor?:string)=>setPaging({api,scope,cursor});
   const path=ownerQuestionListPath({...(workId?{workId}:{}),...(materialId?{materialId}:{}),...(operationScope?{operationIds:JSON.parse(operationScope) as string[]}:{})},cursor,history?(filter==='pending'?'open,deferred':'open,deferred,answered,closed,obsolete'):'open,deferred,closed,answered');
   const page=useResource<QuestionPage>(api,path,5000);
-  useEffect(()=>setCursor(undefined),[api,workId,materialId,operationScope]);
   const items=page.error===undefined&&Array.isArray(page.data?.items)?page.data.items:[];
   if(!history&&!items.length&&!page.error&&(!page.loading||page.data!==undefined)&&!page.data?.nextCursor)return null;
   return <section className={history?'owner-question-history owner-question-final':'owner-question-links owner-question-final'} aria-label={history?moteText('需要你补充'):moteText('补充问题记录')}>
