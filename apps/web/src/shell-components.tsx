@@ -383,7 +383,9 @@ export function EvidenceDialog({
   onClose,
   onDeleted,
   onOpen,
+  embedded=false,
 }: {
+  embedded?:boolean;
   id: string;
   api: Api;
   onClose: () => void;
@@ -407,16 +409,17 @@ export function EvidenceDialog({
     return () => document.removeEventListener("keydown", key);
   }, [onClose]);
   useEffect(() => {
+    if(embedded)return;
     const panel = document.querySelector<HTMLElement>('.evidence-modal');
     return panel?containDialogFocus(panel,document.activeElement as HTMLElement|null):undefined;
-  }, []);
+  }, [embedded]);
   async function remove() {
     setBusy(true);
     try {
       await api.request(`/api/captures/${encodeURIComponent(captureId!)}`, {
         method: "DELETE",
       });
-      resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources)([/?]|$)/.test(key));
+      resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources|materials|library)([/?]|$)/.test(key));
       onDeleted();
       onClose();
     } catch (e) {
@@ -436,15 +439,16 @@ export function EvidenceDialog({
   const currentMaterialRef=materialRef&&/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(materialRef)?materialRef:undefined;
   return (
     <div
-      className="modal-backdrop"
+      className={embedded?"embedded-evidence":"modal-backdrop evidence-reader-backdrop"}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section
-        className="modal evidence-modal"
-        role="dialog"
-        aria-modal="true"
+        className={embedded?"evidence-modal evidence-reader":"modal evidence-modal evidence-reader"}
+        role={embedded?"region":"dialog"}
+        aria-modal={embedded?undefined:true}
         aria-label={moteText("上下文证据详情")}
       >
+        {embedded&&<button className="text-button evidence-back" onClick={onClose}>{moteText("返回资料列表")}</button>}
         <div className="evidence-heading">
           <div>
             <h2>{readerTitle}</h2>
@@ -490,7 +494,7 @@ export function EvidenceDialog({
                   capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
                   capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div>
                 {(capture.source==='media'||capture.metadata?.media)&&<MediaSnapshot media={capture.metadata?.media} observedAt={capture.metadata?.observedAt??capture.capturedAt} screenLocked={capture.metadata?.state?.screenLocked} collection={capture.privacy.collection}/>}
-                <dl>
+                <details className="reader-source-details"><summary>{moteText("来源与详情")}</summary><dl>
                   <div>
                     <dt>{moteText("来源")}</dt>
                     <dd>
@@ -530,7 +534,7 @@ export function EvidenceDialog({
                 {capture.privacy.reason && (
                   <p className="field-note">{capture.privacy.reason}</p>
                 )}
-                <code className="record-id">{capture.id}</code>
+                <code className="record-id">{capture.id}</code></details>
               </div>
             </div>
             <div className="evidence-footer">

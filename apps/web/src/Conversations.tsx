@@ -67,6 +67,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [clearedScope,setClearedScope]=useState<{owner:Api;id:string}|null>(null);
   const [selectedId,setSelectedId]=useState<string|null>(null),[older,setOlder]=useState<OlderTurns|null>(null),[pageRevoked,setPageRevoked]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
   const [targetTurn,setTargetTurn]=useState<string|null>(null);
   const [selectedOwnerQuestion,setSelectedOwnerQuestion]=useState<string|null>(()=>readOwnerQuestion(window.location.hash));
   const detail=useResource<Conversation>(api,selectedId?`/api/conversations/${encodeURIComponent(selectedId)}`:null);
@@ -167,6 +168,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
 
   function open(id: string) {
     if (busy) return;
+    setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setError('');setConfirmDelete(false);setQuestion('');setAttachments([]);setPendingQuestion('');
@@ -185,6 +187,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     finally{if(olderRequest.current===controller){olderRequest.current=null;setLoadingOlder(false);}}
   }
   function startNew() {
+    setHistoryOpen(false);
     if (busy) return;
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
@@ -250,9 +253,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) {if (!controller.signal.aborted) setError(errorMessage(e));}
     finally {if (!controller.signal.aborted) {setBusy(false); operation.current = null;}}
   }
-  return <div className="conversation-layout" aria-busy={loading||opening||recentRuns.loading}>
+  return <div className={"conversation-layout final-conversation"+(historyOpen?" history-open":"")} aria-busy={loading||opening||recentRuns.loading}>
     {unavailableReference&&<UnavailableReference opener={unavailableReference.opener} close={()=>setUnavailableReference(null)}/>}
-    <aside className="conversation-history panel" aria-label={moteText("对话历史")}>
+    <div className="conversation-toolbar"><button className="text-button" aria-expanded={historyOpen} aria-controls="conversation-history" onClick={()=>setHistoryOpen(value=>!value)}>{moteText("对话历史")}</button><button className="button subtle" disabled={busy} onClick={startNew}><Plus size={15}/>{moteText("新对话")}</button></div>
+    <aside id="conversation-history" hidden={!historyOpen} className="conversation-history panel" aria-label={moteText("对话历史")}>
       <div className="conversation-history-heading"><div className="chat-section-title"><div className="chat-section-icon"><MessageSquare size={15}/></div><div><h2>{moteText("对话历史")}</h2></div></div><button className="icon-button" aria-label={moteText("刷新对话历史")} disabled={loading} onClick={() => void loadHistory()}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
       <button className="button subtle full new-conversation-button" disabled={busy} onClick={startNew}><Plus size={16}/>{moteText("新对话")}</button>
       <FeaturePanels api={api} onOpen={onOpen} value={{kind:'mote.ask.history',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion??'',revision:'1',title:'',text:''}}/>

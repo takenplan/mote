@@ -23,7 +23,8 @@ test('note reader leads with the exact original, keeps real source facts and ret
  assert.equal(d.querySelector('.evidence-heading h2')!.textContent,'随手记');assert.equal(d.querySelector('.evidence-body-heading')!.textContent,'用户原文');
  assert.equal(body.textContent,generated.ocrText);assert.equal(body.querySelector('script'),null,'untrusted original remains literal');
  assert.match(d.querySelector('.evidence-caption')!.textContent!,/Generated note app/);assert.match(d.querySelector('.evidence-caption')!.textContent!,/Generated device/);assert.equal(d.querySelector('.evidence-caption time')!.textContent,dateTime(generated.capturedAt));assert.equal(d.querySelector('time')!.getAttribute('datetime'),generated.capturedAt);
- const facts=Array.from(d.querySelectorAll('.evidence-text>dl>div'));
+ assert.equal(d.querySelector<HTMLDetailsElement>('.reader-source-details')!.open,false,'original text leads while source facts remain available on demand');
+ const facts=Array.from(d.querySelectorAll('.reader-source-details>dl>div'));
  assert.ok(facts.some(row=>row.querySelector('dt')!.textContent==='窗口标题'&&row.querySelector('dd')!.textContent===generated.windowTitle));
  assert.ok(facts.some(row=>row.textContent==='索引状态等待索引'));assert.ok(facts.some(row=>row.textContent==='隐私处理未标记脱敏'));
  // Everyday reading shows the archival fact; processing explanation stays collapsed.
@@ -36,7 +37,7 @@ test('note reader leads with the exact original, keeps real source facts and ret
 test('screen reader keeps authored title, failed OCR/index/privacy facts and the actual delete confirmation',async t=>{
  const capture:Capture={...generated,source:'screen',platform:'macos',windowTitle:'Generated authored window',ocrText:'Exact generated OCR\n  final line ',indexingStatus:'failed',ocr:{status:'failed',updatedAt:'2026-10-13T00:01:00Z'},privacy:{redacted:true,mode:'standard'}},before=structuredClone(capture),{document:d,writes}=await fixture(t,capture);
  assert.equal(d.querySelector('.evidence-heading h2')!.textContent,capture.windowTitle);assert.equal(d.querySelector('.evidence-body-heading')!.textContent,'OCR 全文');assert.equal(d.querySelector('.evidence-text pre')!.textContent,capture.ocrText);
- assert.match(d.querySelector('.evidence-caption')!.textContent!,/屏幕采样/);assert.match(d.querySelector('.evidence-ocr-status')!.textContent!,/OCR 失败/);assert.match(d.querySelector('.evidence-text>dl')!.textContent!,/索引失败/);assert.match(d.querySelector('.evidence-text>dl')!.textContent!,/客户端报告已脱敏/);
+ assert.match(d.querySelector('.evidence-caption')!.textContent!,/屏幕采样/);assert.match(d.querySelector('.evidence-ocr-status')!.textContent!,/OCR 失败/);assert.match(d.querySelector('.reader-source-details>dl')!.textContent!,/索引失败/);assert.match(d.querySelector('.reader-source-details>dl')!.textContent!,/客户端报告已脱敏/);
  await act(async()=>d.querySelector<HTMLButtonElement>('.danger-text')!.click());assert.match(d.querySelector('.evidence-footer')!.textContent!,/此操作无法撤销/);assert.deepEqual(writes,[]);
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.evidence-footer button')).find(button=>button.textContent==='取消')!.click());assert.deepEqual(writes,[]);assert.equal(d.querySelector('.evidence-text pre')!.textContent,capture.ocrText);
  await act(async()=>d.querySelector<HTMLButtonElement>('.danger-text')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.evidence-footer .danger')!.click());assert.deepEqual(writes,['/api/captures/'+id]);assert.equal(d.querySelector('[role=dialog]'),null);assert.deepEqual(capture,before);

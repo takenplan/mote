@@ -14,6 +14,7 @@ test('Codex editor renders the selected model effort levels from model/list',asy
   for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){
     saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
   }
+  Object.assign(dom.window.HTMLElement.prototype,{attachEvent:()=>{},detachEvent:()=>{}});
   dom.window.localStorage.setItem('mote.language','zh-CN');
   const root=createRoot(dom.window.document.getElementById('root')!);
   t.after(async()=>{await act(async()=>root.unmount());for(const [key,descriptor] of saved){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
@@ -27,8 +28,8 @@ test('Codex editor renders the selected model effort levels from model/list',asy
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,550));});
   const select=dom.window.document.querySelector<HTMLSelectElement>('select[aria-label="推理强度"]')!;
   assert.deepEqual(Array.from(select.options).filter(option=>!option.disabled).map(option=>option.value),['auto','low','medium','high','max']);
-  const model=dom.window.document.querySelector<HTMLSelectElement>('select[aria-label="可用模型"]')!;
-  await act(async()=>{model.value='second';model.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  const model=dom.window.document.querySelector<HTMLInputElement>('input[aria-label="模型名称"]')!;
+  await act(async()=>{model.focus();Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(model,'second');model.dispatchEvent(new dom.window.Event('input',{bubbles:true}));model.dispatchEvent(new dom.window.Event('change',{bubbles:true}));model.dispatchEvent(new dom.window.KeyboardEvent('keyup',{bubbles:true,key:'t'}));});
   assert.deepEqual(Array.from(select.options).filter(option=>!option.disabled).map(option=>option.value),['auto','low','high']);
   assert.equal(select.value,'medium');
   assert.equal(Array.from(select.options).find(option=>option.value==='medium')?.disabled,true);
@@ -44,6 +45,7 @@ test('Codex editor saves Fast, blocks unsupported models and clears speed when s
   for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){
     saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
   }
+  Object.assign(dom.window.HTMLElement.prototype,{attachEvent:()=>{},detachEvent:()=>{}});
   dom.window.localStorage.setItem('mote.language','zh-CN');
   const root=createRoot(dom.window.document.getElementById('root')!);
   t.after(async()=>{await act(async()=>root.unmount());for(const [key,descriptor] of saved){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
@@ -56,7 +58,7 @@ test('Codex editor saves Fast, blocks unsupported models and clears speed when s
   await act(async()=>root.render(React.createElement(ModelSettingsEditor,{api,revision:1,onApplied:()=>{}})));
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,550));});
   const select=(label:string)=>dom.window.document.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
-  const change=async(label:string,value:string)=>act(async()=>{const node=select(label);node.value=value;node.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  const change=async(label:string,value:string)=>act(async()=>{const node=label==='可用模型'?dom.window.document.querySelector<HTMLInputElement>('input[aria-label="模型名称"]')!:select(label);if(node.tagName==='INPUT'){node.focus();Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(node,value);node.dispatchEvent(new dom.window.Event('input',{bubbles:true}));}else node.value=value;node.dispatchEvent(new dom.window.Event('change',{bubbles:true}));node.dispatchEvent(new dom.window.KeyboardEvent('keyup',{bubbles:true,key:'t'}));});
   const submit=async()=>act(async()=>{dom.window.document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));});
   assert.equal(select('速度模式').value,'default');
   await change('速度模式','fast');await submit();

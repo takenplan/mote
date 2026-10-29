@@ -13,6 +13,7 @@ import {failureMessage} from '../src/failure-message.js';
 async function fixture(t:import('node:test').TestContext){
   const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
   for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+  Object.assign(dom.window.HTMLElement.prototype,{attachEvent:()=>{},detachEvent:()=>{}});
   dom.window.localStorage.setItem('mote.language','zh-CN');const root=createRoot(dom.window.document.getElementById('root')!);
   t.after(async()=>{await act(async()=>root.unmount());for(const [key,value] of backups){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
   return {root,d:dom.window.document};
@@ -105,4 +106,33 @@ test('Memory deletion retains accurate external clearing status after the card d
  assert.equal(d.querySelector('.notice[role=status]'),null,'a previous node receipt does not appear under a new connection');
  deleted=false;receipt={deleted:1,externalErase:'acknowledged',physicalEraseVerified:false};await render(api);await click(memory.title);await click('删除记忆');await click('确认删除');
  assert.match(d.querySelector('.notice[role=status]')!.textContent!,/已确认移除当前记录，物理擦除尚未核验/);
+});
+
+test('search remains available with filters collapsed and returning from a memory preserves the exact list and opener',async t=>{
+ const {root,d}=await fixture(t),paths:string[]=[],memory={id:'generated-search',title:'Generated searchable lesson',statement:'Generated original statement preview',uncertainty:'Only this generated evidence',status:'published',createdAt:'2026-10-12T00:00:00Z',evidenceIds:[],evidence:[]};
+ let query='';const api={request:async(path:string)=>{
+  paths.push(path);
+  if(path==='/api/model-settings')return modelView();
+  if(path==='/api/memory-recipes'||path==='/api/memory-jobs'||path==='/api/context-trees')return {items:[]};
+  if(path==='/api/memory-settings')return {settings:{consolidation:{maxItems:30}},extensions:[]};
+  if(path.startsWith('/api/memories?')){query=new URL('http://localhost'+path).searchParams.get('query')??'';return {items:[memory],nextCursor:null};}
+  if(path.startsWith('/api/memories/'+memory.id))return memory;
+  if(path==='/api/execution-settings')return {queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}};
+  if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};
+  assert.fail('Unexpected request '+path);
+ }} as Api;
+ await act(async()=>root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}})));
+ const input=d.querySelector<HTMLInputElement>('#memory-search')!;
+ assert.equal(input.closest('[hidden]'),null,'search is available before opening optional filters');
+ assert.equal(d.querySelector<HTMLElement>('#memory-filter-panel')!.hidden,true);
+ await act(async()=>{input.focus();Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')!.set!.call(input,'generated original');input.dispatchEvent(new window.Event('input',{bubbles:true}));input.dispatchEvent(new window.Event('change',{bubbles:true}));input.dispatchEvent(new window.KeyboardEvent('keyup',{bubbles:true,key:'t'}));});
+ await act(async()=>input.form!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(query,'generated original','the request searches the real list scope');
+ const row=d.querySelector<HTMLButtonElement>('.workspace-select')!;row.focus();
+ assert.match(row.textContent!,/Generated original statement preview/,'the list previews stored statement text');
+ await act(async()=>row.click());assert.match(d.querySelector('.memory-detail')!.textContent!,/Generated original statement preview/);
+ await act(async()=>d.querySelector<HTMLButtonElement>('.memory-detail-back')!.click());
+ assert.equal(d.querySelector('.memory-detail'),null);assert.equal(d.activeElement,row);assert.equal(input.value,'generated original');
+ assert.ok(paths.filter(path=>path.startsWith('/api/memories?')).every(path=>new URL('http://localhost'+path).searchParams.get('layer')==='memory'));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.memory-filter-chip')!.click());assert.equal(input.value,'');assert.equal(query,'');
 });

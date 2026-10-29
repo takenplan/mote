@@ -451,7 +451,7 @@ test('Memory rolling-window polling retains selected detail while real scope and
  await act(async()=>{const select=d.querySelector<HTMLSelectElement>('[aria-label="内容分类"]')!;select.value='observation';select.dispatchEvent(new window.Event('change',{bubbles:true}));});assert.equal(d.querySelector('.memory-detail'),null);
  await open();assert.ok(d.querySelector('.memory-detail'));
  const next=apiWith(path=>path.startsWith('/api/memories?')?{items:[memory(ids[0])],nextCursor:null}:{...memory(ids[0]),statement:'NEW SESSION DETAIL'});
- await act(async()=>render('month',next,'generated-device'));assert.equal(d.querySelector('.memory-detail'),null);assert.doesNotMatch(d.body.textContent!,/NEW SESSION DETAIL|Current evidence a/);
+ await act(async()=>render('month',next,'generated-device'));assert.equal(d.querySelector('.memory-detail'),null);assert.doesNotMatch(d.body.textContent!,/NEW SESSION DETAIL/);assert.match(d.querySelector('.workspace-list')!.textContent!,/Current evidence a/,'the new session authorizes its own original list preview; selected detail remains closed');
 });
 
 test('Library Memory keeps its selected card and integration panel across a 30-second rolling range',async t=>{

@@ -72,7 +72,9 @@ test('explicit library navigation leads directly into rows and source details wi
   assert.match(d.querySelector('.library-detail')!.textContent!,/Generated untrusted evidence/);
   assert.equal(d.querySelector('.library-detail script'),null);
   assert.ok(reads.includes('/api/capture-browser/'+id));
-  await act(async()=>button(d,'打开完整详情').click());assert.deepEqual(opened,['capture:'+id]);
+  assert.ok(button(d,'删除这条记录'),'the same complete reader exposes its original deletion action directly');
+  assert.ok(d.querySelector('.reader-source-details'),'provenance stays available in the shared reader');
+  assert.deepEqual(opened,[],'opening list detail no longer requires a second nested reader');
   await act(async()=>button(d,'返回资料列表').click());
   assert.equal(d.querySelector('.library-browser')?.classList.contains('has-selection'),false);
   assert.equal(d.activeElement,record,'return preserves the original list and keyboard opener');
