@@ -16,6 +16,8 @@ The owner also approved H10 with “补齐整份资料的版本引用（推荐�
 
 The owner additionally approved H11 after the missing-time behavior was explained: in Mote → Tasks and Calendar → event detail, the owner supplies missing start/end information and saves it. The existing unique effective device/calendar/material-scope grant then determines automatic synchronization. Complete events already satisfying the existing execution conditions take effect directly; do not guess dates, add a grant or present saving information as per-item calendar-write approval.
 
+During the centralized completeness audit, the owner also approved H12 with “补齐只读分组，按定稿完成（推荐）”. Add a read-only time-browse projection: reuse existing capture sessions for screenshots; group other records by recorded device, date and source type. Do not infer that matching titles belong to one document. Counts come from the complete filtered query, with exact-original reading, filters and pagination preserved. This does not authorize changes to capture, storage/retention, permissions, session segmentation or model calls. Implementation and final acceptance remain pending.
+
 ## Decision
 
 Central Web remains the complete archive and management workspace. Preserve the sidebar and top bar, original-first reading, separate materials and memories, input sources and outward AI access. Keep quick note in the global top bar; saving or collapsing returns to the same page, reading position and unsent question. The same record uses the same detail from library, source or citation, with an origin-aware return path.
