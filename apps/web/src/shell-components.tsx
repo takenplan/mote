@@ -1,3 +1,4 @@
+import {useMediaEvidenceText} from './media-evidence-presentation';
 import {ReaderToolsDialog} from './ReaderToolsDialog';
 import {originalReferenceRoute,rememberOriginalReturn} from './ask-original-reference';
 import {confirmNavigation} from './unsaved';
@@ -441,7 +442,9 @@ export function EvidenceDialog({
   const presentation = capture ? evidencePresentation(capture) : null;
   // Decode only the server-declared organizer format; user prose that resembles JSON stays literal.
   const sourceBody=capture?.evidencePresentation==='source-record-json-v1'?decodeSourceText(capture.evidencePresentation,capture.ocrText):undefined;
-  const readableText=sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText;
+  const mediaBody=useMediaEvidenceText(api,capture);
+  const readableText=mediaBody.text??(sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText);
+  const projectedMedia=mediaBody.text!==undefined;
   const ocr = capture ? ocrPresentation(captureOcrState(capture), capture.ocrText, capture.metadata?.capture?.deduplication?.duplicate, capture.perceptionJobs) : null;
   const sourceLabel=capture?(sourceLabels[capture.source]||capture.source):'';
   const readerTitle=capture?(capture.windowTitle||(capture.source==='note'?capture.ocrText?.split('\n')[0]?.slice(0,100):capture.appName)||sourceLabel):moteText('上下文证据');
@@ -497,7 +500,7 @@ export function EvidenceDialog({
               <div className="evidence-text">
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
                 <NoteOrigin api={api} capture={capture} onOpen={onOpen}/>{!presentation?.nativeFile&&(!capture.metadata?.noteOrigin||capture.metadata.noteOrigin.kind==='manual'||Boolean(readableText))&&<><h3 className="evidence-body-heading">{capture.metadata?.noteOrigin?.kind!==undefined&&capture.metadata.noteOrigin.kind!=='manual'?moteText("我的补充"):presentation?.textLabel}</h3>
-                {capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
+                {mediaBody.loading?<p role="status">{moteText('正在读取…')}</p>:capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
                 </pre>} </>}
     <ActionResults api={api} evidenceId={capture.id}/>
@@ -546,7 +549,7 @@ export function EvidenceDialog({
                 <code className="record-id">{capture.id}</code></details>
               </div>
             </div>
-            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{error&&<ErrorNotice text={error}/>} {deletionDiagnostic&&<details className="deletion-diagnostic"><summary>{moteText('技术详情')}</summary><pre>{deletionDiagnostic}</pre></details>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
+            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{projectedMedia&&<details className="evidence-canonical"><summary>{moteText('技术详情')}</summary><pre>{capture.ocrText}</pre></details>}{error&&<ErrorNotice text={error}/>} {deletionDiagnostic&&<details className="deletion-diagnostic"><summary>{moteText('技术详情')}</summary><pre>{deletionDiagnostic}</pre></details>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
                   capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
                   capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div><EvidenceProcessingHelp/>            <div className="evidence-footer">
               {confirm&&capture.deletion?.available ? (
