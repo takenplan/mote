@@ -9467,5 +9467,12 @@
   "诊断范围与保留": "Diagnoseumfang und Aufbewahrung",
   "质量请输入 40–95。": "Qualität zwischen 40 und 95 eingeben.",
   "输出最长边": "Längste Ausgabekante",
-  "预览与应用说明": "Vorschau und Anwendung"
+  "预览与应用说明": "Vorschau und Anwendung",
+  "这台 Mac 尚未上传的记录": "Einträge dieses Mac warten auf Upload",
+  "导出为电脑端队列 JSON，包含待传事件及关联图片。": "Desktop-Warteschlange als JSON mit ausstehenden Ereignissen und Bildern exportieren.",
+  "选择电脑端队列 JSON": "Desktop-Warteschlangen-JSON auswählen",
+  "选定后导入当前待传队列，并按当前连接与发送设置处理。": "In die aktuelle Warteschlange mit bestehender Verbindung und Sendeeinstellung importieren.",
+  "此设备偏好": "Einstellungen dieses Geräts",
+  "频率、电源、画质与本机队列": "Frequenz, Energie, Bildqualität und lokale Warteschlange",
+  "本机日志与安全支持包": "Lokale Protokolle und sicheres Supportpaket"
 }

@@ -9468,5 +9468,12 @@ export const french: Readonly<Record<string, string>> = {
   "诊断范围与保留": "Portée et conservation des diagnostics",
   "质量请输入 40–95。": "Saisissez une qualité de 40 à 95.",
   "输出最长边": "Côté le plus long en sortie",
-  "预览与应用说明": "Détails de l’aperçu et de l’application"
+  "预览与应用说明": "Détails de l’aperçu et de l’application",
+  "这台 Mac 尚未上传的记录": "Enregistrements de ce Mac en attente",
+  "导出为电脑端队列 JSON，包含待传事件及关联图片。": "Exporter un JSON de file d’attente avec les événements et images associés.",
+  "选择电脑端队列 JSON": "Choisir un JSON de file d’attente",
+  "选定后导入当前待传队列，并按当前连接与发送设置处理。": "Importer dans la file actuelle avec la connexion et les paramètres d’envoi actuels.",
+  "此设备偏好": "Préférences de cet appareil",
+  "频率、电源、画质与本机队列": "Fréquence, alimentation, qualité et file locale",
+  "本机日志与安全支持包": "Journaux locaux et dossier d’assistance sécurisé"
 };

@@ -1,3 +1,4 @@
+import {keepLanguageAskDraft,takeLanguageAskDraft,dropLanguageAskDraft} from './language-draft';
 import {createWorkPendingUi} from './work-pending-ui';
 import {queueImportPresentation} from './queue-import-presentation';
 import {createChromeCaptureUi} from './chrome-capture-ui';
@@ -160,7 +161,7 @@ function reviewCollectionSetup(): void {
   try { localStorage.setItem('mote-desktop-collection-reviewed', '1'); } catch { /* This preference is not required for capture. */ }
   if (currentStatus) render(currentStatus);
 }
-byId('setup-primary').addEventListener('click', () => { if (showPage('privacy')) reviewCollectionSetup(); });
+byId('setup-primary').addEventListener('click', () => {if(showPage('screen')){reviewCollectionSetup();byId('default-collection').closest<HTMLDetailsElement>('details')!.open=true;byId('default-collection').querySelector<HTMLInputElement>('input')?.focus();}});
 byId('setup-current').addEventListener('click', () => { reviewCollectionSetup(); byId('start').focus(); });
 byId('pause-sending').addEventListener('click',()=>void perform(async()=>{ const updated=await desktopApi.setSyncPaused(!currentStatus.config.syncPaused); render(updated); }));
 function updateSettingsHint(): void {
@@ -206,7 +207,8 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);
 });
 desktopApi.onNavigate?.(page => {
-  if (page === 'central') byId('central').click();
+  if(page==='capture-start'){if(showPage('screen',true,true))byId('start').click();}
+  else if (page === 'central') byId('central').click();
   else if (pageNames.includes(page)) showPage(page);
 });
 showPage(quickNote ? 'notes' : 'overview', false);
@@ -494,7 +496,7 @@ function render(status: import('./contracts').Status): void {
   if (status.diagnostics?.enabled) { const c = status.diagnostics.counters; statistics.push(moteText("诊断累计：保存 {0} · 过滤 {1} · 失败 {2} · 截图文字隐私审查 {3} s", c.saved, c.blocked, c.failed, (c.ocrMs / 1000).toFixed(1)), moteText("累计上传请求体约 {0} MiB；不代表远端存储量。", (c.uploadedBytes / 1048576).toFixed(2))); }
   else statistics.push(moteText("数值诊断未开启；如需持续处理计数、资源与耗时，请在开发者设置中启用。"));
   byId('collection-statistics').replaceChildren(...statistics.map(text => { const p = document.createElement('p'); p.textContent = text; return p; }));
-  if (!initialized) { fillConfig(status.config); initialized = true;void refreshContent(); }
+  if (!initialized) { fillConfig(status.config); initialized = true;void refreshContent();restoreLanguageAskDraft(); }
 }
 async function perform(action: () => Promise<unknown>): Promise<void> {
   if (busy) return;
@@ -575,12 +577,15 @@ byId('permissions').addEventListener('click', () => showPage('permissions'));
 byId('data-folder').addEventListener('click', () => void perform(() => desktopApi.openDataFolder()));
 byId('export-metadata').addEventListener('click',()=>void perform(()=>desktopApi.exportMetadata()));
 byId('export-central').addEventListener('click',()=>void perform(()=>desktopApi.openCentral('vault')));
+byId('restore-pause').addEventListener('click',()=>void perform(async()=>render(await desktopApi.setSyncPaused(true))));
 byId('export').addEventListener('click',()=>void perform(async()=>{
+  showPage('export-result');
   showBackupOperation('export','working',moteText('正在处理，请稍候…'));
   try {const result=await desktopApi.exportQueue();showBackupOperation('export',result.canceled?'canceled':'complete',result.canceled?moteText('已取消'):moteText('队列备份已保存至 {0}',result.path));}
   catch(error){showBackupOperation('export','error',error instanceof Error?error.message:moteText('操作失败'));throw error;}
 }));
 byId('import').addEventListener('click',()=>void perform(async()=>{
+  showPage('restore');
   if(!window.confirm(moteText('恢复到当前本机队列，继续按当前发送设置处理。是否继续？')))return;
   showBackupOperation('import','working',moteText('正在处理，请稍候…'));
   try {const result=queueImportPresentation(await desktopApi.importQueue());showBackupOperation('import',result.phase,result.message);}
@@ -714,7 +719,7 @@ let sourceEditingContext:import('./source-context-outbox').SourceContextState|un
 const sourceAddDialog=byId<HTMLDialogElement>('source-add-dialog');
 byId('source-add').addEventListener('click',()=>sourceAddDialog.showModal());
 byId('source-add-close').addEventListener('click',()=>sourceAddDialog.close());
-for(const id of ['source-central','source-cloud-choice'])byId(id).addEventListener('click',()=>{sourceAddDialog.close();void perform(()=>desktopApi.openCentral('sources'));});
+for(const id of ['source-central','source-cloud-choice'])byId(id).addEventListener('click',()=>{sourceAddDialog.close();if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}void perform(()=>desktopApi.openCentral('sources'));});
 function renderSourceDestination():void {
   const config=currentStatus?.config;byId('source-destination').textContent=config?.serverUrl||moteText('尚未连接中央，先保存在本机');
   byId('source-destination-state').textContent=!config?.tokenConfigured?moteText('未连接'):config.syncPaused?moteText('发送已暂停'):moteText('已连接');
@@ -1165,6 +1170,11 @@ let askSubmittedQuestion='';
 let askBusy = false, askGeneration = 0, askCursor: string | undefined;
 let askPendingInput: {id: string; question: string; conversationId?: string} | undefined;
 let askTimer: ReturnType<typeof setTimeout> | undefined;
+function languageDraftScope():string{return JSON.stringify([currentStatus.config.serverUrl,currentStatus.config.deviceId,currentStatus.config.authSourceBinding??null]);}
+window.addEventListener('mote-language-changing',event=>{if(!readInput('ask-question')&&!askConversation)return;try{keepLanguageAskDraft(sessionStorage,{scope:languageDraftScope(),question:readInput('ask-question'),view:askView,...(askConversation?{conversationId:askConversation.id}:{})});}catch{event.preventDefault();}});
+window.addEventListener('mote-language-change-failed',()=>{try{dropLanguageAskDraft(sessionStorage);}catch{}});
+function restoreLanguageAskDraft():void{try{const saved=takeLanguageAskDraft(sessionStorage,languageDraftScope());if(!saved)return;byId<HTMLTextAreaElement>('ask-question').value=saved.question;askView=saved.view;if(saved.conversationId&&currentStatus.config.tokenConfigured)void askAction(()=>loadAskConversation(saved.conversationId!));else renderAsk();}catch{/* No unrelated session may be restored. */}}
+
 function mayReplaceAskDraft(next:string):boolean {
   const draft=readInput('ask-question');
   return !draft.trim()||draft===next||window.confirm(moteText('还有未发送的问题。舍弃原输入并新建对话？'));

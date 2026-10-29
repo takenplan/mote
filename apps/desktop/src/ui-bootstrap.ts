@@ -33,9 +33,10 @@ async function start() {
     saving=true;update();error.hidden=true;
     try {
       if(appearance.value!==desktopAppearance.getSnapshot().preference)receiveAppearance(await window.mote.setAppearance(appearance.value as 'light'|'dark'|'auto'));
-      if(next!==language.preference)language=await window.mote.setLanguage(next);
+      if(next!==language.preference){if(!window.dispatchEvent(new Event('mote-language-changing',{cancelable:true})))throw Error('Unable to preserve the current question draft');language=await window.mote.setLanguage(next);}
       preferences.dataset.dirty='false';
     } catch {
+      window.dispatchEvent(new Event('mote-language-change-failed'));
       error.textContent=translate(language.locale,next!==language.preference?'语言保存失败，请重试。':'无法保存外观偏好，请重试。');error.hidden=false;
     } finally {saving=false;update();}
   });

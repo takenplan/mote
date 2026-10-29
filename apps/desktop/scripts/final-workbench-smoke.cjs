@@ -80,7 +80,7 @@ app.on('browser-window-created',(_event,window)=>{
     await until(()=>js('document.querySelectorAll("#ask-messages article").length===1&&!document.querySelector("#ask-new").disabled'),'same conversation opens');
     assert(requests.some(r=>r.path==='/api/conversations/'+id+'?limit=20'));
 
-    await js('document.querySelector("aside [data-nav=settings]").click();document.querySelector("[data-page=settings] [data-nav=capture]").click();document.querySelector("#interval").value="45";document.querySelector("#interval").dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#note-action").click()');
+    await js('document.querySelector("aside [data-nav=settings]").click();document.querySelector("[data-page=settings] [data-nav=mac-options]").click();document.querySelector("[data-page=mac-options] [data-nav=capture]").click();document.querySelector("#interval").value="45";document.querySelector("#interval").dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#note-action").click()');
     const draftWindow=await waitQuick();
     await draftWindow.webContents.executeJavaScript('document.querySelector("#note-text").value="Generated persistent note draft";document.querySelector("#note-text").dispatchEvent(new Event("input",{bubbles:true}))');
     await delay(350);draftWindow.close();await until(()=>!quick(),'draft window closes');

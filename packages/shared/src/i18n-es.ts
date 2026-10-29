@@ -9468,5 +9468,12 @@ export const spanish: Readonly<Record<string, string>> = {
   "诊断范围与保留": "Alcance y retención de diagnósticos",
   "质量请输入 40–95。": "Introduce una calidad entre 40 y 95.",
   "输出最长边": "Lado más largo de salida",
-  "预览与应用说明": "Detalles de vista previa y aplicación"
+  "预览与应用说明": "Detalles de vista previa y aplicación",
+  "这台 Mac 尚未上传的记录": "Registros de este Mac pendientes",
+  "导出为电脑端队列 JSON，包含待传事件及关联图片。": "Exportar la cola de escritorio en JSON con eventos pendientes e imágenes.",
+  "选择电脑端队列 JSON": "Elegir un JSON de cola de escritorio",
+  "选定后导入当前待传队列，并按当前连接与发送设置处理。": "Importar en la cola actual usando la conexión y los ajustes de envío actuales.",
+  "此设备偏好": "Preferencias de este dispositivo",
+  "频率、电源、画质与本机队列": "Frecuencia, energía, calidad y cola local",
+  "本机日志与安全支持包": "Registros locales y paquete de soporte seguro"
 };

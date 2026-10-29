@@ -20,14 +20,15 @@ const archive = new Map(), requests = [], errors = [];let materialReady=true,mat
 const blockedDetails=[];
 const pixels = Buffer.alloc(64, 200);
 const generatedImage = nativeImage.createFromBitmap(pixels, { width: 4, height: 4 }).toJPEG(70);
+const wireRecord=record=>({...record,source:record.source==='coding'?'message':record.source});
 const server = createServer((req, res) => {
   requests.push(req.url);
   const path = req.url.split('?')[0], id = path.split('/')[3], record = archive.get(id);
   if (path.endsWith('/image') && record) { res.setHeader('Content-Type', 'image/jpeg'); res.end(generatedImage); return; }
   res.setHeader('Content-Type', 'application/json');
-  if (path === '/api/capture-browser') {if(feedStatus!==200){res.statusCode=feedStatus;res.end('{}');return;}const offset=Number(new URL(req.url,'http://fixture').searchParams.get('cursor')||0),rows=[...archive.values()].sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt));res.end(JSON.stringify({items:rows.slice(offset,offset+30),totalCount:rows.length,nextCursor:offset+30<rows.length?String(offset+30):null}));return;}
+  if (path === '/api/capture-browser') {if(feedStatus!==200){res.statusCode=feedStatus;res.end('{}');return;}const offset=Number(new URL(req.url,'http://fixture').searchParams.get('cursor')||0),rows=[...archive.values()].sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt));res.end(JSON.stringify({items:rows.slice(offset,offset+30).map(wireRecord),totalCount:rows.length,nextCursor:offset+30<rows.length?String(offset+30):null}));return;}
   if (path === '/api/materials/generated') {if(!materialAuthorized){res.statusCode=403;res.end('{}');return;}res.end(JSON.stringify({ref:'material:generated@r1',revision:'r1',coverage:{state:materialReady?'complete':'partial'},indexing:{state:'indexed',revision:'r1'}}));return;}
-  if (path.startsWith('/api/capture-browser/') && record) {if(blockDetail){blockedDetails.push(()=>res.end(JSON.stringify(record)));return;}res.end(JSON.stringify(record)); return; }
+  if (path.startsWith('/api/capture-browser/') && record) {if(blockDetail){blockedDetails.push(()=>res.end(JSON.stringify(wireRecord(record))));return;}res.end(JSON.stringify(wireRecord(record))); return; }
   res.statusCode = 410; res.end('{}');
 });
 const timeout = setTimeout(() => { process.stderr.write('Sync history smoke timed out\n'); app.exit(1); }, process.env.MOTE_UI_ROLLOUT_DIALOGS ? 180000 : 60000);

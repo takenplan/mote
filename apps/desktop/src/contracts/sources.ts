@@ -1,4 +1,14 @@
 /** Renderer/main data contract. Keep platform and implementation dependencies outside this module. */
+import type { SourceContextSnapshot } from '@mote/shared';
+
+export type CaptureContextChannel = 'screen' | 'structured' | 'activity' | 'notifications';
+export interface SourceContextState {
+  snapshot: SourceContextSnapshot;
+  pending?: {expectedVersion:number;description:string};
+  conflict?: boolean;
+  error?: 'denied'|'unavailable';
+}
+
 
 export type SourceRetention = 'snapshot' | 'reference' | 'archive';
 export interface SourceDefinition {
@@ -24,7 +34,7 @@ export interface LocalSource extends SourceDefinition, Omit<SourceOptions, 'name
   path?: string; calendarId?: string; agent?: 'claude' | 'codex' | 'kimi';
 }
 export interface SourceStatus {
-  context?: import('../source-context-outbox').SourceContextState;
+  context?: SourceContextState;
   blocked?: number;
   failures?: {externalId:string;title:string;status:number}[];
   facts?: import('@mote/shared/native-status').NativeStatusView;

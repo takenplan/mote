@@ -144,7 +144,7 @@ async function showCentral(page?: string, evidenceId?: string,workId?:string): P
   }, page, evidenceId, workId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
-function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central'): void {
+function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central' | 'capture-start'): void {
   if (page === 'notes') { void openQuickNote?.(); return; }
   showWindow(); window?.webContents.send('mote:navigate', page);
 }
@@ -170,8 +170,8 @@ function updateUi(status: Status): void {
     { label: moteText("随手记"), click: () => showClientPage('notes') },
     { label: moteText("打开中央仓库"), click: () => showClientPage('central') },
     { label: moteText("设置…"), click: () => showClientPage('settings') },
-    { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else void serialize(()=>collector.start()).catch(error=>dialog.showErrorBox(moteText("无法开始采集"),(error as Error).message)); } },
-    { label: moteText("立即发送"), enabled: !status.config.syncPaused, click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
+    { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else showClientPage('capture-start'); } },
+    { label: moteText("立即发送"), enabled: !status.config.syncPaused&&status.sync.state!=='uploading', click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
     { type: 'separator' },
     { label: moteText("退出 Mote（停止采集和上传）"), click: () => app.quit() },
   ]));
@@ -285,7 +285,7 @@ else {
       renameSync(languageFile + '.tmp', languageFile);
       preferredLanguage = next; refreshApplicationMenu(); updateUi(clientStatus());
       // Renderer navigation is blocked; only this trusted IPC may reload its fixed page.
-      setTimeout(() => window?.webContents.reload(), 20);
+      setTimeout(() => {window?.webContents.reload();if(quickNoteWindow&&!quickNoteWindow.isDestroyed())quickNoteWindow.webContents.reload();}, 20);
       return languageState();
     });
     // Retain authored keys: a renderer locale change does not restart the main process.

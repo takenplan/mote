@@ -22,7 +22,8 @@ import { FileWatcher, type FileWatchEvent } from './file-watcher';
 import {INGRESS_VERSION_HEADERS} from './ingress-protocol';
 import {SourceContextOutbox,type SourceContextState} from './source-context-outbox';
 export const captureContextChannels=['screen','structured','activity','notifications'] as const;
-export type CaptureContextChannel=typeof captureContextChannels[number];
+import type { CaptureContextChannel } from './contracts/sources';
+export type { CaptureContextChannel } from './contracts/sources';
 export function captureContextIdentity(deviceId:string,channel:CaptureContextChannel):string {
   const prefixes={screen:'screen',structured:'ui-page',activity:'activity',notifications:'notification'};
   if(!captureContextChannels.includes(channel))throw Error('Invalid capture context channel');

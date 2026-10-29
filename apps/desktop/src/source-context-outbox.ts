@@ -1,14 +1,10 @@
-import {sourceContextSnapshotSchema, sourceContextUpdateSchema, type SourceContextSnapshot} from '@mote/shared';
+import {sourceContextSnapshotSchema, sourceContextUpdateSchema} from '@mote/shared';
 import {readLocalContent} from './local-content';
 import {atomicSourceJson} from './source-sync';
 import type {SourceRequest} from './source-types';
 
-export interface SourceContextState {
-  snapshot: SourceContextSnapshot;
-  pending?: {expectedVersion:number;description:string};
-  conflict?: boolean;
-  error?: 'denied'|'unavailable';
-}
+import type { SourceContextState } from './contracts/sources';
+export type { SourceContextState } from './contracts/sources';
 
 /** Private, connection-scoped owner declarations. Never part of source content or public metadata. */
 export class SourceContextOutbox {

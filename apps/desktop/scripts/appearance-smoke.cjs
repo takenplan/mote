@@ -1,7 +1,7 @@
 require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 const electron=require('electron');
-const {app,nativeTheme}=electron;
+const {app,nativeTheme,BrowserWindow}=electron;
 const {mkdtempSync,writeFileSync,mkdirSync,readFileSync,rmSync}=require('node:fs');
 const {join,resolve}=require('node:path');
 const {tmpdir}=require('node:os');
@@ -27,7 +27,7 @@ const out=resolve(__dirname,'../../../.mote/appearance/electron');mkdirSync(out,
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){const deadline=Date.now()+20000;while(Date.now()<deadline){if(await fn())return;await delay(25);}throw Error('Timed out: '+label);}
 const timeout=setTimeout(()=>{console.error('Theme native timeout');app.exit(1);},60000);
-app.on('browser-window-created',(_event,window)=>{
+let fixtureWindow;app.on('browser-window-created',(_event,window)=>{if(fixtureWindow)return;fixtureWindow=window;
  const wc=window.webContents,errors=[];
  wc.on('console-message',(_e,level,message)=>{if(level>=3)errors.push(message);});
  wc.once('did-finish-load',()=>void(async()=>{
@@ -39,7 +39,7 @@ app.on('browser-window-created',(_event,window)=>{
   assert.equal(await js('window.mote.initialAppearance.preference'),preference);
   if(process.env.MOTE_THEME_FIXTURE_RESTART){console.log(JSON.stringify({ok:true,processRestart:true,preference,fixtureOnly:true}));clearTimeout(timeout);app.exit(0);return;}
   await until(()=>js('!document.querySelector("#settings-fields").disabled&&Boolean(document.querySelector(".main-nav [data-nav=records]"))'),'real app ready');
-  await js(`document.querySelector('[data-nav=settings]').click()`);
+  await js(`document.querySelector('[data-nav=settings]').click();document.querySelector('[data-nav=mac-options]').click();document.querySelector('[data-nav=preferences]').click()`);
   await until(()=>js(`document.querySelector('#appearance').getClientRects().length>0`),'actual appearance settings');
   await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   writeFileSync(join(out,`${preference}-os-${systemScheme}-settings.png`),(await wc.capturePage()).toPNG());
@@ -48,32 +48,28 @@ app.on('browser-window-created',(_event,window)=>{
   const contrast=await js(`(()=>{const s=getComputedStyle(document.body);return ['ink','muted','control-border','border'].map(role=>s.getPropertyValue('--mote-'+role).trim());})()`);
   assert.ok(contrast[0]);assert.deepEqual(contrast,[contrast[0],contrast[0],contrast[0],contrast[0]],'increased contrast reaches the actual presentation root');
   await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});wc.debugger.detach();
-  await js(`document.querySelector('[data-nav=records]').click();document.querySelector('#note-action').click();document.querySelector('#add-dialog [data-add-choice=note]').click()`);
-  await until(()=>js(`document.querySelector('#note-text').getClientRects().length>0&&!document.querySelector('#note-text').disabled`),'actual note');
-  await js(`window.fixtureDraft=document.querySelector('#note-text');fixtureDraft.value='Generated unsaved theme note';fixtureDraft.dispatchEvent(new Event('input',{bubbles:true}));fixtureDraft.focus();fixtureDraft.setSelectionRange(4,12);window.fixturePage=document.querySelector('.page:not([hidden])');`);
+  await js(`document.querySelector('#note-action').click()`);
+  const quick=()=>BrowserWindow.getAllWindows().find(candidate=>candidate!==window&&candidate.webContents.getURL().endsWith('#quick-note'));
+  await until(()=>quick()&&!quick().webContents.isLoading()&&quick().webContents.executeJavaScript(`!document.querySelector('#note-text').disabled`),'actual independent note');
+  const note=quick(),noteJs=code=>note.webContents.executeJavaScript(code);
+  await noteJs(`window.fixtureDraft=document.querySelector('#note-text');fixtureDraft.value='Generated unsaved theme note';fixtureDraft.dispatchEvent(new Event('input',{bubbles:true}));fixtureDraft.focus();fixtureDraft.setSelectionRange(4,12);true`);
   let loads=0;wc.on('did-finish-load',()=>loads++);
-  systemScheme=systemScheme==='dark'?'light':'dark';if(requested==='system')nativeTheme.themeSource=systemScheme;else nativeTheme.emit('updated');
-  await delay(100);
-  const live=preference==='auto'?systemScheme:preference;
-  assert.equal(await js('document.documentElement.dataset.colorScheme'),live);
-  assert(await js(`document.querySelector('#note-text')===fixtureDraft&&fixtureDraft.value==='Generated unsaved theme note'&&fixtureDraft.selectionStart===4&&fixtureDraft.selectionEnd===12&&document.activeElement===fixtureDraft&&document.querySelector('.page:not([hidden])')===fixturePage`));
-  // The actual Add dialog stays open across acknowledged trusted IPC changes.
-  await js(`document.querySelector('#note-action').click();window.fixtureDialog=document.querySelector('#add-dialog');`);
+  systemScheme=systemScheme==='dark'?'light':'dark';if(requested==='system')nativeTheme.themeSource=systemScheme;else nativeTheme.emit('updated');await delay(100);
+  const live=preference==='auto'?systemScheme:preference;assert.equal(await js('document.documentElement.dataset.colorScheme'),live);
+  assert(await noteJs(`document.querySelector('#note-text')===fixtureDraft&&fixtureDraft.value==='Generated unsaved theme note'&&fixtureDraft.selectionStart===4&&fixtureDraft.selectionEnd===12`));
+  await js(`document.querySelector('[data-nav=sources]').click();document.querySelector('#source-add').click();window.fixtureDialog=document.querySelector('#source-add-dialog');true`);
   for(const next of ['dark','light','auto']){
-   await js(`window.mote.setAppearance(${JSON.stringify(next)})`);await delay(50);
-   assert(await js(`fixtureDialog.open&&document.querySelector('#note-text')===fixtureDraft&&fixtureDraft.value==='Generated unsaved theme note'`));
+   await js(`window.mote.setAppearance(${JSON.stringify(next)})`);await delay(50);assert(await js(`fixtureDialog.open`));assert(await noteJs(`document.querySelector('#note-text')===fixtureDraft&&fixtureDraft.value==='Generated unsaved theme note'`));
   }
-  await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-  writeFileSync(join(out,`${preference}-live-modal.png`),(await wc.capturePage()).toPNG());
-  await js(`fixtureDialog.close();document.querySelector('[data-nav=settings]').click()`);
-  await js(`(()=>{const s=document.querySelector('#appearance');s.value='dark';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await until(()=>js(`document.documentElement.dataset.colorScheme==='dark'&&document.querySelector('#appearance').value==='dark'`),'actual native select');
-  assert.equal(JSON.parse(readFileSync(join(profile,'appearance.json'),'utf8')),'dark');
+  await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');writeFileSync(join(out,`${preference}-live-modal.png`),(await wc.capturePage()).toPNG());
+  await js(`document.querySelector('#source-add-close').click();document.querySelector('[data-nav=settings]').click();document.querySelector('[data-nav=mac-options]').click();document.querySelector('[data-nav=preferences]').click()`);note.close();
+  await js(`(()=>{const s=document.querySelector('#appearance');s.value='dark';s.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#preferences-apply').click();})()`);
+  await until(()=>js(`document.documentElement.dataset.colorScheme==='dark'&&document.querySelector('#appearance').value==='dark'`),'explicit appearance apply');assert.equal(JSON.parse(readFileSync(join(profile,'appearance.json'),'utf8')),'dark');
   // An atomic-file write failure leaves the acknowledged preference intact.
   mkdirSync(join(profile,'appearance.json.tmp'));
-  await js(`(()=>{const s=document.querySelector('#appearance');s.value='light';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await js(`(()=>{const s=document.querySelector('#appearance');s.value='light';s.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#preferences-apply').click();})()`);
   await until(()=>js(`!document.querySelector('#appearance-error').hidden`),'save failure surfaced');
-  assert.equal(await js(`document.querySelector('#appearance').value`),'dark');assert.equal(nativeTheme.shouldUseDarkColors,true);
+  assert.equal(await js(`document.querySelector('#appearance').value`),'light');assert.equal(nativeTheme.shouldUseDarkColors,true);
   const reloaded=new Promise(resolve=>wc.once('did-finish-load',resolve));wc.reload();await reloaded;await until(()=>js(`Boolean(document.querySelector('#appearance'))&&document.documentElement.dataset.colorScheme==='dark'`),'reload persisted explicit choice');
   assert.equal(loads,1);assert.deepEqual(errors.filter(message=>!message.includes('EISDIR')),[]);
   rmSync(join(profile,'appearance.json.tmp'),{recursive:true,force:true});

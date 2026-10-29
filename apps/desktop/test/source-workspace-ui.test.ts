@@ -52,3 +52,8 @@ it('shows an enabled but centrally paused source as paused in the list and detai
  expect(el('source-detail-body').textContent).toContain('Generated Central pause');
  expect(el('source-detail-body').textContent).not.toContain('持续同步');
 });
+
+it('keeps rejected files visible as attention items instead of claiming they are waiting to send',()=>{
+ ui.update([{...structuredClone(source),pending:0,blocked:1,failures:[{externalId:'generated-blocked',title:'Generated <script>literal</script>.txt',status:410}]}]);
+ const detail=el('source-detail-body'),failure=detail.querySelector('.source-failures')!;expect(failure.textContent).toContain('本机待处理 1 项');expect(failure.textContent).toContain('中央已删除此文件');expect(failure.textContent).toContain('<script>literal</script>');expect(failure.querySelector('script')).toBeNull();expect(detail.textContent).toContain('本机待发送 · 0');expect(detail.textContent).not.toContain('本机待发送 · 1');
+});

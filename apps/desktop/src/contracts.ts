@@ -90,8 +90,8 @@ export interface DesktopApi {
   checkChromePermissions(id:string):Promise<import('./contracts/chrome').ChromePermissionStatus>;
   cancelChromePermissions(id:string):Promise<void>;
   openChromeExtensions():Promise<void>;
-  captureContext(channel:import('./source-manager').CaptureContextChannel):Promise<import('./source-context-outbox').SourceContextState>;
-  saveCaptureContext(channel:import('./source-manager').CaptureContextChannel,input:{expectedVersion:number;description:string}):Promise<import('./source-context-outbox').SourceContextState>;
+  captureContext(channel:import('./contracts/sources').CaptureContextChannel):Promise<import('./contracts/sources').SourceContextState>;
+  saveCaptureContext(channel:import('./contracts/sources').CaptureContextChannel,input:{expectedVersion:number;description:string}):Promise<import('./contracts/sources').SourceContextState>;
   setupChromeCapture():Promise<{extensionId:string;extensionDirectory:string;manifestPath:string}>;
   initialAppearance: import('@mote/shared').AppearanceSnapshot;
   setAppearance(preference: import('@mote/shared').AppearancePreference): Promise<import('@mote/shared').AppearanceSnapshot>;
@@ -118,7 +118,7 @@ export interface DesktopApi {
   captureDetail(location: import('./contracts/content').CaptureLocation, id: string): Promise<import('./contracts/content').BrowserDetail>;
   captureImage(location: import('./contracts/content').CaptureLocation, id: string, thumbnail: boolean): Promise<string>;
   installedApplications(): Promise<{ appId: string; appName: string; appVersion?: string }[]>;
-  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings' | 'central') => void): () => void;
+  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings' | 'central' | 'capture-start') => void): () => void;
   previewConnection(input: string): Promise<import('./contracts/connection').ConnectionPreview>;
   importConnection(kind: 'json' | 'qr'): Promise<{ canceled: boolean; preview?: import('./contracts/connection').ConnectionPreview }>;
   cancelConnection(): Promise<void>;
@@ -139,8 +139,8 @@ export interface DesktopApi {
   sources(): Promise<import('./contracts/sources').SourceStatus[]>;
   sourceArchivedContent(id:string,cursor?:string):Promise<import('./contracts/content').CentralContentPage>;
   sourcePendingContent(id:string):Promise<import('./contracts/content').LocalContentPage>;
-  sourceContext(id:string):Promise<import('./source-context-outbox').SourceContextState>;
-  saveSourceContext(id:string,input:{expectedVersion:number;description:string}):Promise<import('./source-context-outbox').SourceContextState>;
+  sourceContext(id:string):Promise<import('./contracts/sources').SourceContextState>;
+  saveSourceContext(id:string,input:{expectedVersion:number;description:string}):Promise<import('./contracts/sources').SourceContextState>;
   selectSourceFiles(mode: 'files' | 'directory'): Promise<{canceled:boolean;selectionId?:string;names?:string[]}>;
   confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<void>;
   cancelSourceFiles(selectionId:string): Promise<void>;
