@@ -9630,7 +9630,6 @@
   "回听录音": "Play recording",
   "回到播放器": "Return to player",
   "说话人": "Speakers",
-  "Mote 中心": "Mote Central",
   "独立采集器 · 仅同步本设备": "Independent collector · sync this device only",
   "设备类型": "Device type",
   "电脑客户端": "Desktop client",
@@ -9656,5 +9655,10 @@
   "连接信息与二维码文件": "Connection information and QR file",
   "连接前准备": "Prepare to connect",
   "连接授权已撤销": "Connection authorization revoked",
-  "归档资料保留；设备需要重新连接后才能继续同步。": "Archived material is retained. Reconnect the device to continue syncing."
+  "归档资料保留；设备需要重新连接后才能继续同步。": "Archived material is retained. Reconnect the device to continue syncing.",
+  "草稿已保留，请确认当前内容后重新发送。": "Your draft is retained. Review the current content and send it again.",
+  "围绕这份资料提问": "Ask about this material",
+  "查看所选资料版本": "View selected material version",
+  "参考整份资料 · 版本 {0}": "Whole material reference · Version {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "The selected material version changed or is unavailable. Clear the reference or select it again; your draft is retained."
 }

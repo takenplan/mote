@@ -65,6 +65,12 @@ class AskRecoveryInstrumentedTest {
             click(scenario,"检查结果")
             ready(scenario,"404 remains unconfirmed"){a -> !a.isWorking && shown(a).filterIsInstance<TextView>().any { it.text.toString()=="请求尚未确认，可重试同一请求。" }}
             assertEquals(admitted,saved().getJSONObject("pending").toString());assertEquals("Generated newer question with an uncertain admission",saved().getString("question"))
+            scenario.onActivity { a ->
+                val retry=shown(a).filterIsInstance<TextView>().single { it.text.toString()=="重试同一请求" }
+                retry.requestRectangleOnScreen(android.graphics.Rect(0,0,retry.width,retry.height),true)
+                val bounds=android.graphics.Rect();assertTrue(retry.getGlobalVisibleRect(bounds));assertEquals(retry.height,bounds.height())
+                assertTrue("Retry uses a readable full action",retry.layout.height<=retry.height-retry.paddingTop-retry.paddingBottom)
+            }
             val reads=state().getJSONArray("askGetIds");assertTrue(reads.length()>readsBefore);for(i in readsBefore until reads.length())assertEquals(request.getString("id"),reads.getString(i));screenshot(scenario,"new-admission-404-held")
             control("show-ask");click(scenario,"重试同一请求")
             until("Same real admission completes"){saved().optString("runStatus")=="completed" && !saved().has("pending") && saved().optString("runId")==request.getString("id")}

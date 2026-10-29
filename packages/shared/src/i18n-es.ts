@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "草稿已保留，请确认当前内容后重新发送。": "El borrador se conserva. Revisa el contenido actual y vuelve a enviarlo.",
+  "参考原件暂不可用，请清除参考后继续。": "El original de referencia no está disponible. Borra la referencia para continuar.",
+  "围绕这份资料提问": "Preguntar sobre este material",
+  "查看所选资料版本": "Ver la versión seleccionada",
+  "参考整份资料 · 版本 {0}": "Referencia al material completo · Versión {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "La versión seleccionada ha cambiado o no está disponible. Borra la referencia o vuelve a seleccionarla; se conserva el borrador.",
   "保存分享": "Guardar contenido compartido",
   "引用与我的补充分开保存": "El original citado y mi comentario se guardan por separado",
   "未保存的草稿": "Borrador sin guardar",

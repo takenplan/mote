@@ -9208,7 +9208,7 @@
   "导入状态": "Import status",
   "提取的记忆": "Extracted memory",
   "适用范围": "Applies to",
-  "参考原件暂不可用，请清除参考后继续。": "The referenced original is unavailable. Clear the reference to continue.",
+  "参考原件暂不可用，请清除参考后继续。": "L’original référencé est indisponible. Retirez la référence pour continuer.",
   "这条记忆的原始依据": "Original evidence for this memory",
   "返回记忆": "Back to memory",
   "问问 AI": "Ask AI",
@@ -9480,7 +9480,7 @@
   "当前：加密保存": "Actuellement : chiffré",
   "当前：明文保存": "Actuellement : non chiffré",
   "已有文件与加密范围": "Fichiers existants et périmètre du chiffrement",
-  "Mote 中心": "Centre Mote",
+  "Mote 中心": "Mote Central",
   "暂不可读取": "Lecture temporairement indisponible",
   "最近检查 {0}": "Dernière vérification : {0}",
   "接收与索引": "Réception et indexation",
@@ -9630,7 +9630,6 @@
   "回听录音": "Play recording",
   "回到播放器": "Return to player",
   "说话人": "Speakers",
-  "Mote 中心": "Mote Central",
   "独立采集器 · 仅同步本设备": "Independent collector · sync this device only",
   "设备类型": "Device type",
   "电脑客户端": "Desktop client",
@@ -9656,5 +9655,10 @@
   "连接信息与二维码文件": "Connection information and QR file",
   "连接前准备": "Prepare to connect",
   "连接授权已撤销": "Connection authorization revoked",
-  "归档资料保留；设备需要重新连接后才能继续同步。": "Archived material is retained. Reconnect the device to continue syncing."
+  "归档资料保留；设备需要重新连接后才能继续同步。": "Archived material is retained. Reconnect the device to continue syncing.",
+  "草稿已保留，请确认当前内容后重新发送。": "Votre brouillon est conservé. Vérifiez son contenu actuel, puis renvoyez-le.",
+  "围绕这份资料提问": "Interroger ce document",
+  "查看所选资料版本": "Voir la version sélectionnée",
+  "参考整份资料 · 版本 {0}": "Document entier en référence · Version {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "La version sélectionnée a changé ou est indisponible. Retirez la référence ou sélectionnez-la à nouveau ; le brouillon est conservé."
 }

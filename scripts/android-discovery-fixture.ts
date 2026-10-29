@@ -8,6 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {buildApp,type QueryAgent} from '../apps/server/src/app.js';
 import type {ContextReader} from '@mote/agent';
 import {noteCapture} from '@mote/shared';
+import {materialId} from '../apps/server/src/materials.js';
 const dataDir=await mkdtemp(join(tmpdir(),'mote-native-discovery-')),port=Number(process.env.MOTE_DISCOVERY_FIXTURE_PORT ?? 47886),token='generated-native-discovery-owner-token';
 let noteId=randomUUID(),ids:string[]=[],queryCalls=0,insightCalls=0,dropAck=false,lastQuery:unknown=null;
 let offline=false;
@@ -15,8 +16,16 @@ let holdNext=false,releaseGeneration:(()=>void)|undefined,activeGenerations=0;
 const seenRequests:string[]=[];
 const seenAskRequests:string[]=[],askGetIds:string[]=[];
 let dropAskAck=false,hideAskRuns=false,holdNextQuery=false,activeQueries=0,releaseQuery:(()=>void)|undefined;
+const nativeMaterialId=materialId('generated-native-material','one');let nativeMaterialRef='',changeMaterialOnStart=false;
+const materialReads:string[]=[];
+let holdNextMaterialRead=false,materialReadHeld=false,releaseMaterialRead:(()=>void)|undefined;
+function publishMaterial(label='Original',partial=false){
+ const material=node.materials.publish({id:nativeMaterialId,kind:'mote.file',schemaVersion:1,title:'Generated exact whole Material',origin:{sourceId:'generated-native-material',externalId:'one',deviceId:'generated-discovery-phone',firstAt:'2026-10-01T00:00:00Z',lastAt:'2026-10-01T00:00:00Z'},members:[{id:noteId,kind:'capture',ref:'capture:'+noteId}],blocks:Array.from({length:partial?2:31},(_,index)=>({id:'paragraph-'+index,kind:'text' as const,format:'plain',text:label+' generated exact paragraph '+index,memberIds:[noteId]})),coverage:{state:partial?'partial':'complete',...(partial?{reason:'generated_unavailable_tail'}:{})},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:node.materials.revisionForWrite(nativeMaterialId)});
+ nativeMaterialRef=material.ref;return material;
+}
 function agent(reader:ContextReader):QueryAgent{return {configured:true,close:async()=>{},query:async input=>{
- const evidenceIds=input.anchorEvidenceIds??input.evidenceIds??[noteId];
+ let evidenceIds=input.anchorEvidenceIds??input.evidenceIds??[noteId];
+ if(input.anchorMaterialRef){const page=await reader.materialRead!({ref:input.anchorMaterialRef,length:12000});materialReads.push(page.material.ref);evidenceIds=page.originalRefs.filter(ref=>ref.startsWith('capture:')).map(ref=>ref.slice(8));if(!evidenceIds.length)evidenceIds=[noteId];}
  const records=await reader.evidence({ids:evidenceIds});if(records.length!==evidenceIds.length)throw Error('Generated fixture evidence is not actually readable');
  const citations=records.map(row=>({id:row.id,appName:row.appName,capturedAt:row.capturedAt,excerpt:row.ocrText}));
  if(input.skill==='personal-insight'){
@@ -25,23 +34,26 @@ function agent(reader:ContextReader):QueryAgent{return {configured:true,close:as
   activeGenerations--;
   return {answer:JSON.stringify({title:'Generated native report',markdown:'Generated native conclusion remains uncertain. ['+records[0].id+']',html:'<p>Generated native conclusion remains uncertain.</p>'}),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
  }
- queryCalls++;lastQuery={question:input.question,anchorEvidenceIds:input.anchorEvidenceIds??null,evidenceIds:input.evidenceIds??null};
+ queryCalls++;lastQuery={question:input.question,anchorEvidenceIds:input.anchorEvidenceIds??null,evidenceIds:input.evidenceIds??null,anchorMaterialRef:input.anchorMaterialRef??null};
  activeQueries++;if(holdNextQuery){holdNextQuery=false;await new Promise<void>(resolve=>releaseQuery=resolve);}activeQueries--;
  return {answer:'Generated answer from the actual original: '+records.map(row=>row.ocrText+' ['+row.id+']').join('\n'),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
 }};}
 const node=await buildApp({dataDir,token,tokenPath:'fixture-only',host:'127.0.0.1',port,profile:'test',maxStorageBytes:32_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'generated-fixture-key',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,createModelAgent:async(_settings,reader)=>agent(reader)});
+node.sources.register({id:'generated-native-material',name:'Generated native Material source',kind:'custom',deviceId:'generated-discovery-phone',platform:'import'});
 const restricted=await node.connections.mintMcp({serverUrl:'http://127.0.0.1:'+port,label:'Generated read-only Agent',access:'read'},{mcpEnabled:true,directory:'unused'});
 const restrictedToken=restricted.config.mcpServers.mote.headers.Authorization.slice(7);
 async function reset(){
+ releaseMaterialRead?.();releaseMaterialRead=undefined;holdNextMaterialRead=false;materialReadHeld=false;
  for(const run of node.featureServices.queryRuns.list())if(run.status==='running')node.featureServices.queryRuns.cancel(run.id);
  releaseQuery?.();releaseQuery=undefined;holdNextQuery=false;
  for(let i=0;activeQueries>0&&i<100;i++)await new Promise(resolve=>setTimeout(resolve,20));
- seenAskRequests.length=0;askGetIds.length=0;dropAskAck=false;hideAskRuns=false;
+ seenAskRequests.length=0;askGetIds.length=0;dropAskAck=false;hideAskRuns=false;materialReads.length=0;changeMaterialOnStart=false;
  for(const run of node.insightRuns.list())if(run.status==='running')node.insightRuns.cancel(run.id);
  releaseGeneration?.();releaseGeneration=undefined;holdNext=false;
  if(node.store.evidence([noteId]).length)node.store.delete(noteId);
  noteId=randomUUID();ids=Array.from({length:67},()=>randomUUID()).sort().reverse();queryCalls=0;insightCalls=0;lastQuery=null;seenRequests.length=0;dropAck=false;offline=false;
  await node.store.ingest(noteCapture({id:noteId,deviceId:'generated-discovery-phone',deviceName:'Generated discovery phone',platform:'android',capturedAt:'2026-10-01T00:00:00.000Z',text:'Generated original discovery record: completion remains unknown.',mood:'Generated explicit mood'}));
+ publishMaterial();
  for(const [index,id] of ids.entries())node.store.saveInsight({runId:id,answer:'Generated native discovery '+index,citations:[{id:noteId,appName:'Generated discovery note',capturedAt:'2026-10-01T00:00:00.000Z',excerpt:'Completion remains unknown.'}],trace:[]},id);
  node.store.db.prepare('UPDATE insights SET created_at=?').run('2026-10-01T00:00:00.000Z');
 }
@@ -60,16 +72,23 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/show-ask')hideAskRuns=false;
    if(req.method==='POST'&&url==='/api/__fixture/hold-query')holdNextQuery=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-query'){releaseQuery?.();releaseQuery=undefined;}
+   if(req.method==='POST'&&url==='/api/__fixture/material-update')publishMaterial('Updated');
+   if(req.method==='POST'&&url==='/api/__fixture/material-partial')publishMaterial('Partial',true);
+   if(req.method==='POST'&&url==='/api/__fixture/material-race')changeMaterialOnStart=true;
+   if(req.method==='POST'&&url==='/api/__fixture/hold-material-read')holdNextMaterialRead=true;
+   if(req.method==='POST'&&url==='/api/__fixture/release-material-read'){releaseMaterialRead?.();releaseMaterialRead=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/hold-generation')holdNext=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-generation'){releaseGeneration?.();releaseGeneration=undefined;}
-   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
+   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
   }
   if(offline){req.socket.destroy();return;}
   if(req.method==='POST'&&url==='/api/insight-runs')seenRequests.push(JSON.parse(payload.toString()).requestId);
   if(req.method==='POST'&&url==='/api/query-runs')seenAskRequests.push(payload.toString());
+  if(changeMaterialOnStart&&req.method==='POST'&&url==='/api/query-runs'){changeMaterialOnStart=false;publishMaterial('Changed before admission');}
   const askId=req.method==='GET'?/^\/api\/query-runs\/([a-f0-9-]{36})$/.exec(url)?.[1]:undefined;
   if(askId){askGetIds.push(askId);if(hideAskRuns){res.writeHead(404,{'content-type':'application/json'}).end(JSON.stringify({error:'not_found'}));return;}}
   const result=await node.app.inject({method:req.method as 'GET',url,headers:req.headers,payload:payload.length?payload:undefined});
+  if(holdNextMaterialRead&&req.method==='GET'&&url.startsWith('/api/materials/')&&url.includes('/read?')){holdNextMaterialRead=false;materialReadHeld=true;await new Promise<void>(resolve=>releaseMaterialRead=resolve);materialReadHeld=false;}
   if(dropAskAck&&req.method==='POST'&&url==='/api/query-runs'&&result.statusCode===202){dropAskAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ask_ack_lost'}));return;}
   if(dropAck&&req.method==='POST'&&url==='/api/insight-runs'&&result.statusCode===202){dropAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ack_lost'}));return;}
   res.writeHead(result.statusCode,result.headers);res.end(result.rawPayload);

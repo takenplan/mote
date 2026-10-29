@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "草稿已保留，请确认当前内容后重新发送。": "Dein Entwurf bleibt erhalten. Prüfe den aktuellen Inhalt und sende ihn erneut.",
+  "参考原件暂不可用，请清除参考后继续。": "Das referenzierte Original ist nicht verfügbar. Entferne die Referenz, um fortzufahren.",
+  "围绕这份资料提问": "Zu diesem Material fragen",
+  "查看所选资料版本": "Ausgewählte Materialversion anzeigen",
+  "参考整份资料 · 版本 {0}": "Gesamtes Material als Referenz · Version {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "Die ausgewählte Materialversion wurde geändert oder ist nicht verfügbar. Entferne die Referenz oder wähle sie erneut; dein Entwurf bleibt erhalten.",
   "保存分享": "Geteilten Inhalt speichern",
   "引用与我的补充分开保存": "Das zitierte Original und mein Kommentar werden getrennt gespeichert",
   "未保存的草稿": "Ungespeicherter Entwurf",

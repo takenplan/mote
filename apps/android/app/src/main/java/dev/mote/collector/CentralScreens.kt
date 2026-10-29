@@ -47,6 +47,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var send: Button? = null
     private var stop: Button? = null
     private var checkRun: Button? = null
+    private var retryRun: Button? = null
     private var noteText: EditText? = null
     private var noteMood: EditText? = null
     private var noteDraft = JSONObject().put("text", "").put("mood", "").put("attachments", JSONArray())
@@ -105,7 +106,31 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun askAbout(id: String) {
         UUID.fromString(id)
         if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
-        askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); NativeAskEvidenceScope.select(askState, id); persistAsk(); ui.navigate("ask")
+        askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("activeRequest"); NativeAskEvidenceScope.select(askState, id); persistAsk(); ui.navigate("ask")
+    }
+    fun askAboutMaterial(reference: String) {
+        if(askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
+        verifyMaterial(reference,loadDraft=true) { state ->
+            askState=state
+            if(askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@verifyMaterial }
+            askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("activeRequest")
+            NativeAskEvidenceScope.selectMaterial(askState,reference); persistAsk(); ui.navigate("ask")
+        }
+    }
+    private fun verifyMaterial(reference: String, loadDraft: Boolean=false, done: (JSONObject) -> Unit) {
+        val match=Regex("material:(mat_[a-f0-9]{64})@([a-f0-9]{64})").matchEntire(reference) ?: return
+        val api=client; val id=match.groupValues[1]; val revision=match.groupValues[2]
+        ui.work(MoteI18n.text("正在读取原文…"), {
+            try {
+                val read=api.get("/api/materials/"+encode(id)+"/read?revision="+encode(revision)+"&offset=0&length=1").getJSONObject("material")
+                val current=api.get("/api/materials/"+encode(id))
+                check(read.getString("id")==id && read.getString("revision")==revision && current.getString("revision")==revision) { MoteI18n.text("所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。") }
+                if(loadDraft)CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; askStore.read() } else JSONObject()
+            } catch(error:CentralFailure) {
+                if(error.status in setOf(404,409))throw IllegalStateException(MoteI18n.text("所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。"),error)
+                throw error
+            }
+        }) { done(it) }
     }
     private fun persistAsk() = askWriter.submit(JSONObject(askState.toString()))
     private fun watch(field: EditText, changed: () -> Unit) {
@@ -194,6 +219,13 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
             minHeight = ui.moteDp(38); gravity = android.view.Gravity.CENTER_VERTICAL; isFocusable = true
             setOnClickListener {
+                if(ui.isWorking)return@setOnClickListener
+                NativeAskEvidenceScope.material(askState)?.let { reference ->
+                    MoteDialogBuilder(ui).setTitle(MoteI18n.text("调整参考范围")).setItems(arrayOf(MoteI18n.text("查看所选资料版本"),MoteI18n.text("清除范围"))) { _,index ->
+                        if(index==0)library.evidence(reference)
+                        else if(NativeAskEvidenceScope.clear(askState)) { persistAsk(); updateScope() } else ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
+                    }.show(); return@setOnClickListener
+                }
                 val id = (askState.optJSONArray("anchorEvidenceIds") ?: askState.optJSONArray("evidenceIds"))?.optString(0)
                 if (id.isNullOrBlank()) { ui.navigate("archive"); return@setOnClickListener }
                 val labels = listOf("参考这条记录，自动查找相关上下文", "仅查这条记录", "清除范围")
@@ -253,6 +285,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 attachments.remove(i); askState.put("attachments", attachments); persistAsk(); refresh()
             }
         }
+        retryRun = ui.button(MoteI18n.text("重试同一请求"), parent = compose) { submitAsk() }
         checkRun = ui.button(MoteI18n.text("检查结果"), parent = compose) { pollAsk() }
         stop = ui.button(MoteI18n.text("停止回答"), parent = compose) {
             val id = NativeAskRunState.currentId(askState); if (id.isBlank()) return@button
@@ -267,7 +300,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
                 .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
         }
-        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","scopeDirty").forEach(askState::remove)
+        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty").forEach(askState::remove)
         askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
     }
     fun showAskHistory() {
@@ -323,7 +356,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             return
         }
         askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
-        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "scopeDirty").forEach(askState::remove)
+        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty").forEach(askState::remove)
         question?.setText(""); persistAsk(); refresh()
     }
 
@@ -331,19 +364,30 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
         preset?.isEnabled = !busy; model?.isEnabled = !busy
-        send?.isEnabled = (!busy && question?.text?.isNotBlank() == true) || askState.has("pending")
-        send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else "↑"
+        send?.isEnabled = !busy && question?.text?.isNotBlank() == true
+        retryRun?.visibility = if (askState.has("pending")) android.view.View.VISIBLE else android.view.View.GONE
         checkRun?.visibility = if (busy) android.view.View.VISIBLE else android.view.View.GONE
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
     }
     private fun updateScope() {
         val strict = (askState.optJSONArray("evidenceIds")?.length() ?: 0) > 0
         val anchored = (askState.optJSONArray("anchorEvidenceIds")?.length() ?: 0) > 0
+        val material=NativeAskEvidenceScope.material(askState)
         scopeBox?.visibility = android.view.View.VISIBLE
-        scopeLabel?.text = if (strict) MoteI18n.text("仅查这条记录") + " ⌄" else if (anchored) MoteI18n.text("参考这条记录，自动查找相关上下文") + " ⌄" else "＋ " + MoteI18n.text("参考资料")
+        scopeLabel?.contentDescription=material ?: MoteI18n.text("参考资料")
+        scopeLabel?.text = if(material!=null) MoteI18n.text("参考整份资料 · 版本 {0}",material.substringAfter('@').take(8))+" ⌄" else if (strict) MoteI18n.text("仅查这条记录") + " ⌄" else if (anchored) MoteI18n.text("参考这条记录，自动查找相关上下文") + " ⌄" else "＋ " + MoteI18n.text("参考资料")
     }
-    private fun submitAsk() {
+    private data class AskAdmission(val run:JSONObject?=null,val materialRejected:Boolean=false)
+    private fun submitAsk(validatedMaterial: String? = null) {
         val api = client
+        val reference=NativeAskEvidenceScope.material(askState)
+        if(!askState.has("pending") && reference!=null && validatedMaterial!=reference) {
+            val draft=askState.toString()
+            verifyMaterial(reference) {
+                if(askState.toString()==draft)submitAsk(reference)
+                else ui.notice(MoteI18n.text("草稿已保留，请确认当前内容后重新发送。"))
+            }; return
+        }
         val request = askState.optJSONObject("pending") ?: run {
             val text = question?.text?.toString()?.trim().orEmpty()
             if (text.isBlank()) { ui.notice(MoteI18n.text("请输入问题（最多 8000 字）")); return }
@@ -361,12 +405,16 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         ui.work(MoteI18n.text("正在发送问题…"), {
             CentralDraftWrites.barrier { askStore.write(snapshot); draftFailure.set(null) }
             // Retrying preserves the admission ID even when the first response was lost.
-            try { api.post("/api/query-runs", request).also { NativeAskRunState.validate(it,request.getString("id")) } }
+            try { AskAdmission(api.post("/api/query-runs", request).also { NativeAskRunState.validate(it,request.getString("id")) }) }
             catch(error:Exception) {
                 if(error is CentralFailure && error.status in setOf(401,403))throw error
+                if(error is CentralFailure && error.status==409 && error.code=="context_evidence_restricted" && NativeAskEvidenceScope.material(request.getJSONObject("input"))!=null) return@work AskAdmission(materialRejected=true)
                 throw IllegalStateException(MoteI18n.text("请求尚未确认，可重试同一请求。")+"\n"+error.message.orEmpty(),error)
             }
-        }) { run -> receiveRun(run,request.getString("id"),request) }
+        }) { admission ->
+            if(admission.materialRejected) { askState.remove("pending"); persistAsk(); controlsAsk(); ui.notice(MoteI18n.text("所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。")) }
+            else receiveRun(admission.run!!,request.getString("id"),request)
+        }
     }
     fun pollAsk() {
         if (currentPage != "ask" || detailBack != null) return

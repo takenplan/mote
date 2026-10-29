@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "草稿已保留，请确认当前内容后重新发送。": "Votre brouillon est conservé. Vérifiez son contenu actuel, puis renvoyez-le.",
+  "参考原件暂不可用，请清除参考后继续。": "L’original référencé est indisponible. Retirez la référence pour continuer.",
+  "围绕这份资料提问": "Interroger ce document",
+  "查看所选资料版本": "Voir la version sélectionnée",
+  "参考整份资料 · 版本 {0}": "Document entier en référence · Version {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "La version sélectionnée a changé ou est indisponible. Retirez la référence ou sélectionnez-la à nouveau ; le brouillon est conservé.",
   "保存分享": "Enregistrer le contenu partagé",
   "引用与我的补充分开保存": "L’original cité et mon commentaire sont enregistrés séparément",
   "未保存的草稿": "Brouillon non enregistré",

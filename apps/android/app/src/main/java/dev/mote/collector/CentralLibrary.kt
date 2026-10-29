@@ -157,7 +157,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
         } else paged("/api/materials?limit=20", ui.card()) { row, card ->
             ui.text(row.optString("title"), NativeFontRole.ROW, card); ui.text(row.optString("kind") + " · " + row.optJSONObject("coverage")?.optString("state"), parent = card)
-            ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }
+            ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }.tag="material-open:"+row.getString("id")
         }
     }
     fun captureEvidence(id: String, conversationId: String? = null) { capture(id, conversationId = conversationId) }
@@ -235,6 +235,8 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = value.getJSONObject("material"); ui.text(item.getString("title"), NativeFontRole.TITLE_MOBILE)
             ui.text(MoteI18n.text("版本 {0}", item.opt("sequence"))); ui.text(value.getString("text"))
+            val reference="material:"+item.getString("id")+"@"+item.getString("revision")
+            ui.button(MoteI18n.text("围绕这份资料提问")) { screens.askAboutMaterial(reference) }.tag="material-ask"
             values(item.getJSONObject("origin"), ui.card())
             item.optJSONObject("attributionContext")?.let { context ->
                 val card = ui.card(); ui.text(MoteI18n.text("内容与我的关系") + " · " + relationLabel(context.optString("ownerRelation")), parent = card)
@@ -254,10 +256,10 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 } else ui.button(MoteI18n.text("查看当前版本"), parent = card) { material(id, current.getString("revision")) }
             }
             val range = value.getJSONObject("textRange")
-            if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { material(id, revision, range.getInt("nextOffset")) }
+            if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { material(id, item.getString("revision"), range.getInt("nextOffset")) }
             ui.button(MoteI18n.text("来源与处理")) {
                 val target = ui.card()
-                paged("/api/materials/" + enc(id) + "/members?limit=20" + (revision?.let { "&revision=" + enc(it) } ?: ""), target) { member, card ->
+                paged("/api/materials/" + enc(id) + "/members?limit=20&revision="+enc(item.getString("revision")), target) { member, card ->
                     ui.button(member.optString("kind"), parent = card) { evidence(member.getString("ref")) }
                 }
             }

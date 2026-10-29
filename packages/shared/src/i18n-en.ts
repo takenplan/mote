@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "草稿已保留，请确认当前内容后重新发送。": "Your draft is retained. Review the current content and send it again.",
+  "参考原件暂不可用，请清除参考后继续。": "The referenced original is unavailable. Clear the reference to continue.",
+  "围绕这份资料提问": "Ask about this material",
+  "查看所选资料版本": "View selected material version",
+  "参考整份资料 · 版本 {0}": "Whole material reference · Version {0}",
+  "所选资料版本已变更或不可用。请清除参考或重新选择；草稿已保留。": "The selected material version changed or is unavailable. Clear the reference or select it again; your draft is retained.",
   "保存分享": "Save shared content",
   "引用与我的补充分开保存": "The quoted original and my comment are saved separately",
   "未保存的草稿": "Unsaved draft",
