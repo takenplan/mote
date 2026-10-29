@@ -23,7 +23,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     var importInstruction = ""
     private var player: android.media.MediaPlayer? = null
     @Volatile private var audioFile: File? = null
-    fun close() { player?.release(); player = null; audioFile?.delete(); audioFile = null; admin.close() }
+    fun close() { askFailureDialog?.dismiss(); askFailureDialog = null; player?.release(); player = null; audioFile?.delete(); audioFile = null; admin.close() }
     private var askState = JSONObject()
     private val askWriter = LatestWriter<JSONObject>(CentralDraftWrites.executor) {
         runCatching { askStore.write(it) }.onSuccess { draftFailure.set(null) }.onFailure(draftFailure::set)
@@ -44,6 +44,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var scopeBox: LinearLayout? = null
     private var scopeLabel: TextView? = null
     private var runStatus: TextView? = null
+    private var askFailureAction: TextView? = null
+    private var askFailureDialog: android.app.AlertDialog? = null
     private var send: Button? = null
     private var stop: Button? = null
     private var checkRun: Button? = null
@@ -96,6 +98,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         if (captureId != null && conversationId != null) library.captureEvidence(captureId,conversationId) else library.evidence(normalized)
     }
     fun clearPrivateState() {
+        askFailureDialog?.dismiss(); askFailureDialog = null; askFailureAction = null
         CentralDraftWrites.executor.execute { runCatching { askStore.read().also(NativeAskImages::clearReferences).also(askStore::write) } }
         askImagesView?.removeAllViews();askImagesView=null;addAskImage=null
         askState = JSONObject(); askHistory = JSONObject(); askHistoryReadable = false; modelSettings = JSONObject(); lastConversation = null; question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); library.clearTopics(); insights.clear(); body.removeAllViews()
@@ -112,14 +115,14 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun askAbout(id: String) {
         UUID.fromString(id)
         if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
-        askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("activeRequest"); NativeAskEvidenceScope.select(askState, id); persistAsk(); ui.navigate("ask")
+        askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("failureDetails"); askState.remove("activeRequest"); NativeAskEvidenceScope.select(askState, id); persistAsk(); ui.navigate("ask")
     }
     fun askAboutMaterial(reference: String) {
         if(askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
         verifyMaterial(reference,loadDraft=true) { state ->
             askState=state
             if(askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@verifyMaterial }
-            askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("activeRequest")
+            askState.remove("conversationId"); askState.remove("runId"); askState.remove("runStatus"); askState.remove("failureDetails"); askState.remove("activeRequest")
             NativeAskEvidenceScope.selectMaterial(askState,reference); persistAsk(); ui.navigate("ask")
         }
     }
@@ -292,6 +295,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val id = NativeAskRunState.currentId(askState); if (id.isBlank()) return@button
             val api = client; ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
         }
+        updateAskFailureAction()
         controlsAsk()
     }
     private fun askBusy() = askState.has("pending") || askState.optString("runStatus") == "running"
@@ -301,7 +305,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
                 .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
         }
-        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty","imageUploads").forEach(askState::remove)
+        listOf("runId","conversationId","runStatus","activeRequest","failureDetails","evidenceIds","anchorEvidenceIds","anchorMaterialRef","scopeDirty","imageUploads").forEach(askState::remove)
         askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
     }
     fun showAskHistory() {
@@ -357,10 +361,35 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             return
         }
         askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
-        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty","imageUploads").forEach(askState::remove)
+        listOf("runId", "runStatus", "activeRequest", "failureDetails", "evidenceIds", "anchorEvidenceIds", "anchorMaterialRef", "scopeDirty","imageUploads").forEach(askState::remove)
         question?.setText(""); persistAsk(); refresh()
     }
 
+    internal fun askFailurePresentation(error: Throwable): String? {
+        if (currentPage != "ask" || detailBack != null || (!askBusy() && askState.optString("runStatus") != "failed")) return null
+        if (error is CentralFailure && error.status in setOf(401,403)) return null
+        val chain = JSONArray(); var value: Throwable? = error
+        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable,Boolean>())
+        while (value != null && seen.add(value)) {
+            val current=value
+            chain.put(JSONObject().put("message",current.message.orEmpty()).apply { if(current is CentralFailure) { put("status",current.status);put("code",current.code);put("detail",current.detail) } });value=current.cause
+        }
+        askState.put("failureDetails",JSONObject().put("requestId",NativeAskRunState.currentId(askState)).put("errors",chain));persistAsk();updateAskFailureAction()
+        return MoteI18n.text(if(askBusy()) "结果尚未确认，请检查或重试原请求。" else "回答未完成")
+    }
+    private fun updateAskFailureAction() {
+        val target=messages ?: return
+        if (askFailureAction?.parent !== target) askFailureAction=conversationAction(target,"查看详情") {
+            askState.optJSONObject("failureDetails")?.let { showAskFailureDetails(it,true) }
+        }.apply { tag="ask-error-details" }
+        askFailureAction?.visibility=if(askState.optJSONObject("failureDetails")?.optString("requestId")==NativeAskRunState.currentId(askState)) android.view.View.VISIBLE else android.view.View.GONE
+    }
+    private fun showAskFailureDetails(details:JSONObject,currentRequest:Boolean=false) {
+        val content=LinearLayout(ui).apply { orientation=LinearLayout.VERTICAL;setPadding(ui.moteDp(20),ui.moteDp(12),ui.moteDp(20),ui.moteDp(20)) }
+        ui.text(details.toString(2),NativeFontRole.SUPPORT,content)
+        if(currentRequest && details.optString("requestId")==NativeAskRunState.currentId(askState)) (askState.optJSONObject("pending") ?: askState.optJSONObject("activeRequest"))?.let { ui.text(it.toString(2),NativeFontRole.SUPPORT,content).tag="ask-error-original-request" }
+        askFailureDialog?.dismiss();askFailureDialog=MoteDialogBuilder(ui).setTitle(MoteI18n.text("查看详情")).setView(ScrollView(ui).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭"),null).show()
+    }
     private fun controlsAsk() {
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
@@ -371,6 +400,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         retryRun?.visibility = if (askState.has("pending")) android.view.View.VISIBLE else android.view.View.GONE
         checkRun?.visibility = if (busy) android.view.View.VISIBLE else android.view.View.GONE
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
+        askFailureAction?.visibility=if(askState.optJSONObject("failureDetails")?.optString("requestId")==NativeAskRunState.currentId(askState)) android.view.View.VISIBLE else android.view.View.GONE
     }
     private fun updateScope() {
         val strict = (askState.optJSONArray("evidenceIds")?.length() ?: 0) > 0
@@ -441,6 +471,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun receiveRun(run: JSONObject, expected: String=NativeAskRunState.currentId(askState), admitted: JSONObject?=null) {
         NativeAskRunState.validate(run,expected)
         admitted?.let { askState.put("activeRequest",JSONObject(it.toString())) }
+        askState.remove("failureDetails")
+        if(run.optString("status")=="failed")run.optJSONObject("error")?.let { askState.put("failureDetails",JSONObject().put("requestId",run.getString("id")).put("error",it)) }
         val clearCompletedDraft=run.getString("status")=="completed" && NativeAskRunState.completesCurrentDraft(askState,expected)
         askState.remove("pending"); askState.remove("scopeDirty")
         askState.put("runId", run.getString("id")).put("runStatus", run.getString("status"))
@@ -452,7 +484,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             "running" -> latest.ifBlank { MoteI18n.text("中央节点正在回答…") }
             "completed" -> MoteI18n.text("回答已完成")
             "cancelled" -> MoteI18n.text("已停止回答")
-            else -> run.optJSONObject("error")?.optString("message") ?: MoteI18n.text("回答未完成")
+            else -> MoteI18n.text("回答未完成")
         }
         if (clearCompletedDraft) { askState.put("question", "").put("attachments", JSONArray()); question?.setText("") }
         if(run.getString("status") in NativeAskRunState.terminal)askState.remove("activeRequest")
@@ -471,7 +503,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val target = messages ?: return
         val id = conversation.getString("id")
         NativeAskEvidenceScope.restore(askState, conversation); persistAsk(); updateScope()
-        target.removeAllViews()
+        target.removeAllViews(); askFailureAction = null
         runStatus = ui.text("", parent = target).apply { visibility = android.view.View.GONE; setPadding(0,0,0,0) }
         val turns = conversation.getJSONArray("turns")
         for (i in 0 until turns.length()) {
@@ -495,9 +527,13 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 conversationAction(actions,"保存为记录") { ui.recordConversation(turn.getString("question") + "\n\n" + answer.optString("answer"), id) }
                 conversationAction(actions,"更多") { showTurnDetails(id,answer,citations) }
             }
-            turn.optJSONObject("error")?.let { ui.text(it.optString("message"), NativeFontRole.SUPPORT, target) }
+            turn.optJSONObject("error")?.let { error ->
+                ui.text(MoteI18n.text("回答未完成"),NativeFontRole.SUPPORT,target)
+                conversationAction(target,"查看详情") { showAskFailureDetails(error) }.tag="ask-turn-error-details:"+turn.getString("id")
+            }
         }
         next(conversation)?.let { older -> ui.button(MoteI18n.text("加载更早的对话"), parent = target) { loadConversation(id, older) } }
+        if(askBusy())updateAskFailureAction()
         ui.askConversationActions(true)
     }
     private fun conversationAction(parent: LinearLayout, label: String, action: () -> Unit) = TextView(ui).apply {

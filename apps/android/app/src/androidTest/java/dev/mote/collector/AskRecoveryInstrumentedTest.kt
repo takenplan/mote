@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
+import android.view.inspector.WindowInspector
 import android.widget.EditText
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
@@ -42,7 +43,9 @@ class AskRecoveryInstrumentedTest {
     private fun open()=ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("evidenceId",fixture.getString("noteId")).putExtra("evidenceOrigin",origin))
     private fun state()=api.get("/api/__fixture/state")
     private fun control(name:String)=api.post("/api/__fixture/$name",JSONObject())
-    private fun screenshot(s:ActivityScenario<CentralActivity>,name:String){instrumentation.waitForIdleSync();s.onActivity { a -> val root=a.window.decorView;assertTrue(a.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0);val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);try{root.draw(android.graphics.Canvas(image));File(context.filesDir,"ask-recovery-final").apply { mkdirs() }.resolve("$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }}finally{image.recycle()} }}
+    private fun windowViews()=WindowInspector.getGlobalWindowViews().filter { it.hasWindowFocus() }.flatMap { views(it) }.filter { it.isShown }
+    private fun closeDetails(){main { windowViews().filterIsInstance<TextView>().single { it.isClickable && it.text.toString()=="关闭" }.performClick() }}
+    private fun screenshot(s:ActivityScenario<CentralActivity>,name:String,dialog:Boolean=false){instrumentation.waitForIdleSync();s.onActivity { a -> val root=if(dialog)WindowInspector.getGlobalWindowViews().single { it.hasWindowFocus() } else a.window.decorView;assertTrue(a.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0);val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);try{root.draw(android.graphics.Canvas(image));File(context.filesDir,"ask-recovery-final").apply { mkdirs() }.resolve("$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }}finally{image.recycle()} }}
     @Before fun generatedOnly(){
         assumeTrue(InstrumentationRegistry.getArguments().getString("nativeAskRecoveryFixture")=="true")
         require(context.packageName=="dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a") && !Settings(context).enabled)
@@ -61,6 +64,14 @@ class AskRecoveryInstrumentedTest {
             question(scenario,"Generated newer question with an uncertain admission");control("drop-ask-ack");control("hide-ask");click(scenario,"发送")
             ready(scenario,"Unconfirmed admission remains explicit"){a -> !a.isWorking && shown(a).filterIsInstance<TextView>().any { it.text.toString()=="重试同一请求" }}
             val admitted=saved().getJSONObject("pending").toString();val request=JSONObject(admitted);assertNotEquals(old,request.getString("id"));assertEquals(fixture.getString("noteId"),request.getJSONObject("input").getJSONArray("anchorEvidenceIds").getString(0))
+            ready(scenario,"Readable unknown notice without raw transport diagnostics"){a -> !a.isWorking && shown(a).filterIsInstance<TextView>().any { it.text.toString()=="结果尚未确认，请检查或重试原请求。" }}
+            scenario.onActivity { a -> assertFalse(shown(a).filterIsInstance<TextView>().any { it.text.contains("generated_ask_ack_lost") || it.text.contains("502") });assertFalse(shown(a).filterIsInstance<EditText>().single { it.contentDescription=="你的问题" }.isEnabled) }
+            screenshot(scenario,"unknown-default-light")
+            main { MoteAppearance.select(context,AppearancePreference.DARK) };screenshot(scenario,"unknown-default-dark")
+            scenario.onActivity { a -> shown(a).single { it.tag=="ask-error-details" }.performClick() }
+            until("Complete diagnostics are explicitly reachable"){main { windowViews().filterIsInstance<TextView>().any { it.text.contains("generated_ask_ack_lost") } }}
+            assertEquals(request.toString(2),main { windowViews().filterIsInstance<TextView>().single { it.tag=="ask-error-original-request" }.text.toString() })
+            assertEquals(admitted,saved().getJSONObject("pending").toString());screenshot(scenario,"unknown-details-dark",dialog=true);closeDetails()
             scenario.recreate();ready(scenario,"Durable unconfirmed request restores"){a -> !a.isWorking && shown(a).filterIsInstance<TextView>().any { it.text.toString()=="重试同一请求" }}
             click(scenario,"检查结果")
             ready(scenario,"404 remains unconfirmed"){a -> !a.isWorking && shown(a).filterIsInstance<TextView>().any { it.text.toString()=="请求尚未确认，可重试同一请求。" }}
@@ -76,6 +87,22 @@ class AskRecoveryInstrumentedTest {
             until("Same real admission completes"){saved().optString("runStatus")=="completed" && !saved().has("pending") && saved().optString("runId")==request.getString("id")}
             ready(scenario,"Same native composer clears only the admitted question"){a -> shown(a).filterIsInstance<EditText>().any { it.contentDescription=="你的问题" && it.isEnabled && it.text.isEmpty() }}
             val receipt=state();assertEquals(2,receipt.getInt("queryCalls"));val seen=receipt.getJSONArray("seenAskRequests");assertEquals(3,seen.length());assertEquals(seen.getString(1),seen.getString(2));assertEquals(admitted,JSONObject(seen.getString(2)).toString());screenshot(scenario,"same-admission-recovered")
+        }
+    }
+    @Test fun actualFailedAnswerUsesReadableDefaultAndKeepsFullDiagnosticsAndDraft(){
+        control("fail-query")
+        open().use { scenario ->
+            val draft="Generated question with a controlled real agent failure"
+            question(scenario,draft);click(scenario,"发送")
+            until("Actual server failure is terminal"){saved().optString("runStatus")=="failed" && !saved().has("pending")}
+            val id=saved().getString("runId");val run=api.get("/api/query-runs/$id");assertEquals("failed",run.getString("status"))
+            val error=run.getJSONObject("error")
+            ready(scenario,"Failed turn has a readable default and explicit details"){a -> !a.isWorking && shown(a).any { it.tag?.toString()?.startsWith("ask-turn-error-details:")==true }}
+            scenario.onActivity { a -> assertTrue(shown(a).filterIsInstance<TextView>().any { it.text.toString()=="回答未完成" });assertFalse(shown(a).filterIsInstance<TextView>().any { it.text.contains("generated_native_query_failure") });assertEquals(draft,shown(a).filterIsInstance<EditText>().single { it.contentDescription=="你的问题" }.text.toString()) }
+            screenshot(scenario,"failed-default-light");main { MoteAppearance.select(context,AppearancePreference.DARK) };screenshot(scenario,"failed-default-dark")
+            scenario.onActivity { a -> shown(a).single { it.tag?.toString()?.startsWith("ask-turn-error-details:")==true }.performClick() }
+            until("Complete actual server error remains readable"){main { windowViews().filterIsInstance<TextView>().any { it.text.toString()==error.toString(2) } }}
+            screenshot(scenario,"failed-details-dark",dialog=true);closeDetails();assertEquals(draft,saved().getString("question"));assertEquals(1,state().getInt("queryCalls"))
         }
     }
     @Test fun acceptedRun404KeepsItsRequestAndOnlyActualCancellationReleasesIt(){

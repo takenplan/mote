@@ -15,7 +15,7 @@ let offline=false;
 let holdNext=false,releaseGeneration:(()=>void)|undefined,activeGenerations=0;
 const seenRequests:string[]=[];
 const seenAskRequests:string[]=[],askGetIds:string[]=[];
-let dropAskAck=false,hideAskRuns=false,holdNextQuery=false,activeQueries=0,releaseQuery:(()=>void)|undefined;
+let dropAskAck=false,hideAskRuns=false,holdNextQuery=false,failNextQuery=false,activeQueries=0,releaseQuery:(()=>void)|undefined;
 const nativeMaterialId=materialId('generated-native-material','one');let nativeMaterialRef='',changeMaterialOnStart=false;
 const materialReads:string[]=[];
 let holdNextMaterialRead=false,materialReadHeld=false,releaseMaterialRead:(()=>void)|undefined;
@@ -39,7 +39,7 @@ function agent(reader:ContextReader):QueryAgent{return {configured:true,close:as
   return {answer:JSON.stringify({title:'Generated native report',markdown:'Generated native conclusion remains uncertain. ['+records[0].id+']',html:'<p>Generated native conclusion remains uncertain.</p>'}),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
  }
  queryCalls++;lastQuery={question:input.question,anchorEvidenceIds:input.anchorEvidenceIds??null,evidenceIds:input.evidenceIds??null,anchorMaterialRef:input.anchorMaterialRef??null};
- activeQueries++;if(holdNextQuery){holdNextQuery=false;await new Promise<void>(resolve=>releaseQuery=resolve);}activeQueries--;
+ activeQueries++;if(holdNextQuery){holdNextQuery=false;await new Promise<void>(resolve=>releaseQuery=resolve);}activeQueries--;if(failNextQuery){failNextQuery=false;throw Error('generated_native_query_failure: complete controlled diagnostics');}
  return {answer:'Generated answer from the actual original: '+records.map(row=>row.ocrText+' ['+row.id+']').join('\n'),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
 }};}
 const node=await buildApp({dataDir,token,tokenPath:'fixture-only',host:'127.0.0.1',port,profile:'test',maxStorageBytes:32_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'generated-fixture-key',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,createModelAgent:async(_settings,reader)=>agent(reader)});
@@ -51,7 +51,7 @@ async function reset(){
  releaseMaterialRead?.();releaseMaterialRead=undefined;holdNextMaterialRead=false;materialReadHeld=false;
  releaseAttachmentCommit?.();releaseAttachmentCommit=undefined;dropAttachmentAck=false;holdAttachmentCommit=false;attachmentCommitHeld=false;attachmentManifests.length=0;
  for(const run of node.featureServices.queryRuns.list())if(run.status==='running')node.featureServices.queryRuns.cancel(run.id);
- releaseQuery?.();releaseQuery=undefined;holdNextQuery=false;
+ releaseQuery?.();releaseQuery=undefined;holdNextQuery=false;failNextQuery=false;
  for(let i=0;activeQueries>0&&i<100;i++)await new Promise(resolve=>setTimeout(resolve,20));
  seenAskRequests.length=0;askGetIds.length=0;dropAskAck=false;hideAskRuns=false;materialReads.length=0;changeMaterialOnStart=false;
  for(const run of node.insightRuns.list())if(run.status==='running')node.insightRuns.cancel(run.id);
@@ -81,6 +81,7 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/drop-ask-ack')dropAskAck=true;
    if(req.method==='POST'&&url==='/api/__fixture/hide-ask')hideAskRuns=true;
    if(req.method==='POST'&&url==='/api/__fixture/show-ask')hideAskRuns=false;
+   if(req.method==='POST'&&url==='/api/__fixture/fail-query')failNextQuery=true;
    if(req.method==='POST'&&url==='/api/__fixture/hold-query')holdNextQuery=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-query'){releaseQuery?.();releaseQuery=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/material-update')publishMaterial('Updated');

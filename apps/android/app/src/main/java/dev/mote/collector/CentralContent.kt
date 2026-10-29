@@ -474,7 +474,7 @@ internal class CentralContent(
     }
     internal fun enterDetail() { backButton.visibility = View.VISIBLE; revision++; pending.clear(); handler.removeCallbacks(refreshRun) }
     internal fun requestFailure(error: Throwable, generation: Long = accessGeneration) {
-        notice(error.message ?: MoteI18n.text("操作失败"))
+        notice((if(page=="ask")screens?.askFailurePresentation(error) else null) ?: error.message ?: MoteI18n.text("操作失败"))
         if (client == null && body.childCount == 0) {
             button(MoteI18n.text("重试")) { recreate() }; connectionButton()
         }
