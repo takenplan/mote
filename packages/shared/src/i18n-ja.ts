@@ -9754,5 +9754,9 @@ export const japanese: Readonly<Record<string, string>> = {
   "等待开启自动处理": "Waiting for automatic processing approval",
   "用户纠正": "Owner correction",
   "用户主动说明": "Explicit owner statement",
-  "从 GitHub 添加其他可信插件": "GitHub から他の信頼できるプラグインを追加"
+  "从 GitHub 添加其他可信插件": "GitHub から他の信頼できるプラグインを追加",
+  "长期记忆自动整理": "長期記憶の自動整理",
+  "高级：处理节奏与内容量": "詳細：処理間隔と内容量",
+  "保存后续处理设置": "今後の処理設定を保存",
+  "定期发现在发现页的「更多」中设置。": "定期的な発見は「発見」ページの「その他」で設定します。"
 };

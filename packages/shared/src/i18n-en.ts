@@ -9754,5 +9754,9 @@ export const english: Readonly<Record<string, string>> = {
   "等待开启自动处理": "Waiting for automatic processing approval",
   "用户纠正": "Owner correction",
   "用户主动说明": "Explicit owner statement",
-  "从 GitHub 添加其他可信插件": "Add another trusted plugin from GitHub"
+  "从 GitHub 添加其他可信插件": "Add another trusted plugin from GitHub",
+  "长期记忆自动整理": "Automatic long-term memory organization",
+  "高级：处理节奏与内容量": "Advanced: processing cadence and content limits",
+  "保存后续处理设置": "Save settings for subsequent processing",
+  "定期发现在发现页的「更多」中设置。": "Configure scheduled discoveries under More on the Discover page."
 };

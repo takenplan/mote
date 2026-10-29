@@ -9753,5 +9753,9 @@
   "等待开启自动处理": "Waiting for automatic processing approval",
   "用户纠正": "Owner correction",
   "用户主动说明": "Explicit owner statement",
-  "从 GitHub 添加其他可信插件": "Weiteres vertrauenswürdiges Plugin von GitHub hinzufügen"
+  "从 GitHub 添加其他可信插件": "Weiteres vertrauenswürdiges Plugin von GitHub hinzufügen",
+  "长期记忆自动整理": "Automatische Ordnung des Langzeitgedächtnisses",
+  "高级：处理节奏与内容量": "Erweitert: Verarbeitungstakt und Inhaltsumfang",
+  "保存后续处理设置": "Einstellungen für künftige Verarbeitung speichern",
+  "定期发现在发现页的「更多」中设置。": "Regelmäßige Entdeckungen werden unter Mehr auf der Seite Entdecken eingestellt."
 }

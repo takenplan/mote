@@ -9754,5 +9754,9 @@ export const french: Readonly<Record<string, string>> = {
   "等待开启自动处理": "Waiting for automatic processing approval",
   "用户纠正": "Owner correction",
   "用户主动说明": "Explicit owner statement",
-  "从 GitHub 添加其他可信插件": "Ajouter un autre plugin de confiance depuis GitHub"
+  "从 GitHub 添加其他可信插件": "Ajouter un autre plugin de confiance depuis GitHub",
+  "长期记忆自动整理": "Organisation automatique de la mémoire à long terme",
+  "高级：处理节奏与内容量": "Avancé : rythme de traitement et limites de contenu",
+  "保存后续处理设置": "Enregistrer les réglages des traitements suivants",
+  "定期发现在发现页的「更多」中设置。": "Configurez les découvertes périodiques dans Plus sur la page Découvrir."
 };
