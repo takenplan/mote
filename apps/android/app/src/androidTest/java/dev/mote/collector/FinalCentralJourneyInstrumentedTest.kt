@@ -55,6 +55,12 @@ class FinalCentralJourneyInstrumentedTest {
         }
         return CentralClient(origin,token).also { assertEquals("owner",it.get("/api/connections/self").getJSONObject("credential").getString("scope")) }
     }
+    private fun existingConnection(config:JSONObject):CentralClient {
+        val settings=Settings(context);val current=settings.read();val origin=config.getString("origin")
+        require(current.server.trimEnd('/')==origin&&settings.centralEndpoint().trimEnd('/')==origin&&current.connectionToken()==config.getString("token")) { "Read-only verification requires the existing selected owner connection" }
+        val selected=CentralAccess.resolve(context);require(selected.server==origin)
+        return requireNotNull(selected.client).also{assertEquals("owner",it.get("/api/connections/self").getJSONObject("credential").getString("scope"))}
+    }
     private fun screenshot(name: String) {
         val latch=java.util.concurrent.CountDownLatch(1)
         main { current().window.decorView.postOnAnimation { current().window.decorView.postOnAnimation { latch.countDown() } } }
@@ -91,7 +97,7 @@ class FinalCentralJourneyInstrumentedTest {
     }
     /** Reopens the already ACKed native record; never creates or uploads a second note. */
     @Test fun verifyPersistedIndependentDescriptionInCentralReader() {
-        val config=configuration();val api=connect(config);val id=config.getString("existingRecordId")
+        val config=configuration();val api=existingConnection(config);val id=config.getString("existingRecordId")
         val local=requireNotNull(context.queue().capture(id));assertTrue("Original local ACK remains durable",local.getBoolean("uploaded"))
         val original=local.getString("ocrText");val description=local.getJSONObject("metadata").getString("ownerDescription")
         val remote=api.get("/api/capture-browser/$id");assertEquals(original,remote.getString("ocrText"));assertEquals(listOf(description),NativeRecordDescription.read(remote,true));assertFalse(remote.getJSONObject("metadata").has("ownerDescription"));assertFalse(original.contains(description))
@@ -125,7 +131,7 @@ class FinalCentralJourneyInstrumentedTest {
     }
     /** Continues UI verification after a completed real turn; never admits another query. */
     @Test fun readPersistedSharedTurnAndReturnFromExactCitation() {
-        val config=configuration();val api=connect(config);val id=config.getString("conversationId");val turnId=config.getString("existingTurnId")
+        val config=configuration();val api=existingConnection(config);val id=config.getString("conversationId");val turnId=config.getString("existingTurnId")
         val snapshot=api.get("/api/conversations/$id?limit=50");assertEquals(id,snapshot.getString("id"))
         val turns=snapshot.getJSONArray("turns");val turn=(0 until turns.length()).map{turns.getJSONObject(it)}.single{it.getString("id")==turnId}
         assertEquals(config.getString("question"),turn.getString("question"));assertEquals("completed",turn.getString("status"))
