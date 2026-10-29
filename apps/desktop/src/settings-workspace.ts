@@ -2,6 +2,28 @@ import {describeCaptureSelection} from './app-capture-ui';
 import {getLocale,moteText} from '@mote/shared/i18n';
 import type {Status} from './contracts';
 
+type DiagnosticRead={scope:string;ticket:number;read:boolean};
+const diagnosticReads=new WeakMap<HTMLElement,DiagnosticRead>();
+const diagnosticScope=(status:Status)=>JSON.stringify([status.authorizationGeneration,status.config.deviceId,status.config.serverUrl,status.config.tokenConfigured,status.config.authSignedOut,status.config.authExpiresAt,status.config.authSourceBinding]);
+function renderDiagnosticFacts(status:Status,root:Document):void {
+ const currentFacts=root.getElementById('diagnostics-current-facts');if(!currentFacts)return;
+ const scope=diagnosticScope(status);let state=diagnosticReads.get(currentFacts);
+ if(!state){state={scope,ticket:0,read:false};diagnosticReads.set(currentFacts,state);}else if(state.scope!==scope){state.scope=scope;state.ticket++;state.read=false;}
+ const diagnostics=status.diagnostics,sample=diagnostics?.latest;currentFacts.replaceChildren();currentFacts.hidden=!state.read||!sample;
+ if(currentFacts.hidden||!sample||!diagnostics)return;
+ const count=root.createElement('p');count.className='helper';count.textContent=diagnostics.enabled?moteText('诊断开启 · {0} 条数值样本',diagnostics.sampleCount):moteText('诊断关闭');
+ const facts=root.createElement('dl');facts.className='maintenance-facts';
+ const values=[[moteText('最近采样'),new Date(sample.at).toLocaleString(getLocale(),{hour12:false})],[moteText('本机诊断'),moteText('主进程 RSS {0} MiB · 累计 CPU {1} s',(sample.rssBytes/1048576).toFixed(1),((sample.cpuUserMicros+sample.cpuSystemMicros)/1000000).toFixed(1))]];
+ for(const[label,text]of values){const term=root.createElement('dt'),value=root.createElement('dd');term.textContent=label;value.textContent=text;facts.append(term,value);}currentFacts.append(count,facts);
+}
+/** Called before the existing sample IPC; only its successful, current ACK may disclose facts. */
+export function beginDiagnosticFactsRefresh(root:Document=document):(status:Status)=>void {
+ const currentFacts=root.getElementById('diagnostics-current-facts'),state=currentFacts&&diagnosticReads.get(currentFacts);
+ if(!currentFacts||!state)return()=>{};
+ const ticket=++state.ticket,scope=state.scope;
+ return status=>{if(diagnosticReads.get(currentFacts)!==state||state.ticket!==ticket||state.scope!==scope||diagnosticScope(status)!==scope||!status.diagnostics?.latest||status.diagnostics.error)return;state.read=true;renderDiagnosticFacts(status,root);};
+}
+
 /** Rearranges existing controls without copying their values or changing their owners. */
 export function mountSettingsWorkspace(root:Document=document):void {
   const id=(name:string)=>root.getElementById(name)!;
@@ -53,7 +75,7 @@ export function mountSettingsWorkspace(root:Document=document):void {
   const diagnostics=root.querySelector('[data-page="developer"] [data-page-title]');if(diagnostics)diagnostics.textContent=moteText('帮助与诊断');const diagnosticDetails=id('diagnostics-enabled').closest('details')!;diagnosticDetails.replaceWith(...Array.from(diagnosticDetails.children).filter(node=>node.tagName!=='SUMMARY'));
   const diagnosticPanel=id('diagnostics-enabled').closest('.panel')!;
   const diagnosticHeading=diagnosticPanel.querySelector('.section-title')!;
-  const numericDetails=element('details',undefined,'disclosure spaced');numericDetails.id='diagnostics-more';numericDetails.append(element('summary',moteText('更多')),diagnosticHeading,id('diagnostics-detail'));const currentFacts=element('section');currentFacts.id='diagnostics-current-facts';currentFacts.hidden=true;currentFacts.setAttribute('aria-live','polite');id('diagnostics-sample').addEventListener('click',()=>{currentFacts.dataset.requested='true';currentFacts.dataset.before=currentFacts.dataset.latest??'';});
+  const numericDetails=element('details',undefined,'disclosure spaced');numericDetails.id='diagnostics-more';numericDetails.append(element('summary',moteText('更多')),diagnosticHeading,id('diagnostics-detail'));const currentFacts=element('section');currentFacts.id='diagnostics-current-facts';currentFacts.hidden=true;currentFacts.setAttribute('aria-live','polite');
   const diagnosticField=id('diagnostic-interval').closest('label')!;diagnosticField.classList.remove('narrow-field');diagnosticField.querySelector('span')!.textContent=moteText('采样间隔（秒）');
   const saveDiagnostics=element('button',moteText('保存诊断设置'),'primary');saveDiagnostics.id='diagnostics-save';saveDiagnostics.type='submit';
   const saveActions=element('div',undefined,'actions spaced');saveActions.append(saveDiagnostics,id('diagnostics-sample'));diagnosticPanel.insertBefore(saveActions,diagnosticField.nextSibling);saveActions.after(currentFacts);
@@ -72,8 +94,7 @@ export function renderSettingsWorkspace(status:Status,root:Document=document):vo
   const connected=Boolean(status.config.serverUrl&&status.config.tokenConfigured),connectionDetails=root.getElementById('connection-details') as HTMLDetailsElement;if(connectionDetails.dataset.connected!==String(connected)){connectionDetails.dataset.connected=String(connected);connectionDetails.open=!connected;}
   set('about-runtime',(status.environment?.profile??'')+(status.environment?.defaultProfile?moteText('（原日常目录）'):moteText(' · 独立数据')));
   set('preferences-credentials',status.credentialStorage==='json'?moteText('Dev 凭据保存在私有本地文件。'):moteText('凭据由操作系统保护。'));
-  const currentFacts=root.getElementById('diagnostics-current-facts'),diagnostics=status.diagnostics,sample=diagnostics?.latest;
-  if(currentFacts){const scope=JSON.stringify([status.authorizationGeneration,status.config.deviceId,status.config.serverUrl,status.config.tokenConfigured,status.config.authSourceBinding]),signature=sample&&diagnostics?JSON.stringify([sample.at,diagnostics.sampleCount,sample.rssBytes,sample.cpuUserMicros,sample.cpuSystemMicros]):'';if(currentFacts.dataset.scope!==scope){currentFacts.dataset.scope=scope;delete currentFacts.dataset.requested;delete currentFacts.dataset.read;}if(currentFacts.dataset.requested==='true'&&signature&&signature!==currentFacts.dataset.before){currentFacts.dataset.read='true';delete currentFacts.dataset.requested;}currentFacts.dataset.latest=signature;currentFacts.replaceChildren();currentFacts.hidden=currentFacts.dataset.read!=='true'||!sample;if(!currentFacts.hidden&&sample&&diagnostics){const count=root.createElement('p');count.className='helper';count.textContent=diagnostics.enabled?moteText('诊断开启 · {0} 条数值样本',diagnostics.sampleCount):moteText('诊断关闭');const facts=root.createElement('dl');facts.className='maintenance-facts';const values=[[moteText('最近采样'),new Date(sample.at).toLocaleString(getLocale(),{hour12:false})],[moteText('本机诊断'),moteText('主进程 RSS {0} MiB · 累计 CPU {1} s',(sample.rssBytes/1048576).toFixed(1),((sample.cpuUserMicros+sample.cpuSystemMicros)/1000000).toFixed(1))]];for(const[label,text]of values){const term=root.createElement('dt'),value=root.createElement('dd');term.textContent=label;value.textContent=text;facts.append(term,value);}currentFacts.append(count,facts);}}
+  renderDiagnosticFacts(status,root);
 }
 
 export function showBackupOperation(kind:'import'|'export',phase:'working'|'canceled'|'complete'|'error',message:string,root:Document=document):void {
