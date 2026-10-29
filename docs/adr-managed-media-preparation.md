@@ -38,3 +38,5 @@ Native 自动准备目标为 macOS arm64/x64、Linux glibc arm64/x64。Windows�
 取代 Native supervisor 自动 pip 修补和仅下载模型按钮。保留当前 worker 认证、执行回执、未知结果保护、处理权限、原件归档、可选插件与模型完整性校验。不增加旧数据读取器、迁移或双写。旧模型版本仍按当前固定 catalog 判断，旧运行目录不自动删除。
 
 本决定细化 [录音结果与执行就绪](adr-recording-outcomes-runtime.md) 的运行时部分；其资料归属、重试授权及不确定执行规则继续有效。
+
+本轮实际准备、生成素材处理、固定提交截图、平台未测范围与剩余整页差异见[验证报告](validation/ui-final-media-2026-10-29/README.md)。
