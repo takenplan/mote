@@ -13,6 +13,7 @@ import type {ExecutionEngine} from './execution-engine.js';
 import {ImportAttributionStore} from './import-attribution.js';
 import {RecordContextStore} from './record-context.js';
 import {SourceContextStore} from './source-context.js';
+import {captureContextMembers,captureContextOriginals,isCaptureContextSourceId} from './capture-context.js';
 
 const MATERIAL_PREFIX='mat_';
 const materialIdSchema=z.string().regex(/^mat_[a-f0-9]{64}$/);
@@ -316,14 +317,22 @@ export class MaterialStore {
     return this.withImportContext(sourceId?this.resolveContext('',sourceId):unknownAttributionContext(),[captureId],true);
   }
   private withImportContext(context:AttributionContext,captureIds:string[],open=false):AttributionContext {
-    const {importDeclarations:_,importStatements:__,sourceContextStatements:___,recordContextDeclarations:____,recordContextStatements:_____,...base}=context,importDeclarations=this.importAttribution.identities(captureIds);
+    const {importDeclarations:_,importStatements:__,sourceContextStatements:___,recordContextDeclarations:____,recordContextStatements:_____,sourceContextDeclarations:______,...base}=context,importDeclarations=this.importAttribution.identities(captureIds);
     const recordContextDeclarations=this.recordContexts.identities(captureIds),recordContextStatements=open?this.recordContexts.open(recordContextDeclarations):[];
+    const channelMembers=captureContextMembers(this.store,captureIds);
+    const sourceContextDeclarations=[...(context.sourceContextDeclarations??[]).filter(pin=>!isCaptureContextSourceId(pin.sourceId)),...[...channelMembers.keys()].sort().flatMap(id=>{const pin=this.sourceContexts.identity(id);return pin?[pin]:[];})];
     const importStatements=open?this.importAttribution.open(importDeclarations):[];
-    const sourceContextStatements=open?this.sourceContexts.open(context.sourceContextDeclarations??[]):[];
-    return {...base,...(recordContextDeclarations.length?{recordContextDeclarations}:{}),...(recordContextStatements.length?{recordContextStatements}:{}),...(importDeclarations.length?{importDeclarations}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
+    const sourceContextStatements=open?this.scopedSourceStatements(sourceContextDeclarations,channelMembers):[];
+    return {...base,...(sourceContextDeclarations.length?{sourceContextDeclarations}:{}),...(recordContextDeclarations.length?{recordContextDeclarations}:{}),...(recordContextStatements.length?{recordContextStatements}:{}),...(importDeclarations.length?{importDeclarations}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
+  }
+  private scopedSourceStatements(pins:NonNullable<AttributionContext['sourceContextDeclarations']>,members:Map<string,string[]>):NonNullable<AttributionContext['sourceContextStatements']>{
+    return this.sourceContexts.open(pins).flatMap(value=>{
+      if(!isCaptureContextSourceId(value.sourceId))return [value];
+      const captureIds=members.get(value.sourceId);return captureIds?.length?[{...value,captureIds}]:[];
+    });
   }
   private rangeContext(material:MaterialRecord,memberIds:string[]):AttributionContext {
-    const context=contextMetadata(material.attributionContext??unknownAttributionContext());if(!context.importDeclarations?.length&&!context.recordContextDeclarations?.length)return context;
+    const context=contextMetadata(material.attributionContext??unknownAttributionContext());if(!context.importDeclarations?.length&&!context.recordContextDeclarations?.length&&!context.sourceContextDeclarations?.some(pin=>isCaptureContextSourceId(pin.sourceId)))return context;
     const captureIds=this.store.db.prepare(`SELECT ref FROM material_members WHERE material_id=? AND revision=? AND kind='capture'
       AND id IN (SELECT value FROM json_each(?))`).all(material.id,material.revision,JSON.stringify(memberIds)).map(row=>String(row.ref).slice('capture:'.length));
     return this.withImportContext(context,captureIds);
@@ -403,7 +412,8 @@ export class MaterialStore {
   }
   private openContext(id:string,context:AttributionContext):AttributionContext {
     const ownerStatements=(context.declarations??[]).flatMap(value=>{const row=this.store.db.prepare('SELECT json FROM material_owner_declarations WHERE material_id=? AND id=? AND version=?').get(id,value.id,value.version);if(!row)return [];const body=decodeMemoryPrivate<{question:string;answer:string}>(this.store,JSON.parse(String(row.json)).private);return [{id:value.id,...body}];});
-    const {importStatements:_,sourceContextStatements:__,recordContextStatements:___,...base}=context,recordContextStatements=this.recordContexts.open(context.recordContextDeclarations??[]),importStatements=this.importAttribution.open(context.importDeclarations??[]),sourceContextStatements=this.sourceContexts.open(context.sourceContextDeclarations??[]);
+    const members=this.store.db.prepare("SELECT m.ref FROM material_members m JOIN material_heads h ON h.id=m.material_id AND h.revision=m.revision WHERE h.id=? AND m.kind='capture'").all(id).map(row=>String(row.ref).slice('capture:'.length));
+    const {importStatements:_,sourceContextStatements:__,recordContextStatements:___,...base}=context,recordContextStatements=this.recordContexts.open(context.recordContextDeclarations??[]),importStatements=this.importAttribution.open(context.importDeclarations??[]),sourceContextStatements=this.scopedSourceStatements(context.sourceContextDeclarations??[],captureContextMembers(this.store,members));
     return {...base,...(recordContextStatements.length?{recordContextStatements}:{}),...(ownerStatements.length?{ownerStatements}:{}),...(importStatements.length?{importStatements}:{}),...(sourceContextStatements.length?{sourceContextStatements}:{})};
   }
   /** Semantic dependencies follow original and excerpt lineage without revoking either original. */
@@ -423,9 +433,12 @@ export class MaterialStore {
   }
   refreshSourceContext(sourceId:string){
     const hasImages=Boolean(this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='image_inputs'").get());
-    for(const capture of this.store.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=?'+(hasImages?' UNION SELECT capture_id FROM image_inputs WHERE source_id=?':'')).all(sourceId,...(hasImages?[sourceId]:[])))this.invalidateCaptureSemantics(String(capture.capture_id));
+    const originals=[...new Set([...captureContextOriginals(this.store,sourceId),...this.store.db.prepare('SELECT capture_id FROM source_versions WHERE source_id=?'+(hasImages?' UNION SELECT capture_id FROM image_inputs WHERE source_id=?':'')).all(sourceId,...(hasImages?[sourceId]:[])).map(row=>String(row.capture_id))])];
+    for(const id of originals)this.invalidateCaptureSemantics(id);
     this.onSourceContextChanged?.(sourceId);
-    const ids=this.store.db.prepare('SELECT id FROM material_heads WHERE source_id=? AND retired=0').all(sourceId);
+    const ids=this.store.db.prepare(`WITH RECURSIVE affected(id) AS (SELECT value FROM json_each(?) UNION SELECT l.capture_id FROM file_evidence_links l JOIN affected a ON l.parent_id=a.id)
+      SELECT id FROM material_heads WHERE source_id=? AND retired=0 UNION
+      SELECT h.id FROM material_heads h JOIN material_members m ON m.material_id=h.id AND m.revision=h.revision JOIN affected a ON m.ref='capture:'||a.id WHERE h.retired=0`).all(JSON.stringify(originals),sourceId);
     for(const row of ids){const material=this.get(String(row.id));if(material)this.republishContext(material);}
   }
   private codingLayout(id:string,revision:string):boolean {

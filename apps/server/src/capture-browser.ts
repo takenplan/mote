@@ -91,7 +91,7 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
     const memoryMaterialRef=evidenceReader.currentMemoryMaterialRef(record);
     const detailed=evidenceReader.context([record])[0];
     if(credential(req)&&detailed.attributionContext){
-      const {recordContextDeclarations:_,recordContextStatements:__,...context}=detailed.attributionContext;
+      const {recordContextDeclarations:_,recordContextStatements:__,sourceContextDeclarations:___,sourceContextStatements:____,...context}=detailed.attributionContext;
       detailed.attributionContext=context;
     }
     return {...detailed,libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,

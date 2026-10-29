@@ -4,6 +4,7 @@ import {StoreError,sha256,type Store} from './store.js';
 import {ImportAttributionStore,portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution.js';
 import {SourceContextStore,portableSourceContextSchema,type PortableSourceContext} from './source-context.js';
 import {RecordContextStore,portableRecordContextSchema,type PortableRecordContext} from './record-context.js';
+import {captureContextMembers,isCaptureContextSourceId} from './capture-context.js';
 
 const hash=z.string().regex(/^[a-f0-9]{64}$/),id=z.string().regex(/^mat_[a-f0-9]{64}$/),uuid=z.string().uuid();
 const text=z.string(),integer=z.number().int().nonnegative(),flag=z.number().int().min(0).max(1),at=z.string().datetime({offset:true});
@@ -120,13 +121,14 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
     const normalized=materialManifestSchema.parse(manifest);
     if(normalized.attributionContext?.recordContextStatements!==undefined)throw new StoreError('Material archive contains private record descriptions outside their declaration store');
     if(normalized.attributionContext?.sourceContextStatements!==undefined)throw new StoreError('Material archive contains private source context prose outside its declaration store');
-    for(const pin of normalized.attributionContext?.sourceContextDeclarations??[]){
-      if(pin.sourceId!==normalized.origin.sourceId||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material source context declaration has unrelated or missing source scope');
-    }
     if(normalized.id!==head.id||normalized.origin.sourceId!==head.source_id||normalized.origin.externalId!==head.external_id)throw new StoreError('Material revision source identity mismatch');
     const members=(membersByRevision.get(revisionKey(revision))??[]).sort((a,b)=>Number(a.idx)-Number(b.idx));
     if(members.length!==revision.member_count||members.some((row,i)=>row.idx!==i))throw new StoreError('Material member layout mismatch');
     for(const member of members){if(member.kind==='capture'&&(member.ref!=='capture:'+member.id||!store.evidence([String(member.id)]).length))throw new StoreError('Material archive is missing its original capture');}
+    const channelMembers=captureContextMembers(store,members.filter(member=>member.kind==='capture').map(member=>String(member.id)));
+    for(const pin of normalized.attributionContext?.sourceContextDeclarations??[]){
+      if((isCaptureContextSourceId(pin.sourceId)?!channelMembers.has(pin.sourceId):pin.sourceId!==normalized.origin.sourceId)||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material source context declaration has unrelated or missing source scope');
+    }
     if(digest(normalized.attributionContext?.recordContextDeclarations??[])!==digest(recordContexts.identities(members.filter(member=>member.kind==='capture').map(member=>String(member.id)))))throw new StoreError('Material record description has unrelated or missing original scope');
     if(normalized.attributionContext?.importDeclarations?.length){
       const expected=importAttribution.identities(members.filter(member=>member.kind==='capture').map(member=>String(member.id)));
@@ -173,7 +175,16 @@ export function restorePortableMaterials(store:Store,portable:Portable|undefined
     if(context.attributionContext?.recordContextStatements!==undefined)throw new StoreError('Material evidence archive contains private record descriptions outside their declaration store');
     if(digest(context.attributionContext?.recordContextDeclarations??[])!==digest(recordContexts.identities(dependencies.get(String(row.anchor_id))??[])))throw new StoreError('Material evidence record description has unrelated or missing original scope');
   }
-  for(const row of portable.contexts){if(!anchors.has(row.anchor_id))throw new StoreError('Material context has no anchor');const context=materialEvidenceContextSchema.parse(JSON.parse(String(row.json)));if(context.attributionContext?.sourceContextStatements!==undefined)throw new StoreError('Material evidence archive contains private source context prose outside its declaration store');for(const pin of context.attributionContext?.sourceContextDeclarations??[]){const anchor=anchors.get(row.anchor_id)!,head=heads.get(anchor.material_id)!;if(pin.sourceId!==head.source_id||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material evidence source context declaration has unrelated or missing source scope');}}
+  for(const row of portable.contexts){
+    if(!anchors.has(row.anchor_id))throw new StoreError('Material context has no anchor');
+    const context=materialEvidenceContextSchema.parse(JSON.parse(String(row.json)));
+    if(context.attributionContext?.sourceContextStatements!==undefined)throw new StoreError('Material evidence archive contains private source context prose outside its declaration store');
+    const channelMembers=captureContextMembers(store,dependencies.get(String(row.anchor_id))??[]);
+    for(const pin of context.attributionContext?.sourceContextDeclarations??[]){
+      const anchor=anchors.get(row.anchor_id)!,head=heads.get(anchor.material_id)!;
+      if((isCaptureContextSourceId(pin.sourceId)?!channelMembers.has(pin.sourceId):pin.sourceId!==head.source_id)||!sourceContexts.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Material evidence source context declaration has unrelated or missing source scope');
+    }
+  }
   for(const row of portable.codingSnapshots)if(!revisions.has(revisionKey(row)))throw new StoreError('Coding material snapshot has no revision');
   for(const row of portable.indexing)if(!heads.has(row.material_id))throw new StoreError('Material search projection has no head');
 
