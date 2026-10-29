@@ -227,6 +227,49 @@ class FinalSelectedRiskInstrumentedTest {
         }finally{instrumentation.removeMonitor(monitor);context.queue().dedupeRow(id)?.let{context.queue().resolveDedupe(id,it.getString("blob"),null,null,null)};directory.deleteRecursively()}
     }
 
+
+    @Test fun enabledExistingCalendarSavesAndActuallyScansLocallyWhileAllSendingStaysPaused()=fixture{
+        val resolver=context.contentResolver;val manager=WorkManager.getInstance(context);val store=context.localSources();val before=store.sources();require(before.isEmpty())
+        fun calendarRows(uri:Uri,projection:Array<String>,selection:String)=resolver.query(uri,projection,selection,null,"_id")!!.use{cursor->JSONArray().apply{while(cursor.moveToNext())put(JSONArray().apply{for(i in projection.indices)put(if(cursor.isNull(i))JSONObject.NULL else cursor.getString(i))})}.toString()}
+        val calendars=calendarRows(CalendarContract.Calendars.CONTENT_URI,arrayOf("_id","account_name","account_type","calendar_displayName"),"_id=1");require(JSONArray(calendars).length()==1)
+        val columns=arrayOf("_id","calendar_id","title","description","dtstart","dtend","allDay","eventLocation","eventTimezone","deleted");val events=calendarRows(CalendarContract.Events.CONTENT_URI,columns,"calendar_id=1")
+        resolver.query(CalendarContract.Events.CONTENT_URI,arrayOf(CalendarContract.Events.DTSTART),"_id=7 AND calendar_id=1",null,null)!!.use{cursor->require(cursor.moveToFirst()&&cursor.getLong(0)>System.currentTimeMillis()+2*86400000L)}
+        val network=AtomicInteger();val previousHook=HttpJson.onRequest;HttpJson.onRequest={network.incrementAndGet();previousHook?.invoke()};var sourceId:String?=null
+        try{
+            ActivityScenario.launch<SourcesActivity>(Intent(context,SourcesActivity::class.java).putExtra("addCalendar",true)).use{
+                val label=resolver.query(CalendarContract.Calendars.CONTENT_URI,arrayOf(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME),"_id=1",null,null)!!.use{cursor->check(cursor.moveToFirst());cursor.getString(0)};chooseNativeListItem(label);until("Actual calendar form"){main{shown().any{it.tag=="calendar-description"}}}
+                main{shown().filterIsInstance<CheckBox>().single{it.text.toString()=="允许读取并按所选策略发送这个来源"}.isChecked=true;val edits=shown().filterIsInstance<EditText>();val form=edits.single{it.tag=="calendar-description"}.parent as ViewGroup;val children=(0 until form.childCount).map{form.getChildAt(it)};for((label,value)in listOf("过去多少天（0–365）" to "0","未来多少天（1–365）" to "1")){(children[children.indexOfFirst{it is TextView&&it.text.toString()==label}+1]as EditText).setText(value)}}
+                picture("calendar-enabled-current-range-before-save");click("保存来源设置");until("Real enabled local source persisted"){store.sources().any{it.calendarId==1L&&it.enabled&&it.daysBefore==0&&it.daysAfter==1}};sourceId=store.sources().single().id
+                until("Production SourceScanWorker read exact current calendar scope"){store.state(requireNotNull(sourceId)).let{it.optBoolean("scanComplete")&&it.optString("lastScan").isNotBlank()&&it.optString("status")=="scanned"}}
+                val state=store.state(requireNotNull(sourceId));assertEquals(0,state.getJSONObject("current").length());assertEquals(0,state.getJSONArray("pending").length());assertFalse(state.optBoolean("registered"));assertFalse(state.has("lastAcknowledgedAt"));assertTrue(Settings(context).read().syncPaused);assertEquals("manual",Settings(context).read().syncMode)
+                until("Native source list reports scanned waiting, never Central acknowledgement"){has("已扫描，等待发送")};assertFalse(has("资料说明已获中央确认"));assertFalse(has("已同步"));assertEquals("Paused send gates every network request",0,network.get());picture("calendar-enabled-local-scan-waits-without-central-ack")
+                val facts=JSONObject().put("sourceId",sourceId).put("calendarId",1).put("enabled",true).put("daysBefore",0).put("daysAfter",1).put("actualScanComplete",true).put("currentItems",0).put("pendingVersions",0).put("registered",false).put("networkRequests",network.get()).put("actionsConnectInvoked",false)
+                File(context.filesDir,"final-selected-risk/calendar-enabled-local-facts.json").writeText(facts.toString())
+            }
+        }finally{
+            sourceId?.let{store.setEnabled(it,false)};SourceWork.schedule(context);listOf("mote-source-scan","mote-source-periodic","mote-source-upload").forEach{manager.cancelUniqueWork(it).result.get()};until("Only temporary source work stopped"){listOf("mote-source-scan","mote-source-periodic","mote-source-upload").all{name->manager.getWorkInfosForUniqueWork(name).get().all{it.state.isFinished}}};sourceId?.let{store.remove(it)};HttpJson.onRequest=previousHook;assertEquals(before,store.sources());assertEquals(calendars,calendarRows(CalendarContract.Calendars.CONTENT_URI,arrayOf("_id","account_name","account_type","calendar_displayName"),"_id=1"));assertEquals(events,calendarRows(CalendarContract.Events.CONTENT_URI,columns,"calendar_id=1"))
+        }
+    }
+
+    @Test fun oneAndTwentyFourHourSupportExportsFilterActualRuntimeLogsAndRetainAllNumericSamples()=fixture{
+        val now=System.currentTimeMillis();val ages=listOf(30*60_000L,2*3600_000L,2*86400_000L);val ids=ages.map{UUID.randomUUID().toString()};val files=(0..6).map{File(context.noBackupFilesDir,if(it==0)"mote.log"else"mote.log.$it")};val sampleFile=File(context.noBackupFilesDir,"diagnostics.json");val originals=(files+sampleFile).associateWith{if(it.exists())it.readBytes()else null}
+        val root=File(context.cacheDir,"record-camera/generated-range-${UUID.randomUUID()}").apply{mkdirs()};var target:File?=null
+        val monitor=object:Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:Intent):Instrumentation.ActivityResult?=if(intent.action==Intent.ACTION_CREATE_DOCUMENT)Instrumentation.ActivityResult(Activity.RESULT_OK,Intent().setData(FileProvider.getUriForFile(context,"${context.packageName}.record-files",requireNotNull(target))))else null}
+        try{
+            // Current-format generated past timestamps are fixture input; the actual UI and production exporter decide range membership.
+            files.forEach{it.delete()};files.first().writeText(ages.indices.joinToString("\n",postfix="\n"){i->"${Instant.ofEpochMilli(now-ages[i])} INFO  [thread-0] SUPPORT - OK sourceId=${ids[i]} elapsedMs=0"})
+            sampleFile.writeText(JSONArray(ages.indices.map{i->JSONObject().put("atMs",now-ages[i]).put("capturedCount",901+i).put("queueDepth",0)}).toString())
+            instrumentation.addMonitor(monitor)
+            ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","DIAGNOSTICS")).awaitMainUi().use{scenario->
+                for((hours,count)in listOf(1 to 1,24 to 2)){
+                    click("导出时间范围");chooseNativeListItem(if(hours==1)"最近 1 小时"else"最近 24 小时");until("Actual selected $hours-hour range visible after dialog closes"){main{shown().filterIsInstance<TextView>().any{it.tag=="diagnostic-export-range"&&it.text.toString().contains(if(hours==1)"最近 1 小时"else"最近 24 小时")}}};target=File(root,"support-$hours.json");click("导出安全支持包 JSON");until("Actual $hours-hour support file written"){requireNotNull(target).length()>0&&has("诊断包已导出")}
+                    val result=JSONObject(requireNotNull(target).readText());val logs=result.getJSONObject("logs");val text=logs.getString("text");ids.forEachIndexed{i,id->assertEquals("Actual runtime timestamp membership",i<count,text.contains(id))};val after=Instant.parse(logs.getString("after")).toEpochMilli();val end=Instant.parse(logs.getString("before")).toEpochMilli();assertTrue(kotlin.math.abs(end-after-hours*3600_000L)<1000)
+                    val samples=result.getJSONArray("samples");val seededTimes=ages.map{now-it}.toSet();val seeded=(0 until samples.length()).map{samples.getJSONObject(it)}.filter{it.getLong("atMs")in seededTimes};assertEquals("All three planted ages survive; Main may add current numeric samples",3,seeded.size);assertEquals(seededTimes,seeded.map{it.getLong("atMs")}.toSet());assertEquals(setOf(901,902,903),seeded.map{it.getInt("capturedCount")}.toSet());picture("support-actual-${hours}h-range-and-success")
+                }
+                scenario.recreate();until("Actual 24h selected range retained after rebuild"){has("导出时间范围 · 最近 24 小时")};picture("support-24h-range-restored")
+            }
+        }finally{instrumentation.removeMonitor(monitor);originals.forEach{(file,bytes)->if(bytes==null)file.delete()else file.writeBytes(bytes)};root.deleteRecursively()}
+    }
     private class HttpFixture:AutoCloseable{
         val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
         init{threads.submit{while(!server.isClosed)runCatching{server.accept()}.getOrNull()?.let{socket->threads.submit{socket.use{
