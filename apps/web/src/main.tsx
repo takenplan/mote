@@ -71,6 +71,7 @@ import './library-final.css';
 import './recording-reader.css';
 import './device-workspace.css';
 import './agent-final.css';
+import './special-materials-final.css';
 import './activity-final.css';
 import './actions-final.css';
 import './discovery-final.css';
