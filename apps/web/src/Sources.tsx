@@ -141,7 +141,7 @@ function SourceRecordingConnection({api,sourceId,provider,onOpen}:{api:Api;sourc
  if(page.error)return <p role="alert">{moteText('状态读取失败，请重试。')}</p>;
  if(!page.data)return <p role="status">{moteText('正在读取…')}</p>;
  if(page.data.provider!==provider||page.data.sourceId!==sourceId)return <p role="status">{moteText('此来源未绑定当前录音账号')}</p>;
- return <div className="source-connection-embedded"><RecordingConnection api={api} provider={provider} onOpen={onOpen}/></div>;
+ return <div className="source-connection-embedded final-source-connector"><RecordingConnection api={api} provider={provider} onOpen={onOpen}/></div>;
 }
 
 function ConnectorPanel({api,catalog,refresh,requested}:{api:Api;catalog:Record<string,unknown>|null;refresh:()=>Promise<void>;requested:string}){
