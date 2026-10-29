@@ -54,7 +54,8 @@ internal class BackupOperationView(private val activity: Activity, private val b
         }
         line(file.displayName ?: MoteI18n.text("文件名暂不可读取"),"backup-export-name",13f,false)
         line(file.size?.let { java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(it) + " B" } ?: MoteI18n.text("文件大小未知"),"backup-export-size",10f,true)
-        line(file.uri,"backup-export-uri",10f,true)
+        val details = SecondaryUi.disclosure(words,MoteI18n.text("技术详情"),"backup-file-details")
+        SecondaryUi.text(details,file.uri,muted=true).apply { tag = "backup-export-uri"; setTextIsSelectable(true) }
         MoteUi.styleTree(card)
     }
 

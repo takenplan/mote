@@ -189,9 +189,13 @@ class BackupJourneyInstrumentedTest {
             val uri = FileProvider.getUriForFile(context,"${context.packageName}.record-files",file).toString()
             until("same selected document post-write metadata") { main {
                 visible().filterIsInstance<TextView>().any { it.tag=="backup-export-name" && it.text.toString()==file.name } &&
-                    visible().filterIsInstance<TextView>().any { it.tag=="backup-export-size" && it.text.toString()==java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(file.length())+" B" } &&
-                    visible().filterIsInstance<TextView>().any { it.tag=="backup-export-uri" && it.text.toString()==uri }
+                    visible().filterIsInstance<TextView>().any { it.tag=="backup-export-size" && it.text.toString()==java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(file.length())+" B" }
             } }
+            assertFalse(main { visible().any { it.tag=="backup-export-uri" } })
+            tag("backup-file-details")
+            assertTrue(main { visible().filterIsInstance<TextView>().any { it.tag=="backup-export-uri" && it.text.toString()==uri } })
+            tag("backup-file-details")
+            assertFalse(main { visible().any { it.tag=="backup-export-uri" } })
         }
         ActivityScenario.launch(BackupActivity::class.java).use { scenario ->
             until("real local count") { main { visible().filterIsInstance<TextView>().any { it.tag=="backup-record-count" && it.text.toString()==java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(before.records) } } }
