@@ -1,4 +1,10 @@
 {
+  "应用到草稿": "Auf Entwurf anwenden",
+  "补充这类记录的背景（选填）": "Hintergrund für diese Art von Aufzeichnung ergänzen (optional)",
+  "适用于这台 Mac 的已有与后续资料，不改写原文。": "Gilt für vorhandene und künftige Inhalte auf diesem Mac, ohne den Originaltext zu ändern.",
+  "跟随连接默认": "Standard der Verbindung verwenden",
+  "指定此连接下的模型": "Modell für diese Verbindung wählen",
+  "新请求使用已保存的模块分配": "Neue Anfragen verwenden die gespeicherten Modulzuweisungen",
   "开始整理": "Ordnen starten",
   "更新于 {0}": "Aktualisiert {0}",
   "需重验": "Erneut prüfen",

@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "应用到草稿": "Apply to draft",
+  "补充这类记录的背景（选填）": "Add background for this type of record (optional)",
+  "适用于这台 Mac 的已有与后续资料，不改写原文。": "Applies to existing and future materials on this Mac without changing the original text.",
+  "跟随连接默认": "Use the connection default",
+  "指定此连接下的模型": "Choose a model for this connection",
+  "新请求使用已保存的模块分配": "New requests use the saved module assignments",
   "开始整理": "Start organizing",
   "更新于 {0}": "Updated {0}",
   "需重验": "Needs revalidation",

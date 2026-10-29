@@ -1,4 +1,10 @@
 {
+  "应用到草稿": "Aplicar al borrador",
+  "补充这类记录的背景（选填）": "Añadir contexto para este tipo de registro (opcional)",
+  "适用于这台 Mac 的已有与后续资料，不改写原文。": "Se aplica a los materiales actuales y futuros de este Mac sin modificar el texto original.",
+  "跟随连接默认": "Usar el valor predeterminado de la conexión",
+  "指定此连接下的模型": "Elegir un modelo para esta conexión",
+  "新请求使用已保存的模块分配": "Las nuevas solicitudes usan las asignaciones de módulos guardadas",
   "开始整理": "Comenzar a organizar",
   "更新于 {0}": "Actualizado {0}",
   "需重验": "Requiere verificación",
