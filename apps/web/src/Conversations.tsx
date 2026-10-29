@@ -1,7 +1,7 @@
 import {unsentDrafts,type ChatAttachment} from './chat-drafts';
 import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
-import {SaveConversationRecord} from './SaveConversationRecord';
+import {conversationFailure,ConversationDialog,ConversationTurnDetails} from './ConversationTurnDetails';
 import {useResource} from './useResource';
 import {useOperationUpdates} from './useOperationUpdates';
 import {readResource,resources} from './resource-cache';
@@ -12,7 +12,7 @@ import {QueryProgress,type QueryRun} from './QueryProgress';
 import {uploadChatImage} from './note-attachments';
 import React,{useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode} from 'react';
 import {AlertCircle, ArrowRight, ArrowUp, ImagePlus, LoaderCircle, MessageSquare, Monitor, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Trash2, X} from 'lucide-react';
-import {ApiError,dateTime, errorMessage, type Answer, type Api, type Device, type Range} from './api';
+import {ApiError,dateTime, type Answer, type Api, type Device, type Range} from './api';
 import {ConversationHeading,ConversationComposer} from './ConversationShell';
 import {FeaturePanels} from './features/runtime';
 import {readOwnerQuestion} from './owner-question-route';
@@ -70,7 +70,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [clearedScope,setClearedScope]=useState<{owner:Api;id:string}|null>(null);
   const [selectedId,setSelectedId]=useState<string|null>(null),[older,setOlder]=useState<OlderTurns|null>(null),[pageRevoked,setPageRevoked]=useState(false);
-  const [historyOpen,setHistoryOpen]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false),[moreOpen,setMoreOpen]=useState(false),[moreTurn,setMoreTurn]=useState<{owner:Api;conversationId:string;turnId:string}|null>(null),[pendingSwitch,setPendingSwitch]=useState<{owner:Api;id:string|null}|null>(null),[dialogOwner,setDialogOwner]=useState(api);
   const [targetTurn,setTargetTurn]=useState<string|null>(null);
   const [selectedOwnerQuestion,setSelectedOwnerQuestion]=useState<string|null>(()=>readOwnerQuestion(window.location.hash));
   const detail=useResource<Conversation>(api,selectedId?`/api/conversations/${encodeURIComponent(selectedId)}`:null);
@@ -84,10 +84,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     void api.request<{id:string;available:boolean}>(`/api/conversations/${encodeURIComponent(conversationId)}/references/${encodeURIComponent(id)}`).then(value=>{
       if(latestDetail.current.api!==owner||latestDetail.current.selectedId!==conversationId)return;
       if(value.available===true&&value.id===id)onOpen(ref);else setUnavailableReference({opener});
-    }).catch(error=>{if(latestDetail.current.api===owner&&latestDetail.current.selectedId===conversationId)setError(errorMessage(error));});
+    }).catch(error=>{if(latestDetail.current.api===owner&&latestDetail.current.selectedId===conversationId)setError(conversationFailure(error));});
   };
   const scopeCleared=clearedScope?.owner===api&&clearedScope.id===conversation?.id;
-  useEffect(()=>{setClearedScope(null);setUnavailableReference(null);},[api,selectedId]);
+  useEffect(()=>{setClearedScope(null);setUnavailableReference(null);setMoreOpen(false);setMoreTurn(null);setConfirmDelete(false);setPendingSwitch(null);setDialogOwner(api);},[api,selectedId]);
   const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error});
   latestDetail.current={api,selectedId,data:detail.data,error:detail.error};
   const draftOwner=useRef(api);
@@ -109,6 +109,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const loading=history.loading||loadingPage,opening=detail.loading&&!conversation||loadingOlder;
   const end = useRef<HTMLDivElement>(null);
   const [run,setRun]=useState<QueryRun|null>(null),[pollError,setPollError]=useState('');
+  const activeRun=useRef<{api:Api;id?:string}>({api});activeRun.current={api,id:run?.id};
 
   async function loadHistory(next?: string) {
     historyRequest.current?.abort();
@@ -120,7 +121,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if (controller.signal.aborted) return;
       setItems(previous => [...previous, ...page.items.filter(item => !previous.some(existing => existing.id === item.id))]);
       setCursor(page.nextCursor ?? null);
-    } catch (e) { if (!controller.signal.aborted) setHistoryError(errorMessage(e)); }
+    } catch (e) { if (!controller.signal.aborted) setHistoryError(conversationFailure(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
   useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
@@ -166,15 +167,18 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
         setBusy(false);setPendingQuestion('');operation.current=null;
       }catch(e){if(!controller.signal.aborted){
         if(e instanceof ApiError&&e.status===404){setRun(null);setBusy(false);setPendingQuestion('');operation.current=null;setError(moteText("对话或运行记录已删除。"));return;}
-        setPollError(errorMessage(e));timer=setTimeout(()=>void update(),3000);
+        setPollError(conversationFailure(e));timer=setTimeout(()=>void update(),3000);
       }}
     };
     void update();
     return()=>{controller.abort();clearTimeout(timer);};
   },[api,run?.id]);
 
-  function open(id: string) {
+  function open(id: string,force=false) {
     if (busy) return;
+    if(id===selectedId){setHistoryOpen(false);return;}
+    if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length)){setPendingSwitch({owner:api,id});return;}
+    attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
     setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
@@ -190,12 +194,13 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if(!current())return;
       if(page.id!==id||page.revision!==revision){setOlder(null);setPageRevoked(true);detail.refresh();return;}
       setOlder(previous=>{const turns=previous?.api===api&&previous.id===id&&previous.revision===revision?previous.turns:[];return {api,id,revision,turns:[...page.turns.filter(turn=>!turns.some(old=>old.id===turn.id)),...turns],nextCursor:page.nextCursor??null};});
-    }catch(e){if(current()){if(e instanceof ApiError&&[401,403,404,410].includes(e.status)){setOlder(null);setPageRevoked(true);detail.refresh();}setError(errorMessage(e));}}
+    }catch(e){if(current()){if(e instanceof ApiError&&[401,403,404,410].includes(e.status)){setOlder(null);setPageRevoked(true);detail.refresh();}setError(conversationFailure(e));}}
     finally{if(olderRequest.current===controller){olderRequest.current=null;setLoadingOlder(false);}}
   }
-  function startNew() {
-    setHistoryOpen(false);
+  function startNew(force=false) {
     if (busy) return;
+    if(!force&&(draft.getSnapshot().trim()||attachments.length)){setPendingSwitch({owner:api,id:null});return;}
+    attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
@@ -229,7 +234,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       // can appear from conversation refresh before the run poll completes.
       setRun(accepted);setPollError('');
     } catch (e) {
-      if (!controller.signal.aborted) {setBusy(false);setQuestion(text); setPendingQuestion(''); setError(moteText("{0} 可刷新历史检查结果后再重试。", errorMessage(e)));}
+      if (!controller.signal.aborted) {setBusy(false);setQuestion(text); setPendingQuestion(''); setError(moteText("{0} 可刷新历史检查结果后再重试。", conversationFailure(e)));}
     } finally {if (!controller.signal.aborted) {operation.current = null;}}
   }
   async function addImages(files:FileList|null){
@@ -249,7 +254,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
         if(controller.signal.aborted||draftOwner.current!==api||attachmentRequest.current!==controller)return;
         updateAttachments(current=>{if(controller.signal.aborted||draftOwner.current!==api)return current;const next=current.some(item=>item.id===id)?current:[...current,{id,name:file.name,mimeType:file.type}];unsentDrafts.set(api,{question:draft.getSnapshot(),attachments:next});return next;});
       }
-    }catch(e){if(!controller.signal.aborted)setError(errorMessage(e));}
+    }catch(e){if(!controller.signal.aborted)setError(conversationFailure(e));}
     finally{if(!controller.signal.aborted){setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}if(attachmentRequest.current===controller)attachmentRequest.current=null;}
   }
   async function remove() {
@@ -260,17 +265,18 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       await api.request(`/api/conversations/${encodeURIComponent(conversation.id)}`, {method: 'DELETE', signal: controller.signal});
       if (controller.signal.aborted) return;
       setRun(null);setSelectedId(null);setOlder(null);resources(api).invalidate(key=>key.startsWith('/api/conversations')||key.startsWith('/api/query-runs'));setQuestion(''); setConfirmDelete(false); void loadHistory();
-    } catch (e) {if (!controller.signal.aborted) setError(errorMessage(e));}
+    } catch (e) {if (!controller.signal.aborted) setError(conversationFailure(e));}
     finally {if (!controller.signal.aborted) {setBusy(false); operation.current = null;}}
   }
-  return <div className={"conversation-layout final-conversation"+(historyOpen?" history-open":"")} aria-busy={loading||opening||recentRuns.loading}>
+  return <div className={"conversation-layout final-conversation"+(historyOpen?" history-open":"")+(!conversation?" conversation-fresh":"")} aria-busy={loading||opening||recentRuns.loading}>
+    <ConversationDialog open={pendingSwitch?.owner===api} title={moteText('还有未发送的内容')} onClose={()=>setPendingSwitch(null)} footer={<><button className="button" onClick={()=>setPendingSwitch(null)}>{moteText('继续编辑')}</button><button className="button primary" onClick={()=>{const next=pendingSwitch;setPendingSwitch(null);if(next?.owner===api){if(next.id===null)startNew(true);else open(next.id,true);}}}>{moteText('舍弃并切换')}</button></>}><p>{pendingSwitch?.id===null?moteText('还有未发送的问题。舍弃原输入并新建对话？'):moteText('有未保存的修改。离开并丢弃修改？')}</p></ConversationDialog>
     {unavailableReference&&<UnavailableReference opener={unavailableReference.opener} close={()=>setUnavailableReference(null)}/>}
-    <div className="conversation-toolbar"><button className="text-button" aria-expanded={historyOpen} aria-controls="conversation-history" onClick={()=>setHistoryOpen(value=>!value)}>{moteText("对话历史")}</button><button className="button subtle" disabled={busy} onClick={startNew}><Plus size={15}/>{moteText("新对话")}</button></div>
+    <div className="conversation-toolbar"><button className="text-button" aria-expanded={historyOpen} aria-controls="conversation-history" onClick={()=>setHistoryOpen(value=>!value)}>{historyOpen?moteText("返回对话"):moteText("对话历史")}</button><div><button className="text-button" disabled={opening} onClick={()=>{detail.refresh();recentRuns.refresh();}}>{moteText("刷新")}</button><button className="button subtle" disabled={busy} onClick={()=>startNew()}><Plus size={15}/>{moteText("新对话")}</button>{conversation&&!historyOpen&&<button className="text-button conversation-more" aria-label={moteText("对话更多")} onClick={()=>setMoreOpen(true)}>{moteText("更多")}</button>}</div></div>
     <aside id="conversation-history" hidden={!historyOpen} className="conversation-history panel" aria-label={moteText("对话历史")}>
-      <div className="conversation-history-heading"><div className="chat-section-title"><div className="chat-section-icon"><MessageSquare size={15}/></div><div><h2>{moteText("对话历史")}</h2></div></div><button className="icon-button" aria-label={moteText("刷新对话历史")} disabled={loading} onClick={() => void loadHistory()}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
-      <button className="button subtle full new-conversation-button" disabled={busy} onClick={startNew}><Plus size={16}/>{moteText("新对话")}</button>
+      <div className="conversation-history-heading"><div className="chat-section-title"><div className="chat-section-icon"><MessageSquare size={15}/></div><div><h1>{moteText("对话历史")}</h1></div></div><button className="icon-button" aria-label={moteText("刷新对话历史")} disabled={loading} onClick={() => void loadHistory()}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
+      <button className="button subtle full new-conversation-button" disabled={busy} onClick={()=>startNew()}><Plus size={16}/>{moteText("新对话")}</button>
       <FeaturePanels api={api} onOpen={onOpen} value={{kind:'mote.ask.history',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion??'',revision:'1',title:'',text:''}}/>
-      {Boolean(historyError||history.error)&&<p className="notice error" role="alert">{historyError||errorMessage(history.error)}</p>}
+      {Boolean(historyError||history.error)&&<p className="notice error" role="alert">{historyError||conversationFailure(history.error)}</p>}
       {history.data && !loadingPage && !historyError && !history.error && !items.length && <p className="fine-print">{moteText("回答会自动保存在中央节点，随时回来继续。")}</p>}
       <div className="conversation-list">{items.map(item => <button key={item.id} className={`conversation-item ${!selectedOwnerQuestion&&conversation?.id === item.id ? 'active' : ''} ${item.status === 'failed' ? 'failed' : ''}`} aria-current={!selectedOwnerQuestion&&conversation?.id === item.id ? 'true' : undefined} disabled={busy} onClick={() => void open(item.id)}>
         <strong>{item.title}</strong><span>{item.status === 'failed' ? <><AlertCircle size={12}/>{moteText("未完成")}{' · '}</> : null}{dateTime(item.updatedAt)} · {item.turnCount}{' '}{moteText("轮")}</span>
@@ -279,31 +285,36 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {cursor && <button className="text-button" disabled={loading} onClick={() => void loadHistory(cursor)}>{moteText("加载更早的对话")}</button>}
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>
-      <ConversationHeading title={conversation?.title??moteText('开始一段新对话')} action={conversation&&<button className="icon-button" aria-label={moteText("删除此对话")} disabled={busy} onClick={()=>setConfirmDelete(value=>!value)}><Trash2 size={17}/></button>}/>
-      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):reference.origin.kind==='material'?moteText('参考这份资料'):reference.origin.kind==='insight'?moteText('原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{reference.error}</span>:reference.origin.kind==='material'?<button className="text-button" onClick={()=>onOpen(reference.origin!.id)}>{moteText('查看参考资料')}</button>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<a className="text-button" href={reference.origin.kind==='memory'?'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id):reference.returnRoute??'#/library?view=materials&selected='+encodeURIComponent(reference.origin.kind==='material'?reference.origin.id:'capture:'+reference.origin.id)}>{reference.origin.kind==='memory'?moteText('返回记忆'):moteText('返回资料')}</a><button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
-      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
-      {conversation?.scope.anchorMaterialRef&&<nav className="filter-bar" aria-label={moteText('参考资料')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这份资料')}</span><button className="text-button" onClick={()=>onOpen(conversation.scope.anchorMaterialRef!)}>{moteText('查看参考资料')}</button></>}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation.id})}>{moteText('清除参考记录')}</button></nav>}
-      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
-      {confirmDelete && <div className="notice conversation-delete-confirm"><p>{moteText("删除此对话及全部问答记录？")}</p><div className="source-toolbar"><button className="button danger" disabled={busy} onClick={() => void remove()}>{moteText("确认删除对话")}</button><button className="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{moteText("取消")}</button></div></div>}
+      <ConversationHeading plain title={conversation?.title??moteText('想从留下的内容里找什么？')}/>
+      <ConversationDialog open={dialogOwner===api&&moreOpen&&Boolean(conversation)} title={moteText('对话')} onClose={()=>setMoreOpen(false)}>{conversation&&<><div className="conversation-more-list">{conversation.turns.filter(turn=>turn.result&&!turn.evidenceDeleted).slice(-1).map(turn=><button className="text-button" key={turn.id} onClick={()=>{setMoreOpen(false);setMoreTurn({owner:api,conversationId:conversation.id,turnId:turn.id});}}>{moteText('本轮详情')}<small>{turn.question}</small></button>)}<button className="text-button danger-text" disabled={busy} onClick={()=>{setMoreOpen(false);setError('');setConfirmDelete(true);}}>{moteText('删除此对话')}</button></div>{run&&<details className="conversation-run-details"><summary>{moteText('运行详情')}</summary>{moreOpen&&<QueryProgress api={api} run={run} error={pollError}/>}</details>}</>}</ConversationDialog>
+      <ConversationDialog open={dialogOwner===api&&confirmDelete} busy={busy} title={moteText('删除此对话')} onClose={()=>{setConfirmDelete(false);setError('');}} footer={<><button className="button" disabled={busy} onClick={()=>{setConfirmDelete(false);setError('');}}>{moteText('取消')}</button><button className="button primary" disabled={busy} onClick={()=>void remove()}>{moteText('确认删除对话')}</button></>}>{confirmDelete&&<div className="conversation-delete-confirm"><p>{moteText('删除此对话及全部问答记录？')}</p>{error&&<p role="alert">{error}</p>}</div>}</ConversationDialog>
       {opening && <p className="loading" role="status"><LoaderCircle size={16} className="spin"/>{moteText("正在打开对话…")}</p>}
       {targetTurn&&conversation&&!opening&&!conversation.nextCursor&&!conversation.turns.some(turn=>turn.id===targetTurn)&&<p role="status">{moteText('原始轮次暂不可读。')}</p>}
       <div className="conversation-messages">
       {conversation?.nextCursor&&<button className="text-button" disabled={opening} onClick={()=>void loadOlderTurns()}>{moteText("加载更早的对话")}</button>}
-      {conversation?.turns.map(turn => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
-        <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}{Boolean(turn.attachments?.length)&&<span className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</span>}</span></div>
-        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.result.modelSelection&&<small className="model-used">{turn.result.modelSelection.profileName} · {turn.result.modelSelection.model}</small>}{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,openHistoryReference)}<SaveConversationRecord api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} onOpen={onOpen}/></>}</>}
+      {conversation?.turns.map(turn => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}${turn.question===conversation.title?' first-question-duplicate':''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
+        <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}</span></div>{Boolean(turn.attachments?.length)&&<div className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</div>}
+        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,openHistoryReference)}<div className="conversation-turn-actions"><button className="text-button" aria-label={moteText('本轮详情')+' '+turn.question} onClick={()=>setMoreTurn({owner:api,conversationId:conversation.id,turnId:turn.id})}>{moteText('更多')}</button></div><ConversationTurnDetails api={api} conversationId={conversation.id} id={turn.id} question={turn.question} answer={turn.result} open={moreTurn?.owner===api&&moreTurn.conversationId===conversation.id&&moreTurn.turnId===turn.id} onClose={()=>setMoreTurn(null)} onOpen={ref=>{setMoreTurn(null);openHistoryReference(ref);}} run={run?.turnId===turn.id?run:undefined} pollError={pollError}/></>}</>}
       </article>)}
+      {busy&&!run&&pendingQuestion&&<p className="query-admission-status" role="status">{moteText('正在提交问题…')}</p>}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}
-      {run&&<QueryProgress api={api} run={run} error={pollError}/>}
-      {run?.status==='running'&&<button className="button subtle" onClick={()=>void api.request<QueryRun>(`/api/query-runs/${run.id}/cancel`,{method:'POST'}).then(setRun).catch(e=>setError(errorMessage(e)))}>{moteText("停止生成")}</button>}
+      {run&&run.status!=='completed'&&<QueryProgress compact api={api} run={run} error={pollError}/>}
+      {run?.status==='running'&&<button className="button subtle" onClick={()=>void api.request<QueryRun>(`/api/query-runs/${run.id}/cancel`,{method:'POST'}).then(value=>{if(activeRun.current.api===api&&activeRun.current.id===run.id)setRun(value);}).catch(e=>{if(activeRun.current.api===api&&activeRun.current.id===run.id)setError(conversationFailure(e));})}>{moteText("停止生成")}</button>}
       <div ref={end}/>
       </div>
-      {Boolean(error||detail.error||recentRuns.error||feedError)&&<p className="notice error" role="alert">{error||errorMessage(detail.error||recentRuns.error||feedError)}</p>}
+      {Boolean(error||detail.error||recentRuns.error||feedError)&&<p className="notice error" role="alert">{error||conversationFailure(detail.error||recentRuns.error||feedError)}</p>}
+      <div className="conversation-compose">
+      {!reference.origin&&!conversation&&<a className="conversation-add-reference text-button" href="#/library">＋ {moteText('参考资料')}</a>}
+      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):reference.origin.kind==='material'?moteText('参考这份资料'):reference.origin.kind==='insight'?moteText('原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{reference.error}</span>:reference.origin.kind==='material'?<button className="text-button" onClick={()=>onOpen(reference.origin!.id)}>{moteText('查看参考资料')}</button>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<a className="text-button" href={reference.origin.kind==='memory'?'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id):reference.returnRoute??'#/library?view=materials&selected='+encodeURIComponent(reference.origin.kind==='material'?reference.origin.id:'capture:'+reference.origin.id)}>{reference.origin.kind==='memory'?moteText('返回记忆'):moteText('返回资料')}</a><button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
+      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
+      {conversation?.scope.anchorMaterialRef&&<nav className="filter-bar" aria-label={moteText('参考资料')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这份资料')}</span><button className="text-button" onClick={()=>onOpen(conversation.scope.anchorMaterialRef!)}>{moteText('查看参考资料')}</button></>}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation.id})}>{moteText('清除参考记录')}</button></nav>}
+      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
       <DraftComposer draft={draft}>{question=><ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={setQuestion} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
         {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==attachment.id))}><X size={13}/></button></span>)}</div>}
-        <details className="chat-model-options" open={Boolean(modelProfileId||modelOverride)}><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={setModelProfileId} model={modelOverride} onModelChange={setModelOverride} disabled={busy||opening} detachedFromForm/></details>
+        <details className="chat-model-options"><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={setModelProfileId} model={modelOverride} onModelChange={setModelOverride} disabled={busy||opening} detachedFromForm/></details>
         <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
       </ConversationComposer>}</DraftComposer>
+      </div>
       {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
     </section>}
   </div>;

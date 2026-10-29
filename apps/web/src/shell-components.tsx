@@ -585,23 +585,25 @@ export function EvidenceDialog({
 export function AnswerView({
   answer,
   onOpen,
+  compact=false,
 }: {
   answer: Answer;
   onOpen: (id: string) => void;
+  compact?:boolean;
 }) {
   return (
-    <div className="answer">
-      <div className="answer-label">
+    <div className={"answer"+(compact?" answer-compact":"")}>
+      {!compact&&<div className="answer-label">
         <span className="mote-symbol small">m</span>
         <strong>Mote</strong>
         <span>{moteText("根据你的上下文")}</span>
-      </div>
+      </div>}
       <div className="markdown">
         <AnswerMarkdown answer={answer} onOpen={onOpen} />
       </div>
       {answer.citations.length > 0 && (
         <div className="citations">
-          <span className="eyebrow">{moteText("证据来源 ·")}{' '}{answer.citations.length}</span>
+          <span className="eyebrow">{compact?moteText("依据"):moteText("证据来源 ·")+' '+answer.citations.length}</span>
           <div className="citation-grid">
             {answer.citations.map((cite, index) => (
               <button
@@ -621,7 +623,7 @@ export function AnswerView({
           </div>
         </div>
       )}
-      <TurnUsage usage={answer.usage}/>
+      {!compact&&<><TurnUsage usage={answer.usage}/>
       <details className="trace">
         <summary>
           <Layers3 size={14} />
@@ -636,7 +638,7 @@ export function AnswerView({
           </div>
         ))}
         <p className="run-id">{moteText("运行 ID ·")}{' '}{answer.runId}</p>
-      </details>
+      </details></>}
     </div>
   );
 }

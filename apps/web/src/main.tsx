@@ -73,6 +73,7 @@ import './device-workspace.css';
 import './activity-final.css';
 import './actions-final.css';
 import './discovery-final.css';
+import './conversation-final.css';
 import {QuickNoteDialog} from './QuickNoteDialog';
 import {QuickNoteContext} from './quick-note-context';
 import {enterGuide,guideVisit} from './feature-guide-state';
