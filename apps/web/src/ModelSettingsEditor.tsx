@@ -26,17 +26,19 @@ interface EditorState {
     latest: ModelSettingsView;
     draft: ModelSettingsDraft;
 }
-export function ModelSettingsEditor({ api, revision, onApplied, profileId, visible = true }: {
+export function ModelSettingsEditor({ api, revision, onApplied, profileId, initialProfile,onSaved,visible = true }: {
     api: Api;
     revision: number;
     onApplied: () => void;
     profileId?: string;
+    initialProfile?:ModelSettingsView['profiles'][number];
+    onSaved?:(view:ModelSettingsView)=>void;
     visible?: boolean;
 }) {
     const endpoint = profileId === undefined ? '/api/model-settings' : `/api/model-settings/profiles/${encodeURIComponent(profileId)}`;
-    const profileView = (view: ModelSettingsView): ModelSettingsView => { const profile = view.profiles.find(p => p.id === profileId); if (profileId !== undefined && !profile)
-        throw new Error(moteText("模型配置已被删除，请重新选择。")); return { ...view, settings: profile?.settings ?? view.settings }; };
-    const profileName = (view: ModelSettingsView) => view.profiles.find(p => p.id === profileId)?.name ?? moteText("默认配置");
+    const profileView = (view: ModelSettingsView): ModelSettingsView => { const profile = view.profiles.find(p => p.id === profileId)??(initialProfile?.id===profileId?initialProfile:undefined); if (profileId !== undefined && !profile)
+        throw new Error(moteText("模型配置已被删除，请重新选择。")); return { ...view, profiles:profile&&!view.profiles.some(value=>value.id===profile.id)?[...view.profiles,profile]:view.profiles, settings: profile?.settings ?? view.settings }; };
+    const profileName = (view: ModelSettingsView) => (view.profiles.find(p => p.id === profileId)??initialProfile)?.name ?? moteText("默认配置");
     const [state, setState] = useState<EditorState>();
     const [loading, setLoading] = useState(true), [operation, setOperation] = useState<'save' | 'test' | 'restore'>();
     const [error, setError] = useState(''), [notice, setNotice] = useState(''), [conflict, setConflict] = useState(false);
@@ -66,7 +68,7 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId, visib
             setCatalogLoading(true);
             void api.request<{
                 items: CatalogModel[];
-            }>(endpoint + '/models', { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}), signal: controller.signal })
+            }>((initialProfile?'/api/model-settings':endpoint) + '/models', { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}), signal: controller.signal })
                 .then(result => { if (!controller.signal.aborted)
                 setCatalog(result.items); })
                 .catch(e => { if (!controller.signal.aborted)
@@ -185,7 +187,7 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId, visib
                 setRestoreReview(false);
                 setNotice(kind === 'restore' ? moteText("默认项已恢复部署配置，功能分配保持不变。") : moteText("已保存。选择此配置的新请求将立即使用这些设置。"));
                 invalidateConfiguration(api);
-                onApplied();
+                onSaved?.(result as ModelSettingsView);onApplied();
             }
         }
         catch (e) {
