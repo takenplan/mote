@@ -15,5 +15,5 @@ export function recordingSpeaker(speaker:string|undefined,diarized:boolean,confi
 }
 export function installRecordingStyles(){
  if(document.querySelector('link[data-mote-recording-final]'))return;
- const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./recording-final.css',import.meta.url).href;link.dataset.moteRecordingFinal='';document.head.append(link);
+ const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./recording-final.css?no-inline',import.meta.url).href;link.dataset.moteRecordingFinal='';document.head.append(link);
 }
