@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {REPORT_SIZE_MESSAGE,REPORT_SOURCE_MESSAGE,acceptedReportHeight,acceptedReportSource} from '../src/report-sizing';
 import {reportDocument} from '../src/report-document';
@@ -18,6 +19,7 @@ test('the report remains scriptless by default; resizing allows only one host no
  assert.ok(sized.indexOf('Content-Security-Policy')<sized.indexOf('window.generatedAttack'));
  assert.match(sized,/script-src 'nonce-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; script-src-attr 'none';/);
  assert.equal((sized.match(/<script nonce=/g)??[]).length,1,'A nonce is never added to model-supplied script elements');
+ const document=new JSDOM(sized).window.document,bridge=document.querySelector('script[nonce]')!;assert.equal(bridge.textContent,'','The trusted bridge contains no inline executable text');assert.equal(bridge.getAttribute('src'),'http://127.0.0.1:54321/insight-report-bridge.js');document.defaultView!.close();
  assert.doesNotMatch(sized,/unsafe-eval|strict-dynamic|script-src 'unsafe-inline'/);assert.match(sized,/connect-src 'none'/);
  assert.throws(()=>reportDocument('',[],'light',{token:'untrusted',parentOrigin:'http://127.0.0.1:54321'}));
  assert.throws(()=>reportDocument('',[],'light',{token,parentOrigin:'javascript:alert(1)'}));
@@ -65,4 +67,20 @@ test('a current report maps only its own citations and rejects an old owner list
  await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.length,2);
  const other={...citation,id:'22222222-2222-4222-8222-222222222222'},secondToken=token();await act(async()=>root.render(view(ownerB,[other,citation])));assert.notEqual(token(),secondToken);await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.at(-1),'capture:'+other.id);
  await act(async()=>root.render(null));await act(async()=>dom.window.dispatchEvent(message(0)));assert.equal(opened.length,3,'Unmount removes the navigation listener');
+});
+
+
+test('the fixed bridge reads its nonce and source origin while only current numeric markers produce navigation',()=>{
+ const token='d'.repeat(32),dom=new JSDOM(`<body><span data-mote-report-source="${token}" data-mote-report-index="1">2</span><span data-mote-report-source="old" data-mote-report-index="0">old</span><a href="https://generated.invalid/">inert navigation</a></body>`,{url:'about:blank',runScripts:'outside-only'}),window=dom.window;
+ const messages:{data:unknown;target:string}[]=[],script=window.document.createElement('script');script.nonce=token;script.src='http://127.0.0.1:54321/insight-report-bridge.js';
+ Object.defineProperty(window.document,'currentScript',{value:script});Object.defineProperty(window,'parent',{value:{postMessage:(data:unknown,target:string)=>messages.push({data,target})}});
+ Object.defineProperty(window,'ResizeObserver',{value:class{observe(){}}});window.requestAnimationFrame=()=>1;
+ try{
+  window.eval(readFileSync(new URL('../public/insight-report-bridge.js',import.meta.url),'utf8'));
+  const current=window.document.querySelector<HTMLElement>('[data-mote-report-source="'+token+'"]')!;current.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(messages)),[{data:{type:REPORT_SOURCE_MESSAGE,token,index:1},target:'http://127.0.0.1:54321'}]);
+  window.document.querySelector<HTMLElement>('[data-mote-report-source="old"]')!.click();
+  for(const index of ['-1','1.5','NaN','9007199254740992']){current.setAttribute('data-mote-report-index',index);current.click();}
+  assert.equal(messages.length,1);const link=window.document.querySelector('a')!,event=new window.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+ }finally{window.close();}
 });
