@@ -184,7 +184,7 @@ test('raw attribution looks up linked originals by member reference and excludes
   for(let i=0;i<32;i++)materials.publish({...draft,id:materialId('fixture','unrelated-'+i),origin:{sourceId:'fixture',externalId:'unrelated-'+i},
     members:[{id:unrelated.id,kind:'capture',ref:'capture:'+unrelated.id}],blocks:[{id:'body',kind:'text',format:'plain',text:item.text,memberIds:[unrelated.id]}]});
   const prepare=store.db.prepare.bind(store.db),queries:string[]=[];
-  t.mock.method(store.db,'prepare',(sql:string)=>{if(sql.includes('WITH RECURSIVE originals'))queries.push(sql);return prepare(sql);});
+  t.mock.method(store.db,'prepare',(sql:string)=>{if(sql.includes('WITH RECURSIVE originals')&&sql.includes('material_members'))queries.push(sql);return prepare(sql);});
   const raw=store.evidence([leaf.id])[0];
   assert.equal(materials.contextForEvidence(raw).ownerRelation,'owner','linked ancestors inherit the current owner correction even with a cycle');
   const parent=materials.publish({...draft,id:materialId('fixture','leaf'),origin:{sourceId:'fixture',externalId:'leaf'},
