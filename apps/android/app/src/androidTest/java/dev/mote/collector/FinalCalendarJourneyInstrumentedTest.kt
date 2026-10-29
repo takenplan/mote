@@ -197,7 +197,7 @@ class FinalCalendarJourneyInstrumentedTest {
                 assertTrue(actual.getString("description").contains(CalendarActionRules.marker(related?.getString("actionId") ?: id)))
             }
             val result = JSONObject().put("id", id).put("kind", kind).put("receipt", action).put("nativeEventPresent", actual != null).put("nativeExternalId", nativeId)
-                .put("calendarId", record.getString("calendarId")).put("osMutationClaimed", kind != "calendar.complete").put("executorTriggeredByTest", executorTriggeredByTest).put("unattendedWorkerScheduleProven", false)
+                .put("calendarId", record.getString("calendarId")).put("nativeEvent",actual ?: JSONObject.NULL).put("osMutationClaimed", kind != "calendar.complete").put("executorTriggeredByTest", executorTriggeredByTest).put("unattendedWorkerScheduleProven", false)
             record.remove("pending"); record.getJSONArray("executed").put(result); writePrivate(stateFile, record); results.put(result)
         }
         writeResult("execute-selected", config, JSONObject().put("results", results).put("onlySelectedIds", true).put("realModelInvokedByTest", false))
