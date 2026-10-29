@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "返回导入详情": "Zurück zu den Importdetails",
+  "此格式暂无预览": "Für dieses Format ist keine Vorschau verfügbar",
   "处理选项": "Verarbeitungsoptionen",
   "问：{0}\n\n答：{1}": "Frage: {0}\n\nAntwort: {1}",
   "{0} 条记录已保存": "{0} Einträge gespeichert",

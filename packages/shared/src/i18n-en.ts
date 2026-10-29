@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "返回导入详情": "Return to import details",
+  "此格式暂无预览": "Preview is not available for this format",
   "处理选项": "Processing options",
   "问：{0}\n\n答：{1}": "Q: {0}\n\nA: {1}",
   "{0} 条记录已保存": "{0} records saved",

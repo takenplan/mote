@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "返回导入详情": "インポートの詳細に戻る",
+  "此格式暂无预览": "この形式はプレビューできません",
   "处理选项": "処理オプション",
   "问：{0}\n\n答：{1}": "質問：{0}\n\n回答：{1}",
   "{0} 条记录已保存": "{0} 件の記録を保存済み",

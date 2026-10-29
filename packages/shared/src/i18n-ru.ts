@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const russian: Readonly<Record<string, string>> = {
+  "返回导入详情": "Вернуться к сведениям об импорте",
+  "此格式暂无预览": "Предварительный просмотр этого формата недоступен",
   "处理选项": "Параметры обработки",
   "问：{0}\n\n答：{1}": "Вопрос: {0}\n\nОтвет: {1}",
   "{0} 条记录已保存": "Сохранено записей: {0}",
