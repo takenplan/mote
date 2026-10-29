@@ -10073,5 +10073,6 @@ export const german: Readonly<Record<string, string>> = {
   "查看结果与依据 →": "Ergebnis und Belege ansehen →",
   "暂时无法确认当前目录": "Der aktuelle Ordner kann nicht bestätigt werden",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Beenden Sie zuerst Ihre aktuelle Eingabe. Die Installation stoppt die lokale Erfassung und Uploads; vorhandene Daten bleiben erhalten.",
-  "继续安装": "Installation fortsetzen"
+  "继续安装": "Installation fortsetzen",
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Die Datei wurde Ihrem Browser bereitgestellt. Prüfen Sie in der Downloadliste, ob sie gespeichert wurde."
 };

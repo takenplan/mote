@@ -10073,5 +10073,6 @@ export const french: Readonly<Record<string, string>> = {
   "查看结果与依据 →": "Voir le résultat et ses sources →",
   "暂时无法确认当前目录": "Le dossier actuel ne peut pas être confirmé",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Terminez d’abord votre saisie. L’installation arrête la collecte et les envois locaux tout en conservant les données existantes.",
-  "继续安装": "Continuer l’installation"
+  "继续安装": "Continuer l’installation",
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Le fichier a été transmis à votre navigateur. Vérifiez les téléchargements pour confirmer son enregistrement."
 };

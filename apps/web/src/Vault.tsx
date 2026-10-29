@@ -1,6 +1,7 @@
+import {useMaintenanceTransfer,provideMaintenanceDownload,maintenanceFailure,maintenanceTechnicalFailure} from './maintenance-transfer';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { CheckCircle2, LoaderCircle, RefreshCw } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { bytes, dateTime, errorMessage, type Api, type Status } from "./api";
 import { ErrorNotice } from './shell-components';
 import {useResource} from './useResource';
@@ -14,41 +15,18 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, chil
     refresh: () => void;
     disconnect: () => void;
 }) {
-    const [busy, setBusy] = useState("");
-    const [message, setMessage] = useState("");
-    const [error, setError] = useState("");
+    const {busy,message,error,kind,run:action,current}=useMaintenanceTransfer(api,refresh);
     const input = useRef<HTMLInputElement>(null);
-    async function action(kind: string, fn: () => Promise<string>) {
-        setBusy(kind);
-        setError("");
-        setMessage("");
-        try {
-            setMessage(await fn());
-            refresh();
-        }
-        catch (e) {
-            setError(errorMessage(e));
-        }
-        finally {
-            setBusy("");
-        }
-    }
     async function exportArchive(mode?: 'metadata' | 'data') {
         const response = await api.raw(mode ? `/api/export-bundle?mode=${mode}` : "/api/export");
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = mode ? `mote-${mode}.tar.gz` : `mote-${new Date().toISOString().slice(0, 10)}.json`;
-        anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return mode === 'metadata' ? moteText('资料已导出') : moteText("资料已导出，包含记录、影像与校验信息。");
+        return provideMaintenanceDownload(response,mode?`mote-${mode}.tar.gz`:`mote-${new Date().toISOString().slice(0,10)}.json`,current);
     }
     async function importFile(file?: File) {
         if (!file)
             return;
-        await action("import", async () => {
+        await action("import", async current => {
             const raw = await file.text();
+            if(!current())return "";
             const archive = JSON.parse(raw);
             const sections = ['captures', 'sources', 'sourceHeads', 'sourceVersions', 'memories', 'memoryDeletions', 'files', 'captureFiles', 'perceptionResults', 'todos'];
             if (!archive || archive.version !== 2 || !sections.every(key => Array.isArray(archive[key])))
@@ -59,15 +37,15 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, chil
             }>("/api/import", { method: "POST", body: raw });
             return moteText("已导入 {0} 条记录，跳过 {1} 条重复记录。", result.imported, result.duplicates);
         });
-        if (input.current)
+        if (current()&&input.current)
             input.current.value = "";
     }
     const storage=status.storage;
     const disk=useResource<StorageStatistics>(api,'/api/storage-statistics');
     return <div className="vault-content">
       {!embedded&&<h1>{moteText('存储与备份')}</h1>}
-      {error&&<ErrorNotice text={error}/>}
-      {message&&<p className="notice success" role="status"><CheckCircle2 size={16}/>{message}</p>}
+      {Boolean(error)&&<><ErrorNotice text={maintenanceFailure(error)}/><details className="owner-disclosure"><summary>{moteText("技术详情")}</summary><pre>{maintenanceTechnicalFailure(error)}</pre></details></>}
+      {message&&<p className={kind==='import'?'notice success':'notice'} role="status">{kind==='import'&&<CheckCircle2 size={16}/ >}{message}</p>}
       <div className="owner-metrics owner-storage-metrics">
         <div><span>{moteText('中心已使用')}</span><strong>{!disk.error&&disk.data?bytes(disk.data.bytes):'—'}</strong><small role={disk.error?'alert':undefined}>{disk.error?errorMessage(disk.error):disk.data?.skipped?moteText('部分文件无法读取，统计可能不完整。'):disk.loading?moteText('正在读取…'):moteText('文件与模型 · 当前占用')}</small></div>
         <div><span>{moteText('资料保存')}</span><strong className="owner-metric-text">{status.retentionDays?moteText('{0} 天',status.retentionDays):moteText('持续保留')}</strong><small>{status.retentionDays?moteText('保留周期'):moteText('未启用自动删除')}</small></div>

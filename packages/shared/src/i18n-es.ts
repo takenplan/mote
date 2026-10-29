@@ -10073,5 +10073,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "查看结果与依据 →": "Ver resultado y evidencias →",
   "暂时无法确认当前目录": "No se puede confirmar la carpeta actual",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Termina primero la entrada actual. La instalación detiene la captura y los envíos locales y conserva el material existente.",
-  "继续安装": "Continuar la instalación"
+  "继续安装": "Continuar la instalación",
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "El archivo se ha enviado al navegador. Comprueba las descargas para confirmar que se guardó."
 };

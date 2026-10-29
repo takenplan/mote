@@ -1,3 +1,4 @@
+import {useMaintenanceTransfer,provideMaintenanceDownload,maintenanceFailure,maintenanceTechnicalFailure} from './maintenance-transfer';
 import {useResource} from './useResource';
 import { moteText } from '@mote/shared/i18n';
 import {useEffect, useRef, useState, type ReactNode} from 'react';
@@ -27,9 +28,8 @@ export function Diagnostics({api,profile,advanced,deployment}:{api:Api;profile?:
   const [autoRefresh,setAutoRefresh]=useState(false);
   const [copyStatus,setCopyStatus]=useState('');
   const logRef=useRef<HTMLTextAreaElement>(null);
-  const [exporting,setExporting]=useState(false);
+  const transfer=useMaintenanceTransfer(api),exporting=Boolean(transfer.busy);
   const [hours,setHours]=useState(24);
-  const [error,setError]=useState('');
   const [checkedAt,setCheckedAt]=useState('');
   const statusResource=useResource<Snapshot>(api,'/api/diagnostics',autoRefresh?5000:undefined);
   const logs=useResource<LogPage>(api,`/api/diagnostics/log-pages?file=${logFile}&page=${logPage}&pageSize=${pageSize}&stage=${logStage}`,autoRefresh?5000:undefined);
@@ -39,20 +39,19 @@ export function Diagnostics({api,profile,advanced,deployment}:{api:Api;profile?:
   useEffect(()=>{if(logs.data)setLogPage(logs.data.page);setCopyStatus('');},[logs.data]);
   useEffect(()=>{setCheckedAt(snapshot?new Date().toISOString():'');},[api,snapshot]);
   async function download() {
-    setExporting(true);setError('');
-    try{
-      const response=await api.raw('/api/support-bundle?after='+encodeURIComponent(new Date(Date.now()-hours*3600000).toISOString())+'&before='+encodeURIComponent(new Date().toISOString()));
-      const url=URL.createObjectURL(await response.blob());
-      const anchor=document.createElement('a');anchor.href=url;anchor.download=`mote-support-${new Date().toISOString().slice(0,10)}.json`;anchor.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){setError(errorMessage(e));}finally{setExporting(false);}
+    const before=new Date(),after=new Date(before.getTime()-hours*3600000);
+    await transfer.run('support',async current=>{
+      const response=await api.raw('/api/support-bundle?after='+encodeURIComponent(after.toISOString())+'&before='+encodeURIComponent(before.toISOString()));
+      return provideMaintenanceDownload(response,`mote-support-${before.toISOString().slice(0,10)}.json`,current);
+    });
   }
   async function copyLogs() {
     try {await navigator.clipboard.writeText(rawLog);setCopyStatus(moteText("已复制当前页日志。"));}
     catch {logRef.current?.focus();logRef.current?.select();setCopyStatus(moteText("剪贴板不可用，已全选，请按 ⌘/Ctrl+C 复制。"));}
   }
   return <section className="diagnostics-panel" aria-labelledby="diagnostics-title">
-    {Boolean(error||statusResource.error||logs.error)&&<div className="notice error" role="alert">{error||errorMessage(statusResource.error||logs.error)}</div>}
+    {Boolean(transfer.error||statusResource.error||logs.error)&&<><div className="notice error" role="alert">{maintenanceFailure(transfer.error||statusResource.error||logs.error)}</div><details className="owner-disclosure"><summary>{moteText('技术详情')}</summary><pre>{maintenanceTechnicalFailure(transfer.error||statusResource.error||logs.error)}</pre></details></>}
+    {transfer.message&&<p className="notice" role="status">{transfer.message}</p>}
     <div className="owner-row"><div><h2 id="diagnostics-title">{moteText('Mote 中心')}</h2><p>{statusResource.error?moteText('暂不可读取'):snapshot?moteText('运行中'):statusResource.loading?moteText('正在读取…'):moteText('暂不可读取')}{checkedAt&&<> · {moteText('最近检查 {0}',dateTime(checkedAt))}</>}</p></div><button className="text-button" onClick={refresh} disabled={busy}>{moteText('刷新')}</button></div>
     <div className="owner-row"><div><h3>{moteText('接收与索引')}</h3><p>{snapshot?moteText('索引待处理 {0} 项，失败 {1} 项',snapshot.queue.index.pending,snapshot.queue.index.failed):moteText('正在读取…')}</p></div><a className="text-button" href="#/activity">{moteText('查看后台活动')} →</a></div>
     <section className="owner-section"><h2>{moteText('问题诊断')}</h2><div className="owner-row"><div><h3>{moteText('导出诊断包')}</h3><p>{moteText('运行状态、数量与脱敏事件')}</p></div><div className="owner-row-actions"><select aria-label={moteText('导出时间范围')} value={hours} onChange={event=>setHours(Number(event.target.value))}><option value={1}>{moteText('最近 1 小时')}</option><option value={24}>{moteText('最近 24 小时')}</option><option value={168}>{moteText('最近 7 天')}</option></select><button className="button" onClick={()=>void download()} disabled={exporting}>{exporting?moteText('正在导出…'):moteText('导出')}</button></div></div>
