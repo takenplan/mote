@@ -1,4 +1,5 @@
 import {moteText} from '@mote/shared/i18n';
+import {failureMessage} from './failure-message';
 import type {CapabilityState,MemoryBindingView,MemoryModuleBinding,MemoryPreparationView,PluginConfigurationField} from '@mote/shared';
 
 export function capabilityLabel(state:CapabilityState){
@@ -32,3 +33,9 @@ export function configurationValid(fields:PluginConfigurationField[],values:Reco
   return field.type!=='select'||Boolean(field.options?.some(option=>option.value===value));
  });
 }
+
+export function preparationPhaseLabel(preparation:Pick<MemoryPreparationView,'state'|'phase'>){
+ if(preparation.state==='cancelled')return moteText('准备已取消');
+ return ({copy:moteText('正文迁移与索引准备'),drain:moteText('处理中'),verified:moteText('核验通过 · 尚未生效'),applied:moteText('已生效')} as Record<string,string>)[preparation.phase]??moteText('处理中');
+}
+export function preparationFailureLabel(code:string){const label=failureMessage(code);return label===moteText('操作未完成。错误码：{0}',code)?moteText('准备未完成'):label;}
