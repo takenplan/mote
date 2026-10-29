@@ -70,6 +70,11 @@ const server=createServer(async(req,res)=>{
   if(url.startsWith('/api/__fixture/')){
    if(req.headers.authorization!=='Bearer '+token){res.writeHead(401).end();return;}
    if(req.method==='POST'&&url==='/api/__fixture/reset')await reset();
+   if(req.method==='POST'&&url==='/api/__fixture/inline-report'){
+    const runId=randomUUID(),answer='**Generated exact inline report** ['+noteId+']\n\n'+Array.from({length:35},(_,index)=>'Generated full paragraph '+index+': completion remains unknown.').join('\n\n')+'\n\nFinal generated reference ['+noteId+']';
+    node.store.saveInsight({runId,answer,citations:[{id:noteId,appName:'Generated discovery note',capturedAt:'2026-10-01T00:00:00.000Z',excerpt:'Completion remains unknown.'}],trace:[]},runId);
+    res.setHeader('content-type','application/json');res.end(JSON.stringify({runId,noteId}));return;
+   }
    if(req.method==='POST'&&url==='/api/__fixture/offline')offline=true;
    if(req.method==='POST'&&url==='/api/__fixture/online')offline=false;
    if(req.method==='POST'&&url==='/api/__fixture/drop-ack')dropAck=true;

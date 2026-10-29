@@ -140,4 +140,36 @@ class AskImagesInstrumentedTest {
             assertEquals(0,NativeAskImages.count(saved()));assertEquals("Generated private text before sign-out",saved().getString("question"));assertEquals(0,control("state").getInt("queryCalls"));screenshot(s,"sign-out-fences-late-upload")
         }
     }
+    @Test fun coarseComposerActionsKeepTheirActualHitAreaDraftAndRequestDisabling() {
+        fun tapBottom(s:ActivityScenario<CentralActivity>,description:String) {
+            ready(s,"Action layout "+description){a -> shown(a).any { it.contentDescription==description && it.isLaidOut }}
+            var point=floatArrayOf();s.onActivity { a -> val view=shown(a).single { it.contentDescription==description };view.requestRectangleOnScreen(android.graphics.Rect(0,0,view.width,view.height),true)
+                val bounds=android.graphics.Rect();assertTrue(view.getGlobalVisibleRect(bounds));assertEquals(view.height,bounds.height());point=floatArrayOf(bounds.exactCenterX(),bounds.bottom-2*context.resources.displayMetrics.density) }
+            val now=SystemClock.uptimeMillis();instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,point[0],point[1],0));instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now+50,android.view.MotionEvent.ACTION_UP,point[0],point[1],0));instrumentation.waitForIdleSync()
+        }
+        open().use { s ->
+            for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+                main { MoteAppearance.select(context,theme) }
+                ready(s,"Coarse action dimensions after actual theme layout"){a -> listOf("添加图片","本次模型","发送").all { description -> shown(a).single { it.contentDescription==description }.height >= (42*context.resources.displayMetrics.density).toInt() }}
+                s.onActivity { a -> assertFalse(shown(a).single { it.contentDescription=="发送" }.isEnabled) }
+                screenshot(s,"coarse-compose-empty-"+theme.name.lowercase())
+            }
+            question(s,"Generated coarse private draft");tapBottom(s,"本次模型")
+            ready(s,"Bottom of coarse model control opens actual model fields"){a -> shown(a).filterIsInstance<EditText>().any { it.contentDescription?.toString()?.startsWith("模型 ID（")==true }}
+            model(s,"generated-model-coarse");tapBottom(s,"本次模型");pick(s,null)
+            assertEquals("Generated coarse private draft",saved().getString("question"));assertEquals("generated-model-coarse",saved().getString("modelOverride"));assertEquals(0,NativeAskImages.count(saved()))
+            screenshot(s,"coarse-compose-draft-after-clicks-dark")
+            control("hold-query");control("drop-ask-ack");control("hide-ask")
+            try {
+                tapBottom(s,"发送");ready(s,"Actual coarse send retains unknown original request"){a -> !a.isWorking && saved().has("pending")}
+                val pending=saved().getJSONObject("pending").toString();assertEquals("Generated coarse private draft",JSONObject(pending).getJSONObject("input").getString("question"));assertEquals("generated-model-coarse",JSONObject(pending).getJSONObject("input").getString("modelOverride"))
+                s.onActivity { a -> for(description in listOf("发送","添加图片","你的问题"))assertFalse(description,shown(a).single { it.contentDescription==description }.isEnabled) }
+                val count=control("state").getJSONArray("seenAskRequests").length();tapBottom(s,"发送");assertEquals(count,control("state").getJSONArray("seenAskRequests").length());assertEquals(pending,saved().getJSONObject("pending").toString())
+                screenshot(s,"coarse-compose-unknown-disabled-dark")
+                control("release-query");control("show-ask");click(s,"Recheck same generated request"){it is TextView && it.text.toString()=="检查结果"}
+                until("The actual terminal run confirms one request"){saved().optString("runStatus")=="completed" && !saved().has("pending")};assertEquals(1,control("state").getInt("queryCalls"))
+            } finally { control("release-query");control("show-ask") }
+        }
+    }
+
 }

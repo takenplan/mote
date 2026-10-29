@@ -51,6 +51,7 @@ internal class CentralContent(
     private lateinit var title: TextView
     private lateinit var collectionBar: LinearLayout
     private lateinit var composer: LinearLayout
+    private var insightMoreAction: (() -> Unit)? = null
     private lateinit var settingsAction: TextView
     private lateinit var moreAction: TextView
     private lateinit var historyAction: TextView
@@ -150,7 +151,7 @@ internal class CentralContent(
         }
         addAction = headerAction("记下", "记下", tonal = true) { activity.openRecordEditor() }
         settingsAction = headerAction("设置") { localPage("SETTINGS") }
-        moreAction = headerAction("更多") { more() }
+        moreAction = headerAction("更多") { if (page == "insights") insightMoreAction?.invoke() ?: more() else more() }
         historyAction = headerAction("◷", "对话历史") { screens?.showAskHistory() }
         newConversationAction = headerAction("＋", "新对话") { screens?.newConversation() }
         conversationMoreAction = headerAction("⋯", "对话更多") { screens?.conversationMore() }
@@ -240,6 +241,7 @@ internal class CentralContent(
     fun back(): Boolean {
         if (page == "files" && requestedFileId() != null) return false
         if (screens?.back() == true) { updateBackButton(); return true }
+        if (page == "insights" && pageHistory.isEmpty()) return false
         val previous = if (pageHistory.isNotEmpty()) pageHistory.removeAt(pageHistory.lastIndex) else MoteNavigation.centralParent(page)
         if (previous == null) return false
         navigate(previous, remember = false)
@@ -249,7 +251,8 @@ internal class CentralContent(
         backButton.visibility = View.VISIBLE
         addAction.visibility = View.GONE
         val ask = page == "ask"
-        settingsAction.visibility = if (ask) View.GONE else View.VISIBLE
+        moreAction.tag = if (page == "insights") "insight-more" else null
+        settingsAction.visibility = if (ask || page == "insights") View.GONE else View.VISIBLE
         moreAction.visibility = if (ask) View.GONE else View.VISIBLE
         historyAction.visibility = if (ask && client != null) View.VISIBLE else View.GONE
         newConversationAction.visibility = historyAction.visibility
@@ -268,6 +271,7 @@ internal class CentralContent(
 
     internal fun navigate(next: String, remember: Boolean = true) {
         if (remember && next != page) pageHistory.add(page)
+        insightMoreAction = null
         page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews(); composer.removeAllViews(); composer.visibility = View.GONE
         updateCollectionBar(); updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == if (next == "extensions") "plugins" else next }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
@@ -287,6 +291,7 @@ internal class CentralContent(
         else navigate(page)
     }
     private fun disconnected() {
+        insightMoreAction = null
         composer.removeAllViews(); composer.visibility = View.GONE; updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == page }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
         text(MoteI18n.text(when {
@@ -295,6 +300,23 @@ internal class CentralContent(
             else -> "中央功能需要连接中央；文件和随手记仍可在本机保存和查看。"
         }))
         connectionButton()
+    }
+    internal fun insightChrome(titleKey: String, onMore: () -> Unit) {
+        if (page != "insights") return
+        title.text = MoteI18n.text(titleKey); settingsAction.visibility = View.GONE
+        collectionBar.visibility = View.GONE; insightMoreAction = onMore
+        moreAction.tag = "insight-more"
+    }
+    internal fun insightNavigation() {
+        val labels = listOf("资料类型", "本机保留", "设置", "此客户端支持的中央功能")
+        MoteDialogBuilder(this).setTitle(MoteI18n.text("更多"))
+            .setItems(labels.map { MoteI18n.text(it) }.toTypedArray()) { _, index -> when (index) {
+                0 -> { val entries = MoteNavigation.libraryBrowsePages.mapNotNull { key -> CentralScreens.pages.find { it.first == key } }
+                    MoteDialogBuilder(this).setTitle(MoteI18n.text("资料类型")).setItems(entries.map { MoteI18n.text(it.second) }.toTypedArray()) { _, position -> navigate(entries[position].first) }.show() }
+                1 -> localPage("LIBRARY")
+                2 -> localPage("SETTINGS")
+                else -> more()
+            } }.setNegativeButton(MoteI18n.text("取消"), null).show()
     }
     internal fun showFeatureGuide() = more()
     private fun more() {
@@ -315,7 +337,7 @@ internal class CentralContent(
     }
     private fun updateCollectionBar() {
         collectionBar.removeAllViews()
-        if (client == null || page !in MoteNavigation.libraryBrowsePages) { collectionBar.visibility = View.GONE; return }
+        if (client == null || page == "insights" || page !in MoteNavigation.libraryBrowsePages) { collectionBar.visibility = View.GONE; return }
         collectionBar.visibility = View.VISIBLE
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {

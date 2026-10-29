@@ -118,4 +118,38 @@ class FinalCentralJourneyInstrumentedTest {
             output.resolve("conversation-result.json").writeText(JSONObject().put("generatedOnly",true).put("liveModel",true).put("model",model).put("conversationId",id).put("turnId",turn!!.getString("id")).put("evidenceId",evidence).put("exactCitationVerified",true).toString(2))
         }
     }
+    /** Read-only final Discovery leg: root supplies the already persisted real report. */
+    @Test fun readPersistedDiscoveryAndReturnFromExactInlineCitation() {
+        val config=configuration();val api=connect(config);val reportId=config.getString("discoveryRunId")
+        val report=api.get("/api/insights/"+CentralScreens.encode(reportId));assertEquals(reportId,report.getString("runId"))
+        val raw=report.getJSONArray("citations");val citations=(0 until raw.length()).map { raw.getJSONObject(it) }.distinctBy { it.getString("id") }
+        assertTrue("The real persisted report must have actual citations",citations.isNotEmpty())
+        ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","insights").putExtra("insightId",reportId)).use {
+            until("Actual persisted Discovery body must render") { main { (current() as? CentralActivity)?.isWorking == false && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" && it.text.isNotBlank() && it.layout != null } } }
+            var evidenceId="";var number=0
+            var point:FloatArray?=null
+            until("Persisted Discovery inline has a current actual layout") { main {
+                val content=shown().filterIsInstance<TextView>().single { it.tag == "insight-content" };val layout=content.layout ?: return@main false;val text=content.text as android.text.Spanned
+                val spans=text.getSpans(0,text.length,android.text.style.ClickableSpan::class.java);assertTrue("Actual report needs a clickable inline original",spans.isNotEmpty())
+                val span=spans.first();val start=text.getSpanStart(span);val end=text.getSpanEnd(span);val label=text.subSequence(start,end).toString()
+                assertTrue(label.matches(Regex("\\[([1-9][0-9]*)]")));number=label.substring(1,label.length-1).toInt();assertTrue(number in 1..citations.size)
+                evidenceId=citations[number-1].getString("id");assertTrue("The persisted model text must cite this exact original",report.getString("answer").contains("["+evidenceId+"]"))
+                val line=layout.getLineForOffset(start);val x=(layout.getPrimaryHorizontal(start)+layout.getPrimaryHorizontal(end))/2+content.totalPaddingLeft
+                val y=(layout.getLineTop(line)+layout.getLineBottom(line))/2f+content.totalPaddingTop
+                content.requestRectangleOnScreen(android.graphics.Rect(x.toInt(),y.toInt(),x.toInt()+1,y.toInt()+1),true)
+                val location=IntArray(2);content.getLocationOnScreen(location);point=floatArrayOf(location[0]+x,location[1]+y);true
+            } }
+            val original=api.get("/api/capture-browser/"+CentralScreens.encode(evidenceId)).getString("ocrText");assertTrue("Generated actual original must be readable",original.isNotBlank())
+            screenshot("discovery-before-inline")
+            val now=SystemClock.uptimeMillis()
+            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,point!![0],point!![1],0))
+            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now+50,android.view.MotionEvent.ACTION_UP,point!![0],point!![1],0))
+            until("Discovery inline must open the complete exact original") { main { current() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } };screenshot("discovery-inline-original")
+            main { shown().single { it.contentDescription == "返回上一页" }.performClick() }
+            until("Return to the same persisted report") { main { current() is CentralActivity && (current() as CentralActivity).isWorking == false && shown().filterIsInstance<TextView>().any { view -> view.tag == "insight-content" && view.text is android.text.Spanned && (view.text as android.text.Spanned).getSpans(0,view.text.length,android.text.style.ClickableSpan::class.java).isNotEmpty() } } };screenshot("discovery-inline-return")
+            assertEquals(report.toString(),api.get("/api/insights/"+CentralScreens.encode(reportId)).toString())
+            output.resolve("discovery-result.json").writeText(JSONObject().put("generatedOnly",true).put("liveModelInvokedByThisMethod",false).put("persistedDiscoveryRunId",reportId).put("evidenceId",evidenceId).put("citationNumber",number).put("exactCitationVerified",true).toString(2))
+        }
+    }
+
 }

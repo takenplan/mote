@@ -55,6 +55,29 @@ class DiscoveryJourneyInstrumentedTest {
         main { shown().filterIsInstance<TextView>().first { (it.text.toString() == action || it.contentDescription?.toString() == action) && it.isClickable && it.isEnabled }.performClick() }
     }
     private fun clickTag(tag: String) { until(tag) { main { settled() && shown().any { it.tag == tag && it.isEnabled } } }; main { shown().single { it.tag == tag }.performClick() } }
+    private fun chooseMenu(label: String) {
+        until("menu item "+label) { main { shown().filterIsInstance<android.widget.ListView>().any { list -> (0 until list.adapter.count).any { list.adapter.getItem(it).toString() == label } } } }
+        main { val list = shown().filterIsInstance<android.widget.ListView>().single { list -> (0 until list.adapter.count).any { list.adapter.getItem(it).toString() == label } }
+            val position = (0 until list.adapter.count).single { list.adapter.getItem(it).toString() == label }; list.performItemClick(list.getChildAt(position),position,list.adapter.getItemId(position)) }
+    }
+    private fun newReport() { clickTag("insight-more"); chooseMenu("新建洞察") }
+    private fun tapInline(number: Int) {
+        var point: FloatArray? = null
+        until("inline text has a current actual layout") { main {
+            val content = shown().filterIsInstance<TextView>().singleOrNull { it.tag == "insight-content" } ?: return@main false
+            val layout = content.layout ?: return@main false
+            val text = content.text as android.text.Spanned
+            val span = text.getSpans(0,text.length,android.text.style.ClickableSpan::class.java).first { text.subSequence(text.getSpanStart(it),text.getSpanEnd(it)).toString() == "[$number]" }
+            val offset=text.getSpanStart(span);val line=layout.getLineForOffset(offset)
+            val x=(layout.getPrimaryHorizontal(offset)+layout.getPrimaryHorizontal(text.getSpanEnd(span)))/2+content.totalPaddingLeft
+            val y=(layout.getLineTop(line)+layout.getLineBottom(line))/2f+content.totalPaddingTop
+            content.requestRectangleOnScreen(android.graphics.Rect(x.toInt(),y.toInt(),x.toInt()+1,y.toInt()+1),true)
+            val location=IntArray(2);content.getLocationOnScreen(location);point=floatArrayOf(location[0]+x,location[1]+y);true
+        } }
+        val touch=point!!;val now=android.os.SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,touch[0],touch[1],0))
+        instrumentation.sendPointerSync(android.view.MotionEvent.obtain(now,now+50,android.view.MotionEvent.ACTION_UP,touch[0],touch[1],0))
+    }
     private fun back() { instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close() }
     private fun open(id: String? = null) = ActivityScenario.launch<CentralActivity>(Intent(context, CentralActivity::class.java).putExtra("page", "insights").apply { id?.let { putExtra("insightId", it) } })
     private fun captureOne(name: String) = main {
@@ -84,7 +107,7 @@ class DiscoveryJourneyInstrumentedTest {
             clickTag("menu:发现历史")
             until("actual discovery history") { main { settled() && shown().any { it.tag == "insight:" + fixture.getString("latestId") } } }
             clickTag("insight:" + fixture.getString("latestId"))
-            until("exact native report") { main { activity() is CentralActivity && settled() && text("Generated native discovery 0") && text("查看依据") } }
+            until("exact native report") { main { activity() is CentralActivity && settled() && text("Generated native discovery 0") && text("原文依据") } }
             assertTrue(main { text("Generated native discovery 0") })
             capture("latest-report"); assertEquals(0, state().getInt("insightCalls")); main { activity().finish() }
         }
@@ -108,7 +131,7 @@ class DiscoveryJourneyInstrumentedTest {
         }
         open(fixture.getString("oldId")).use {
             until("saved discovery loaded") { main { settled() && text("Generated native discovery 66") } }
-            click("查看原文依据")
+            clickTag("insight-citation:"+fixture.getString("noteId"))
             until("shared citation reader") { main { activity() is CaptureRecordsActivity && shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }
             assertEquals("The actual reader renders the same original and metadata from both entrypoints",first,main { shown().filterIsInstance<TextView>().map { it.text.toString() }.filter(String::isNotBlank) }); capture("citation-shared-original")
             click("关闭详情"); until("same report return") { main { activity() is CentralActivity && text("Generated native discovery 66") } }
@@ -146,7 +169,7 @@ class DiscoveryJourneyInstrumentedTest {
             until("exact result outside first page") { main { settled() && text("Generated native discovery 66") } }
             capture("old-report")
             scenario.recreate(); until("report after Activity recreation") { main { settled() && text("Generated native discovery 66") } }
-            click("查看原文依据"); until("actual original and metadata") { main { settled() && text("Generated original discovery record: completion remains unknown.") && text("基于这条记录提问") } }
+            clickTag("insight-citation:"+fixture.getString("noteId")); until("actual original and metadata") { main { settled() && text("Generated original discovery record: completion remains unknown.") && text("基于这条记录提问") } }
             capture("original")
             main { activity().recreate() }; until("original after recreation") { main { settled() && text("Generated original discovery record: completion remains unknown.") } }
             click("基于这条记录提问"); until("actual original is an anchor") { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString().startsWith("参考这条记录，自动查找相关上下文") } } }
@@ -154,7 +177,7 @@ class DiscoveryJourneyInstrumentedTest {
             until("real scoped answer") { main { shown().filterIsInstance<TextView>().any { it.text.toString().contains("Generated answer from the actual original") } } }
             val query = state().getJSONObject("lastQuery"); assertEquals(fixture.getString("noteId"), query.getJSONArray("anchorEvidenceIds").getString(0)); assertTrue(query.isNull("evidenceIds"))
             back(); until("Ask returns to original") { main { settled() && text("基于这条记录提问") } }
-            back(); until("original returns to exact report") { main { settled() && text("Generated native discovery 66") && text("查看依据") } }
+            back(); until("original returns to exact report") { main { settled() && text("Generated native discovery 66") && text("原文依据") } }
         }
     }
     @Test fun pagedHistoryRestoresAndDeletionAndPermissionRevocationWithdrawOldReports() {
@@ -177,7 +200,7 @@ class DiscoveryJourneyInstrumentedTest {
     }
     @Test fun uncertainGenerationRetriesOneRequestKeepsTheDraftAndCancellationFencesLatePublication() {
         open().use { scenario ->
-            until("history ready") { main { settled() && text("新建洞察") } }; click("新建洞察")
+            until("history ready") { main { settled() && shown().any { it.tag == "insight-more" } } }; newReport()
             until("composer ready") { main { settled() && shown().filterIsInstance<EditText>().any { it.contentDescription == "洞察要求（可选）" } } }
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "洞察要求（可选）" }.setText("Generated original direction") }
             api.post("/api/__fixture/drop-ack", JSONObject()); click("生成洞察")
@@ -186,7 +209,7 @@ class DiscoveryJourneyInstrumentedTest {
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "洞察要求（可选）" }.setText("Generated next draft") }; click("重试上次提交")
             until("published original request") { main { settled() && text("报告已归档") } }
             capture("generation-completed"); val receipt = state(); assertEquals(1, receipt.getInt("insightCalls")); val requests = receipt.getJSONArray("seenRequests"); assertEquals(2, requests.length()); assertEquals(requests.getString(0), requests.getString(1))
-            back(); until("history after run") { main { settled() && text("新建洞察") } }; click("新建洞察")
+            back(); until("history after run") { main { settled() && shown().any { it.tag == "insight-more" } } }; newReport()
             until("unsent draft preserved") { main { settled() && shown().filterIsInstance<EditText>().any { it.text.toString() == "Generated next draft" } } }
             api.post("/api/__fixture/hold-generation", JSONObject()); click("生成洞察"); until("running cancellable task") { main { settled() && text("停止") } }
             click("停止"); until("cancelled receipt") { main { settled() && text("回顾已取消") } }
@@ -214,6 +237,37 @@ class DiscoveryJourneyInstrumentedTest {
                 until("history recovers with real reports") { main { settled() && shown().count { it.tag?.toString()?.startsWith("insight:") == true } == 30 } };capture("history-recovered")
             }
         } finally { api.post("/api/__fixture/online", JSONObject()) }
+    }
+
+    @Test fun finalDiscoveryUsesQuietChromeAndActualInlineReferencesInBothReadingModes() {
+        val published=api.post("/api/__fixture/inline-report",JSONObject());val id=published.getString("runId");val noteId=published.getString("noteId")
+        val saved=api.get("/api/insights/$id");val original=api.get("/api/capture-browser/$noteId").getString("ocrText")
+        open().use {
+            until("source-shaped history") { main { settled() && shown().any { it.tag == "insight:$id" } } }
+            main { assertFalse(shown().any { it.tag == "central-collection-scope" });assertFalse(text("本机保留"));assertFalse(text("设置"));assertFalse(text("生成任务"));assertFalse(text("刷新")) }
+            main { val row=shown().single { it.tag == "insight:$id" }; assertFalse(views(row).filterIsInstance<TextView>().any { it.text.toString().contains("**") || it.text.toString().contains(noteId) }) }
+            capture("final-discovery-history");clickTag("insight:$id")
+            until("actual full saved body") { main { settled() && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" && it.text.toString().contains("Generated full paragraph 34") } } }
+            main {
+                val rendered=shown().filterIsInstance<TextView>().single { it.tag == "insight-content" }.text as android.text.Spanned
+                assertFalse(rendered.toString().contains(noteId));assertTrue(rendered.toString().startsWith("Generated exact inline report [1]"))
+                assertEquals(2,rendered.getSpans(0,rendered.length,android.text.style.ClickableSpan::class.java).size)
+                val meta=shown().filterIsInstance<TextView>().single { it.tag == "insight-meta" }.text.toString();assertTrue(meta.contains(MoteI18n.text("{0} 份依据",1)));assertFalse(meta.contains("T00:"))
+                assertFalse(shown().any { it.tag == "central-collection-scope" });assertFalse(text("设置"));assertFalse(text("生成信息与检索过程"))
+            }
+            capture("final-discovery-formatted");tapInline(1)
+            until("inline opens exact original") { main { activity() is CaptureRecordsActivity && text(original) } };capture("final-discovery-inline-original");click("关闭详情")
+            until("same report returns") { main { activity() is CentralActivity && settled() && shown().any { it.tag == "insight-content" } } };capture("final-discovery-inline-return")
+            clickTag("insight-more");chooseMenu("标准阅读")
+            until("standard body and native focus restored") { main { settled() && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" && it.text.toString().startsWith("Generated exact inline report [1]") } } }
+            main { val rendered=shown().filterIsInstance<TextView>().single { it.tag == "insight-content" }.text as android.text.Spanned;assertTrue(rendered.toString().startsWith("Generated exact inline report [1]"));assertTrue(rendered.toString().contains("Generated full paragraph 34"));assertEquals(2,rendered.getSpans(0,rendered.length,android.text.style.ClickableSpan::class.java).size);assertEquals(0,rendered.getSpans(0,rendered.length,android.text.style.StyleSpan::class.java).size) }
+            capture("final-discovery-standard");tapInline(1)
+            until("standard inline opens same original") { main { activity() is CaptureRecordsActivity && text(original) } };click("关闭详情")
+            until("standard report returns") { main { activity() is CentralActivity && settled() && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" && it.text.toString().startsWith("Generated exact inline report [1]") } } }
+            main { activity().recreate() };until("standard report survives recreation") { main { settled() && shown().filterIsInstance<TextView>().any { it.tag == "insight-content" && it.text.toString().startsWith("Generated exact inline report [1]") } } }
+            clickTag("insight-more");chooseMenu("资料与记忆");chooseMenu("资料类型");until("secondary type routes remain") { main { text("中央资料库") } };back()
+        }
+        assertEquals(saved.toString(),api.get("/api/insights/$id").toString());assertEquals(0,state().getInt("insightCalls"))
     }
 
 }

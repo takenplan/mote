@@ -257,8 +257,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         fun action(label: String, description: String = label, onClick: () -> Unit): Button = MoteUi.action(Button(ui).apply {
             text = label; contentDescription = MoteI18n.text(description); setOnClickListener { if (!ui.isWorking) onClick() }
         }, MoteUi.ButtonRole.TEXT).also { button ->
-            NativePresentationStyles.bind(button, "ask-compose-action") { (it as Button).apply { minWidth = 0; minimumWidth = 0; minHeight = ui.moteDp(36); minimumHeight = minHeight; setPadding(ui.moteDp(8),0,ui.moteDp(8),0); textSize = 10f } }
-            actions.addView(button, LinearLayout.LayoutParams(-2,ui.moteDp(36)))
+            NativePresentationStyles.bind(button, "ask-compose-action") { (it as Button).apply { minWidth = 0; minimumWidth = 0; minHeight = ui.moteDp(42); minimumHeight = minHeight; setPadding(ui.moteDp(8),0,ui.moteDp(8),0); textSize = 10f } }
+            actions.addView(button, LinearLayout.LayoutParams(-2,ui.moteDp(42)))
         }
         addAskImage=action("▧", "添加图片") { if (!askBusy() && NativeAskImages.count(askState)<4) ui.pickAttachment(chat = true) }
         val modelBox = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
@@ -266,7 +266,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         actions.addView(android.view.View(ui), LinearLayout.LayoutParams(0,1,1f))
         send = action("↑", "发送") { submitAsk() }.apply {
             MoteUi.action(this,MoteUi.ButtonRole.PRIMARY)
-            NativePresentationStyles.bind(this, "ask-send") { (it as Button).apply { minimumWidth = ui.moteDp(36); minWidth = minimumWidth; minimumHeight = ui.moteDp(36); minHeight = minimumHeight; setPadding(0,0,0,0); textSize = 18f } }
+            NativePresentationStyles.bind(this, "ask-send") { (it as Button).apply { minimumWidth = ui.moteDp(42); minWidth = minimumWidth; minimumHeight = ui.moteDp(42); minHeight = minimumHeight; setPadding(0,0,0,0); textSize = 18f } }
         }
         entry.addView(modelBox)
         val profiles = modelSettings.optJSONArray("profiles") ?: JSONArray()
