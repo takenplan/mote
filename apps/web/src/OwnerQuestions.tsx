@@ -6,15 +6,17 @@ import {ApiError,dateTime,errorMessage,type Api} from './api';
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {ConversationHeading} from './ConversationShell';
-import {ownerQuestionListPath,ownerQuestionRoute} from './owner-question-route';
+import {ownerQuestionListPath,ownerQuestionRoute,ownerQuestionListOrigin,clearOwnerQuestionListOrigin,readOwnerQuestion} from './owner-question-route';
 import {guideVisit} from './feature-guide-state';
 
 type Reply={requestId:string;expectedRevision:number;action:'answer'|'unknown'|'defer';answer?:string;choiceId?:string};
 type QuestionDraft={draft:string;choiceId?:string;reopened:boolean;pending?:{fingerprint:string;body:Reply}};
 const questionDrafts=new WeakMap<Api,Map<string,QuestionDraft>>();
 const questionVisits=new WeakMap<Api,{filter:'pending'|'all';cursor?:string}>();
-const questionOrigins=new WeakMap<Api,Map<string,{hash:string;scroll:number;opener:HTMLElement|null}>>();
-function rememberQuestion(api:Api,id:string){let all=questionOrigins.get(api);if(!all){all=new Map();questionOrigins.set(api,all);}all.set(id,{hash:window.location.hash,scroll:window.scrollY,opener:document.activeElement as HTMLElement|null});}
+type QuestionReturn={hash:string;scroll:number;opener:HTMLElement|null;questionId:string};
+const questionOrigins=new WeakMap<Api,Map<string,QuestionReturn>>();
+const questionReturns=new WeakMap<Api,QuestionReturn>();
+function rememberQuestion(api:Api,id:string){let all=questionOrigins.get(api);if(!all){all=new Map();questionOrigins.set(api,all);}all.set(id,{hash:window.location.hash,scroll:window.scrollY,opener:document.activeElement as HTMLElement|null,questionId:id});}
 function draftFor(api:Api,id:string){let all=questionDrafts.get(api);if(!all){all=new Map();questionDrafts.set(api,all);}let value=all.get(id);if(!value){value={draft:'',reopened:false};all.set(id,value);}return value;}
 type QuestionPage={items:OwnerQuestion[];nextCursor:string|null};
 const presentationHref=new URL('./owner-question-final.css',import.meta.url).href;
@@ -23,8 +25,9 @@ const stateLabel=(state:OwnerQuestion['state'])=>({open:moteText('待回答'),de
 
 export function OwnerQuestionWorkspace({api,id,onOpen}:{api:Api;id:string;onOpen:(ref:string)=>void}){
   useOwnerQuestionStyle();
-  const returnTo=id?questionOrigins.get(api)?.get(id)?.hash??ownerQuestionRoute():guideVisit(api).returnAvailable?'#/guide':'#/';
-  return <div className="owner-question-workspace"><div className="owner-question-workspace-header">{!id&&<h1>{moteText('需要你补充')}</h1>}<a className="text-button" href={returnTo}>← {moteText('返回')}</a></div>{id?<OwnerQuestionConversation key={id} api={api} id={id} onOpen={onOpen} standalone/>:<OwnerQuestionLinks api={api} history standalone/>}</div>;
+  useEffect(()=>()=>{queueMicrotask(()=>{if(readOwnerQuestion(window.location.hash)===null)clearOwnerQuestionListOrigin(api);});},[api]);
+  const returnTo=id?questionOrigins.get(api)?.get(id)?.hash??ownerQuestionRoute():ownerQuestionListOrigin(api)??(guideVisit(api).returnAvailable?'#/guide':'#/');
+  return <div className="owner-question-workspace"><div className="owner-question-workspace-header">{!id&&<h1>{moteText('需要你补充')}</h1>}<a className="text-button" href={returnTo} onClick={()=>{const position=id?questionOrigins.get(api)?.get(id):undefined;if(position)questionReturns.set(api,position);}}>← {moteText('返回')}</a></div>{id?<OwnerQuestionConversation key={id} api={api} id={id} onOpen={onOpen} standalone/>:<OwnerQuestionLinks api={api} history standalone/>}</div>;
 }
 
 export function OwnerQuestionLinks({api,workId,materialId,operationIds,history=false,selectedId,standalone=false}:{api:Api;workId?:string;materialId?:string;operationIds?:string[];history?:boolean;selectedId?:string;standalone?:boolean}){
@@ -39,7 +42,11 @@ export function OwnerQuestionLinks({api,workId,materialId,operationIds,history=f
   const path=ownerQuestionListPath({...(workId?{workId}:{}),...(materialId?{materialId}:{}),...(operationScope?{operationIds:JSON.parse(operationScope) as string[]}:{})},cursor,history?(filter==='pending'?'open,deferred':'open,deferred,answered,closed,obsolete'):'open,deferred,closed,answered');
   const page=useResource<QuestionPage>(api,path,5000);
   const items=page.error===undefined&&Array.isArray(page.data?.items)?page.data.items:[];
-  useLayoutEffect(()=>{if(!standalone||!page.data||page.error)return;for(const position of questionOrigins.get(api)?.values()??[]){if(position.hash===window.location.hash){window.requestAnimationFrame(()=>{position.opener?.isConnected&&position.opener.focus({preventScroll:true});window.scrollTo(0,position.scroll);});break;}}},[api,standalone,page.data,page.error]);
+  useLayoutEffect(()=>{
+    const position=questionReturns.get(api);if(!standalone||!page.data||page.error||!position||position.hash!==window.location.hash)return;
+    const frame=window.requestAnimationFrame(()=>{if(questionReturns.get(api)!==position||window.location.hash!==position.hash)return;questionReturns.delete(api);const opener=position.opener?.isConnected?position.opener:[...document.querySelectorAll<HTMLAnchorElement>('.owner-question-history a')].find(link=>link.getAttribute('href')===ownerQuestionRoute(position.questionId));opener?.focus({preventScroll:true});window.scrollTo(0,position.scroll);});
+    return()=>window.cancelAnimationFrame(frame);
+  },[api,standalone,page.data,page.error]);
   if(!history&&!items.length&&!page.error&&(!page.loading||page.data!==undefined)&&!page.data?.nextCursor)return null;
   return <section className={history?'owner-question-history owner-question-final':'owner-question-links owner-question-final'} aria-label={history?moteText('需要你补充'):moteText('补充问题记录')}>
     {!standalone&&<h3>{history?moteText('需要你补充'):moteText('补充问题记录')}</h3>}

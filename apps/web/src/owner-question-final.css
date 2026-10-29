@@ -58,3 +58,4 @@
 @media(max-width:560px){.owner-question-workspace .owner-question-conversation{padding:0}.owner-question-workspace .owner-question-message.user{margin-left:0}.owner-question-workspace-header h1,.owner-question-workspace .conversation-heading h1{font-size:25px}}
 .owner-question-workspace .conversation-heading{border:0;box-shadow:none;padding:0 68px 0 0;background:none;min-height:0;line-height:1.5;margin-bottom:28px}
 .owner-question-workspace .processing-actions:empty{display:none}
+.owner-question-workspace-header>.text-button{color:var(--mote-muted);text-decoration:none}

@@ -56,3 +56,12 @@ test('the first committed render withdraws an old image when its permission, rev
  next=f.commits.length;const changed={...item,revision:'revision-two',ref:'material:generated-material@revision-two'};await f.render(api,true,changed);assert.equal(f.commits[next],null,'an old revision is never committed as the new original');
  next=f.commits.length;await f.render(apiFor([],{retained:false}),true,changed);assert.equal(f.commits[next],null,'the old authenticated node cannot render into the new one');
 });
+
+test('authored note previews honor typed spans and keep owner JSON body literal while excluding metadata and late revisions',async t=>{
+ const f=await fixture(t),body='{"captureId":"This JSON is owner-authored body"}',note={...item,kind:'mote.note',schemaVersion:2,ref:'material:generated-material@note-one',revision:'note-one',title:'Generated short note'};
+ const response=(ref:string,text:string)=>({material:{ref},text:text+'{"captureId":"generated-storage-metadata"}',spans:[{kind:'text',format:'plain',pageRange:{start:0,end:text.length}},{kind:'text',format:'json',pageRange:{start:text.length,end:text.length+42}}]});
+ let finish!:(value:unknown)=>void;const old={request:async()=>new Promise(resolve=>finish=resolve)} as Api;await f.render(old,false,note);
+ const reads:string[]=[],current={request:async(path:string)=>{reads.push(path);return response(note.ref,body);}}as Api;await f.render(current,false,note);assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);assert.doesNotMatch(f.d.body.textContent!,/generated-storage-metadata/);assert.ok(reads[0].includes('revision=note-one&offset=0&length=240'));
+ await act(async()=>finish(response(note.ref,'Generated old owner body')));assert.equal(f.d.querySelector('.home-material-excerpt')!.textContent,body);
+ const replacement={...note,ref:'material:generated-material@note-two',revision:'note-two'};await f.render(current,false,replacement);assert.equal(f.d.querySelector('.home-material-excerpt'),null,'a mismatched response ref cannot stand in for the replacement');
+});

@@ -1374,8 +1374,8 @@ export const guideSections:GuideSection[] = [
               "collectionId": null,
               "categoryId": null,
               "label": "需要你补充",
-              "path": "需要你补充 → 待回答 / 全部记录；活动详情 / 资料来源上下文",
-              "where": "打开补充问题列表，或从活动详情和资料上下文进入对应问题。"
+              "path": "需要你补充",
+              "where": "补充后，仅继续处理这份资料"
             },
             "otherTargets": [
               {

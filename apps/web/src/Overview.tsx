@@ -11,7 +11,7 @@ import {type Page} from './navigation';
 import {FeatureHome} from './features/home';
 import {useResource} from './useResource';
 import {HomeMaterialRow,type RecentMaterial} from './HomeMaterialRow';
-import {ownerQuestionListPath,ownerQuestionRoute} from './owner-question-route';
+import {ownerQuestionListPath,openOwnerQuestionList} from './owner-question-route';
 import {openQuestionDraft} from './open-question-draft';
 import {useWorkspaceStyle} from './workspace-final-style';
 import type {InsightRun} from './InsightProgress';
@@ -93,8 +93,8 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
    <button onClick={()=>onPage('connections')}><span>{moteText('AI 接入')}</span><strong>{grants?.length??'—'}<small>{moteText('个有效授权')}</small></strong></button>
   </section>
   {[catalog,sources,connections].map((resource,index)=>resource.error!==undefined&&<p className="home-read-error" role="alert" key={index}>{errorMessage(resource.error)}<button className="text-button" onClick={resource.refresh}>{moteText('重新读取')}</button></p>)}
-  {issues.map(issue=><button className="home-source-issue" key={issue.id} onClick={()=>onPage('sources')}><span><i/>{issue.name||moteText('来源')} · {moteText('需要处理')}</span><span>{moteText('查看')}<ArrowRight size={13}/></span></button>)}
-  {(Boolean(pendingQuestions?.length)||questions.error!==undefined)&&<div className="home-owner-question"><button className="text-button" onClick={()=>{window.location.hash=ownerQuestionRoute();}}>{moteText('需要你补充')}{pendingQuestions?.length?<> · {moteText('{0} 条',pendingQuestions.length+(questions.data?.nextCursor?'+':''))}</>:null}<ArrowRight size={13}/></button>{questions.error!==undefined&&<p role="alert">{errorMessage(questions.error)}<button className="text-button" onClick={questions.refresh}>{moteText('重新读取')}</button></p>}</div>}
+  {issues.map(issue=><button className="home-source-issue" key={issue.id} onClick={()=>{window.location.hash='#/sources?'+new URLSearchParams({sourceId:issue.id});}}><span><i/>{issue.name||moteText('来源')} · {moteText('需要处理')}</span><span>{moteText('查看')}<ArrowRight size={13}/></span></button>)}
+  {(Boolean(pendingQuestions?.length)||questions.error!==undefined)&&<div className="home-owner-question"><button className="text-button" onClick={()=>openOwnerQuestionList(api)}>{moteText('需要你补充')}{pendingQuestions?.length?<> · {moteText('{0} 条',pendingQuestions.length+(questions.data?.nextCursor?'+':''))}</>:null}<ArrowRight size={13}/></button>{questions.error!==undefined&&<p role="alert">{errorMessage(questions.error)}<button className="text-button" onClick={questions.refresh}>{moteText('重新读取')}</button></p>}</div>}
   {(canActions||canTodos)&&<button className="home-action-entry" onClick={()=>onPage('actions')}><span><strong>{moteText('待办与日程')}</strong><small>{activeActions?moteText('{0} 条日程',activeActions.length):moteText('日程')}{Boolean(actionAttention?.length)&&<> · {moteText('{0} 项需处理',actionAttention!.length)}</>} · {knownTodos?moteText('{0} 项待办',knownTodos.filter(item=>item.status==='open').length):moteText('待办')}</small></span><span>{moteText('查看')}<ArrowRight size={13}/></span></button>}
   {(actions.error!==undefined||todos.error!==undefined)&&<p className="home-read-error" role="alert">{errorMessage(actions.error??todos.error)}<button className="text-button" onClick={()=>{actions.refresh();todos.refresh();}}>{moteText('重新读取')}</button></p>}
   <section className="home-discovery"><div className="section-heading"><h2>{moteText('精选发现')}</h2><div className="home-section-actions"><DiscoveryLink className="text-button" target={{pageId:'insights',href:'#/library/insights?insight=new'}}>{moteText('生成回顾')}</DiscoveryLink><button className="text-button" onClick={()=>onPage('insights')}>{moteText('发现历史')}<ArrowRight size={13}/></button></div></div>
