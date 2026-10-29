@@ -236,7 +236,7 @@ test('model assignment refresh preserves owner choices and their original revisi
  const api={request:async(path:string,init?:RequestInit)=>{if(revoked)throw new ApiError('generated models revoked',403);if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('generated conflict',409);}return view();}} as Api;
  await act(async()=>root.render(React.createElement(ModelAssignments,{api,revision:1,onApplied:()=>{},onManage:()=>{}})));
  const choice=d.querySelector<HTMLSelectElement>('.module-assignment-row select')!;await act(async()=>{choice.value='b';choice.dispatchEvent(new window.Event('change',{bubbles:true}));});revision=2;
- await act(async()=>resources(api).invalidate(key=>key==='/api/model-settings'));assert.equal(d.querySelector<HTMLSelectElement>('.module-assignment-row select')!.value,'b');await act(async()=>d.querySelector<HTMLButtonElement>('button[aria-label="保存模块分配"]')!.click());assert.equal(writes[0].revision,1);assert.equal(writes[0].defaults[MODEL_FEATURES[0]],'b');
+ await act(async()=>resources(api).invalidate(key=>key==='/api/model-settings'));assert.equal(d.querySelector<HTMLSelectElement>('.module-assignment-row select')!.value,'b');await act(async()=>button(d,'保存模块分配').click());assert.equal(writes[0].revision,1);assert.equal(writes[0].defaults[MODEL_FEATURES[0]],'b');
  revoked=true;await act(async()=>resources(api).invalidate(key=>key==='/api/model-settings'));assert.equal(d.querySelector('.module-assignment-row'),null);
 });
 

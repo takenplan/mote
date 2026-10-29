@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
-import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {configureLocale} from '@mote/shared/i18n';
 import {MODEL_FEATURES} from '@mote/shared/models';
@@ -13,7 +12,7 @@ function deferred<T>(){let resolve!:(value:T)=>void;return{promise:new Promise<T
 async function fixture(t:import('node:test').TestContext){
  const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/#/system/models?category=model',pretendToBeVisual:true}),prior=new Map<string,PropertyDescriptor|undefined>();configureLocale(()=> 'zh-CN');
  for(const[key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){prior.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
- const root=createRoot(dom.window.document.getElementById('root')!);t.after(async()=>{await act(async()=>root.unmount());for(const[key,value]of prior)if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);dom.window.close();});
+ const {createRoot}=await import('react-dom/client');const root=createRoot(dom.window.document.getElementById('root')!);t.after(async()=>{await act(async()=>root.unmount());for(const[key,value]of prior)if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);dom.window.close();});
  const d=dom.window.document,select=(index:number)=>d.querySelectorAll<HTMLSelectElement>('.module-assignment-row select')[index],save=()=>d.querySelector<HTMLButtonElement>('button[aria-label="保存模块分配"]')!,click=(label:string)=>{const b=[...d.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(b,label);b.click();};
  const change=async(index:number,value:string)=>act(async()=>{select(index).value=value;select(index).dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
  const input=async(value:string)=>act(async()=>{const field=d.querySelector<HTMLInputElement>('.module-selection input')!;field.focus();Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));field.dispatchEvent(new dom.window.Event('change',{bubbles:true}));field.dispatchEvent(new dom.window.KeyboardEvent('keyup',{bubbles:true,key:'t'}));});
@@ -28,12 +27,12 @@ test('custom empty model is an unsaved invalid choice, never silently saves inhe
  await f.change(0,view.profiles[0].id);assert.equal(f.select(1).value,'inherit');assert.equal(f.d.querySelector('.module-selection input'),null);
 });
 test('503 and true revision conflicts retain choices until explicit reload is confirmed and succeeds, without automatic rebase',async t=>{
- const f=await fixture(t);let view=f.state(),failSave=503,failRead=false,reads=0;const writes:any[]=[];
- const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('Generated safe failure',failSave,undefined,failSave===409?'model_settings_conflict':'service_unavailable');}reads++;if(failRead)throw new ApiError('Generated read failure',503);return view;}} as Api;
- await f.render(api);await f.change(0,'generated-second');await act(async()=>f.save().click());assert.equal(f.select(0).value,'generated-second');assert.equal(writes[0].revision,1);
+ const f=await fixture(t);let view=f.state(),failSave=503,failRead=false,reads=0,held:Promise<ReturnType<typeof f.state>>|undefined;const writes:any[]=[];
+ const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('Generated safe failure',failSave,undefined,failSave===409?'model_settings_conflict':'service_unavailable');}reads++;if(failRead)throw new ApiError('Generated read failure',503);return held??view;}} as Api;
+ await f.render(api);await f.change(0,'generated-second');await act(async()=>f.save().click());assert.equal(f.select(0).value,'generated-second');assert.equal(writes[0].revision,1);assert.doesNotMatch(f.d.querySelector('.module-assignment-error [role=alert]')!.textContent!,/Generated|service_unavailable/);assert.equal(f.d.querySelector<HTMLDetailsElement>('.module-assignment-error details')!.open,false);
  view=f.state(2);failSave=409;await act(async()=>resources(api).invalidate(path=>path==='/api/model-settings'));assert.equal(f.select(0).value,'generated-second');await act(async()=>f.save().click());assert.equal(writes[1].revision,1);
  let confirms=0;window.confirm=()=>{confirms++;return false;};const before=reads;await act(async()=>f.click('重新读取'));assert.equal(confirms,1);assert.equal(reads,before);assert.equal(f.select(0).value,'generated-second');
- window.confirm=()=>true;failRead=true;await act(async()=>f.click('重新读取'));assert.equal(f.select(0).value,'generated-second');assert.match(f.d.body.textContent!,/Generated/);failRead=false;await act(async()=>f.click('重新读取'));assert.equal(f.select(0).value,view.profiles[0].id);assert.equal(f.save().disabled,true);
+ window.confirm=()=>true;failRead=true;await act(async()=>f.click('重新读取'));assert.equal(f.select(0).value,'generated-second');assert.match(f.d.querySelector('.module-assignment-error [role=alert]')!.textContent!,/503/);failRead=false;const reloaded=deferred<ReturnType<typeof f.state>>();held=reloaded.promise;await act(async()=>f.click('重新读取'));assert.equal(f.select(0).disabled,true,'confirmed reload cannot overwrite new edits made while pending');assert.equal(f.save().disabled,true);await act(async()=>reloaded.resolve(view));held=undefined;assert.equal(f.select(0).value,view.profiles[0].id);assert.equal(f.save().disabled,true);
  await f.change(0,'generated-second');await act(async()=>f.save().click());assert.equal(writes.at(-1).revision,2);assert.equal(writes.length,3);
 });
 test('manage navigation cancel keeps draft, missing saved connection is explicit, and late old-owner save cannot replace new owner',async t=>{
