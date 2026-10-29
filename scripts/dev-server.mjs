@@ -2,7 +2,6 @@
 // Foreground source builds use the selected profile's identity, never its installed release.
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { startMediaWorkers } from './media-workers.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, readdir, stat, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -149,7 +148,7 @@ export async function runDevServer(options = {}, root = repository) {
   const controller = new AbortController(), { signal } = controller;
   const interrupt = () => { if (!signal.aborted) console.info('\n[dev] Stopping…'); controller.abort(); };
   for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(name, interrupt);
-  let server, marker, workers;
+  let server, marker;
   try {
     const source = sourceCheckout(root);
     console.info('[dev] Source checkout at launch: ' + (source.revision ? `${source.revision.slice(0, 12)} (${source.modified ? 'modified' : 'clean'})` : 'Git identity unavailable') + '.');
@@ -164,7 +163,6 @@ export async function runDevServer(options = {}, root = repository) {
       await assertFreePort(p);
       const version = JSON.parse(await readFile(join(root, 'apps/server/package.json'), 'utf8')).version;
       marker = randomUUID();
-      workers = startMediaWorkers({ root, env: serverEnvironment(p), signal });
       server = startCommand(process.execPath, [join(root, 'apps/server/dist/index.js'), `--mote-instance=${marker}`], {
         cwd: root, env: serverEnvironment(p), signal, graceMs: 20000,
       });
@@ -195,7 +193,6 @@ export async function runDevServer(options = {}, root = repository) {
     if (!signal.aborted) throw error;
   } finally {
     controller.abort();
-    if (workers) await workers.close();
     if (server) await server.done;
     if (marker) {
       try {

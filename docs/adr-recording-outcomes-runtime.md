@@ -8,6 +8,8 @@ A configured archive policy and an unscheduled summary are normal omissions. Mem
 
 Model installation and runtime readiness are independent. Native startup probes Python packages and `ffmpeg`; missing system commands are reported without preventing the OCR or audio health endpoints from starting. Audio health reports specific missing dependencies. An authenticated local worker can explicitly certify that a rejected request never started execution. Only that structured local transport fact clears a 503 issued-call guard; a bare 503, timeout, disconnect, or historic provider error does not. Owner-authorized explicit reprocessing continues to use the existing unknown-outcome acknowledgement. Snapshot inputs may be reused while valid; this does not turn them into retained originals.
 
+2026-10-29: [Managed media preparation](adr-managed-media-preparation.md) supersedes the Native startup dependency-installation mechanism with explicit one-click preparation and one Central-owned worker lifecycle. It preserves the execution, ownership and unknown-outcome rules above.
+
 | Disposition | Scope |
 | --- | --- |
 | KEEP | Vendor account binding, independent audio backup, original exports, encryption, exact transcript coordinates, bounded retries, unknown-call guards, source scope/privacy/retention, model-based interpretation and manual ZIP confirmation. |

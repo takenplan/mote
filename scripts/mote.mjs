@@ -3,9 +3,8 @@
 import { parseArgs } from 'node:util';
 import { writeFile,readFile,stat } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl, updateProfileConfiguration, migrateStorageOwner, setDevLogRetentionDefaults } from './profile-lib.mjs';
-import { ensureMediaRuntime, probeMediaCommands } from './media-workers.mjs';
 import { configureTunnel, runNativeTunnel, nativeTunnelArgs, nativeTunnelIdentity, stopNativeTunnel } from './tunnel-lib.mjs';
 import { startProfile as start, stopProfile as stop, changeProfileDeployment } from './update-deploy.mjs';
 const help = `Mote central profiles (Node 24+, default: dev; prod requires --profile prod)
@@ -95,10 +94,13 @@ async function main() {
     if (p.meta.runtime !== 'native') throw Error('Docker bundles the media runtime in its image');
     const result=await withProfileLock(p,async()=>{
       if((await nativeIdentity(p)).running)throw Error('Stop this profile before installing the Native media runtime');
-      const python=resolve(p.directory,p.document.media.python);
-      const changed=await ensureMediaRuntime({root:resolve(p.meta.release),python,env:isolatedEnvironment(p),sourcePython:values.python||'python3',run:(command,args,env)=>execute(command,args,{env,timeoutMs:30*60*1000,capture:true})});
-      await probeMediaCommands(python,isolatedEnvironment(p),(command,args,env)=>execute(command,args,{env,capture:true}));
-      return {profile:p.profile,installed:true,changed,python,runtimeReady:true};
+      const {prepareNativeMediaRuntime}=await import(pathToFileURL(join(resolve(p.meta.release),'apps/server/dist/media-native-runtime.mjs')).href);
+      const controller=new AbortController(),cancel=()=>controller.abort();process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
+      try{
+        const sourcePython=values.python?.includes('/')?resolve(values.python):values.python;
+        const prepared=await prepareNativeMediaRuntime({repository:resolve(p.meta.release),directory:join(p.modelDirectory,'runtime'),env:isolatedEnvironment(p),sourcePython,signal:controller.signal});
+        return {profile:p.profile,installed:true,changed:prepared.created,python:prepared.python,runtimeReady:true};
+      }finally{process.off('SIGINT',cancel);process.off('SIGTERM',cancel);}
     });print(result);return;
   }
   if (command === 'media-import') {
