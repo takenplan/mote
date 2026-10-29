@@ -105,6 +105,20 @@ class AskRecoveryInstrumentedTest {
             screenshot(scenario,"failed-details-dark",dialog=true);closeDetails();assertEquals(draft,saved().getString("question"));assertEquals(1,state().getInt("queryCalls"))
         }
     }
+    @Test fun confirmedRunErrorSurvivesAFailedConversationReadForTheSameRequest(){
+        control("fail-query");control("fail-conversation-read")
+        open().use { scenario ->
+            val draft="Generated failed answer followed by an unavailable conversation read"
+            question(scenario,draft);click(scenario,"发送")
+            until("Terminal error and subsequent read failure both persist"){saved().optJSONObject("failureDetails")?.let { it.has("error") && it.optJSONArray("errors")?.length()?.let { size -> size>0 }==true }==true}
+            val snapshot=saved();val id=snapshot.getString("runId");val error=api.get("/api/query-runs/$id").getJSONObject("error")
+            assertEquals("failed",snapshot.getString("runStatus"));assertEquals(error.toString(),snapshot.getJSONObject("failureDetails").getJSONObject("error").toString())
+            ready(scenario,"Explicit details remain reachable after conversation503"){a -> !a.isWorking && shown(a).any { it.tag=="ask-error-details" && it.isShown }}
+            scenario.onActivity { a -> assertFalse(shown(a).filterIsInstance<TextView>().any { it.text.contains("generated_native_query_failure") || it.text.contains("generated_conversation_read_unavailable") });shown(a).single { it.tag=="ask-error-details" }.performClick() }
+            until("Both actual terminal and transport details are available"){main { windowViews().filterIsInstance<TextView>().any { it.text.contains(error.getString("code")) && it.text.contains("generated_conversation_read_unavailable") } }}
+            screenshot(scenario,"failed-run-and-conversation503-details",dialog=true);closeDetails();assertEquals(draft,saved().getString("question"));assertEquals(1,state().getInt("queryCalls"))
+        }
+    }
     @Test fun acceptedRun404KeepsItsRequestAndOnlyActualCancellationReleasesIt(){
         control("hold-query")
         open().use { scenario ->

@@ -374,7 +374,11 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val current=value
             chain.put(JSONObject().put("message",current.message.orEmpty()).apply { if(current is CentralFailure) { put("status",current.status);put("code",current.code);put("detail",current.detail) } });value=current.cause
         }
-        askState.put("failureDetails",JSONObject().put("requestId",NativeAskRunState.currentId(askState)).put("errors",chain));persistAsk();updateAskFailureAction()
+        val requestId=NativeAskRunState.currentId(askState)
+        val details=askState.optJSONObject("failureDetails")?.takeIf { it.optString("requestId")==requestId }?.let { JSONObject(it.toString()) } ?: JSONObject().put("requestId",requestId)
+        val errors=details.optJSONArray("errors") ?: JSONArray()
+        for(index in 0 until chain.length())errors.put(chain.getJSONObject(index))
+        askState.put("failureDetails",details.put("errors",errors));persistAsk();updateAskFailureAction()
         return MoteI18n.text(if(askBusy()) "结果尚未确认，请检查或重试原请求。" else "回答未完成")
     }
     private fun updateAskFailureAction() {

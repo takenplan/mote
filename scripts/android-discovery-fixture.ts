@@ -11,7 +11,7 @@ import {noteCapture} from '@mote/shared';
 import {materialId} from '../apps/server/src/materials.js';
 const dataDir=await mkdtemp(join(tmpdir(),'mote-native-discovery-')),port=Number(process.env.MOTE_DISCOVERY_FIXTURE_PORT ?? 47886),token='generated-native-discovery-owner-token';
 let noteId=randomUUID(),ids:string[]=[],queryCalls=0,insightCalls=0,dropAck=false,lastQuery:unknown=null;
-let offline=false;
+let offline=false,failNextConversationRead=false;
 let holdNext=false,releaseGeneration:(()=>void)|undefined,activeGenerations=0;
 const seenRequests:string[]=[];
 const seenAskRequests:string[]=[],askGetIds:string[]=[];
@@ -57,7 +57,7 @@ async function reset(){
  for(const run of node.insightRuns.list())if(run.status==='running')node.insightRuns.cancel(run.id);
  releaseGeneration?.();releaseGeneration=undefined;holdNext=false;
  if(node.store.evidence([noteId]).length)node.store.delete(noteId);
- noteId=randomUUID();ids=Array.from({length:67},()=>randomUUID()).sort().reverse();queryCalls=0;insightCalls=0;lastQuery=null;seenRequests.length=0;dropAck=false;offline=false;
+ noteId=randomUUID();ids=Array.from({length:67},()=>randomUUID()).sort().reverse();queryCalls=0;insightCalls=0;failNextConversationRead=false;lastQuery=null;seenRequests.length=0;dropAck=false;offline=false;
  await node.store.ingest(noteCapture({id:noteId,deviceId:'generated-discovery-phone',deviceName:'Generated discovery phone',platform:'android',capturedAt:'2026-10-01T00:00:00.000Z',text:'Generated original discovery record: completion remains unknown.',mood:'Generated explicit mood'}));
  publishMaterial();
  for(const [index,id] of ids.entries())node.store.saveInsight({runId:id,answer:'Generated native discovery '+index,citations:[{id:noteId,appName:'Generated discovery note',capturedAt:'2026-10-01T00:00:00.000Z',excerpt:'Completion remains unknown.'}],trace:[]},id);
@@ -81,6 +81,7 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/drop-ask-ack')dropAskAck=true;
    if(req.method==='POST'&&url==='/api/__fixture/hide-ask')hideAskRuns=true;
    if(req.method==='POST'&&url==='/api/__fixture/show-ask')hideAskRuns=false;
+   if(req.method==='POST'&&url==='/api/__fixture/fail-conversation-read')failNextConversationRead=true;
    if(req.method==='POST'&&url==='/api/__fixture/fail-query')failNextQuery=true;
    if(req.method==='POST'&&url==='/api/__fixture/hold-query')holdNextQuery=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-query'){releaseQuery?.();releaseQuery=undefined;}
@@ -100,6 +101,7 @@ const server=createServer(async(req,res)=>{
    res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,exportHeld,attachmentManifests,attachmentCommitHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
   }
   if(offline){req.socket.destroy();return;}
+  if(failNextConversationRead&&req.method==='GET'&&/^\/api\/conversations\/[a-f0-9-]{36}(?:\?|$)/.test(url)){failNextConversationRead=false;res.writeHead(503,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_conversation_read_unavailable'}));return;}
   if(req.method==='POST'&&url==='/api/insight-runs')seenRequests.push(JSON.parse(payload.toString()).requestId);
   if(req.method==='POST'&&url==='/api/query-runs')seenAskRequests.push(payload.toString());
   if(req.method==='POST'&&url==='/api/file-sync/v1/uploads')attachmentManifests.push(payload.toString());
