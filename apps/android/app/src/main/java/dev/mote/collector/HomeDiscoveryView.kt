@@ -60,7 +60,7 @@ internal class HomeDiscoveryView(private val activity: MoteActivity, private val
             val whenText=finding.optString("createdAt").ifBlank{finding.optJSONObject("artifact")?.optString("createdAt").orEmpty()}
             val date=runCatching{DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(whenText))}.getOrDefault(whenText)
             card.addView(label(MoteI18n.text("发现")+" · "+date,NativeFontRole.META))
-            card.addView(label(InsightPresentation.title(finding),NativeFontRole.SECTION).apply{MoteUi.type(this,17,medium=true)})
+            card.addView(label(InsightPresentation.title(finding),NativeFontRole.SECTION).apply{MoteUi.type(this,17);NativePresentationStyles.bind(this,"home-result-title"){(it as TextView).apply{typeface=android.graphics.Typeface.create(android.graphics.Typeface.create(MoteTheme.fontFamily(false),android.graphics.Typeface.NORMAL),500,false);setLineSpacing(0f,1.7f)}}})
             val formatted=JSONObject(finding.toString()).put("answer",NativeAnswerPresentation.format(finding.optString("answer"),emptyList()).text)
             card.addView(label(InsightPresentation.preview(formatted),NativeFontRole.SUPPORT))
             card.addView(label(MoteI18n.text("查看结果与依据 →"),NativeFontRole.ACTION).apply{MoteUi.textColor(this,NativeColorRole.ACCENT)})
