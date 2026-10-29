@@ -25,6 +25,7 @@ export interface FileEvidence {
   overlap?: boolean;
 }
 export interface Capture {
+  deletion?: {available:boolean;kind:'capture'|'file'|null};
   evidencePresentation?: import('@mote/shared').SourceTextFormat;
   requiresMaterialForMemory?: boolean;
   memoryMaterialRef?: string;

@@ -399,11 +399,13 @@ export function EvidenceDialog({
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
-  const [mutationError,setError]=useState('');
+  const readerVisit=useRef({api,id});
+  if(readerVisit.current.api!==api||readerVisit.current.id!==id)readerVisit.current={api,id};
+  const [mutationError,setError]=useState(''),[deletionDiagnostic,setDeletionDiagnostic]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
   const [confirm, setConfirm] = useState(false),[readerTools,setReaderTools]=useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(()=>{setError('');setConfirm(false);setReaderTools(false);},[id]);
+  useEffect(()=>{setError('');setDeletionDiagnostic('');setBusy(false);setConfirm(false);setReaderTools(false);},[api,id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape"){if(readerTools)setReaderTools(false);else onClose();}
@@ -417,18 +419,21 @@ export function EvidenceDialog({
     return panel?containDialogFocus(panel,document.activeElement as HTMLElement|null):undefined;
   }, [embedded]);
   async function remove() {
-    setBusy(true);
+    if(busy||!capture?.deletion?.available)return;
+    const visit=readerVisit.current;setBusy(true);setError('');setDeletionDiagnostic('');
     try {
-      await api.request(`/api/captures/${encodeURIComponent(captureId!)}`, {
+      const result=await api.request<{deleted?:unknown}>(`/api/captures/${encodeURIComponent(captureId!)}`, {
         method: "DELETE",
       });
+      if(!Number.isSafeInteger(result?.deleted)||Number(result.deleted)<=0)throw new Error('Deletion response did not confirm a positive deleted count');
       resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources|materials|library)([/?]|$)/.test(key));
+      if(readerVisit.current!==visit)return;
       onDeleted();
       onClose();
     } catch (e) {
-      setError(errorMessage(e));
+      if(readerVisit.current===visit){setError(moteText('未能确认删除完成。请刷新查看当前状态。'));setDeletionDiagnostic(errorMessage(e));}
     } finally {
-      setBusy(false);
+      if(readerVisit.current===visit)setBusy(false);
     }
   }
   const presentation = capture ? evidencePresentation(capture) : null;
@@ -538,13 +543,13 @@ export function EvidenceDialog({
                 <code className="record-id">{capture.id}</code></details>
               </div>
             </div>
-            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{error&&<ErrorNotice text={error}/>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
+            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{error&&<ErrorNotice text={error}/>} {deletionDiagnostic&&<details className="deletion-diagnostic"><summary>{moteText('技术详情')}</summary><pre>{deletionDiagnostic}</pre></details>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
                   capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
                   capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div><EvidenceProcessingHelp/>            <div className="evidence-footer">
-              {confirm ? (
+              {confirm&&capture.deletion?.available ? (
                 <>
                   <p>
-                    {presentation?.deleteDescription}{moteText("此操作无法撤销。")}</p>
+                    {capture.deletion?.kind==='file'?moteText('删除中央文件归档及其派生内容和依赖记忆，并清除已有洞察；来源设备上的原文件保留。'):presentation?.deleteDescription}{moteText("此操作无法撤销。")}</p>
                   <button
                     className="button subtle"
                     onClick={() => setConfirm(false)}
@@ -566,12 +571,12 @@ export function EvidenceDialog({
                   ) : capture.source === "note" ? (
                     <span>{moteText("由你主动记录")}</span>
                   ) : <span />}
-                  <button
+                  {capture.deletion?.available?<button
                     className="text-button danger-text"
                     onClick={() => setConfirm(true)}
                   >
                     <Trash2 size={15} />
-                    {moteText("删除这条记录")}</button>
+                    {moteText("删除这条记录")}</button>:<span className="muted">{moteText('此引用不能直接删除原始记录。')}</span>}
                 </>
               )}
             </div></ReaderToolsDialog>}
