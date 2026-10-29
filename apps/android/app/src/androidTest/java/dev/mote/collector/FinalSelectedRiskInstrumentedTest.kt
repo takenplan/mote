@@ -1,6 +1,13 @@
 package dev.mote.collector
 
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.Intent
+import android.net.Uri
+import android.provider.CalendarContract
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Spinner
+import androidx.core.content.FileProvider
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
@@ -118,10 +125,114 @@ class FinalSelectedRiskInstrumentedTest {
             }
         }finally{blocked?.let{Os.chmod(it.path,blockedMode)};manager.cancelUniqueWork(BulkDedupeWorker.NAME).result.get();until("Generated worker stopped"){manager.getWorkInfosForUniqueWork(BulkDedupeWorker.NAME).get().all{it.state.isFinished}};ids.forEach{id->queue.dedupeRow(id)?.let{queue.resolveDedupe(id,it.getString("blob"),null,null,null)}};store.write("report",report);store.write("plan",plan)}
     }
+
+    /** The browser is real; only the external URL at the Intent boundary is redirected to generated loopback HTML. */
+    @Test fun actualInstallDocumentViewReturnsToTheUnsentEditorDraft()=fixture{
+        val store=context.recordDraftStore();require(!store.hasPrepared());val previous=store.draft()
+        val text="Generated installation-return draft ${UUID.randomUUID()}";val description="Generated separate explanation retained across the browser"
+        val originalUrl="https://github.com/utopiafar/mote/blob/main/docs/agent-install.md"
+        HttpFixture().use{http->
+            val seen=AtomicReference<String>();val monitor=object:Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:Intent):Instrumentation.ActivityResult?{
+                if(intent.action==Intent.ACTION_VIEW&&intent.dataString==originalUrl){seen.set(intent.dataString);intent.data=Uri.parse(http.origin+"/generated-install-help")};return null
+            }}
+            instrumentation.addMonitor(monitor)
+            try{ActivityScenario.launch(RecordEditorActivity::class.java).use{scenario->
+                until("Editor ready"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="正在想什么"&&it.isEnabled}}}
+                main{shown().filterIsInstance<EditText>().single{it.contentDescription=="正在想什么"}.setText(text)};click("资料说明（选填）");main{(shown().single{it.tag=="record-description"}as EditText).setText(description)}
+                until("Actual draft persisted"){store.draft().optString("text")==text&&store.draft().optString("description")==description}
+                scenario.onActivity{it.startActivity(Intent(it,StartUsingActivity::class.java))};until("Install help"){has("查看安装文档")};picture("install-document-before-browser");click("查看安装文档")
+                until("Real browser loaded only generated loopback page"){
+                    val nodes=systemNodes();nodes.firstOrNull{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()in setOf("Stay signed out","No thanks")}?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    seen.get()==originalUrl&&http.helpReads.get()>0&&nodes.any{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()?.contains("Generated Mote installation help boundary")==true}
+                }
+                assertEquals(originalUrl,seen.get());assertTrue(systemNodes().any{it.text?.toString()?.contains(http.origin.removePrefix("http://"))==true});systemPicture("install-document-actual-browser")
+                assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK));until("Returned to exact help screen"){has("查看安装文档")};click("返回上一页")
+                until("Same editor and full unsent draft returned"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="正在想什么"&&it.text.toString()==text}}};assertEquals(text,store.draft().getString("text"));assertEquals(description,store.draft().getString("description"));picture("install-document-back-same-editor-draft")
+            }}finally{instrumentation.removeMonitor(monitor);store.edit(previous.getString("text"),previous.getJSONArray("attachments"),previous.getJSONObject("origin"),previous.optString("description"))}
+        }
+    }
+    private fun systemNodes():List<AccessibilityNodeInfo>{fun children(node:AccessibilityNodeInfo?):List<AccessibilityNodeInfo> = if(node==null)emptyList()else listOf(node)+(0 until node.childCount).flatMap{children(node.getChild(it))}
+        return children(instrumentation.uiAutomation.rootInActiveWindow)}
+    private fun systemPicture(name:String){SystemClock.sleep(500);instrumentation.uiAutomation.waitForIdle(100,3000);val image=requireNotNull(instrumentation.uiAutomation.takeScreenshot());try{File(context.filesDir,"final-selected-risk").apply{mkdirs()}.resolve("$name.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)}}finally{image.recycle()}}
+
+    @Test fun physicallyMissingLocalOriginalCannotBeReadOrResurrectedByExplicitRecovery()=fixture{
+        require(context.localSources().sources().none{it.enabled})
+        val id=UUID.randomUUID().toString();lateinit var queue:DurableQueue;val dir=File(QueueStorage(context).current().path);val eventFile=File(dir,"$id.event");val held=File(context.cacheDir,"generated-missing-$id.event")
+        val recovery=context.getSharedPreferences("sync-recovery",0);val oldRecovery=recovery.all.toMap();val manager=WorkManager.getInstance(context)
+        require(manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().all{it.state.isFinished})
+        HttpFixture().use{http->
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated isolated missing-local recovery",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=false,wifiOnly=false,syncChargingOnly=false,syncBatteryNotLow=false),confirmCentralEndpoint=true)}
+            queue=context.queue()
+            try{
+                val body=JSONObject().put("id",id).put("deviceId",settings.deviceId).put("source","note").put("capturedAt",Instant.now().toString()).put("durationMs",0).put("ocrText","Generated local original physically removed before recovery").put("privacy",JSONObject().put("excluded",false))
+                queue.enqueue(body,null,64L*1024*1024);val version=CaptureUploadVersion.of(requireNotNull(queue.archiveRecord(id)).first);assertNotNull(queue.capture(id));check(eventFile.renameTo(held));assertTrue(held.isFile);assertNull(queue.capture(id));assertFalse(eventFile.exists())
+                ActivityScenario.launch<CaptureRecordsActivity>(Intent(context,CaptureRecordsActivity::class.java).putExtra("recordId",id).putExtra("historyOriginalVersion",version)).use{
+                    until("Exact history reader reports local original unavailable"){has("历史版本不可用：本机原件已更新或清理")};assertFalse(has("中央不可用 / 已删除"));picture("recovery-missing-local-exact-reader")
+                }
+                assertTrue("Isolated origin must have no retained local originals",queue.syncIds().isEmpty())
+                ActivityScenario.launch(SyncRecoveryActivity::class.java).use{
+                    until("Recovery entry"){has("补传本机保留的记录")};main{shown().single{it.tag=="recovery-replay"}.performClick()};until("Explicit warning distinguishes cleaned local data"){has("已从手机清理的数据无法补传")};picture("recovery-missing-local-explicit-scope");click("开始补传")
+                    until("Production recovery finishes with zero existing originals"){recovery.getString("message","")!!.startsWith("已安排补传 0 条本机采集记录及 0 个保留来源版本")&&manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().all{it.state.isFinished}}
+                    until("Actual zero replay result renders"){has("已安排补传 0 条本机采集记录")};assertFalse(eventFile.exists());assertNull(queue.capture(id));assertEquals(0,http.capturePosts.get());picture("recovery-missing-local-zero-not-restored")
+                }
+            }finally{
+                manager.cancelUniqueWork("mote-sync-recovery").result.get();manager.cancelUniqueWork("mote-upload").result.get();until("Selected recovery/upload stopped"){listOf("mote-sync-recovery","mote-upload").all{name->manager.getWorkInfosForUniqueWork(name).get().all{it.state.isFinished}}}
+                if(held.exists()){check(held.renameTo(eventFile));queue.resolveDedupe(id,"",null,null,null)}
+                val edit=recovery.edit().clear();oldRecovery.forEach{(key,value)->when(value){is String->edit.putString(key,value);is Int->edit.putInt(key,value);is Long->edit.putLong(key,value);is Boolean->edit.putBoolean(key,value);else->error("Unsupported recovery preference")}};edit.commit()
+            }
+        }
+    }
+
+    @Test fun existingLocalCalendarRangeBoundariesAndAllNewSaveAndCancelNeverChangeProvider()=fixture{
+        val resolver=context.contentResolver;fun rows(uri:Uri,projection:Array<String>,selection:String):String=resolver.query(uri,projection,selection,null,"_id")!!.use{c->JSONArray().apply{while(c.moveToNext())put(JSONArray().apply{for(i in projection.indices)put(if(c.isNull(i))JSONObject.NULL else c.getString(i))})}.toString()}
+        val calendarBefore=rows(CalendarContract.Calendars.CONTENT_URI,arrayOf("_id","account_name","account_type","calendar_displayName"),"_id=1");require(JSONArray(calendarBefore).length()==1)
+        val eventColumns=arrayOf("_id","calendar_id","title","description","dtstart","dtend","allDay","eventLocation","eventTimezone","deleted");val eventsBefore=rows(CalendarContract.Events.CONTENT_URI,eventColumns,"calendar_id=1")
+        val store=context.localSources();val before=store.sources();require(before.none{it.enabled||it.calendarId==1L});var created:String?=null
+        fun fields(values:Pair<String,String>){main{val edits=shown().filterIsInstance<EditText>();val form=edits.single{it.tag=="calendar-description"}.parent as ViewGroup;val children=(0 until form.childCount).map{form.getChildAt(it)};fun field(label:String):EditText { return children[children.indexOfFirst{it is TextView&&it.text.toString()==label}+1]as EditText }
+            field("过去多少天（0–365）").setText(values.first);field("未来多少天（1–365）").setText(values.second)}}
+        fun initial(position:Int){main{shown().filterIsInstance<Spinner>().single{it.adapter.count==2&&it.adapter.getItem(0).toString()=="已有内容分批导入（默认）"}.setSelection(position)}}
+        try{
+            ActivityScenario.launch<SourcesActivity>(Intent(context,SourcesActivity::class.java).putExtra("addCalendar",true)).use{
+                until("Existing sole generated calendar picker"){main{shown().filterIsInstance<TextView>().any{it.text.toString().contains("Generated")}}};val label=resolver.query(CalendarContract.Calendars.CONTENT_URI,arrayOf(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME),"_id=1",null,null)!!.use{c->check(c.moveToFirst());c.getString(0)};chooseNativeListItem(label)
+                until("Existing calendar scope form"){main{shown().any{it.tag=="calendar-description"}}};main{shown().filterIsInstance<CheckBox>().single{it.text.toString()=="允许读取并按所选策略发送这个来源"}.isChecked=false};fields("0" to "1");initial(0);picture("calendar-existing-minimum-all-before-save");click("保存来源设置")
+                until("Real minimum all save"){store.sources().any{it.calendarId==1L&&!it.enabled&&it.daysBefore==0&&it.daysAfter==1&&it.initialSync=="all"}};created=store.sources().single{it.calendarId==1L}.id
+            }
+            fun reopen(block:(ActivityScenario<SourcesActivity>)->Unit){ActivityScenario.launch<SourcesActivity>(Intent(context,SourcesActivity::class.java).putExtra("sourceId",created)).use{scenario->until("Actual saved calendar scope reopens"){main{shown().any{it.tag=="calendar-description"}}};block(scenario)}}
+            val minimum=store.sources().single{it.id==created}
+            reopen{
+                for(invalid in listOf("366" to "1","0" to "0","0" to "366")){fields(invalid);initial(1);click("保存来源设置");instrumentation.waitForIdleSync();assertEquals("Each independently invalid boundary must not persist",minimum,store.sources().single{it.id==created});assertTrue(main{shown().any{it.tag=="calendar-description"}})}
+                picture("calendar-invalid-range-not-saved");click("取消")
+            }
+            reopen{fields("365" to "365");initial(1);click("保存来源设置");until("Real maximum new-only saved"){store.sources().any{it.id==created&&!it.enabled&&it.daysBefore==365&&it.daysAfter==365&&it.initialSync=="new_only"}}}
+            val maximum=store.sources().single{it.id==created};reopen{picture("calendar-existing-maximum-new-saved");fields("0" to "1");initial(0);click("取消");assertEquals(maximum,store.sources().single{it.id==created})}
+            reopen{picture("calendar-cancel-keeps-maximum-new");click("取消")}
+            assertEquals(calendarBefore,rows(CalendarContract.Calendars.CONTENT_URI,arrayOf("_id","account_name","account_type","calendar_displayName"),"_id=1"));assertEquals(eventsBefore,rows(CalendarContract.Events.CONTENT_URI,eventColumns,"calendar_id=1"))
+        }finally{created?.let{store.remove(it)};assertEquals(before,store.sources());assertEquals(eventsBefore,rows(CalendarContract.Events.CONTENT_URI,eventColumns,"calendar_id=1"))}
+    }
+
+    @Test fun actualSupportExportExcludesPlantedBodyKnownTokenAndGeneratedImage()=fixture{
+        val settings=Settings(context);val config=settings.read();val knownToken=config.connectionToken();require(knownToken.length>=32)
+        val marker="generated-sensitive-body-${UUID.randomUUID()}";val imageMarker="generated-sensitive-image-${UUID.randomUUID()}";val image=Bitmap.createBitmap(600,80,Bitmap.Config.ARGB_8888).apply{eraseColor(Color.WHITE);android.graphics.Canvas(this).drawText(imageMarker,5f,40f,android.graphics.Paint().apply{color=Color.BLACK;textSize=20f})};val bytes=try{ByteArrayOutputStream().also{image.compress(Bitmap.CompressFormat.PNG,100,it)}.toByteArray()}finally{image.recycle()}
+        val id=UUID.randomUUID().toString();val event=JSONObject().put("id",id).put("deviceId",settings.deviceId).put("source","note").put("capturedAt",Instant.now().toString()).put("durationMs",0).put("ocrText",marker+"\n"+knownToken).put("metadata",JSONObject().put("ownerDescription",imageMarker)).put("privacy",JSONObject().put("excluded",false))
+        val directory=File(context.cacheDir,"record-camera/generated-support-$id").apply{mkdirs()};val output=File(directory,"safe-support.json")
+        val monitor=object:Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:Intent):Instrumentation.ActivityResult?=if(intent.action==Intent.ACTION_CREATE_DOCUMENT)Instrumentation.ActivityResult(Activity.RESULT_OK,Intent().setData(FileProvider.getUriForFile(context,"${context.packageName}.record-files",output)))else null}
+        try{
+            context.queue().enqueue(event,bytes,64L*1024*1024);assertTrue(context.queue().capture(id)!!.getString("ocrText").contains(marker));assertArrayEquals(bytes,context.queue().image(id))
+            SupportEvents.failure(context,EventStage.SUPPORT,java.io.IOException(marker+" "+knownToken+" "+imageMarker));SupportEvents.record(context,EventStage.SUPPORT,EventCode.OK,errorName=knownToken,sourceId=marker)
+            instrumentation.addMonitor(monitor)
+            ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","DIAGNOSTICS")).awaitMainUi().use{
+                click("导出安全支持包 JSON");until("Actual SAF provider output completed"){has("诊断包已导出")&&output.length()>0};val body=output.readText();val json=JSONObject(body);assertTrue(json.has("configuration")&&json.has("logs")&&json.has("events")&&json.has("samples"));assertFalse("Captured body excluded",body.contains(marker));assertFalse("Current generated token excluded",body.contains(knownToken));assertFalse("Independent explanation excluded",body.contains(imageMarker));assertFalse("Original image excluded",body.contains(java.util.Base64.getEncoder().encodeToString(bytes)));assertFalse(body.contains(java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}));assertNotNull(context.queue().capture(id));assertArrayEquals(bytes,context.queue().image(id));picture("support-real-export-sensitive-originals-excluded")
+                val safe=File(context.filesDir,"final-selected-risk").apply{mkdirs()};File(safe,"support-absence-facts.json").writeText(JSONObject().put("schema",1).put("actualSupportBytes",output.length()).put("bodyAbsent",true).put("knownCurrentTokenAbsent",true).put("imageAndDescriptionAbsent",true).put("originalRetainedUntilTestCleanup",true).toString())
+            }
+        }finally{instrumentation.removeMonitor(monitor);context.queue().dedupeRow(id)?.let{context.queue().resolveDedupe(id,it.getString("blob"),null,null,null)};directory.deleteRecursively()}
+    }
+
     private class HttpFixture:AutoCloseable{
-        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
+        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
         init{threads.submit{while(!server.isClosed)runCatching{server.accept()}.getOrNull()?.let{socket->threads.submit{socket.use{
             val input=it.getInputStream().bufferedReader();val first=input.readLine().orEmpty();val path=first.split(' ').getOrElse(1){""};val headers=mutableListOf<String>();while(true){val h=input.readLine();if(h.isNullOrEmpty())break;headers.add(h)};val size=headers.firstOrNull{h->h.startsWith("Content-Length:",true)}?.substringAfter(':')?.trim()?.toInt()?:0;val body=CharArray(size);var n=0;while(n<size){val x=input.read(body,n,size-n);if(x<0)break;n+=x}
+            if(path=="/generated-install-help"){helpReads.incrementAndGet();val bytes="<!doctype html><title>Generated Mote help</title><h1>Generated Mote installation help boundary</h1><p>Generated local documentation only. No sign in or installation.</p>".toByteArray();it.getOutputStream().apply{write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray());write(bytes);flush()};return@use}
+            if(first.startsWith("POST ")&&path=="/api/captures")capturePosts.incrementAndGet()
             if(path=="/api/connections/redeem"){redeems.incrementAndGet();return@use}
             var status="200 OK";val response=when{
                 first.startsWith("DELETE ")&&path=="/api/conversations/$conversation"->{deletes.incrementAndGet();status="503 Service Unavailable";JSONObject().put("error","generated_delete_unavailable")}
