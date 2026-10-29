@@ -146,17 +146,17 @@ internal object MoteUi {
 
     /** A selected scope or retention choice must remain fully readable, including at 130%. */
     fun choiceAdapter(context: Context, labels: List<String>) = object : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
-        private fun present(view: View): View = view.apply {
+        private fun present(view: View, popup: Boolean): View = view.apply {
             (this as? TextView)?.let {
                 type(it, NativeFontRole.BODY); textColor(it, NativeColorRole.INK)
-                MoteUi.backgroundColor(it, NativeColorRole.SURFACE_RAISED)
+                if(popup) MoteUi.backgroundColor(it, NativeColorRole.SURFACE_RAISED) else NativePresentationStyles.bind(it,"background-color") { selected -> selected.setBackgroundColor(Color.TRANSPARENT) }
                 it.isSingleLine = false; it.maxLines = Int.MAX_VALUE; it.ellipsize = null
                 it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(MoteTheme.controlHeight)
                 it.setPadding(context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline))
             }
         }
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent))
-        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent))
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent),false)
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent),true)
     }
 
     /** Set line behavior before inputType: setSingleLine replaces password transformation. */
@@ -203,15 +203,16 @@ internal object MoteUi {
 
 /** Native adapters retain their data and selection semantics while the provider owns presentation. */
 private class NativeSpinnerAdapter(private val delegate: SpinnerAdapter) : SpinnerAdapter by delegate {
-    private fun present(view: View): View = view.apply {
+    private fun present(view: View, popup: Boolean): View = view.apply {
         if (this is TextView) {
-            MoteUi.type(this); MoteUi.textColor(this, NativeColorRole.INK); MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED)
+            MoteUi.type(this); MoteUi.textColor(this, NativeColorRole.INK)
+            if(popup) MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED) else NativePresentationStyles.bind(this,"background-color") { selected -> selected.setBackgroundColor(Color.TRANSPARENT) }
             minHeight = context.moteDp(MoteTheme.controlHeight)
             isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
         }
     }
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getView(position, convertView, parent))
-    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getDropDownView(position, convertView, parent))
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getView(position, convertView, parent),false)
+    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getDropDownView(position, convertView, parent),true)
 }
 
 fun Context.moteDp(value: Int) = (value * resources.displayMetrics.density).toInt()

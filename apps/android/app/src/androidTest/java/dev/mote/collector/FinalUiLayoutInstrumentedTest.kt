@@ -99,4 +99,31 @@ class FinalUiLayoutInstrumentedTest {
             scenario.onActivity { a -> assertEquals(View.VISIBLE,views(a.window.decorView).single { it.tag == "library-filters:content" }.visibility); assertFalse(Settings(context).enabled) }
         }
     }
+    @Test fun appearanceSelectionsKeepTheirWholeOutlineInLightAndDark() {
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","APPEARANCE")).awaitMainUi().use { scenario ->
+            try {
+                for(preference in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+                    scenario.onActivity { a -> views(a.window.decorView).filterIsInstance<android.widget.Spinner>().first().setSelection(AppearancePreference.entries.indexOf(preference)) }
+                    until("Actual appearance choice applies") { MoteAppearance.preference()==preference }; frames(scenario)
+                    scenario.onActivity { a ->
+                        val root=a.window.decorView; val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+                        try {
+                            root.draw(android.graphics.Canvas(image)); File(context.filesDir,"ui-final-layout").apply { mkdirs() }.resolve("appearance-outline-${preference.name.lowercase()}.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }
+                            val rootAt=IntArray(2); root.getLocationOnScreen(rootAt)
+                            val expected=MoteTheme.controlBorder
+                            fun near(color:Int)=maxOf(kotlin.math.abs(android.graphics.Color.red(color)-android.graphics.Color.red(expected)),kotlin.math.abs(android.graphics.Color.green(color)-android.graphics.Color.green(expected)),kotlin.math.abs(android.graphics.Color.blue(color)-android.graphics.Color.blue(expected)))<=12
+                            for(spinner in views(root).filterIsInstance<android.widget.Spinner>()) {
+                                val at=IntArray(2); spinner.getLocationOnScreen(at)
+                                for(fraction in listOf(.25,.5,.75)) {
+                                    val x=at[0]-rootAt[0]+(spinner.width*fraction).toInt(); val top=at[1]-rootAt[1]
+                                    val pixels=(0..a.moteDp(2)).map { image.getPixel(x,top+it) }
+                                    assertTrue("The selected value must not paint over the $preference outline at $fraction: ${pixels.map { Integer.toHexString(it) }}",pixels.any(::near))
+                                }
+                            }
+                        } finally { image.recycle() }
+                    }
+                }
+            } finally { MoteAppearance.select(context,AppearancePreference.LIGHT) }
+        }
+    }
 }
