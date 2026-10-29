@@ -31,6 +31,7 @@ const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.ge
 let currentStatus: import('./contracts').Status;
 let initialized = false;
 let busy = false;
+let statusReadEpoch = 0;
 const fields = byId<HTMLFieldSetElement>('settings-fields');
 const settingsForm = byId<HTMLFormElement>('settings');
 const appCaptureUi=createAppCaptureUi({root:byId('app-collection-rules'),defaultRoot:byId('default-collection'),rulesEditor:byId<HTMLTextAreaElement>('ui-page-rules'),
@@ -128,7 +129,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   if (page === 'records' && !preserveContentPosition) { void loadRecords(); void refreshContent(); }
   if (page === 'overview' && initialized && !preserveContentPosition) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
   if (page === 'sources') void refreshSources();
-  if (page === 'overview' && initialized) void desktopApi.status().then(render).catch(() => feedback(moteText("状态读取失败，请重试。")));
+  if (page === 'overview' && initialized) { const epoch=statusReadEpoch; void desktopApi.status().then(status=>{if(epoch===statusReadEpoch&&!busy)render(status);}).catch(() => {if(epoch===statusReadEpoch&&!busy)feedback(moteText("状态读取失败，请重试。"));}); }
   return true;
 }
 for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-nav]:not([data-presentation-nav])'))) button.addEventListener('click', () => {
@@ -394,7 +395,7 @@ function renderOperations(jobs:NonNullable<import('./contracts').Status['operati
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||currentPage!=='overview'&&job.startedAt>=pageEnteredAt);
   byId('background-progress').hidden = !operations.length;
-  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+  byId('background-progress').textContent = operations.map(job => job.state === 'running' ? `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000))}` : job.state === 'failed' ? moteText('操作未完成，请检查权限与配置后重试') : moteText('已完成')).join('；');
 }
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
@@ -505,11 +506,19 @@ function render(status: import('./contracts').Status): void {
 }
 async function perform(action: () => Promise<unknown>): Promise<void> {
   if (busy) return;
-  busy = true; feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
+  statusReadEpoch++; busy = true; feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
   try { await action(); } catch (error) {
     const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作失败");
     renderReadableFailure(byId('feedback'),moteText('操作未完成，请检查权限与配置后重试'),message);
-  } finally { busy = false; byId('feedback').setAttribute('aria-busy', 'false'); if (byId('feedback').textContent === moteText("正在处理，请稍候…")) feedback(''); if (currentStatus) render(currentStatus); }
+  } finally {
+    // Read the operation's settled state before enabling a subsequent mutation.
+    let settled: import('./contracts').Status | undefined;
+    try { settled = await desktopApi.status(); } catch { /* Keep the last confirmed status on a read failure. */ }
+    busy = false; byId('feedback').setAttribute('aria-busy', 'false');
+    if (byId('feedback').textContent === moteText("正在处理，请稍候…")) feedback('');
+    statusReadEpoch++;
+    if (settled ?? currentStatus) render(settled ?? currentStatus);
+  }
 }
 byId('settings').addEventListener('submit', event => {
   event.preventDefault();
@@ -587,7 +596,7 @@ byId('export').addEventListener('click',()=>void perform(async()=>{
   showPage('export-result');
   showBackupOperation('export','working',moteText('正在处理，请稍候…'));
   try {const result=await desktopApi.exportQueue();showBackupOperation('export',result.canceled?'canceled':'complete',result.canceled?moteText('已取消'):moteText('队列备份已保存至 {0}',result.path));}
-  catch(error){showBackupOperation('export','error',error instanceof Error?error.message:moteText('操作失败'));throw error;}
+  catch(error){showBackupOperation('export','error',moteText('导出未完成，请重试'));appendDiagnostic(byId('backup-operation'),error instanceof Error?error.message:String(error));throw error;}
 }));
 byId('import').addEventListener('click',()=>void perform(async()=>{
   showPage('restore');
@@ -902,9 +911,9 @@ void desktopApi.updateStatus().then(renderUpdate).catch(() => {});
 // One polling request at a time, even if a slow disk or worker delays a reply.
 let statusReading = false;
 setInterval(() => {
-  if (statusReading || document.hidden) return;
-  statusReading = true;
-  void Promise.allSettled([desktopApi.status().then(render), desktopApi.updateStatus().then(renderUpdate)])
+  if (statusReading || document.hidden || busy) return;
+  statusReading = true; const epoch = statusReadEpoch;
+  void Promise.allSettled([desktopApi.status().then(status => { if (epoch === statusReadEpoch && !busy) render(status); }), desktopApi.updateStatus().then(renderUpdate)])
     .finally(() => { statusReading = false; });
 }, 1000);
 

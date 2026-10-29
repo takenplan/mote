@@ -22,9 +22,10 @@ export async function localContentDetail(queue:DurableQueue,sources:LocalSourceM
   if(key.startsWith('queue:')){
     const record=queue.recordForHistory(key.slice(6));if(!record)throw Error(moteText('该记录已完成同步，请切换到中央已归档查看'));
     const event=record.event;let text=event.source==='note'?noteBody(event.ocrText??'',event.metadata):event.ocrText??'';
+    if(event.source==='activity')text=moteText('仅记录应用活动；未采集屏幕、窗口标题或正文');
     if(event.source==='notification'){const value=event.metadata?.notification;text=value?[value.title,value.text,value.bigText,value.subText,...(value.textLines??[])].filter(Boolean).join('\n'):text;}
     const bytes=image?await queue.imageForBrowser(event.id):undefined;
-    return {sizeBytes:record.blobBytes||undefined,truncated:text.length>100000,text:text.slice(0,100000),description:event.metadata?.ownerDescription,sourceName:event.deviceName,metadata:JSON.stringify({capturedAt:event.capturedAt,appName:event.appName,durationMs:event.durationMs,metadata:event.metadata},null,2),hasImage:Boolean(record.blobHash),retainsOriginal:record.blobHash?true:undefined,...(bytes?{image:await previewWork.run<string>({kind:'preview',bytes,thumbnail:false})}:{})};
+    return {sizeBytes:record.blobBytes||undefined,truncated:text.length>100000,text:text.slice(0,100000),description:event.metadata?.ownerDescription,sourceName:event.deviceName,metadata:JSON.stringify({capturedAt:event.capturedAt,appName:event.appName,durationMs:event.durationMs,stateSeries:event.stateSeries,metadata:event.metadata},null,2),hasImage:Boolean(record.blobHash),retainsOriginal:record.blobHash?true:undefined,...(bytes?{image:await previewWork.run<string>({kind:'preview',bytes,thumbnail:false})}:{})};
   }
   const [,id,version]=key.split(':');const source=sources.status().find(row=>row.source.id===id)?.source,item=sources.pendingForHistory(id,version);
   if(!source||!item)throw Error(moteText('本机副本已变化；尚无可读取的中央接收凭据。'));

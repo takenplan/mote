@@ -38,7 +38,8 @@ export function historyRange(day: string, days: 1 | 7 = 1): { after: string; bef
   const [y, m, d] = day.split('-').map(Number), end = new Date(y, m - 1, d);
   if (y < 2000 || y > 2100 || end.getFullYear() !== y || end.getMonth() !== m - 1 || end.getDate() !== d) throw Error(moteText('请选择有效日期'));
   const localDay = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  const dates = Array.from({ length: days }, (_, i) => new Date(y, m - 1, d - days + 1 + i));
+  // At the earliest supported date the summary contains only supported days.
+  const dates = Array.from({ length: days }, (_, i) => new Date(y, m - 1, d - days + 1 + i)).filter(date => date.getFullYear() >= 2000);
   return { after: dates[0].toISOString(), before: new Date(y, m - 1, d + 1).toISOString(), days: dates.map(localDay) };
 }
 const PAGE_SIZE = 20;
