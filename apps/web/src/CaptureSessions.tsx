@@ -37,9 +37,9 @@ export function CaptureSessions({api,devices,onOpen,revision}:{api:Api;devices:D
     <div className="form-footer"><button className="button" disabled={loading||cursors.length===1} onClick={()=>setCursors(c=>c.slice(0,-1))}>{moteText("上一页")}</button><button className="button" disabled={loading||!next} onClick={()=>setCursors(c=>[...c,next!])}>{moteText("下一页")}</button></div>
   </section>;
 }
-function SessionImage({api,item,onOpen}:{api:Api;item:ImageRef;onOpen:(id:string)=>void}){
+export function SessionImage({api,item,onOpen}:{api:Api;item:ImageRef;onOpen:(id:string)=>void}){
   const [image,setImage]=useState<{owner:Api;id:string;url?:string;failed?:boolean}>();
-  const current=image?.owner===api&&image.id===item.id?image:undefined,url=current?.url,failed=current?.failed;
+  const current=item.hasImage&&image?.owner===api&&image.id===item.id?image:undefined,url=current?.url,failed=current?.failed;
   useEffect(()=>{if(!item.hasImage)return;let disposed=false,owned='';const controller=new AbortController();
     void api.raw(`/api/capture-browser/${item.id}/image?thumbnail=1`,{signal:controller.signal}).then(response=>response.blob()).then(blob=>{if(!disposed){owned=URL.createObjectURL(blob);setImage({owner:api,id:item.id,url:owned});}}).catch(()=>{if(!disposed)setImage({owner:api,id:item.id,failed:true});});
     return()=>{disposed=true;controller.abort();if(owned)URL.revokeObjectURL(owned);};},[api,item.id,item.hasImage]);
