@@ -7,6 +7,7 @@ import { captureDateRange, localDateInput, ocrPresentation } from './capture-pre
 import { CollectionContent } from './features/runtime';
 import { webFeatures } from './features/registry';
 import { LibraryBrowseLayout } from './LibraryBrowse';
+import {LibraryTimeline} from './LibraryTimeline';
 const CaptureSessions = React.lazy(() => import('./CaptureSessions').then(module => ({ default: module.CaptureSessions })));
 import { sourceLabels } from './Metadata';
 import { CaptureCard, Empty, ErrorNotice, Spinner } from './shell-components';
@@ -74,7 +75,7 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
      <button className={tab!=='memories'?'active':''} aria-current={tab!=='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('materials');}}>{moteText('我的资料')}</button>
      <button className={tab==='memories'?'active':''} aria-current={tab==='memories'?'page':undefined} onClick={()=>{clearSelection();setTab('memories');}}>{moteText('我的记忆')}</button>
    </nav>
-   {tab!=='materials'&&tab!=='memories'&&<div hidden={Boolean(selected)} className="library-view-navigation">{viewNavigation}{browseNavigation}</div>}
+   {tab!=='materials'&&tab!=='memories'&&tab!=='records'&&<div hidden={Boolean(selected)} className="library-view-navigation">{viewNavigation}{browseNavigation}</div>}
    <div className="library-workspace central-library-workspace"><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
  </div></DiscoveryProvider>;
 }
@@ -98,15 +99,9 @@ export function Timeline(props: {
     const [view, setView] = useState(props.embedded ? 'records' : 'sessions');
     return <><div className="filter-bar" role="group" aria-label={moteText("记录视图")}><button className={'button ' + (view === 'sessions' ? 'primary' : '')} onClick={() => setView('sessions')}>{moteText("片段 / 应用分组")}</button><button className={'button ' + (view === 'records' ? 'primary' : '')} onClick={() => setView('records')}>{moteText("全部记录")}</button></div>{view === 'sessions' ? <><div className="page-heading timeline-heading"><div className="eyebrow">{moteText("沿着连续的记录回看")}</div><Heading>{moteText("片段")}</Heading><p>{moteText("先看一段，再展开其中的截图与上下文。")}</p></div><CaptureSessions {...props}/></> : <RecordTimeline {...props}/>}</>;
 }
-export function RecordTimeline({ api, devices, onOpen, revision, library = false, selectedReference, onBrowseChanged, }: {
-    api: Api;
-    devices: Device[];
-    onOpen: (id: string) => void;
-    revision: number;
-    library?: boolean;
-    selectedReference?: string;
-    onBrowseChanged?: () => void;
-}) {
+type RecordTimelineProps={api:Api;devices:Device[];onOpen:(ref:string)=>void;revision:number;library?:boolean;selectedReference?:string;onBrowseChanged?:()=>void;viewNavigation?:React.ReactNode;browseNavigation?:React.ReactNode};
+export function RecordTimeline(props:RecordTimelineProps){return props.library?<LibraryTimeline {...props}/>:<RawRecordTimeline {...props}/>;}
+function RawRecordTimeline({api,devices,onOpen,revision,onBrowseChanged}:RecordTimelineProps){
     const [layout, setLayout] = useState<'grid' | 'list'>(() => localStorage.getItem('mote.record-layout') === 'grid' ? 'grid' : 'list');
     const [after, setAfter] = useState("");
     const [before, setBefore] = useState("");
@@ -215,21 +210,6 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
         }
         return [...result.entries()];
     }, [visibleItems]);
-    useEffect(() => { if (library)
-        onBrowseChanged?.(); }, [range, library, onBrowseChanged]);
-    if (library)
-        return <section className="library-captures">
-    <div className="library-capture-tools"><label><span>{moteText('按天查看')}</span><input type="date" aria-label={moteText('查看某天的采集记录')} value={after && after === before ? after : ''} onChange={event => { setAfter(event.target.value); setBefore(event.target.value); }}/></label><label><span>{moteText('设备')}</span><select aria-label={moteText('筛选设备')} value={device} onChange={event => setDevice(event.target.value)}><option value="">{moteText('全部设备')}</option>{devices.map(item => <option key={item.deviceId} value={item.deviceId}>{item.deviceName}</option>)}</select></label><button className="icon-button" aria-label={moteText('刷新记录')} disabled={loading} onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
-    <details className="library-advanced-filters"><summary>{moteText('更多筛选')}</summary><div className="filter-bar"><label><span>{moteText('从')}</span><input type="date" aria-label={moteText('开始日期')} value={after} onChange={event => setAfter(event.target.value)}/></label><label><span>{moteText('至')}</span><input type="date" aria-label={moteText('结束日期')} value={before} min={after} onChange={event => setBefore(event.target.value)}/></label><label><span>{moteText('来源')}</span><select aria-label={moteText('筛选记录来源')} value={source} onChange={event => { setSource(event.target.value); if (event.target.value && event.target.value !== 'screen')
-            setOcrStatus(''); }}><option value="">{moteText('全部来源')}</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>{moteText('采集级别')}</span><select aria-label={moteText('筛选采集级别')} value={collection} onChange={event => setCollection(event.target.value as typeof collection)}><option value="">{moteText('全部记录')}</option><option value="activity">{moteText('仅活动状态')}</option><option value="content">{moteText('允许保留的内容')}</option></select></label><label><span>OCR</span><select aria-label={moteText('筛选 OCR 状态')} value={ocrStatus} onChange={event => setOcrStatus(event.target.value)}><option value="">{moteText('全部状态')}</option><option value="pending">{moteText('待处理')}</option><option value="completed">{moteText('已完成')}</option><option value="failed">{moteText('失败')}</option><option value="disabled">{moteText('已关闭')}</option><option value="unknown">{moteText('状态未知')}</option></select></label></div></details>
-    <div className="library-list-status"><span>{visibleTotal === undefined ? moteText('已读取') + ' ' + visibleItems.length : moteText('共 {0} 条 · 本页 {1} 条', visibleTotal, visibleItems.length)}</span>{(after || before || device || collection || source || ocrStatus) && <button className="text-button" onClick={() => { setAfter(''); setBefore(''); setDevice(''); setCollection(''); setSource(''); setOcrStatus(''); }}>{moteText('清除筛选')}</button>}</div>
-    {error && <ErrorNotice text={error} retry={() => void load(pageCursors[page], requestVersion.current, page)}/>}
-    {groups.map(([day, records]) => <section className="library-record-group" key={day}><h2>{day}</h2><div className="library-record-list">{records.map(capture => <button className={'library-record' + (selectedReference === 'capture:' + capture.id ? ' selected' : '')} key={capture.id} aria-current={selectedReference === 'capture:' + capture.id ? 'true' : undefined} onClick={() => onOpen('capture:' + capture.id)}><span className="library-record-icon"><FileText size={18}/></span><span className="library-record-copy"><strong>{capture.windowTitle || capture.appName || sourceLabels[capture.source]}</strong><small>{sourceLabels[capture.source] ?? capture.source} · {capture.deviceName} · {dateTime(capture.capturedAt)}</small>{capture.textPreview && <span className="library-record-preview">{capture.textPreview}</span>}{capture.source === 'screen' && <small>{ocrPresentation(capture.ocr, capture.textPreview).label}</small>}</span></button>)}</div></section>)}
-    {initialOrPageLoading && <div className="load-more"><Spinner label={moteText('正在找回这些片刻…')}/></div>}
-    {visibleTotal!==undefined && !initialOrPageLoading && !visibleItems.length && !error && <Empty icon={Clock3} title={moteText('这段时间还没有记录')}><p>{moteText('试试其他时间或设备，或检查采集端是否已开启。')}</p></Empty>}
-    <nav className="library-pagination" aria-label={moteText('采集记录分页')}><button className="button subtle" disabled={loading || page === 0} onClick={() => { onBrowseChanged?.(); void load(pageCursors[page - 1], requestVersion.current, page - 1); }}>{moteText('上一页')}</button><span>{moteText('第 {0} 页', page + 1)}</span><button className="button subtle" disabled={loading || !cursor} onClick={() => { onBrowseChanged?.(); if (cursor)
-            void load(cursor, requestVersion.current, page + 1); }}>{moteText('下一页')}</button></nav><p className="library-time-note">{moteText('日期按当前浏览器时区显示。这里展示已同步到中央节点的记录；可刷新查看文字识别的最新状态与结果。')}</p>
-  </section>;
     return (<>
       <div className="page-heading timeline-heading">
         <div className="eyebrow">{moteText("按天回看，保留来处")}</div>

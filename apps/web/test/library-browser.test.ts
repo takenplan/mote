@@ -15,6 +15,7 @@ configureLocale(()=> 'zh-CN');
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const when='2026-09-01T10:00:00Z',activity:Activity={apps:[],devices:[],totalDurationMs:0,captures:0};
 const row=(value=id)=>({id:value,deviceId:'fixture-device',deviceName:'Generated device',platform:'macos',capturedAt:when,source:'note',appName:'Generated note',windowTitle:'Generated '+value[0],durationMs:0,hasImage:false,ocr:{status:'not_applicable'},textPreview:'Generated original text'});
+const timeline=(rows:ReturnType<typeof row>[],nextCursor:string|null=null)=>({revision:'generated-current',items:rows.map(record=>({type:'record',id:'projection-'+record.id,day:'2026-10-29',firstAt:when,lastAt:when,sampleCount:null,record})),nextCursor});
 const capture=(value=id):Capture=>({...row(value),source:'note',ocrText:'<script>Generated untrusted evidence</script>',blobHash:null,indexingStatus:'text_ready',privacy:{redacted:false,mode:'none'},provenance:{sourceId:'fixture-source',externalId:'fixture-original',revision:'fixture-version',layer:'snapshot',document:{recordedAt:when,path:'generated/note.txt',contentRole:'authored'}}} as Capture);
 function deferred(){let resolve!:(value:unknown)=>void;const promise=new Promise<unknown>(done=>{resolve=done;});return {promise,resolve};}
 
@@ -29,7 +30,7 @@ async function fixture(t:any){
 }
 function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{return {request:async(path:string,init?:RequestInit)=>{if(path.startsWith('/api/actions/by-evidence/'))return {items:[],hasMore:false};
   if(path==='/api/library/descriptor')return {schemaVersion:1,revision:1,types:[]};
-  if(path==='/api/features')return {schemaVersion:1,revision:1,features:[],capabilities:['/api/capture-browser','/api/library/browse','/api/coding/uploads'].map(path=>({id:'http:GET:'+path,version:'1',state:'active'}))};
+  if(path==='/api/features')return {schemaVersion:1,revision:1,features:[],capabilities:['/api/capture-browser','/api/capture-browser/timeline','/api/capture-browser/timeline/members','/api/library/browse','/api/coding/uploads'].map(path=>({id:'http:GET:'+path,version:'1',state:'active'}))};
   const result=await read(path,init);return path.startsWith('/api/library/browse?')?{schemaVersion:1,types:[],sources:[],noteOrigin:{origin:'notes',label:'随手记'},...result as object,items:((result as any).items??[]).map((material:any)=>material.entryType?material:{entryType:'material',ref:material.ref,contentAt:material.origin?.lastAt??material.updatedAt??when,material})}:result;
 },setAgentTimeout:()=>{}} as Api;}
 function view(api:Api,extras:Partial<React.ComponentProps<typeof Archive>>={}){return React.createElement(Archive,{api,devices:[{deviceId:'fixture-device',deviceName:'Generated device',platform:'macos',status:'capturing',queueDepth:0,lastSeenAt:when}],range:{},activity,revision:0,onOpen:()=>{},tab:'records',setTab:()=>{},...extras});}
@@ -54,7 +55,7 @@ test('an invalid date deep link keeps filters recoverable without widening or cr
 
 test('explicit library navigation leads directly into rows and source details without nested record-view tabs',async t=>{
   const {root,d}=await fixture(t),reads:string[]=[],opened:string[]=[];
-  const api=apiWith(path=>{reads.push(path);if(path.startsWith('/api/capture-browser?'))return {items:[row()],nextCursor:null,totalCount:1};if(path.startsWith('/api/capture-browser/'))return capture();throw Error('Unexpected generated request '+path);});
+  const api=apiWith(path=>{reads.push(path);if(path.startsWith('/api/capture-browser/timeline?'))return timeline([row()]);if(path.startsWith('/api/capture-browser/'))return capture();throw Error('Unexpected generated request '+path);});
   await act(async()=>root.render(view(api,{onOpen:ref=>opened.push(ref)})));
   assert.deepEqual(new Set(Array.from(d.querySelectorAll('[data-collection-id]'),node=>node.getAttribute('data-collection-id'))),new Set(webFeatures.collections().filter(entry=>entry.id!=='memories').map(entry=>entry.id)),'all registered collections remain reachable in the primary, context or More links');
   assert.equal(d.querySelector('[data-collection-id="coding-status"]')?.textContent,'Coding 同步状态','the accepted source exposes the existing receipt view as a contextual link');
@@ -84,7 +85,7 @@ test('explicit library navigation leads directly into rows and source details wi
 
 test('two primary library tabs keep registered specialized views secondary and unavailable links recoverable',async t=>{
  const {root,d}=await fixture(t),selected:string[]=[];
- const api=apiWith(path=>path.startsWith('/api/library/browse?')?{items:[],nextCursor:null}:{items:[row()],nextCursor:null,totalCount:1});
+ const api=apiWith(path=>path.startsWith('/api/library/browse?')?{items:[],nextCursor:null}:timeline([row()]));
  await act(async()=>root.render(view(api,{setTab:tab=>selected.push(tab)})));
  assert.deepEqual(Array.from(d.querySelectorAll('.library-primary-tabs button'),node=>node.textContent),['我的资料','我的记忆']);
  assert.equal(d.querySelector('.library-secondary-views')?.hasAttribute('open'),false);
@@ -97,12 +98,12 @@ test('two primary library tabs keep registered specialized views secondary and u
 
 test('record pagination and explicit device filters keep their request scope while returning from detail',async t=>{
   const {root,d,w}=await fixture(t),paths:string[]=[];
-  const api=apiWith(path=>{paths.push(path);if(path.startsWith('/api/capture-browser?')){const params=new URL('http://localhost'+path).searchParams;return {items:[row(params.get('cursor')?'b'.repeat(8)+'-bbbb-4bbb-8bbb-'+ 'b'.repeat(12):id)],nextCursor:params.has('cursor')?null:'generated-next',totalCount:2};}if(path.startsWith('/api/capture-browser/'))return capture(other);throw Error(path);});
+  const api=apiWith(path=>{paths.push(path);if(path.startsWith('/api/capture-browser/timeline?')){const params=new URL('http://localhost'+path).searchParams;return timeline([row(params.get('cursor')?other:id)],params.has('cursor')?null:'generated-next');}if(path.startsWith('/api/capture-browser/'))return capture(other);throw Error(path);});
   await act(async()=>root.render(view(api)));
   const filter=d.querySelector<HTMLSelectElement>('select[aria-label="筛选设备"]')!;
   await act(async()=>{filter.value='fixture-device';filter.dispatchEvent(new w.Event('change',{bubbles:true}));});
   await act(async()=>button(d,'下一页').click());
-  const latest=new URL('http://localhost'+paths.filter(path=>path.startsWith('/api/capture-browser?')).at(-1)!);
+  const latest=new URL('http://localhost'+paths.filter(path=>path.startsWith('/api/capture-browser/timeline?')).at(-1)!);
   assert.equal(latest.searchParams.get('deviceId'),'fixture-device');assert.equal(latest.searchParams.get('cursor'),'generated-next');
   await act(async()=>d.querySelector<HTMLButtonElement>('.library-record')!.click());
   await act(async()=>button(d,'返回资料列表').click());
@@ -113,12 +114,12 @@ test('record pagination and explicit device filters keep their request scope whi
 test('switching collections or authenticated nodes cannot retain an old selected object or a late page',async t=>{
   const {root,d}=await fixture(t),oldPage=deferred();let signal:AbortSignal|undefined;
   const oldApi=apiWith((path,init)=>{signal=init?.signal as AbortSignal;return oldPage.promise;});
-  const newApi=apiWith(path=>path.startsWith('/api/library/browse?')?{items:[],nextCursor:null}:path.startsWith('/api/capture-browser?')?{items:[row(other)],nextCursor:null,totalCount:1}:capture(other));
+  const newApi=apiWith(path=>path.startsWith('/api/library/browse?')?{items:[],nextCursor:null}:path.startsWith('/api/capture-browser/timeline?')?timeline([row(other)]):capture(other));
   await act(async()=>root.render(view(oldApi)));
   await act(async()=>root.render(view(newApi)));
   assert.equal(signal?.aborted,true);
   await act(async()=>d.querySelector<HTMLButtonElement>('.library-record')!.click());
-  await act(async()=>oldPage.resolve({items:[row(id)],nextCursor:null,totalCount:1}));
+  await act(async()=>oldPage.resolve(timeline([row(id)])));
   assert.match(d.querySelector('.library-master')!.textContent!,/Generated b/);assert.doesNotMatch(d.querySelector('.library-master')!.textContent!,/Generated a/);
   assert.match(d.querySelector('.library-detail')!.textContent!,/Generated b/);
   await act(async()=>root.render(view(newApi,{tab:'materials'})));
@@ -126,7 +127,7 @@ test('switching collections or authenticated nodes cannot retain an old selected
   await act(async()=>root.render(view(newApi)));
   assert.equal(d.querySelector('.library-browser')?.classList.contains('has-selection'),false,'returning to an earlier collection does not resurrect its old choice');
   await act(async()=>d.querySelector<HTMLButtonElement>('.library-record')!.click());
-  const emptyApi=apiWith(()=>({items:[],nextCursor:null,totalCount:0}));
+  const emptyApi=apiWith(()=>(timeline([])));
   await act(async()=>root.render(view(emptyApi)));
   assert.equal(d.querySelector('.library-browser')?.classList.contains('has-selection'),false);
   assert.doesNotMatch(d.querySelector('.library-detail')!.textContent!,/Generated b/);
