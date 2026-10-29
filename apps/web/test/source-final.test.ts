@@ -39,3 +39,11 @@ test('recording source settings require the current provider status to identify 
  base.request=async(path,init)=>{reads.push(path);if(init?.method)writes.push(path);if(path==='/api/connectors/status')return {'generated-recordings':{...status,sourceId:saved.id}};if(path==='/api/connectors/generated-recordings')return {...status,sourceId:'another-current-account'};return original(path,init);};
  await act(async()=>root.render(view(base)));await act(async()=>d.querySelector<HTMLButtonElement>('.source-select')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.source-final-tabs button:last-child')!.click());assert.match(d.querySelector('.source-final-connection')!.textContent!,/此来源未绑定当前录音账号/);assert.equal(d.querySelector('.recording-save-bar'),null);assert.equal(reads.some(path=>/archive|recordings\/items/.test(path)),false);assert.deepEqual(writes,[]);
 });
+
+
+test('recording identity read failures keep a readable default and the full folded diagnostic without mounting account controls',async t=>{
+ const {root,d}=await fixture(t),saved={...source('generated-recording','idle'),kind:'generated.recordings'};const base=apiWith(path=>path==='/api/sources'?{items:[saved]}:path.startsWith('/api/source-items?')?{items:[],nextCursor:null}:{}),original=base.request.bind(base);
+ base.request=async(path,init)=>{if(path==='/api/connectors/generated-recordings')throw new ApiError('generated_recording_identity_read_failure',503);return original(path,init);};
+ await act(async()=>root.render(view(base)));await act(async()=>d.querySelector<HTMLButtonElement>('.source-select')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.source-final-tabs button:last-child')!.click());
+ assert.equal(d.querySelector('.source-final-connection [role=alert]')!.textContent,'状态读取失败，请重试。');assert.equal(d.querySelector<HTMLDetailsElement>('.source-final-connection .source-final-diagnostics')!.open,false);assert.match(d.querySelector('.source-final-connection .source-final-diagnostics')!.textContent!,/generated_recording_identity_read_failure/);assert.equal(d.querySelector('.connector-recording-connection'),null);
+});

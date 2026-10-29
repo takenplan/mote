@@ -138,7 +138,7 @@ function SourceConnectionConfig({api,source,catalog,onOpen,refresh,onSources}:{a
 }
 function SourceRecordingConnection({api,sourceId,provider,onOpen}:{api:Api;sourceId:string;provider:string;onOpen:(ref:string)=>void}){
  const page=useResource<import('@mote/shared').RecordingStatus>(api,'/api/connectors/'+encodeURIComponent(provider)+'-recordings',3000);
- if(page.error)return <p role="alert">{moteText('状态读取失败，请重试。')}</p>;
+ if(page.error)return <div><p role="alert">{moteText('状态读取失败，请重试。')}</p><details className="source-final-diagnostics"><summary>{moteText('技术详情')}</summary><pre>{errorMessage(page.error)}</pre></details></div>;
  if(!page.data)return <p role="status">{moteText('正在读取…')}</p>;
  if(page.data.provider!==provider||page.data.sourceId!==sourceId)return <p role="status">{moteText('此来源未绑定当前录音账号')}</p>;
  return <div className="source-connection-embedded final-source-connector"><RecordingConnection api={api} provider={provider} onOpen={onOpen}/></div>;
