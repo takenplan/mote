@@ -367,4 +367,17 @@ class AppCaptureSetupInstrumentedTest {
             }
         }
     }
+    @Test fun everyExplicitStartRepreviewsCurrentScopeAfterEarlierAcceptance() = fixture { settings->
+        settings.capturePreviewAccepted();assertTrue(settings.capturePreviewSeen())
+        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use{scenario->
+            scenario.onActivity{a->a.openGeneratedAdd(MoteAddAction.SCREEN);button("保存范围并开始记录").performClick()}
+            waitFor{var shown=false;instrumentation.runOnMainSync{shown=dialogViews().filterIsInstance<TextView>().any{it.isShown&&it.text.toString()=="按此范围开始"}};shown}
+            instrumentation.runOnMainSync{assertFalse(settings.enabled);scenario.onActivity{capture(it,"accepted-scope-must-preview-again.png")};button("暂不开始").performClick()}
+            scenario.onActivity{a->views(a.window.decorView).single{it.tag=="app-default-summary"}.performClick();views(a.window.decorView).filterIsInstance<CheckBox>().single{it.text.toString()=="默认：截图"}.performClick();button("保存范围并开始记录").performClick()}
+            waitFor{var shown=false;instrumentation.runOnMainSync{shown=dialogViews().filterIsInstance<TextView>().any{it.isShown&&it.text.toString()=="按此范围开始"}};shown}
+            instrumentation.runOnMainSync{assertTrue(settings.read().collectionRules.defaultMode.screenshots);assertTrue(dialogViews().filterIsInstance<TextView>().any{it.isShown&&it.text.toString().startsWith("未单独设置的应用：")&&it.text.toString().contains("截图")});assertFalse(settings.enabled);scenario.onActivity{capture(it,"changed-scope-requires-new-preview.png")};button("暂不开始").performClick()}
+            assertFalse(settings.enabled)
+        }
+    }
+
 }

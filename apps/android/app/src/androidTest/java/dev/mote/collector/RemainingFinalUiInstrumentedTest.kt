@@ -189,4 +189,60 @@ class RemainingFinalUiInstrumentedTest {
             assertEquals(0,context.queue().inventory().records)
         } } finally { session.select("") }
     }
+    @Test fun localLibraryTabsKeepRealLocationsOriginalAndMemoryHandoff() = fixture {
+        val id=UUID.randomUUID().toString();val original="Generated exact local library original"
+        val event=JSONObject().put("id",id).put("source","note").put("appName","Generated library note").put("capturedAt","2026-10-29T12:00:00Z").put("durationMs",0).put("ocrText",original).put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","none"))
+        context.queue().enqueue(event,null,16_000_000)
+        try { ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","LIBRARY")).awaitMainUi().use { scenario->
+            until("real local library row"){main{visible().any{it.tag=="library-record:"+id}}}
+            main{assertTrue(visible().single{it.tag=="library-locations:local"}.isSelected);assertTrue(visible().single{it.tag=="library-primary-views:materials"}.isSelected);assertTrue(visible().single{it.tag=="library-primary-views:materials"} is TextView);assertFalse(visible().single{it.tag=="library-primary-views:materials"} is android.widget.Button)}
+            for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-library-local-"+theme.value)}}
+            tag("library-locations:central");main{assertTrue(visible().single{it.tag=="library-locations:central"}.isSelected);assertFalse(visible().any{it.tag=="library-record:"+id})};scenario.onActivity{picture(it,"gap-library-central-unavailable-dark")}
+            tag("library-locations:local");until("same local original remains"){main{visible().any{it.tag=="library-record:"+id}}};tag("library-record:"+id)
+            until("exact local record reader"){text(original)}
+            main{val a=androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).single();assertTrue(a is CaptureRecordsActivity);picture(a,"gap-library-exact-original-dark")};click("返回上一页")
+            until("same location on return"){main{visible().any{it.tag=="library-locations:local"&&it.isSelected}}}
+            tag("library-primary-views:memories");until("source memory handoff"){text("查看中心整理的记忆。")};scenario.onActivity{picture(it,"gap-library-memory-handoff-dark")}
+            scenario.recreate();scenario.awaitMainUi();until("same memory tab after recreation"){main{visible().any{it.tag=="library-primary-views:memories"&&it.isSelected}}};click("查看我的记忆 ↗")
+            until("existing Central memory route"){main{androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).any{it is CentralActivity&&it.intent.getStringExtra("page")=="memories"}}}
+            main{androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).single{it is CentralActivity}.finish()}
+            until("return to same handoff"){text("查看中心整理的记忆。")};assertNotNull(context.queue().capture(id));assertFalse(Settings(context).enabled)
+        }}finally{context.queue().acknowledge(id)}
+    }
+    @Test fun processingAndDiagnosticsKeepRealAdvancedDraftsAndVisibleRange() = fixture {
+        val settings=Settings(context);settings.save(settings.read().copy(imageDedupeMode="aggressive",captureMaxSide=1920),confirmCentralEndpoint=true)
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","PROCESSING")).awaitMainUi().use{scenario->
+            main{assertFalse(visible().any{it.tag=="图片最长边 / px"});assertFalse(visible().any{it.tag=="imageDedupeMode"});assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString().contains("近似画面 · 激进")})}
+            for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-processing-default-"+theme.value)}}
+            tag("image-dedupe-choice");click("近似画面");until("explicit native preset choice"){text("选择近似画面档位")};click("取消")
+            assertEquals("aggressive",settings.read().imageDedupeMode);tag("image-processing-advanced")
+            main{val root=visible();assertEquals("1920",(root.single{it.tag=="图片最长边 / px"} as EditText).text.toString());assertEquals(4,(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);(root.single{it.tag=="JPEG 质量"} as EditText).setText("81");(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).setSelection(1)}
+            assertEquals("aggressive",settings.read().imageDedupeMode);scenario.recreate();scenario.awaitMainUi();tag("image-processing-advanced")
+            main{assertEquals("81",(visible().single{it.tag=="JPEG 质量"} as EditText).text.toString());assertEquals(1,(visible().single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);assertEquals("1920",(visible().single{it.tag=="图片最长边 / px"} as EditText).text.toString())}
+            click("保存设置");until("actual explicit processing save"){settings.read().jpegQuality==81&&settings.read().imageDedupeMode=="exact"&&settings.read().captureMaxSide==1920};assertFalse(settings.enabled)
+        }
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","DIAGNOSTICS")).awaitMainUi().use{scenario->
+            main{assertFalse(visible().any{it.tag=="诊断采样间隔 / 秒（15–3600）"});assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString().contains("数值诊断导出保留的全部数值")})}
+            for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-diagnostics-default-"+theme.value)}}
+            tag("diagnostic-export-range");click("最近 7 天");until("actual selected range visible"){main{visible().filterIsInstance<TextView>().any{it.tag=="diagnostic-export-range"&&it.text.toString().contains("最近 7 天")}}}
+            tag("diagnostic-details");main{(visible().single{it.tag=="诊断采样间隔 / 秒（15–3600）"} as EditText).setText("123")};scenario.recreate();scenario.awaitMainUi()
+            main{assertTrue(visible().filterIsInstance<TextView>().single{it.tag=="diagnostic-export-range"}.text.toString().contains("最近 7 天"));assertFalse(visible().any{it.tag=="诊断采样间隔 / 秒（15–3600）"})};tag("diagnostic-details");main{assertEquals("123",(visible().single{it.tag=="诊断采样间隔 / 秒（15–3600）"} as EditText).text.toString())};assertEquals(60,settings.read().diagnosticsIntervalSeconds)
+            scenario.onActivity{picture(it,"gap-diagnostics-advanced-draft-dark")};assertFalse(settings.enabled)
+        }
+    }
+    @Test fun calendarAndTodoTabsReuseActualConsumerKeepDraftAndWithdrawOldSession() = fixture {
+        val origin=requireNotNull(InstrumentationRegistry.getArguments().getString("remainingEmptyOrigin"));val token="generated-remaining-empty-owner-token-20261030"
+        ConnectionGuard.change(context,origin,bindLocal=true){Settings(context).saveConnection(origin,token,"Generated action tabs",true)}
+        try{ActivityScenario.launch<CalendarActionsActivity>(Intent(context,CalendarActionsActivity::class.java)).use{scenario->
+            until("real calendar empty default"){text("尚未发现日程。")};main{assertTrue(visible().single{it.tag=="action-tabs:calendar"}.isSelected);assertFalse(visible().filterIsInstance<TextView>().any{it.text.toString()=="连接本机日历"})}
+            for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-actions-calendar-"+theme.value)}}
+            tag("action-tabs:todos");until("actual existing Todo consumer"){main{visible().any{it.tag=="todo-title"&&it.isEnabled}}};main{(visible().single{it.tag=="todo-title"} as EditText).setText("Generated retained Todo draft")}
+            tag("action-tabs:calendar");tag("action-tabs:todos");until("same-owner tab draft retained"){main{visible().filterIsInstance<EditText>().any{it.tag=="todo-title"&&it.text.toString()=="Generated retained Todo draft"}}}
+            scenario.recreate();until("same-owner recreated Todo draft"){main{visible().filterIsInstance<EditText>().any{it.tag=="todo-title"&&it.text.toString()=="Generated retained Todo draft"}}};scenario.onActivity{picture(it,"gap-actions-todo-draft-dark")}
+            click("添加待办");val api=CentralClient(origin,token);until("real owner Todo saved"){val rows=api.get("/api/todos?limit=30").getJSONArray("items");(0 until rows.length()).any{rows.getJSONObject(it).getString("title")=="Generated retained Todo draft"}}
+            until("Todo consumer refresh complete"){main{visible().filterIsInstance<EditText>().any{it.tag=="todo-title"&&it.text.isEmpty()}}};main{(visible().single{it.tag=="todo-title"} as EditText).setText("Generated former session private draft")};tag("action-tabs:calendar");Settings(context).signOut();tag("action-tabs:todos")
+            until("new session removes previous draft before display"){main{visible().none{it is EditText&&it.text.toString()=="Generated former session private draft"}&&visible().none{it.tag=="todo-title"}&&visible().filterIsInstance<TextView>().any{it.text.toString()=="登录并继续"}}};scenario.onActivity{picture(it,"gap-actions-session-withdrawn-dark")};assertFalse(Settings(context).enabled)
+        }}finally{CentralSession.get(context).select("")}
+    }
+
 }

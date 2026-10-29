@@ -19,11 +19,21 @@ internal class CentralContent(
     state: Bundle?,
     initialPage: String = "ask",
     private val openLocalPage: ((String) -> Unit)? = null,
+    private val embeddedActions: Boolean = false,
+    private val openCalendar: (() -> Unit)? = null,
 ) : ContextWrapper(activity) {
     fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?) = CentralCaptureReader.open(activity,origin,row,conversationId)
     fun requestedFileId(): String? = activity.intent.getStringExtra("fileId")
     fun requestedFileOriginMatches(): Boolean = activity.intent.getStringExtra("fileOrigin") == server
     fun recordNew() = activity.openRecordEditor()
+    internal fun openCalendarActions() { openCalendar?.invoke() ?: activity.startActivity(Intent(activity,CalendarActionsActivity::class.java)) }
+    internal fun backWithinPage(): Boolean = screens?.back() == true
+    internal val actionsEmbedded get() = embeddedActions
+    private var pendingTodoDraft: NativeTodoDraft? = null
+    internal fun restoreTodoDraft(value: NativeTodoDraft?) { pendingTodoDraft=value }
+    internal fun retainTodoDraft(): NativeTodoDraft? = body.findViewWithTag<EditText>("todo-title")?.let { NativeTodoDraft(server,accessGeneration,it.text.toString()) }
+    internal fun takeTodoDraft(): String? = pendingTodoDraft?.let { value->pendingTodoDraft=null;if(value.origin==server&&value.generation==accessGeneration)value.text else null }
+
     fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
     fun takeAskConversation(): String? = activity.intent.getStringExtra("conversationId")?.also { activity.intent.removeExtra("conversationId") }
     fun takeAskEvidence(): String? {
@@ -161,7 +171,8 @@ internal class CentralContent(
             header.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(6) })
         }
         shell.header(header)
-        shell.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1,moteDp(1)) })
+        shell.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1,moteDp(1));if(embeddedActions)visibility=View.GONE })
+        if(embeddedActions){require(initialPage=="actions");header.visibility=View.GONE}
         status = TextView(this).apply {
             tag = "central-status"
             visibility = View.GONE

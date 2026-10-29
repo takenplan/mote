@@ -356,7 +356,10 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     else -> MotePrimaryTab.LIBRARY
 }
 
-fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }): LinearLayout {
+fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }): LinearLayout =
+    moteDetailPageContent(primary,title,headerAction,onBack) { body->ScrollView(this).apply { isFillViewport=true;addView(body) } }
+
+internal fun Activity.moteDetailPageContent(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }, buildContent:(LinearLayout)->View): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceItem), moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceGroup))
@@ -377,7 +380,7 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
     headerAction?.let { header.addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(20) }) }
     root.header(header)
     root.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1, moteDp(1)) })
-    root.content(ScrollView(this).apply { isFillViewport = true; addView(body) })
+    root.content(buildContent(body))
     setContentView(root)
     return body
 }

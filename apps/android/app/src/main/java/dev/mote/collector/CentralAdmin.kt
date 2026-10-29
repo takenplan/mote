@@ -376,11 +376,11 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun actions() {
-        ui.button(MoteI18n.text("日程建议")) { ui.startActivity(Intent(ui, CalendarActionsActivity::class.java)) }
-        ui.button(MoteI18n.text("行动设置")) {
-            configuration(MoteI18n.text("行动设置"), "/api/actions", "/api/actions/settings") { it.getJSONObject("settings") }
-        }
-        val todo = ui.field(MoteI18n.text("待办标题"))
+        if(!ui.actionsEmbedded)ui.button(MoteI18n.text("日程建议")){ui.openCalendarActions()}
+        ui.disclosure(MoteI18n.text("更多")){target->ui.button(MoteI18n.text("行动设置"),parent=target){
+            configuration(MoteI18n.text("行动设置"),"/api/actions","/api/actions/settings"){it.getJSONObject("settings")}
+        }}
+        val todo = ui.field(MoteI18n.text("待办标题")).apply { tag="todo-title" };ui.takeTodoDraft()?.let(todo::setText)
         ui.button(MoteI18n.text("添加待办"), true) {
             action("/api/todos", JSONObject().put("id", UUID.randomUUID().toString()).put("title", todo.text.toString()).put("description", "").put("dueAt", JSONObject.NULL).put("evidenceIds", JSONArray()))
         }

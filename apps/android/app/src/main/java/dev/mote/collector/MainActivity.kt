@@ -90,6 +90,8 @@ class MainActivity : MoteActivity() {
     internal fun isFirstUseRecordEntry() = firstUse
     private var libraryView: LibraryCaptureView? = null
     private var libraryState: Bundle? = null
+    private var libraryTab = "materials"
+    private var processingSave: Button? = null
     private var libraryRecordsRevision = -1L
     private var firstUseGuide: LinearLayout? = null
     private var firstUse = true
@@ -262,7 +264,7 @@ class MainActivity : MoteActivity() {
         root.navigation(navigation)
         setContentView(root)
         // CollectorConfig is the complete draft baseline. Unvisited pages never supply defaults.
-        libraryState = savedInstanceState?.getBundle("library")
+        libraryState = savedInstanceState?.getBundle("library"); libraryTab = savedInstanceState?.getString("libraryTab") ?: "materials"; logExportHours=savedInstanceState?.getInt("logExportHours",24)?.takeIf { it in listOf(1,24,168) } ?: 24
         buildToday()
         buildManagement()
         buildSettings()
@@ -549,20 +551,27 @@ class MainActivity : MoteActivity() {
         val pageContent = content
         val index = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         pageContent.addView(index, LinearLayout.LayoutParams(-1, -2)); content = index
-        val views = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; tag = "library-primary-views" }
-        views.addView(MoteUi.button(Button(this).apply {
-            text = MoteI18n.text("我的资料"); isSelected = true
-            setOnClickListener { loadLocalLibrary() }
-        }, primary = true), LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
-        views.addView(MoteUi.button(Button(this).apply {
-            text = MoteI18n.text("我的记忆"); setOnClickListener { openCentral("memories") }
-        }), LinearLayout.LayoutParams(0, -2, 1f))
-        content.addView(views, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        button(MoteI18n.text("中央归档")) { openCentral("archive") }
-        libraryView = LibraryCaptureView(this, content, libraryState,
+        val materials = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val memories = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        lateinit var tabs: NativeSectionTabs
+        fun select(value: String) {
+            libraryTab = value; tabs.select(value)
+            materials.visibility = if(value=="materials")View.VISIBLE else View.GONE
+            memories.visibility = if(value=="memories")View.VISIBLE else View.GONE
+            if(value=="materials"&&currentPage==Page.LIBRARY&&!initializing)loadLocalLibrary()
+        }
+        tabs = NativeSectionTabs(this,listOf("materials" to "我的资料","memories" to "我的记忆"),"library-primary-views",::select)
+        content.addView(tabs,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(12) })
+        content.addView(materials);content.addView(memories)
+        libraryView = LibraryCaptureView(this, materials, libraryState,
             { parent, item, remote, location, scope -> addCaptureRow(parent, item, remote, location, scope) },
-            { parent, item -> addFileRow(parent, item) })
-        button(MoteI18n.text("按日期浏览更多记录")) { startActivity(Intent(this, CaptureRecordsActivity::class.java)) }
+            { parent, item -> addFileRow(parent, item) },
+            { startActivity(Intent(this,CaptureRecordsActivity::class.java)) },
+            { showPage(Page.STORAGE) })
+        val previous=content;content=memories
+        text(MoteI18n.text("查看中心整理的记忆。"),NativeFontRole.BODY,NativeColorRole.MUTED)
+        button(MoteI18n.text("查看我的记忆")+" ↗") { openCentral("memories") }
+        content=previous;select(libraryTab)
 
         content = pageContent
     }
@@ -782,44 +791,69 @@ class MainActivity : MoteActivity() {
         if (!RuntimeProfile.current.developerTools) menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
     }
     private fun buildProcessing(config: CollectorConfig) {
-        page(Page.PROCESSING, MoteI18n.text("调整截图清晰度与图片去重"))
-        section(MoteI18n.text("图像质量"))
-        jpegQuality = presetNumber(MoteI18n.text("图像质量 · 数值越高清晰度越高"), config.jpegQuality, "75", 40..95, listOf(50, 65, 75, 85, 95))
-        captureMaxSide = presetNumber(MoteI18n.text("图片最长边 / px"), config.captureMaxSide, "1280", 640..2560, listOf(640, 960, 1280, 1920, 2560))
-        text(MoteI18n.text("图片去重"), NativeFontRole.BODY)
+        page(Page.PROCESSING, null)
+        jpegQuality = presetNumber(MoteI18n.text("JPEG 质量"), config.jpegQuality, "75", 40..95, listOf(50, 65, 75, 85, 95))
+        val pageContent=content
+        val advanced=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;visibility=View.GONE;tag="image-processing-advanced:content" }
         imageDedupeMode = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("关闭"), MoteI18n.text("精确"), MoteI18n.text("保守"), MoteI18n.text("均衡"), MoteI18n.text("激进")))
+            adapter = ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf(MoteI18n.text("关闭"),MoteI18n.text("精确"),MoteI18n.text("保守"),MoteI18n.text("均衡"),MoteI18n.text("激进")))
             setSelection(imageDedupeModes.indexOf(config.imageDedupeMode).coerceAtLeast(0))
         }
-        content.addView(imageDedupeMode, LinearLayout.LayoutParams(-1, dp(56))); track(imageDedupeMode, "imageDedupeMode")
-        help(MoteI18n.text("图片去重说明"), MoteI18n.text("与同一应用最近保存的画面比较。重处理前命中时仅记录应用活动，不保存或审查当前图片，也不沿用旧文字。开启图片对比诊断时保留审查后的对比链路。近似档位可能忽略细小变化；重启后重新建立基准。"))
-        menu(MoteI18n.text("图片压缩预览"), MoteI18n.text("质量、文件大小、缩放比例与放大对比"), "chart") {
-            @Suppress("DEPRECATION") startActivityForResult(Intent(this, CompressionPreviewActivity::class.java), 105)
+        val choice=button("") {
+            val labels=listOf("关闭","相同画面","近似画面")
+            MoteDialogBuilder(this).setTitle(MoteI18n.text("采集时图片去重")).setSingleChoiceItems(labels.map { MoteI18n.text(it) }.toTypedArray(),when(imageDedupeMode.selectedItemPosition){0->0;1->1;else->2}) { dialog,which->
+                dialog.dismiss()
+                if(which<2)imageDedupeMode.setSelection(which)
+                else MoteDialogBuilder(this).setTitle(MoteI18n.text("选择近似画面档位")).setSingleChoiceItems(arrayOf(MoteI18n.text("保守"),MoteI18n.text("均衡"),MoteI18n.text("激进")),imageDedupeMode.selectedItemPosition.takeIf { it>=2 }?.minus(2) ?: -1) { preset,index->imageDedupeMode.setSelection(index+2);preset.dismiss() }.setNegativeButton(MoteI18n.text("取消"),null).show()
+            }.setNegativeButton(MoteI18n.text("取消"),null).show()
+        }.apply { contentDescription=MoteI18n.text("采集时图片去重");tag="image-dedupe-choice" }
+        fun choiceLabel(){choice.text=MoteI18n.text("采集时图片去重")+" · "+when(imageDedupeMode.selectedItemPosition){0->MoteI18n.text("关闭");1->MoteI18n.text("相同画面");else->MoteI18n.text("近似画面")+" · "+imageDedupeMode.selectedItem.toString()}}
+        track(imageDedupeMode,"imageDedupeMode");val tracked=imageDedupeMode.onItemSelectedListener
+        imageDedupeMode.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{
+            override fun onNothingSelected(parent:AdapterView<*>?)=Unit
+            override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long){tracked?.onItemSelected(parent,view,position,id);choiceLabel()}
+        };choiceLabel()
+        text(MoteI18n.text("同一应用最近保存画面对比；近似档可能忽略细小变化。命中时仅记录活动，不复用旧文字。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
+        processingSave=button(MoteI18n.text("保存设置"),true){saveConfig()}
+        menu(MoteI18n.text("图片压缩预览"),MoteI18n.text("质量、文件大小、缩放比例与放大对比"),"chart"){
+            @Suppress("DEPRECATION") startActivityForResult(Intent(this,CompressionPreviewActivity::class.java),105)
         }
-        imageDedupeDiagnosticsEnabled = check(MoteI18n.text("临时保留图片去重对比记录"), config.imageDedupeDiagnosticsEnabled)
-        help(MoteI18n.text("图片对比诊断说明"), MoteI18n.text("默认关闭。开启并保存后，将已去重图片及对比原图临时保存在本机，供核对分数与判断依据。最多 20 组、32 MiB，24 小时后到期；读取时清理，系统可能延后后台清理。关闭并保存后清空。保留的都是通过隐私检查和遮罩后的图片。"))
-        menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
-        menu(MoteI18n.text("查看图片去重记录"), MoteI18n.text("对比两张图片、分数与依据，可随时清空"), "chart") { startActivity(Intent(this, ImageDedupeDiagnosticsActivity::class.java)) }
-
-
+        imageDedupeDiagnosticsEnabled=check(MoteI18n.text("临时保留图片去重对比记录"),config.imageDedupeDiagnosticsEnabled)
+        text(MoteI18n.text("默认关闭；最多20组、32 MiB、24小时。关闭并保存后清空诊断副本。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
+        menu(MoteI18n.text("查看图片去重记录"),MoteI18n.text("对比两张图片、分数与依据，可随时清空"),"chart"){startActivity(Intent(this,ImageDedupeDiagnosticsActivity::class.java))}
+        menu(MoteI18n.text("本机图片批量去重"),MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"),"chart"){startActivity(Intent(this,BulkDedupeActivity::class.java))}
+        button(MoteI18n.text("高级选项")){advanced.visibility=if(advanced.visibility==View.VISIBLE)View.GONE else View.VISIBLE}.tag="image-processing-advanced"
+        content.addView(advanced);content=advanced
+        captureMaxSide=presetNumber(MoteI18n.text("图片最长边 / px"),config.captureMaxSide,"1280",640..2560,listOf(640,960,1280,1920,2560))
+        content.addView(imageDedupeMode,LinearLayout.LayoutParams(-1,dp(56)))
+        help(MoteI18n.text("图片去重说明"),MoteI18n.text("与同一应用最近保存的画面比较。重处理前命中时仅记录应用活动，不保存或审查当前图片，也不沿用旧文字。开启图片对比诊断时保留审查后的对比链路。近似档位可能忽略细小变化；重启后重新建立基准。"))
+        help(MoteI18n.text("图片对比诊断说明"),MoteI18n.text("默认关闭。开启并保存后，将已去重图片及对比原图临时保存在本机，供核对分数与判断依据。最多 20 组、32 MiB，24 小时后到期；读取时清理，系统可能延后后台清理。关闭并保存后清空。保留的都是通过隐私检查和遮罩后的图片。"))
+        content=pageContent
     }
 
     private fun buildDiagnostics(config: CollectorConfig) {
-        page(Page.DIAGNOSTICS, MoteI18n.text("按需开启诊断，帮助定位采集和同步问题"))
-        technicalStatus = text(MoteI18n.text("正在读取运行状态…"), NativeFontRole.SUPPORT)
-        diagnosticEnabled = check(MoteI18n.text("记录数值与事件诊断"), config.diagnosticsEnabled)
-        diagnosticInterval = field(MoteI18n.text("诊断采样间隔 / 秒（15–3600）"), config.diagnosticsIntervalSeconds.toString(), "60", InputType.TYPE_CLASS_NUMBER)
-        help(MoteI18n.text("数值诊断说明"), MoteI18n.text("仅在应用/采集运行时采样，最多 1440 条。记录整机电量、本机空间、入队/拦截/失败计数、截图隐私审查耗时和上传字节，不包含截图、文字、笔记、令牌或审查理由。电量变化是整机变化，不能归因于 Mote。"))
-        button(MoteI18n.text("导出数值诊断 JSON")) {
-            @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE, "mote-diagnostics.json"), 103)
+        page(Page.DIAGNOSTICS,null)
+        diagnosticEnabled=check(MoteI18n.text("记录数值与事件诊断"),config.diagnosticsEnabled)
+        text(MoteI18n.text("最多 1440 条数值样本。电量变化是整机变化，不能归因于 Mote。支持包不含截图、正文、笔记、令牌或审查理由。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
+        button(MoteI18n.text("打开本地日志查看器")){startActivity(Intent(this,LogViewerActivity::class.java))}
+        val labels=listOf("最近 1 小时","最近 24 小时","最近 7 天");val hours=listOf(1,24,168)
+        lateinit var range:Button
+        fun rangeLabel(){range.text=MoteI18n.text("导出时间范围")+" · "+MoteI18n.text(labels[hours.indexOf(logExportHours).coerceAtLeast(0)])}
+        range=button(""){MoteDialogBuilder(this).setTitle(MoteI18n.text("导出时间范围")).setSingleChoiceItems(labels.map{MoteI18n.text(it)}.toTypedArray(),hours.indexOf(logExportHours)){dialog,which->logExportHours=hours[which];rangeLabel();dialog.dismiss()}.show()}.apply{contentDescription=MoteI18n.text("导出时间范围");tag="diagnostic-export-range"};rangeLabel()
+        text(MoteI18n.text("数值诊断导出保留的全部数值；时间范围用于支持包事件。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
+        button(MoteI18n.text("导出数值诊断 JSON")){
+            @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"mote-diagnostics.json"),103)
         }
-        button(MoteI18n.text("打开本地日志查看器")) { startActivity(Intent(this, LogViewerActivity::class.java)) }
-        button(MoteI18n.text("导出时间范围")) { MoteDialogBuilder(this).setTitle(MoteI18n.text("导出时间范围")).setSingleChoiceItems(arrayOf(MoteI18n.text("最近 1 小时"), MoteI18n.text("最近 24 小时"), MoteI18n.text("最近 7 天")), listOf(1,24,168).indexOf(logExportHours)) { dialog, which -> logExportHours = listOf(1,24,168)[which]; dialog.dismiss() }.show() }
-        help(MoteI18n.text("支持包包含什么"), MoteI18n.text("事件日志最多 500 条，只记录固定阶段、错误类别与数值。支持包不包含节点地址、设备名、截图、笔记、OCR、令牌、提示词或审查理由；关闭诊断后停止新增，已有记录保留。"))
-        button(MoteI18n.text("导出安全支持包 JSON")) {
-            @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE, "mote-${BuildConfig.MOTE_PROFILE}-support.json"), 104)
+        button(MoteI18n.text("导出安全支持包 JSON")){
+            @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"mote-"+BuildConfig.MOTE_PROFILE+"-support.json"),104)
         }
-        diagnosticExportStatus=text("",NativeFontRole.SUPPORT).apply { tag="diagnostic-export-status";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        diagnosticExportStatus=text("",NativeFontRole.SUPPORT).apply{tag="diagnostic-export-status";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
+        val pageContent=content;content=SecondaryUi.disclosure(content,MoteI18n.text("更多"),"diagnostic-details")
+        technicalStatus=text(MoteI18n.text("正在读取运行状态…"),NativeFontRole.SUPPORT)
+        diagnosticInterval=field(MoteI18n.text("诊断采样间隔 / 秒（15–3600）"),config.diagnosticsIntervalSeconds.toString(),"60",InputType.TYPE_CLASS_NUMBER)
+        help(MoteI18n.text("数值诊断说明"),MoteI18n.text("仅在应用/采集运行时采样，最多 1440 条。记录整机电量、本机空间、入队/拦截/失败计数、截图隐私审查耗时和上传字节，不包含截图、文字、笔记、令牌或审查理由。电量变化是整机变化，不能归因于 Mote。"))
+        help(MoteI18n.text("支持包包含什么"),MoteI18n.text("事件日志最多 500 条，只记录固定阶段、错误类别与数值。支持包不包含节点地址、设备名、截图、笔记、OCR、令牌、提示词或审查理由；关闭诊断后停止新增，已有记录保留。"))
+        content=pageContent
     }
 
     private fun buildNotes() {
@@ -1325,7 +1359,7 @@ class MainActivity : MoteActivity() {
         if (settings.enabled) { toast(MoteI18n.text("已启用，状态见上方")); return }
         val next = runCatching { draft().also { it.validate() } }.getOrElse { toast(it.message ?: MoteI18n.text("请检查设置")); return }
         fun previewThenStart() {
-            if (!settings.capturePreviewSeen()) showCapturePreview(loadedConfig, firstStart = true) else startConfiguredCapture()
+            showCapturePreview(loadedConfig, firstStart = true)
         }
         if (next == loadedConfig) previewThenStart() else saveConfig(after = { previewThenStart() })
     }
@@ -1829,7 +1863,7 @@ class MainActivity : MoteActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBundle("library", libraryView?.saveState() ?: libraryState)
+        outState.putBundle("library", libraryView?.saveState() ?: libraryState); outState.putString("libraryTab",libraryTab);outState.putInt("logExportHours",logExportHours)
         outState.putString("page", currentPage.name)
         outState.putString("permissionReturnPage", permissionReturnPage.name)
         outState.putBoolean("connectionSettingsExpanded", connectionSettingsPanel?.visibility == View.VISIBLE)
@@ -1852,7 +1886,8 @@ class MainActivity : MoteActivity() {
         if (!::saveBar.isInitialized || initializing) return
         val current = pageControlValues()
         val dirty = current.any { (key, value) -> baseline[key] != value }
-        saveBar.visibility = if (current.isNotEmpty() && (dirty || applyingSettings)) View.VISIBLE else View.GONE
+        saveBar.visibility = if (currentPage!=Page.PROCESSING && current.isNotEmpty() && (dirty || applyingSettings)) View.VISIBLE else View.GONE
+        processingSave?.isEnabled=!applyingSettings&&!ConnectionGuard.reconfiguring()
         (saveBar.getChildAt(1) as Button).isEnabled = !applyingSettings && !ConnectionGuard.reconfiguring()
         saveHint.text = if (applyingSettings) MoteI18n.text("正在保存…") else MoteI18n.text("有未保存的更改")
     }

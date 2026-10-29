@@ -6,11 +6,16 @@ import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.content.pm.PackageManager
+import android.content.Intent
+import android.view.View
 import android.widget.*
 import org.json.JSONObject
+
+internal data class NativeTodoDraft(val origin:String,val generation:Long,val text:String)
 
 class CalendarActionsActivity : MoteActivity() {
     private lateinit var status: TextView
@@ -20,24 +25,64 @@ class CalendarActionsActivity : MoteActivity() {
     private var deviceId = ""
     private var cursor = 0L
     private var nextCursor = 0L
+    private var selectedTab = "calendar"
+    private var active = false
+    private var todoContent: CentralContent? = null
+    private var todoState: Bundle? = null
+    private var todoIdentity: Pair<String,Long>? = null
+    private var restoredTodoDraft: NativeTodoDraft? = null
+    private lateinit var tabHost: FrameLayout
+    private lateinit var calendarScroll: ScrollView
+    private lateinit var tabs: NativeSectionTabs
     private val handler = Handler(Looper.getMainLooper())
-    private val poll = object : Runnable { override fun run() { if (!task.busy) refresh(); handler.postDelayed(this, 20000) } }
+    private val poll = object : Runnable { override fun run() { if (selectedTab=="calendar"&&!task.busy) refresh(); if(selectedTab=="calendar")handler.postDelayed(this, 20000) } }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE); task = UiTask(this)
-        val body = moteDetailPage(primary = null, title = MoteI18n.text("日程建议"))
-        text(body, MoteI18n.text("从资料中发现安排。范围授权内的日程交给指定设备，其余逐条确认；结果保留在行动历史。"))
-        text(body, MoteI18n.text("首次使用：在中央网页「行动」开启发现，并授权此设备查看跨来源的建议及原文片段。"))
-        button(body, MoteI18n.text("连接本机日历")) { if (calendarPermissions()) connect() else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR), 401) }
-        button(body, MoteI18n.text("最新建议")) { cursor = 0; refresh() }
-        button(body, MoteI18n.text("更早建议")) { if (nextCursor > 0) { cursor = nextCursor; refresh() } }
-        button(body, MoteI18n.text("刷新并同步已确认日程"), primary = true) { sync() }
+        restoredTodoDraft=lastNonConfigurationInstance as? NativeTodoDraft
+        selectedTab=state?.getString("actionTab")?.takeIf { it in setOf("calendar","todos") } ?: "calendar";todoState=state?.getBundle("todoContent");cursor=state?.getLong("calendarCursor") ?: 0L
+        val body = moteDetailPageContent(primary=null,title=MoteI18n.text("日程与待办"),onBack=::navigateBack) { calendarBody->
+            LinearLayout(this).apply {
+                orientation=LinearLayout.VERTICAL
+                tabs=NativeSectionTabs(this@CalendarActionsActivity,listOf("calendar" to "日程","todos" to "待办"),"action-tabs",::selectTab);addView(tabs)
+                tabHost=FrameLayout(this@CalendarActionsActivity);addView(tabHost,LinearLayout.LayoutParams(-1,0,1f))
+                calendarScroll=ScrollView(this@CalendarActionsActivity).apply{isFillViewport=true;addView(calendarBody)};tabHost.addView(calendarScroll,FrameLayout.LayoutParams(-1,-1))
+            }
+        }
         status = TextView(this); body.addView(status)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(list)
+        val tools=SecondaryUi.disclosure(body,MoteI18n.text("更多"),"calendar-tools")
+        text(tools,MoteI18n.text("从资料中发现安排。范围授权内的日程交给指定设备，其余逐条确认；结果保留在行动历史。"))
+        text(tools,MoteI18n.text("首次使用：在中央网页「行动」开启发现，并授权此设备查看跨来源的建议及原文片段。"))
+        button(tools,MoteI18n.text("连接本机日历")){if(calendarPermissions())connect()else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR,Manifest.permission.WRITE_CALENDAR),401)}
+        button(tools,MoteI18n.text("最新建议")){cursor=0;refresh()}
+        button(tools,MoteI18n.text("更早建议")){if(nextCursor>0){cursor=nextCursor;refresh()}}
+        button(tools,MoteI18n.text("刷新并同步已确认日程"),primary=true){sync()}
         MoteUi.styleTree(body)
-        refresh()
+        if(Build.VERSION.SDK_INT>=33)onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,::navigateBack)
+        selectTab(selectedTab)
     }
-    override fun onResume() { super.onResume(); handler.postDelayed(poll, 20000) }
-    override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
+    private fun selectTab(next:String){
+        selectedTab=next;tabs.select(next);handler.removeCallbacks(poll)
+        calendarScroll.visibility=if(next=="calendar")View.VISIBLE else View.GONE
+        if(next=="todos"){
+            val access=CentralAccess.resolve(this);val identity=access.server to access.generation
+            if(todoIdentity!=null&&todoIdentity!=identity){todoContent?.let { it.close();tabHost.removeView(it.root) };todoContent=null;todoState=null;restoredTodoDraft=null}
+            todoIdentity=identity
+            val todos=todoContent ?: CentralContent(this,todoState,initialPage="actions",embeddedActions=true,openCalendar={selectTab("calendar")}).also { it.restoreTodoDraft(restoredTodoDraft);restoredTodoDraft=null;todoContent=it;todoState=null;tabHost.addView(it.root,FrameLayout.LayoutParams(-1,-1)) }
+            todos.root.visibility=View.VISIBLE;if(active)todos.resume()
+        }else{
+            todoContent?.root?.visibility=View.GONE;todoContent?.pause()
+            if(!task.busy)refresh();if(active)handler.postDelayed(poll,20000)
+        }
+    }
+    private fun navigateBack(){if(selectedTab=="todos"&&todoContent?.backWithinPage()==true)return;finish()}
+    @Deprecated("Native back navigation") override fun onBackPressed()=navigateBack()
+    override fun onSaveInstanceState(state:Bundle){state.putString("actionTab",selectedTab);state.putLong("calendarCursor",cursor);state.putBundle("todoContent",Bundle().also { todoContent?.saveState(it) ?: todoState?.let(it::putAll) });super.onSaveInstanceState(state)}
+    override fun onResume(){super.onResume();active=true;if(selectedTab=="calendar")handler.postDelayed(poll,20000)else selectTab("todos")}
+    @Deprecated("In-memory generated owner draft") override fun onRetainNonConfigurationInstance():Any?=todoContent?.retainTodoDraft() ?: restoredTodoDraft
+    override fun onPause(){active=false;handler.removeCallbacks(poll);todoContent?.pause();super.onPause()}
+    override fun onDestroy(){todoContent?.close();super.onDestroy()}
+    @Deprecated("Native document picker") override fun onActivityResult(request:Int,result:Int,data:Intent?){super.onActivityResult(request,result,data);todoContent?.activityResult(request,result,data)}
     private fun text(parent: LinearLayout, value: String, size: Float = MoteTheme.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) MoteTheme.fontSection else size.toInt(), medium = size >= 20f); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)); setTextIsSelectable(true) }.also(parent::addView)
     private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
     private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }

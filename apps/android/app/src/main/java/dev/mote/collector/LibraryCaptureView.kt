@@ -16,6 +16,8 @@ internal class LibraryCaptureView(
     state: Bundle?,
     private val capture: (LinearLayout, JSONObject, Boolean, String, String) -> Unit,
     private val file: (LinearLayout, JSONObject) -> Unit,
+    private val moreRecords: () -> Unit,
+    private val retention: () -> Unit,
 ) {
     private val task = UiTask(activity)
     private val projection = LibraryCaptureProjection()
@@ -28,7 +30,7 @@ internal class LibraryCaptureView(
         deniedOrigin = origin; projection.clearCentral(origin); remoteCursor = null; remoteMore = false; render()
     }, { origin -> deniedOrigin != origin }) }
     private var source = state?.getString("source").orEmpty()
-    private var location = state?.getString("location").orEmpty()
+    private var location = state?.getString("location") ?: "local"
     private var day = state?.getString("day").orEmpty()
     private var localCursor: String? = null
     private var remoteCursor: String? = null
@@ -47,6 +49,9 @@ internal class LibraryCaptureView(
     private var anchor = state?.getString("anchor")
     private var anchorTop = state?.getInt("anchorTop") ?: 0
     init {
+        lateinit var locations: NativeSectionTabs
+        locations=NativeSectionTabs(activity,listOf("local" to "本机","central" to "中央资料"),"library-locations") { value->location=value;locations.select(value);render() }
+        locations.select(location);parent.addView(locations)
         val options = SecondaryUi.disclosure(parent,MoteI18n.text("筛选"),"library-filters",state?.getBoolean("filtersExpanded") ?: false)
         val types = listOf("" to "全部记录", "file" to "文件", "source" to "来源资料", "material" to "整理资料", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
         fun selector(label: String, choices: List<Pair<String,String>>, selected: String, changed: (String) -> Unit) {
@@ -62,7 +67,7 @@ internal class LibraryCaptureView(
             }
         }
         selector("资料类型", types, source) { if (source != it) { source = it; resetFilter() } }
-        selector("资料位置", listOf("" to "全部位置", "local" to "本机", "central" to "中央可读"), location) { if (location != it) { location = it; render() } }
+        selector("资料位置", listOf("" to "全部位置", "local" to "本机", "central" to "中央可读"), location) { if (location != it) { location = it; locations.select(it); render() } }
         options.addView(TextView(activity).apply { text = MoteI18n.text("收集/更新时间"); MoteUi.type(this, NativeFontRole.META) })
         val date = Button(activity).apply {
             text = day.ifBlank { MoteI18n.text("选择日期") }
@@ -75,9 +80,11 @@ internal class LibraryCaptureView(
         }; options.addView(MoteUi.button(date))
         options.addView(MoteUi.button(Button(activity).apply { text = MoteI18n.text("全部日期"); setOnClickListener { day = ""; date.text = MoteI18n.text("选择日期"); resetFilter() } }))
         sourceView.restore(state?.getBundle("sourceView")); sourceView.controls(options)
+        SecondaryUi.action(options,MoteI18n.text("按日期浏览更多记录"),action=moreRecords)
         parent.addView(status); parent.addView(rows)
         more.text = MoteI18n.text("加载更多"); more.setOnClickListener { if (!task.busy) load() }; parent.addView(MoteUi.button(more))
         parent.addView(MoteUi.button(Button(activity).apply { text = MoteI18n.text("刷新"); setOnClickListener { refresh() } }))
+        parent.addView(TextView(activity).apply { text=MoteI18n.text("上传后的本机保留设置")+"  ›";MoteUi.type(this,NativeFontRole.SUPPORT);MoteUi.textColor(this,NativeColorRole.ACCENT);minHeight=activity.moteDp(42);gravity=android.view.Gravity.CENTER_VERTICAL;isFocusable=true;setOnClickListener { retention() } })
     }
     fun saveState(): Bundle = Bundle().apply {
         putBoolean("filtersExpanded", host.findViewWithTag<android.view.View>("library-filters:content")?.visibility == android.view.View.VISIBLE)
