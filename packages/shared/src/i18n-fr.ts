@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "例如：这是我的工作日历，日程不代表实际参加。": "Par exemple : il s’agit de mon calendrier professionnel ; un événement ne prouve pas ma participation.",
   "备份未导入": "Sauvegarde non importée",
   "已清理的本机副本不在其中。": "Les copies locales déjà supprimées de cet appareil ne sont pas incluses.",
   "备份文件为明文，仅保存在自己信任的位置。": "Les sauvegardes ne sont pas chiffrées. Enregistrez-les uniquement dans un emplacement de confiance.",
