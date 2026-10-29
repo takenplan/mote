@@ -109,3 +109,39 @@ it('cannot restore first-note content after the owner connection changes while i
   finish({text:'Previous owner generated original',metadata:'',sourceName:'Previous owner'});await flush();
   expect(el('home-first-record-preview').textContent).toBe('');expect(el('home-first-record').hidden).toBe(true);
 });
+
+it('keeps an already confirmed first-note receipt when its original later becomes unreadable',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});
+  document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({location:'central',captureId:conversation.id,text:'Generated first original',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  ui.setHomeRows([{key:'capture:'+conversation.id,source:'note',title:'Generated first original',preview:'',observedAt:new Date().toISOString()}]);await flush();
+  expect(el('home-first-record-state').textContent).toBe('中央已收到');
+  vi.mocked(api.localContentDetail).mockRejectedValue(Error('Generated original HTTP503'));
+  ui.update({...status,sync:{...status.sync,state:'uploading'}});await flush();
+  expect(el('home-first-record-state').textContent).toBe('中央已收到');
+  expect(el('home-first-copy').textContent).toBe('资料已收到，原文暂不可用。');
+  expect(el('home-first-record-preview').textContent).toBe('');
+  expect(el('home-onboarding').hidden).toBe(false);
+});
+
+it('does not reuse a first-note receipt after the owner generation changes, even for an identical draft ID',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({location:'central',captureId:conversation.id,text:'Old owner first original',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  const row={key:'queue:'+conversation.id,source:'note' as const,title:'Generated original',preview:'',observedAt:new Date().toISOString()};ui.setHomeRows([row]);await flush();expect(el('home-first-record-state').textContent).toBe('中央已收到');
+  vi.mocked(api.localContentDetail).mockRejectedValue(Error('New owner original unavailable'));
+  ui.update({...status,authorizationGeneration:2});ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);ui.setHomeRows([row]);await flush();
+  expect(el('home-first-record-state').textContent).toBe('接收结果待核实');expect(el('home-first-copy').textContent).not.toContain('资料已收到');
+});
+
+it('does not replace the selected first note with a different capture returned by its reader',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({location:'central',captureId:'22222222-2222-4222-8222-222222222222',text:'Unrelated capture',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  ui.setHomeRows([{key:'queue:'+conversation.id,source:'note',title:'Generated first original',preview:'',observedAt:new Date().toISOString()}]);await flush();
+  expect(el('home-first-record-state').textContent).toBe('接收结果待核实');expect(el('home-first-record-preview').textContent).toBe('');
+});

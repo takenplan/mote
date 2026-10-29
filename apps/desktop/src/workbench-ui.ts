@@ -9,7 +9,7 @@ type WorkbenchActions = {question:(text:string)=>boolean;conversation:(id:string
 export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
   const question=el<HTMLTextAreaElement>('home-question'),submit=el<HTMLButtonElement>('home-ask-submit'),history=el('home-conversations');
-  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent:boolean|undefined,hasSource=false,hasConversation:boolean|undefined,firstUseActive=false,firstNoteId:string|undefined,firstRecord:ContentItem|undefined,firstVersion=0,firstDetailSignature='',firstCopy='',firstSourceId:string|undefined,firstLocalKey:string|undefined,firstFileActive=false,firstSourceMessage='';
+  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent:boolean|undefined,hasSource=false,hasConversation:boolean|undefined,firstUseActive=false,firstNoteId:string|undefined,firstRecord:ContentItem|undefined,firstVersion=0,firstDetailSignature='',firstCopy='',firstReceiptId:string|undefined,firstSourceId:string|undefined,firstLocalKey:string|undefined,firstFileActive=false,firstSourceMessage='';
   function controls(){
     submit.disabled=blocked||!question.value.trim();
     for(const button of Array.from(history.querySelectorAll('button')))button.disabled=blocked;
@@ -30,9 +30,9 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   async function readFirstRecord(){
     if(!firstRecord||!(firstLocalKey||firstNoteId))return;const version=++firstVersion,item=firstRecord;
     try{const detail=await api.localContentDetail(firstLocalKey||'queue:'+firstNoteId);if(version!==firstVersion||!firstUseActive)return;
-      const remote='location'in detail&&detail.location==='central';if(remote&&'captureId'in detail&&detail.captureId)firstRecord={...item,key:'capture:'+detail.captureId};
-      firstCopy=remote?moteText('中央已收到'):moteText('原文已经保存在这台 Mac，可以随时打开。');el('home-first-copy').textContent=firstCopy;el('home-first-record-preview').textContent=detail.text;el('home-first-record-state').textContent=remote?moteText('中央已收到'):moteText('本机已保存');
-    }catch{if(version!==firstVersion||!firstUseActive)return;el('home-first-record-preview').textContent='';firstCopy=moteText('接收结果待核实');el('home-first-copy').textContent=firstCopy;el('home-first-record-state').textContent=moteText('接收结果待核实');}
+      const remote='location'in detail&&detail.location==='central';if(remote&&'captureId'in detail&&typeof detail.captureId==='string'){if(firstNoteId&&detail.captureId!==firstNoteId||firstReceiptId&&detail.captureId!==firstReceiptId)throw Error(moteText('内容暂不可用'));firstReceiptId=detail.captureId;firstRecord={...item,key:'capture:'+detail.captureId};}
+      firstCopy=firstReceiptId?moteText('中央已收到'):moteText('原文已经保存在这台 Mac，可以随时打开。');el('home-first-copy').textContent=firstCopy;el('home-first-record-preview').textContent=detail.text;el('home-first-record-state').textContent=firstReceiptId?moteText('中央已收到'):moteText('本机已保存');
+    }catch{if(version!==firstVersion||!firstUseActive)return;el('home-first-record-preview').textContent='';firstCopy=firstReceiptId?moteText('资料已收到，原文暂不可用。'):moteText('接收结果待核实');el('home-first-copy').textContent=firstCopy;el('home-first-record-state').textContent=firstReceiptId?moteText('中央已收到'):moteText('接收结果待核实');}
   }
   async function refreshFirstSource(){
     if(!firstSourceId||!firstUseActive)return;const version=++firstVersion,id=firstSourceId;
@@ -83,7 +83,7 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
     refresh,
     cancelFirstFile(){if(!firstUseActive||!firstFileActive)return false;firstFileActive=false;return true;},
     sourcesSaved(ids:string[]):'overview'|'records'|undefined{if(!firstUseActive||!firstFileActive)return;firstFileActive=false;if(ids.length!==1)return 'records';firstSourceId=ids[0];onboarding();void refreshFirstSource();return 'overview';},
-    leave(page:string){if(page!=='overview'&&page!=='content-reader'&&!(firstFileActive&&page==='source-editor')){firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstVersion++;firstDetailSignature='';firstCopy='';onboarding(true);}},
+    leave(page:string){if(page!=='overview'&&page!=='content-reader'&&!(firstFileActive&&page==='source-editor')){firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstVersion++;firstDetailSignature='';firstCopy='';firstReceiptId=undefined;onboarding(true);}},
     setHomeRows(rows:readonly ContentItem[]){if(!firstUseActive)return;if(firstSourceId){if(firstRecord)void readFirstRecord();else void refreshFirstSource();return;}if(!firstNoteId)return;const row=rows.find(row=>row.key==='queue:'+firstNoteId||row.key==='capture:'+firstNoteId);if(row){firstRecord=row;onboarding();void readFirstRecord();}},
     setHistory(items:RecentConversation[]){generation++;renderHistory(items);},
     setBusy(value:boolean){blocked=value;controls();},
@@ -95,7 +95,7 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
       const sending=next.config.syncPaused?moteText('发送已暂停'):next.sync.state==='unconfigured'?moteText('仅保存在本机'):next.sync.state==='error'?moteText('发送需要处理'):next.sync.state==='uploading'?moteText('正在发送'):next.config.syncMode==='manual'?moteText('仅手动发送'):moteText('按设置自动发送');
       el('home-collection-summary').textContent=capture+' · '+sending;
       const key=JSON.stringify([next.authorizationGeneration,next.config.serverUrl,next.config.tokenConfigured,next.config.authSignedOut,next.config.authExpiresAt,next.config.authSourceBinding]);
-      if(key!==authorization){authorization=key;firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstCopy='';firstVersion++;hasConversation=undefined;onboarding();generation++;history.replaceChildren();void refresh();}
+      if(key!==authorization){authorization=key;firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstCopy='';firstReceiptId=undefined;firstVersion++;hasConversation=undefined;onboarding();generation++;history.replaceChildren();void refresh();}
     },
   };
 }
