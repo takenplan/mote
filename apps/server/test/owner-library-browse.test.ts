@@ -47,3 +47,12 @@ test('browse privacy and deletion boundaries invalidate cursors and non-owner cr
  const invitation=await f.node.app.inject({method:'POST',url:'/api/connections/collector-invitations',headers:f.headers,payload:{serverUrl:'https://generated.invalid',label:'Generated collector'}});const redeemed=await f.node.app.inject({method:'POST',url:'/api/connections/redeem',payload:{code:invitation.json().invitation.code,deviceId:'generated-collector',deviceName:'Generated collector',platform:'android'}});await f.read({},403,{...f.headers,authorization:'Bearer '+redeemed.json().token});
  const readOnly=await f.node.connections.mintMcp({serverUrl:'https://generated.invalid',label:'Generated Agent',access:'read'},{directory:join(f.node.store.directory,'connectors'),mcpEnabled:true});const credential=Object.values(readOnly.config.mcpServers)[0].headers.Authorization;await f.read({},403,{...f.headers,authorization:credential});
 });
+
+test('browse source ordering normalizes ISO offsets and equivalent millisecond timestamps through multiple pages',async t=>{
+ const f=await fixture(t);const instants=['2026-10-29T08:00:00+08:00','2026-10-29T01:00:00Z','2026-10-29T01:00:00.000Z','2026-10-28T18:00:00-07:00','2026-10-29T09:00:00.001+08:00'];
+ const expected:any[]=[];
+ for(let index=0;index<instants.length;index++){const original=await f.note(index,instants[index]);expected.push({ref:'capture:'+original.id,contentAt:new Date(instants[index]).toISOString()});const material=f.material('offset-'+index,original,{members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],origin:{sourceId:'generated-source',externalId:'offset-'+index,firstAt:instants[index],lastAt:instants[index]}});expected.push({ref:material.ref,contentAt:new Date(instants[index]).toISOString()});}
+ const seen:any[]=[];let cursor:string|undefined;do{const page=await f.read({limit:'2',...(cursor?{cursor}:{})});seen.push(...page.items.map(({ref,contentAt}:any)=>({ref,contentAt})));cursor=page.nextCursor??undefined;}while(cursor);
+ assert.deepEqual(seen,expected.sort((a,b)=>b.contentAt.localeCompare(a.contentAt)||b.ref.localeCompare(a.ref)));assert.equal(new Set(seen.map(item=>item.ref)).size,10);
+ const bounded=await f.read({after:'2026-10-29T08:30:00+08:00',before:'2026-10-29T09:00:00.001+08:00',limit:'100'});assert.equal(bounded.items.length,6);assert.ok(bounded.items.every((item:any)=>item.contentAt==='2026-10-29T01:00:00.000Z'));
+});

@@ -915,12 +915,12 @@ export class MaterialStore {
     if(args.id){clauses.push('h.id=?');values.push(parseId(args.id));}
     if(args.type){const predicate=materialTypePredicate(args.type);clauses.push(predicate.sql);values.push(...predicate.values);}
     const librarySort='COALESCE(h.last_at,h.updated_at)';
-    if(args.after){const after=new Date(args.after).toISOString();clauses.push(args.order==='library'?`${librarySort}>=?`:'h.last_at>=?');values.push(after);}
-    if(args.before){const before=new Date(args.before).toISOString();clauses.push(args.order==='library'?`${librarySort}<?`:'h.first_at<?');values.push(before);}
-    const sort=args.order==='library'?librarySort:args.order==='source'?'COALESCE(h.last_at,h.first_at,h.updated_at)':'h.updated_at';
+    if(args.after){const after=new Date(args.after).toISOString();clauses.push(args.order==='library'?`${librarySort}>=?`:args.order==='source'?'julianday(h.last_at)>=julianday(?)':'h.last_at>=?');values.push(after);}
+    if(args.before){const before=new Date(args.before).toISOString();clauses.push(args.order==='library'?`${librarySort}<?`:args.order==='source'?'julianday(h.first_at)<julianday(?)':'h.first_at<?');values.push(before);}
+    const sort=args.order==='library'?librarySort:args.order==='source'?"strftime('%Y-%m-%dT%H:%M:%fZ',COALESCE(h.last_at,h.first_at,h.updated_at))":'h.updated_at';
     if(args.cursor){
       let cursor:{u:string;id:string};try{cursor=JSON.parse(Buffer.from(args.cursor,'base64url').toString()) as typeof cursor;if(typeof cursor.u!=='string'||!materialIdSchema.safeParse(cursor.id).success)throw Error();}catch{throw new StoreError('Invalid material cursor');}
-      clauses.push(`(${sort}<? OR (${sort}=? AND h.id<?))`);values.push(cursor.u,cursor.u,cursor.id);
+      clauses.push(`(${sort}<? OR (${sort}=? AND h.id<?))`);const seek=args.order==='source'?new Date(cursor.u).toISOString():cursor.u;values.push(seek,seek,cursor.id);
     }
     const rows=this.store.db.prepare(`SELECT h.*,${sort} AS sort_at,r.manifest,r.text_length,r.block_count,r.member_count,r.asset_count,r.created_at AS version_created_at FROM material_heads h JOIN material_revisions r ON r.material_id=h.id AND r.revision=h.revision WHERE ${clauses.join(' AND ')} ORDER BY ${sort} DESC,h.id DESC LIMIT ?`).all(...values,limit+1) as (HeadRow&RevisionRow&{sort_at:string})[];
     const page=rows.slice(0,limit).map(row=>this.record(row,row,false));

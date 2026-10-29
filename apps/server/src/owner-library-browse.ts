@@ -13,7 +13,7 @@ type Query=z.infer<typeof querySchema>;
 const positionSchema=z.object({material:z.string().optional(),notes:z.string().optional(),materialDone:z.boolean(),notesDone:z.boolean()}).strict();
 type Position=z.infer<typeof positionSchema>;
 export type OwnerBrowseEntry={entryType:'material';ref:string;contentAt:string;material:MaterialRecord}|{entryType:'capture';ref:string;contentAt:string;revision:string;capture:CapturePreview};
-const materialTime=(value:MaterialRecord)=>value.origin.lastAt??value.origin.firstAt??value.updatedAt;
+const materialTime=(value:MaterialRecord)=>new Date(value.origin.lastAt??value.origin.firstAt??value.updatedAt).toISOString();
 const encode=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64url');
 
 /** A read projection of existing owner entities. It never publishes notes or
