@@ -39,7 +39,9 @@ class CompressionPreviewInstrumentedTest {
                 assertEquals(2, all.filterIsInstance<ImageView>().count { it.drawable != null && it.contentDescription in listOf("原始示例", "压缩结果") })
                 all.filterIsInstance<Spinner>().single().setSelection(0)
             }
-            Thread.sleep(150); waitReady()
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<Button>().single { it.text == "更新预览" }.performClick() }
+            waitReady()
             scenario.onActivity { activity ->
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.contains("360 × 640") })
                 val root = activity.window.decorView
