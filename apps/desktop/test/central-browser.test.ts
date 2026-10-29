@@ -95,3 +95,7 @@ it.each(['overview', 'about', 'guide', 'activity'])('preserves the %s destinatio
 });
 
 it.each([['sources','#/connections'],['actions','#/actions'],['models','#/system/models']])('keeps the existing %s destination through a real login handoff',async(page,route)=>{const chrome=vi.fn();await openCentralBrowser('http://127.0.0.1:47832',page,'darwin',chrome,vi.fn(),undefined,'generated-ticket');const url=new URL(chrome.mock.calls[0][0]);expect(url.hash.split('?')[0]).toBe(route);expect(new URLSearchParams(url.hash.split('?')[1]).get('loginTicket')).toBe('generated-ticket');expect(url.search).toBe('');});
+
+it('opens the retained source-detail Central library action through either login handoff',async()=>{
+ for(const login of ['ticket','request']){const chrome=vi.fn();await openCentralBrowser('https://central.example','library','darwin',chrome,vi.fn(),undefined,login==='ticket'?'generated-ticket':undefined,login==='request'?'generated-request':undefined);const url=new URL(chrome.mock.calls[0][0]);expect(url.hash.split('?')[0]).toBe('#/library');expect(new URLSearchParams(url.hash.split('?')[1]).get(login==='ticket'?'loginTicket':'loginRequest')).toBe('generated-'+login);expect(url.search).toBe('');}
+});
