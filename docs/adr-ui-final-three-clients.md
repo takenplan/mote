@@ -1,12 +1,14 @@
 # ADR: Three-client UI finalization from the owner review
 
-Date: 2026-10-29. Status: owner-directed UI target plus four explicitly authorized bounded backend changes; implementation and visual acceptance pending. Other extensions remain subject to the boundaries below.
+Date: 2026-10-29. Status: accepted UI target; H01–H04 and the bounded H07/H09 additions are owner-authorized. Integrated implementation and final visual/live acceptance remain separate evidence.
 
 ## Source and scope
 
 The source is the owner's [UI review](codex://threads/01a17d84-94a3-7382-b12a-5c656106f534), fully reread through its final private-site publication: 40 turns, including 39 with user messages. [The source, decisions and acceptance scope](design/ui-final-three-clients-2026-10-29.md) records exact turn/message IDs, accepted and superseded prototypes, the three clients, page/dialog/state inventories and known evidence gaps. The owner's later explicit decisions prevail over conflicting repository ADRs. The four published prototype groups together are the target; a file's old candidate label does not override the owner's finalization instruction.
 
 The owner authorizes implementation of the UI, strict comparison, draft PRs, independent review and merging checked heads into main. In the [execution thread](codex://threads/01a1767c-d428-715a-8055-60970a2a00c5), the owner's reply `Sentinel_257460f132848191881fe64393bba4c5` to `Sentinel_6409e67a4e0481918ccb06bb1688db5a` also approves the four scoped history/calendar/context/local-recognition changes below and explicitly includes automatic dependency preparation in the fourth. This execution authorization is separate from the UI design source. It does not authorize deployment, release, unrelated features, new device/calendar scopes or arbitrary backend changes.
+
+In this continuation the owner additionally approved two concrete gaps after a plain-language explanation: read-only inspection of permissions for the configured Chrome origins, and truthful partial/uncertain Mac backup-import results. The reply was “两处都按这个方案补齐（推荐）”. These narrow H09/H07 additions preserve existing permissions, saves and deduplication; they do not authorize automatic permission grants/retries or new recovery transactions/checkpoints/rollback policies.
 
 ## Decision
 
@@ -30,6 +32,8 @@ Submitted conversations remain visible after ordinary referenced-material modifi
 
 Calendar's target is automatic effectiveness within granted bounds, with no per-item approval queue. Missing information, waiting for a device, uncertainty and actual write receipts remain visible. The owner authorizes extending the current create-only managed path to update/cancel/complete within the existing authorization, without extending devices or calendars. Preserve target/version checks, idempotency, actual device receipts and host protections; authorization does not establish that implementation or verification has finished.
 
+Chrome's recheck uses the authenticated local bridge to inspect only the saved exact HTTP(S) origins with `chrome.permissions.contains`. It reads no page and requests no permission. Disconnection, multiple peers, busy/timeout/cancellation and changed settings remain unverified. Backup import reports confirmed completed work separately from a potentially written but unconfirmed current record; an error must not imply nothing was saved. Explicitly selecting the same archive again uses existing identity/content deduplication, without a new transaction or automatic retry strategy.
+
 ## Supersession and unchanged contracts
 
 | Classification | Disposition |
@@ -38,7 +42,7 @@ Calendar's target is automatic effectiveness within granted bounds, with no per-
 | CHANGE | Android primary navigation and Mac landing priority; original preview default; global Central quick note; unified reader; Memory list/filter organization; discovery More menu; settings/authorization grouping; low-frequency existing entries. |
 | REMOVE | Android four-tab/Record-tab candidates as the final layout; independent Memory view management; server-directory import UI; discovery's prominent report/text tabs; standalone background-authorization tab; unnecessary daily explanatory prose. |
 | AUTHORIZED, IMPLEMENTATION PENDING | Ordinary-deletion history retention with privacy erasure/forget/revocation exceptions; automatic update/cancel/complete within existing calendar/device authorization; complete independent description fields/storage/transport/context; full managed OCR/ASR dependency/download/start/recovery path. See H01–H04 in the source inventory; these are no longer approval Holds. |
-| STILL SEPARATE | New receipt/count policies, recovery transaction/checkpoint semantics, provider auto-restoration, broader credential reuse, missing browser-origin permission inspection and any authorization beyond the four explicitly approved scopes. See H06–H09 and capability checks Q01/Q02. |
+| STILL SEPARATE | New Android receipt/count policies, recovery transaction/checkpoint/rollback semantics, provider auto-restoration, broader credential reuse and authorization beyond the explicitly approved scopes. H07/H09 are narrowed only by the concrete additions above; H06/H08 and capability checks Q01/Q02 remain applicable. |
 | UNKNOWN | Full final-prototype dynamic access, native visual parity, physical-device permissions/OEM behavior, unexecuted state transitions and actual provider behavior. Existing prototype screenshots do not certify the product. |
 
 This supersedes the Android navigation and overlapping presentation/entry-placement portions of [UI IA v1](adr-ui-ia-v1.md), [the 2026-10-26 user journeys](ui-user-journeys.md), and their earlier client/presentation recommendations. It does not replace unrelated architecture decisions. In [retained evidence history](adr-evidence-history-retention.md), ordinary-update retention remains valid; the owner has now approved changing ordinary deletion while preserving explicit privacy erasure/forget/revocation. The baseline backend still requires that implementation and verification. Older Holds are narrowed only by the explicit UI decisions and four additional execution authorizations.
@@ -47,6 +51,8 @@ This supersedes the Android navigation and overlapping presentation/entry-placem
 
 An independent reviewer uses the source inventory established before implementation to check completeness. Validate the changed module with focused risk checks, then run the real three clients in isolated generated profiles and compare each applicable page, dialog and state with its corresponding prototype. Record viewport/screen, theme, language, source, revision, screenshot, differences and pass/fail/untested/Hold. Unit tests and DOM assertions do not prove visual equality; platform-specific layouts are expected to differ exactly as their own approved sources differ.
 
-The final HTML is readable, but old final temporary screenshots are missing and a supported browser request to open its local URL was denied by browser security policy. No workaround is authorized. Ten already-created source default-state screenshots have independent image review; no product state has completed this round's visual acceptance. Full comparison remains blocked pending an allowed source delivery/access method.
+The inventory separates earlier partial visual evidence from the integrated candidate. Original source files, already-generated source screenshots and the owner-published private website identify the target. Prior denied access is not to be bypassed, and a source state not actually observed must stay unverified. A screenshot of the prototype is not a screenshot of the product, and neither replaces actual state transitions.
+
+After the UI converges, run the real clients against one isolated Central with generated evidence. Where a journey requires inference, use the owner's required local Codex Server model `gpt-6.1-terra`, record the actual calls and persisted results, and continue the same conversation and citations across clients. Do not substitute another model or fixture answers. Controlled failure injection is labeled separately. The final integrated run follows, rather than replaces, focused module validation.
 
 Use draft PRs, independent code/design review, relevant checks on the final head and the owner's authorized merge path. Verify the remote main commit. Do not approve on the owner's behalf, bypass branch protection, push directly to main, deploy or publish a release.
