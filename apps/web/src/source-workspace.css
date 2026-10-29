@@ -53,3 +53,7 @@
 .source-dialog > p { font-size:13px; line-height:1.7; padding:22px; margin:0; }
 .source-dialog footer { display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--mote-border); }
 @media(max-width:700px) { .source-workspace { padding:4px 0 30px; } .access-row { gap:12px; flex-wrap:wrap; padding:18px 3px; } .access-row .source-row-copy { min-width:55%; } .access-permission,.access-properties { grid-template-columns:90px minmax(0,1fr); } .source-workspace .page-heading h1 { font-size:23px; } }
+/* A long connection name may wrap; its authorization state remains one phrase. */
+.access-workspace .access-detail > .split-heading > div { min-width:0; flex:1; }
+.access-workspace .access-detail > .split-heading h1 { overflow-wrap:anywhere; }
+.access-workspace .access-detail > .split-heading > span { flex-shrink:0; white-space:nowrap; }
