@@ -1,4 +1,6 @@
 {
+  "此引用不能直接删除原始记录。": "L’enregistrement original ne peut pas être supprimé depuis cette référence.",
+  "未能确认删除完成。请刷新查看当前状态。": "La suppression n’est pas confirmée. Actualisez pour vérifier l’état actuel.",
   "返回导入详情": "Retour aux détails de l’import",
   "此格式暂无预览": "Aucun aperçu disponible pour ce format",
   "处理选项": "Options de traitement",

@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "此引用不能直接删除原始记录。": "El registro original no se puede eliminar desde esta referencia.",
+  "未能确认删除完成。请刷新查看当前状态。": "La eliminación no está confirmada. Actualiza para comprobar el estado actual.",
   "返回导入详情": "Volver a los detalles de la importación",
   "此格式暂无预览": "No hay vista previa disponible para este formato",
   "处理选项": "Opciones de procesamiento",

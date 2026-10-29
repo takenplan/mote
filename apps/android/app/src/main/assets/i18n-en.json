@@ -1,4 +1,6 @@
 {
+  "此引用不能直接删除原始记录。": "The original record cannot be deleted from this reference.",
+  "未能确认删除完成。请刷新查看当前状态。": "Deletion is not confirmed. Refresh to check the current status.",
   "返回导入详情": "Return to import details",
   "此格式暂无预览": "Preview is not available for this format",
   "处理选项": "Processing options",

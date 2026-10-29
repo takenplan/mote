@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "此引用不能直接删除原始记录。": "Der Originaleintrag kann über diesen Verweis nicht gelöscht werden.",
+  "未能确认删除完成。请刷新查看当前状态。": "Die Löschung ist nicht bestätigt. Aktualisieren Sie die Ansicht, um den aktuellen Status zu prüfen.",
   "返回导入详情": "Zurück zu den Importdetails",
   "此格式暂无预览": "Für dieses Format ist keine Vorschau verfügbar",
   "处理选项": "Verarbeitungsoptionen",
