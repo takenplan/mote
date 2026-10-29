@@ -5,7 +5,7 @@ import {createWorkPendingUi} from './work-pending-ui';
 import {queueImportPresentation} from './queue-import-presentation';
 import {createChromeCaptureUi} from './chrome-capture-ui';
 import {createCaptureContextUi} from './capture-context-ui';
-import {renderSettingsWorkspace,showBackupOperation} from './settings-workspace';
+import {renderSettingsWorkspace,showBackupOperation,beginDiagnosticFactsRefresh} from './settings-workspace';
 import {createMemoryTopicsUi} from './memory-topics-ui';
 import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
@@ -672,7 +672,7 @@ byId('note-form').addEventListener('submit', event => {
 });
 
 byId('open-feedback').addEventListener('click', () => void perform(() => desktopApi.openFeedback()));
-byId('diagnostics-sample').addEventListener('click', () => void perform(async () => render(await desktopApi.sampleDiagnostics())));
+byId('diagnostics-sample').addEventListener('click', () => void perform(async () => {const accept=beginDiagnosticFactsRefresh();const next=await desktopApi.sampleDiagnostics();render(next);accept(next);}));
 byId('diagnostics-export').addEventListener('click', () => void perform(async () => { const result = await desktopApi.exportDiagnostics(); if (!result.canceled) feedback(moteText("数值诊断已导出。"), true); }));
 let logText = '';
 let logWrap = true;
