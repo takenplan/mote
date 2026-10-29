@@ -215,9 +215,16 @@ class RemainingFinalUiInstrumentedTest {
             main{assertFalse(visible().any{it.tag=="图片最长边 / px"});assertFalse(visible().any{it.tag=="imageDedupeMode"});assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString().contains("近似画面 · 激进")})}
             for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-processing-default-"+theme.value)}}
             tag("image-dedupe-choice");click("近似画面");until("explicit native preset choice"){text("选择近似画面档位")};click("取消")
-            assertEquals("aggressive",settings.read().imageDedupeMode);tag("image-processing-advanced")
-            main{val root=visible();assertEquals("1920",(root.single{it.tag=="图片最长边 / px"} as EditText).text.toString());assertEquals(4,(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);(root.single{it.tag=="JPEG 质量"} as EditText).setText("81");(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).setSelection(1)}
-            assertEquals("aggressive",settings.read().imageDedupeMode);scenario.recreate();scenario.awaitMainUi();tag("image-processing-advanced")
+            assertEquals("aggressive",settings.read().imageDedupeMode)
+            main{val number=visible().single{it.tag=="JPEG 质量"} as EditText;assertNotNull(number.keyListener);assertTrue(number.isFocusableInTouchMode);number.requestFocus();assertTrue(number.hasFocus())}
+            tag("image-processing-advanced")
+            main{val root=visible();assertEquals("1920",(root.single{it.tag=="图片最长边 / px"} as EditText).text.toString());assertEquals(4,(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);(root.single{it.tag=="JPEG 质量"} as EditText).setText("81");(root.single{it.tag=="临时保留图片去重对比记录"} as CheckBox).isChecked=true;(root.single{it.tag=="imageDedupeMode"} as android.widget.Spinner).setSelection(1)}
+            assertEquals("aggressive",settings.read().imageDedupeMode)
+            for(language in listOf("en","zh-CN")){
+                main{MoteI18n.select(context,language)};scenario.recreate();scenario.awaitMainUi();tag("image-processing-advanced")
+                main{assertEquals("81",(visible().single{it.tag==MoteI18n.text("JPEG 质量")} as EditText).text.toString());assertTrue((visible().single{it.tag==MoteI18n.text("临时保留图片去重对比记录")} as CheckBox).isChecked);assertEquals("1920",(visible().single{it.tag==MoteI18n.text("图片最长边 / px")} as EditText).text.toString());assertEquals(1,(visible().single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition)}
+                scenario.onActivity{picture(it,"gap-processing-language-$language")}
+            }
             main{assertEquals("81",(visible().single{it.tag=="JPEG 质量"} as EditText).text.toString());assertEquals(1,(visible().single{it.tag=="imageDedupeMode"} as android.widget.Spinner).selectedItemPosition);assertEquals("1920",(visible().single{it.tag=="图片最长边 / px"} as EditText).text.toString())}
             click("保存设置");until("actual explicit processing save"){settings.read().jpegQuality==81&&settings.read().imageDedupeMode=="exact"&&settings.read().captureMaxSide==1920};assertFalse(settings.enabled)
         }
@@ -226,7 +233,12 @@ class RemainingFinalUiInstrumentedTest {
             for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};settledFrames(scenario);scenario.onActivity{picture(it,"gap-diagnostics-default-"+theme.value)}}
             tag("diagnostic-export-range");click("最近 7 天");until("actual selected range visible"){main{visible().filterIsInstance<TextView>().any{it.tag=="diagnostic-export-range"&&it.text.toString().contains("最近 7 天")}}}
             tag("diagnostic-details");main{(visible().single{it.tag=="诊断采样间隔 / 秒（15–3600）"} as EditText).setText("123")};scenario.recreate();scenario.awaitMainUi()
-            main{assertTrue(visible().filterIsInstance<TextView>().single{it.tag=="diagnostic-export-range"}.text.toString().contains("最近 7 天"));assertFalse(visible().any{it.tag=="诊断采样间隔 / 秒（15–3600）"})};tag("diagnostic-details");main{assertEquals("123",(visible().single{it.tag=="诊断采样间隔 / 秒（15–3600）"} as EditText).text.toString())};assertEquals(60,settings.read().diagnosticsIntervalSeconds)
+            main{assertTrue(visible().filterIsInstance<TextView>().single{it.tag=="diagnostic-export-range"}.text.toString().contains("最近 7 天"));assertFalse(visible().any{it.tag=="诊断采样间隔 / 秒（15–3600）"})};tag("diagnostic-details")
+            for(language in listOf("en","zh-CN")){
+                main{MoteI18n.select(context,language)};scenario.recreate();scenario.awaitMainUi();tag("diagnostic-details")
+                main{assertEquals("123",(visible().single{it.tag==MoteI18n.text("诊断采样间隔 / 秒（15–3600）")} as EditText).text.toString());assertTrue(visible().filterIsInstance<TextView>().single{it.tag=="diagnostic-export-range"}.text.toString().contains(MoteI18n.text("最近 7 天")))}
+            }
+            main{assertEquals("123",(visible().single{it.tag=="诊断采样间隔 / 秒（15–3600）"} as EditText).text.toString())};assertEquals(60,settings.read().diagnosticsIntervalSeconds)
             scenario.onActivity{picture(it,"gap-diagnostics-advanced-draft-dark")};assertFalse(settings.enabled)
         }
     }
@@ -243,6 +255,44 @@ class RemainingFinalUiInstrumentedTest {
             until("Todo consumer refresh complete"){main{visible().filterIsInstance<EditText>().any{it.tag=="todo-title"&&it.text.isEmpty()}}};main{(visible().single{it.tag=="todo-title"} as EditText).setText("Generated former session private draft")};tag("action-tabs:calendar");Settings(context).signOut();tag("action-tabs:todos")
             until("new session removes previous draft before display"){main{visible().none{it is EditText&&it.text.toString()=="Generated former session private draft"}&&visible().none{it.tag=="todo-title"}&&visible().filterIsInstance<TextView>().any{it.text.toString()=="登录并继续"}}};scenario.onActivity{picture(it,"gap-actions-session-withdrawn-dark")};assertFalse(Settings(context).enabled)
         }}finally{CentralSession.get(context).select("")}
+    }
+
+    @Test fun calendarOwnerChangeWithdrawsOldCardsDialogsAndLateReads() = fixture {
+        val listener=java.net.ServerSocket(0,10,java.net.InetAddress.getByName("127.0.0.1"))
+        val origin="http://127.0.0.1:${listener.localPort}";val workers=java.util.concurrent.Executors.newCachedThreadPool()
+        val reads=java.util.concurrent.atomic.AtomicInteger();val writes=java.util.concurrent.atomic.AtomicInteger()
+        val held=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        val tokenA="generated-calendar-owner-A-20261030";val tokenB="generated-calendar-owner-B-20261030"
+        val secret="Generated former-owner calendar title";val actionId=UUID.randomUUID().toString()
+        workers.submit{while(!listener.isClosed)runCatching{listener.accept()}.getOrNull()?.let{socket->workers.submit{socket.use{
+            val input=it.getInputStream().bufferedReader();val first=input.readLine().orEmpty();val headers=mutableListOf<String>();while(true){val line=input.readLine();if(line.isNullOrEmpty())break;headers.add(line)}
+            val path=first.split(' ').getOrElse(1){""};val a=headers.any{h->h.equals("Authorization: Bearer $tokenA",true)}
+            if(!first.startsWith("GET "))writes.incrementAndGet()
+            val nth=if(a&&path.startsWith("/api/actions?"))reads.incrementAndGet()else 0
+            if(nth==3){held.countDown();check(release.await(20,java.util.concurrent.TimeUnit.SECONDS))}
+            val event=JSONObject().put("title",secret).put("start","2026-11-01T10:00:00Z").put("end","2026-11-01T11:00:00Z").put("timeZone","UTC").put("location","")
+            val item=JSONObject().put("id",actionId).put("version",1).put("kind","calendar.cancel").put("status","proposed").put("event",event).put("evidence",JSONArray())
+            val body=(if(a&&path.startsWith("/api/actions?"))JSONObject().put("items",JSONArray().put(item)).put("targets",JSONArray()).put("nextCursor",123)else if(path.startsWith("/api/actions?"))JSONObject().put("error","forbidden")else JSONObject().put("items",JSONArray())).toString().toByteArray()
+            val status=if(!a&&path.startsWith("/api/actions?"))"403 Forbidden"else"200 OK"
+            it.getOutputStream().apply{write("HTTP/1.1 $status\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray());write(body);flush()}
+        }}}}
+        val settings=Settings(context)
+        try{
+            ConnectionGuard.change(context,origin,bindLocal=true){settings.saveConnection(origin,tokenA,"Generated owner calendar guard",true)}
+            ActivityScenario.launch<CalendarActionsActivity>(Intent(context,CalendarActionsActivity::class.java)).use{scenario->
+                until("A real native card read from controlled HTTP"){text(secret)};click("核对变更");until("owned confirmation dialog"){text("确认变更")}
+                val oldPositive=main{visible().filterIsInstance<android.widget.Button>().single{it.text.toString()=="确认变更"}}
+                settings.signIn(origin,tokenB,60_000);scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                until("B denied never shows A card"){!text(secret)&&text("当前连接没有执行此操作的权限")}
+                main{oldPositive.performClick()};assertEquals("Old dialog must never write under B",0,writes.get());scenario.onActivity{picture(it,"gap-actions-owner-denied-withdrawn-dark")}
+                settings.signIn(origin,tokenA,60_000);tag("action-tabs:todos");tag("action-tabs:calendar")
+                assertTrue("Explicitly held old A read",held.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                tag("action-tabs:todos");settings.signIn(origin,tokenB,60_000);tag("action-tabs:calendar")
+                assertFalse("Old A card withdrawn synchronously",text(secret));release.countDown()
+                until("B failure remains after A late response"){!text(secret)&&text("当前连接没有执行此操作的权限")}
+                scenario.onActivity{picture(it,"gap-actions-owner-late-read-rejected-dark")};assertEquals(0,writes.get());assertFalse(settings.enabled)
+            }
+        }finally{release.countDown();listener.close();workers.shutdownNow();CentralSession.get(context).select("")}
     }
 
 }

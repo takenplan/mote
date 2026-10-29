@@ -103,6 +103,7 @@ class MainActivity : MoteActivity() {
     private var homeConnectionHelp: TextView? = null
     private val controls = mutableListOf<View>()
     private val controlPages = mutableMapOf<View, Page>()
+    private val stableControlKeys = mutableMapOf<View, String>()
     private val fieldLabels = mutableMapOf<EditText, TextView>()
     private var baseline = emptyMap<String, String>()
     private var initializing = true
@@ -682,8 +683,8 @@ class MainActivity : MoteActivity() {
         button(MoteI18n.text("连接设置")) { connectionSettingsExpanded = manual.visibility != View.VISIBLE; manual.visibility = if(connectionSettingsExpanded) View.VISIBLE else View.GONE }.apply { tag = "connection-settings-toggle" }
         content.addView(manual); val connectionContent = content; content = manual
         section(MoteI18n.text("节点与设备"))
-        server = field(MoteI18n.text("节点 URL（可留空，仅在本机记录）"), config.server, "https://mote.example.com", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
-        token = field(MoteI18n.text("访问令牌（未连接时可留空）"), "", MoteI18n.text("建议通过邀请获取本设备凭据"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        server = sourceField("节点 URL（可留空，仅在本机记录）", config.server, "https://mote.example.com", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        token = sourceField("访问令牌（未连接时可留空）", "", MoteI18n.text("建议通过邀请获取本设备凭据"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         fun showTokenField() {
             val visible = config.connectionToken().isBlank() || server.text.toString().trim().trimEnd('/') != config.server.trimEnd('/')
             token.visibility = if (visible) View.VISIBLE else View.GONE
@@ -701,7 +702,7 @@ class MainActivity : MoteActivity() {
                 }
             }
         })
-        name = field(MoteI18n.text("设备名称"), config.deviceName, MoteI18n.text("我的 K90 Pro Max"))
+        name = sourceField("设备名称", config.deviceName, MoteI18n.text("我的 K90 Pro Max"))
         text(MoteI18n.text("中央节点可在电脑、NAS 或服务器部署。手机的 localhost 指手机本身；跨设备请填写局域网 IP 或 HTTPS 域名。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         help(MoteI18n.text("连接说明"), MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"))
         val verification = text("", NativeFontRole.SUPPORT, NativeColorRole.MUTED)
@@ -735,16 +736,16 @@ class MainActivity : MoteActivity() {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("实时同步"), MoteI18n.text("定时同步"), MoteI18n.text("批量同步"), MoteI18n.text("仅手动同步")))
             setSelection(syncModes.indexOf(config.syncMode).coerceAtLeast(0))
         }; content.addView(syncMode, LinearLayout.LayoutParams(-1, dp(56))); track(syncMode, "syncMode")
-        syncInterval = presetNumber(MoteI18n.text("同步间隔 / 分钟（批量模式下也是最长等待时间）"), config.syncIntervalMinutes, "1", 1..1440, listOf(1, 15, 30, 60, 180, 360, 720, 1440))
-        syncBatch = presetNumber(MoteI18n.text("批量达到多少条时同步"), config.syncBatchSize, "20", 1..500, listOf(5, 10, 20, 50, 100, 200, 500))
-        packedUpload = check(MoteI18n.text("压缩包上传（gzip JSONL，服务端解包后逐条确认）"), config.packedUpload)
-        jsonlWindow = presetNumber(MoteI18n.text("无图片状态 JSONL 合并窗口 / 分钟"), config.jsonlWindowMinutes, "10", 1..1440, listOf(1, 5, 10, 15, 30, 60))
+        syncInterval = sourcePresetNumber("同步间隔 / 分钟（批量模式下也是最长等待时间）", config.syncIntervalMinutes, "1", 1..1440, listOf(1, 15, 30, 60, 180, 360, 720, 1440))
+        syncBatch = sourcePresetNumber("批量达到多少条时同步", config.syncBatchSize, "20", 1..500, listOf(5, 10, 20, 50, 100, 200, 500))
+        packedUpload = sourceCheck("压缩包上传（gzip JSONL，服务端解包后逐条确认）", config.packedUpload)
+        jsonlWindow = sourcePresetNumber("无图片状态 JSONL 合并窗口 / 分钟", config.jsonlWindowMinutes, "10", 1..1440, listOf(1, 5, 10, 15, 30, 60))
         updateSyncFields()
         help(MoteI18n.text("同步方式说明"), MoteI18n.text("定时模式按所选间隔发送；批量模式达到数量或最长等待时间即发送。压缩包内是 gzip JSONL，服务端解包后逐条校验并确认。无图片的短状态记录会按时间窗口合并，默认 10 分钟。手动模式仅在点击“立即同步”后发送；同步条件始终有效。Android 省电可能推迟后台执行。"))
         section(MoteI18n.text("同步条件"))
-        wifi = check(MoteI18n.text("仅非计费 Wi-Fi 同步"), config.wifiOnly)
-        syncChargingOnly = check(MoteI18n.text("仅充电时同步"), config.syncChargingOnly)
-        syncBatteryNotLow = check(MoteI18n.text("低电量时暂停同步"), config.syncBatteryNotLow)
+        wifi = sourceCheck("仅非计费 Wi-Fi 同步", config.wifiOnly)
+        syncChargingOnly = sourceCheck("仅充电时同步", config.syncChargingOnly)
+        syncBatteryNotLow = sourceCheck("低电量时暂停同步", config.syncBatteryNotLow)
         text(MoteI18n.text("适用于记录、来源文件和 OCR 结果。立即同步与全量补传也遵守这些条件；低电量由系统判定。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = connectionContent
     }
@@ -753,11 +754,11 @@ class MainActivity : MoteActivity() {
         page(Page.CAPTURE, MoteI18n.text("在记录密度、清晰度和耗电之间找到平衡"))
         button(MoteI18n.text("编辑采集来源说明")) { CaptureContextDialog(this).show() }
         section(MoteI18n.text("采集来源"))
-        screenCollectionEnabled = check(MoteI18n.text("采集屏幕与前台应用活动"), config.screenCollectionEnabled)
-        notificationCollectionEnabled = check(MoteI18n.text("采集通知（正文、持续状态与更新）"), config.notificationCollectionEnabled)
-        deviceEventCollectionEnabled = check(MoteI18n.text("采集亮屏、熄屏与锁定 / 解锁事件"), config.deviceEventCollectionEnabled)
+        screenCollectionEnabled = sourceCheck("采集屏幕与前台应用活动", config.screenCollectionEnabled)
+        notificationCollectionEnabled = sourceCheck("采集通知（正文、持续状态与更新）", config.notificationCollectionEnabled)
+        deviceEventCollectionEnabled = sourceCheck("采集亮屏、熄屏与锁定 / 解锁事件", config.deviceEventCollectionEnabled)
         help(MoteI18n.text("通知与设备事件说明"), MoteI18n.text("通知与设备事件可独立开启，通过系统通知服务观察，按同步策略上传。通知遵循应用规则：仅活动不读取正文，不记录会完全跳过。系统可能隐藏敏感内容；熄屏不等同于锁定。"))
-        mediaCollectionEnabled = check(MoteI18n.text("采集媒体播放状态（需通知使用权）"), config.mediaCollectionEnabled)
+        mediaCollectionEnabled = sourceCheck("采集媒体播放状态（需通知使用权）", config.mediaCollectionEnabled)
         help(MoteI18n.text("媒体采集说明"), MoteI18n.text("媒体采集可单独开启，在前台、后台和锁屏时观察播放器公开的状态、应用及曲目/章节信息；不录音、不控制播放。普通通知由单独的通知采集开关控制。使用本机页的开始/暂停控制采集。媒体沿用应用隐私规则、电量限制和同步策略；关闭元数据会同时暂停媒体。"))
         mediaStatus = text(MoteI18n.text("媒体状态正在读取…"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         button(MoteI18n.text("授权通知、媒体与设备事件")) { mediaPermission() }
@@ -770,12 +771,12 @@ class MainActivity : MoteActivity() {
         }
         help(MoteI18n.text("播放时间如何计算"), MoteI18n.text("约每30秒及状态变化时记录。系统休眠、终止服务或播放器未公开媒体会话时可能缺失；仅统计连续观测的播放时段。"))
         section(MoteI18n.text("采样与空间"))
-        interval = presetNumber(MoteI18n.text("采集间隔 / 秒"), config.intervalSeconds, "30", 5..300, listOf(5, 15, 30, 60, 120, 300))
-        projectionMode = check(MoteI18n.text("使用投屏模式（只截图，每次需授权）"), config.mode == "projection")
+        interval = sourcePresetNumber("采集间隔 / 秒", config.intervalSeconds, "30", 5..300, listOf(5, 15, 30, 60, 120, 300))
+        projectionMode = sourceCheck("使用投屏模式（只截图，每次需授权）", config.mode == "projection")
         help(MoteI18n.text("截图模式说明"), MoteI18n.text("默认无障碍采集支持页面字段与截图回退。选择投屏会同时改为只截图，锁屏/被杀后必须重新授权。Android 10 截图请选投屏模式。"))
         section(MoteI18n.text("电量策略"))
-        chargingOnly = check(MoteI18n.text("仅充电时采集屏幕、活动和媒体"), config.chargingOnly)
-        batteryBelow = presetNumber(MoteI18n.text("低于此电量暂停 / % · 0 为关闭"), config.batteryPauseBelowPct, "0", 0..95, listOf(0, 10, 15, 20, 30, 50))
+        chargingOnly = sourceCheck("仅充电时采集屏幕、活动和媒体", config.chargingOnly)
+        batteryBelow = sourcePresetNumber("低于此电量暂停 / % · 0 为关闭", config.batteryPauseBelowPct, "0", 0..95, listOf(0, 10, 15, 20, 30, 50))
         section(MoteI18n.text("更多采集设置"))
         menu(MoteI18n.text("图像质量与去重"), MoteI18n.text("清晰度与图片去重"), "capture") { showPage(Page.PROCESSING) }
         menu(MoteI18n.text("本机存储"), MoteI18n.text("上传后保留时间、空间上限与保存位置"), "folder") { showPage(Page.STORAGE) }
@@ -784,15 +785,15 @@ class MainActivity : MoteActivity() {
         page(Page.STORAGE, MoteI18n.text("保留你需要回看的本机副本"))
         menu(MoteI18n.text("图片保存位置"), MoteI18n.text("选择应用存储空间并迁移已有记录"), "folder") { startActivity(Intent(this, StorageActivity::class.java)) }
         menu(MoteI18n.text("上传历史保存时长"), MoteI18n.text("默认30天，仅清理历史，不删除资料"), "history") { startActivity(Intent(this, UploadHistorySettingsActivity::class.java)) }
-        uploadedRetention = presetNumber(MoteI18n.text("上传后本机保留 / 天（0 为立即清理）"), config.uploadedRetentionDays, "7", 0..365, listOf(0, 1, 7, 14, 30, 90, 365))
-        maxQueue = presetNumber(MoteI18n.text("本机存储上限 / MiB"), config.maxQueueMiB, "256", 8..4096, listOf(64, 128, 256, 512, 1024, 2048, 4096))
+        uploadedRetention = sourcePresetNumber("上传后本机保留 / 天（0 为立即清理）", config.uploadedRetentionDays, "7", 0..365, listOf(0, 1, 7, 14, 30, 90, 365))
+        maxQueue = sourcePresetNumber("本机存储上限 / MiB", config.maxQueueMiB, "256", 8..4096, listOf(64, 128, 256, 512, 1024, 2048, 4096))
         text(MoteI18n.text("中央确认上传后开始计时，到期自动清理本机副本；中央归档继续保留。未上传和冲突记录不会自动删除。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         menu(MoteI18n.text("导入与导出"), MoteI18n.text("备份配置与本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
         if (!RuntimeProfile.current.developerTools) menu(MoteI18n.text("本机图片批量去重"), MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"), "chart") { startActivity(Intent(this, BulkDedupeActivity::class.java)) }
     }
     private fun buildProcessing(config: CollectorConfig) {
         page(Page.PROCESSING, null)
-        jpegQuality = presetNumber(MoteI18n.text("JPEG 质量"), config.jpegQuality, "75", 40..95, listOf(50, 65, 75, 85, 95))
+        jpegQuality = sourceField("JPEG 质量", config.jpegQuality.toString(), "75", InputType.TYPE_CLASS_NUMBER)
         val pageContent=content
         val advanced=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;visibility=View.GONE;tag="image-processing-advanced:content" }
         imageDedupeMode = Spinner(this).apply {
@@ -818,13 +819,13 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("图片压缩预览"),MoteI18n.text("质量、文件大小、缩放比例与放大对比"),"chart"){
             @Suppress("DEPRECATION") startActivityForResult(Intent(this,CompressionPreviewActivity::class.java),105)
         }
-        imageDedupeDiagnosticsEnabled=check(MoteI18n.text("临时保留图片去重对比记录"),config.imageDedupeDiagnosticsEnabled)
+        imageDedupeDiagnosticsEnabled=sourceCheck("临时保留图片去重对比记录",config.imageDedupeDiagnosticsEnabled)
         text(MoteI18n.text("默认关闭；最多20组、32 MiB、24小时。关闭并保存后清空诊断副本。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
         menu(MoteI18n.text("查看图片去重记录"),MoteI18n.text("对比两张图片、分数与依据，可随时清空"),"chart"){startActivity(Intent(this,ImageDedupeDiagnosticsActivity::class.java))}
         menu(MoteI18n.text("本机图片批量去重"),MoteI18n.text("全量扫描、对比预览、移入待决定区或删除"),"chart"){startActivity(Intent(this,BulkDedupeActivity::class.java))}
         button(MoteI18n.text("高级选项")){advanced.visibility=if(advanced.visibility==View.VISIBLE)View.GONE else View.VISIBLE}.tag="image-processing-advanced"
         content.addView(advanced);content=advanced
-        captureMaxSide=presetNumber(MoteI18n.text("图片最长边 / px"),config.captureMaxSide,"1280",640..2560,listOf(640,960,1280,1920,2560))
+        captureMaxSide=sourcePresetNumber("图片最长边 / px",config.captureMaxSide,"1280",640..2560,listOf(640,960,1280,1920,2560))
         content.addView(imageDedupeMode,LinearLayout.LayoutParams(-1,dp(56)))
         help(MoteI18n.text("图片去重说明"),MoteI18n.text("与同一应用最近保存的画面比较。重处理前命中时仅记录应用活动，不保存或审查当前图片，也不沿用旧文字。开启图片对比诊断时保留审查后的对比链路。近似档位可能忽略细小变化；重启后重新建立基准。"))
         help(MoteI18n.text("图片对比诊断说明"),MoteI18n.text("默认关闭。开启并保存后，将已去重图片及对比原图临时保存在本机，供核对分数与判断依据。最多 20 组、32 MiB，24 小时后到期；读取时清理，系统可能延后后台清理。关闭并保存后清空。保留的都是通过隐私检查和遮罩后的图片。"))
@@ -833,7 +834,7 @@ class MainActivity : MoteActivity() {
 
     private fun buildDiagnostics(config: CollectorConfig) {
         page(Page.DIAGNOSTICS,null)
-        diagnosticEnabled=check(MoteI18n.text("记录数值与事件诊断"),config.diagnosticsEnabled)
+        diagnosticEnabled=sourceCheck("记录数值与事件诊断",config.diagnosticsEnabled)
         text(MoteI18n.text("最多 1440 条数值样本。电量变化是整机变化，不能归因于 Mote。支持包不含截图、正文、笔记、令牌或审查理由。"),NativeFontRole.SUPPORT,NativeColorRole.MUTED)
         button(MoteI18n.text("打开本地日志查看器")){startActivity(Intent(this,LogViewerActivity::class.java))}
         val labels=listOf("最近 1 小时","最近 24 小时","最近 7 天");val hours=listOf(1,24,168)
@@ -850,7 +851,7 @@ class MainActivity : MoteActivity() {
         diagnosticExportStatus=text("",NativeFontRole.SUPPORT).apply{tag="diagnostic-export-status";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
         val pageContent=content;content=SecondaryUi.disclosure(content,MoteI18n.text("更多"),"diagnostic-details")
         technicalStatus=text(MoteI18n.text("正在读取运行状态…"),NativeFontRole.SUPPORT)
-        diagnosticInterval=field(MoteI18n.text("诊断采样间隔 / 秒（15–3600）"),config.diagnosticsIntervalSeconds.toString(),"60",InputType.TYPE_CLASS_NUMBER)
+        diagnosticInterval=sourceField("诊断采样间隔 / 秒（15–3600）",config.diagnosticsIntervalSeconds.toString(),"60",InputType.TYPE_CLASS_NUMBER)
         help(MoteI18n.text("数值诊断说明"),MoteI18n.text("仅在应用/采集运行时采样，最多 1440 条。记录整机电量、本机空间、入队/拦截/失败计数、截图隐私审查耗时和上传字节，不包含截图、文字、笔记、令牌或审查理由。电量变化是整机变化，不能归因于 Mote。"))
         help(MoteI18n.text("支持包包含什么"),MoteI18n.text("事件日志最多 500 条，只记录固定阶段、错误类别与数值。支持包不包含节点地址、设备名、截图、笔记、OCR、令牌、提示词或审查理由；关闭诊断后停止新增，已有记录保留。"))
         content=pageContent
@@ -865,7 +866,7 @@ class MainActivity : MoteActivity() {
         val io = QuickNotes.io
         val controller = QuickNotes.controller(app)
         val task = UiTask(this, io, ownsExecutor = false)
-        val note = field(MoteI18n.text("正在想什么"), "", MoteI18n.text("记下此刻的想法…"), multiline = true)
+        val note = sourceField("正在想什么", "", MoteI18n.text("记下此刻的想法…"), multiline = true)
         fieldLabels[note]?.visibility = View.GONE
         note.contentDescription = MoteI18n.text("正在想什么")
         note.minLines = 4; note.gravity = Gravity.TOP
@@ -953,9 +954,9 @@ class MainActivity : MoteActivity() {
         }.apply { tag = "app-default-summary"; MoteUi.action(this,MoteUi.ButtonRole.TEXT); gravity = Gravity.START or Gravity.CENTER_VERTICAL }
         content.addView(appDefaults)
         val defaultOwner = content; content = appDefaults
-        appDefaultDuration = check(MoteI18n.text("默认：应用时长"), appRules.defaultMode.duration)
-        appDefaultScreenshots = check(MoteI18n.text("默认：截图"), appRules.defaultMode.screenshots)
-        appDefaultStructured = check(MoteI18n.text("默认：结构化内容"), appRules.defaultMode.structured)
+        appDefaultDuration = sourceCheck("默认：应用时长", appRules.defaultMode.duration)
+        appDefaultScreenshots = sourceCheck("默认：截图", appRules.defaultMode.screenshots)
+        appDefaultStructured = sourceCheck("默认：结构化内容", appRules.defaultMode.structured)
         text(MoteI18n.text("默认方式适用于没有单独设置的应用，也适用于以后安装的应用。修改后点击保存生效。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = defaultOwner
         listOf(appDefaultDuration, appDefaultScreenshots, appDefaultStructured).forEach { choice ->
@@ -977,8 +978,8 @@ class MainActivity : MoteActivity() {
         val rawRules = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级：手工编辑包名规则")) { rawRules.visibility = if (rawRules.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         regular.addView(rawRules); content = rawRules
-        excludes = field(MoteI18n.text("不采集的应用包名（每行一个或逗号分隔）"), config.excludedPackages, "com.example.private", multiline = true)
-        appPolicies = field(MoteI18n.text("应用选项（每行 包名=采集选项）"), appRules.apps.entries.joinToString("\n") { "${it.key}=${it.value.wire}" }, "com.example.chat=activity\ncom.example.private=off", multiline = true)
+        excludes = sourceField("不采集的应用包名（每行一个或逗号分隔）", config.excludedPackages, "com.example.private", multiline = true)
+        appPolicies = sourceField("应用选项（每行 包名=采集选项）", appRules.apps.entries.joinToString("\n") { "${it.key}=${it.value.wire}" }, "com.example.chat=activity\ncom.example.private=off", multiline = true)
         appPolicies.filters = arrayOf(android.text.InputFilter.LengthFilter(32768))
         text(AppCollectionMode.entries.joinToString("\n") { "${it.wire}：${appModeLabel(it)}" }, NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = regular
@@ -1002,7 +1003,7 @@ class MainActivity : MoteActivity() {
             }
         }
         menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("保存后授权，再回本机开始采集"), "settings") { showPage(Page.PERMISSIONS) }
-        metadataEnabled = check(MoteI18n.text("上传设备与采集状态元数据"), config.metadataEnabled)
+        metadataEnabled = sourceCheck("上传设备与采集状态元数据", config.metadataEnabled)
         text(MoteI18n.text("开启后附带实际系统/机型、采集器版本、语言/时区、电量/充电、网络类型、锁屏与可用空间；不取设备序列号、IMEI、MAC、SSID或定位。关闭只影响新记录和心跳，已入队内容不追溯修改。授权文件来源自身的大小/修改时间不受此开关影响。"), NativeFontRole.SUPPORT)
         text(MoteI18n.text("没有内置应用黑名单。配置排除后，无法识别应用、多个应用窗口或系统遮挡时暂停。投屏模式需要同时启用无障碍服务才能可靠执行排除；仅使用情况权限不足以保证所有可见窗口。"), NativeFontRole.SUPPORT)
         section(MoteI18n.text("页面采集方式"))
@@ -1017,10 +1018,10 @@ class MainActivity : MoteActivity() {
         button(MoteI18n.text("高级：查看或编辑全部页面规则")) { ruleEditor.visibility = if (ruleEditor.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         content.addView(ruleEditor)
         val pageOwner = content; content = ruleEditor
-        uiPageRules=field(MoteI18n.text("页面规则 JSON"),config.uiPageRules,"[]",multiline=true)
+        uiPageRules=sourceField("页面规则 JSON",config.uiPageRules,"[]",multiline=true)
         text(MoteI18n.text("字段规则需要匹配实际应用版本与控件 ID；配置匹配不代表已经通过真机验证。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = pageOwner
-        localContentOcr = check(MoteI18n.text("使用本机 OCR 补充结构化内容"), config.localContentOcr)
+        localContentOcr = sourceCheck("使用本机 OCR 补充结构化内容", config.localContentOcr)
         localContentOcr.setOnCheckedChangeListener { _, _ -> updateSaveBar(); renderAppRules() }
         uiPageRules.addTextChangedListener(rulesWatcher)
         appCaptureEditor = AppCaptureEditor(this,
@@ -1052,7 +1053,7 @@ class MainActivity : MoteActivity() {
         text(MoteI18n.text("拖动示意图添加矩形；绿色区域会在 OCR 和保存前被遮住。这里不会读取你的屏幕。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         val maskFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         val mainContent = content; content.addView(maskFields); content = maskFields
-        masks = field(MoteI18n.text("固定遮罩（每行 left,top,right,bottom）"), config.masks, "0,0,1,0.08", multiline = true)
+        masks = sourceField("固定遮罩（每行 left,top,right,bottom）", config.masks, "0,0,1,0.08", multiline = true)
         content = mainContent
         maskEditor = MaskEditorView(this) { values -> masks.setText(values.joinToString("\n") { "${it.left},${it.top},${it.right},${it.bottom}" }) }
         maskEditor.setMasks(Mask.parse(config.masks)); content.addView(maskEditor, LinearLayout.LayoutParams(-1, dp(260)).apply { bottomMargin = dp(12) })
@@ -1065,8 +1066,8 @@ class MainActivity : MoteActivity() {
         rowButtons(MoteI18n.text("调整所选区域"), { editSelectedMask() }, MoteI18n.text("移除所选区域"), { maskEditor.removeSelected() })
         button(MoteI18n.text("高级：编辑精确坐标")) { maskFields.visibility = if (maskFields.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         section(MoteI18n.text("上传审查与过滤"))
-        gateEnabled = check(MoteI18n.text("启用文字规则审查"), config.uploadGate.enabled)
-        gateText = field(MoteI18n.text("禁止上传的文字（每行一个，精确包含匹配）"), config.uploadGate.blockedText, "", multiline = true)
+        gateEnabled = sourceCheck("启用文字规则审查", config.uploadGate.enabled)
+        gateText = sourceField("禁止上传的文字（每行一个，精确包含匹配）", config.uploadGate.blockedText, "", multiline = true)
         gateFailure = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("暂存待复核（默认）"), MoteI18n.text("不保存、不上传"), MoteI18n.text("允许上传")))
             setSelection(listOf("hold", "drop", "allow").indexOf(config.uploadGate.failureAction).coerceAtLeast(0))
@@ -1083,7 +1084,7 @@ class MainActivity : MoteActivity() {
             setSelection(OcrPolicy.modes.indexOf(config.ocrMode).coerceAtLeast(0))
         }
         content.addView(ocrMode); track(ocrMode, "ocrMode")
-        ocrAppModes = field(MoteI18n.text("按应用指定隐私审查引擎（JSON）"), config.ocrAppModes, "{}")
+        ocrAppModes = sourceField("按应用指定隐私审查引擎（JSON）", config.ocrAppModes, "{}")
         text(MoteI18n.text("可填写包名到 chinese、latin 或 dual 的映射；未指定的应用使用上方模式。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         text(MoteI18n.text("隐私审查使用本机识别。只有另行选择本机 OCR 补充时，识别文字才会作为结构化内容保存；截图按独立选择执行。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         content = appConfigurationContent
@@ -1143,7 +1144,7 @@ class MainActivity : MoteActivity() {
             @Suppress("DEPRECATION") startActivityForResult(Intent(this, CompressionPreviewActivity::class.java), 105)
         }
         section(MoteI18n.text("调试连接"))
-        http = check(MoteI18n.text("允许调试局域网 HTTP（明文，仅私有 IP）"), config.debugHttp).apply { isEnabled = BuildConfig.DEBUG }
+        http = sourceCheck("允许调试局域网 HTTP（明文，仅私有 IP）", config.debugHttp).apply { isEnabled = BuildConfig.DEBUG }
         section(MoteI18n.text("构建与运行环境"))
         text(MoteI18n.text("环境：{0} · {1}\n私有数据目录：{2}", BuildConfig.MOTE_PROFILE, packageName, noBackupFilesDir.absolutePath), NativeFontRole.META, NativeColorRole.MUTED)
         if (BuildConfig.MOTE_PROFILE == "dev") text(MoteI18n.text("开发版与日常 Mote 独立安装，权限、设备 ID、令牌、草稿、队列和模型互不共享。默认测试端口 47842；模拟器使用 adb reverse tcp:47842 tcp:47842。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
@@ -1316,7 +1317,7 @@ class MainActivity : MoteActivity() {
                 applyingSettings = false
                 if (isDestroyed || isFinishing) {
                     // Binding still requires a visible confirmation; preserve that draft for review.
-                    if (result.getOrNull() == false) RuntimeSettings.apply(app, c, bindLocal, expected = current, confirmCentralEndpoint = MoteI18n.text("节点 URL（可留空，仅在本机记录）") in savedFields) { }
+                    if (result.getOrNull() == false) RuntimeSettings.apply(app, c, bindLocal, expected = current, confirmCentralEndpoint = "${Page.CONNECTION.name}:节点 URL（可留空，仅在本机记录）" in savedFields) { }
                     return@post
                 }
                 updateSaveBar()
@@ -1338,7 +1339,7 @@ class MainActivity : MoteActivity() {
         generation: Int = draftGeneration, saved: () -> Unit) {
         if (applyingSettings) return
         pendingSubmission = submitted; applyingSettings = true; updateSaveBar()
-        RuntimeSettings.apply(this, config, bindLocal, expected = expected, confirmCentralEndpoint = MoteI18n.text("节点 URL（可留空，仅在本机记录）") in appliedFields) { result ->
+        RuntimeSettings.apply(this, config, bindLocal, expected = expected, confirmCentralEndpoint = "${Page.CONNECTION.name}:节点 URL（可留空，仅在本机记录）" in appliedFields) { result ->
             applyingSettings = false
             if (isDestroyed) return@apply
             result.onSuccess {
@@ -1897,7 +1898,7 @@ class MainActivity : MoteActivity() {
     private fun restoreControlValues(values: Map<String, String>) {
         val wasApplying = applyingConnectionFields
         applyingConnectionFields = true
-        try { controls.forEach { view -> values[view.tag as String]?.let { value -> when (view) {
+        try { controls.forEach { view -> values[stableControlKeys.getValue(view)]?.let { value -> when (view) {
             is EditText -> { if (view.text.toString() != value) view.setText(value); view.error = null }
             is CheckBox -> view.isChecked = value.toBoolean()
             is Spinner -> view.setSelection(value.toInt())
@@ -1915,7 +1916,7 @@ class MainActivity : MoteActivity() {
             initializing = true; applyingConnectionFields = true
             try {
                 pages.remove(currentPage)?.let(pagesHost::removeView)
-                discarded.forEach { controls.remove(it); controlPages.remove(it); if (it is EditText) fieldLabels.remove(it) }
+                discarded.forEach { controls.remove(it); controlPages.remove(it); stableControlKeys.remove(it); if (it is EditText) fieldLabels.remove(it) }
                 buildSettingsPage(currentPage, config)
                 baseline = baseline + pageControlValues()
             } finally { initializing = false; applyingConnectionFields = false }
@@ -1942,7 +1943,7 @@ class MainActivity : MoteActivity() {
             val editablePages = controlPages.values.toSet()
             editablePages.forEach { page -> pages.remove(page)?.let(pagesHost::removeView) }
             controls.forEach { if (it is EditText) fieldLabels.remove(it) }
-            controls.clear(); controlPages.clear()
+            controls.clear(); controlPages.clear(); stableControlKeys.clear()
             loadedConfig = config; loadedServer = config.server
             editablePages.forEach { buildSettingsPage(it, config) }
             baseline = controlValues()
@@ -1951,7 +1952,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun controlValues(views: List<View> = controls) = views.associate { view ->
-        view.tag as String to when (view) {
+        stableControlKeys.getValue(view) to when (view) {
             is EditText -> view.text.toString()
             is CheckBox -> view.isChecked.toString()
             is Spinner -> view.selectedItemPosition.toString()
@@ -1959,8 +1960,8 @@ class MainActivity : MoteActivity() {
         }
     }
 
-    private fun track(view: View, key: String) {
-        view.tag = key; controls.add(view); controlPages[view] = buildingPage
+    private fun track(view: View, key: String, stableKey: String = key) {
+        view.tag = key; controls.add(view); controlPages[view] = buildingPage; stableControlKeys[view] = "${buildingPage.name}:$stableKey"
         when (view) {
             is EditText -> view.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -2211,8 +2212,13 @@ class MainActivity : MoteActivity() {
         } }; dialog.show()
     }
 
-    private fun presetNumber(label: String, value: Int, placeholder: String, range: IntRange, presets: List<Int>): EditText {
-        val result = field(label, value.toString(), placeholder, InputType.TYPE_CLASS_NUMBER)
+    // Display labels remain translated; in-memory draft identity never depends on the selected language.
+    private fun sourceField(source: String, value: String, placeholder: String, type: Int = InputType.TYPE_CLASS_TEXT, multiline: Boolean = false) = field(MoteI18n.text(source), value, placeholder, type, multiline, source)
+    private fun sourceCheck(source: String, selected: Boolean) = check(MoteI18n.text(source), selected, source)
+    private fun sourcePresetNumber(source: String, value: Int, placeholder: String, range: IntRange, presets: List<Int>) = presetNumber(MoteI18n.text(source), value, placeholder, range, presets, source)
+
+    private fun presetNumber(label: String, value: Int, placeholder: String, range: IntRange, presets: List<Int>, stableKey: String = label): EditText {
+        val result = field(label, value.toString(), placeholder, InputType.TYPE_CLASS_NUMBER, stableKey = stableKey)
         result.keyListener = null; result.isFocusable = false; result.isClickable = true
         result.setCompoundDrawablesWithIntrinsicBounds(null, null, MoteNavigationIcon(this, "dropdown", true), null)
         result.contentDescription = MoteI18n.text("{0}，点按选择", label)
@@ -2238,7 +2244,7 @@ class MainActivity : MoteActivity() {
         return result
     }
 
-    private fun field(label: String, value: String, placeholder: String, type: Int = InputType.TYPE_CLASS_TEXT, multiline: Boolean = false): EditText {
+    private fun field(label: String, value: String, placeholder: String, type: Int = InputType.TYPE_CLASS_TEXT, multiline: Boolean = false, stableKey: String = label): EditText {
         val labelView = text(label, NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         return MoteUi.field(EditText(this)).apply {
             fieldLabels[this] = labelView
@@ -2246,13 +2252,13 @@ class MainActivity : MoteActivity() {
             setText(value); hint = placeholder
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; isSaveEnabled = false
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) }; content.addView(this)
-            if (buildingPage != Page.NOTES) track(this, label)
+            if (buildingPage != Page.NOTES) track(this, label, stableKey)
         }
     }
-    private fun check(label: String, selected: Boolean) = CheckBox(this).apply {
+    private fun check(label: String, selected: Boolean, stableKey: String = label) = CheckBox(this).apply {
         text = label; isChecked = selected; MoteUi.type(this, NativeFontRole.BODY); minHeight = dp(52); MoteUi.textColor(this, NativeColorRole.INK)
         buttonTintList = android.content.res.ColorStateList.valueOf(MoteUi.accent)
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }; content.addView(this); track(this, label)
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }; content.addView(this); track(this, label, stableKey)
     }
     private fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this), primary).apply {
         text = label; setOnClickListener { action() }

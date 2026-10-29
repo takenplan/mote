@@ -21,7 +21,23 @@ class CalendarActionsActivity : MoteActivity() {
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
     private lateinit var task: UiTask
-    private lateinit var client: CalendarActions
+    private var calendarIdentity: Pair<String,Long>? = null
+    private var calendarEpoch = 0L
+    private val calendarDialogs = mutableListOf<android.app.Dialog>()
+    private var permissionIdentity: Pair<String,Long>? = null
+    private fun identity(): Pair<String,Long> = CentralAccess.resolve(this).let { it.server to it.generation }
+    private fun current(expected: Pair<String,Long>?, epoch: Long) = !isDestroyed && calendarIdentity == expected && calendarEpoch == epoch && identity() == expected
+    private fun withdrawChangedCalendar(): Pair<String,Long> {
+        val next=identity()
+        if(calendarIdentity != next) {
+            calendarIdentity=next;calendarEpoch++;cursor=0;nextCursor=0;deviceId=""
+            if(::list.isInitialized)list.removeAllViews()
+            if(::status.isInitialized)status.text=""
+            calendarDialogs.toList().forEach { it.dismiss() };calendarDialogs.clear();permissionIdentity=null
+        }
+        return next
+    }
+    private fun <T:android.app.Dialog> own(dialog:T):T = dialog.also { calendarDialogs.add(it) }
     private var deviceId = ""
     private var cursor = 0L
     private var nextCursor = 0L
@@ -53,7 +69,7 @@ class CalendarActionsActivity : MoteActivity() {
         val tools=SecondaryUi.disclosure(body,MoteI18n.text("更多"),"calendar-tools")
         text(tools,MoteI18n.text("从资料中发现安排。范围授权内的日程交给指定设备，其余逐条确认；结果保留在行动历史。"))
         text(tools,MoteI18n.text("首次使用：在中央网页「行动」开启发现，并授权此设备查看跨来源的建议及原文片段。"))
-        button(tools,MoteI18n.text("连接本机日历")){if(calendarPermissions())connect()else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR,Manifest.permission.WRITE_CALENDAR),401)}
+        button(tools,MoteI18n.text("连接本机日历")){if(calendarPermissions())connect()else {permissionIdentity=withdrawChangedCalendar();requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR,Manifest.permission.WRITE_CALENDAR),401)}}
         button(tools,MoteI18n.text("最新建议")){cursor=0;refresh()}
         button(tools,MoteI18n.text("更早建议")){if(nextCursor>0){cursor=nextCursor;refresh()}}
         button(tools,MoteI18n.text("刷新并同步已确认日程"),primary=true){sync()}
@@ -62,6 +78,7 @@ class CalendarActionsActivity : MoteActivity() {
         selectTab(selectedTab)
     }
     private fun selectTab(next:String){
+        withdrawChangedCalendar()
         selectedTab=next;tabs.select(next);handler.removeCallbacks(poll)
         calendarScroll.visibility=if(next=="calendar")View.VISIBLE else View.GONE
         if(next=="todos"){
@@ -78,29 +95,42 @@ class CalendarActionsActivity : MoteActivity() {
     private fun navigateBack(){if(selectedTab=="todos"&&todoContent?.backWithinPage()==true)return;finish()}
     @Deprecated("Native back navigation") override fun onBackPressed()=navigateBack()
     override fun onSaveInstanceState(state:Bundle){state.putString("actionTab",selectedTab);state.putLong("calendarCursor",cursor);state.putBundle("todoContent",Bundle().also { todoContent?.saveState(it) ?: todoState?.let(it::putAll) });super.onSaveInstanceState(state)}
-    override fun onResume(){super.onResume();active=true;if(selectedTab=="calendar")handler.postDelayed(poll,20000)else selectTab("todos")}
+    override fun onResume(){super.onResume();active=true;selectTab(selectedTab)}
     @Deprecated("In-memory generated owner draft") override fun onRetainNonConfigurationInstance():Any?=todoContent?.retainTodoDraft() ?: restoredTodoDraft
     override fun onPause(){active=false;handler.removeCallbacks(poll);todoContent?.pause();super.onPause()}
-    override fun onDestroy(){todoContent?.close();super.onDestroy()}
+    override fun onDestroy(){calendarDialogs.toList().forEach{it.dismiss()};calendarDialogs.clear();todoContent?.close();super.onDestroy()}
     @Deprecated("Native document picker") override fun onActivityResult(request:Int,result:Int,data:Intent?){super.onActivityResult(request,result,data);todoContent?.activityResult(request,result,data)}
     private fun text(parent: LinearLayout, value: String, size: Float = MoteTheme.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) MoteTheme.fontSection else size.toInt(), medium = size >= 20f); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)); setTextIsSelectable(true) }.also(parent::addView)
-    private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
-    private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
-    private fun work(label: String, fn: () -> JSONObject) { task.start(label, { status.text = it }, {
-        if (!::client.isInitialized) client = CalendarActions(applicationContext, foreground = true)
-        val identity = Settings(applicationContext).deviceId
-        fn() to identity
-    }) { result -> result.onSuccess { (data, identity) -> deviceId = identity; render(data); status.text = MoteI18n.text("已刷新。范围授权内的日程由设备执行，其余建议仍需确认。") }.onFailure { status.text = it.message ?: MoteI18n.text("操作失败，请重试") } } }
-    private fun refresh() = work(MoteI18n.text("正在读取日程建议…")) {
-        val data = client.list(cursor)
-        if (client.permissions()) { val items = data.getJSONArray("items"); for (i in 0 until items.length()) { val a = items.getJSONObject(i); if (a.optJSONObject("target")?.optString("deviceId") == Settings(this).deviceId && a.optString("status") == "approved") client.execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }) } }
-        client.list(cursor)
+    private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) {
+        val expected=calendarIdentity;val epoch=calendarEpoch
+        parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener {
+            val valid=expected==null || current(expected,epoch)
+            withdrawChangedCalendar()
+            if(valid&&!task.busy)fn()
+        } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) })
     }
-    private fun connect() = work(MoteI18n.text("正在连接日历…")) { client.connect(); client.list(cursor) }
-    private fun sync() = work(MoteI18n.text("正在同步已确认日程…")) {
-        val data = client.list(cursor); val items = data.getJSONArray("items")
-        for (i in 0 until items.length()) { val a = items.getJSONObject(i); if (a.optJSONObject("target")?.optString("deviceId") == Settings(this).deviceId && a.optString("status") in listOf("approved", "executing", "uncertain")) client.execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }) }
-        client.list(cursor)
+    private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    private fun work(label: String, fn: CalendarActions.(Long) -> JSONObject) {
+        val expected=withdrawChangedCalendar();val epoch=calendarEpoch;val page=cursor
+        task.start(label, { if(current(expected,epoch))status.text=it else withdrawChangedCalendar() }, {
+            val client=CalendarActions(applicationContext,foreground=true,sessionIdentity=expected)
+            client.fn(page) to Settings(applicationContext).deviceId
+        }) { result ->
+            if(!current(expected,epoch)){withdrawChangedCalendar();if(active&&selectedTab=="calendar")refresh();return@start}
+            result.onSuccess { (data, device) -> deviceId=device;render(data);status.text=MoteI18n.text("已刷新。范围授权内的日程由设备执行，其余建议仍需确认。") }
+                .onFailure { status.text=it.message ?: MoteI18n.text("操作失败，请重试") }
+        }
+    }
+    private fun refresh() = work(MoteI18n.text("正在读取日程建议…")) { page ->
+        val data = list(page)
+        if (permissions()) { val items = data.getJSONArray("items"); for (i in 0 until items.length()) { val a = items.getJSONObject(i); if (a.optJSONObject("target")?.optString("deviceId") == Settings(this@CalendarActionsActivity).deviceId && a.optString("status") == "approved") execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }) } }
+        list(page)
+    }
+    private fun connect() = work(MoteI18n.text("正在连接日历…")) { page -> connect();list(page) }
+    private fun sync() = work(MoteI18n.text("正在同步已确认日程…")) { page ->
+        val data = list(page); val items = data.getJSONArray("items")
+        for (i in 0 until items.length()) { val a = items.getJSONObject(i); if (a.optJSONObject("target")?.optString("deviceId") == Settings(this@CalendarActionsActivity).deviceId && a.optString("status") in listOf("approved", "executing", "uncertain")) execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }) }
+        list(page)
     }
     private fun render(data: JSONObject) {
         nextCursor = if (data.isNull("nextCursor")) 0 else data.optLong("nextCursor")
@@ -125,22 +155,24 @@ class CalendarActionsActivity : MoteActivity() {
             text(card, label).apply { tag="calendar-action-status:"+a.getString("id") }
             text(card, "${e.optString("start")} → ${e.optString("end")}\n${e.optString("timeZone")} · ${e.optString("location")}")
             if (a.optString("uncertainty").isNotBlank()) text(card, a.getString("uncertainty"))
-            button(card, MoteI18n.text("查看原文依据")) { val evidence = a.getJSONArray("evidence"); val content = (0 until evidence.length()).joinToString("\n\n") { val r = evidence.getJSONObject(it); "${r.getString("source")} · ${r.getString("capturedAt")}\n${r.getString("quote")}" }; MoteDialogBuilder(this).setTitle(MoteI18n.text("原文依据")).setMessage(content).setPositiveButton(MoteI18n.text("关闭"), null).show() }
+            button(card, MoteI18n.text("查看原文依据")) { val evidence = a.getJSONArray("evidence"); val content = (0 until evidence.length()).joinToString("\n\n") { val r = evidence.getJSONObject(it); "${r.getString("source")} · ${r.getString("capturedAt")}\n${r.getString("quote")}" }; own(MoteDialogBuilder(this).setTitle(MoteI18n.text("原文依据")).setMessage(content).setPositiveButton(MoteI18n.text("关闭"), null).create()).show() }
             if (state == "proposed" && !a.has("resolution")) {
                 button(card, if (kind == "calendar.create") MoteI18n.text("核对并添加到日历") else MoteI18n.text("核对变更")) { edit(a, data) }
-                button(card, MoteI18n.text("忽略这条建议")) { work(MoteI18n.text("正在保存选择…")) { client.dismiss(a); client.list(cursor) } }
+                button(card, MoteI18n.text("忽略这条建议")) { work(MoteI18n.text("正在保存选择…")) { page -> dismiss(a); list(page) } }
             }
-            if (a.optJSONObject("target")?.optString("deviceId") == deviceId && state in listOf("approved", "executing", "uncertain")) button(card, MoteI18n.text("写入 / 核实保存结果"), primary = true) { work(MoteI18n.text("正在写入已确认日程…")) { client.execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }); client.list(cursor) } }
+            if (a.optJSONObject("target")?.optString("deviceId") == deviceId && state in listOf("approved", "executing", "uncertain")) button(card, MoteI18n.text("写入 / 核实保存结果"), primary = true) { work(MoteI18n.text("正在写入已确认日程…")) { page -> execute(a.getString("id"), a.optJSONObject("managed")?.let { a.getString("operationId") }); list(page) } }
         }
     }
     private fun edit(action: JSONObject, data: JSONObject) {
+        val expected=calendarIdentity;val epoch=calendarEpoch
+        fun valid()=current(expected,epoch).also { if(!it)withdrawChangedCalendar() }
         val kind = action.getString("kind"); val related = action.optJSONObject("related")
         if (kind in listOf("calendar.cancel", "calendar.complete")) {
             val event = action.getJSONObject("event")
             val target = related?.optJSONObject("target")
             if (target != null && target.getString("deviceId") != deviceId) { status.text = MoteI18n.text("请在原设备确认，或使用中央网页"); return }
             val message = if (kind == "calendar.complete") MoteI18n.text("确认后仅在 Mote 中标记完成。") else if (related?.has("externalId") == true) MoteI18n.text("确认后取消原设备上的这一条日程。") else MoteI18n.text("确认后取消尚未写入日历的原建议。")
-            MoteDialogBuilder(this).setTitle(if (kind == "calendar.cancel") MoteI18n.text("取消日程") else MoteI18n.text("标记安排完成")).setMessage(event.getString("title") + "\n" + event.optString("start") + " → " + event.optString("end") + "\n" + message).setNegativeButton(MoteI18n.text("返回"), null).setPositiveButton(MoteI18n.text("确认变更")) { _, _ -> work(MoteI18n.text("正在确认变更…")) { val confirmed = client.confirm(action, event, null); if (confirmed.getString("status") == "approved") client.execute(confirmed.getString("id")); client.list(cursor) } }.show()
+            own(MoteDialogBuilder(this).setTitle(if (kind == "calendar.cancel") MoteI18n.text("取消日程") else MoteI18n.text("标记安排完成")).setMessage(event.getString("title") + "\n" + event.optString("start") + " → " + event.optString("end") + "\n" + message).setNegativeButton(MoteI18n.text("返回"), null).setPositiveButton(MoteI18n.text("确认变更")) { _, _ -> if(valid())work(MoteI18n.text("正在确认变更…")) { page -> val confirmed = confirm(action, event, null); if (confirmed.getString("status") == "approved") execute(confirmed.getString("id")); list(page) } }.create()).show()
             return
         }
         if (related?.optJSONObject("target")?.getString("deviceId")?.let { it != deviceId } == true) { status.text = MoteI18n.text("请在原设备确认，或使用中央网页"); return }
@@ -159,15 +191,15 @@ class CalendarActionsActivity : MoteActivity() {
             if (key == "start" || key == "end") { input.isFocusable = false; input.setOnClickListener {
                 val zone = runCatching { java.time.ZoneId.of(fields["timeZone"]?.text.toString()) }.getOrDefault(java.time.ZoneId.systemDefault())
                 val previous = runCatching { java.time.OffsetDateTime.parse(input.text.toString()).atZoneSameInstant(zone) }.getOrDefault(java.time.ZonedDateTime.now(zone))
-                DatePickerDialog(this, { _, y, m, d ->
+                own(DatePickerDialog(this, { _, y, m, d ->
                     val date = java.time.LocalDate.of(y, m + 1, d)
                     if (allDay.isChecked) input.setText(date.toString())
-                    else TimePickerDialog(this, { _, h, minute ->
+                    else own(TimePickerDialog(this, { _, h, minute ->
                         val local = date.atTime(h, minute); val offsets = zone.rules.getValidOffsets(local)
                         if (offsets.size != 1) { Toast.makeText(this, MoteI18n.text("夏令时切换时间不明确，请改用 UTC 时区"), Toast.LENGTH_LONG).show() }
                         else input.setText(local.atOffset(offsets.single()).toString())
-                    }, previous.hour, previous.minute, true).show()
-                }, previous.year, previous.monthValue - 1, previous.dayOfMonth).show()
+                    }, previous.hour, previous.minute, true)).show()
+                }, previous.year, previous.monthValue - 1, previous.dayOfMonth)).show()
             } }
         }
         text(form, MoteI18n.text("添加到已有日历"))
@@ -175,13 +207,14 @@ class CalendarActionsActivity : MoteActivity() {
         val picker = Spinner(this).apply { adapter = MoteUi.choiceAdapter(this@CalendarActionsActivity, (0 until calendars.length()).map { calendars.getJSONObject(it).getString("title") }) }; form.addView(picker)
         if (related != null) { val originalCalendar = related.optJSONObject("target")?.optString("calendarId"); val index = (0 until calendars.length()).indexOfFirst { calendars.getJSONObject(it).getString("id") == originalCalendar }; if (index >= 0) picker.setSelection(index); picker.isEnabled = false; text(form, if (related.has("externalId")) MoteI18n.text("确认后更新原日程，不新建另一条。") else MoteI18n.text("确认后仅更新原建议，仍需确认添加到日历。")) }
         val validation = TextView(this); form.addView(validation)
-        val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("确认日程")).setView(ScrollView(this).apply { addView(form) }).setNegativeButton(MoteI18n.text("返回"), null).setPositiveButton(if (related == null) MoteI18n.text("确认添加") else MoteI18n.text("确认变更"), null).create()
+        val dialog = own(MoteDialogBuilder(this).setTitle(MoteI18n.text("确认日程")).setView(ScrollView(this).apply { addView(form) }).setNegativeButton(MoteI18n.text("返回"), null).setPositiveButton(if (related == null) MoteI18n.text("确认添加") else MoteI18n.text("确认变更"), null).create())
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if(!valid())return@setOnClickListener
             val edited = JSONObject().put("allDay", allDay.isChecked); for ((key, value) in fields) edited.put(key, value.text.toString())
             try { CalendarActionRules.times(edited) } catch (_: Exception) { validation.text = MoteI18n.text("请核对完整日期、时间、时区和标题"); return@setOnClickListener }
             val calendarId = calendars.getJSONObject(picker.selectedItemPosition).getString("id")
-            dialog.dismiss(); work(MoteI18n.text("正在确认并写入日程…")) { val confirmed = client.confirm(action, edited, if (related == null) calendarId else null); if (confirmed.getString("status") == "approved") client.execute(confirmed.getString("id")); client.list(cursor) }
+            dialog.dismiss(); work(MoteI18n.text("正在确认并写入日程…")) { page -> val confirmed = confirm(action, edited, if (related == null) calendarId else null); if (confirmed.getString("status") == "approved") execute(confirmed.getString("id")); list(page) }
         } }; dialog.show()
     }
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) { super.onRequestPermissionsResult(requestCode, permissions, grantResults); if (requestCode == 401) { if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) connect() else status.text = MoteI18n.text("未授权，不读取或写入日历。可随时重新连接。") } }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) { super.onRequestPermissionsResult(requestCode, permissions, grantResults); if (requestCode == 401) { val expected=permissionIdentity;permissionIdentity=null;if(expected!=identity()){withdrawChangedCalendar();return};if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) connect() else status.text = MoteI18n.text("未授权，不读取或写入日历。可随时重新连接。") } }
 }
