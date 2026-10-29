@@ -384,7 +384,7 @@ app.on('browser-window-created', (_event, window) => {
       await settingsIdle('save capture settings');
       await navigate('sync');
       for (const mode of ['interval', 'batch', 'manual']) {
-        await js(`document.querySelector('[name=sync-mode][value=${mode}]').click()`);
+        await js(`document.querySelector('#sync-mode').value='${mode}';document.querySelector('#sync-mode').dispatchEvent(new Event('input',{bubbles:true}))`);
         assert.equal(await js(`document.querySelector('#sync-batch-field').hidden`), mode !== 'batch');
         assert.equal(await js(`document.querySelector('#sync-interval-field').hidden`), mode === 'manual');
       }
@@ -482,9 +482,9 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'No horizontal overflow at minimum window width');
       writeFileSync(join(require('node:path').dirname(output), 'compact-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       assert.equal((await js('window.mote.status()')).running, false);
-      await navigate('capture');await navigate('compression');
+      await navigate('capture');await navigate('compression');await js("document.querySelector('#compression-refresh').click();void 0");
       for(let i=0;i<200&&await js(`document.querySelector('#compression-apply').disabled`);i++)await new Promise(resolve=>setTimeout(resolve,30));
-      assert(await js(`document.querySelector('#compression-stats').textContent.includes('文件大小为原图的')`));
+      assert(await js(`document.querySelector('#compression-metrics').textContent.includes('文件大小为原图的')`));
       await js(`document.querySelector('#compression-zoom').value='2';document.querySelector('#compression-zoom').dispatchEvent(new Event('change'))`);
       assert.equal(await js(`document.querySelector('#compression-after').style.width`),'5120px');
       await js(`document.querySelector('#compression-zoom').value='fit';document.querySelector('#compression-zoom').dispatchEvent(new Event('change'))`);
