@@ -50,6 +50,8 @@ test('the catalog keeps directory and scope disclosure folded and a direct recor
  await act(async()=>root.render(React.createElement(AgentInspector,{api:owner,onOpen:()=>{}})));
  assert.equal(d.querySelector<HTMLDetailsElement>('.agent-directory-options')!.open,false);assert.equal(seen.length,0);
  const details=d.querySelector<HTMLDetailsElement>('.agent-directory-options')!;
- await act(async()=>{details.open=true;details.dispatchEvent(new d.defaultView!.Event('toggle'));});assert.ok(seen.some(path=>path.startsWith('/api/agent-view/catalog?')));
- await act(async()=>{window.location.hash='#/agent?tab=input';window.dispatchEvent(new d.defaultView!.Event('hashchange'));});assert.ok(d.querySelector('.agent-run-selection'));assert.equal(seen.some(path=>path.startsWith('/api/agent-view/events')),false);
+ await act(async()=>{details.open=true;details.dispatchEvent(new d.defaultView!.Event('toggle'));});assert.equal(seen.some(path=>path.startsWith('/api/agent-view/catalog?')),false);
+ const browser=d.querySelector<HTMLDetailsElement>('.agent-catalog-browser')!;
+ await act(async()=>{browser.open=true;browser.dispatchEvent(new d.defaultView!.Event('toggle'));});assert.ok(seen.some(path=>path.startsWith('/api/agent-view/catalog?')));
+ await act(async()=>{window.location.hash='#/agent?tab=input';window.dispatchEvent(new d.defaultView!.Event('hashchange'));});assert.ok(d.querySelector('.agent-run-selection'));assert.equal(d.querySelector('.section-tabs'),null);assert.equal(seen.some(path=>path.startsWith('/api/agent-view/events')),false);
 });

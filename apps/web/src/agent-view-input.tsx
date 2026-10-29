@@ -23,12 +23,12 @@ export function StartupPreview({api,scope}:{api:Api;scope:Scope}){
   void api.request<Preview>('/api/agent-view/startup',{method:'POST',body:JSON.stringify({question:submitted,...JSON.parse(scopeKey),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}),signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setState({data,loading:false});}).catch(error=>{if(!controller.signal.aborted)setState({error,loading:false});});
   return ()=>controller.abort();
  },[api,scopeKey,submitted,refresh]);
- return <section className="panel panel-pad agent-startup"><h2>{moteText('一次新对话的首次上下文')}</h2><p>{moteText('用当前资料预览一次新对话，不调用模型。实际运行以当时记录的输入为准。')}</p>
+ return <section className="agent-startup"><p className="agent-access-note">{moteText('先提供目录和能力，原文按需读取。')}</p><div className="agent-startup-box"><h2>{moteText('首次上下文预览')}</h2><p>{moteText('个人上下文目录、检索工具和当前可访问范围。')}</p><details className="agent-startup-structure"><summary>{moteText('展开示例结构')}</summary>
   <form className="agent-preview-form" onSubmit={e=>{e.preventDefault();setSubmitted(question);setRefresh(v=>v+1);}}><label>{moteText('想问的问题')}<input maxLength={4000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder={moteText('输入问题，看看启动时会带上哪些记忆线索')}/></label><button className="button" type="submit">{moteText('预览首次上下文')}</button></form>
   <div className="agent-startup-rules"><p>{moteText('默认包含：系统规则、只读工具说明、当前问题、时间与设备范围，以及最多 5 条记忆线索。')}</p><p>{moteText('已有对话会按预算带入历史或工作摘要；此处预览的是没有历史的新对话。')}</p><p>{moteText('完整目录、文件正文和原图需要按需读取，原图还受独立授权控制。')}</p></div>
   {state.loading&&<p role="status">{moteText('正在读取…')}</p>}{state.error!==undefined&&<p role="alert">{errorMessage(state.error)} <button className="text-button" onClick={()=>setRefresh(v=>v+1)}>{moteText('重试')}</button></p>}
   {state.data&&<><ContextContents context={state.data.context}/><details><summary>{moteText('可用的只读工具')} · {state.data.tools.length}</summary><div className="agent-tool-list">{state.data.tools.map(tool=><code key={tool}>{tool}</code>)}</div><pre className="feature-json">{JSON.stringify(state.data.toolDefinitions,null,2)}</pre></details><details><summary>{moteText('系统规则与工具')}</summary><pre className="feature-json">{state.data.system}</pre></details><details><summary>{moteText('查看上下文结构')}</summary><pre className="feature-json">{JSON.stringify(state.data.context,null,2)}</pre></details></>}
- </section>;
+ </details></div></section>;
 }
 type RecordedPage={items:TraceEvent[];nextSeq:number;oldestSeq:number;recording:{enabled:boolean}};
 export function RecordedInput({api,runId,setRunId,onOpen=()=>{}}:{api:Api;runId:string;setRunId:(id:string)=>void;onOpen?:(ref:string)=>void}){
@@ -52,7 +52,7 @@ export function RecordedInput({api,runId,setRunId,onOpen=()=>{}}:{api:Api;runId:
    <nav className="agent-recorded-tabs" aria-label={moteText('实际输入与工具读取')}>{[['input',moteText('模型输入')],['tools',moteText('工具读取')],['answer',moteText('输出')]].map(([id,label])=><button key={id} aria-selected={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</nav>
    <div className="agent-recorded-content">{visible.map(item=>{const context=recordedContext(item),reads=recordedReads(item),response=recordedResponse(item);return <article key={item.seq} className="agent-recorded-event">
     {(item.truncated||item.trace?.truncated)&&<p>{moteText('记录已截断，不能还原完整输入。')}</p>}
-    {context&&<ContextContents context={context}/>}
+    {context&&<><div className="agent-question-card"><span>{moteText('用户问题')}</span><p className="agent-body">{context.request}</p></div><details className="agent-delivered-context"><summary>{moteText('这次实际交付的上下文')}</summary><ContextContents context={context}/></details></>}
     {item.trace?.type==='instructions.assembled'&&<details><summary>{moteText('系统规则与工具')}</summary><pre className="feature-json">{JSON.stringify(item.trace.payload,null,2)}</pre></details>}
     {tab==='tools'&&<details open><summary>{item.trace?.tool??moteText('调用工具')} · {item.trace?.status==='failed'?moteText('读取失败'):moteText('工具调用已完成')}</summary>{reads.map((value,index)=><div key={index}>{value.offset!==undefined&&<p className="fine-print">{moteText('已展开 {0}–{1} / {2} 个字符',value.offset,value.offset+value.text.length,value.total??value.offset+value.text.length)}</p>}<div className="agent-body">{value.text}</div></div>)}<details><summary>{moteText('查看记录内容')}</summary><pre className="feature-json">{JSON.stringify(item.trace?.payload,null,2)}</pre></details></details>}
     {response!==undefined&&<div className="agent-body">{response}</div>}
