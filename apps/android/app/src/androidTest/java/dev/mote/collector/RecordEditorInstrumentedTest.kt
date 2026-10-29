@@ -127,6 +127,50 @@ class RecordEditorInstrumentedTest {
             waitUntil("Audio retained after recreation") { context.recordDraftStore().draft().getJSONArray("attachments").toString().contains(audio.getString("id")) }
         }
     }
+    @Test fun incomingShareKeepsThePriorDraftUntilExplicitReplacement() {
+        guard()
+        context.recordDraftStore().edit("Generated prior private text",org.json.JSONArray(),org.json.JSONObject().put("kind","manual"),"Generated prior private description")
+        fun shared()=ActivityScenario.launch<RecordEditorActivity>(Intent(context,RecordEditorActivity::class.java).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Generated incoming quoted original"))
+        fun choose(label:String) {
+            waitUntil("Existing draft choice $label") { var found=false;instrumentation.runOnMainSync { found=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>().any { it.isShown && it.isClickable && it.text.toString()==label } };found }
+            instrumentation.runOnMainSync { android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString()==label }.performClick() }
+        }
+        shared().use { scenario ->
+            choose("继续编辑")
+            waitUntil("Prior text stays visible") { var found=false;scenario.onActivity { a -> found=views(a.window.decorView).filterIsInstance<EditText>().any { it.isEnabled && it.text.toString()=="Generated prior private text" } };found }
+            assertEquals("Generated prior private description",context.recordDraftStore().draft().getString("description"));assertEquals("",context.recordDraftStore().draft().getJSONObject("origin").optString("text"))
+            scenario.onActivity { screenshot(it,"share-existing-continued") }
+        }
+        shared().use { scenario ->
+            choose("替换草稿")
+            waitUntil("Explicitly accepted original is separate") { context.recordDraftStore().draft().getJSONObject("origin").optString("text")=="Generated incoming quoted original" }
+            val draft=context.recordDraftStore().draft();assertEquals("",draft.getString("text"));assertEquals("",draft.getString("description"));assertEquals(0,context.queue().depth())
+            scenario.onActivity { a ->
+                assertTrue(views(a.window.decorView).filterIsInstance<TextView>().single { it.tag=="record-origin-fulltext" }.isShown)
+                screenshot(a,"share-existing-replaced")
+            }
+        }
+    }
+    @Test fun leavingAnActualRecordingStopsItAndKeepsAnEncodedPrivateDraft() {
+        guard();instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.RECORD_AUDIO)
+        ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
+            waitUntil("Editor loaded") { var ready=false;scenario.onActivity { ready=views(it.window.decorView).filterIsInstance<EditText>().singleOrNull { it.contentDescription=="正在想什么" }?.isEnabled==true };ready }
+            scenario.onActivity { a ->
+                views(a.window.decorView).filterIsInstance<EditText>().single { it.contentDescription=="正在想什么" }.setText("Generated draft before leaving recording")
+                views(a.window.decorView).filterIsInstance<TextView>().single { it.contentDescription=="录音" }.performClick()
+            }
+            Thread.sleep(1300)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            waitUntil("Leaving stores the stopped audio") { context.recordDraftStore().draft().getJSONArray("attachments").length()==1 }
+            val draft=context.recordDraftStore().draft();assertEquals("Generated draft before leaving recording",draft.getString("text"))
+            val audio=draft.getJSONArray("attachments").getJSONObject(0);val file=File(context.cacheDir,"generated-left-recording.m4a");file.writeBytes(context.recordDraftStore().bytes(audio.getString("id")))
+            val metadata=android.media.MediaMetadataRetriever();try{metadata.setDataSource(file.absolutePath);assertTrue(metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong()>0)}finally{metadata.release();file.delete()}
+            assertEquals(0,context.queue().depth());scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitUntil("Stopped draft returns with playback") { var found=false;scenario.onActivity { a -> found=views(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString()=="播放" && it.isShown } };found }
+            scenario.onActivity { a -> assertFalse(views(a.window.decorView).any { it.contentDescription=="停止录音" });screenshot(a,"recording-left-and-returned") }
+            scenario.recreate();waitUntil("Stopped original survives recreation") { context.recordDraftStore().draft().getJSONArray("attachments").optJSONObject(0)?.optString("id")==audio.getString("id") }
+        }
+    }
     @Test fun synchronizeOfflineRecordThroughRealWorkManagerAndVerifyOriginalBytes() {
         val args = InstrumentationRegistry.getArguments()
         org.junit.Assume.assumeTrue(args.getString("recordEditorFixture") == "true" && args.containsKey("uiJourneyServer"))

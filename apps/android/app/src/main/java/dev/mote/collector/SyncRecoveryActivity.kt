@@ -36,7 +36,7 @@ class SyncRecoveryActivity : MoteActivity() {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("重新上传本机保留的数据？"))
                 .setMessage(MoteI18n.text("会重发本机仍保留的截图、页面、应用活动、通知、设备事件、笔记及已启用来源的保留版本。中央端核验相同 ID 去重，继续补齐缺失数据。\n\n已从手机清理的数据无法补传。中央已删除或内容冲突的记录不会覆盖或恢复，暂停的来源不会启用。此操作可能产生较多流量，仍遵守网络设置。"))
                 .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("开始补传")) { _, _ -> runAction { SyncRecoveryWorker.start(this, true) } }.show()
-        }
+        }.tag = "recovery-replay"
         stop = SecondaryUi.action(body, MoteI18n.text("停止本次检查 / 准备补传")) { runAction { WorkManager.getInstance(this).cancelUniqueWork("mote-sync-recovery"); getSharedPreferences("sync-recovery", MODE_PRIVATE).edit().putString("message", MoteI18n.text("已请求停止检查；已进入待发队列的记录按同步策略保留")).apply() } }.apply { tag = "recovery-stop"; visibility = android.view.View.GONE }
         val details = SecondaryUi.disclosure(body, MoteI18n.text("哪些内容可以补传？"), "recovery-scope")
         stateDetails = SecondaryUi.text(details, "", muted = true)

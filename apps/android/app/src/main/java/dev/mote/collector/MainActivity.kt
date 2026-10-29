@@ -998,6 +998,7 @@ class MainActivity : MoteActivity() {
                 globalSettings.visibility = if (!detail && advancedPrivacyExpanded) View.VISIBLE else View.GONE
                 captureExtras?.visibility = if (!detail && captureExtrasExpanded) View.VISIBLE else View.GONE
                 captureExtrasToggle?.visibility = if (detail) View.GONE else View.VISIBLE
+                startRange.visibility = if(detail)View.GONE else View.VISIBLE
             })
         appEditorHost.addView(appCaptureEditor)
         text(MoteI18n.text("仅对已选择结构化内容的应用启用。截图关闭时，临时像素只在本机识别后释放，不保存、不上传图片。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)

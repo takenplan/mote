@@ -74,7 +74,7 @@ internal class CentralClient(
     override fun post(path: String, body: JSONObject) = request("POST", path, body)
     fun put(path: String, body: JSONObject) = request("PUT", path, body)
     fun patch(path: String, body: JSONObject) = request("PATCH", path, body)
-    fun delete(path: String, body: JSONObject? = null) = request("DELETE", path, body)
+    fun delete(path: String, body: JSONObject? = null) = request("DELETE", path, body ?: JSONObject())
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         bytes(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
     override fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {

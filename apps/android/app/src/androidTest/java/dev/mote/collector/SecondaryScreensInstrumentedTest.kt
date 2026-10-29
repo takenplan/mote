@@ -81,7 +81,10 @@ class SecondaryScreensInstrumentedTest {
         assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
         val root = activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-        root.draw(Canvas(bitmap))
+        val canvas=Canvas(bitmap);root.draw(canvas)
+        WindowInspector.getGlobalWindowViews().filter { it!==root && it.isShown && it.hasWindowFocus() }.forEach { window ->
+            val position=IntArray(2);window.getLocationOnScreen(position);canvas.save();canvas.translate(position[0].toFloat(),position[1].toFloat());window.draw(canvas);canvas.restore()
+        }
         val directory = File(context.filesDir, "generated-secondary-ui").apply { mkdirs() }
         File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
@@ -248,5 +251,71 @@ class SecondaryScreensInstrumentedTest {
             until("history tab restored") { main { visible().any { it.tag == "sync-history-tab" && it.isSelected } } }
         }
         assertEquals(before, context.queue().inventory()); assertFalse(settings.enabled)
+    }
+    @Test fun generatedCentralCheckReplayAndHistoryKeepMissingDeletedAndConflictStatesDistinct() = fixture {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("nativeCentralFixture")=="true")
+        val origin="http://127.0.0.1:47883";val token="generated-native-central-owner-token-123456"
+        val settings=Settings(context);settings.save(settings.read().copy(server=origin,token=token,debugHttp=true,syncPaused=false,syncMode="manual",wifiOnly=false,syncChargingOnly=false,syncBatteryNotLow=false),confirmCentralEndpoint=true)
+        val api=CentralClient(origin,token)
+        fun note(label:String)=org.json.JSONObject().put("id",java.util.UUID.randomUUID().toString()).put("deviceId",settings.deviceId).put("deviceName","Generated recovery phone").put("platform","android").put("source","note").put("capturedAt",java.time.Instant.now().toString()).put("durationMs",0).put("ocrText",label).put("privacy",org.json.JSONObject().put("excluded",false))
+        val present=note("Generated recovery already present");val missing=note("Generated recovery missing");val deleted=note("Generated recovery owner deleted");val conflict=note("Generated recovery local conflict")
+        api.post("/api/captures",present);api.post("/api/captures",deleted);api.delete("/api/captures/"+deleted.getString("id"));api.post("/api/captures",org.json.JSONObject(conflict.toString()).put("ocrText","Generated retained Central conflict original"))
+        listOf(present,missing,deleted,conflict).forEach { context.queue().enqueue(it,null,1_000_000) }
+        val manager=androidx.work.WorkManager.getInstance(context)
+        try {
+            ActivityScenario.launch(SyncQueueActivity::class.java).use { scenario ->
+                until("actual pending queue") { main { visible().filterIsInstance<TextView>().any { it.text.toString().contains("Generated recovery missing") } } }
+                scenario.onActivity { screenshot(it,"sync-real-pending") }
+                assertEquals(4,context.queue().pendingSync().count)
+            }
+            ActivityScenario.launch(SyncRecoveryActivity::class.java).use { scenario ->
+                clickTag("recovery-check")
+                until("real Central reconciliation completes") { context.getSharedPreferences("sync-recovery",0).getString("message","")!!.startsWith("检查完成：中央可见 2 条，不可见 2 条") }
+                until("actual check result renders") { main { visible().filterIsInstance<TextView>().any { it.text.toString().startsWith("检查完成：中央可见 2 条，不可见 2 条") } } }
+                assertEquals("Read-only reconciliation never acknowledges local records",4,context.queue().pendingSync().count)
+                scenario.onActivity { screenshot(it,"recovery-real-check-completed") }
+                main { visible().single { it.tag=="recovery-scope" }.performClick() }
+                clickTag("recovery-replay");scenario.onActivity { screenshot(it,"recovery-real-replay-confirm") }
+                clickText("取消");assertEquals(4,context.queue().pendingSync().count)
+                clickTag("recovery-replay")
+                clickDialogPositive()
+                until("real replay scheduled") { context.getSharedPreferences("sync-recovery",0).getString("message","")!!.startsWith("已安排补传") }
+                until("actual conflict and deletion remain held") { context.queue().syncIssues().size==2 }
+                until("replay result reaches the actual screen") { main { visible().filterIsInstance<TextView>().any { it.text.toString().startsWith("已安排补传") } } }
+                scenario.onActivity { screenshot(it,"recovery-real-replay-result") }
+                val beforeStop=context.queue().inventory()
+                settings.save(settings.read().copy(syncPaused=true))
+                clickTag("recovery-check")
+                until("actual check waits under the sending restriction") { manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().any { !it.state.isFinished } }
+                clickTag("recovery-stop")
+                until("actual recovery job cancelled") { manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().all { it.state.isFinished } }
+                assertEquals(beforeStop,context.queue().inventory());assertTrue(settings.read().syncPaused);assertFalse(settings.enabled)
+                scenario.onActivity { screenshot(it,"recovery-real-stop-keeps-local-records") }
+            }
+            assertEquals("Generated recovery missing",api.get("/api/captures/"+missing.getString("id")).getString("ocrText"))
+            assertEquals("Generated retained Central conflict original",api.get("/api/captures/"+conflict.getString("id")).getString("ocrText"))
+            assertEquals(setOf(deleted.getString("id"),conflict.getString("id")),context.queue().syncIssues().map { it.getString("id") }.toSet())
+            assertTrue(context.queue().capture(deleted.getString("id"))!=null)
+            assertTrue(runCatching { api.get("/api/captures/"+deleted.getString("id")) }.exceptionOrNull() is CentralFailure)
+            ActivityScenario.launch(SyncQueueActivity::class.java).use { scenario ->
+                clickTag("sync-history-tab");until("actual upload history renders") { main { visible().any { it.tag?.toString()?.startsWith("history-date-")==true } } }
+                main { visible().single { it.tag?.toString()?.startsWith("history-date-")==true }.performClick() }
+                until("real uploaded batches expand") { main { visible().any { it.tag?.toString()?.startsWith("history-batch-")==true } } }
+                scenario.onActivity { screenshot(it,"sync-real-upload-history") }
+                MoteAppearance.select(context,AppearancePreference.DARK);instrumentation.waitForIdleSync();scenario.onActivity { screenshot(it,"sync-real-upload-history-dark") };MoteAppearance.select(context,AppearancePreference.LIGHT)
+            }
+        } finally {
+            manager.cancelAllWork().result.get()
+            // Remove only this test's exact generated local originals after the
+            // recovery assertions; leave real Central outcomes available as evidence.
+            listOf(present,missing,deleted,conflict).forEach { generated ->
+                val id=generated.getString("id")
+                context.queue().capture(id)?.let { retained ->
+                    check(retained.getString("deviceId")==settings.deviceId && retained.getString("ocrText")==generated.getString("ocrText"))
+                    check(context.queue().resolveDedupe(id,"",null,null,null))
+                }
+            }
+        }
+        assertFalse(settings.enabled)
     }
 }
