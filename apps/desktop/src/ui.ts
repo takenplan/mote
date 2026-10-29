@@ -376,6 +376,7 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
   settingsDirty = false; updateSettingsHint();chromeCaptureUi.refresh();
 }
 function renderStorage(): void {
+  const selected=captureStorageDirectory||currentStatus?.storage?.defaultDirectory||'';byId('storage-location-name').textContent=captureStorageDirectory?selected.split(/[\\/]/).filter(Boolean).at(-1)||selected:moteText('默认位置（当前环境目录）');byId('storage-location-count').textContent=moteText('待同步 {0} 条',currentStatus?.queueDepth??0);
   byId('storage-restart').hidden = !currentStatus?.storage?.recoveryRequired;
   byId<HTMLInputElement>('capture-directory').value = captureStorageDirectory || currentStatus?.storage?.defaultDirectory || moteText("默认位置（当前环境目录）");
   byId('capture-directory-state').textContent = currentStatus?.storage?.cleanupPending ? moteText("新目录已生效；旧副本尚未清理，请连接原磁盘后重新打开 Mote。") : captureStorageDirectory !== (currentStatus?.config.captureStorageDirectory || '') ? moteText("保存设置后迁移本机已有记录，过程中会自动暂停并恢复。") : moteText("这里保存本机待同步的截图。完整内容识别与已归档图片保存在中央节点。");
