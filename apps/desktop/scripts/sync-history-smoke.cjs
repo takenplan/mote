@@ -45,7 +45,7 @@ app.on('browser-window-created', (_event, window) => {
     ipcMain.handle('mote:permission-status', () => ({ screen: 'denied', accessibility: 'denied', calendar: 'denied' }));
     const config = { ...defaultConfig(), ...status.config };
     let now = Date.now(); const history = new SyncHistory(join(profile, 'sync-history.sqlite'), () => ++now); await history.initialize();
-    const fixtureEvent = (id, source = 'note', title = 'Generated app') => ({ id, deviceId: config.deviceId, deviceName: 'Synthetic Mac', platform: 'macos', capturedAt: new Date(now).toISOString(), durationMs: 0, appId: 'dev.mote.synthetic', appName: title, source, privacy: { excluded: false, redacted: false, mode: 'none' }, ocrText: '<script>window.fixtureExecuted=true</script> Generated evidence', ...(source === 'screen' ? { imageMime: 'image/jpeg' } : {}) });
+    const fixtureEvent = (id, source = 'note', title = 'Generated app') => ({ id, deviceId: config.deviceId, deviceName: 'Synthetic Mac', platform: 'macos', capturedAt: new Date(now).toISOString(), durationMs: 0, appId: 'dev.mote.synthetic', appName: title, source, privacy: { excluded: false, redacted: false, mode: 'none' }, ocrText: '<script>window.fixtureExecuted=true</script> Generated evidence', ...(source==='note'?{attributionContext:{recordContextStatements:[{captureId:id,version:1,description:'Generated scoped owner description <script>literal</script>'}]}}:{}), ...(source === 'screen' ? { imageMime: 'image/jpeg' } : {}) });
     for (let i = 0; i < 21; i++) { const e = fixtureEvent(randomUUID()), r = history.begin(config, 'automatic'); history.attempt(r, [captureHistoryItem(e)]); history.settle(r, e.id, true, e.id, 201); history.addBytes(r, 500); history.finish(r); archive.set(e.id, e); }
     const run = history.begin(config, 'manual'), items = [];
     for (let i = 0; i < 23; i++) {
@@ -138,6 +138,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     assert.equal(await js('Boolean(window.fixtureExecuted)'), false, 'Evidence is text, never executable HTML');
     assert((await js('document.querySelector("#upload-content-preview").textContent')).includes('<script>'));
+    const visibleKeys=await js('Array.from(document.querySelectorAll(".upload-record-pick")).map(b=>b.dataset.uploadKey)'),noteKey=visibleKeys.find(key=>archive.get(key)?.source==='note');assert(noteKey,'Real paged receipt includes an exact generated note');await js('document.querySelector('+JSON.stringify('[data-upload-key="'+noteKey+'"]')+').click()');await wait('document.querySelector(".upload-content-description pre")?.textContent==="Generated scoped owner description <script>literal</script>"','Scoped receipt description');assert.equal(await js('document.querySelectorAll(".upload-content-description script").length'),0);assert.equal(await js('document.querySelector("#upload-content-preview > .upload-content-text").textContent.includes("scoped owner description")'),false,'Owner context never becomes original bytes');
     writeFileSync(join(out, 'content.png'), (await window.webContents.capturePage()).toPNG());
     await js('document.querySelector("#upload-content-next").click()');
     await wait('document.querySelectorAll(".upload-record-pick").length === 3', 'Content pagination');
