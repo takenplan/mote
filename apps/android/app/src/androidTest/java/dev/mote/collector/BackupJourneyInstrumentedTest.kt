@@ -179,6 +179,46 @@ class BackupJourneyInstrumentedTest {
         }
     }
 
+    @Test fun selectedExportFactsAndSourceHierarchyKeepRecordsAndNeverReuseCancelledFile() = fixture { root ->
+        val before = context.queue().inventory()
+        val output = File(root, "generated-selected-records.zip")
+        val metadata = File(root, "generated-selected-metadata.json")
+        val configuration = File(root, "generated-selected-configuration.json")
+        val invalid = File(root,"generated-unwritable-output").apply { mkdirs() }
+        fun facts(file: File) {
+            val uri = FileProvider.getUriForFile(context,"${context.packageName}.record-files",file).toString()
+            until("same selected document post-write metadata") { main {
+                visible().filterIsInstance<TextView>().any { it.tag=="backup-export-name" && it.text.toString()==file.name } &&
+                    visible().filterIsInstance<TextView>().any { it.tag=="backup-export-size" && it.text.toString()==java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(file.length())+" B" } &&
+                    visible().filterIsInstance<TextView>().any { it.tag=="backup-export-uri" && it.text.toString()==uri }
+            } }
+        }
+        ActivityScenario.launch(BackupActivity::class.java).use { scenario ->
+            until("real local count") { main { visible().filterIsInstance<TextView>().any { it.tag=="backup-record-count" && it.text.toString()==java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(before.records) } } }
+            main { val count=visible().filterIsInstance<TextView>().single { it.tag=="backup-record-count" }; assertEquals(35f,count.textSize/context.resources.displayMetrics.scaledDensity,.1f) }
+            assertFalse(textVisible("已清理的本机副本不在其中。"))
+            tag("backup-scope"); assertTrue(textVisible("已清理的本机副本不在其中。")); assertTrue(textVisible("备份文件为明文，仅保存在自己信任的位置。"))
+            screenshot(scenario,"backup-source-scope"); tag("backup-scope")
+            picker(Intent.ACTION_CREATE_DOCUMENT,output) { tag("backup-export-records");until("real ZIP output") { textVisible("导出文件已生成") } }
+            java.util.zip.ZipFile(output).use { assertNotNull(it.getEntry("archive.json")) }; facts(output)
+            assertTrue(textVisible("导出本机记录")); screenshot(scenario,"backup-selected-record-facts");click("完成")
+            tag("backup-scope")
+            picker(Intent.ACTION_CREATE_DOCUMENT,metadata) { click("导出本机元数据 JSON");until("real metadata output") { textVisible("导出文件已生成") } }
+            assertEquals("mote-local-metadata",JSONObject(metadata.readText()).getString("format"));facts(metadata)
+            assertTrue(textVisible("导出本机元数据"));screenshot(scenario,"backup-selected-metadata-facts");click("完成")
+            tag("backup-config-tab")
+            picker(Intent.ACTION_CREATE_DOCUMENT,configuration) { click("导出配置 JSON");until("real configuration output") { textVisible("导出文件已生成") } }
+            assertFalse(JSONObject(configuration.readText()).getJSONObject("settings").has("token"));facts(configuration)
+            assertTrue(textVisible("导出客户端配置"));screenshot(scenario,"backup-selected-configuration-facts");click("完成")
+            tag("backup-records-tab")
+            picker(Intent.ACTION_CREATE_DOCUMENT,invalid) { tag("backup-export-records");until("real output write failure") { textVisible("备份未能生成") } }
+            until("failed selected URI visible") { textVisible(invalid.name) };screenshot(scenario,"backup-selected-failed-file")
+            picker(Intent.ACTION_CREATE_DOCUMENT,null) { click("重新导出");instrumentation.waitForIdleSync() }
+            assertFalse(main { visible().any { it.tag=="backup-export-file" } });screenshot(scenario,"backup-picker-cancel-withdraws-old-file")
+            assertEquals(before,context.queue().inventory());assertFalse(Settings(context).enabled)
+        }
+    }
+
     @Test fun partialRestoreRetainsRecordsAndRetriesSameValidatedFileWithoutDuplication() = fixture { root ->
         val settings = Settings(context); val before = settings.read(); settings.save(before.copy(maxQueueMiB = 8))
         val blocker = event().getString("id")
@@ -215,7 +255,7 @@ class BackupJourneyInstrumentedTest {
             try {
                 tag("backup-central");api.post("/api/__fixture/hold-export")
                 picker(Intent.ACTION_CREATE_DOCUMENT,output) { click("导出中央元数据");until("Actual generated archive response held"){api.get("/api/__fixture/state").getBoolean("exportHeld")} }
-                until("Native actual export in progress"){textVisible("正在导出中央资料")};assertFalse(textVisible("导出文件已生成"));screenshot(scenario,"actual-central-export-in-progress")
+                until("Native actual export in progress"){textVisible("正在导出中央资料")};until("Held export selected document") { textVisible(output.name) };assertTrue(textVisible("导出中央元数据"));assertFalse(textVisible("导出文件已生成"));screenshot(scenario,"actual-central-export-in-progress")
                 api.post("/api/__fixture/release-export");until("Actual archive saved after response"){textVisible("导出文件已生成")}
                 assertTrue(output.length()>0);java.util.zip.GZIPInputStream(output.inputStream()).use { assertTrue(it.readBytes().isNotEmpty()) };assertEquals(before,context.queue().inventory());screenshot(scenario,"actual-central-export-completed")
             } finally { api.post("/api/__fixture/release-export") }

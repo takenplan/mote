@@ -26,6 +26,9 @@ class BackupActivity : MoteActivity() {
     private lateinit var operation: BackupOperationView
     private var importName = ""
     private lateinit var inventory: TextView
+    private val exportDocument = BackupDocumentSelection()
+    private var inventoryKnown = false
+    private lateinit var inventoryUnit: TextView
     private var localStateJob: kotlinx.coroutines.Job? = null
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -43,13 +46,25 @@ class BackupActivity : MoteActivity() {
         val records = SecondaryUi.column(body)
         val recordCard = SecondaryUi.column(records, card = true)
         SecondaryUi.text(recordCard, MoteI18n.text("这台手机仍保留的记录"), muted = true)
-        inventory = SecondaryUi.text(recordCard, MoteI18n.text("正在读取本机同步状态…"), heading = true)
+        val count = LinearLayout(this).apply { gravity = android.view.Gravity.BOTTOM }.also(recordCard::addView)
+        inventory = TextView(this).apply {
+            text = MoteI18n.text("正在读取本机同步状态…"); tag = "backup-record-count"
+            MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.INK)
+            NativePresentationStyles.bind(this, "backup-count") { (it as TextView).apply { textSize = if (inventoryKnown) 35f else NativeFontRole.SUPPORT.size().toFloat(); letterSpacing = if (inventoryKnown) -.04f else 0f; typeface = android.graphics.Typeface.create(MoteTheme.fontFamily(false), android.graphics.Typeface.NORMAL) } }
+        }.also { count.addView(it, LinearLayout.LayoutParams(-2,-2)) }
+        inventoryUnit = TextView(this).apply {
+            text = MoteI18n.text("条"); visibility = android.view.View.GONE
+            MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
+            NativePresentationStyles.bind(this,"backup-count-unit") { (it as TextView).textSize = 13f }
+        }.also { count.addView(it, LinearLayout.LayoutParams(-2,-2).apply { marginStart = moteDp(7); bottomMargin = moteDp(5) }) }
         SecondaryUi.text(recordCard, MoteI18n.text("导出为本机记录 ZIP，之后可以重新导入。"), muted = true)
         val recordActions = SecondaryUi.actions(recordCard)
         SecondaryUi.action(recordActions, MoteI18n.text("导出本机记录"), primary = true) { create(12, "application/zip", "mote-records.zip") }.tag = "backup-export-records"
         SecondaryUi.action(recordActions, MoteI18n.text("从备份恢复")) { chooseRestore() }.tag = "backup-restore-records"
         val range = SecondaryUi.disclosure(records, MoteI18n.text("备份包含什么"), "backup-scope")
         SecondaryUi.text(range, MoteI18n.text("备份本机仍保留的截图、应用活动、通知、媒体和随手记。ZIP 为明文，不含中央归档、来源文件原件、未提交草稿或模型文件。"), muted = true)
+        SecondaryUi.text(range, MoteI18n.text("已清理的本机副本不在其中。"), muted = true)
+        SecondaryUi.text(range, MoteI18n.text("备份文件为明文，仅保存在自己信任的位置。"), muted = true)
         SecondaryUi.action(range, MoteI18n.text("导出本机元数据 JSON")) { create(14, "application/json", "mote-local-metadata.json") }
         SecondaryUi.row(records, MoteI18n.text("本机存储位置")) { startActivity(Intent(this, StorageActivity::class.java)) }
         val central = SecondaryUi.disclosure(records, MoteI18n.text("中央资料导出"), "backup-central")
@@ -81,7 +96,12 @@ class BackupActivity : MoteActivity() {
     }
     override fun onResume() {
         super.onResume()
-        localStateJob = observeLocalState { state -> inventory.text = state.active?.let { MoteI18n.text("{0} 条", it.records) } ?: state.imageLabel() }
+        localStateJob = observeLocalState { state ->
+            inventoryKnown = state.active != null
+            inventory.text = state.active?.let { java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(it.records) } ?: state.imageLabel()
+            inventoryUnit.visibility = if (inventoryKnown) android.view.View.VISIBLE else android.view.View.GONE
+            NativePresentationStyles.refresh(inventory)
+        }
     }
     override fun onPause() { localStateJob?.cancel(); localStateJob = null; super.onPause() }
     private fun chooseRestore() {
@@ -91,6 +111,7 @@ class BackupActivity : MoteActivity() {
             actions = listOf(Triple(MoteI18n.text("选择备份文件"), true) { open(13, "application/zip") }))
     }
     private fun returnFromOperation() {
+        exportDocument.clear()
         if (!restoring && !task.busy) releasePrepared()
         operation.landing()
     }
@@ -116,6 +137,8 @@ class BackupActivity : MoteActivity() {
     private fun canChooseFile() = !closed && !restoring && !task.busy && pendingPicker == 0 && prepared == null
     private fun launchPicker(intent: Intent, code: Int) {
         if (!canChooseFile()) return
+        exportDocument.clear()
+        if (::operation.isInitialized) operation.updateFile(null)
         pendingPicker = code
         try { startActivityForResult(intent, code) } catch (error: Exception) { pendingPicker = 0; status.text = error.message }
     }
@@ -128,26 +151,33 @@ class BackupActivity : MoteActivity() {
         if (closed || restoring || task.busy || prepared != null) return
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        val selected = if (requestCode in setOf(10,12,14,15,16)) exportDocument.select(uri.toString()) else null
         if (requestCode in setOf(10, 12, 14, 15, 16)) {
             val label = MoteI18n.text(when (requestCode) { 10 -> "正在导出配置…"; 14 -> "正在导出本机元数据…"; 15, 16 -> "正在导出中央资料…"; else -> "正在导出本机记录…" })
-            operation.show(MoteI18n.text("导出"), MoteI18n.text("正在导出"), label, loading = true)
+            operation.show(exportTitle(requestCode), MoteI18n.text("正在导出"), label, loading = true, file = exportDocument.facts)
         }
         if (requestCode == 11) operation.show(MoteI18n.text("导入客户端配置"), "", MoteI18n.text("正在读取配置…"), loading = true)
         when (requestCode) {
             14 -> task.start(MoteI18n.text("正在导出本机记录…"), ::progress, {
-                val q = queue(); val records = org.json.JSONArray()
-                q.dedupeIds().forEach { id -> q.capture(id)?.let(records::put) }
-                requireNotNull(contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(JSONObject().put("format", "mote-local-metadata").put("version", 1).put("records", records).toString()) }
+                withDocumentFacts(uri, selected!!) {
+                    val q = queue(); val records = org.json.JSONArray()
+                    q.dedupeIds().forEach { id -> q.capture(id)?.let(records::put) }
+                    requireNotNull(contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(JSONObject().put("format", "mote-local-metadata").put("version", 1).put("records", records).toString()) }
+                }
             }) { exportResult(it, requestCode) }
             15, 16 -> task.start(MoteI18n.text("正在导出中央资料…"), ::progress, {
-                val client = CentralAccess.requireClient(this)
-                check(client.server == exportOrigin && CentralSession.get(this).generation == exportGeneration) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
-                val mode = if (requestCode == 15) "metadata" else "data"
-                requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { client.download("/api/export-bundle?mode=" + mode, it) }
+                withDocumentFacts(uri, selected!!) {
+                    val client = CentralAccess.requireClient(this)
+                    check(client.server == exportOrigin && CentralSession.get(this).generation == exportGeneration) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                    val mode = if (requestCode == 15) "metadata" else "data"
+                    requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { client.download("/api/export-bundle?mode=" + mode, it) }
+                }
             }) { exportResult(it, requestCode) }
             10 -> task.start(MoteI18n.text("正在导出配置…"), ::progress, {
-                val json = ConfigurationArchive.encode(Settings(this).read(), includeToken)
-                requireNotNull(contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(json) }
+                withDocumentFacts(uri, selected!!) {
+                    val json = ConfigurationArchive.encode(Settings(this).read(), includeToken)
+                    requireNotNull(contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(json) }
+                }
             }) { exportResult(it, requestCode) }
             11 -> task.start(MoteI18n.text("正在读取配置…"), ::progress, {
                 val current = Settings(this).read()
@@ -161,9 +191,11 @@ class BackupActivity : MoteActivity() {
             }) { result -> result.onSuccess { (current, next) -> previewConfiguration(current, next) }
                 .onFailure { errorStage(MoteI18n.text("导入客户端配置"), MoteI18n.text("配置无法导入：{0}", it.message ?: MoteI18n.text("文件无效"))) { open(11, "application/json") } } }
             12 -> task.start(MoteI18n.text("正在导出本机记录…"), ::progress, {
-                ConnectionGuard.sync {
-                    QueueArchive.export(queue(), Settings(this).dataOrigin(), requireNotNull(contentResolver.openOutputStream(uri, "wt")))
-                } ?: error(MoteI18n.text("设置正在变更，请稍后重试"))
+                withDocumentFacts(uri, selected!!) {
+                    ConnectionGuard.sync {
+                        QueueArchive.export(queue(), Settings(this).dataOrigin(), requireNotNull(contentResolver.openOutputStream(uri, "wt")))
+                    } ?: error(MoteI18n.text("设置正在变更，请稍后重试"))
+                }
             }) { exportResult(it, requestCode) }
             13 -> {
               operation.show(MoteI18n.text("从备份恢复"), MoteI18n.text("正在校验备份…"), MoteI18n.text("校验并保存记录"), loading = true)
@@ -187,6 +219,21 @@ class BackupActivity : MoteActivity() {
         operation.show(title, MoteI18n.text("未完成"), title, message, actions = listOf(
             Triple(MoteI18n.text("重新选择文件"), true, retry), Triple(MoteI18n.text("返回"), false) { returnFromOperation() }))
     }
+    private fun exportTitle(code: Int) = MoteI18n.text(when(code) {
+        10 -> "导出客户端配置"
+        14 -> "导出本机元数据"
+        15 -> "导出中央元数据"
+        16 -> "导出中央资料与附件"
+        else -> "导出本机记录"
+    })
+    private fun withDocumentFacts(uri: android.net.Uri, selected: BackupDocumentSelection.Ticket, write: () -> Unit) {
+        fun publish() {
+            val facts = BackupDocumentMetadata.read(contentResolver, uri)
+            runOnUiThread { if (!closed && exportDocument.accept(selected, facts) && operation.showing) operation.updateFile(facts) }
+        }
+        publish()
+        try { write() } finally { publish() }
+    }
     private fun exportResult(result: Result<*>, code: Int) {
         val success = result.isSuccess
         val message = if (!success) MoteI18n.text("请删除刚才不完整的文件，再重新导出。本机记录保留。") else when (code) {
@@ -196,7 +243,7 @@ class BackupActivity : MoteActivity() {
         }
         status.text = if (success) MoteI18n.text("已保存到所选位置") else MoteI18n.text("导出未完成")
         if (!operation.showing) return
-        operation.show(MoteI18n.text("导出"), status.text.toString(), if (success) MoteI18n.text("导出文件已生成") else MoteI18n.text("备份未能生成"), message,
+        operation.show(exportTitle(code), MoteI18n.text(if (success) "导出文件已生成" else "导出未完成"), if (success) MoteI18n.text("已保存到所选位置") else MoteI18n.text("备份未能生成"), message, file = exportDocument.facts,
             actions = (if (success) emptyList() else listOf(Triple(MoteI18n.text("重新导出"), true) { retryExport(code) })) +
                 listOf(Triple(MoteI18n.text(if (success) "完成" else "返回"), success) { returnFromOperation() }))
     }

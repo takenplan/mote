@@ -11,10 +11,11 @@ internal class BackupOperationView(private val activity: Activity, private val b
     private val landing: LinearLayout, private val onReturn: () -> Unit) {
     private val page = SecondaryUi.column(body).apply { visibility = View.GONE }
     private var progress: TextView? = null
+    private var fileCard: LinearLayout? = null
     var showing = false; private set
 
     fun show(title: String, state: String, heading: String, message: String = "", loading: Boolean = false,
-        content: (LinearLayout) -> Unit = {}, actions: List<Triple<String, Boolean, () -> Unit>> = emptyList()) {
+        file: BackupDocumentFacts? = null, content: (LinearLayout) -> Unit = {}, actions: List<Triple<String, Boolean, () -> Unit>> = emptyList()) {
         showing = true; landing.visibility = View.GONE; page.visibility = View.VISIBLE
         (activity.window.decorView.findViewWithTag<View>("detail-title") as? TextView)?.text = title
         page.removeAllViews()
@@ -22,6 +23,8 @@ internal class BackupOperationView(private val activity: Activity, private val b
         val card = SecondaryUi.column(page, card = true)
         if (state.isNotBlank()) SecondaryUi.text(card, state, muted = true)
         SecondaryUi.text(card, heading, heading = true)
+        fileCard = SecondaryUi.column(card, card = true).apply { tag = "backup-export-file" }
+        updateFile(file)
         content(card)
         if (loading) card.addView(ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true }, LinearLayout.LayoutParams(-1, activity.moteDp(4)).apply { topMargin = activity.moteDp(16); bottomMargin = activity.moteDp(16) })
         progress = SecondaryUi.text(card, message, muted = true).apply { visibility = if (message.isBlank()) View.GONE else View.VISIBLE; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
@@ -32,8 +35,32 @@ internal class BackupOperationView(private val activity: Activity, private val b
         MoteUi.styleTree(page)
     }
 
+    fun updateFile(file: BackupDocumentFacts?) {
+        val card = fileCard ?: return
+        card.removeAllViews()
+        card.visibility = if (file == null) View.GONE else View.VISIBLE
+        if (file == null) return
+        card.orientation = LinearLayout.HORIZONTAL; card.gravity = android.view.Gravity.CENTER_VERTICAL
+        card.setPadding(activity.moteDp(16),activity.moteDp(16),activity.moteDp(16),activity.moteDp(16))
+        card.addView(TextView(activity).apply {
+            text = "▤"; MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.ACCENT)
+            NativePresentationStyles.bind(this,"backup-file-icon") { (it as TextView).textSize = 25f }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(-2,-2).apply { marginEnd = activity.moteDp(14) })
+        val words = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }.also { card.addView(it,LinearLayout.LayoutParams(0,-2,1f)) }
+        fun line(value:String,tagName:String,size:Float,muted:Boolean) = SecondaryUi.text(words,value,muted=muted).apply {
+            tag = tagName; setTextIsSelectable(true)
+            NativePresentationStyles.bind(this,"backup-file-line") { (it as TextView).apply { textSize = size; setLineSpacing(0f,1.2f) } }
+        }
+        line(file.displayName ?: MoteI18n.text("文件名暂不可读取"),"backup-export-name",13f,false)
+        line(file.size?.let { java.text.NumberFormat.getIntegerInstance(MoteI18n.locale()).format(it) + " B" } ?: MoteI18n.text("文件大小未知"),"backup-export-size",10f,true)
+        line(file.uri,"backup-export-uri",10f,true)
+        MoteUi.styleTree(card)
+    }
+
     fun updateProgress(message: String) { progress?.apply { text = message; visibility = View.VISIBLE } }
     fun landing() {
+        fileCard = null
         showing = false; page.visibility = View.GONE; landing.visibility = View.VISIBLE
         (activity.window.decorView.findViewWithTag<View>("detail-title") as? TextView)?.text = MoteI18n.text("备份与恢复")
     }

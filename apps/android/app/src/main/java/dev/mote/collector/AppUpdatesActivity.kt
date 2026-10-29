@@ -18,6 +18,8 @@ class AppUpdatesActivity : MoteActivity() {
     private lateinit var primary: Button
     private lateinit var cancel: Button
     private lateinit var deletePackage: Button
+    private lateinit var primaryActions: android.view.ViewGroup
+    private lateinit var otherPackageActions: android.view.ViewGroup
     private lateinit var progress: ProgressBar
     private lateinit var repository: EditText
     private lateinit var channel: Spinner
@@ -60,6 +62,7 @@ class AppUpdatesActivity : MoteActivity() {
         SecondaryUi.text(card, MoteI18n.text("更新保留设置与本机记录，安装由系统确认。"), muted = true)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }; card.addView(progress)
         val actions = SecondaryUi.actions(card)
+        primaryActions = actions
         fun button(label: String, action: () -> Unit) = SecondaryUi.action(actions, label) {
             runCatching(action).onFailure { Toast.makeText(this@AppUpdatesActivity, message((it as? UpdateFailure)?.code ?: "failed"), Toast.LENGTH_LONG).show() }
         }
@@ -85,7 +88,8 @@ class AppUpdatesActivity : MoteActivity() {
         val advanced = SecondaryUi.disclosure(body, MoteI18n.text("更新设置"), "app-update-settings", restoredState?.getBoolean("settingsExpanded") == true)
         settingsPanel = advanced
         actions.removeView(deletePackage)
-        SecondaryUi.actions(advanced).addView(deletePackage)
+        otherPackageActions = SecondaryUi.actions(advanced)
+        otherPackageActions.addView(deletePackage)
         SecondaryUi.text(advanced, MoteI18n.text("删除下载的 APK 和未完成下载，保留应用设置和记录；需要时可以重新下载。"), muted = true)
         advanced.addView(TextView(this).apply { text = MoteI18n.text("发布仓库") })
         repository = EditText(this).apply { setSingleLine(); setText(restoredState?.getString("repository") ?: initialConfig.repository); contentDescription = MoteI18n.text("更新发布仓库") }; advanced.addView(repository)
@@ -119,6 +123,12 @@ class AppUpdatesActivity : MoteActivity() {
         val action = UpdatePresentation.action(state, store.prefs.getLong("availableCode", 0) > BuildConfig.VERSION_CODE)
         primary.text = when (action) { "download" -> MoteI18n.text("下载更新"); "install" -> MoteI18n.text("安装更新"); "busy" -> MoteI18n.text("处理中…"); else -> MoteI18n.text("检查更新") }
         primary.isEnabled = action != "busy"
+        val packageParent = if (action == "install") primaryActions else otherPackageActions
+        if (deletePackage.parent !== packageParent) {
+            (deletePackage.parent as? android.view.ViewGroup)?.removeView(deletePackage)
+            packageParent.addView(deletePackage)
+        }
+        deletePackage.tag = "update-delete-package"
         deletePackage.isEnabled = state !in UpdatePresentation.installStates && !store.prefs.getBoolean("installRequestActive", false)
         cancel.visibility = if (state in UpdatePresentation.transferStates || state in UpdatePresentation.installStates) android.view.View.VISIBLE else android.view.View.GONE
         progress.visibility = if (state in UpdatePresentation.transferStates || state in UpdatePresentation.installStates) android.view.View.VISIBLE else android.view.View.GONE
