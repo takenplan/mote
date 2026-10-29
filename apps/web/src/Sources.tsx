@@ -44,7 +44,12 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse,
     const choose=(id:string|null)=>{if(id&&!selected)setListPosition({api,scroll:window.scrollY,opener:document.activeElement as HTMLElement|null});chooseSource(id);};
     useEffect(()=>{if(selected||!listPosition||listPosition.api!==api)return;listPosition.opener?.isConnected&&listPosition.opener.focus({preventScroll:true});if(window.scrollY!==listPosition.scroll)window.scrollTo({top:listPosition.scroll});},[api,selected,listPosition]);
     const activeApi=useRef(api);activeApi.current=api;
-    const [mutationError, setError] = useState(''), [busy, setBusy] = useState(false), [historyKey, setHistoryKey] = useState<string | null>(null);
+    const visit=useRef({api,source:selected});if(visit.current.api!==api||visit.current.source!==selected)visit.current={api,source:selected};
+    const renderVisit=visit.current,mutationVisit=useRef<typeof visit.current|undefined>(undefined);
+    const [storedMutationError,setError]=useState(''),[storedBusy,setBusy]=useState(false),[historyChoice,setHistoryChoice]=useState<{visit:typeof visit.current;path:string}>();
+    const mutationError=mutationVisit.current===visit.current?storedMutationError:'',busy=mutationVisit.current===visit.current&&storedBusy;
+    const historyKey=historyChoice?.visit===visit.current?historyChoice.path:null;
+    const setHistoryKey=(path:string|null)=>setHistoryChoice(path?{visit:visit.current,path}:undefined);
     const [pages, setPages] = useState<ArchivePages<SourceItemRecord>>();
     const listScope = JSON.stringify([mode, selected]), currentPages = currentArchivePages(pages,api,listScope), cursor = currentPages?.cursor;
     const [requestedSetup,chooseSetup]=useHashChoice('setup',readSetup);
@@ -68,19 +73,19 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse,
     const sources = sourceList.data?.items ?? [], items = mergeArchivePage(currentPages,page.data?.items??[],withdrawn), nextCursor = page.data?.nextCursor, history = versions.data?.items ?? null, catalog = connectorStatus.data ?? null, loading = sourceList.loading || page.loading;
     const initialLoading = page.loading && page.data === undefined;
     const readError = sourceList.error || page.error || versions.error || connectorStatus.error, technicalError=mutationError||(readError?errorMessage(readError):''),error=mutationError?moteText('操作未完成，请重试'):readError?(readError instanceof ApiError?(readError.code&&commonFailureMessage(readError.code,readError.status)||httpStatusMessage(readError.status)):moteText('状态读取失败，请重试。')):'';
-    async function refresh(source = selected) { if(activeApi.current!==api)return;setError(''); setHistoryKey(null); setPages(undefined); resources(api).invalidate(key => /^\/api\/(sources|source-items|library\/browse|connectors\/status)([/?]|$)/.test(key)); }
-    function loadHistory(item: SourceItemRecord) { setHistoryKey('/api/sources/' + encodeURIComponent(item.sourceId) + '/history?externalId=' + encodeURIComponent(item.externalId)); }
+    async function refresh(source = selected) { if(activeApi.current!==api||visit.current!==renderVisit)return;setError(''); setHistoryKey(null); setPages(undefined); resources(api).invalidate(key => /^\/api\/(sources|source-items|library\/browse|connectors\/status)([/?]|$)/.test(key)); }
+    function loadHistory(item: SourceItemRecord) { if(visit.current!==renderVisit||selected&&item.sourceId!==selected)return;setHistoryKey('/api/sources/' + encodeURIComponent(item.sourceId) + '/history?externalId=' + encodeURIComponent(item.externalId)); }
     function more() { if (!nextCursor || loading)
         return; setPages({api,scope:listScope,previous:items,cursor:nextCursor}); }
-    async function run(task: () => Promise<void>) { setBusy(true); setError(''); try {
+    async function run(task: () => Promise<void>) { const owner=visit.current,current=()=>visit.current===owner&&activeApi.current===api;mutationVisit.current=owner;setBusy(true);setError('');try {
         await task();
-        if(activeApi.current===api)await refresh();
+        if(current())await refresh();
     }
     catch (e) {
-        if(activeApi.current===api)setError(errorMessage(e));
+        if(current())setError(errorMessage(e));
     }
     finally {
-        if(activeApi.current===api)setBusy(false);
+        if(current())setBusy(false);
     } }
     const filteredSources=sources.filter(source=>(!sourceSearch||(source.name+' '+(kindNames[source.kind]??source.kind)).toLocaleLowerCase().includes(sourceSearch.toLocaleLowerCase()))&&(!sourceKind||source.kind===sourceKind)&&(!attentionOnly||['error','permission_required'].includes(source.status?.state??'')));
     const sourceContent=mode==='library'?<div className="source-final-originals">{initialLoading ? <p role="status">{moteText("正在读取…")}</p> : items.length === 0 && !error ? <p className="muted">{moteText("还没有资料。连接来源或导入文件后，它们会出现在这里。")}</p> : items.map(item => <article className="source-item" key={item.captureId}><div><strong>{item.title || moteText("未命名记录")}</strong><span className="badge">{layerNames[item.layer]}</span></div><p className="muted">{moteText("采集于")}{' '}{dateTime(item.observedAt)} · {item.current ? moteText("当前版本") : moteText("历史版本")}</p>{item.calendar && <p>{moteText("日历安排：")}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay ? moteText("（全天）") : ''} · {item.calendar.status === 'cancelled' ? moteText("已取消") : moteText("计划")}{moteText("，不代表实际参加。")}</p>}<p>{item.layer === 'reference' ? moteText("原文仍在外部来源，此处没有收集正文。") : item.text.slice(0, 300)}</p>{item.uri && <details><summary>{moteText("原件位置")}</summary><code>{item.uri}</code><p className="muted">{moteText("这里只展示定位信息，不会自动读取远程地址。")}</p></details>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><div className="source-toolbar"><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{moteText("展开证据")}</button><button className="button" onClick={() => void loadHistory(item)}>{moteText("查看版本")}</button></div></article>)}{nextCursor && <button disabled={loading} className="button" onClick={() => void more()}>{moteText("更多资料")}</button>}</div>:<div className="source-final-originals">{initialLoading?<p role="status">{moteText('正在读取…')}</p>:!items.length&&!error?<p className="muted">{moteText('此列表暂无原始记录；已有资料可在资料库查看。')}</p>:items.map(item=><div className="source-final-record" key={item.captureId}><button className="source-final-record-open" onClick={()=>onOpen(formatEvidenceRef('capture',item.captureId))}><span className="source-final-symbol">{item.kind==='calendar'?<CalendarDays size={18}/>:<FileText size={18}/>}</span><span><strong>{item.title||moteText('未命名记录')}</strong><small>{item.layer==='reference'?moteText('原文仍在外部来源，此处没有收集正文。'):item.text}</small></span><time title={moteText('采集于')}>{dateTime(item.observedAt)}</time><ChevronRight size={16}/></button><details className="source-final-record-more"><summary>{moteText('更多')}</summary><p>{item.current?moteText('当前版本'):moteText('历史版本')} · {layerNames[item.layer]}</p>{item.calendar&&<p>{moteText('日历安排：')}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay?moteText('（全天）'):''} · {item.calendar.status==='cancelled'?moteText('已取消'):moteText('计划')}{moteText('，不代表实际参加。')}</p>}{item.uri&&<><code>{item.uri}</code><p>{moteText('这里只展示定位信息，不会自动读取远程地址。')}</p></>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><button className="text-button" onClick={()=>void loadHistory(item)}>{moteText('查看版本')}</button></details></div>)}{nextCursor&&<button disabled={loading} className="button" onClick={()=>void more()}>{moteText('更多资料')}</button>}</div>;
