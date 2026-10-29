@@ -175,7 +175,7 @@ test('connection reads share cache and reject stale authenticated inventories',a
  const {root,d}=await fixture(t),old=deferred();const first=apiWith(path=>path==='/api/configuration'?{groups:[]}:old.promise),next=apiWith(path=>path==='/api/configuration'?Promise.reject(new ApiError('generated configuration unavailable',503)):{items:[],mcp:{enabled:false,writeEnabled:false,writeSourceIds:[]}});
  await act(async()=>root.render(React.createElement(Connections,{api:first,serverUrl:'http://localhost',devices:[]})));await act(async()=>root.render(React.createElement(Connections,{api:next,serverUrl:'https://generated.example',devices:[]})));
  await act(async()=>old.resolve({items:[{id:'old',label:'OLD PRIVATE DEVICE',scope:'collector',createdAt:when}],mcp:{enabled:true}}));
- assert.doesNotMatch(d.body.textContent!,/OLD PRIVATE DEVICE/);assert.match(d.body.textContent!,/generated configuration unavailable/);assert.equal(d.querySelector<HTMLInputElement>('[aria-label="邀请节点地址"]')!.value,'https://generated.example');
+ assert.doesNotMatch(d.body.textContent!,/OLD PRIVATE DEVICE/);assert.match(d.body.textContent!,/generated configuration unavailable/);await act(async()=>button(d,'新建连接').click());assert.equal(d.querySelector<HTMLInputElement>('[aria-label="邀请节点地址"]')!.value,'https://generated.example');
 });
 test('execution overview shares initial settings read; dirty runtime draft survives updates and clears after revocation',async t=>{
  const {root,d}=await fixture(t);let count=0,enabled=true,revoked=false;const value=()=>({enabled,debug:false,traceEnabled:false,level:'info',queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}});

@@ -99,6 +99,7 @@ test('reusing the connection component for device and AI modes clears prior form
   await act(async () => button(d, '撤销').click());
   assert.ok(button(d, '确认撤销'));
   await act(async () => root.render(view('chatbot')));
+  await act(async () => button(d, '新建连接').click());
   assert.equal(d.querySelector<HTMLInputElement>('[aria-label="连接名称"]')!.value, '我的 AI 助手');
   await act(async () => root.render(view('device')));
   assert.equal(button(d, '确认撤销'), undefined);
@@ -146,16 +147,24 @@ test('source device pairing and AI access use distinct routes and inventories wi
 
   await act(async () => { location.hash = '#/connections/access'; }); await renderRoute();
   assert.equal(primaryDestination('connections'), 'connections');
-  assert.equal(d.querySelector('h2')!.textContent, 'AI 接入');
+  assert.equal(d.querySelector('h1')!.textContent, 'AI 接入');
   assert.equal(d.querySelector('[aria-label="设备权限"]'), null);
-  assert.ok(d.querySelector('[aria-label="MCP 访问权限"]'));
+  assert.equal(d.querySelector('[aria-label="MCP 访问权限"]'), null, 'authority controls appear only in the explicit creation flow');
   const list = d.querySelector('.connection-list')!;
   assert.match(list.textContent!, /Generated read Agent|Generated write Agent/);
   assert.doesNotMatch(list.textContent!, /Generated owner Mac|Generated collector/);
+  await act(async () => button(d, '新建连接').click());
   assert.equal(d.querySelector<HTMLSelectElement>('[aria-label="MCP 访问权限"]')!.value, 'read');
-  assert.ok(d.querySelector('.connection-help summary')!.textContent!.includes('规划中'));
-  await act(async () => list.querySelector<HTMLButtonElement>('button')!.click());
-  assert.deepEqual(writes, [], 'reviewing revocation does not revoke any authority');
+  assert.match(d.querySelector('.connection-help')!.textContent!, /Bearer/);
+  await act(async () => button(d, 'AI 接入').click());
+  await act(async () => d.querySelector<HTMLButtonElement>('.connection-list button')!.click());
+  assert.match(d.querySelector('h1')!.textContent!, /Generated read Agent/);
+  await act(async () => button(d, '撤销连接').click());
+  assert.deepEqual(writes, [], 'opening details and revocation review does not revoke any authority');
+  assert.ok(d.querySelector('[role="dialog"]'));
+  await act(async () => button(d, '取消').click());
+  assert.deepEqual(writes, [], 'cancelling review preserves authority');
+  await act(async () => button(d, '撤销连接').click());
   await act(async () => button(d, '确认撤销').click());
   assert.deepEqual(writes, [{path: '/api/connections/reader'}], 'the existing selected-credential revocation API is preserved');
 });
