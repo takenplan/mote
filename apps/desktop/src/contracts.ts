@@ -142,7 +142,7 @@ export interface DesktopApi {
   sourceContext(id:string):Promise<import('./contracts/sources').SourceContextState>;
   saveSourceContext(id:string,input:{expectedVersion:number;description:string}):Promise<import('./contracts/sources').SourceContextState>;
   selectSourceFiles(mode: 'files' | 'directory'): Promise<{canceled:boolean;selectionId?:string;names?:string[]}>;
-  confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<{sourceIds:string[]}>;
   cancelSourceFiles(selectionId:string): Promise<void>;
   memoryTopics(): Promise<import('./contracts/content').TopicDirectory>;
   memoryTopicPage(input?:import('./contracts/content').TopicQuery): Promise<import('./contracts/content').TopicPage>;

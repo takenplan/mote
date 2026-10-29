@@ -3,13 +3,13 @@ import type {DesktopApi, Status} from './contracts';
 import type {ContentItem} from './contracts/content';
 
 export type RecentConversation = {id:string;title:string;turnCount?:number;updatedAt?:string};
-type WorkbenchActions = {question:(text:string)=>boolean;conversation:(id:string)=>void;content?:(item:ContentItem)=>void};
+type WorkbenchActions = {question:(text:string)=>boolean;conversation:(id:string)=>void;content?:(item:ContentItem)=>void;contents?:()=>void};
 
 /** A small entry to the existing Ask and content workspaces. No query is submitted here. */
 export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
   const question=el<HTMLTextAreaElement>('home-question'),submit=el<HTMLButtonElement>('home-ask-submit'),history=el('home-conversations');
-  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent:boolean|undefined,hasSource=false,hasConversation:boolean|undefined,firstUseActive=false,firstNoteId:string|undefined,firstRecord:ContentItem|undefined,firstVersion=0,firstDetailSignature='',firstCopy='';
+  let status:Status|undefined,authorization='',generation=0,blocked=false,hasContent:boolean|undefined,hasSource=false,hasConversation:boolean|undefined,firstUseActive=false,firstNoteId:string|undefined,firstRecord:ContentItem|undefined,firstVersion=0,firstDetailSignature='',firstCopy='',firstSourceId:string|undefined,firstLocalKey:string|undefined,firstFileActive=false,firstSourceMessage='';
   function controls(){
     submit.disabled=blocked||!question.value.trim();
     for(const button of Array.from(history.querySelectorAll('button')))button.disabled=blocked;
@@ -17,30 +17,39 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   function onboarding(leaving=false){
     const empty=hasContent===false&&!hasSource&&hasConversation===false&&!status?.lastCaptureAt&&!status?.queueDepth&&!status?.running;
     if(!leaving&&empty&&!el('home-onboarding').closest<HTMLElement>('[data-page]')!.hidden)firstUseActive=true;
-    const first=empty||firstUseActive&&Boolean(firstNoteId);
+    const first=empty||firstUseActive&&Boolean(firstNoteId||firstSourceId||firstFileActive);
     el('home-onboarding').hidden=!first;document.querySelector('[data-page=overview]')!.classList.toggle('first-use-home',first);
     const connected=Boolean(status?.config.serverUrl&&status.config.tokenConfigured);
     el('home-first-status').textContent=(status?.config.deviceName||moteText('这台 Mac'))+' · '+(connected?moteText('已连接你的 Mote'):moteText('仅保存在本机'));
     el('home-first-connection-title').textContent=connected?moteText('已连接你的 Mote'):moteText('连接你的 Mote');el('home-first-connection-copy').textContent=connected?moteText('自动采集尚未开启。'):moteText('让记录进入中央档案，供其他设备和 AI 使用。');
-    el('home-first-record').hidden=!firstRecord;if(!firstRecord){el('home-first-record-preview').textContent='';el('home-first-record-state').textContent='';}el('home-onboarding').querySelector<HTMLElement>('.home-task-actions')!.hidden=Boolean(firstRecord);
-    el('home-first-title').textContent=firstRecord?moteText('先留下，再慢慢想。'):moteText('先留下一点内容。');el('home-first-copy').textContent=firstRecord?(firstCopy||moteText('正在读取内容…')):moteText('记一句想法，或导入一份文件。自动采集可以稍后再设置。');
+    el('home-first-record').hidden=!firstRecord;if(!firstRecord){el('home-first-record-preview').textContent='';el('home-first-record-state').textContent='';}el('home-onboarding').querySelector<HTMLElement>('.home-task-actions')!.hidden=Boolean(firstRecord||firstSourceId);
+    el('home-first-title').textContent=firstRecord?moteText('先留下，再慢慢想。'):firstSourceId?moteText('已添加来源'):moteText('先留下一点内容。');el('home-first-copy').textContent=firstRecord?(firstCopy||moteText('正在读取内容…')):firstSourceId?(firstSourceMessage||moteText('正在读取内容…')):moteText('记一句想法，或导入一份文件。自动采集可以稍后再设置。');
     if(firstRecord)el('home-first-connection-copy').textContent=status?.sync.message??'';
     el('home-first-connect').hidden=connected;el('home-first-help').hidden=connected;el('home-first-connected').hidden=!connected;
   }
   async function readFirstRecord(){
-    if(!firstRecord||!firstNoteId)return;const version=++firstVersion,item=firstRecord;
-    try{const detail=await api.localContentDetail('queue:'+firstNoteId);if(version!==firstVersion||!firstUseActive)return;
-      const remote='location'in detail&&detail.location==='central';if(remote)firstRecord={...item,key:'capture:'+firstNoteId};
+    if(!firstRecord||!(firstLocalKey||firstNoteId))return;const version=++firstVersion,item=firstRecord;
+    try{const detail=await api.localContentDetail(firstLocalKey||'queue:'+firstNoteId);if(version!==firstVersion||!firstUseActive)return;
+      const remote='location'in detail&&detail.location==='central';if(remote&&'captureId'in detail&&detail.captureId)firstRecord={...item,key:'capture:'+detail.captureId};
       firstCopy=remote?moteText('中央已收到'):moteText('原文已经保存在这台 Mac，可以随时打开。');el('home-first-copy').textContent=firstCopy;el('home-first-record-preview').textContent=detail.text;el('home-first-record-state').textContent=remote?moteText('中央已收到'):moteText('本机已保存');
     }catch{if(version!==firstVersion||!firstUseActive)return;el('home-first-record-preview').textContent='';firstCopy=moteText('接收结果待核实');el('home-first-copy').textContent=firstCopy;el('home-first-record-state').textContent=moteText('接收结果待核实');}
   }
+  async function refreshFirstSource(){
+    if(!firstSourceId||!firstUseActive)return;const version=++firstVersion,id=firstSourceId;
+    try{const [page,sources]=await Promise.all([api.sourcePendingContent(id),api.sources()]);if(version!==firstVersion||id!==firstSourceId||!firstUseActive)return;
+      firstSourceMessage=sources.find(row=>row.source.id===id)?.message??moteText('内容暂不可用');
+      if(page.total===1&&page.items.length===1){firstRecord=page.items[0];firstLocalKey=firstRecord.key;onboarding();void readFirstRecord();}
+      else if(page.total>1){actions.contents?.();}else onboarding();
+    }catch{if(version===firstVersion&&firstUseActive){firstSourceMessage=moteText('内容暂不可用');onboarding();}}
+  }
+  el('home-onboarding').querySelector('[data-add-choice=file]')!.addEventListener('click',()=>{if(firstUseActive)firstFileActive=true;});
   const armFirstNote=()=>{if(!firstUseActive)return;const scope=authorization;void api.noteDraft().then(draft=>{if(scope===authorization&&firstUseActive)firstNoteId=draft.id;}).catch(()=>{});};el('home-onboarding').querySelector('[data-add-choice=note]')!.addEventListener('click',armFirstNote);el('note-action').addEventListener('click',armFirstNote);
   el('home-first-read').addEventListener('click',()=>{if(firstRecord)actions.content?.(firstRecord);});
   function message(text:string){
     const empty=document.createElement('p');empty.className='home-empty';empty.textContent=text;history.replaceChildren(empty);
   }
   function renderHistory(items:RecentConversation[]){
-    hasConversation=items.length>0;if(hasConversation&&!firstNoteId)firstUseActive=false;onboarding();history.removeAttribute('aria-busy');history.replaceChildren();
+    hasConversation=items.length>0;if(hasConversation&&!firstNoteId&&!firstSourceId&&!firstFileActive)firstUseActive=false;onboarding();history.removeAttribute('aria-busy');history.replaceChildren();
     if(!items.length){message(moteText('还没有对话'));return;}
     for(const item of items.slice(0,3)){
       const button=document.createElement('button');button.type='button';button.className='home-conversation';button.dataset.conversationId=item.id;
@@ -72,19 +81,21 @@ export function createWorkbenchUi(api:DesktopApi, actions:WorkbenchActions) {
   el('home-ask-form').addEventListener('submit',event=>{event.preventDefault();if(blocked||!question.value.trim())return;if(actions.question(question.value)){question.value='';controls();}});
   return {
     refresh,
-    leave(page:string){if(page!=='overview'&&page!=='content-reader'){firstUseActive=false;firstNoteId=undefined;firstRecord=undefined;firstVersion++;firstDetailSignature='';firstCopy='';onboarding(true);}},
-    setHomeRows(rows:readonly ContentItem[]){if(!firstUseActive||!firstNoteId)return;const row=rows.find(row=>row.key==='queue:'+firstNoteId||row.key==='capture:'+firstNoteId);if(row){firstRecord=row;onboarding();void readFirstRecord();}},
+    cancelFirstFile(){if(!firstUseActive||!firstFileActive)return false;firstFileActive=false;return true;},
+    sourcesSaved(ids:string[]):'overview'|'records'|undefined{if(!firstUseActive||!firstFileActive)return;firstFileActive=false;if(ids.length!==1)return 'records';firstSourceId=ids[0];onboarding();void refreshFirstSource();return 'overview';},
+    leave(page:string){if(page!=='overview'&&page!=='content-reader'&&!(firstFileActive&&page==='source-editor')){firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstVersion++;firstDetailSignature='';firstCopy='';onboarding(true);}},
+    setHomeRows(rows:readonly ContentItem[]){if(!firstUseActive)return;if(firstSourceId){if(firstRecord)void readFirstRecord();else void refreshFirstSource();return;}if(!firstNoteId)return;const row=rows.find(row=>row.key==='queue:'+firstNoteId||row.key==='capture:'+firstNoteId);if(row){firstRecord=row;onboarding();void readFirstRecord();}},
     setHistory(items:RecentConversation[]){generation++;renderHistory(items);},
     setBusy(value:boolean){blocked=value;controls();},
-    setHasContent(value:boolean|undefined){hasContent=value;if(value&&!firstNoteId)firstUseActive=false;onboarding();},
+    setHasContent(value:boolean|undefined){hasContent=value;if(value&&!firstNoteId&&!firstSourceId&&!firstFileActive)firstUseActive=false;onboarding();},
     setHasSource(value:boolean){hasSource=value;onboarding();},
     update(next:Status){
-      status=next;onboarding();const detailSignature=JSON.stringify([next.queueDepth,next.sync.state,next.sync.lastUploadAt]);if(firstRecord&&detailSignature!==firstDetailSignature){firstDetailSignature=detailSignature;void readFirstRecord();}
+      status=next;onboarding();const detailSignature=JSON.stringify([next.queueDepth,next.sync.state,next.sync.lastUploadAt]);if(detailSignature!==firstDetailSignature){firstDetailSignature=detailSignature;if(firstRecord)void readFirstRecord();else if(firstSourceId)void refreshFirstSource();}
       const capture={stopped:moteText('已停止'),capturing:moteText('正在记录'),paused:moteText('已暂停'),permission_required:moteText('需要屏幕录制权限'),error:moteText('采集需要处理')}[next.state];
       const sending=next.config.syncPaused?moteText('发送已暂停'):next.sync.state==='unconfigured'?moteText('仅保存在本机'):next.sync.state==='error'?moteText('发送需要处理'):next.sync.state==='uploading'?moteText('正在发送'):next.config.syncMode==='manual'?moteText('仅手动发送'):moteText('按设置自动发送');
       el('home-collection-summary').textContent=capture+' · '+sending;
       const key=JSON.stringify([next.authorizationGeneration,next.config.serverUrl,next.config.tokenConfigured,next.config.authSignedOut,next.config.authExpiresAt,next.config.authSourceBinding]);
-      if(key!==authorization){authorization=key;firstUseActive=false;firstNoteId=undefined;firstRecord=undefined;firstCopy='';firstVersion++;hasConversation=undefined;onboarding();generation++;history.replaceChildren();void refresh();}
+      if(key!==authorization){authorization=key;firstUseActive=false;firstNoteId=undefined;firstSourceId=undefined;firstLocalKey=undefined;firstFileActive=false;firstSourceMessage='';firstRecord=undefined;firstCopy='';firstVersion++;hasConversation=undefined;onboarding();generation++;history.replaceChildren();void refresh();}
     },
   };
 }

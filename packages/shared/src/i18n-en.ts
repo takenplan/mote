@@ -9602,5 +9602,5 @@ export const english: Readonly<Record<string, string>> = {
   "之后需要时再配置": "Configure later when needed",
   "问一问与自动理解": "Questions and automatic understanding",
   "保存原文已经可以使用": "Saving originals is already available",
-  "参考资料": "Reference material"
+  "已添加来源": "Source added"
 };

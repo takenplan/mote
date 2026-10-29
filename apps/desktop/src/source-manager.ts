@@ -170,7 +170,7 @@ export class LocalSourceManager {
     if (!calendar) throw new Error(moteText("请先连接日历，再从已授权列表中选择"));
     await this.add({ calendarId: calendar.id, name: calendar.title.slice(0, 200) || moteText("本地日历"), kind: 'local-calendar' }, input);
   }
-  async addFiles(path: string, input: unknown): Promise<void> { await this.add({ path, name: basename(path).slice(0, 200) || moteText("本地文件"), kind: 'local-files' }, input); }
+  async addFiles(path: string, input: unknown): Promise<string> { return this.add({ path, name: basename(path).slice(0, 200) || moteText("本地文件"), kind: 'local-files' }, input); }
   async addCodingAgent(provider: CodingProvider, input: unknown): Promise<void> {
     if (!Object.hasOwn(codingProviders, provider)) throw new Error(moteText("不支持的 Coding Agent"));
     await this.add({ path: codingRoot(provider), name: codingProviders[provider], kind: 'coding-agent', agent: provider }, { ...normalizeSourceOptions(input), trackDeletions: false });

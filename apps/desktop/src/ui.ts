@@ -1,3 +1,4 @@
+import {sourceSelectionResult} from './source-selection-result';
 import {keepLanguageAskDraft,takeLanguageAskDraft,dropLanguageAskDraft} from './language-draft';
 import {createWorkPendingUi} from './work-pending-ui';
 import {queueImportPresentation} from './queue-import-presentation';
@@ -50,7 +51,7 @@ let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['screen','connection', 'sync', 'capture', 'privacy', 'developer','storage','chrome']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
-const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation,content:item=>void libraryUi.open(item)});
+const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation,content:item=>void libraryUi.open(item),contents:()=>showPage('records')});
 let contentOrigin:Page='records';
 const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),(hasContent,rows)=>{workbenchUi.setHasContent(hasContent);workbenchUi.setHomeRows(rows);},{
   open(){contentOrigin=currentPage;const title=document.querySelector<HTMLElement>(`[data-page="${currentPage}"] [data-page-title]`)?.textContent?.trim()??moteText('内容');byId('content-detail-close').textContent='← '+title;showPage('content-reader');},
@@ -151,7 +152,7 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-ad
   if(action==='note')showPage('notes');
   else if(action==='screen')showPage('screen');
   else if(action==='source')showPage('sources');
-  else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files');
+  else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files',Boolean(button.closest('#home-onboarding')));
   else if(action==='lark'){
     if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}
     void perform(()=>desktopApi.openCentral('lark'));
@@ -745,14 +746,17 @@ async function beginSourceSelection(mode:'files'|'directory',pick=false):Promise
   if(sourceBusy)return;sourceAddDialog.close();
   if(mode!==sourceMode||sourceEditingId){byId<HTMLInputElement>('source-continuous').checked=mode==='directory';if(sourceSelection)await desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLSelectElement>('source-initial-sync').value='all';byId<HTMLSelectElement>('source-retention').value='snapshot';}
   configureSourceEditor(mode);if(!showPage('source-editor'))return;if(!pick)return;
-  await sourceAction(async()=>{const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId)return;sourceSelection={id:result.selectionId,mode,names:result.names??[]};byId<HTMLInputElement>('source-name').value=sourceSelection.names.length===1?sourceSelection.names[0]:'';configureSourceEditor(mode);});
+  await sourceAction(async()=>{const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId){if(!sourceSelection&&workbenchUi.cancelFirstFile())showPage('overview');return;}sourceSelection={id:result.selectionId,mode,names:result.names??[]};byId<HTMLInputElement>('source-name').value=sourceSelection.names.length===1?sourceSelection.names[0]:'';configureSourceEditor(mode);});
 }
 for(const mode of ['files','directory'] as const)byId('source-mode-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-change-selection').addEventListener('click',()=>void beginSourceSelection(sourceMode,true));
-byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();showPage('sources');});
+byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();showPage(workbenchUi.cancelFirstFile()?'overview':'sources');});
+function sourceSaveScope():string{return JSON.stringify([currentStatus.authorizationGeneration,currentStatus.config.serverUrl,currentStatus.config.deviceId,currentStatus.config.authSourceBinding??null,currentStatus.config.tokenConfigured]);}
 byId('source-confirm').addEventListener('click',()=>void sourceAction(async()=>{
-  if(!sourceSelection)return;const selected=sourceSelection,oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:oneTime?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
-  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();byId<HTMLTextAreaElement>('source-initial-description').value='';await refreshContent();showPage(oneTime?'records':'sources');
+  if(!sourceSelection)return;const selected=sourceSelection,scope={selectionId:selected.id,scope:sourceSaveScope()},oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;const result=await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:oneTime?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
+  const sourceIds=sourceSelectionResult(result,scope,sourceSelection&&currentPage==='source-editor'?{selectionId:sourceSelection.id,scope:sourceSaveScope()}:undefined);if(!sourceIds)return;
+  const firstRoute=oneTime?workbenchUi.sourcesSaved(sourceIds):undefined;
+  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();byId<HTMLTextAreaElement>('source-initial-description').value='';await refreshContent();showPage(firstRoute??(oneTime?'records':'sources'));
 }));
 function sourceOptions(): import('./source-types').SourceOptions {
   return normalizeSourceOptions({name:readInput('source-name').trim()||undefined, ...(!sourceEditingId?{description:readInput('source-initial-description')}:{}),syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) });
