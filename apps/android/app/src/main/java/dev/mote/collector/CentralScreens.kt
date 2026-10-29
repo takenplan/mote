@@ -341,14 +341,33 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
     fun conversationMore() {
         val id = askState.optString("conversationId"); if (id.isBlank() || askBusy()) return
-        MoteDialogBuilder(ui).setTitle(MoteI18n.text("对话")).setItems(arrayOf(MoteI18n.text("删除这段对话"))) { _, _ ->
+        val api=client;val selected=CentralAccess.resolve(ui);val expected=selected.server to selected.generation
+        fun current()=ui.client===api&&currentPage=="ask"&&askState.optString("conversationId")==id&&!askBusy()&&CentralAccess.resolve(ui).let{(it.server to it.generation)==expected}
+        val deletionDetails=askState.optJSONObject("conversationDeleteFailure")?.takeIf { it.optString("conversationId")==id }
+        val actions=listOf(MoteI18n.text("删除这段对话"))+if(deletionDetails!=null)listOf(MoteI18n.text("查看详情"))else emptyList()
+        MoteDialogBuilder(ui).setTitle(MoteI18n.text("对话")).setItems(actions.toTypedArray()) { _, index ->
+            if(!current())return@setItems
+            if(index==1){deletionDetails?.let { showAskFailureDetails(it) };return@setItems}
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("删除整段对话？")).setMessage(MoteI18n.text("会删除这段对话的所有问答。已单独保存的记录保留。"))
                 .setNegativeButton(MoteI18n.text("取消"),null).setPositiveButton(MoteI18n.text("删除对话")) { _, _ ->
-                val api = client; ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/conversations/" + encode(id)) }) {
-                    askState.remove("conversationId"); askState.remove("runId"); lastConversation = null; persistAsk()
-                    val old = askHistory.optJSONArray("items") ?: JSONArray()
-                    askHistory.put("items",JSONArray().apply { for (index in 0 until old.length()) old.getJSONObject(index).takeUnless { it.optString("id") == id }?.let(::put) })
-                    showAskHistory()
+                if(!current())return@setPositiveButton
+                ui.work(MoteI18n.text("正在删除…"), { runCatching { api.delete("/api/conversations/" + encode(id)) } }) { outcome ->
+                    outcome.onSuccess {
+                        askState.remove("conversationDeleteFailure");askState.remove("conversationId"); askState.remove("runId"); lastConversation = null; persistAsk()
+                        val old = askHistory.optJSONArray("items") ?: JSONArray()
+                        askHistory.put("items",JSONArray().apply { for (index in 0 until old.length()) old.getJSONObject(index).takeUnless { it.optString("id") == id }?.let(::put) })
+                        showAskHistory()
+                    }.onFailure { error ->
+                        val errors=JSONArray();var current:Throwable?=error
+                        val seen=java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable,Boolean>())
+                        while(current!=null&&seen.add(current)){
+                            val value=current;errors.put(JSONObject().put("message",value.message.orEmpty()).apply { if(value is CentralFailure){put("status",value.status);put("code",value.code);put("detail",value.detail)} });current=value.cause
+                        }
+                        askState.put("conversationDeleteFailure",JSONObject().put("conversationId",id).put("errors",errors));persistAsk()
+                        // Keep authentication withdrawal and conflict handling at the original shared boundary.
+                        ui.requestFailure(error)
+                        if(error !is CentralFailure || error.status !in setOf(401,403,409,410))ui.notice(MoteI18n.text("未能确认删除完成。请刷新查看当前状态。"))
+                    }
                 }
             }.show()
         }.show()
