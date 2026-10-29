@@ -502,17 +502,41 @@ class CaptureRecordsActivity : MoteActivity() {
                         if (!intent.getBooleanExtra("centralReaderActions",false)) return
                         fun selected(): CentralClient {
                             val access=CentralAccess.resolve(this@CaptureRecordsActivity)
-                            check(access.server == intent.getStringExtra("recordOrigin")) { MoteI18n.text("访问凭据已失效，请重新连接。") }
+                            check(access.server == intent.getStringExtra("recordOrigin") && access.generation == selection?.generation) { MoteI18n.text("访问凭据已失效，请重新连接。") }
                             return requireNotNull(access.client)
                         }
                         content.addView(MoteUi.button(Button(this).apply { text=MoteI18n.text("基于这条记录提问"); setOnClickListener { runCatching { selected(); startActivity(Intent(this@CaptureRecordsActivity,CentralActivity::class.java).putExtra("page","ask").putExtra("evidenceId",id).putExtra("evidenceOrigin",intent.getStringExtra("recordOrigin"))) }.onFailure { text(content,it.message ?: MoteI18n.text("操作失败，请重试"),MoteTheme.fontSupport.toFloat()) } } }))
                         val more=SecondaryUi.disclosure(content,MoteI18n.text("更多"),"capture-reader-more")
-                        more.addView(MoteUi.button(Button(this).apply { text=MoteI18n.text("删除记录"); setOnClickListener {
-                            MoteDialogBuilder(this@CaptureRecordsActivity).setTitle(MoteI18n.text("删除中央记录")).setMessage(MoteI18n.text("删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。"))
-                                .setNegativeButton(MoteI18n.text("取消"),null).setPositiveButton(MoteI18n.text("确认")) { _,_ ->
-                                    detailExecutor.execute { runCatching { selected().delete("/api/captures/"+id) }.onSuccess { runOnUiThread { closeReader() } }.onFailure { error -> runOnUiThread { text(content,error.message ?: MoteI18n.text("操作失败，请重试"),MoteTheme.fontSupport.toFloat()) } } }
-                                }.show()
-                        } }))
+                        val deletionKind=CentralDeletion.kind(record)
+                        if (deletionKind == null) text(more,MoteI18n.text("此引用不能直接删除原始记录。"),MoteTheme.fontSupport.toFloat())
+                        else {
+                            val remove=MoteUi.button(Button(this).apply { text=MoteI18n.text(if(deletionKind == "file") "删除文件" else "删除记录") })
+                            var deleting=false
+                            fun currentDeletion(): Boolean {
+                                if (isDestroyed || directReaderPaused || stamp != generation || !reading()) return false
+                                val access=runCatching { CentralAccess.resolve(this@CaptureRecordsActivity) }.getOrNull()
+                                return access != null && selection != null && access.server == selection.server && access.generation == selection.generation
+                            }
+                            remove.setOnClickListener {
+                                if (!deleting) MoteDialogBuilder(this@CaptureRecordsActivity).setTitle(MoteI18n.text(if(deletionKind == "file") "删除中央文件" else "删除中央记录"))
+                                    .setMessage(MoteI18n.text(if(deletionKind == "file") "删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。" else "删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。"))
+                                    .setNegativeButton(MoteI18n.text("取消"),null).setPositiveButton(MoteI18n.text("确认")) { _,_ ->
+                                        if (currentDeletion()) {
+                                            deleting=true;remove.isEnabled=false
+                                            detailExecutor.execute {
+                                                val result=runCatching { CentralDeletion.evidence(selected(),id,deletionKind) }
+                                                runOnUiThread {
+                                                    if (currentDeletion()) {
+                                                        deleting=false;remove.isEnabled=true
+                                                        result.onSuccess { closeReader() }.onFailure { error -> text(content,error.message ?: MoteI18n.text("未能确认删除完成。请刷新查看当前状态。"),MoteTheme.fontSupport.toFloat()) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }.show()
+                            }
+                            more.addView(remove)
+                        }
                     }
 
                     val isNote = record.optString("source") == "note"

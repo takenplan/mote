@@ -203,9 +203,13 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             if (row.optBoolean("hasImage") || !row.isNull("blobHash") && row.has("blobHash")) ui.button(MoteI18n.text("查看原图")) {
                 image("/api/capture-browser/" + enc(id) + "/image", body)
             }
-            ui.button(MoteI18n.text("删除记录")) {
-                screens.confirm(MoteI18n.text("删除中央记录"), MoteI18n.text("删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {
-                    ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/captures/" + enc(id)) }) { screens.refresh() }
+            val deletionKind=CentralDeletion.kind(row)
+            ui.disclosure(MoteI18n.text("更多")) { more ->
+                if (deletionKind == null) ui.text(MoteI18n.text("此引用不能直接删除原始记录。"),parent=more)
+                else ui.button(MoteI18n.text(if(deletionKind == "file") "删除文件" else "删除记录"),parent=more) {
+                    screens.confirm(MoteI18n.text(if(deletionKind == "file") "删除中央文件" else "删除中央记录"), MoteI18n.text(if(deletionKind == "file") "删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。" else "删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {
+                        ui.work(MoteI18n.text("正在删除…"), { CentralDeletion.evidence(api,id,deletionKind) }) { screens.refresh() }
+                    }
                 }
             }
             if (topicMemoryId != null) ui.scheduleMemoryTopicsPoll()
@@ -352,7 +356,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
             }
             ui.button(MoteI18n.text("删除文件")) { screens.confirm(MoteI18n.text("删除中央文件"), MoteI18n.text("删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。")) {
-                ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/files/" + enc(id)) }) { screens.refresh() }
+                ui.work(MoteI18n.text("正在删除…"), { CentralDeletion.delete(api,"/api/files/" + enc(id)) }) { screens.refresh() }
             } }
         }
     }
