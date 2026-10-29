@@ -30,7 +30,7 @@ export function parentDestination(page:Page):Page|undefined {
     if(page==='coding')return 'archive';
     const section=sectionFor(page);
     if(section==='library'&&page!=='archive')return 'archive';
-    if(section==='connections'&&page!=='sources')return 'sources';
+    if(section==='connections'&&page!=='sources'&&page!=='connections')return 'sources';
     if(page==='settings')return;
     if(page==='processing')return 'activity';
     if(page==='actions')return 'overview';

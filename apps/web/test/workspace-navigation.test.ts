@@ -41,6 +41,24 @@ test('the legacy Coding page stays under Library and has a Library parent withou
  assert.doesNotMatch(settings,/Generated Coding status/);
 });
 
+test('AI access is a primary destination while source setup retains its parent',async t=>{
+ configureLocale(()=> 'zh-CN');
+ const featureId='generated.ai-access-navigation';
+ const fiber=await webFeatures.install({id:featureId,version:'1',components:[]},[
+  {surface:'page',entry:{id:'sources',route:'sources',label:'来源',section:'connections',featureId,render:()=>null}},
+  {surface:'page',entry:{id:'connections',route:'connections',label:'AI 接入',section:'connections',featureId,render:()=>null}},
+  {surface:'page',entry:{id:'gmail',route:'sources/gmail',label:'Gmail',section:'connections',featureId,render:()=>null}},
+ ]);
+ t.after(()=>fiber.dispose());
+ assert.equal(primaryDestination('connections'),'connections');
+ assert.equal(parentDestination('connections'),undefined);
+ const access=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'connections',onPage:()=>{}}))).window.document;
+ assert.equal(access.querySelector('button'),null,'the AI access component owns its detail/new-connection return without an unrelated source parent');
+ assert.equal(parentDestination('gmail'),'sources');
+ const source=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'gmail',onPage:()=>{}}))).window.document;
+ assert.equal(source.querySelector('button[aria-label="返回来源"]')?.textContent,'返回上级');
+});
+
 
 test('fixed Settings cards react to page disposal and restoration without invoking an unavailable destination',async t=>{
  configureLocale(()=> 'zh-CN');
