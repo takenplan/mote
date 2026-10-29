@@ -18,3 +18,5 @@
 .mcp-import-connector{max-width:740px}.mcp-import-connector .connector-check{padding:15px 0;margin:0;border-bottom:1px solid var(--mote-border)}.mcp-import-connector .connector-check>span{min-width:0}.mcp-import-connector .connector-check strong{font-size:13px;font-weight:500;display:block}.mcp-import-connector .connector-check small{font-size:10px;color:var(--mote-muted);display:block;overflow-wrap:anywhere;margin-top:4px}
 
 .mcp-import-connector>.mcp-resource-list{margin-top:23px;padding-top:0;border-top:1px solid var(--mote-border)}.mcp-import-connector>.mcp-resource-list>.button{margin-top:23px}
+
+.source-external-setup .source-connectors .final-source-connector fieldset{padding:0;margin:0;border:0;min-inline-size:0}
