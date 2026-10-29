@@ -106,3 +106,18 @@ it('keeps source time separate from the original and omits absent source separat
   expect(el('content-detail-source').textContent).not.toMatch(/^\s*·/);
   expect(el('content-detail-body').textContent).toBe(remote.text);
 });
+
+it('keeps recent content complete without changing the Content workspace filter',async()=>{
+  const local={...item,key:'queue:22222222-2222-4222-8222-222222222222',title:'Generated local note'};
+  vi.mocked(api.localContent).mockResolvedValue({items:[local],total:1});
+  (el('content-scope') as HTMLSelectElement).value='received';
+  await library.refresh();await flush();
+  expect(document.querySelectorAll('#content-feed .content-row')).toHaveLength(1);
+  expect(document.querySelectorAll('#home-recent .content-row')).toHaveLength(2);
+  expect((el('content-scope') as HTMLSelectElement).value).toBe('received');
+  let finish!:(value:CentralContentPage)=>void;
+  vi.mocked(api.centralContent).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  const pending=library.refreshHome();await flush();library.update({...status,authorizationGeneration:2,config:{...status.config,tokenConfigured:false}});
+  finish(page);await pending;await flush();
+  expect(document.querySelector('#home-recent [data-content-key^="capture:"]')).toBeNull();
+});
