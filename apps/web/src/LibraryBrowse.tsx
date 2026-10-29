@@ -106,7 +106,7 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
   </section>;
 }
 
-function LibraryMaterialRow({api,item,type,source,device,selected,onSelect,preview}:{api:Api;item:Material;type?:LibraryTypeDescriptor;source?:string;device?:string;selected:boolean;onSelect:(ref:string)=>void;preview?:{read:boolean;image:boolean}}){
+export function LibraryMaterialRow({api,item,type,source,device,selected,onSelect,preview}:{api:Api;item:Material;type?:LibraryTypeDescriptor;source?:string;device?:string;selected:boolean;onSelect:(ref:string)=>void;preview?:{read:boolean;image:boolean}}){
     const {image,clearImage,kindLabel,text}=useMaterialPreview(api,item,Boolean(preview?.read),Boolean(preview?.image));
     const value={kind:item.kind,schemaVersion:item.schemaVersion,representation:'owner-material',ref:item.ref,revision:item.revision,title:item.title,text:''};
     const at=item.origin.lastAt??item.origin.firstAt??item.updatedAt;

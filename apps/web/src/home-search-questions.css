@@ -24,3 +24,11 @@
 @media(pointer:coarse){.final-search .workspace-search input{font-size:16px}}
 .final-search .search-memory-section .section-head h2{font-size:13px;font-weight:500;color:var(--mote-muted)}
 .final-search .search-memory-section .library-record-copy strong{font-size:13px}
+.final-search .search-records{border-top:1px solid var(--mote-divider)}
+.final-search .search-memory-row{align-items:flex-start;gap:14px;padding:18px 0}
+.final-search .search-memory-symbol{font-size:20px;color:var(--mote-muted);width:24px;flex-shrink:0}
+.final-search .search-memory-title{display:flex;align-items:center;gap:10px}
+.final-search .search-memory-title strong{font-size:13px;line-height:1.7;font-weight:500;color:var(--mote-ink)}
+.final-search .search-memory-title .memory-status-badge{font-size:10px;background:var(--mote-tint);padding:1px 5px;border-radius:3px}
+.final-search .search-memory-row .library-record-copy>small{font-size:10px;line-height:1.7;color:var(--mote-muted)}
+.final-search .search-memory-row>svg{align-self:center}

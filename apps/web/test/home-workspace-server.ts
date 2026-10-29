@@ -58,7 +58,7 @@ for(const [index,title,text] of [[1,'评审议程.md','先检查用户能否找�
 }
 // Persist original notes through the same production owner API used by the UI.
 if(['library','home-search-questions'].includes(process.argv[3]))for(let index=1;index<(process.argv[3]==='home-search-questions'?32:29);index++){
- const response=await runtime.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:randomUUID(),deviceId:'generated-phone',deviceName:'本轮生成手机',platform:'android',capturedAt:when,text:'本轮生成记录 '+String(index+1).padStart(2,'0')+'：返回列表应保留筛选、页码、滚动和焦点。'}});
+ const response=await runtime.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:randomUUID(),deviceId:'generated-phone',deviceName:'本轮生成手机',platform:'android',capturedAt:when,text:(process.argv[3]==='home-search-questions'?'本轮生成资料记录 ':'本轮生成记录 ')+String(index+1).padStart(2,'0')+'：返回列表应保留筛选、页码、滚动和焦点。'}});
  if(response.statusCode!==201)throw Error(response.body);
 }
 const citations=[{id:noteId,appName:'本轮生成资料',capturedAt:when,excerpt:'先把资料阅读和提问之间的路径走通。'}];
