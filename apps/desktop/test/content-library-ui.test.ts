@@ -2,6 +2,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {JSDOM} from 'jsdom';
 import {readFileSync} from 'node:fs';
 import {createContentLibraryUi} from '../src/content-library-ui';
+import {createWorkbenchUi} from '../src/workbench-ui';
 import {centralContentPage,type CentralContentPage,type ContentDetail,type ContentItem} from '../src/content-library';
 import {defaultConfig} from '../src/config';
 import type {DesktopApi,Status} from '../src/contracts';
@@ -22,7 +23,9 @@ beforeEach(()=>{
   dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};
   page={items:[item],total:1};
   api={localContent:vi.fn(async()=>({items:[],total:0})),centralContent:vi.fn(async()=>page),centralContentDetail:vi.fn(async()=>remote),localContentDetail:vi.fn(async()=>({text:'GENERATED LOCAL BODY',metadata:'GENERATED LOCAL METADATA',sourceName:'Generated Mac'}))} as unknown as DesktopApi;
-  library=createContentLibraryUi(api);library.update(status);
+  const workbench=createWorkbenchUi({...api,ask:vi.fn(async()=>({items:[]}))},{question:()=>true,conversation:()=>{}});
+  workbench.update({...status,state:'stopped',running:false});
+  library=createContentLibraryUi(api,undefined,value=>workbench.setHasContent(value));library.update(status);
 });
 afterEach(()=>{library.close();dom.window.close();vi.unstubAllGlobals();});
 async function open(key=item.key){await flush();(document.querySelector(`[data-content-key="${key}"]`) as HTMLButtonElement).click();await flush();}
@@ -105,4 +108,35 @@ it('keeps source time separate from the original and omits absent source separat
   expect(document.querySelector('#content-feed .content-source-name')!.textContent).not.toBe('');
   expect(el('content-detail-source').textContent).not.toMatch(/^\s*·/);
   expect(el('content-detail-body').textContent).toBe(remote.text);
+});
+
+it('keeps recent content complete without changing the Content workspace filter',async()=>{
+  const local={...item,key:'queue:22222222-2222-4222-8222-222222222222',title:'Generated local note'};
+  vi.mocked(api.localContent).mockResolvedValue({items:[local],total:1});
+  (el('content-scope') as HTMLSelectElement).value='received';
+  await library.refresh();await flush();
+  expect(document.querySelectorAll('#content-feed .content-row')).toHaveLength(1);
+  expect(document.querySelectorAll('#home-recent .content-row')).toHaveLength(2);
+  expect((el('content-scope') as HTMLSelectElement).value).toBe('received');
+  let finish!:(value:CentralContentPage)=>void;
+  vi.mocked(api.centralContent).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  const pending=library.refreshHome();await flush();library.update({...status,authorizationGeneration:2,config:{...status.config,tokenConfigured:false}});
+  finish(page);await pending;await flush();
+  expect(document.querySelector('#home-recent [data-content-key^="capture:"]')).toBeNull();
+});
+
+it('does not turn a local read failure into an empty first-use screen and still clears revoked central rows',async()=>{
+  await flush();page={items:[],total:0};vi.mocked(api.localContent).mockRejectedValueOnce(Error('Generated local read failure'));
+  await library.refreshHome();
+  expect(el('home-recent').textContent).toContain('内容暂不可完整读取');
+  expect(el('home-recent').textContent).not.toContain('还没有本机内容');
+  expect(el('home-onboarding').hidden).toBe(true);
+  const local={...item,key:'queue:22222222-2222-4222-8222-222222222222'};
+  vi.mocked(api.localContent).mockResolvedValue({items:[local],total:1});page={items:[item],total:1};await library.refreshHome();
+  vi.mocked(api.localContent).mockRejectedValueOnce(Error('Generated later local read failure'));page={items:[],total:0,authorizationDenied:true};await library.refreshHome();
+  expect(el('home-recent').querySelector(`[data-content-key="${local.key}"]`)).not.toBeNull();
+  expect(el('home-recent').querySelector('[data-content-key^="capture:"]')).toBeNull();
+  expect(el('home-onboarding').hidden).toBe(true);
+  el('home-recent').querySelector<HTMLButtonElement>('button.text-button')!.click();await flush();
+  expect(el('home-recent').textContent).not.toContain('内容暂不可完整读取');
 });

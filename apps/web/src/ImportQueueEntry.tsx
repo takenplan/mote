@@ -22,7 +22,6 @@ function Controls({entry,queue,onEdit}:{entry:Entry;queue:ImportQueue;onEdit:(en
     {entry.state==='paused'&&<button className="text-button" onClick={()=>queue.retry(entry.id)}>{moteText('继续上传')}</button>}
     {entry.state==='failed'&&<button className="text-button" onClick={()=>queue.retry(entry.id)}>{moteText('重试提交')}</button>}
     {entry.failure?.recovery==='files'&&<button className="text-button" onClick={()=>onEdit(entry)}>{moteText('重新选择文件')}</button>}
-    {entry.failure?.recovery==='directory'&&<button className="text-button" onClick={()=>onEdit(entry)}>{moteText('修改目录')}</button>}
     {entry.state!=='creating'&&entry.state!=='submitted'&&<button className="text-button" onClick={()=>queue.discard(entry.id)}>{moteText('移出队列')}</button>}
   </div>;
 }

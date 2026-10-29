@@ -113,7 +113,7 @@ export const guideSections:GuideSection[] = [
         "id": "G04",
         "title": "导入文档、文件夹和媒体",
         "purpose": "把已有资料加入归档，核对解析预览，继续或恢复导入。",
-        "setting": "导入页选择文件或目录；所缺的模型、处理配置和确认会在详情提示。",
+        "setting": "导入页选择文件或文件夹；所缺的模型、处理配置和确认会在详情提示。",
         "links": [
           {
             "pageId": "imports",
@@ -225,33 +225,6 @@ export const guideSections:GuideSection[] = [
               "其他导入或证据仍引用的共享资料、原件会保留。"
             ],
             "condition": "只有已有中央导入记录才有此操作；进行中的接收会禁用删除。"
-          },
-          {
-            "id": "A01",
-            "priority": "advanced",
-            "title": "从中央机器的目录导入",
-            "purpose": "让中央节点复制其机器上可读取的目录内容进入归档。",
-            "actions": [
-              "填写中央机器可读取的路径",
-              "提交并复制到归档"
-            ],
-            "target": {
-              "pageId": "imports",
-              "href": "#/library/import",
-              "collectionId": null,
-              "categoryId": null,
-              "label": "导入",
-              "path": "资料库工具 → 导入 → 服务器目录",
-              "where": "切换到服务器目录方式，填写「中央服务器上的目录」。"
-            },
-            "otherTargets": [],
-            "setup": "目录必须存在于运行中央节点的机器，并允许中央进程读取。",
-            "setupTargets": [],
-            "caveats": [
-              "这是中央机器路径，不是浏览器电脑的路径。",
-              "一次提交导入不会开启自动文件夹同步。"
-            ],
-            "condition": null
           },
           {
             "id": "A02",

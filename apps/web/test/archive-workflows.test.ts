@@ -1,14 +1,16 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
+import React,{act} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {JSDOM,ResourceLoader} from 'jsdom';
+import {configureLocale} from '@mote/shared/i18n';
 import {InsightReport,reportDocument} from '../src/InsightReport.js';
 import {MemoryProgress,type MemoryJob} from '../src/MemoryProgress.js';
 import {SourceDocumentDetails} from '../src/SourceDocumentDetails.js';
 import {createApi,type Answer} from '../src/api.js';
 import designTokens from '../../../packages/shared/design-tokens.json';
 
+configureLocale(()=> 'zh-CN');
 const evidenceId='11111111-1111-4111-8111-111111111111';
 test('snapshot metadata describes central text retention and partial coverage without offering a legacy lightweight mode',()=>{
  const document={fileIndex:{version:1 as const,fileId:evidenceId,contentVersion:'generated',mode:'index' as const,coverage:'lightweight' as const,parser:'generated-central-processor',status:'ready' as const,totalCharacters:120000,offset:0,length:100000,allowRead:true}};
@@ -26,7 +28,36 @@ test('a generated report is isolated in a scriptless iframe while evidence contr
   assert.match(html,/<section class="report-evidence"/);
   assert.match(html,/<button[^>]+class="evidence-card"/);
   assert.match(html,/项目在等待一次合成评审/);
-  assert.match(html,/文字/);
+  assert.match(html,/aria-haspopup="menu" aria-expanded="false"/);
+  assert.match(html,/更多/);
+  assert.doesNotMatch(html,/role="menuitemradio"/);
+});
+
+test('report reading choices stay under More and switching preserves the answer, citations and keyboard focus',async t=>{
+  const dom=new JSDOM('<!doctype html><div id="root"></div><button id="outside">Outside</button>',{url:'http://localhost/',pretendToBeVisual:true});
+  const before=new Map<string,PropertyDescriptor|undefined>();
+  for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,Node:dom.window.Node,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){
+    before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});
+  }
+  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),d=dom.window.document,opened:string[]=[],stored=JSON.stringify(answer);
+  t.after(async()=>{await act(async()=>root.unmount());for(const [key,value] of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+  await act(async()=>root.render(React.createElement(InsightReport,{answer,onOpen:id=>opened.push(id)})));
+  const more=d.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
+  assert.ok(d.querySelector('.report-frame'));assert.equal(d.querySelector('[role="menu"]'),null);
+  await act(async()=>more.click());
+  let choices=d.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+  assert.deepEqual(Array.from(choices,item=>[item.textContent,item.getAttribute('aria-checked')]),[['排版结果','true'],['标准阅读','false']]);
+  assert.equal(d.activeElement,choices[0]);
+  await act(async()=>choices[0].dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true})));assert.equal(d.activeElement,choices[1]);
+  await act(async()=>choices[1].click());
+  assert.equal(d.querySelector('.report-frame'),null);assert.match(d.querySelector('.report-markdown')!.textContent!,/合成资料中的项目进展/);assert.equal(more.getAttribute('aria-expanded'),'false');assert.equal(d.activeElement,more);
+  await act(async()=>d.querySelector<HTMLButtonElement>('.evidence-card')!.click());assert.deepEqual(opened,['capture:'+evidenceId]);
+  await act(async()=>more.click());choices=d.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');assert.equal(d.activeElement,choices[1]);
+  await act(async()=>choices[1].dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Home',bubbles:true})));assert.equal(d.activeElement,choices[0]);
+  await act(async()=>choices[0].click());assert.ok(d.querySelector('.report-frame'));assert.equal(d.querySelector('.report-markdown'),null);
+  await act(async()=>more.click());await act(async()=>d.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));assert.equal(d.querySelector('[role="menu"]'),null);assert.equal(d.activeElement,more);
+  await act(async()=>more.click());await act(async()=>d.getElementById('outside')!.dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true})));assert.equal(d.querySelector('[role="menu"]'),null);
+  assert.equal(JSON.stringify(answer),stored,'display changes never rewrite the archived result');
 });
 
 test('report document places the restrictive resource policy before any generated content',()=>{

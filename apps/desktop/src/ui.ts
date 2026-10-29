@@ -1,6 +1,7 @@
 import {createMemoryTopicsUi} from './memory-topics-ui';
 import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
+import {createWorkbenchUi, type RecentConversation} from './workbench-ui';
 import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
 import {createWorkActivityUi} from './work-activity-ui';
@@ -40,7 +41,8 @@ let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
-const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open());
+const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation});
+const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasContent=>workbenchUi.setHasContent(hasContent));
 function refreshContent():Promise<void>{return libraryUi.refresh();}
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
@@ -50,7 +52,7 @@ window.addEventListener('beforeunload',()=>{workActivityUi.dispose();permissions
 let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
-function showPage(page: Page, focus = true, preserveSettingsDraft = false): boolean {
+function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true): boolean {
   if (page === 'notes' && !quickNote && desktopApi.openQuickNote) { void desktopApi.openQuickNote(); return false; }
   if (quickNote && page !== 'notes') return false;
   if (!navigation.navigate(page, () => preserveSettingsDraft || !settingsDirty || !settingsPages.has(currentPage) || window.confirm(moteText("有未保存的修改。离开并丢弃修改？")))) return false;
@@ -83,7 +85,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     button.classList.toggle('selected', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  const heading = (target: Page) => target === 'overview' ? moteText('首页') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
+  const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
   byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
   byId('workspace-back').hidden = !navigation.canGoBack;
@@ -93,12 +95,12 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   if (focus) document.querySelector<HTMLElement>(`[data-page="${page}"] [data-page-title]`)?.focus({ preventScroll: true });
   window.scrollTo({ top: pageScroll.get(page) || 0, behavior: 'instant' });
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
-  if (page === 'ask') void refreshAsk();
+  if (page === 'ask' && refreshAskOnEntry) void refreshAsk();
   if (page === 'permissions') permissionsUi.show();
   if (page === 'privacy') void appCaptureUi.refreshApplications();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records') { void loadRecords(); void refreshContent(); }
-  if (page === 'overview' && initialized) { void refreshContent(); void refreshSources(); }
+  if (page === 'overview' && initialized) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
   if (page === 'sources') void refreshSources();
   if (page === 'overview' && initialized) void desktopApi.status().then(render).catch(() => feedback(moteText("状态读取失败，请重试。")));
   return true;
@@ -111,7 +113,7 @@ byId('workspace-back').addEventListener('click', () => showPage(navigation.backT
 function updateNoteAction(): void {
   const action = byId('note-action');
   action.classList.add('secondary');
-  action.hidden = currentPage !== 'notes' && (navigation.section === 'settings' || settingsPages.has(currentPage));
+  action.hidden = quickNote;
 }
 const addDialog=byId<HTMLDialogElement>('add-dialog');
 let addOrigin:HTMLElement|undefined;
@@ -357,7 +359,7 @@ byId('capture-directory-open').addEventListener('click', () => void perform(() =
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
 function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
   // Completed work belongs to the page where it began; active work and failures remain global.
-  const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
+  const operations=jobs.filter(job=>job.state!=='completed'||currentPage!=='overview'&&job.startedAt>=pageEnteredAt);
   byId('background-progress').hidden = !operations.length;
   byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
 }
@@ -367,7 +369,7 @@ function render(status: import('./contracts').Status): void {
     recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
-  currentStatus = status; renderStorage();appCaptureUi.setStatus(status);
+  currentStatus = status; renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -375,7 +377,6 @@ function render(status: import('./contracts').Status): void {
   byId('environment').textContent = status.environment ? moteText("环境：{0}{1} · {2}", status.environment.profile, status.environment.defaultProfile ? moteText("（原日常目录）") : moteText(" · 独立数据"), status.environment.dataDirectory) : '';
   const names = { stopped: moteText("采集已停止"), capturing: moteText("正在采集"), paused: moteText("采集已暂停"), permission_required: moteText("需要屏幕录制权限"), error: moteText("采集已停止 · 需要处理") };
   setText('state', names[status.state]);
-  setText('sidebar-state', names[status.state]);
   const hasCentralConnection = Boolean(status.config.serverUrl && status.config.tokenConfigured);
   const centralState = !hasCentralConnection ? 'unconfigured' : status.sync.state === 'uploading' ? 'syncing' : status.sync.state === 'error' ? 'error' : 'connected';
   const centralTitle = !hasCentralConnection
@@ -395,9 +396,8 @@ function render(status: import('./contracts').Status): void {
   const firstCollection = needsCollectionSetup({ reviewed: setupReviewed, running: status.running, hasCapture: Boolean(status.lastCaptureAt), queuedRecords: status.queueDepth, recoveryRequired: status.state === 'error' || Boolean(status.storage?.recoveryRequired) });
   byId('setup-prompt').hidden = !firstCollection;
   byId('collection-workbench').hidden = firstCollection;
-  setText('home-screen-state',status.running ? moteText('采集中') : moteText('已停止'));
-  setText('home-central-state',centralTitle);
-  setText('home-sync-line',status.config.syncPaused?moteText('暂停全部发送'):moteText('待上传 {0} 条',status.sync.pendingRecords));
+  setText('sidebar-device',status.config.deviceName||moteText('这台 Mac'));
+  setText('sidebar-state',centralTitle);
   setText('pause-sending',status.config.syncPaused?moteText('恢复全部发送'):moteText('暂停全部发送'));
   byId<HTMLButtonElement>('retry').disabled=busy||Boolean(status.config.syncPaused);
   updateNoteAction();
@@ -718,11 +718,8 @@ async function refreshSources(): Promise<void> {
   try {
   const rows = await desktopApi.sources(); localSourceRows = rows;
   const list = byId('source-list'); list.replaceChildren();byId('source-attention').replaceChildren();
-  const home=byId('home-sources');home.replaceChildren();
-  if(!rows.length){const empty=document.createElement('p');empty.className='helper';empty.textContent=moteText('同步文件夹后，它会出现在这里。也可以连接日历与编码对话。');home.append(empty);}
-  for(const row of rows.filter(row=>row.source.syncContinuously!==false).sort((a,b)=>Number(Boolean(b.blocked))-Number(Boolean(a.blocked))).slice(0,4)){const button=document.createElement('button');button.type='button';button.className='home-source';const title=document.createElement('strong');title.textContent=row.source.name;const state=document.createElement('span');state.textContent=row.blocked?moteText('本机待处理 {0} 项',row.blocked):row.source.enabled?row.message:moteText('本机已暂停');button.append(title,state);button.addEventListener('click',()=>{if(showPage('sources'))editSource(row.source.id);});home.append(button);}
   const ongoing = rows.filter(row => row.source.syncContinuously !== false);
-  byId('home-onboarding').hidden = ongoing.length > 0 || Boolean(currentStatus?.lastCaptureAt) || Boolean(currentStatus?.running);
+  workbenchUi.setHasSource(ongoing.length>0);
   if (!ongoing.length) { const p = document.createElement('p'); p.className = 'helper'; p.textContent = moteText("尚未连接本地来源。选择只包含你希望归档资料的目录。"); list.append(p); }
   const groups = [
     { title: '需要处理', rows: ongoing.filter(row=>Boolean(row.blocked)) },
@@ -1126,6 +1123,26 @@ let askScopeUnavailable = false;
 let askBusy = false, askGeneration = 0, askCursor: string | undefined;
 let askPendingInput: {id: string; question: string; conversationId?: string} | undefined;
 let askTimer: ReturnType<typeof setTimeout> | undefined;
+function mayReplaceAskDraft(next:string):boolean {
+  const draft=readInput('ask-question');
+  return !draft.trim()||draft===next||window.confirm(moteText('还有未发送的问题。舍弃原输入并新建对话？'));
+}
+function openWorkbenchQuestion(question:string):boolean {
+  if(askBusy||askRun?.status==='running'||!mayReplaceAskDraft(question))return false;
+  if(!showPage('ask',true,false,false))return false;
+  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;
+  byId<HTMLTextAreaElement>('ask-question').value=question;renderAsk();void refreshAsk();
+  byId('ask-question').focus();return true;
+}
+function openWorkbenchConversation(id:string):void {
+  if(askBusy||askRun?.status==='running')return;
+  const switching=askConversation?.id!==id;
+  if(switching&&!mayReplaceAskDraft(''))return;
+  if(!showPage('ask',true,false,false))return;
+  if(switching)byId<HTMLTextAreaElement>('ask-question').value='';
+  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;
+  renderAsk();void askAction(()=>loadAskConversation(id));
+}
 const askCall = async <T>(command: import('./ask').AskCommand, input?: Parameters<typeof desktopApi.ask>[1]): Promise<T> => {
   const generation = askGeneration;
   try { return await desktopApi.ask(command, input) as T; }
@@ -1136,6 +1153,7 @@ const askCall = async <T>(command: import('./ask').AskCommand, input?: Parameter
 };
 function askControls(): void {
   const running = askRun?.status === 'running';
+  workbenchUi.setBusy(askBusy||Boolean(running));
   byId<HTMLButtonElement>('ask-send').disabled = askBusy || running;
   byId<HTMLButtonElement>('ask-new').disabled = askBusy || running;
   byId<HTMLButtonElement>('ask-login').disabled = askBusy;
@@ -1182,8 +1200,9 @@ async function olderAskTurns(): Promise<void> {
 }
 async function askHistory(append = false): Promise<void> {
   const generation = askGeneration;
-  const page = await askCall<{items: {id: string; title: string}[]; nextCursor?: string}>('history', append && askCursor ? {cursor: askCursor} : undefined);
+  const page = await askCall<{items: RecentConversation[]; nextCursor?: string}>('history', append && askCursor ? {cursor: askCursor} : undefined);
   if (generation !== askGeneration) return;
+  if(!append)workbenchUi.setHistory(page.items);
   const history = byId('ask-history'); if (!append) history.replaceChildren();
   for (const item of page.items) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary'; button.textContent = item.title;
