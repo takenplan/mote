@@ -32,7 +32,7 @@ export class Actions {
   readonly engine:ExecutionEngine;private owned:boolean;private unregister:()=>Promise<void>;private closing?:Promise<void>;
   private runtimeSettings:ActionsRuntimeSettings;
   private settingsTail:Promise<void>=Promise.resolve();
-  constructor(readonly store:Store,private files:FileStore,private query:(input:QueryInput)=>Promise<QueryResult>,private configured:()=>boolean,private options:{executor?:ExecutionEngine;semanticArtifacts?:(ids:string[],operationId?:string)=>Promise<string[]>;configService?:ConfigService}={}){
+  constructor(readonly store:Store,private files:FileStore,private query:(input:QueryInput)=>Promise<QueryResult>,private configured:()=>boolean,private options:{executor?:ExecutionEngine;semanticArtifacts?:(ids:string[],operationId?:string,mode?:'lifecycle')=>Promise<string[]>;configService?:ConfigService}={}){
     this.runtimeSettings=actionsRuntimeSettingsSchema.parse(options.configService?.current('actions')??{});
     store.db.exec(`CREATE TABLE IF NOT EXISTS action_meta(key TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS action_proposals(id TEXT PRIMARY KEY,json TEXT NOT NULL);
@@ -257,7 +257,7 @@ export class Actions {
     for(const job of jobs){
       const row=this.options.semanticArtifacts?this.store.db.prepare("SELECT a.id FROM context_artifacts a JOIN artifact_inputs i ON i.artifact_id=a.id WHERE i.observation_id=? AND a.kind='segment' AND json_extract(a.json,'$.metadata.complete')=1 LIMIT 1").get(job.id):undefined;
       if(!row){ranges.push({id:job.id,offset:job.offset,length:job.length});continue;}
-      const ids=await this.options.semanticArtifacts!([String(row.id)],operationId),artifact=ids.map(id=>this.store.archive.get(id)).find(a=>a?.kind==='semantic'&&a.metadata.productsVersion===1);
+      const ids=await this.options.semanticArtifacts!([String(row.id)],operationId,'lifecycle'),artifact=ids.map(id=>this.store.archive.get(id)).find(a=>a?.kind==='semantic'&&a.metadata.productsVersion===1);
       if(!artifact)throw new StoreError('Unified semantic input is not ready',409);
       if(refs.some(r=>r.id===artifact.id)||this.store.db.prepare('SELECT 1 FROM action_semantic_checkpoints WHERE artifact_id=? AND revision=?').get(artifact.id,artifact.revision))continue;
       refs.push({id:artifact.id,revision:artifact.revision});
