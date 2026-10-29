@@ -19,6 +19,8 @@ import android.view.inspector.WindowInspector
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -60,10 +62,10 @@ class FinalSelectedRiskInstrumentedTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("nativeFinalSelectedRisk")=="true")
         require(context.packageName=="dev.mote.collector.dev"&&Build.FINGERPRINT.contains("emu64a"))
         val settings=Settings(context);val before=settings.read();val device=settings.deviceId;require(!settings.enabled&&!CaptureAccessibilityService.connected&&!ProjectionService.running&&before.syncMode=="manual"&&before.syncPaused)
-        val language=MoteI18n.preference();val appearance=MoteAppearance.preference();val ids=context.queue().dedupeIds().toSet();val originals=ids.associateWith{context.queue().capture(it)!!.toString()}
+        val preferenceStore=context.getSharedPreferences("mote",0);val originalPreferenceValues=preferenceStore.all.toMap();val language=MoteI18n.preference();val appearance=MoteAppearance.preference();val ids=context.queue().dedupeIds().toSet();val originals=ids.associateWith{context.queue().capture(it)!!.toString()}
         val privateFiles=listOf(File(context.filesDir,"final-central-journey.json"),File(context.filesDir,"final-calendar-journey.json"),File(context.noBackupFilesDir,"final-calendar-journey-state.json"));val privateBytes=privateFiles.associateWith{if(it.exists())it.readBytes()else null}
         try{MoteI18n.select(context,"zh-CN");main{MoteAppearance.select(context,AppearancePreference.LIGHT)};until("Idle existing configuration"){!ConnectionGuard.changing()&&!QueueStorage.recovering};block()}
-        finally{CentralDraftWrites.barrier{};until("Test operation released configuration"){!ConnectionGuard.changing()};settings.save(before,confirmCentralEndpoint=true);CentralSession.get(context).select(before.server);MoteI18n.select(context,language);main{MoteAppearance.select(context,appearance)};assertEquals(before,settings.read());assertEquals(device,settings.deviceId);assertFalse(settings.enabled);assertEquals(ids,context.queue().dedupeIds().toSet());originals.forEach{(id,value)->assertEquals("Existing original unchanged",value,context.queue().capture(id)!!.toString())};privateBytes.forEach{(file,value)->if(value==null)assertFalse(file.exists())else assertArrayEquals(value,file.readBytes())}}
+        finally{CentralDraftWrites.barrier{};until("Test operation released configuration"){!ConnectionGuard.changing()};settings.save(before,confirmCentralEndpoint=true);restorePreferences(preferenceStore,originalPreferenceValues);CentralSession.get(context).select(before.server);MoteI18n.select(context,language);main{MoteAppearance.select(context,appearance)};assertEquals(before,settings.read());assertEquals(device,settings.deviceId);assertFalse(settings.enabled);assertEquals(ids,context.queue().dedupeIds().toSet());originals.forEach{(id,value)->assertEquals("Existing original unchanged",value,context.queue().capture(id)!!.toString())};privateBytes.forEach{(file,value)->if(value==null)assertFalse(file.exists())else assertArrayEquals(value,file.readBytes())}}
     }
     @Test fun expiredInvitationAndActualTransportFailureRetainInputAndReviewName()=fixture{
         val before=Settings(context).read();val pending=File(context.noBackupFilesDir,"connection-pending.enc");require(!pending.exists())
@@ -317,14 +319,82 @@ class FinalSelectedRiskInstrumentedTest {
             val after=queueDirectory.listFiles().orEmpty().filter{it.extension in setOf("event","blob")}.associate{it.name to it.readBytes()};assertEquals(queueOriginals.keys,after.keys);queueOriginals.forEach{(name,bytes)->assertArrayEquals(bytes,after[name])}
         }
     }
+
+    private fun restorePreferences(prefs:android.content.SharedPreferences,values:Map<String,*>) {val edit=prefs.edit().clear();values.forEach{(key,value)->when(value){is String->edit.putString(key,value);is Boolean->edit.putBoolean(key,value);is Int->edit.putInt(key,value);is Long->edit.putLong(key,value);is Float->edit.putFloat(key,value);is Set<*>->edit.putStringSet(key,value.filterIsInstance<String>().toSet());else->error("Unsupported preference")}};check(edit.commit());assertEquals(values,prefs.all)}
+    private fun clickRow(label:String){until("Native row $label"){main{shown().filterIsInstance<TextView>().any{it.text.toString()==label}}};main{var row:View=shown().filterIsInstance<TextView>().first{it.text.toString()==label};while(!row.isClickable&&row.parent is View)row=row.parent as View;assertTrue(row.isClickable);row.performClick()}}
+    private fun centralIdle()=main{ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).filterIsInstance<CentralActivity>().singleOrNull()?.let{!it.isWorking}==true}
+    private fun backActivity(){main{ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single{it.packageName==context.packageName}.onBackPressed()};instrumentation.waitForIdleSync()}
+    private fun withFinalOwner(block:(CentralClient)->Unit){
+        val settings=Settings(context);val before=settings.read();val prefs=context.getSharedPreferences("mote",0);val values=prefs.all.toMap();val cfg=JSONObject(File(context.filesDir,"final-calendar-journey.json").readText());require(cfg.getBoolean("generatedOnly")&&cfg.getString("origin")==before.server);val owner=cfg.getString("ownerToken")
+        val ask=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(before.server)+"/ask.enc");CentralDraftWrites.barrier{};val askBytes=if(ask.exists())ask.readBytes()else null;var temporary:String?=null
+        try{
+            settings.signOut();ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask")).use{
+                until("Normal owner login"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="中央管理令牌"}}};main{shown().filterIsInstance<EditText>().single{it.contentDescription=="中央管理令牌"}.setText(owner)};click("登录并继续");until("Normal short owner session"){settings.read().connectionToken().let{it.isNotBlank()&&it!=owner&&it!=before.connectionToken()}};temporary=settings.read().connectionToken();until("Actual owner composer"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.isEnabled}}}
+            };val api=CentralAccess.requireClient(context);assertEquals("owner",api.get("/api/connections/self").getJSONObject("credential").getString("scope"));block(api)
+        }finally{
+            var revoked=temporary==null;temporary?.let{token->revoked=runCatching{val client=CentralClient(before.server,token);client.post("/api/login/logout",JSONObject());val error=runCatching{client.get("/api/connections/self")}.exceptionOrNull();error is CentralFailure&&error.status==401}.getOrDefault(false)}
+            CentralDraftWrites.barrier{if(askBytes==null)ask.delete()else ask.writeBytes(askBytes)};restorePreferences(prefs,values);CentralSession.get(context).select(before.server);assertEquals(before,settings.read());assertEquals("collector",CentralAccess.requireClient(context).get("/api/connections/self").getJSONObject("credential").getString("scope"));assertTrue("Only this short owner session revoked",revoked)
+        }
+    }
+    @Test fun finalHomeOfflineDraftAttentionAndDarkHistoricalPagingUseControlledReadOnlyHttp()=fixture{
+        val draftStore=context.recordDraftStore();require(!draftStore.hasPrepared());val old=draftStore.draft();val settings=Settings(context)
+        HttpFixture().use{http->ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated final navigation",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            try{
+                draftStore.edit("Generated final home offline draft",old.getJSONArray("attachments"),JSONObject().put("kind","manual"),"Generated retained home context");http.failReads=true;main{MoteAppearance.select(context,AppearancePreference.DARK)}
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use{scenario->
+                    until("Actual failed history keeps local record action"){has("对话暂不可读取，请稍后重试。")&&main{shown().any{it.tag=="home-record-action"}}};assertTrue(main{shown().any{it.contentDescription=="继续草稿"||it is TextView&&it.text.toString().contains("继续草稿")}});assertFalse(main{shown().any{it.tag?.toString()?.startsWith("home-discovery:")==true}});picture("final-home-dark-offline-draft")
+                    settings.status("permission_required","Generated controlled permission interruption");until("Actionable capture issue is visible without starting capture"){main{shown().any{it.tag=="home-attention"}}};main{shown().single{it.tag=="home-attention"}.performClick()};until("Actual recovery scope page"){main{shown().any{it.tag=="local-back:PRIVACY"}}};scenario.onActivity{it.onBackPressed()};assertEquals("Generated final home offline draft",draftStore.draft().getString("text"));picture("final-home-dark-actionable-return")
+                }
+                http.failReads=false;http.pagedHistory=true
+                val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());store.write(JSONObject().put("conversationId",http.conversation).put("question","Generated dark historical later draft"))
+                try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
+                    until("Actual first controlled dark history page"){has("Generated history answer 29")&&has("加载更早的对话")};assertEquals(20,main{shown().filterIsInstance<TextView>().count{it.text.toString().startsWith("Generated history answer ")}});picture("final-dark-history-latest-page");click("加载更早的对话");until("All nine older controlled turns replace the first 20-turn page"){main{shown().filterIsInstance<TextView>().count{it.text.toString().startsWith("Generated history answer ")}==9}};assertTrue(has("Generated history answer 1"));assertTrue(has("这是历史版本，当前资料已更新。"));picture("final-dark-history-older-page")
+                    scenario.recreate();until("Same controlled history and later draft after recreation"){has("Generated history answer 29")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()=="Generated dark historical later draft"}}};picture("final-dark-history-recreated");assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());assertTrue(http.olderReads.get()>0)
+                }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
+            }finally{draftStore.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"))}
+        }
+    }
+    @Test fun finalHomeMenuSourceArchiveAndRegisteredCentralConsumersReturnWithoutWrites()=fixture{withFinalOwner{api->
+        val draft=context.recordDraftStore();require(!draft.hasPrepared());val old=draft.draft();val local=LocalSource(name="Generated final source return",kind="local-calendar",calendarId=1,enabled=false,description="Generated local-only source return draft");val sources=context.localSources();require(sources.sources().isEmpty());sources.save(local)
+        try{
+            draft.edit("Generated menu retained local draft",old.getJSONArray("attachments"),JSONObject().put("kind","manual"),old.optString("description"))
+            val reports=api.get("/api/insights?limit=30").getJSONArray("items");val finding=requireNotNull(InsightPresentation.featured(reports));val reportId=InsightPresentation.id(finding)!!
+            ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use{scenario->
+                until("Actual existing archived report card on home"){main{shown().any{it.tag=="home-discovery:$reportId"}}};picture("final-home-light-existing-result");main{shown().single{it.tag=="home-discovery:$reportId"}.performClick()};until("Exact existing report opened without generation"){main{shown().any{it.tag=="insight-content"}}&&has(InsightPresentation.title(finding))};picture("final-home-exact-result")
+                backActivity();until("Report returns through its existing history"){centralIdle()&&has("发现历史")};backActivity();until("Exact home restored"){main{shown().any{it.tag=="home-record-action"}}}
+                for(label in listOf("资料与记忆","发现历史","日程与待办","采集与同步","设置","中央工作台")){
+                    click("打开菜单");until("Registered light menu"){main{shown().any{it.tag=="menu:$label"}}};if(label=="资料与记忆")picture("final-light-secondary-menu");main{shown().single{it.tag=="menu:$label"}.performClick()}
+                    until("Selected secondary destination $label"){!main{shown().any{it.tag=="home-record-action"}||shown().any{it.tag=="menu:中央工作台"}}};picture("final-menu-"+label)
+                    repeat(4){if(!main{shown().any{it.tag=="home-record-action"}})backActivity()};until("Menu destination returns to same home"){main{shown().any{it.tag=="home-record-action"}}};assertEquals("Generated menu retained local draft",draft.draft().getString("text"))
+                }
+                val visited=JSONArray()
+                for(group in MoteNavigation.groups)for(page in group.pages){
+                    click("打开菜单");main{shown().single{it.tag=="menu:中央工作台"}.performClick()};until("Actual Central overview idle"){centralIdle()&&main{shown().filterIsInstance<TextView>().any{it.tag=="central-title"}}};click("更多");chooseNativeListItem(group.titleKey);chooseNativeListItem(CentralScreens.pages.single{it.first==page}.second)
+                    until("Registered current consumer $page has real readable page or error"){centralIdle()&&main{val title=shown().filterIsInstance<TextView>().firstOrNull{it.tag=="central-title"};val container=shown().filterIsInstance<ViewGroup>().firstOrNull{it.tag=="central-body"};title!=null&&container!=null&&container.childCount>0&&!(shown().filterIsInstance<TextView>().any{it.text.toString().startsWith("正在读取")})}}
+                    val details=main{JSONObject().put("route",page).put("header",shown().filterIsInstance<TextView>().first{it.tag=="central-title"}.text.toString()).put("visibleTextCount",shown().filterIsInstance<TextView>().count())};visited.put(details);picture("final-consumer-$page")
+                    repeat(6){if(!main{shown().any{it.tag=="home-record-action"}})backActivity()};until("Consumer $page returns exact home"){main{shown().any{it.tag=="home-record-action"}}};assertEquals("Generated menu retained local draft",draft.draft().getString("text"))
+                }
+                File(context.filesDir,"final-selected-risk/final-native-menu-consumers.json").writeText(JSONObject().put("visited",visited).put("existingReportId",reportId).put("queryOrSaveActions",0).toString())
+            }
+            ActivityScenario.launch<SourcesActivity>(Intent(context,SourcesActivity::class.java).putExtra("detailSourceId",local.id)).use{
+                until("Actual same local source detail"){has(local.name)&&has("中央资料库")};picture("final-source-before-central");clickRow("中央资料库");val catalog=api.get("/api/library/catalog?limit=24").getJSONArray("items");require(catalog.length()>0);until("Actual generic same-origin Central archive"){has(catalog.getJSONObject(0).getString("title"))&&has("全部资料")};picture("final-source-central-generic-archive");backActivity();until("Return same local source identity and description"){has(local.name)&&main{shown().any{it.tag=="source-primary-status"}}};assertEquals(local,sources.sources().single());picture("final-source-return-same-local-detail")
+            }
+        }finally{sources.remove(local.id);draft.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"))}
+    }}
     private class HttpFixture:AutoCloseable{
-        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
+        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();val olderReads=AtomicInteger();@Volatile var failReads=false;@Volatile var pagedHistory=false;private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
         init{threads.submit{while(!server.isClosed)runCatching{server.accept()}.getOrNull()?.let{socket->threads.submit{socket.use{
             val input=it.getInputStream().bufferedReader();val first=input.readLine().orEmpty();val path=first.split(' ').getOrElse(1){""};val headers=mutableListOf<String>();while(true){val h=input.readLine();if(h.isNullOrEmpty())break;headers.add(h)};val size=headers.firstOrNull{h->h.startsWith("Content-Length:",true)}?.substringAfter(':')?.trim()?.toInt()?:0;val body=CharArray(size);var n=0;while(n<size){val x=input.read(body,n,size-n);if(x<0)break;n+=x}
             if(path=="/generated-install-help"){helpReads.incrementAndGet();val bytes="<!doctype html><title>Generated Mote help</title><h1>Generated Mote installation help boundary</h1><p>Generated local documentation only. No sign in or installation.</p>".toByteArray();it.getOutputStream().apply{write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray());write(bytes);flush()};return@use}
             if(first.startsWith("POST ")&&path=="/api/captures")capturePosts.incrementAndGet()
             if(path=="/api/connections/redeem"){redeems.incrementAndGet();return@use}
             var status="200 OK";val response=when{
+                failReads&&first.startsWith("GET ")->{status="503 Service Unavailable";JSONObject().put("error","config_unavailable")}
+                pagedHistory&&path.startsWith("/api/conversations/$conversation")-> {
+                    val older=path.contains("cursor=");if(older)olderReads.incrementAndGet()
+                    val numbers=if(older)1..9 else 10..29
+                    JSONObject().put("id",conversation).put("scope",JSONObject()).put("turns",JSONArray(numbers.map{n->JSONObject().put("id",UUID.nameUUIDFromBytes((conversation+":"+n).toByteArray()).toString()).put("status","completed").put("question","Generated history question $n").put("evidenceStale",true).put("result",JSONObject().put("answer","Generated history answer $n").put("citations",JSONArray()))})).put("nextCursor",if(older)JSONObject.NULL else "generated-earlier-page")
+                }
                 first.startsWith("DELETE ")&&path=="/api/conversations/$conversation"->{deletes.incrementAndGet();status="503 Service Unavailable";JSONObject().put("error","generated_delete_unavailable")}
                 first.startsWith("POST ")&&path.startsWith("/api/query-runs")->{queryPosts.incrementAndGet();status="503 Service Unavailable";JSONObject().put("error","query_not_allowed")}
                 path.startsWith("/api/conversations/$conversation")->JSONObject().put("id",conversation).put("scope",JSONObject()).put("turns",JSONArray().put(JSONObject().put("id",UUID.randomUUID().toString()).put("status","completed").put("question","Generated isolated history").put("result",JSONObject().put("answer","Generated controlled existing answer").put("citations",JSONArray()))))
