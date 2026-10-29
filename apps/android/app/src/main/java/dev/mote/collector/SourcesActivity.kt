@@ -142,8 +142,8 @@ class SourcesActivity : MoteActivity() {
         SecondaryUi.action(list, MoteI18n.text("编辑设置")) { edit(source) }.tag = "source-edit"
         SecondaryUi.action(list, MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源")) {
             work(MoteI18n.text("正在保存来源设置…")) {
-                val latest = localSources().sources().firstOrNull { it.id == source.id } ?: error(MoteI18n.text("所选文件不可用"))
-                localSources().save(latest.copy(enabled = !latest.enabled)); SourceWork.schedule(applicationContext, true)
+                check(localSources().setEnabled(source.id, !source.enabled)) { MoteI18n.text("所选文件不可用") }
+                SourceWork.schedule(applicationContext, true)
             }
         }.tag = "source-toggle"
         val context = SecondaryUi.column(list, card = true)

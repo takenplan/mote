@@ -21,6 +21,7 @@ class BackupActivity : MoteActivity() {
     private var exportOrigin: String? = null
     private var exportGeneration = -1L
     private var configTab = false
+    private var pendingPicker = 0
     private lateinit var inventory: TextView
     private var localStateJob: kotlinx.coroutines.Job? = null
     override fun onCreate(state: Bundle?) {
@@ -28,6 +29,7 @@ class BackupActivity : MoteActivity() {
         includeToken = state?.getBoolean("includeToken") ?: false
         exportOrigin = state?.getString("exportOrigin"); exportGeneration = state?.getLong("exportGeneration") ?: -1L
         configTab = state?.getBoolean("configTab") ?: false
+        pendingPicker = state?.getInt("pendingPicker") ?: 0
         val body = moteDetailPage(title = MoteI18n.text("备份与恢复"))
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
         val recordsTab = Button(this).apply { text = MoteI18n.text("本机记录"); tag = "backup-records-tab" }
@@ -73,18 +75,28 @@ class BackupActivity : MoteActivity() {
     }
     override fun onPause() { localStateJob?.cancel(); localStateJob = null; super.onPause() }
     private fun create(code: Int, mime: String, name: String) {
+        if (!canChooseFile()) return
         if (code in setOf(15, 16)) {
             task.start(MoteI18n.text("正在读取…"), { status.text = it }, { CentralAccess.requireClient(this).server to CentralSession.get(this).generation }) { result ->
                 result.onSuccess { (origin, generation) -> exportOrigin = origin; exportGeneration = generation
-                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name), code)
+                    launchPicker(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name), code)
                 }.onFailure { status.text = it.message }
             }
-        } else startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name), code)
+        } else launchPicker(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name), code)
     }
-    private fun open(code: Int, mime: String) = startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime), code)
+    private fun canChooseFile() = !closed && !restoring && !task.busy && pendingPicker == 0 && prepared == null
+    private fun launchPicker(intent: Intent, code: Int) {
+        if (!canChooseFile()) return
+        pendingPicker = code
+        try { startActivityForResult(intent, code) } catch (error: Exception) { pendingPicker = 0; status.text = error.message }
+    }
+    private fun open(code: Int, mime: String) = launchPicker(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime), code)
     @Deprecated("Native document picker")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode !in 10..16 || requestCode != pendingPicker) return
+        pendingPicker = 0
+        if (closed || restoring || task.busy || prepared != null) return
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         when (requestCode) {
@@ -151,5 +163,5 @@ class BackupActivity : MoteActivity() {
         }
     }
     override fun onDestroy() { closed = true; if (!restoring) prepared?.let { java.util.concurrent.Executors.newSingleThreadExecutor().apply { execute { it.close() }; shutdown() } }; super.onDestroy() }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("configTab", configTab); outState.putBoolean("includeToken", includeToken); outState.putString("exportOrigin", exportOrigin); outState.putLong("exportGeneration", exportGeneration); super.onSaveInstanceState(outState) }
+    override fun onSaveInstanceState(outState: Bundle) { outState.putInt("pendingPicker", pendingPicker); outState.putBoolean("configTab", configTab); outState.putBoolean("includeToken", includeToken); outState.putString("exportOrigin", exportOrigin); outState.putLong("exportGeneration", exportGeneration); super.onSaveInstanceState(outState) }
 }

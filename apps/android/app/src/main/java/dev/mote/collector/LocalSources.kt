@@ -154,6 +154,12 @@ class LocalSourceStore(private val directory: File, private val cipher: ByteCiph
         all.removeAll { it.id == source.id }; all.add(source)
         write(File(directory, "config.enc"), JSONObject().put("sources", JSONArray(all.map { it.json() })))
     }
+    /** Apply the action shown to the owner; a stale Pause button must never resume a source. */
+    fun setEnabled(id: String, enabled: Boolean): Boolean = synchronized(lock) {
+        val current = sources().find { it.id == id } ?: return@synchronized false
+        if (current.enabled != enabled) save(current.copy(enabled = enabled))
+        true
+    }
     /** Context ACKs only update metadata. A concurrent edit remains pending and never loses its draft. */
     fun confirmContext(expected: LocalSource, target: String, snapshot: SourceContextSnapshot): LocalSource? = synchronized(lock) {
         if (sources().find { it.id == expected.id } != expected) return@synchronized null

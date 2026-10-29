@@ -49,12 +49,23 @@ class SecondaryScreensInstrumentedTest {
         until(text) { main { visible().any { it is Button && it.text.toString() == text && it.isEnabled } } }
         main { (visible().single { it is Button && it.text.toString() == text && it.isEnabled }).performClick() }
     }
+    private fun clickDialogPositive() {
+        until("dialog positive") { main { visible().any { it.id == android.R.id.button1 && it.isEnabled } } }
+        main { visible().single { it.id == android.R.id.button1 && it.isEnabled }.performClick() }
+    }
     private fun fixture(block: () -> Unit) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("secondaryUiFixture") == "true")
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a"))
         val settings = Settings(context); val previous = settings.read(); val language = MoteI18n.preference()
         require(!settings.enabled && !ProjectionService.running && !CaptureAccessibilityService.connected)
         require(context.queue().inventory().pending == 0)
+        // Optional recovery of the exact generated fixture left by an interrupted source test.
+        InstrumentationRegistry.getArguments().getString("secondaryCleanupSourceId")?.let { id ->
+            context.localSources().sources().firstOrNull { it.id == id }?.let { source ->
+                require(source.name == "Generated original settings" && source.uri == "content://generated/task-file.txt" && !source.enabled)
+                context.localSources().remove(id); context.fileArchives().remove(id)
+            }
+        }
         val originalSources = context.localSources().sources().map { it.id }.toSet()
         try {
             MoteI18n.select(context, "zh-CN")
@@ -117,7 +128,7 @@ class SecondaryScreensInstrumentedTest {
             clickText(MoteI18n.text("取消"))
             assertTrue(context.localSources().sources().any { it.id == source.id })
             scenario.onActivity { screenshot(it, "calendar-source-detail") }
-            clickTag("source-remove"); clickText(MoteI18n.text("移除连接"))
+            clickTag("source-remove"); clickDialogPositive()
             until("source removed") { context.localSources().sources().none { it.id == source.id } }
         }
         assertEquals(permission, context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR))
@@ -152,6 +163,42 @@ class SecondaryScreensInstrumentedTest {
             }
         } finally { UploadHistoryRetention.save(context, retention) }
         assertEquals(before, context.queue().inventory())
+    }
+
+    @Test fun stalePauseButtonKeepsSourcePausedAfterBackgroundChange() = fixture {
+        val source = LocalSource(name = "Generated stale pause", kind = "local-calendar", calendarId = 991992, enabled = true)
+        context.localSources().save(source)
+        ActivityScenario.launch<SourcesActivity>(Intent(context, SourcesActivity::class.java).putExtra("detailSourceId", source.id)).use {
+            until("pause button") { main { visible().any { it.tag == "source-toggle" } } }
+            main {
+                val pause = visible().single { it.tag == "source-toggle" } as Button
+                assertEquals(MoteI18n.text("暂停这个来源"), pause.text.toString())
+                context.localSources().setEnabled(source.id, false)
+                pause.performClick()
+            }
+            until("pause completed") { main { visible().filterIsInstance<TextView>().any { it.text.toString().contains(MoteI18n.text("操作已完成；同步进度会自动刷新")) } } }
+            assertFalse(context.localSources().sources().single { it.id == source.id }.enabled)
+        }
+    }
+
+    @Test fun backupDoesNotOpenAnotherPickerWhileAWriteIsRunning() = fixture {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val completed = java.util.concurrent.CountDownLatch(1)
+        ActivityScenario.launch(BackupActivity::class.java).use { scenario ->
+            try {
+                scenario.onActivity { activity ->
+                    val getTask = BackupActivity::class.java.getDeclaredMethod("getTask").apply { isAccessible = true }
+                    val task = getTask.invoke(activity) as UiTask
+                    assertTrue(task.start("Generated blocked write", {}, { check(release.await(15, java.util.concurrent.TimeUnit.SECONDS)) }, { completed.countDown() }))
+                    views(activity.window.decorView).single { it.tag == "backup-restore-records" }.performClick()
+                    views(activity.window.decorView).single { it.tag == "backup-export-records" }.performClick()
+                    val pending = BackupActivity::class.java.getDeclaredField("pendingPicker").apply { isAccessible = true }
+                    assertEquals(0, pending.getInt(activity))
+                    assertTrue(task.busy)
+                }
+            } finally { release.countDown() }
+            assertTrue(completed.await(15, java.util.concurrent.TimeUnit.SECONDS))
+        }
     }
 
     @Test fun sendPauseChangesOnlySendingAndDisconnectedSendStaysUnavailable() = fixture {
