@@ -30,7 +30,8 @@ class FinalCentralJourneyInstrumentedTest {
     private val output get() = File(context.filesDir,"final-central-ui").apply { mkdirs() }
     private fun <T> main(block: () -> T): T { val result=AtomicReference<Result<T>>(); instrumentation.runOnMainSync { result.set(runCatching(block)) }; return result.get().getOrThrow() }
     private fun views(root: View): List<View> = listOf(root) + if(root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
-    private fun current(): Activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single()
+    private fun currentOrNull(): Activity? = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).singleOrNull()
+    private fun current(): Activity = requireNotNull(currentOrNull())
     private fun shown() = android.view.inspector.WindowInspector.getGlobalWindowViews().filter { it.isShown && it.hasWindowFocus() }.flatMap(::views).filter { it.isShown }
     private fun until(label: String, timeout: Long = 30_000, check: () -> Boolean) {
         val end=SystemClock.elapsedRealtime()+timeout
@@ -104,20 +105,49 @@ class FinalCentralJourneyInstrumentedTest {
                 turn?.let { assertFalse("Actual model turn failed",it.optString("status") in setOf("failed","cancelled")) }
                 turn?.optString("status") == "completed"
             }
-            val result=turn!!.getJSONObject("result"); val expected=config.optString("expectedModel","gpt-6.1-terra")
-            val model=result.optJSONObject("modelSelection")?.optString("model").orEmpty().ifBlank { result.optJSONObject("usage")?.optString("model").orEmpty() }
-            assertEquals("The actual requested model must be recorded",expected,model)
-            val raw=result.getJSONArray("citations"); val citations=(0 until raw.length()).map { raw.getJSONObject(it) }.distinctBy { it.getString("id") }
-            assertTrue("The actual answer must cite real evidence",citations.isNotEmpty())
-            val evidence=config.optString("expectedEvidenceId").ifBlank { citations.first().getString("id") }; val number=citations.indexOfFirst { it.getString("id") == evidence }+1; assertTrue(number > 0)
-            assertTrue(CentralConversationReference.available(api,id,evidence)); val original=api.get("/api/capture-browser/$evidence").getString("ocrText")
-            until("Actual answer must render") { main { shown().any { it.contentDescription?.toString()?.startsWith("查看引用 $number ·") == true } } }; screenshot("shared-conversation-answer")
-            main { shown().single { it.contentDescription?.toString()?.startsWith("查看引用 $number ·") == true }.performClick() }
-            until("Exact original must render") { main { shown().filterIsInstance<TextView>().any { it.text.toString() == original } } }; screenshot("exact-citation")
-            main { shown().single { it.contentDescription == "返回上一页" }.performClick() }
-            until("Return to same conversation and composer") { main { shown().filterIsInstance<EditText>().any { it.contentDescription == "你的问题" } && shown().any { it.contentDescription?.toString()?.startsWith("查看引用 $number ·") == true } } }; screenshot("citation-return")
-            output.resolve("conversation-result.json").writeText(JSONObject().put("generatedOnly",true).put("liveModel",true).put("model",model).put("conversationId",id).put("turnId",turn!!.getString("id")).put("evidenceId",evidence).put("exactCitationVerified",true).toString(2))
+            verifyPersistedTurn(config,api,id,turn!!,newInference=true)
         }
+    }
+    /** Continues UI verification after a completed real turn; never admits another query. */
+    @Test fun readPersistedSharedTurnAndReturnFromExactCitation() {
+        val config=configuration();val api=connect(config);val id=config.getString("conversationId");val turnId=config.getString("existingTurnId")
+        val snapshot=api.get("/api/conversations/$id?limit=50");assertEquals(id,snapshot.getString("id"))
+        val turns=snapshot.getJSONArray("turns");val turn=(0 until turns.length()).map{turns.getJSONObject(it)}.single{it.getString("id")==turnId}
+        assertEquals(config.getString("question"),turn.getString("question"));assertEquals("completed",turn.getString("status"))
+        ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
+            until("Persisted actual target is selected before read-only citation work") { main { (current() as? CentralActivity)?.let{!it.isWorking&&it.selectedAskConversationId==id}==true&&shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.isEnabled} } }
+            verifyPersistedTurn(config,api,id,turn,newInference=false)
+        }
+    }
+    private fun verifyPersistedTurn(config:JSONObject,api:CentralClient,id:String,turn:JSONObject,newInference:Boolean) {
+        val snapshot=api.get("/api/conversations/$id?limit=50");assertEquals(id,snapshot.getString("id"));val all=snapshot.getJSONArray("turns")
+        val turns=(0 until all.length()).map{all.getJSONObject(it)};val index=turns.indexOfFirst{it.getString("id")==turn.getString("id")};assertTrue(index>=0)
+        assertEquals(turn.toString(),turns[index].toString());val questions=turns.map{it.getString("question")}
+        val result=turn.getJSONObject("result");val expected=config.optString("expectedModel","gpt-6.1-terra")
+        val model=result.optJSONObject("modelSelection")?.optString("model").orEmpty().ifBlank{result.optJSONObject("usage")?.optString("model").orEmpty()};assertEquals("Actual stored requested model",expected,model)
+        val raw=result.getJSONArray("citations");val citations=(0 until raw.length()).map{raw.getJSONObject(it)}.distinctBy{it.getString("id")};assertTrue(citations.isNotEmpty())
+        val evidence=config.optString("expectedEvidenceId").ifBlank{citations.first().getString("id")};val number=citations.indexOfFirst{it.getString("id")==evidence}+1;assertTrue(number>0)
+        assertTrue(CentralConversationReference.available(api,id,evidence));val original=api.get("/api/capture-browser/$evidence").getString("ocrText")
+        fun currentTurnCitation():View {
+            val question=shown().filterIsInstance<TextView>().single{it.text.toString()==questions[index]};val parent=question.parent as ViewGroup
+            val children=(0 until parent.childCount).map(parent::getChildAt);val questionViews=children.filterIsInstance<TextView>().filter{it.text.toString() in questions}
+            assertEquals("Complete rendered question sequence must match actual snapshot, including historical turns",questions,questionViews.map{it.text.toString()})
+            assertSame(questionViews[index],question);val first=parent.indexOfChild(question)+1;val end=questionViews.getOrNull(index+1)?.let(parent::indexOfChild)?:parent.childCount
+            val rows=children.subList(first,end).filter{it.contentDescription?.toString()?.startsWith("查看引用 ")==true}
+            val expectedLabels=citations.mapIndexed{i,c->"查看引用 ${i+1} · "+c.optString("title").ifBlank{c.optString("appName").ifBlank{MoteI18n.text("查看原文依据")}}}
+            assertEquals("This turn's complete citation list must match its stored result",expectedLabels,rows.map{it.contentDescription.toString()})
+            return rows[number-1]
+        }
+        until("Exact persisted turn and all its references rendered"){main{runCatching{currentTurnCitation()}.isSuccess}}
+        val laterDraft="Generated native citation-return draft "+turn.getString("id")
+        main{shown().filterIsInstance<EditText>().single{it.contentDescription=="你的问题"}.setText(laterDraft);val row=currentTurnCitation();row.requestRectangleOnScreen(android.graphics.Rect(0,0,row.width,row.height),true)}
+        screenshot("shared-conversation-answer")
+        main{assertTrue(currentTurnCitation().performClick())}
+        until("Exact original must render in the actual capture reader"){main{currentOrNull() is CaptureRecordsActivity&&shown().filterIsInstance<TextView>().any{it.text.toString()==original}}};screenshot("exact-citation")
+        main{shown().single{it.contentDescription=="返回上一页"}.performClick()}
+        until("Same conversation, exact turn and unsent draft return") { main { (currentOrNull() as? CentralActivity)?.selectedAskConversationId==id&&shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.text.toString()==laterDraft}&&runCatching{currentTurnCitation()}.isSuccess } };screenshot("citation-return")
+        val runs=api.get("/api/query-runs").getJSONArray("items");val run=(0 until runs.length()).map{runs.getJSONObject(it)}.single{it.optString("turnId")==turn.getString("id")};assertEquals("completed",run.getString("status"));assertEquals(id,run.getString("conversationId"))
+        output.resolve("conversation-result.json").writeText(JSONObject().put("generatedOnly",true).put("liveModel",true).put("newInferenceByThisMethod",newInference).put("model",model).put("conversationId",id).put("turnId",turn.getString("id")).put("queryRunId",run.getString("id")).put("evidenceId",evidence).put("renderedTurnIndex",index).put("exactCitationVerified",true).put("laterDraftRetained",true).toString(2))
     }
     /** Read-only final Discovery leg: root supplies the already persisted real report. */
     @Test fun readPersistedDiscoveryAndReturnFromExactInlineCitation() {
