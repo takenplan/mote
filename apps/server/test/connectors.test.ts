@@ -493,6 +493,22 @@ test('Google provider counters and page order retain evidence across restart whi
   events[0]=first;await connector.sync();assert.notEqual(sources.getItem(source.id,first.id)!.revision,initial.revision);
 });
 
+test('saving Google selection preserves paused originals and requires an explicit source resume',async t=>{
+  const {ctx,sources}=await fixture(t),second={...calendar,id:'generated-new-calendar',summary:'Generated newly selected calendar'},eventReads:string[]=[];
+  let listed=[calendar];
+  const {connector,authorize}=googleFixture(ctx,url=>{if(url.pathname.endsWith('/calendarList'))return Response.json({items:listed});eventReads.push(url.pathname);return Response.json({items:[googleEvent('generated-event','Generated retained original')],nextSyncToken:'generated-sync'});});
+  await connector.init();t.after(()=>connector.close());await authorize();await connector.select({calendarIds:[calendar.id]});
+  assert.equal((await connector.sync()).imported,1);const originalSource=sources.listSources().find(source=>source.kind==='google-calendar')!,original=sources.getItem(originalSource.id,'generated-event')!;
+  sources.update(originalSource.id,{enabled:false,initialSync:'new_only'});const context=sources.updateContext(originalSource.id,{expectedVersion:0,description:'Generated independent paused source description'});
+  listed=[{...calendar,summary:'Generated renamed existing calendar'},second];eventReads.length=0;
+  await connector.select({calendarIds:[calendar.id,second.id]});
+  const paused=sources.getSource(originalSource.id);assert.equal(paused.enabled,false);assert.equal(paused.initialSync,'new_only');assert.deepEqual(paused.sourceContext,{version:context.version,fingerprint:context.fingerprint});assert.deepEqual(sources.contexts.current(originalSource.id),context);assert.match(paused.name,/Generated renamed existing calendar/);
+  assert.equal(sources.listSources().filter(source=>source.kind==='google-calendar'&&source.enabled).length,1,'A genuinely new selected calendar retains normal enabled registration');
+  assert.equal((await connector.sync()).calendars,1);assert.equal(eventReads.length,1);assert.ok(eventReads[0].includes(encodeURIComponent(second.id)),'The paused calendar is never read');assert.equal(sources.getItem(originalSource.id,'generated-event')!.captureId,original.captureId);
+  await authorize();await connector.select({calendarIds:[calendar.id]});assert.equal(sources.getSource(originalSource.id).enabled,false,'Reauthorization and saving cannot restore an archived source');eventReads.length=0;assert.deepEqual(await connector.sync(),{imported:0,duplicates:0,calendars:0});assert.deepEqual(eventReads,[]);
+  sources.update(originalSource.id,{enabled:true});assert.equal((await connector.sync()).calendars,1,'The existing explicit source resume remains effective');assert.equal(eventReads.length,1);
+});
+
 test('Google OAuth state/PKCE, private refresh persistence, calendar selection and disconnect isolation',async t=>{
   const {ctx,directory,sources}=await fixture(t);
   const {connector,authorize,counts}=googleFixture(ctx,()=>Response.json({items:[calendar]}));await connector.init();t.after(()=>connector.close());
