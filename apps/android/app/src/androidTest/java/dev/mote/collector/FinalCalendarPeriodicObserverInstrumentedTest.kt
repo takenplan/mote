@@ -30,7 +30,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 
-/** Observe the existing periodic OS job only. Never enqueue, force, deliver, claim or execute. */
+/** Observe the existing WorkManager periodic schedule. Record its actual scheduler separately; never enqueue, force, deliver, claim or execute. */
 @RunWith(AndroidJUnit4::class)
 class FinalCalendarPeriodicObserverInstrumentedTest {
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
