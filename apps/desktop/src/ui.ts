@@ -165,7 +165,7 @@ byId('setup-primary').addEventListener('click', () => {if(showPage('screen')){re
 byId('setup-current').addEventListener('click', () => { reviewCollectionSetup(); byId('start').focus(); });
 byId('pause-sending').addEventListener('click',()=>void perform(async()=>{ const updated=await desktopApi.setSyncPaused(!currentStatus.config.syncPaused); render(updated); }));
 function updateSettingsHint(): void {
-  byId('settings-save-bar').hidden = !settingsPages.has(currentPage)||currentPage==='chrome'||currentPage==='screen'&&!settingsDirty;
+  byId('settings-save-bar').hidden = !settingsPages.has(currentPage)||currentPage==='chrome'||currentPage==='developer'||currentPage==='screen'&&!settingsDirty;
   byId('settings-pending').hidden = !settingsDirty;
   byId('save-hint').textContent = settingsDirty ? moteText("有未保存的修改，离开前会提醒。保存后立即生效。") : currentStatus?.running ? moteText("保存后立即应用；必要时会短暂暂停并自动恢复采集。") : moteText("设置保存后立即生效；采集保持当前开停状态。");
   byId<HTMLButtonElement>('settings-reset').disabled = !settingsDirty || busy;
@@ -351,9 +351,9 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
     'diagnostic-interval': config.diagnosticIntervalSeconds, 'image-dedupe': config.imageDedupeMode ?? 'off', 'jpeg-quality': config.jpegQuality, 'capture-max-side': config.captureMaxSide, 'battery-pause-below': config.batteryPauseBelowPct,
     'server-url': config.serverUrl, 'device-name': config.deviceName, interval: config.intervalMs / 1000,
     'queue-mb': config.maxQueueBytes / 1024 / 1024, 'queue-events': config.maxQueueEvents,
+    idle: config.idlePauseSeconds,
     'sync-interval': config.syncIntervalMinutes, 'sync-batch': config.syncBatchSize,
     masks: JSON.stringify(config.masks, null, 2),
-    idle: config.idlePauseSeconds,
   };
   for (const [id, value] of Object.entries(values)) byId<HTMLInputElement>(id).value = String(value);
   byId<HTMLInputElement>('metadata-enabled').checked = config.metadataEnabled;
@@ -481,6 +481,7 @@ function render(status: import('./contracts').Status): void {
     ? moteText("开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。")
     : status.encryptedTokenStorage ? moteText("使用系统密钥存储加密；不会展示已有令牌。") : moteText("系统加密存储不可用，无法保存令牌。");
 
+  byId<HTMLButtonElement>('diagnostics-sample').disabled=busy||!status.diagnostics?.enabled;
   if (status.diagnostics) {
     const d = status.diagnostics, latest = d.latest;
     const rows = [d.enabled ? moteText("诊断开启 · {0} 条数值样本", d.sampleCount) : moteText("诊断关闭"), moteText("保存 {0} · 过滤 {1} · 失败 {2}", d.counters.saved, d.counters.blocked, d.counters.failed), moteText("图像累计 {0} MiB · 已上传请求体约 {1} MiB", (d.counters.imageBytes / 1048576).toFixed(2), (d.counters.uploadedBytes / 1048576).toFixed(2))];
@@ -835,16 +836,19 @@ setInterval(() => { void refreshSources().catch(() => {}); }, 3000);
 let updateState: import('./updater').UpdateStatus | undefined;
 function renderUpdate(value: import('./updater').UpdateStatus): void {
   updateState = value;
+  byId('about-client').textContent='Mote for Mac · '+(value.manualDownload?'Dev':'Prod');byId('about-version').textContent=value.currentVersion;byId('about-update-heading').textContent=value.manualDownload?moteText('Dev 构建'):moteText('应用更新');
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
   byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
   byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
+  byId('update-notes').classList.toggle('secondary',!!value.manualDownload);byId('update-notes').classList.toggle('text-button',!value.manualDownload);
   byId('update-notes').textContent=value.manualDownload?moteText('查看 Dev 构建产物'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;
-  byId('update-message').textContent = value.message; byId('update-install-reason').textContent = value.installReason;
+  byId('update-message').textContent = value.manualDownload?moteText('从构建产物页面手动下载安装包，同包覆盖安装。'):value.message; byId('update-install-reason').textContent = value.installReason;
   byId<HTMLProgressElement>('update-progress').value = value.total ? value.received / value.total : 0;
   byId('update-bytes').textContent = value.total ? `${(value.received / 1048576).toFixed(1)} / ${(value.total / 1048576).toFixed(1)} MiB` : '';
   const working = ['checking', 'downloading', 'verifying', 'installing'].includes(value.state);
+  byId('update-progress').hidden=!!value.manualDownload||!['downloading','verifying'].includes(value.state);byId('update-cancel').hidden=!!value.manualDownload||!working;
   byId<HTMLButtonElement>('update-check').disabled = working;
   byId<HTMLSelectElement>('update-channel').disabled = working;
   byId<HTMLButtonElement>('update-download').disabled = working || !value.availableVersion || value.state === 'up_to_date' || value.state === 'idle';
@@ -977,17 +981,10 @@ byId('server-url').addEventListener('input', updateTokenField);
 for (const id of ['server-url', 'token']) byId(id).addEventListener('input', () => { byId<HTMLInputElement>('confirm-local-backlog').checked = false; updateLocalBacklog(); });
 
 const presetFields: Record<string, [number, string][]> = {
-  interval: [[10, moteText("每 10 秒 · 更细致")], [15, moteText("每 15 秒 · 默认")], [30, moteText("每 30 秒 · 日常")], [60, moteText("每分钟 · 轻量")], [300, moteText("每 5 分钟 · 低频")]],
-  idle: [[60, moteText("空闲 1 分钟后")], [300, moteText("空闲 5 分钟后")], [900, moteText("空闲 15 分钟后")], [0, moteText("不检测空闲")]],
-  'battery-pause-below': [[0, moteText("不按电量暂停")], [10, moteText("低于 10%")], [20, moteText("低于 20%")], [30, moteText("低于 30%")]],
-  'queue-mb': [[256, moteText("256 MiB · 轻量")], [512, moteText("512 MiB · 默认")], [1024, moteText("1 GiB · 日常")], [5120, moteText("5 GiB · 更多离线记录")], [20480, moteText("20 GiB · 长期离线")]],
-  'queue-events': [[1000, moteText("1,000 条")], [10000, moteText("10,000 条")], [50000, moteText("50,000 条")], [100000, moteText("100,000 条")]],
   'sync-interval': [[1, '1 min'], [15, moteText("15 分钟")], [30, moteText("30 分钟")], [60, moteText("1 小时")], [360, moteText("6 小时")], [1440, moteText("1 天")]],
   'sync-batch': [[10, moteText("10 条")], [20, moteText("20 条")], [50, moteText("50 条")], [100, moteText("100 条")], [500, moteText("500 条")]],
   'source-interval': [[60, moteText("每分钟")], [300, moteText("每 5 分钟")], [900, moteText("每 15 分钟")], [3600, moteText("每小时")]],
-  'jpeg-quality': [[65, moteText("65 · 节省空间")], [75, moteText("75 · 默认")], [80, moteText("80 · 均衡")], [90, moteText("90 · 清晰")]],
-  'capture-max-side': [[1280, '1280 px'], [1600, moteText("1600 px · 默认")], [1920, '1920 px'], [2560, '2560 px']],
-  'diagnostic-interval': [[15, moteText("每 15 秒")], [60, moteText("每分钟")], [300, moteText("每 5 分钟")]],
+  'capture-max-side': [[640, '640 px'], [960, '960 px'], [1280, '1280 px'], [1600, '1600 px'], [1920, '1920 px'], [2560, '2560 px']],
 };
 function refreshPresets(): void {
   for (const [id, choices] of Object.entries(presetFields)) {

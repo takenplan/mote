@@ -379,7 +379,7 @@ app.on('browser-window-created', (_event, window) => {
       await js(`new Promise(resolve=>setTimeout(resolve,100))`); assert(await js(`document.querySelector('#review-pending').textContent.includes('没有待复核记录')`));
 
       await navigate('capture');
-      await js(`document.querySelector('#interval-preset').value = '60'; document.querySelector('#interval-preset').dispatchEvent(new Event('change', { bubbles: true }));`);
+      await js(`document.querySelector('#interval').value = '60'; document.querySelector('#interval').dispatchEvent(new Event('change', { bubbles: true }));`);
       await js(`document.querySelector('#settings').requestSubmit()`);
       await settingsIdle('save capture settings');
       await navigate('sync');

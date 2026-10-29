@@ -9558,5 +9558,14 @@ export const french: Readonly<Record<string, string>> = {
   "在「当前服务」查看连接与浏览器登录保留时间；未登录时由目标页进入登录。": "View the connection and browser session duration under Current service. Sign in from the destination when signed out.",
   "切换后重新载入页面。当前问题草稿会保留。": "The page will reload after changing language. Your current question draft will be preserved.",
   "退出此浏览器？": "Sign out of this browser?",
-  "已保存资料和对话保留。其他设备与 Agent 的连接不受影响。": "Saved materials and conversations are retained. Connections on other devices and Agents are unaffected."
+  "已保存资料和对话保留。其他设备与 Agent 的连接不受影响。": "Saved materials and conversations are retained. Connections on other devices and Agents are unaffected.",
+  "保存诊断设置": "Enregistrer les paramètres de diagnostic",
+  "导出与日志": "Exportations et journaux",
+  "仅导出到你选择的位置，不发送给任何人。": "Exportation uniquement vers l’emplacement choisi ; rien n’est envoyé à qui que ce soit.",
+  "客户端": "Client",
+  "发送状态": "État d’envoi",
+  "Dev 构建": "Version Dev",
+  "从构建产物页面手动下载安装包，同包覆盖安装。": "Téléchargez manuellement le programme depuis la page des versions et remplacez la même app.",
+  "采样与运行": "Échantillonnage et fonctionnement",
+  "画质与去重": "Qualité d’image et déduplication"
 };
