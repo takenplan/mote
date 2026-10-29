@@ -38,7 +38,7 @@ class CalendarActionsActivity : MoteActivity() {
     }
     override fun onResume() { super.onResume(); handler.postDelayed(poll, 20000) }
     override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
-    private fun text(parent: LinearLayout, value: String, size: Float = MoteTheme.fontBody.toFloat()) { parent.addView(TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) MoteTheme.fontSection else size.toInt(), medium = size >= 20f); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)); setTextIsSelectable(true) }) }
+    private fun text(parent: LinearLayout, value: String, size: Float = MoteTheme.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) MoteTheme.fontSection else size.toInt(), medium = size >= 20f); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)); setTextIsSelectable(true) }.also(parent::addView)
     private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
     private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun work(label: String, fn: () -> JSONObject) { task.start(label, { status.text = it }, {
@@ -64,7 +64,7 @@ class CalendarActionsActivity : MoteActivity() {
         for (i in 0 until items.length()) {
             val a = items.getJSONObject(i); val e = a.getJSONObject("event"); val state = a.getString("status")
             val managed = a.optJSONObject("managed")
-            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline)); background = MoteUi.shape(this@CalendarActionsActivity) }; list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceItem) })
+            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline)); background = MoteUi.shape(this@CalendarActionsActivity); tag="calendar-action:"+a.getString("id") }; list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceItem) })
             text(card, e.getString("title"), 21f)
             val kind = a.getString("kind")
             text(card, when (kind) { "calendar.update" -> MoteI18n.text("更新日程"); "calendar.cancel" -> MoteI18n.text("取消日程"); "calendar.complete" -> MoteI18n.text("标记安排完成"); else -> MoteI18n.text("添加日程") })
@@ -76,9 +76,9 @@ class CalendarActionsActivity : MoteActivity() {
                 else -> MoteI18n.text("范围授权行动")
             })
             if (managed?.has("cancelRequestedAt") == true && state == "succeeded") text(card, MoteI18n.text("取消请求后收到成功回执；未删除系统日历事件。"))
-            if (a.has("resolution")) text(card, if (a.getString("resolution") == "cancelled") MoteI18n.text("已取消") else MoteI18n.text("已完成"))
-            val labels = mapOf("proposed" to MoteI18n.text("待确认"), "approved" to MoteI18n.text("等待客户端写入"), "executing" to MoteI18n.text("等待保存回执"), "uncertain" to MoteI18n.text("保存结果待核实"), "succeeded" to MoteI18n.text("已添加 · #Mote"), "dismissed" to MoteI18n.text("已忽略"), "stale" to MoteI18n.text("原文已更新或删除"))
-            text(card, "${labels[state] ?: state}\n${e.optString("start")} → ${e.optString("end")}\n${e.optString("timeZone")} · ${e.optString("location")}")
+            val label = CalendarActionPresentation.stateKey(kind,state,a.optString("resolution"),managed?.optString("state").orEmpty())?.let { MoteI18n.text(it) } ?: state
+            text(card, label).apply { tag="calendar-action-status:"+a.getString("id") }
+            text(card, "${e.optString("start")} → ${e.optString("end")}\n${e.optString("timeZone")} · ${e.optString("location")}")
             if (a.optString("uncertainty").isNotBlank()) text(card, a.getString("uncertainty"))
             button(card, MoteI18n.text("查看原文依据")) { val evidence = a.getJSONArray("evidence"); val content = (0 until evidence.length()).joinToString("\n\n") { val r = evidence.getJSONObject(it); "${r.getString("source")} · ${r.getString("capturedAt")}\n${r.getString("quote")}" }; MoteDialogBuilder(this).setTitle(MoteI18n.text("原文依据")).setMessage(content).setPositiveButton(MoteI18n.text("关闭"), null).show() }
             if (state == "proposed" && !a.has("resolution")) {

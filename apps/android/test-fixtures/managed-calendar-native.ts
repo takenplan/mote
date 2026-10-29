@@ -2,9 +2,10 @@ import {fixture,owner,command} from '../../server/test/fixtures/managed-calendar
 
 // Generated Central only. Native writes are made by the actual Android app on
 // the explicitly selected disposable emulator, never by this host process.
-let close:(()=>Promise<void>)|undefined,host:Awaited<ReturnType<typeof fixture>>,blocked=false;
+let close:(()=>Promise<void>)|undefined,host:Awaited<ReturnType<typeof fixture>>,blocked=false,readFailure=false;
 host=await fixture({after:((callback:()=>Promise<void>)=>{close=callback;}) as any},{skipDeviceConnect:true,beforeListen:node=>{
- node.app.addHook('onRequest',async(request,reply)=>{if(blocked&&request.url.startsWith('/api/managed-calendar/')&&request.url.endsWith('/receipt'))return reply.code(503).send({error:'generated_offline_receipt'});});
+ node.app.addHook('onRequest',async(request,reply)=>{if(readFailure&&request.method==='GET'&&request.url.split('?')[0]==='/api/actions')return reply.code(503).send({error:'generated_calendar_read_unavailable'});if(blocked&&request.url.startsWith('/api/managed-calendar/')&&request.url.endsWith('/receipt'))return reply.code(503).send({error:'generated_offline_receipt'});});
+ node.app.post('/fixture/ui-read-failure',async request=>{readFailure=(request.body as {blocked:boolean}).blocked;return {readFailure};});
  node.app.get('/fixture/pair',async()=>({token:host.paired.token,deviceId:'generated-device'}));
  node.app.post('/fixture/grant',async request=>host.grant(true,true,(request.body as {calendarId:string}).calendarId));
  node.app.post('/fixture/add',async()=>host.add());

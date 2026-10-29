@@ -1,6 +1,12 @@
 package dev.mote.collector
 
 import android.content.ContentUris
+import androidx.test.core.app.ActivityScenario
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
@@ -49,6 +55,32 @@ class ManagedCalendarNativeInstrumentedTest {
         fun change(id:String,kind:String)=request("/fixture/change",JSONObject().put("id",id).put("kind",kind))
         fun execute(id:String):JSONObject { val delivery=request("/fixture/delivery/$id");if(delivery.has("operationId"))actions.execute(id,delivery.getString("operationId"));return status(id) }
         fun event(id:String):JSONObject?=resolver.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI,id.toLong()),arrayOf("_id","calendar_id","title","description","dtstart"),"deleted=0",null,null)!!.use { c -> if(!c.moveToFirst()) null else JSONObject().put("id",c.getString(0)).put("calendarId",c.getString(1)).put("title",c.getString(2)).put("description",c.getString(3)).put("start",c.getLong(4)) }
+        val visual=args.getString("managedCalendarVisual")=="true"
+        fun views(root:View):List<View> = listOf(root)+if(root is ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun nativeVisual(id:String?,expected:String,name:String){
+            if(!visual)return
+            val pairedConfig=settings.read();val appearance=MoteAppearance.preference()
+            try {
+                settings.save(pairedConfig.copy(token=owner,authSignedOut=false,authExpiresAt=0,authProcess=""),confirmCentralEndpoint=true)
+                MoteI18n.select(context,"zh-CN")
+                ActivityScenario.launch(CalendarActionsActivity::class.java).use { scenario ->
+                    val end=android.os.SystemClock.elapsedRealtime()+25000;var found=false
+                    while(android.os.SystemClock.elapsedRealtime()<end && !found){scenario.onActivity { a -> found=views(a.window.decorView).filterIsInstance<TextView>().any { it.isShown && if(id==null)it.text.toString().contains(expected) else it.tag=="calendar-action-status:$id" && it.text.toString()==expected } };if(!found)Thread.sleep(60)}
+                    assertTrue("Actual received calendar state $name is shown",found)
+                    for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){
+                        InstrumentationRegistry.getInstrumentation().runOnMainSync { MoteAppearance.select(context,theme) }
+                        scenario.onActivity { a -> if(id!=null){val target=views(a.window.decorView).single { it.tag=="calendar-action-status:$id" };target.requestRectangleOnScreen(android.graphics.Rect(0,0,target.width,target.height),true)} }
+                        val frames=CountDownLatch(1);scenario.onActivity { a -> a.window.decorView.postOnAnimation { a.window.decorView.postOnAnimation { frames.countDown() } } };assertTrue(frames.await(5,TimeUnit.SECONDS))
+                        scenario.onActivity { a ->
+                            val root=a.window.decorView;assertTrue(a.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
+                            if(id!=null){val target=views(root).single { it.tag=="calendar-action-status:$id" } as TextView;assertEquals(expected,target.text.toString());val bounds=android.graphics.Rect();assertTrue(target.getGlobalVisibleRect(bounds));assertEquals(target.height,bounds.height())}
+                            val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+                            try{root.draw(android.graphics.Canvas(bitmap));File(context.filesDir,"calendar-receipt-final").apply { mkdirs() }.resolve(name+"-"+theme.value+".png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }}finally{bitmap.recycle()}
+                        }
+                    }
+                }
+            } finally { InstrumentationRegistry.getInstrumentation().runOnMainSync { MoteAppearance.select(context,appearance) };settings.save(pairedConfig,confirmCentralEndpoint=true) }
+        }
         val journal=File(context.noBackupFilesDir,"calendar-actions/${SourceRules.hash(origin+"generated-device")}")
         require(!journal.exists()) { "Generated operation journal must be new" }
         try {
@@ -56,21 +88,28 @@ class ManagedCalendarNativeInstrumentedTest {
             check(prefs.edit().putString("deviceId",pair.getString("deviceId")).commit())
             settings.save(prior.copy(server=origin,token=pair.getString("token"),debugHttp=true,authSignedOut=false,authExpiresAt=0,authProcess="",syncMode="manual"),confirmCentralEndpoint=true)
             actions.deliver() // Publishes the actual two-calendar declaration, without a grant or a write.
+            nativeVisual(null,"尚未发现日程","calendar-empty")
+            if(visual){request("/fixture/ui-read-failure",JSONObject().put("blocked",true));try{nativeVisual(null,"503","calendar-read-failed")}finally{request("/fixture/ui-read-failure",JSONObject().put("blocked",false))}}
             var grant=request("/fixture/grant",JSONObject().put("calendarId",selected))
             fun create():JSONObject { val a=request("/fixture/add",JSONObject());return execute(a.getString("id")).also { assertEquals("succeeded",it.getString("status"));assertEquals(selected,event(it.getString("externalId"))!!.getString("calendarId")) } }
             val original=create();val id=original.getString("id");val external=original.getString("externalId")
+            nativeVisual(id,"已写入日历","calendar-create-received")
             val update=change(id,"calendar.update");execute(update.getString("id"));assertEquals("succeeded",status(update.getString("id")).getString("status"));assertEquals(external,status(update.getString("id")).getString("externalId"))
             assertEquals(java.time.Instant.parse("2099-09-19T15:00:00Z").toEpochMilli(),event(external)!!.getLong("start"));assertTrue(event(external)!!.getString("description").contains("[Mote:$id]"))
+            nativeVisual(update.getString("id"),"已更新日历","calendar-update-received")
             val completed=create();val complete=change(completed.getString("id"),"calendar.complete");execute(complete.getString("id"));assertEquals("succeeded",status(complete.getString("id")).getString("status"));assertEquals("completed",status(completed.getString("id")).getString("resolution"));assertNotNull(event(completed.getString("externalId")))
+            nativeVisual(complete.getString("id"),"已标记完成","calendar-complete-received")
             val cancel=change(id,"calendar.cancel");request("/fixture/receipts",JSONObject().put("blocked",true));assertThrows(IllegalStateException::class.java) { execute(cancel.getString("id")) };assertNull(event(external))
             request("/fixture/revoke",JSONObject().put("id",grant.getString("id")));request("/fixture/receipts",JSONObject().put("blocked",false));CalendarActions(context).deliver();CalendarActions(context).deliver()
             assertEquals("succeeded",status(cancel.getString("id")).getString("status"));assertEquals("cancelled",status(id).getString("resolution"));assertNull(event(external))
+            nativeVisual(cancel.getString("id"),"已取消日程","calendar-cancel-received")
             grant=request("/fixture/grant",JSONObject().put("calendarId",selected))
             for(mutation in listOf("title","description","calendar_id")) {
                 val a=create();val nativeId=a.getString("externalId");val values=ContentValues().apply { put(mutation,if(mutation=="calendar_id") other else "Generated owner-edited $mutation") }
                 assertEquals(1,resolver.update(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI,nativeId.toLong()),values,null,null))
                 val proposal=change(a.getString("id"),"calendar.cancel");assertThrows(IllegalStateException::class.java) { execute(proposal.getString("id")) }
                 assertNotNull("A changed native original must not be deleted",event(nativeId));assertEquals("uncertain",status(proposal.getString("id")).getString("status"))
+                if(mutation=="title")nativeVisual(proposal.getString("id"),"保存结果待核实","calendar-native-original-changed-uncertain")
                 // This uncertain original is intentionally not retried during the next independent case.
                 request("/fixture/revoke",JSONObject().put("id",grant.getString("id")))
                 grant=request("/fixture/grant",JSONObject().put("calendarId",selected))
