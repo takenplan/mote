@@ -7,6 +7,7 @@ import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {configureLocale} from '@mote/shared/i18n';
+import {storageStatistics} from '@mote/shared/storage-statistics';
 import {Store} from '../../server/src/store.js';
 import {SourceStore} from '../../server/src/sources.js';
 import {ArchivedFileStore} from '../../server/src/archived-files.js';
@@ -36,7 +37,7 @@ test('the actual Vault component imports its current v2 JSON download with origi
  URL.createObjectURL=blob=>{downloads.push(blob);return 'blob:generated-vault';};URL.revokeObjectURL=()=>{};
  d.defaultView!.HTMLAnchorElement.prototype.click=function(){downloadName=this.download;};
  t.after(()=>{URL.createObjectURL=objectURL;URL.revokeObjectURL=revokeURL;d.defaultView!.HTMLAnchorElement.prototype.click=click;});
- const api={raw:async(path:string)=>{assert.equal(path,'/api/export');return new Response(JSON.stringify(origin.exportArchive(1_000_000)),{headers:{'content-type':'application/json'}});},request:async(path:string,init?:RequestInit)=>{assert.equal(path,'/api/import');assert.equal(init?.method,'POST');const raw=JSON.parse(String(init.body));imports.push(raw);return restored.importArchive(raw);},setAgentTimeout:()=>{}} as Api;
+ const api={raw:async(path:string)=>{assert.equal(path,'/api/export');return new Response(JSON.stringify(origin.exportArchive(1_000_000)),{headers:{'content-type':'application/json'}});},request:async(path:string,init?:RequestInit)=>{if(path==='/api/storage-statistics'){assert.equal(init?.method,undefined);return storageStatistics([directory]);}assert.equal(path,'/api/import');assert.equal(init?.method,'POST');const raw=JSON.parse(String(init.body));imports.push(raw);return restored.importArchive(raw);},setAgentTimeout:()=>{}} as Api;
  await act(async()=>root.render(React.createElement(Vault,{api,status:status(origin),refresh:()=>changed++,disconnect:()=>{}})));
  await act(async()=>button(d,'导出').click());assert.match(downloadName,/^mote-\d{4}-\d{2}-\d{2}\.json$/);assert.equal(downloads.length,1);
  const raw=await downloads[0].text(),archive=JSON.parse(raw);assert.equal(archive.version,2);
@@ -49,10 +50,10 @@ function domAnchorClick(d:Document){return d.defaultView!.HTMLAnchorElement.prot
 
 test('Vault rejects legacy versions and incomplete v2 files before posting a partial archive',async t=>{
  const {root,d}=await fixture(t),directory=mkdtempSync(join(tmpdir(),'mote-vault-ui-invalid-')),store=new Store(directory);t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});let posts=0;
- const api={request:async()=>{posts++;return {imported:0,duplicates:0};},setAgentTimeout:()=>{}} as Api;
+ const api={request:async(path:string,init?:RequestInit)=>{if(path==='/api/storage-statistics'){assert.equal(init?.method,undefined);return storageStatistics([directory]);}assert.equal(path,'/api/import');assert.equal(init?.method,'POST');posts++;return {imported:0,duplicates:0};},setAgentTimeout:()=>{}} as Api;
  await act(async()=>root.render(React.createElement(Vault,{api,status:status(store),refresh:()=>{},disconnect:()=>{}})));
  for(const archive of [{version:1,captures:[]},{version:2,captures:[]},null]){
   await select(d,new File([JSON.stringify(archive)],'generated-invalid.json',{type:'application/json'}));assert.match(d.body.textContent!,/请选择 Mote v2 JSON 归档文件/);assert.equal(posts,0);
  }
- assert.match(d.body.textContent!,/合并 Mote v2 JSON 归档/);assert.doesNotMatch(d.body.textContent!,/v1 JSON/);
+ assert.match(d.body.textContent!,/合并记录，跳过重复内容/);assert.doesNotMatch(d.body.textContent!,/v1 JSON/);
 });
