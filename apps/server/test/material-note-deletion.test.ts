@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {buildApp} from '../src/app.js';
 import {materialId,type MaterialDraft,type MaterialRecord} from '../src/materials.js';
 import {MaterialNoteDeletion} from '../src/material-note-deletion.js';
+import {captureLibraryVersion,materialEvidenceLibraryVersion} from '../src/capture-library-version.js';
 import {EvidenceDeletion} from '../src/evidence-deletion.js';
 
 async function fixture(t:TestContext){
@@ -92,3 +93,16 @@ test('the existing deletion transaction rechecks the alias and rolls back a sync
  for(const id of [n.id,n.anchor])assert.equal((await f.app.inject({method:'DELETE',url:'/api/captures/'+id,headers})).statusCode,403);
  assert.equal((await f.get('/api/capture-browser/'+n.id)).statusCode,200);
  });
+
+test('a virtual reader pins the exact returned immutable Material view and never substitutes a raw hash or newer head',async t=>{
+ const f=await fixture(t),n=await f.note(),first=(await f.get('/api/capture-browser/'+n.anchor)).json(),second=(await f.get('/api/capture-browser/'+n.anchor)).json();
+ assert.equal(first.libraryVersion,n.material.ref+'#record');assert.equal(second.libraryVersion,first.libraryVersion);assert.equal(first.ocrText,n.text);assert.equal(second.id,first.id);
+ const raw=(await f.get('/api/capture-browser/'+n.id)).json(),stored=f.store.evidence([n.id])[0];assert.equal(raw.libraryVersion,captureLibraryVersion(stored));assert.notEqual(raw.libraryVersion,first.libraryVersion);
+ assert.equal(materialEvidenceLibraryVersion(f.store,{...first,ocrText:'Generated different bytes'}),undefined);
+ assert.equal(materialEvidenceLibraryVersion(f.store,{...first,id:randomUUID()}),undefined);
+ assert.equal(materialEvidenceLibraryVersion(f.store,{...stored,provenance:{uri:first.libraryVersion}}),undefined,'a raw source URI cannot impersonate a host anchor');
+ const corrected=f.materials.correctContext(n.material.id,n.material.revision,'third_party'),currentAnchor=f.materials.evidenceIds(corrected.ref,['record'])[0],current=(await f.get('/api/capture-browser/'+currentAnchor)).json();
+ assert.equal(current.libraryVersion,corrected.ref+'#record');assert.notEqual(current.libraryVersion,first.libraryVersion);assert.equal(current.ocrText,n.text);
+ assert.equal(materialEvidenceLibraryVersion(f.store,{...current,provenance:{uri:first.libraryVersion}}),undefined,'the new anchor cannot borrow the old revision pin');
+ const oldResponse=await f.get('/api/capture-browser/'+n.anchor);if(oldResponse.statusCode===200){const old=oldResponse.json();assert.equal(old.libraryVersion,first.libraryVersion);assert.equal(old.ocrText,n.text);}else assert.equal(oldResponse.statusCode,404);
+});

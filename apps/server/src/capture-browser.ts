@@ -1,5 +1,5 @@
 import type {EvidenceDeletion} from './evidence-deletion.js';
-import {storedCaptureLibraryVersion} from './capture-library-version.js';
+import {storedCaptureLibraryVersion,materialEvidenceLibraryVersion} from './capture-library-version.js';
 import {CaptureTimeline,type TimelineRange} from './capture-timeline.js';
 import {registerDeviceLibrary} from './device-library.js';
 import type {EvidenceReader} from './evidence-reader.js';
@@ -108,7 +108,7 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
       const {recordContextDeclarations:_,recordContextStatements:__,sourceContextDeclarations:___,sourceContextStatements:____,...context}=detailed.attributionContext;
       detailed.attributionContext=context;
     }
-    return {...detailed,deletion:credential(req)?{available:false,kind:null}:deletion.capability(record.id),libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
+    return {...detailed,deletion:credential(req)?{available:false,kind:null}:deletion.capability(record.id),libraryVersion:storedCaptureLibraryVersion(store,record.id)??materialEvidenceLibraryVersion(store,detailed),fileArchive:file?{captureId:record.id}:undefined,
       requiresMaterialForMemory,...(memoryMaterialRef?{memoryMaterialRef}:{})};
   });
   app.get('/api/capture-browser/:id/image',async(req,reply)=>{
