@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "更新于 {0}": "Actualizado {0}",
+  "需重验": "Requiere verificación",
   "回顾生成中": "Generando revisión",
   "找回已有的资料": "Encontrar materiales archivados",
   "把这个问题交给 Mote": "Hacer esta pregunta a Mote",

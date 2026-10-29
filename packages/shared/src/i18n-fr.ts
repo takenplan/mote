@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "更新于 {0}": "Mis à jour {0}",
+  "需重验": "À revérifier",
   "回顾生成中": "Génération du bilan en cours",
   "找回已有的资料": "Retrouver les documents archivés",
   "把这个问题交给 Mote": "Poser cette question à Mote",
