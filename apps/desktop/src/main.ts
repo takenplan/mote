@@ -429,9 +429,9 @@ else {
     handle('mote:memory-topic-page',input=>browseWithConnection(config=>centralMemoryTopicPage(config,input as import('./memory-topics').TopicQuery)));
     handle('mote:memory-topic-evidence',(memoryId,evidenceId)=>browseWithConnection(config=>centralMemoryTopicEvidence(config,memoryId as string,evidenceId as string,()=>{if(settings!==config)throw Error(moteText('连接已改变，请刷新采集记录'));})));
     handle('mote:memory-topic-detail',id=>browseWithConnection(config=>centralMemoryTopicDetail(config,id as string)));
-    handle('mote:content-central', cursor => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined)));
+    handle('mote:content-central', (cursor,query) => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined,query as string|undefined)));
     handle('mote:content-central-detail',(id,offset,image)=>browseWithConnection(config=>{if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)||offset!==undefined&&(!Number.isSafeInteger(offset)||Number(offset)<0))throw Error('Invalid content reference');return readCentralContent(config,{key:id,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false},Number(offset??0),image===true);}));
-    handle('mote:content-local', offset => localContentPage(queue,localSources!,offset as number|undefined));
+    handle('mote:content-local', (offset,query) => localContentPage(queue,localSources!,offset as number|undefined,query as string|undefined));
     handle('mote:content-local-detail', (key,image) => browseWithConnection(() => localContentDetail(queue,localSources!,key as string,image as boolean|undefined).catch(async error=>{
       if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
       const id=receiptKey?syncHistory.receivedCapture(settings,receiptKey):undefined;if(!id)throw error;return readCentralContent(settings,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);

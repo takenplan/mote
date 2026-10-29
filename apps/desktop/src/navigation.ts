@@ -1,4 +1,4 @@
-export const desktopPages = ['screen', 'ask', 'statistics', 'overview', 'notes', 'records', 'uploads', 'sources', 'work', 'settings', 'connection', 'sync', 'capture', 'privacy', 'developer', 'about', 'activity', 'compression', 'permissions'] as const;
+export const desktopPages = ['content-reader', 'screen', 'ask', 'statistics', 'overview', 'notes', 'records', 'uploads', 'sources', 'work', 'settings', 'connection', 'sync', 'capture', 'privacy', 'developer', 'about', 'activity', 'compression', 'permissions'] as const;
 export type DesktopPage = typeof desktopPages[number];
 export type DesktopSection = 'overview' | 'records' | 'ask' | 'sources' | 'work' | 'settings';
 

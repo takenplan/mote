@@ -9,9 +9,11 @@ import type { SyncSource } from './sync-history';
 
 const sourceKind=(kind:string):SyncSource=>kind==='local-calendar'?'calendar':kind==='coding-agent'?'coding':'file';
 /** All content is evidence. The bounded reading surface never executes or interprets its text. */
-export function localContentPage(queue:DurableQueue,sources:LocalSourceManager,offset=0):LocalContentPage {
+function contentQuery(query?:string):string {if(query!==undefined&&(typeof query!=='string'||query.length>2000))throw Error(moteText('搜索内容过长'));return query?.trim().toLocaleLowerCase()??'';}
+export function localContentPage(queue:DurableQueue,sources:LocalSourceManager,offset=0,query?:string):LocalContentPage {
   if(!Number.isSafeInteger(offset)||offset<0)throw Error(moteText('分页参数无效'));
-  const items:ContentItem[]=[...queue.contentRecords().map(record=>({key:`queue:${record.event.id}`,source:record.event.source,title:record.event.source==='note'?record.event.ocrText?.split('\n')[0].slice(0,100)||moteText('随手记'):record.event.appName,observedAt:record.event.capturedAt,preview:(record.event.ocrText??'').slice(0,160),sourceName:record.event.deviceName,error:record.syncError})),...sources.pendingContent().map(({source,item,key})=>({key:`source:${source.id}:${key}`,source:sourceKind(source.kind),title:item.title,observedAt:item.observedAt,preview:item.text.slice(0,160),sourceName:source.name}))].sort((a,b)=>b.observedAt.localeCompare(a.observedAt)||a.key.localeCompare(b.key));
+  const needle=contentQuery(query),matches=(...values:(string|undefined)[])=>!needle||values.some(value=>value?.toLocaleLowerCase().includes(needle));
+  const items:ContentItem[]=[...queue.contentRecords().filter(record=>matches(record.event.appName,record.event.ocrText)).map(record=>({key:`queue:${record.event.id}`,source:record.event.source,title:record.event.source==='note'?record.event.ocrText?.split('\n')[0].slice(0,100)||moteText('随手记'):record.event.appName,observedAt:record.event.capturedAt,preview:(record.event.ocrText??'').slice(0,160),sourceName:record.event.deviceName,error:record.syncError})),...sources.pendingContent().filter(({item})=>matches(item.title,item.text)).map(({source,item,key})=>({key:`source:${source.id}:${key}`,source:sourceKind(source.kind),title:item.title,observedAt:item.observedAt,preview:item.text.slice(0,160),sourceName:source.name}))].sort((a,b)=>b.observedAt.localeCompare(a.observedAt)||a.key.localeCompare(b.key));
   return {items:items.slice(offset,offset+30),total:items.length,...(offset+30<items.length?{nextOffset:offset+30}:{})};
 }
 export async function localContentDetail(queue:DurableQueue,sources:LocalSourceManager,key:string,image=false):Promise<ContentDetail>{
@@ -33,13 +35,21 @@ export async function localContentDetail(queue:DurableQueue,sources:LocalSourceM
   return {truncated:text.length>100000,text:text.slice(0,100000),sourceName:source.name,metadataOnly:item.layer==='reference',retainsOriginal:item.kind==='file'?Boolean(item.localOriginal||item.localOriginalBase64):undefined,metadata:JSON.stringify({title:item.title,uri:item.uri,modifiedAt:item.modifiedAt,mimeType:item.mimeType,calendar:item.calendar,document:item.document},null,2)};
 }
 
-export async function centralContentPage(config:import('./contracts').Config,cursor?:string):Promise<CentralContentPage>{
+export async function centralContentPage(config:import('./contracts').Config,cursor?:string,search?:string):Promise<CentralContentPage>{
   const {requireConnectionToken}=await import('./login-session.js');const {validateServerUrl}=await import('./config.js');const {readResponseText}=await import('./response-body.js');
-  if(cursor!==undefined&&(typeof cursor!=='string'||cursor.length>512))throw Error(moteText('分页参数无效'));
-  const query=new URLSearchParams({deviceId:config.deviceId,limit:'30',...(cursor?{cursor}:{})});
-  const response=await fetch(`${validateServerUrl(config.serverUrl)}/api/capture-browser?${query}`,{headers:{Authorization:`Bearer ${requireConnectionToken(config)}`},redirect:'error',signal:AbortSignal.timeout(20000)});
+  if(cursor!==undefined&&(typeof cursor!=='string'||cursor.length>4096))throw Error(moteText('分页参数无效'));
+  const needle=contentQuery(search);
+  const query=new URLSearchParams({deviceId:config.deviceId,limit:'30',...(cursor?{cursor}:{}),...(needle?{query:needle}:{})});
+  const response=await fetch(`${validateServerUrl(config.serverUrl)}${needle?'/api/context/search':'/api/capture-browser'}?${query}`,{headers:{Authorization:`Bearer ${requireConnectionToken(config)}`},redirect:'error',signal:AbortSignal.timeout(20000)});
   if(!response.ok){await response.body?.cancel();if(response.status===401||response.status===403)return {items:[],total:0,authorizationDenied:true};throw Error(moteText('无法访问采集记录，请检查中央连接权限'));}
   const page=JSON.parse(await readResponseText(response,1024*1024)) as {items:Record<string,unknown>[];totalCount:number;nextCursor?:string};
+  if(needle){
+    if(!Array.isArray(page.items)||page.items.length>30)throw Error(moteText('记录不属于当前设备'));
+    const items=page.items.map(row=>{const origin=row.origin as Record<string,unknown>|undefined;
+      if(typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||origin?.deviceId!==config.deviceId||row.ref!==`capture:${row.id}`||typeof origin.source!=='string'||!['screen','ui_page','note','activity','notification','media','file','calendar','message'].includes(origin.source))throw Error(moteText('记录不属于当前设备'));
+      return {key:`capture:${row.id}`,source:origin.source==='message'?'coding':origin.source as SyncSource,title:String(row.title??'').slice(0,200),observedAt:String(origin.capturedAt),preview:String(row.snippet??'').slice(0,160),sourceName:config.deviceName};});
+    return {items,nextCursor:page.nextCursor??undefined};
+  }
   if(!Array.isArray(page.items)||page.items.length>30||page.items.some(row=>typeof row.id!=='string'||!/^[a-f0-9-]{36}$/i.test(row.id)||row.deviceId!==config.deviceId))throw Error(moteText('记录不属于当前设备'));
   return {items:page.items.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':row.source as SyncSource,title:String(row.windowTitle??row.appName??'').slice(0,200),observedAt:String(row.capturedAt),preview:String(row.textPreview??row.ocrText??'').slice(0,160),sourceName:String(row.deviceName??config.deviceName)})),total:page.totalCount,nextCursor:page.nextCursor??undefined};
 }

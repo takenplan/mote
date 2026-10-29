@@ -139,9 +139,9 @@ export interface DesktopApi {
   memoryTopicPage(input?:import('./contracts/content').TopicQuery): Promise<import('./contracts/content').TopicPage>;
   memoryTopicEvidence(memoryId:string,evidenceId:string): Promise<import('./contracts/content').TopicEvidence>;
   memoryTopicDetail(id:string): Promise<import('./contracts/content').TopicMemory>;
-  centralContent(cursor?:string): Promise<import('./contracts/content').CentralContentPage>;
+  centralContent(cursor?:string,query?:string): Promise<import('./contracts/content').CentralContentPage>;
   centralContentDetail(id:string,offset?:number,image?:boolean): Promise<import('./contracts/content').SyncContent>;
-  localContent(offset?:number): Promise<import('./contracts/content').LocalContentPage>;
+  localContent(offset?:number,query?:string): Promise<import('./contracts/content').LocalContentPage>;
   localContentDetail(key:string, image?:boolean): Promise<import('./contracts/content').ContentDetail|import('./contracts/content').SyncContent>;
   chooseSourceFiles(mode: 'files' | 'directory', options: import('./contracts/sources').SourceOptions): Promise<{ canceled: boolean }>;
   connectActionCalendar(): Promise<{deviceId:string}>;

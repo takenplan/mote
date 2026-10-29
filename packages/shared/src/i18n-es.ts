@@ -9022,5 +9022,15 @@ export const spanish: Readonly<Record<string, string>> = {
   "资料说明最多 12000 个字符位；原草稿未改动。": "La descripción admite hasta 12000 unidades de caracteres. El borrador original no ha cambiado.",
   "记录内容": "Contenido de la nota",
   "先保存在本机": "Primero se guarda en este dispositivo",
-  "资料说明": "Descripción"
+  "资料说明": "Descripción",
+  "搜索内容": "Buscar contenido",
+  "内容详情": "Detalles del contenido",
+  "中心已接收": "Recibido por Central",
+  "本机待发送": "Pendiente en este Mac",
+  "没有符合条件的内容": "No hay contenido coincidente",
+  "内容暂不可用": "Contenido temporalmente no disponible",
+  "搜索内容过长": "La búsqueda es demasiado larga",
+  "这台 Mac 留下的记录": "Registros de este Mac",
+  "← 内容": "← Contenido",
+  "来源与同步状态": "Origen y estado de sincronización"
 };

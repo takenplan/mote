@@ -43,7 +43,7 @@ it.each([401,403])('closes an open central reader on a feed HTTP %s, invalidatin
   vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}',{status:code})));
   vi.mocked(api.centralContent).mockImplementationOnce(()=>centralContentPage({...defaultConfig(),serverUrl:status.config.serverUrl,token:'generated-token',deviceId:id}));
   await library.refresh();expectCleared();expect(document.querySelectorAll('#content-feed .content-row')).toHaveLength(0);
-  finish({...remote,text:'GENERATED LATE PRIVATE BODY'});await flush();expectCleared();
+  finish({...remote,text:'GENERATED LATE PRIVATE BODY'});await flush();expectCleared();expect(el('content-feed').textContent).toBe('');
 });
 
 it('keeps an open local reader after the central feed denies access',async()=>{
@@ -73,16 +73,16 @@ it('clears private DOM and invalidates old requests when a credential changes wi
   finish(remote);await flush();expectCleared();
 });
 
-it('shows a note excerpt once and reads its exact original before expandable processing stages',async()=>{
+it('shows the final compact note title and reads the exact original before expandable source status',async()=>{
   const text='Generated first line\nGenerated second line';
   page={items:[{...item,title:'Generated first line',preview:text}],total:1};
   vi.mocked(api.centralContentDetail).mockResolvedValue({...remote,text});
   await library.refresh();
   const button=document.querySelector<HTMLButtonElement>('#content-feed .content-row')!;
   const copy=button.querySelector('.content-row-copy')!;
-  expect(copy.querySelector('strong')).toBeNull();expect(copy.querySelector('span')!.textContent).toBe(text);
+  expect(copy.querySelector('strong')!.textContent).toBe('Generated first line');expect(copy.textContent).not.toContain('Generated second line');
   button.click();await flush();
-  expect(el('content-detail-title').textContent).not.toContain('Generated first line');
+  expect(el('content-detail-title').textContent).toBe('Generated first line');
   expect(el('content-detail-body').textContent).toBe(text);
   const processing=el('content-processing') as HTMLDetailsElement;
   expect(processing.open).toBe(false);expect(processing.querySelector('summary')!.textContent!.trim()).not.toBe('');
@@ -148,4 +148,28 @@ it('does not turn a local read failure into an empty first-use screen and still 
   expect(el('home-onboarding').hidden).toBe(true);
   el('home-recent').querySelector<HTMLButtonElement>('button.text-button')!.click();await flush();
   expect(el('home-recent').textContent).not.toContain('内容暂不可完整读取');
+});
+
+
+it('keeps search results independent from Home and invalidates a late older query',async()=>{
+  await flush();const search=el('content-search') as HTMLInputElement;
+  let finish!:(value:CentralContentPage)=>void;
+  vi.mocked(api.centralContent).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  search.value='older';const pending=library.refresh();await flush();
+  search.value='newer';page={items:[{...item,title:'Newer match'}]};await library.refresh();
+  finish({items:[{...item,title:'Stale old query'}]});await pending;await flush();
+  expect(document.querySelector('#content-feed .content-row-copy strong')!.textContent).toBe('Newer match');
+  expect(api.centralContent).toHaveBeenCalledWith(undefined,'newer');expect(api.localContent).toHaveBeenCalledWith(0,'newer');
+  expect(api.centralContent).toHaveBeenCalledWith();expect(api.localContent).toHaveBeenCalledWith(0);
+  expect(search.value).toBe('newer');
+});
+it('retains same-scope rows on temporary reads and never calls unavailable content empty',async()=>{
+  const local={...item,key:'queue:22222222-2222-4222-8222-222222222222'};
+  vi.mocked(api.localContent).mockResolvedValue({items:[local],total:1});await library.refresh();
+  vi.mocked(api.localContent).mockRejectedValueOnce(Error("Error invoking remote method 'mote:local-content': generated private diagnostics"));
+  page={items:[],authorizationDenied:true};await library.refresh();
+  expect(el('content-feed').querySelector(`[data-content-key="${local.key}"]`)).not.toBeNull();
+  expect(el('content-feed').querySelector('[data-content-key^="capture:"]')).toBeNull();
+  (el('content-search') as HTMLInputElement).value='unavailable query';vi.mocked(api.localContent).mockRejectedValueOnce(Error('Generated failure'));page={items:[]};await library.refresh();
+  expect(el('content-feed').textContent).toBe('');expect(el('content-status').textContent).toContain('内容暂不可完整读取');expect(el('content-status').textContent).not.toContain('generated');
 });

@@ -42,7 +42,11 @@ const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
 const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation});
-const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasContent=>workbenchUi.setHasContent(hasContent));
+let contentOrigin:Page='records';
+const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasContent=>workbenchUi.setHasContent(hasContent),{
+  open(){contentOrigin=currentPage;const title=document.querySelector<HTMLElement>(`[data-page="${currentPage}"] [data-page-title]`)?.textContent?.trim()??moteText('内容');byId('content-detail-close').textContent='← '+title;showPage('content-reader');},
+  close(){if(currentPage==='content-reader')showPage(contentOrigin,true,false,true,true);},
+});
 function refreshContent():Promise<void>{return libraryUi.refresh();}
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
@@ -52,7 +56,7 @@ window.addEventListener('beforeunload',()=>{workActivityUi.dispose();permissions
 let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
-function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true): boolean {
+function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true, preserveContentPosition = false): boolean {
   if (page === 'notes' && !quickNote && desktopApi.openQuickNote) { void desktopApi.openQuickNote(); return false; }
   if (quickNote && page !== 'notes') return false;
   if (!navigation.navigate(page, () => preserveSettingsDraft || !settingsDirty || !settingsPages.has(currentPage) || window.confirm(moteText("有未保存的修改。离开并丢弃修改？")))) return false;
@@ -73,6 +77,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
   if (currentPage === 'work' && page !== 'work') workActivityUi.hide();
   if (currentPage === 'permissions' && page !== 'permissions') permissionsUi.hide();
+  if (currentPage === 'content-reader' && page !== 'content-reader') libraryUi.close(false);
   currentPage = page;
   if(initialized) renderOperations(currentStatus.operations??[]);
   if (page === 'uploads') syncHistoryUi.show();
@@ -87,8 +92,8 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   }
   const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
-  byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
-  byId('workspace-back').hidden = !navigation.canGoBack;
+  byId('workspace-location').textContent = page==='content-reader'?moteText('内容详情'):page === selected ? title : `${sectionTitle} / ${title}`;
+  byId('workspace-back').hidden = !navigation.canGoBack||page==='content-reader';
   updateNoteAction();
   byId('workspace-back').setAttribute('aria-label', moteText("返回{0}", heading(navigation.backTarget)));
   updateSettingsHint();
@@ -99,8 +104,8 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   if (page === 'permissions') permissionsUi.show();
   if (page === 'privacy') void appCaptureUi.refreshApplications();
   if (page === 'statistics') void loadStorageStatistics();
-  if (page === 'records') { void loadRecords(); void refreshContent(); }
-  if (page === 'overview' && initialized) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
+  if (page === 'records' && !preserveContentPosition) { void loadRecords(); void refreshContent(); }
+  if (page === 'overview' && initialized && !preserveContentPosition) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
   if (page === 'sources') void refreshSources();
   if (page === 'overview' && initialized) void desktopApi.status().then(render).catch(() => feedback(moteText("状态读取失败，请重试。")));
   return true;
@@ -173,7 +178,9 @@ function revealField(element: HTMLElement): void {
   element.focus(); element.scrollIntoView({ block: 'center', behavior: 'instant' });
 }
 document.addEventListener('keydown', event => {
+  if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'&&!quickNote&&!document.querySelector('dialog[open]')){event.preventDefault();if(showPage('records'))byId('content-search').focus();}
   if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); showPage('settings'); }
+  if(event.key==='Escape'&&currentPage==='content-reader'){event.preventDefault();libraryUi.close();return;}
   if (event.key === 'Escape' && document.querySelector('dialog[open]')) return;
   if (event.key === 'Escape' && currentPage === 'records' && !byId('record-detail').hidden) closeRecordDetail();
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);

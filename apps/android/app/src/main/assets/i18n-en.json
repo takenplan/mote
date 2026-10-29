@@ -9021,5 +9021,15 @@
   "资料说明最多 12000 个字符位；原草稿未改动。": "Description must be at most 12000 character units. The original draft is unchanged.",
   "记录内容": "Note content",
   "先保存在本机": "Saved locally first",
-  "资料说明": "Description"
+  "资料说明": "Description",
+  "搜索内容": "Search content",
+  "内容详情": "Content details",
+  "中心已接收": "Received by Central",
+  "本机待发送": "Waiting on this Mac",
+  "没有符合条件的内容": "No matching content",
+  "内容暂不可用": "Content temporarily unavailable",
+  "搜索内容过长": "Search query is too long",
+  "这台 Mac 留下的记录": "Records from this Mac",
+  "← 内容": "← Content",
+  "来源与同步状态": "Source and sync status"
 }
