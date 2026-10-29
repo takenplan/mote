@@ -9602,5 +9602,15 @@ export const english: Readonly<Record<string, string>> = {
   "之后需要时再配置": "Configure later when needed",
   "问一问与自动理解": "Questions and automatic understanding",
   "保存原文已经可以使用": "Saving originals is already available",
-  "已添加来源": "Source added"
+  "已添加来源": "Source added",
+  "停止结果尚未确认。": "Stop is not yet confirmed.",
+  "结果尚未确认，请检查或重试原请求。": "The result is not confirmed. Check it or retry the original request.",
+  "正在停止，等待中央确认…": "Stopping; waiting for central confirmation…",
+  "尚未找到这次提交；可以用原请求重试。": "This submission has not been found. You can retry the original request.",
+  "正在提交问题…": "Submitting the question…",
+  "正在检查结果…": "Checking the result…",
+  "检查结果": "Check result",
+  "用原请求重试": "Retry original request",
+  "重新编辑问题": "Edit question again",
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Restoring the failed question will replace your current draft. Continue?"
 };

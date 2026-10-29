@@ -9602,5 +9602,15 @@ export const french: Readonly<Record<string, string>> = {
   "之后需要时再配置": "Configure later when needed",
   "问一问与自动理解": "Questions and automatic understanding",
   "保存原文已经可以使用": "Saving originals is already available",
-  "已添加来源": "Source ajoutée"
+  "已添加来源": "Source ajoutée",
+  "停止结果尚未确认。": "L’arrêt n’est pas encore confirmé.",
+  "结果尚未确认，请检查或重试原请求。": "Le résultat n’est pas confirmé. Vérifiez-le ou réessayez la demande initiale.",
+  "正在停止，等待中央确认…": "Arrêt en cours ; attente de confirmation du nœud central…",
+  "尚未找到这次提交；可以用原请求重试。": "Cet envoi n’a pas été trouvé. Vous pouvez réessayer la demande initiale.",
+  "正在提交问题…": "Envoi de la question…",
+  "正在检查结果…": "Vérification du résultat…",
+  "检查结果": "Vérifier le résultat",
+  "用原请求重试": "Réessayer la demande initiale",
+  "重新编辑问题": "Modifier à nouveau la question",
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Restaurer la question échouée remplacera votre brouillon actuel. Continuer ?"
 };

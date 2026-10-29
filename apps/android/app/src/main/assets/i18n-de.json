@@ -9601,5 +9601,15 @@
   "之后需要时再配置": "Configure later when needed",
   "问一问与自动理解": "Questions and automatic understanding",
   "保存原文已经可以使用": "Saving originals is already available",
-  "已添加来源": "Quelle hinzugefügt"
+  "已添加来源": "Quelle hinzugefügt",
+  "停止结果尚未确认。": "Das Stoppen ist noch nicht bestätigt.",
+  "结果尚未确认，请检查或重试原请求。": "Das Ergebnis ist nicht bestätigt. Prüfe es oder wiederhole die ursprüngliche Anfrage.",
+  "正在停止，等待中央确认…": "Stoppen; Bestätigung der Zentrale wird erwartet…",
+  "尚未找到这次提交；可以用原请求重试。": "Diese Übermittlung wurde noch nicht gefunden. Du kannst die ursprüngliche Anfrage wiederholen.",
+  "正在提交问题…": "Frage wird übermittelt…",
+  "正在检查结果…": "Ergebnis wird geprüft…",
+  "检查结果": "Ergebnis prüfen",
+  "用原请求重试": "Ursprüngliche Anfrage wiederholen",
+  "重新编辑问题": "Frage erneut bearbeiten",
+  "将失败问题带回输入框，会替换当前草稿。继续？": "Die fehlgeschlagene Frage ersetzt deinen aktuellen Entwurf. Fortfahren?"
 }

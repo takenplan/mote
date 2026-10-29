@@ -1257,3 +1257,7 @@ input,select,textarea { accent-color:var(--mote-accent); }
 .first-record{margin:28px 0;padding:20px;border:1px solid var(--mote-divider);border-radius:8px;background:var(--mote-surface)}
 #home-first-record-preview{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.9}
 #home-first-read{font-size:12px;padding-left:0}
+
+.ask-pending{padding:18px 0;margin:20px 0;border-block:1px solid var(--mote-divider)}
+.ask-pending p{font-size:12px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+#ask-pending-original{color:var(--mote-muted)}

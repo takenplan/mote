@@ -30,3 +30,9 @@ describe('question draft during an explicit language reload', () => {
     expect(() => keepLanguageAskDraft({ setItem() { throw Error('Generated storage failure'); } }, { scope: 'same', question: 'Keep this draft', view: 'history' })).toThrow('Generated storage failure');
   });
 });
+
+
+it('carries an uncertain admission ID separately from a later unsent draft without resubmitting it',()=>{
+  const storage=session(),draft={scope:'generated-owner/device',question:'Later unsent input',view:'conversation' as const,pendingRequest:{id:'612585bd-2c32-4406-83eb-5aeed1b8ef8f',question:'Original admitted question'}};
+  keepLanguageAskDraft(storage,draft);expect(takeLanguageAskDraft(storage,draft.scope)).toEqual(draft);expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
+});
