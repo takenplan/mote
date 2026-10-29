@@ -4,16 +4,12 @@ import {createHash} from 'node:crypto';
 import type {AttributionContext} from '@mote/shared';
 import {StoreError,type Store} from './store.js';
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
+import {importAttributionDeclarationSchema as declarationSchema,portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution-contract.js';
+export {portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution-contract.js';
 
-const declarationSchema=z.object({id:z.string().uuid(),version:z.number().int().positive(),sourceId:z.string().min(1).max(128),instruction:z.string().max(12000)}).strict();
 type Declaration=z.infer<typeof declarationSchema>;
 export type ImportDeclaration=NonNullable<AttributionContext['importDeclarations']>[number];
 const fingerprint=(value:Declaration)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export const portableImportAttributionSchema=z.object({
-  declarations:z.array(declarationSchema.extend({fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict()),
-  captures:z.array(z.object({captureId:z.string().uuid(),id:z.string().uuid(),version:z.number().int().positive()}).strict()),
-}).strict();
-export type PortableImportAttribution=z.infer<typeof portableImportAttributionSchema>;
 
 /** Host-only metadata. Neither source manifests nor operation progress links
  * can create a declaration. Text outlives deleted import history while its

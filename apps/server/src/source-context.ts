@@ -1,12 +1,11 @@
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
-import {sourceContextDeclarationSchema,sourceDescriptionDeclarationSchema,sourceContextSnapshotSchema,sourceContextUpdateSchema,type AttributionContext,type SourceContextDeclaration,type SourceContextSnapshot} from '@mote/shared';
+import {sourceContextDeclarationSchema,sourceDescriptionDeclarationSchema,sourceContextUpdateSchema,type AttributionContext,type SourceContextDeclaration,type SourceContextSnapshot} from '@mote/shared';
 import {StoreError,type Store} from './store.js';
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
+import {sourceContextArchiveDeclarationSchema as declarationSchema,portableSourceContextSchema,type PortableSourceContext} from './source-context-contract.js';
+export {portableSourceContextSchema,type PortableSourceContext} from './source-context-contract.js';
 
-const declarationSchema=sourceContextSnapshotSchema.extend({version:z.number().int().positive(),fingerprint:sourceContextDeclarationSchema.shape.fingerprint,updatedAt:z.string().datetime({offset:true})}).strict();
-export const portableSourceContextSchema=z.object({declarations:z.array(declarationSchema)}).strict();
-export type PortableSourceContext=z.infer<typeof portableSourceContextSchema>;
 const fingerprint=(value:{sourceId:string;version:number;description:string})=>createHash('sha256').update(JSON.stringify({sourceId:value.sourceId,version:value.version,description:value.description})).digest('hex');
 
 /** Owner-only control plane metadata. Collector content cannot write these

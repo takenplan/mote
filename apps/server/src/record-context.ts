@@ -3,14 +3,12 @@ import type {AttributionContext,CaptureInput} from '@mote/shared';
 import {z} from 'zod';
 import {StoreError,type Store} from './store.js';
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
+import {recordContextDeclarationSchema as declarationSchema,portableRecordContextSchema,type PortableRecordContext} from './record-context-contract.js';
+export {portableRecordContextSchema,type PortableRecordContext} from './record-context-contract.js';
 
-const hash=z.string().regex(/^[a-f0-9]{64}$/);
-const declarationSchema=z.object({captureId:z.string().uuid(),version:z.literal(1),captureFingerprint:hash,description:z.string().min(1).max(12000)}).strict();
 type Declaration=z.infer<typeof declarationSchema>;
 type Pin=NonNullable<AttributionContext['recordContextDeclarations']>[number];
 const fingerprint=(value:Declaration)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export const portableRecordContextSchema=z.object({declarations:z.array(declarationSchema.extend({fingerprint:hash}).strict())}).strict();
-export type PortableRecordContext=z.infer<typeof portableRecordContextSchema>;
 
 /** Transport prose is removed before canonical evidence, search or heartbeat storage. */
 export function withoutOwnerDescription(input:CaptureInput):CaptureInput {

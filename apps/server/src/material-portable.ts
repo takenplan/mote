@@ -1,9 +1,12 @@
 import {z} from 'zod';
 import {MaterialStore,materialId,materialManifestSchema,materialEvidenceContextSchema} from './materials.js';
 import {StoreError,sha256,type Store} from './store.js';
-import {ImportAttributionStore,portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution.js';
-import {SourceContextStore,portableSourceContextSchema,type PortableSourceContext} from './source-context.js';
-import {RecordContextStore,portableRecordContextSchema,type PortableRecordContext} from './record-context.js';
+import {ImportAttributionStore} from './import-attribution.js';
+import {portableImportAttributionSchema,type PortableImportAttribution} from './import-attribution-contract.js';
+import {SourceContextStore} from './source-context.js';
+import {portableSourceContextSchema,type PortableSourceContext} from './source-context-contract.js';
+import {RecordContextStore} from './record-context.js';
+import {portableRecordContextSchema,type PortableRecordContext} from './record-context-contract.js';
 import {captureContextMembers,isCaptureContextSourceId} from './capture-context.js';
 
 const hash=z.string().regex(/^[a-f0-9]{64}$/),id=z.string().regex(/^mat_[a-f0-9]{64}$/),uuid=z.string().uuid();
