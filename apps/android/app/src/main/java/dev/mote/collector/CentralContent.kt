@@ -22,6 +22,7 @@ internal class CentralContent(
 ) : ContextWrapper(activity) {
     fun recordNew() = activity.openRecordEditor()
     fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
+    fun takeAskConversation(): String? = activity.intent.getStringExtra("conversationId")?.also { activity.intent.removeExtra("conversationId") }
     fun takeAskEvidence(): String? = activity.intent.getStringExtra("evidenceId")?.also { activity.intent.removeExtra("evidenceId") }
     val root: LinearLayout
     private lateinit var backButton: TextView
@@ -38,8 +39,13 @@ internal class CentralContent(
     private lateinit var addAction: TextView
     private lateinit var status: TextView
     private lateinit var title: TextView
-    private var navigation: MotePrimaryNavigation? = null
     private lateinit var collectionBar: LinearLayout
+    private lateinit var composer: LinearLayout
+    private lateinit var settingsAction: TextView
+    private lateinit var moreAction: TextView
+    private lateinit var historyAction: TextView
+    private lateinit var newConversationAction: TextView
+    private lateinit var conversationMoreAction: TextView
     private val pageHistory = mutableListOf<String>()
     internal var client: CentralClient? = null; private set
     internal var server = ""; private set
@@ -117,7 +123,7 @@ internal class CentralContent(
         val actions = if (compactHeader) LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL } else header
         backButton = TextView(this).apply {
             text = "‹"; contentDescription = MoteI18n.text("返回上级"); textSize = 28f; gravity = Gravity.CENTER
-            isFocusable = true; minHeight = moteDp(48); setOnClickListener { if (!back()) { if (openLocalPage != null) localPage("LIBRARY") else activity.finish() } }
+            isFocusable = true; minHeight = moteDp(48); setOnClickListener { if (!back()) { if (openLocalPage != null) localPage("OVERVIEW") else activity.finish() } }
         }
         heading.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
         title = TextView(this).apply { tag = "central-title"; MoteUi.type(this, NativeFontRole.APPBAR, medium = true); maxLines = Int.MAX_VALUE; ellipsize = null; MoteUi.textColor(this, NativeColorRole.INK) }
@@ -133,13 +139,18 @@ internal class CentralContent(
             return item
         }
         addAction = headerAction("记下", "记下", tonal = true) { activity.openRecordEditor() }
-        headerAction("设置") { localPage("SETTINGS") }
-        headerAction("更多") { more() }
+        settingsAction = headerAction("设置") { localPage("SETTINGS") }
+        moreAction = headerAction("更多") { more() }
+        historyAction = headerAction("◷", "对话历史") { screens?.showAskHistory() }
+        newConversationAction = headerAction("＋", "新对话") { screens?.newConversation() }
+        conversationMoreAction = headerAction("⋯", "对话更多") { screens?.conversationMore() }
+        header.minimumHeight = moteDp(66)
         if (compactHeader) {
             header.addView(heading, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(6) })
             header.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(6) })
         }
         shell.header(header)
+        shell.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1,moteDp(1)) })
         status = TextView(this).apply {
             tag = "central-status"
             visibility = View.GONE
@@ -151,17 +162,9 @@ internal class CentralContent(
         scroll = ScrollView(this).apply { isFillViewport = true }
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(24)) }
         scroll.addView(body); shell.content(scroll)
-        if (openLocalPage == null) navigation = MotePrimaryNavigation(activity) { destination ->
-            when (destination) {
-                MotePrimaryTab.HOME -> activity.openMotePrimary(destination)
-                MotePrimaryTab.ASK -> { pageHistory.clear(); navigate("ask", remember = false) }
-                MotePrimaryTab.LIBRARY -> { pageHistory.clear(); navigate("archive", remember = false) }
-                MotePrimaryTab.SOURCES -> activity.openMotePrimary(destination)
-                MotePrimaryTab.ACTIVITY -> { pageHistory.clear(); navigate("activity", remember = false) }
-            }
-        }
-        navigation?.let(shell::navigation)
-        MoteUi.styleTree(header); navigation?.select(MoteNavigation.centralTab(page)); updateBackButton()
+        composer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "ask-composer" }
+        shell.footer(composer)
+        MoteUi.styleTree(header); updateBackButton()
     }
 
     fun resume() {
@@ -201,7 +204,7 @@ internal class CentralContent(
             pendingInsightId?.let { screens?.selectInsight(it) }; pendingInsightId = null
         }
         if (client == null) { screens?.clearPrivateState(); login() }
-        else if (changed || authenticated || sessionChanged || body.childCount == 0) navigate(page) else if (page == "ask") scheduleAskPoll() else if (page == "activity") scheduleActivityPoll()
+        else if (changed || authenticated || sessionChanged || body.childCount == 0 || (page == "ask" && activity.intent.hasExtra("conversationId"))) navigate(page) else if (page == "ask") scheduleAskPoll() else if (page == "activity") scheduleActivityPoll()
     }
     private fun deliverPendingResult() {
         accessReady = true
@@ -232,14 +235,29 @@ internal class CentralContent(
         return true
     }
     private fun updateBackButton() {
-        backButton.visibility = if (openLocalPage != null && page in setOf("ask", "activity") && pageHistory.isEmpty()) View.GONE else View.VISIBLE
+        backButton.visibility = View.VISIBLE
         addAction.visibility = View.GONE
+        val ask = page == "ask"
+        settingsAction.visibility = if (ask) View.GONE else View.VISIBLE
+        moreAction.visibility = if (ask) View.GONE else View.VISIBLE
+        historyAction.visibility = if (ask && client != null) View.VISIBLE else View.GONE
+        newConversationAction.visibility = historyAction.visibility
+        conversationMoreAction.visibility = View.GONE
     }
+    internal fun askComposer(): LinearLayout {
+        composer.removeAllViews(); composer.visibility = View.VISIBLE
+        composer.addView(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER) }, LinearLayout.LayoutParams(-1,moteDp(1)))
+        return LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(20),moteDp(10),moteDp(20),moteDp(16)) }.also(composer::addView)
+    }
+    internal fun hideAskComposer() { composer.visibility = View.GONE }
+    internal fun askConversationActions(showMore: Boolean) { conversationMoreAction.visibility = if (showMore) View.VISIBLE else View.GONE }
+    internal fun detailTitle(value: String) { title.text = value; historyAction.visibility = View.GONE; newConversationAction.visibility = View.GONE; conversationMoreAction.visibility = View.GONE }
+
 
     internal fun navigate(next: String, remember: Boolean = true) {
         if (remember && next != page) pageHistory.add(page)
-        page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews()
-        navigation?.select(MoteNavigation.centralTab(next)); updateCollectionBar(); updateBackButton()
+        page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews(); composer.removeAllViews(); composer.visibility = View.GONE
+        updateCollectionBar(); updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == if (next == "extensions") "plugins" else next }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
         if (client == null) { if (server.isBlank()) disconnected() else login(); return }
         screens?.show(next)
@@ -257,6 +275,7 @@ internal class CentralContent(
         else navigate(page)
     }
     private fun disconnected() {
+        composer.removeAllViews(); composer.visibility = View.GONE; updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == page }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
         text(MoteI18n.text(when {
             page == "ask" -> "中央问答暂不可用。连接中央后，可以根据已整理的内容提问；文件和随手记仍可在本机保存。"
@@ -309,8 +328,8 @@ internal class CentralContent(
         else startActivity(Intent(this, MainActivity::class.java).putExtra("page", "CONNECTION").putExtra("returnToCentral", true))
     }
     private fun login() {
+        composer.removeAllViews(); composer.visibility = View.GONE; updateBackButton()
         revision++; body.removeAllViews(); collectionBar.visibility = View.GONE; title.text = MoteI18n.text("登录中央节点")
-        navigation?.select(MoteNavigation.centralTab(page))
         text(server); text(MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"))
         val credential = field(MoteI18n.text("中央管理令牌"), password = true)
         text(MoteI18n.text("登录会话有效期"))

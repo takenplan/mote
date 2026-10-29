@@ -166,6 +166,11 @@ internal object GeneratedWindowRendering {
         require(base.width > 0 && base.height > 0 && base.isShown)
         check(hasNoPendingLabels(base) && overlays.all(::hasNoPendingLabels)) { "An unfinished native surface cannot be a ready scene: $name" }
         val (page, state, marker) = when (name) {
+            "home-recent" -> Triple("home", "content", "周五评审需要准备什么？")
+            "home-menu" -> Triple("manage", "content", "我的 Mote")
+            "ask-retained-draft" -> Triple("ask", "draft", "生成的未发送草稿")
+            "home-history-error" -> Triple("home", "error", "对话暂不可读取，请稍后重试。")
+            "home-first-use-draft" -> Triple("home", "first-use", "先记下一件事。")
             "feishu-preview" -> Triple("lark", "content", "实际发现的文档")
             "feishu-archived" -> Triple("lark", "content", "已归档 2 篇文档 · 6 条活动线索 · 0 项待处理 · 0 项失败")
             "home" -> Triple("home", "empty", "还没有内容。选一个动作，留下第一份资料。")

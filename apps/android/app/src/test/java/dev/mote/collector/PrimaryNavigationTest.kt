@@ -4,9 +4,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrimaryNavigationTest {
-    @Test fun recordAdditionStaysInContentJourneysInsteadOfMaintenance() {
+    @Test fun theGlobalRecordActionOnlyBelongsToTheLightHome() {
         for (page in listOf("overview", "actions", "archive", "files", "notes", "ask")) {
-            assertTrue("Record action remains available on $page", MoteNavigation.centralAllowsAdd(page))
+            assertFalse("Secondary content pages do not repeat the home record action: $page", MoteNavigation.centralAllowsAdd(page))
         }
         for (page in listOf("settings", "connections", "devices", "plugins", "vault", "processing", "developer", "about")) {
             assertFalse("Maintenance stays focused on $page", MoteNavigation.centralAllowsAdd(page))
@@ -31,7 +31,7 @@ class PrimaryNavigationTest {
         assertFalse(MoteNavigation.libraryBrowsePages.contains("coding"))
         assertEquals(MotePrimaryTab.LIBRARY, MoteNavigation.centralTab("coding"))
         assertEquals("archive", MoteNavigation.centralParent("coding"))
-        assertEquals(listOf("首页", "资料库", "问一问", "来源"), MoteNavigation.primaryTabs().map { it.titleKey })
+        assertTrue("Management routes live in the secondary menu, not persistent tabs", MoteNavigation.primaryTabs().isEmpty())
         assertEquals("OVERVIEW", MoteNavigation.initialLocalPage())
         assertEquals(MotePrimaryTab.SOURCES, MoteNavigation.localTab("SOURCES"))
         assertEquals(MotePrimaryTab.ACTIVITY, MoteNavigation.centralTab("activity"))
@@ -56,4 +56,12 @@ class PrimaryNavigationTest {
         assertFalse(MoteNavigation.isFirstUse(false, true, null, false))
         assertFalse(MoteNavigation.isFirstUse(true, false, null, false))
     }
+    @Test fun interruptedCaptureRemainsActionableAfterSafeStopWhileIntentionalPauseIsQuiet() {
+        assertTrue(CaptureAttention.show(false, "permission_required", false, true, false))
+        assertTrue(CaptureAttention.show(false, "error", false, false, false))
+        assertFalse(CaptureAttention.show(false, "paused", false, true, false))
+        assertFalse(CaptureAttention.show(true, "paused", true, false, false))
+        assertTrue(CaptureAttention.show(true, "capturing", false, true, false))
+    }
+
 }

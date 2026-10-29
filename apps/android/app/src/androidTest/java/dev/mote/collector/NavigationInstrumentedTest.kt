@@ -36,22 +36,27 @@ class NavigationInstrumentedTest {
     private fun editor(activity: MainActivity, hint: String) = views(activity.window.decorView)
         .filterIsInstance<EditText>().single { it.hint?.toString() == hint }
     private fun tab(activity: MainActivity, label: String) {
-        if (label in listOf("首页", "概览")) { activity.openGeneratedHome(); return }
-        if (label in listOf("随手记", "记录", "记录屏幕")) {
-            activity.openGeneratedAdd(if (label == "记录屏幕") MoteAddAction.SCREEN else MoteAddAction.NOTE)
-        } else {
-            val current = when(label) { "概览" -> "首页"; else -> label }
-            val rows = views(activity.window.decorView)
-            // Embedded Ask owns its header; use the visible Home tab to reach local Settings.
-            if (rows.filterIsInstance<TextView>().none { it.isShown && it.isClickable && it.text.toString() == current }) {
-                rows.single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
-            }
-            views(activity.window.decorView).filterIsInstance<TextView>()
-                .single { it.isShown && it.isClickable && it.text.toString() == current }.performClick()
-        }
-        // The product explicitly confirms discarding a settings draft.
-        android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
+        fun discard() = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
             .filterIsInstance<TextView>().firstOrNull { it.isShown && it.text.toString() == "丢弃修改" }?.performClick()
+        if (label !in listOf("设置", "首页", "概览", "问一问", "内容", "来源", "活动", "记录屏幕")) {
+            views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == label }.performClick()
+            return
+        }
+        repeat(8) {
+            if (views(activity.window.decorView).any { it.isShown && it.tag == "home-record-action" }) return@repeat
+            activity.onBackPressed(); discard()
+        }
+        when (label) {
+            "首页", "概览" -> Unit
+            "问一问" -> views(activity.window.decorView).single { it.isShown && it.tag == "home-ask-action" }.performClick()
+            "记录屏幕" -> activity.openGeneratedAdd(MoteAddAction.SCREEN)
+            else -> {
+                activity.openGeneratedMenu()
+                val key = when(label) { "内容" -> "资料与记忆"; "来源" -> "采集与同步"; "活动" -> "采集与同步"; else -> label }
+                views(activity.window.decorView).single { it.isShown && it.tag == "menu:$key" }.performClick()
+                if (label == "活动") views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == "活动" }.performClick()
+            }
+        }
     }
     private fun menu(activity: MainActivity, label: String) {
         if (label in listOf("按应用配置", "记录屏幕")) { tab(activity, "记录屏幕"); return }
@@ -64,12 +69,11 @@ class NavigationInstrumentedTest {
     }
 
     @Test fun tappingOutsideTheNoteDismissesEditorFocus() {
-        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            scenario.onActivity { activity -> tab(activity, "随手记") }
+        ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
             val deadline=SystemClock.elapsedRealtime()+10000; var enabled=false
-            while(!enabled && SystemClock.elapsedRealtime()<deadline){scenario.onActivity { enabled=editor(it,"记下此刻的想法…").isEnabled };if(!enabled)Thread.sleep(25)}
+            while(!enabled && SystemClock.elapsedRealtime()<deadline){scenario.onActivity { enabled=views(it.window.decorView).filterIsInstance<EditText>().single { row -> row.contentDescription == "正在想什么" }.isEnabled };if(!enabled)Thread.sleep(25)}
             scenario.onActivity { activity ->
-                val field = editor(activity, "记下此刻的想法…")
+                val field = views(activity.window.decorView).filterIsInstance<EditText>().single { it.contentDescription == "正在想什么" }
                 field.requestFocus(); assertTrue(field.hasFocus())
                 val down = SystemClock.uptimeMillis()
                 val event = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, 1f, 1f, 0)
@@ -77,66 +81,6 @@ class NavigationInstrumentedTest {
                 assertFalse(field.hasFocus())
             }
         }
-    }
-
-    @Test fun everyLocalBottomTabSwitchesOnItsFirstTouch() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        instrumentation.setInTouchMode(true)
-        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            val originalNavigation = arrayOfNulls<View>(1)
-            scenario.onActivity { originalNavigation[0] = views(it.window.decorView).single { view -> view is MotePrimaryNavigation } }
-            val askMonitor = instrumentation.addMonitor("dev.mote.collector.AskActivity", null, true)
-            val centralMonitor = instrumentation.addMonitor(CentralActivity::class.java.name, null, true)
-            try { for (label in listOf("内容", "问一问", "来源", "活动", "问一问", "内容")) {
-                instrumentation.waitForIdleSync()
-                var x = 0f; var y = 0f
-                scenario.onActivity { activity ->
-                    val item = views(activity.window.decorView).filterIsInstance<TextView>()
-                        .single { it.isShown && it.isClickable && it.text.toString() == label }
-                    val position = IntArray(2); item.getLocationOnScreen(position)
-                    x = position[0] + item.width / 2f; y = position[1] + item.height / 2f
-                }
-                val down = SystemClock.uptimeMillis()
-                MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0).let { instrumentation.sendPointerSync(it); it.recycle() }
-                MotionEvent.obtain(down, down + 30, MotionEvent.ACTION_UP, x, y, 0).let { instrumentation.sendPointerSync(it); it.recycle() }
-                instrumentation.waitForIdleSync()
-                scenario.onActivity { activity ->
-                    assertTrue("$label must select on one touch", views(activity.window.decorView).filterIsInstance<TextView>()
-                        .single { it.isShown && it.isClickable && it.text.toString() == label }.isSelected)
-                    assertSame(originalNavigation[0], views(activity.window.decorView).single { it is MotePrimaryNavigation })
-                    if (label != "问一问") assertFalse(views(activity.window.decorView).filterIsInstance<EditText>().any { it.isShown })
-                    assertFalse(activity.isFinishing)
-                }
-            }
-            assertEquals("Ask must switch inside MainActivity", 0, askMonitor.hits)
-            assertEquals("Primary tabs must not launch central Activities", 0, centralMonitor.hits)
-            } finally { instrumentation.removeMonitor(askMonitor); instrumentation.removeMonitor(centralMonitor) }
-        }
-    }
-
-    @Test fun conversationUsesTheSamePrimaryNavigationEvenBeforeConnecting() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val settings = Settings(context); val previous = settings.read()
-        org.junit.Assume.assumeTrue("Fresh generated development fixture only", context.packageName == "dev.mote.collector.dev" && previous.token.isBlank() && !settings.enabled && context.queue().depth() == 0)
-        settings.save(previous.copy(server = "", token = ""), confirmCentralEndpoint = true)
-        try { ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            scenario.onActivity { tab(it, "问一问") }
-            scenario.onActivity { activity ->
-                val tabs = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }
-                assertEquals(listOf("内容", "问一问", "来源", "活动"), tabs.map { it.text.toString() })
-                assertTrue(tabs.single { it.text == "问一问" }.isSelected)
-                assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text == "打开对话" })
-                assertFalse(views(activity.window.decorView).any { it.isShown && it.contentDescription == "返回上一页" })
-                assertFalse(Settings(activity).enabled)
-            }
-            scenario.recreate(); scenario.awaitMainUi()
-            scenario.onActivity { activity ->
-                assertTrue(views(activity.window.decorView).single { it.tag == "primary:ASK" }.isSelected)
-                activity.onBackPressed()
-                assertTrue(views(activity.window.decorView).single { it.tag == "primary:LIBRARY" }.isSelected)
-                assertFalse(activity.isFinishing)
-            }
-        } } finally { settings.save(previous, confirmCentralEndpoint = true) }
     }
 
     @Test fun permissionsAndLocalLogsOpenWithoutStartingCapture() {
@@ -169,26 +113,23 @@ class NavigationInstrumentedTest {
     }
 
     private fun navigate(scenario: ActivityScenario<MainActivity>, label: String) {
-        val instrumentation=InstrumentationRegistry.getInstrumentation()
-        if (label in listOf("随手记", "记录", "记录屏幕")) {
-            // Add belongs to Home/Content. Finish the real Home transition and its draft decision first.
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        repeat(8) {
+            var home = false
             scenario.onActivity { activity ->
-                if (views(activity.window.decorView).none { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) {
-                    views(activity.window.decorView).single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
+                home = views(activity.window.decorView).any { it.isShown && it.tag == "home-record-action" }
+                if (!home) activity.onBackPressed()
+            }
+            if (!home) {
+                instrumentation.waitForIdleSync()
+                instrumentation.runOnMainSync {
+                    android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
+                        .filterIsInstance<TextView>().firstOrNull { it.isShown && it.text.toString() == "丢弃修改" }?.performClick()
                 }
+                instrumentation.waitForIdleSync()
             }
-            instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync {
-                android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
-                    .filterIsInstance<TextView>().firstOrNull { it.isShown && it.text.toString() == MoteI18n.text("丢弃修改") }?.performClick()
-            }
-            instrumentation.waitForIdleSync()
         }
-        scenario.onActivity { tab(it,label) };instrumentation.waitForIdleSync()
-        instrumentation.runOnMainSync {
-            android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
-                .filterIsInstance<TextView>().firstOrNull { it.isShown && it.text.toString()=="丢弃修改" }?.performClick()
-        }
+        scenario.onActivity { tab(it,label) }
         instrumentation.waitForIdleSync()
     }
     @Test fun leavingSettingsPagesDiscardsInputsAndHidesSaveBar() {
@@ -210,9 +151,9 @@ class NavigationInstrumentedTest {
                 assertEquals(saved,Settings(activity).read())
                 editor(activity,"30").setText("47")
             }
-            navigate(scenario,"随手记")
+            navigate(scenario,"首页")
             scenario.onActivity { activity ->
-                assertTrue(editor(activity,"记下此刻的想法…").isShown)
+                assertTrue(views(activity.window.decorView).any { it.isShown && it.tag == "home-record-action" })
                 assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown&&it.text=="保存设置" })
             }
             navigate(scenario,"设置")
@@ -224,14 +165,14 @@ class NavigationInstrumentedTest {
         }
     }
 
-    @Test fun askTabUsesTheSameUnsavedSettingsConfirmation() {
+    @Test fun backUsesTheSameUnsavedSettingsConfirmation() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
             scenario.onActivity { activity ->
                 tab(activity, "设置"); menu(activity, "采集与存储")
                 editor(activity, "30").setText("47")
-                views(activity.window.decorView).single { it.tag == "primary:ASK" }.performClick()
-                assertTrue(views(activity.window.decorView).single { it.tag == "primary:SOURCES" }.isSelected)
+                activity.onBackPressed()
+                assertTrue(editor(activity, "30").isShown)
             }
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
@@ -240,7 +181,7 @@ class NavigationInstrumentedTest {
             }
             scenario.onActivity { activity -> assertEquals("47", editor(activity, "30").text.toString()) }
             navigate(scenario, "问一问")
-            scenario.onActivity { activity -> assertTrue(views(activity.window.decorView).single { it.tag == "primary:ASK" }.isSelected) }
+            scenario.onActivity { activity -> assertTrue(views(activity.window.decorView).any { it.isShown && it.tag == "central-title" }) }
             navigate(scenario, "设置")
             scenario.onActivity { activity -> menu(activity, "采集与存储"); assertEquals(Settings(activity).read().intervalSeconds.toString(), editor(activity, "30").text.toString()) }
         }
@@ -349,131 +290,5 @@ class NavigationInstrumentedTest {
     }
 
 
-    @Test fun generatedNoteKeyboardKeepsPrimaryNavigationVisible() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation(); val context = instrumentation.targetContext
-        org.junit.Assume.assumeTrue("Explicit generated-only UI rendering required", InstrumentationRegistry.getArguments().getString("renderGeneratedUi") == "true")
-        require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.startsWith("google/sdk_gphone64_arm64/emu64a:") && !Settings(context).enabled)
-        require(QuickNotes.draft(context).read().text.isEmpty())
-        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            scenario.onActivity { tab(it, "记录") }
-            val editorDeadline = SystemClock.elapsedRealtime() + 10000; var ready = false
-            while (!ready && SystemClock.elapsedRealtime() < editorDeadline) {
-                scenario.onActivity { ready = editor(it, "记下此刻的想法…").isEnabled && it.window.decorView.hasWindowFocus() }
-                if (!ready) Thread.sleep(50)
-            }
-            assertTrue("Fixture note draft must finish loading", ready)
-            scenario.onActivity { activity ->
-                val field = editor(activity, "记下此刻的想法…"); assertTrue(field.requestFocus())
-                activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-            }
-            val deadline = SystemClock.elapsedRealtime() + 10000; var shown = false
-            while (!shown && SystemClock.elapsedRealtime() < deadline) {
-                scenario.onActivity { shown = it.window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true }
-                if (!shown) Thread.sleep(50)
-            }
-            assertTrue("Fixture keyboard must open", shown)
-            instrumentation.waitForIdleSync()
-            scenario.onActivity { activity ->
-                val root = activity.window.decorView
-                val ime = root.rootWindowInsets.getInsets(android.view.WindowInsets.Type.ime())
-                val availableBottom = root.height - ime.bottom
-                val items = views(root).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }
-                assertEquals(3, items.size)
-                for (item in items) {
-                    val bounds = android.graphics.Rect(); assertTrue(item.getGlobalVisibleRect(bounds))
-                    assertTrue("${item.text} must remain above the keyboard", bounds.bottom <= availableBottom + 2)
-                }
-                assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                root.draw(Canvas(bitmap))
-                File(context.filesDir, "generated-ui").apply { mkdirs() }.resolve("notes-keyboard.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                bitmap.recycle()
-                activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
-            }
-        }
-    }
 
-    @Test fun renderGeneratedNavigationPagesWhenExplicitlyRequested() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        org.junit.Assume.assumeTrue("Explicit generated-only UI rendering required", InstrumentationRegistry.getArguments().getString("renderGeneratedUi") == "true")
-        val context = instrumentation.targetContext
-        require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.startsWith("google/sdk_gphone64_arm64/emu64a:"))
-        require(!Settings(context).enabled && context.queue().depth() == 0)
-        require(QuickNotes.draft(context).read().text.isEmpty())
-        val directory = File(context.filesDir, "generated-ui").apply { mkdirs() }
-        fun stableFrames(scenario: ActivityScenario<out android.app.Activity>) {
-            val ready = java.util.concurrent.CountDownLatch(1)
-            scenario.onActivity { activity -> activity.window.decorView.postOnAnimation {
-                activity.window.decorView.postOnAnimation { ready.countDown() }
-            } }
-            assertTrue("Generated draw must follow the visibility/layout traversal", ready.await(5, java.util.concurrent.TimeUnit.SECONDS))
-            instrumentation.waitForIdleSync()
-        }
-        ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            // Every primary destination is rendered inside the same generated MainActivity.
-            listOf("首页" to "overview", "问一问" to "ask", "记录" to "notes", "内容" to "library", "设置" to "settings", "采集与存储" to "capture-settings", "连接与同步" to "sync-settings", "按应用配置" to "privacy-settings", "本机存储" to "storage-settings", "图像质量与去重" to "processing-settings").forEach { (label, file) ->
-                scenario.onActivity {
-                    when {
-                        file.endsWith("-settings") -> { tab(it, "设置"); if (file == "processing-settings") menu(it, "采集与存储"); menu(it, label) }
-                        else -> tab(it, label)
-                    }
-                }
-                instrumentation.waitForIdleSync()
-                if (file == "ask") {
-                    val deadline = SystemClock.elapsedRealtime() + 10000; var ready = false
-                    while (!ready && SystemClock.elapsedRealtime() < deadline) {
-                        scenario.onActivity { activity -> ready = views(activity.window.decorView).filterIsInstance<TextView>().any { it.tag == "central-title" && it.text.isNotBlank() } }
-                        if (!ready) Thread.sleep(50)
-                    }
-                    assertTrue("Embedded Ask must finish loading for the generated rendering", ready)
-                }
-                stableFrames(scenario)
-                scenario.onActivity { activity ->
-                    assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                    val view = activity.window.decorView
-                    if (file != "ask") {
-                        val add = views(view).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == "添加" }
-                        val bounds = android.graphics.Rect()
-                        assertTrue("$file keeps a measured, visible Add header", add.height > 0 && add.getGlobalVisibleRect(bounds) && bounds.height() == add.height)
-                    } else {
-                        val header = views(view).single { it.isShown && it.tag == "central-header" }
-                        val bounds = android.graphics.Rect()
-                        assertTrue("Ask keeps its native central header", header.height > 0 && header.getGlobalVisibleRect(bounds) && bounds.height() == header.height)
-                    }
-                    val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-                    // Draw only this generated-fixture application's own view tree, never the device screen.
-                    view.draw(Canvas(bitmap))
-                    File(directory, "$file.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    bitmap.recycle()
-                }
-            }
-        }
-        ActivityScenario.launch(SourcesActivity::class.java).use { scenario ->
-            stableFrames(scenario)
-            scenario.onActivity { activity ->
-                assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                val root = activity.window.decorView
-                val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                root.draw(Canvas(bitmap))
-                File(directory, "sources.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                bitmap.recycle()
-            }
-        }
-        ActivityScenario.launch(CentralActivity::class.java).use { scenario ->
-            stableFrames(scenario)
-            scenario.onActivity { activity ->
-                assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                val root = activity.window.decorView
-                val header = views(root).single { it.tag == "central-header" } as ViewGroup
-                for (index in 0 until header.childCount) {
-                    val child = header.getChildAt(index)
-                    assertTrue("Central header child must have room", child.width > 0 && child.right <= header.width)
-                }
-                val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                root.draw(Canvas(bitmap))
-                File(directory, "central-login.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                bitmap.recycle()
-            }
-        }
-    }
 }

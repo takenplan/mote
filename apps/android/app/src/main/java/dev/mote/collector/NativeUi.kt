@@ -268,47 +268,50 @@ class MoteNavigationIcon(context: Context, private val kind: String, private val
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** One primary navigation, including while login or a detail screen is visible. */
+/** The phone home has two actions; management and detail pages have no persistent tabs. */
 class MotePrimaryNavigation(private val activity: Activity, private val onSelect: (MotePrimaryTab) -> Unit) : LinearLayout(activity) {
-    private val items = linkedMapOf<MotePrimaryTab, TextView>()
-    private var selected = MotePrimaryTab.LIBRARY
-    init { refreshPresentation() }
+    private var selected = MotePrimaryTab.HOME
+    private var hasDraft = false
+    private lateinit var record: TextView
+    init { setWillNotDraw(false); refreshPresentation() }
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val line = Paint().apply { color = NativeColorRole.DIVIDER.color(); strokeWidth = resources.displayMetrics.density }
+        canvas.drawLine(0f, 0f, width.toFloat(), 0f, line)
+    }
     fun refreshPresentation() {
-        removeAllViews(); items.clear()
-        val rail = NativeUiPacks.registry.layout().navigation == "adaptive" && resources.configuration.screenWidthDp >= 600
-        orientation = if (rail) VERTICAL else HORIZONTAL
-        isBaselineAligned = false
-        gravity = if (rail) Gravity.TOP else Gravity.CENTER_VERTICAL
-        setPadding(activity.moteDp(8), activity.moteDp(8), activity.moteDp(8), activity.moteDp(8))
-        MoteUi.backgroundColor(this, NativeColorRole.SIDEBAR)
-        contentDescription = MoteI18n.text("主导航")
-        MoteNavigation.primaryTabs().forEachIndexed { index, tab ->
-            if (index == 2) {
-                val record = MoteUi.button(Button(activity).apply {
-                    text = MoteI18n.text("＋记下"); contentDescription = MoteI18n.text("＋记下"); tag = "global-record-action"
-                    setOnClickListener { activity.openRecordEditor() }
-                }, true)
-                addView(record, if (rail) LayoutParams(activity.moteDp(88), activity.moteDp(58)) else LayoutParams(0, activity.moteDp(58), 1f))
-            }
-            val item = TextView(activity).apply {
-                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, NativeFontRole.META); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
-                compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
-                contentDescription = MoteI18n.text(tab.titleKey); setOnClickListener { onSelect(tab) }
-            }
-            items[tab] = item
-            addView(item, (if (rail) LayoutParams(activity.moteDp(88), -2) else LayoutParams(0, -2, 1f)).apply { marginStart = activity.moteDp(2); marginEnd = activity.moteDp(2) })
+        removeAllViews()
+        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false
+        setPadding(activity.moteDp(20), activity.moteDp(14), activity.moteDp(20), activity.moteDp(16))
+        MoteUi.backgroundColor(this, NativeColorRole.BACKGROUND)
+        contentDescription = MoteI18n.text("记录与提问")
+        record = TextView(activity).apply {
+            tag = "home-record-action"; gravity = Gravity.CENTER; minHeight = activity.moteDp(53)
+            setPadding(activity.moteDp(18), 0, activity.moteDp(18), 0)
+            MoteUi.type(this, NativeFontRole.ACTION, medium = true)
+            MoteUi.textColor(this, NativeColorRole.BACKGROUND)
+            background = MoteUi.clickable(activity, NativeColorRole.ACCENT, 10, false)
+            isFocusable = true; setOnClickListener { activity.openRecordEditor() }
         }
-        select(selected)
-    }
-    fun select(tab: MotePrimaryTab) {
-        selected = tab
-        items.forEach { (destination, view) ->
-            val active = destination == tab
-            view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, NativeColorRole.SIDEBAR, outline = false)
-            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
+        addView(record, LayoutParams(-2, -2).apply { marginEnd = activity.moteDp(10) })
+        val ask = LinearLayout(activity).apply {
+            tag = "home-ask-action"; gravity = Gravity.CENTER_VERTICAL; minimumHeight = activity.moteDp(53)
+            setPadding(activity.moteDp(15), 0, activity.moteDp(15), 0)
+            background = MoteUi.clickable(activity, NativeColorRole.SURFACE, 10, true, NativeColorRole.BORDER)
+            contentDescription = MoteI18n.text("问一问"); isFocusable = true
+            setOnClickListener { onSelect(MotePrimaryTab.ASK) }
         }
+        ask.addView(TextView(activity).apply { text = MoteI18n.text("问一问…"); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.MUTED) }, LayoutParams(0, -2, 1f))
+        ask.addView(TextView(activity).apply { text = "↗"; textSize = 17f; MoteUi.textColor(this, NativeColorRole.ACCENT) })
+        addView(ask, LayoutParams(0, -2, 1f))
+        updateDraft(hasDraft); select(selected)
     }
+    fun updateDraft(value: Boolean) {
+        hasDraft = value
+        record.text = "✎  " + MoteI18n.text(if (value) "继续草稿" else "记录")
+        record.contentDescription = MoteI18n.text(if (value) "继续草稿" else "记录")
+    }
+    fun select(tab: MotePrimaryTab) { selected = tab; visibility = if (tab == MotePrimaryTab.HOME) VISIBLE else GONE }
 }
 
 /** The selected destination is indicated at its icon; the entire item remains one touch target. */
@@ -347,13 +350,13 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     else -> MotePrimaryTab.LIBRARY
 }
 
-fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, onBack: () -> Unit = { finish() }): LinearLayout {
+fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceItem), moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceGroup))
     }
     val root = NativeAppShell(this).apply { moteInsets() }
-    val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+    val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = moteDp(66) }
     header.addView(TextView(this).apply {
         text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
         MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.ACCENT)
@@ -365,16 +368,10 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
         text = title; tag = "detail-title"; MoteUi.type(this, NativeFontRole.APPBAR, medium = true); MoteUi.textColor(this, NativeColorRole.INK)
         setPadding(0, moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
-    // Content and source tasks share Add; maintenance pages keep their configuration duty.
-    val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
-    if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
-        tag = "detail-add-action"
-        text = MoteI18n.text("记下"); contentDescription = MoteI18n.text("记下")
-        setOnClickListener { openRecordEditor() }
-    }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
+    headerAction?.let { header.addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(20) }) }
     root.header(header)
+    root.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1, moteDp(1)) })
     root.content(ScrollView(this).apply { isFillViewport = true; addView(body) })
-    if (primary != null) root.navigation(MotePrimaryNavigation(this) { openMotePrimary(it) }.apply { select(primary) })
     setContentView(root)
     return body
 }

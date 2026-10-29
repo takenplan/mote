@@ -87,29 +87,24 @@ class NativeUiPackInstrumentedTest {
             File(context.filesDir, "ui-packs/$name.png").apply { parentFile!!.mkdirs(); outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
         } finally { bitmap.recycle() }
     }
-    @Test fun contentDefaultFourDestinationsDeepLinkAndAuxiliaryHomeKeepOneNativeNavigation() {
+    @Test fun lightHomeAndSecondaryDeepLinksKeepTheNativeOwnerWindow() {
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            var navigation: View? = null
             scenario.onActivity { activity ->
-                navigation = visible(activity).single { it is MotePrimaryNavigation }
-                assertEquals(listOf("内容", "问一问", "来源", "活动"), visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
-                assertTrue(visible(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
+                assertTrue(visible(activity).any { it.tag == "home-record-action" })
+                assertFalse(visible(activity).any { it.tag?.toString()?.startsWith("primary:") == true })
                 assertEquals(Color.parseColor("#1c1b1a"), MoteTheme.background)
-                render(activity, "content-default")
+                render(activity, "home-default")
             }
-            for (destination in listOf("SOURCES", "ACTIVITY", "ASK", "LIBRARY")) {
-                scenario.onActivity { visible(it).single { row -> row.tag == "primary:$destination" }.performClick() }
-                await(scenario, "$destination uses the existing owner window") { visible(it).single { row -> row.tag == "primary:$destination" }.isSelected }
-                scenario.onActivity { assertSame(navigation, visible(it).single { row -> row is MotePrimaryNavigation }); assertFalse(Settings(it).enabled) }
+            for (destination in listOf("采集与同步", "资料与记忆", "设置")) {
+                scenario.onActivity { activity -> activity.openGeneratedMenu(); visible(activity).single { it.tag == "menu:$destination" }.performClick() }
+                scenario.onActivity { assertFalse(visible(it).any { row -> row.tag == "home-record-action" }); assertFalse(Settings(it).enabled) }
             }
             scenario.onActivity { it.openGeneratedHome() }
-            await(scenario, "Auxiliary Home remains reachable") { visible(it).any { row -> row.tag == "home-recent-content" } }
             scenario.recreate(); scenario.awaitMainUi()
-            await(scenario, "Restoration wins over the new content default") { visible(it).any { row -> row.tag == "home-recent-content" } }
-            scenario.onActivity { assertSame(MotePrimaryTab.LIBRARY, MoteNavigation.localTab("OVERVIEW")); render(it, "auxiliary-home") }
+            await(scenario, "The light home survives recreation") { visible(it).any { row -> row.tag == "home-record-action" } }
         }
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).putExtra("page", "SOURCES")).awaitMainUi().use { scenario ->
-            scenario.onActivity { assertTrue(visible(it).single { row -> row.tag == "primary:SOURCES" }.isSelected); render(it, "sources") }
+            scenario.onActivity { assertTrue(visible(it).any { row -> row.tag == "local-back:SOURCES" }); assertFalse(visible(it).any { row -> row.tag == "home-record-action" }); render(it, "sources") }
         }
     }
     @Test fun liveThemeAndLayoutReplacementAndRemovalPreserveUnsavedSensitiveFieldsAndReturnPolicy() {
@@ -124,8 +119,8 @@ class NativeUiPackInstrumentedTest {
             }
             await(scenario, "Active provider replacement preserves and restyles the real window") { activity -> activity === previous && (visible(activity).single { it.tag == "local-page-title" } as TextView).currentTextColor == MoteTheme.ink && visible(activity).filterIsInstance<EditText>().any { it.tag == "设备名称" && it.text.toString() == "Generated unsaved name" } }
             scenario.onActivity { activity ->
-                assertEquals(listOf("来源", "活动", "问一问", "内容"), visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
-                assertTrue(visible(activity).single { it.tag == "primary:SOURCES" }.isSelected)
+                assertEquals(emptyList<String>(), visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
+                assertTrue(visible(activity).any { it.tag == "local-back:CONNECTION" })
                 assertEquals(Color.parseColor("#11202a"), (visible(activity).first { it is NativeAppShell }.background as ColorDrawable).color)
                 assertEquals(Color.parseColor("#dceef3"), (visible(activity).single { it.tag == "local-page-title" } as TextView).currentTextColor)
                 assertEquals("generated-unsaved-token-1234567890", visible(activity).filterIsInstance<EditText>().single { it.hint == "建议通过邀请获取本设备凭据" }.text.toString())
@@ -146,12 +141,12 @@ class NativeUiPackInstrumentedTest {
             await(scenario, "Removing only the active theme restores builtin theme and retains layout and draft") { activity -> activity === previous && (visible(activity).single { it.tag == "local-page-title" } as TextView).currentTextColor == MoteTheme.ink && visible(activity).filterIsInstance<EditText>().any { it.tag == "设备名称" && it.text.toString() == "Generated unsaved name" } }
             scenario.onActivity { activity ->
                 assertEquals(originalBinding.theme, NativeUiPacks.registry.activeBinding().theme); assertEquals(binding.layout, NativeUiPacks.registry.activeBinding().layout)
-                assertEquals(listOf("来源", "活动", "问一问", "内容"), visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
+                assertEquals(emptyList<String>(), visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
                 assertEquals(Color.parseColor("#1c1b1a"), MoteTheme.background)
                 previous = activity; NativeUiPacks.registry.removeLayout(binding.layout)
             }
-            await(scenario, "Removing the layout restores builtin primary order without changing current route") { activity -> activity === previous && visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() } == listOf("内容", "问一问", "来源", "活动") && (visible(activity).single { it.tag == "local-page-title" } as TextView).currentTextColor == MoteTheme.ink && visible(activity).filterIsInstance<EditText>().any { it.tag == "设备名称" && it.text.toString() == "Generated unsaved name" } }
-            scenario.onActivity { activity -> assertTrue(visible(activity).single { it.tag == "primary:SOURCES" }.isSelected); assertEquals(originalBinding, NativeUiPacks.registry.activeBinding()); assertFalse(Settings(activity).enabled) }
+            await(scenario, "Removing the layout keeps the secondary route without bringing back retired tabs") { activity -> activity === previous && visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() } == emptyList<String>() && (visible(activity).single { it.tag == "local-page-title" } as TextView).currentTextColor == MoteTheme.ink && visible(activity).filterIsInstance<EditText>().any { it.tag == "设备名称" && it.text.toString() == "Generated unsaved name" } }
+            scenario.onActivity { activity -> assertTrue(visible(activity).any { it.tag == "local-back:CONNECTION" }); assertEquals(originalBinding, NativeUiPacks.registry.activeBinding()); assertFalse(Settings(activity).enabled) }
         }
     }
     @Test fun actualWorkActivityReceiptsAndReadOnlyResultsSurviveRecreationWithoutChangingAskDraft() {
@@ -176,7 +171,7 @@ class NativeUiPackInstrumentedTest {
             scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(question); click(activity, "发送") }
             await(scenario, "Generated deterministic agent answer is actually archived") { idle(it) && visible(it).filterIsInstance<TextView>().any { row -> row.text.contains("Generated native answer") } && visible(it).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.isEmpty() } }
             val draft = "Generated unsent Ask draft remains private"
-            scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(draft); visible(activity).single { it.tag == "primary:ACTIVITY" }.performClick() }
+            scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText(draft); activity.openGeneratedMenu(); visible(activity).single { it.tag == "menu:采集与同步" }.performClick(); click(activity, "活动") }
             await(scenario, "The primary Activity loads product receipts") { visible(it).filterIsInstance<TextView>().any { row -> row.isClickable && row.text == "最近完成" } }
             scenario.onActivity { click(it, "最近完成") }
             await(scenario, "Completed product work appears in Activity") { visible(it).filterIsInstance<TextView>().any { row -> row.text.toString() == question } }
@@ -194,13 +189,13 @@ class NativeUiPackInstrumentedTest {
             await(scenario, "Activity detail selection and result section restore by origin") { visible(it).filterIsInstance<Button>().any { row -> row.text == "查看成果" } }
             scenario.onActivity { click(it, "查看成果") }
             await(scenario, "Actual saved conversation opens read-only") { visible(it).filterIsInstance<TextView>().any { row -> row.text.contains("Generated native answer") } }
-            scenario.onActivity { activity -> render(activity, "work-result"); visible(activity).single { it.tag == "primary:ASK" }.performClick() }
+            scenario.onActivity { activity -> render(activity, "work-result"); activity.openGeneratedHome(); visible(activity).single { it.tag == "home-ask-action" }.performClick() }
             await(scenario, "Returning to Ask preserves the separate unsent draft") { visible(it).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.toString() == draft } }
             val binding = variant()
             var old: MainActivity? = null
             scenario.onActivity { old = it; NativeUiPacks.registry.bind(binding) }
-            await(scenario, "Live provider replacement preserves Ask, owner session and draft") { activity -> activity === old && visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() } == listOf("来源", "活动", "问一问", "内容") && visible(activity).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.toString() == draft } }
-            scenario.onActivity { assertTrue(visible(it).single { row -> row.tag == "primary:ASK" }.isSelected); assertFalse(Settings(it).enabled); render(it, "replacement-ask") }
+            await(scenario, "Live provider replacement preserves Ask, owner session and draft") { activity -> activity === old && visible(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() } == emptyList<String>() && visible(activity).filterIsInstance<EditText>().any { row -> row.contentDescription == "你的问题" && row.text.toString() == draft } }
+            scenario.onActivity { assertTrue(visible(it).any { row -> row.tag == "central-title" && (row as? TextView)?.text == "问一问" }); assertFalse(Settings(it).enabled); render(it, "replacement-ask") }
         }
         CentralSession.get(context).signOut()
     }

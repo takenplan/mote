@@ -37,6 +37,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var preset: Spinner? = null
     private var model: EditText? = null
     private var modelSettings = JSONObject()
+    private var askHistory = JSONObject()
     private var messages: LinearLayout? = null
     private var scopeBox: LinearLayout? = null
     private var scopeLabel: TextView? = null
@@ -151,99 +152,146 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             if (scopeRefused) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
             val conversationId = askState.optString("conversationId")
             if (conversationId.isNotBlank()) loadConversation(conversationId)
+            ui.takeAskConversation()?.let(::selectConversation)
             if (askState.has("runId") || askState.has("pending")) ui.scheduleAskPoll()
         }
     }
     private fun buildAsk(history: JSONObject) {
+        askHistory = history
         body.removeAllViews()
-        messages = ui.card()
-        runStatus = ui.text("", parent = messages!!)
-
-        ui.button(MoteI18n.text("新对话")) {
-            if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@button }
-            askState.remove("runId"); askState.remove("conversationId"); askState.remove("runStatus"); askState.remove("evidenceIds"); askState.remove("anchorEvidenceIds"); askState.remove("scopeDirty"); askState.put("question", ""); persistAsk(); refresh()
-        }
-        ui.button(MoteI18n.text("刷新")) { refresh() }
-        scopeBox = ui.card().also { box ->
-            scopeLabel = ui.text("", NativeFontRole.SUPPORT, box)
-            ui.button(MoteI18n.text("仅查这条记录"), parent = box) {
+        body.setPadding(ui.moteDp(20), ui.moteDp(25), ui.moteDp(20), ui.moteDp(28))
+        messages = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
+        runStatus = ui.text("", parent = messages!!).apply { setPadding(0,0,0,0) }
+        if (askState.optString("conversationId").isBlank()) ui.text(MoteI18n.text("想从留下的内容里找什么？"), NativeFontRole.TITLE_MOBILE, messages!!)
+        ui.askConversationActions(askState.optString("conversationId").isNotBlank())
+        val compose = ui.askComposer()
+        scopeBox = LinearLayout(ui).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }.also(compose::addView)
+        scopeLabel = TextView(ui).apply {
+            MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED)
+            minHeight = ui.moteDp(38); gravity = android.view.Gravity.CENTER_VERTICAL; isFocusable = true
+            setOnClickListener {
                 val id = (askState.optJSONArray("anchorEvidenceIds") ?: askState.optJSONArray("evidenceIds"))?.optString(0)
-                if (!id.isNullOrBlank()) {
-                    if (!NativeAskEvidenceScope.selectOnly(askState, id)) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
-                    else { persistAsk(); updateScope() }
-                }
+                if (id.isNullOrBlank()) { ui.navigate("archive"); return@setOnClickListener }
+                val labels = listOf("参考这条记录，自动查找相关上下文", "仅查这条记录", "清除范围")
+                MoteDialogBuilder(ui).setTitle(MoteI18n.text("调整参考范围")).setItems(labels.map { MoteI18n.text(it) }.toTypedArray()) { _, index ->
+                    val accepted = when (index) { 0 -> NativeAskEvidenceScope.select(askState,id); 1 -> NativeAskEvidenceScope.selectOnly(askState,id); else -> NativeAskEvidenceScope.clear(askState) }
+                    if (accepted) { persistAsk(); updateScope() } else ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。"))
+                }.show()
             }
-            ui.button(MoteI18n.text("清除范围"), parent = box) { if (!NativeAskEvidenceScope.clear(askState)) ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")) else { persistAsk(); updateScope() } }
-        }
+        }.also { scopeBox!!.addView(it, LinearLayout.LayoutParams(-1,-2)) }
         updateScope()
-        question = ui.field(MoteI18n.text("你的问题"), askState.optString("question"), multiline = true).apply {
-            filters = arrayOf(InputFilter.LengthFilter(8000)); minLines = 4
-        }
-        watch(question!!) { askState.put("question", question!!.text.toString()); persistAsk() }
-        val profiles = modelSettings.getJSONArray("profiles")
+        val entry = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(ui, NativeColorRole.SURFACE_RAISED, 7, true); setPadding(ui.moteDp(12),ui.moteDp(10),ui.moteDp(12),ui.moteDp(8)) }
+        compose.addView(entry)
+        question = EditText(ui).apply {
+            hint = MoteI18n.text("想找回什么？"); contentDescription = MoteI18n.text("你的问题"); isSaveEnabled = false
+            MoteUi.textInput(this, android.text.InputType.TYPE_CLASS_TEXT, multiline = true); MoteUi.field(this)
+            filters = arrayOf(InputFilter.LengthFilter(8000)); setText(askState.optString("question"))
+            NativePresentationStyles.bind(this, "ask-question") { (it as EditText).apply { minLines = 2; maxLines = 4; background = null; setPadding(0,0,0,ui.moteDp(6)) } }
+        }.also { entry.addView(it, LinearLayout.LayoutParams(-1,-2)) }
+        watch(question!!) { askState.put("question", question!!.text.toString()); persistAsk(); controlsAsk() }
+        val actions = LinearLayout(ui).apply { gravity = android.view.Gravity.CENTER_VERTICAL }; entry.addView(actions)
+        fun action(label: String, description: String = label, onClick: () -> Unit): Button = MoteUi.action(Button(ui).apply {
+            text = label; contentDescription = MoteI18n.text(description); setOnClickListener { if (!ui.isWorking) onClick() }
+        }, MoteUi.ButtonRole.TEXT).also { actions.addView(it, LinearLayout.LayoutParams(-2,-2)) }
+        action("▧", "添加图片") { if (!askBusy()) ui.pickAttachment(chat = true) }
+        val modelBox = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+        action("▸ " + MoteI18n.text("本次模型"), "本次模型") { modelBox.visibility = if (modelBox.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE }
+        actions.addView(android.view.View(ui), LinearLayout.LayoutParams(0,1,1f))
+        send = action("↑", "发送") { submitAsk() }.apply { MoteUi.action(this,MoteUi.ButtonRole.PRIMARY); minimumWidth = ui.moteDp(36); minWidth = minimumWidth }
+        entry.addView(modelBox)
+        val profiles = modelSettings.optJSONArray("profiles") ?: JSONArray()
         val ids = listOf("") + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
         val names = listOf(MoteI18n.text("跟随功能默认")) + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }
-        ui.text(MoteI18n.text("模型预设"), NativeFontRole.SUPPORT)
+        ui.text(MoteI18n.text("模型预设"), NativeFontRole.SUPPORT, modelBox)
         preset = Spinner(ui).apply {
-            adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
-            setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
+            adapter = MoteUi.choiceAdapter(ui, names); setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    askState.put("modelProfileId", ids[position]); persistAsk()
-                }
+                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { askState.put("modelProfileId", ids[position]); persistAsk() }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        }; body.addView(preset)
-        model = ui.field(MoteI18n.text("模型 ID（留空跟随预设）"), askState.optString("modelOverride")).apply { filters = arrayOf(InputFilter.LengthFilter(512)) }
+        }.also(modelBox::addView)
+        model = ui.field(MoteI18n.text("模型 ID（留空跟随预设）"), askState.optString("modelOverride"), parent = modelBox).apply { filters = arrayOf(InputFilter.LengthFilter(512)) }
         watch(model!!) { askState.put("modelOverride", model!!.text.toString()); persistAsk() }
-        ui.button(MoteI18n.text("添加图片")) {
-            if (askState.has("pending") || askState.optString("runStatus") == "running") return@button
-            ui.pickAttachment(chat = true)
-        }
         val attachments = askState.optJSONArray("attachments") ?: JSONArray()
         for (i in 0 until attachments.length()) {
             val attachment = attachments.getJSONObject(i)
-            ui.button(MoteI18n.text("移除附件：{0}", attachment.optString("name"))) {
-                if (askState.has("pending") || askState.optString("runStatus") == "running") return@button
+            ui.button(MoteI18n.text("移除附件：{0}", attachment.optString("name")), parent = compose) {
+                if (askBusy()) return@button
                 attachments.remove(i); askState.put("attachments", attachments); persistAsk(); refresh()
             }
         }
-        send = ui.button(MoteI18n.text("发送"), true) { submitAsk() }
-        stop = ui.button(MoteI18n.text("停止回答")) {
+        stop = ui.button(MoteI18n.text("停止回答"), parent = compose) {
             val id = askState.optString("runId"); if (id.isBlank()) return@button
-            val api = client
-            ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
+            val api = client; ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
         }
         controlsAsk()
-        ui.text(MoteI18n.text("对话历史"), NativeFontRole.SECTION)
-        val items = history.optJSONArray("items") ?: JSONArray()
+    }
+    private fun askBusy() = askState.has("pending") || askState.optString("runStatus") == "running"
+    fun newConversation(discardConfirmed: Boolean = false) {
+        if (askBusy()) { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return }
+        if (!discardConfirmed && (askState.optString("question").isNotBlank() || (askState.optJSONArray("attachments")?.length() ?: 0) > 0)) {
+            MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
+                .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
+        }
+        listOf("runId","conversationId","runStatus","evidenceIds","anchorEvidenceIds","scopeDirty").forEach(askState::remove)
+        askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
+    }
+    fun showAskHistory() {
+        if (currentPage != "ask" || ui.isWorking) return
+        setBack { refresh() }; ui.hideAskComposer(); ui.detailTitle(MoteI18n.text("对话历史")); body.removeAllViews()
+        ui.text(MoteI18n.text("对话历史"),NativeFontRole.TITLE_MOBILE)
+        ui.button(MoteI18n.text("新对话")) { newConversation() }
+        val items = askHistory.optJSONArray("items") ?: JSONArray()
+        if (items.length() == 0) ui.text(MoteI18n.text("还没有对话。"), NativeFontRole.SUPPORT)
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
-            ui.button(item.optString("title") + "\n" + item.optString("updatedAt")) {
-                if (askState.has("pending") || askState.optString("runStatus") == "running") { ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return@button }
-                askState.put("conversationId", item.getString("id")); askState.remove("runId"); askState.remove("evidenceIds"); askState.remove("anchorEvidenceIds"); askState.remove("scopeDirty"); persistAsk(); loadConversation(item.getString("id"))
-            }
+            ui.selectRow(item.optString("title"), MoteI18n.text("{0} 轮对话",item.optInt("turnCount")) + " · " + item.optString("updatedAt"),body) { selectConversation(item.getString("id")) }
         }
-        next(history)?.let { cursor ->
-            ui.button(MoteI18n.text("加载更早的对话")) {
-                val api = client
-                ui.work(MoteI18n.text("正在读取对话…"), { api.get("/api/conversations?limit=30&cursor=" + encode(cursor)) }) { buildAsk(it) }
-            }
-        }
+        next(askHistory)?.let { cursor -> ui.button(MoteI18n.text("加载更早的对话")) {
+            val api = client; ui.work(MoteI18n.text("正在读取对话…"), { api.get("/api/conversations?limit=30&cursor=" + encode(cursor)) }) { askHistory = it; showAskHistory() }
+        } }
     }
+    fun conversationMore() {
+        val id = askState.optString("conversationId"); if (id.isBlank() || askBusy()) return
+        MoteDialogBuilder(ui).setTitle(MoteI18n.text("对话更多")).setItems(arrayOf(MoteI18n.text("刷新"),MoteI18n.text("删除对话"))) { _, index ->
+            if (index == 0) refresh() else confirm(MoteI18n.text("删除对话"), MoteI18n.text("删除后无法恢复。")) {
+                val api = client; ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/conversations/" + encode(id)) }) {
+                    askState.remove("conversationId"); askState.remove("runId"); persistAsk(); refresh()
+                }
+            }
+        }.show()
+    }
+    private fun selectConversation(id: String, discardConfirmed: Boolean = false) {
+        if (runCatching { UUID.fromString(id) }.isFailure) { ui.notice(MoteI18n.text("请求的资源不存在或已删除。")); return }
+        if (askState.optString("conversationId") == id) { refresh(); return }
+        if (askState.has("pending") || askState.optString("runStatus") == "running") {
+            ui.notice(MoteI18n.text("请先等待当前回答完成，或停止回答。")); return
+        }
+        if (!discardConfirmed && (askState.optString("question").isNotBlank() || (askState.optJSONArray("attachments")?.length() ?: 0) > 0)) {
+            MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容"))
+                .setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
+                .setNegativeButton(MoteI18n.text("继续编辑"), null)
+                .setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> selectConversation(id, true) }.show()
+            return
+        }
+        askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
+        listOf("runId", "runStatus", "evidenceIds", "anchorEvidenceIds", "scopeDirty").forEach(askState::remove)
+        question?.setText(""); persistAsk(); refresh()
+    }
+
     private fun controlsAsk() {
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
         preset?.isEnabled = !busy; model?.isEnabled = !busy
-        send?.isEnabled = !busy || askState.has("pending")
-        send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else MoteI18n.text("发送")
+        send?.isEnabled = (!busy && question?.text?.isNotBlank() == true) || askState.has("pending")
+        send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else "↑"
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
     }
     private fun updateScope() {
         val strict = (askState.optJSONArray("evidenceIds")?.length() ?: 0) > 0
         val anchored = (askState.optJSONArray("anchorEvidenceIds")?.length() ?: 0) > 0
-        scopeBox?.visibility = if (strict || anchored) android.view.View.VISIBLE else android.view.View.GONE
-        scopeLabel?.text = MoteI18n.text(if (strict) "仅查这条记录" else "参考这条记录，自动查找相关上下文")
+        scopeBox?.visibility = android.view.View.VISIBLE
+        scopeLabel?.text = if (strict) MoteI18n.text("仅查这条记录") + " ⌄" else if (anchored) MoteI18n.text("参考这条记录，自动查找相关上下文") + " ⌄" else "＋ " + MoteI18n.text("参考资料")
     }
     private fun submitAsk() {
         val api = client
@@ -311,8 +359,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val turns = conversation.getJSONArray("turns")
             for (i in 0 until turns.length()) {
                 val turn = turns.getJSONObject(i)
-                ui.text(MoteI18n.text("你的问题"), NativeFontRole.SUPPORT, target)
-                ui.text(turn.getString("question"), NativeFontRole.BODY, target)
+                ui.text(turn.getString("question"), NativeFontRole.SECTION, target)
                 val presentation = CentralConversationPresentation.read(turn)
                 presentation.notice?.let { ui.text(it, parent = target) }
                 presentation.result?.let { answer ->
@@ -321,7 +368,6 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     val display = NativeAnswerPresentation.format(answer.optString("answer"), citations.map { it.getString("id") })
                     val styled = android.text.SpannableString(display.text)
                     display.emphasis.forEach { span -> styled.setSpan(android.text.style.StyleSpan(if (span.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.ITALIC), span.start, span.end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-                    ui.text(MoteI18n.text("回答"), NativeFontRole.SUPPORT, target)
                     ui.text("", parent = target).apply { text = styled; setTextIsSelectable(true) }
                     for ((index, citation) in citations.withIndex()) {
                         ui.button("[${index + 1}] " + MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { openConversationEvidence(id, citation.getString("id")) { library.captureEvidence(citation.getString("id")) } }
@@ -331,13 +377,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 turn.optJSONObject("error")?.let { ui.text(it.optString("message"), parent = target) }
             }
             next(conversation)?.let { older -> ui.button(MoteI18n.text("加载更早的对话"), parent = target) { loadConversation(id, older) } }
-            if (askState.optString("runStatus") != "running") ui.button(MoteI18n.text("删除对话"), parent = target) {
-                confirm(MoteI18n.text("删除对话"), MoteI18n.text("删除后无法恢复。")) {
-                    ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/conversations/" + encode(id)) }) {
-                        askState.remove("conversationId"); askState.remove("runId"); persistAsk(); refresh()
-                    }
-                }
-            }
+            ui.askConversationActions(true)
         }
     }
 
