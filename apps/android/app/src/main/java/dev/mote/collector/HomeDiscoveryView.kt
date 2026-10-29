@@ -5,7 +5,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
@@ -51,22 +50,22 @@ internal class HomeDiscoveryView(private val activity: MoteActivity, private val
             val id=requireNotNull(InsightPresentation.id(finding))
             fun current()=active&&!closed&&stamp==epoch&&runCatching{CentralAccess.resolve(activity).let{it.client!=null&&it.generation==generation&&it.server==origin}}.getOrDefault(false)
             val heading=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL}
-            heading.addView(label(MoteI18n.text("最近结果"),NativeFontRole.META),LayoutParams(0,-2,1f))
-            heading.addView(MoteUi.action(android.widget.Button(activity).apply{text=MoteI18n.text("发现历史");tag="home-discovery-history";setOnClickListener{if(current())open(null)}},MoteUi.ButtonRole.TEXT))
+            heading.addView(label(MoteI18n.text("最近结果"),NativeFontRole.META).apply{MoteUi.type(this,12)},LayoutParams(0,-2,1f))
+            heading.addView(MoteUi.action(android.widget.Button(activity).apply{text=MoteI18n.text("发现历史");tag="home-discovery-history";setOnClickListener{if(current())open(null)}},MoteUi.ButtonRole.TEXT).apply{MoteUi.type(this,10);MoteUi.textColor(this,NativeColorRole.MUTED)})
             addView(heading)
             val card=LinearLayout(activity).apply{
-                orientation=VERTICAL;setPadding(activity.moteDp(16),activity.moteDp(15),activity.moteDp(16),activity.moteDp(15));background=MoteUi.clickable(activity,NativeColorRole.SURFACE,10,true)
+                orientation=VERTICAL;setPadding(activity.moteDp(19),activity.moteDp(19),activity.moteDp(19),activity.moteDp(19));background=MoteUi.clickable(activity,NativeColorRole.SURFACE,7,true)
                 tag="home-discovery:$id";isFocusable=true;setOnClickListener{if(current())open(id)}
             }
             val whenText=finding.optString("createdAt").ifBlank{finding.optJSONObject("artifact")?.optString("createdAt").orEmpty()}
             val date=runCatching{DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(whenText))}.getOrDefault(whenText)
             card.addView(label(MoteI18n.text("发现")+" · "+date,NativeFontRole.META))
-            card.addView(label(InsightPresentation.title(finding),NativeFontRole.SECTION))
+            card.addView(label(InsightPresentation.title(finding),NativeFontRole.SECTION).apply{MoteUi.type(this,17,medium=true)})
             val formatted=JSONObject(finding.toString()).put("answer",NativeAnswerPresentation.format(finding.optString("answer"),emptyList()).text)
             card.addView(label(InsightPresentation.preview(formatted),NativeFontRole.SUPPORT))
             card.addView(label(MoteI18n.text("查看结果与依据 →"),NativeFontRole.ACTION).apply{MoteUi.textColor(this,NativeColorRole.ACCENT)})
-            addView(card);visibility=View.VISIBLE;present(true)
+            addView(card,LayoutParams(-1,-2).apply{bottomMargin=activity.moteDp(26)});visibility=View.VISIBLE;present(true)
         }
     }
-    private fun label(value:String,role:NativeFontRole)=TextView(activity).apply{text=value;MoteUi.type(this,role);MoteUi.textColor(this,if(role==NativeFontRole.META||role==NativeFontRole.SUPPORT)NativeColorRole.MUTED else NativeColorRole.INK);setPadding(0,activity.moteDp(5),0,activity.moteDp(5))}
+    private fun label(value:String,role:NativeFontRole)=TextView(activity).apply{text=value;MoteUi.type(this,when(role){NativeFontRole.META->10;NativeFontRole.SUPPORT->12;NativeFontRole.ACTION->11;else->role.size()});MoteUi.textColor(this,if(role==NativeFontRole.META||role==NativeFontRole.SUPPORT)NativeColorRole.MUTED else NativeColorRole.INK);setPadding(0,activity.moteDp(5),0,activity.moteDp(5))}
 }
