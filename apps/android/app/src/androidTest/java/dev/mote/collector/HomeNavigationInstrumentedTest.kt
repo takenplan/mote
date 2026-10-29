@@ -39,6 +39,9 @@ class HomeNavigationInstrumentedTest {
         fail("$description: $labels")
     }
     private fun screenshot(scenario: ActivityScenario<MainActivity>, name: String) {
+        waitFor(scenario, "The requested screen must finish its foreground read before visual comparison") { activity ->
+            shown(activity).filterIsInstance<TextView>().none { it.tag == "central-status" && it.text.isNotBlank() }
+        }
         val committed = java.util.concurrent.CountDownLatch(1)
         scenario.onActivity { it.window.decorView.postOnAnimation { it.window.decorView.postOnAnimation { committed.countDown() } } }
         assertTrue("The native window must draw before its screenshot", committed.await(5, java.util.concurrent.TimeUnit.SECONDS))
