@@ -1,4 +1,5 @@
-require('../../../scripts/fixture-background.cjs');require('../../../scripts/fixture-language.cjs');
+require('../../../scripts/fixture-background.cjs');
+require('../../../scripts/fixture-language.cjs');
 // Actual updater and renderer; generated signed release over one loopback HTTP
 // server. This fixture never invokes install, extraction or a user app bundle.
 const {app,safeStorage}=require('electron'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),{createServer}=require('node:http'),{generateKeyPairSync,createHash,sign}=require('node:crypto'),{execFileSync}=require('node:child_process');

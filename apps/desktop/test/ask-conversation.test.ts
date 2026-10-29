@@ -39,11 +39,11 @@ it('keeps the current snapshot scope when older turn pages are prepended',()=>{
 it('reads scope unchanged and omits selection fields when continuing the same conversation',async()=>{
  const client=new AskClient(),config={...defaultConfig(),credentialScope:'owner' as const,token:'generated-owner-token'.repeat(3)};
  const value={...page(['1'],null),scope:{evidenceIds:['generated-evidence']}};
- const fetcher=vi.fn(async()=>Response.json(value));vi.stubGlobal('fetch',fetcher);
+ const fetcher=vi.fn(async (_url:string,init?:RequestInit)=>Response.json(init?.method==='POST'?{id,status:'running',events:[]}:value));vi.stubGlobal('fetch',fetcher);
  expect((await client.request(config,'conversation',{id}) as AskConversation).scope).toEqual(value.scope);
  await client.request(config,'start',{id,conversationId:id,question:'Generated follow-up'});
  const body=JSON.parse((fetcher.mock.calls[1] as unknown as [string,RequestInit])[1].body as string);
- expect(body.input.conversationId).toBe(id);expect(body.input).not.toHaveProperty('evidenceIds');expect(body.input).not.toHaveProperty('anchorEvidenceIds');
+ expect(body.input.conversationId).toBe(id);expect(body.input).not.toHaveProperty('evidenceIds');expect(body.input).not.toHaveProperty('anchorEvidenceIds');expect(body.input).not.toHaveProperty('anchorMaterialRef');
 });
 
 

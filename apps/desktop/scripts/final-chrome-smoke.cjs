@@ -1,4 +1,5 @@
-require('../../../scripts/fixture-background.cjs');require('../../../scripts/fixture-language.cjs');
+require('../../../scripts/fixture-background.cjs');
+require('../../../scripts/fixture-language.cjs');
 const {app,safeStorage,shell}=require('electron');const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync}=require('node:fs');const {join,resolve}=require('node:path');const {tmpdir}=require('node:os');const {createHash}=require('node:crypto');const cp=require('node:child_process');const {connect}=require('node:net');const assert=require('node:assert/strict');
 const profile=realpathSync(mkdtempSync(join(tmpdir(),'mote-final-chrome-')));app.setPath('userData',profile);process.env.MOTE_PROFILE='dev';for(const key of ['MOTE_URL','MOTE_TOKEN','MOTE_ENV_FILE'])delete process.env[key];safeStorage.isEncryptionAvailable=()=>{throw Error('Dev must not access safeStorage');};app.setLoginItemSettings=()=>{throw Error('Fixture cannot change login settings');};app.getLoginItemSettings=()=>({openAtLogin:false});
 const directory=join(profile+'-profiles','dev'),output=resolve(__dirname,'../../../.mote/final-ui-product/chrome');mkdirSync(directory,{recursive:true,mode:0o700});mkdirSync(output,{recursive:true});

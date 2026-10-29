@@ -197,6 +197,6 @@ it('delegates signed-out navigation to the existing browser login before request
   stubGlobal('fetch', fetcher);
   entry.browserLogin = () => login;
   await showCentral(entry, 'activity', undefined, 'generated/work');
-  assert.deepEqual(login.mock.calls[0].arguments, ['activity', undefined, undefined, 'generated/work']);
+  assert.deepEqual(login.mock.calls[0].arguments, ['activity', undefined, undefined, 'generated/work', undefined]);
   assert.equal(fetcher.mock.calls.length, 0); assert.equal(entry.launchChrome.mock.calls.length, 0);
 });

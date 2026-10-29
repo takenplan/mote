@@ -1,4 +1,5 @@
-require('../../../scripts/fixture-background.cjs');require('../../../scripts/fixture-language.cjs');
+require('../../../scripts/fixture-background.cjs');
+require('../../../scripts/fixture-language.cjs');
 const {app,BrowserWindow,safeStorage,shell}=require('electron');const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,statSync,rmSync}=require('node:fs');const {join,resolve}=require('node:path');const {tmpdir}=require('node:os');const {execFileSync}=require('node:child_process');const assert=require('node:assert/strict');
 const runtimePath=process.env.MOTE_LIVE_CONNECTION_FILE;if(!runtimePath)throw Error('MOTE_LIVE_CONNECTION_FILE is required');assert.equal(statSync(runtimePath).mode&0o077,0,'Runtime connection file must be private');const runtime=JSON.parse(readFileSync(runtimePath,'utf8'));assert.equal(runtime.generated,true);assert(['127.0.0.1','localhost','[::1]'].includes(new URL(runtime.serverUrl).hostname));assert(runtime.token&&runtime.deviceId&&runtime.conversationId&&runtime.question&&runtime.noteText&&runtime.noteDescription);
 // Capture only the existing OS browser launch boundary; HTTP, login ticket,

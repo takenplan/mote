@@ -1,4 +1,5 @@
-require('../../../scripts/fixture-background.cjs');require('../../../scripts/fixture-language.cjs');
+require('../../../scripts/fixture-background.cjs');
+require('../../../scripts/fixture-language.cjs');
 const {app,safeStorage,dialog,Tray,BrowserWindow}=require('electron');const fs=require('node:fs'),fsp=require('node:fs/promises');const {join,resolve}=require('node:path');const {tmpdir}=require('node:os');const {randomUUID}=require('node:crypto');const {execFileSync}=require('node:child_process');const assert=require('node:assert/strict');
 require('../package.json').moteDevelopment=true;app.getVersion=()=>require('../package.json').version;
 const {defaultConfig}=require('../dist/config'),{DurableQueue}=require('../dist/queue');

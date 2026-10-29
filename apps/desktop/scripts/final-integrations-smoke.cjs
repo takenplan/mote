@@ -1,4 +1,5 @@
-require('../../../scripts/fixture-background.cjs');require('../../../scripts/fixture-language.cjs');
+require('../../../scripts/fixture-background.cjs');
+require('../../../scripts/fixture-language.cjs');
 const {app,safeStorage,ipcMain}=require('electron'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
 require('../package.json').moteDevelopment=true;
 const profile=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'mote-final-integrations-'))),directory=path.join(profile+'-profiles','dev'),output=path.resolve(__dirname,'../../../.mote/final-ui-product/integrations');fs.mkdirSync(directory,{recursive:true,mode:0o700});fs.mkdirSync(output,{recursive:true});app.setPath('userData',profile);process.env.MOTE_PROFILE='dev';for(const key of ['MOTE_URL','MOTE_TOKEN','MOTE_ENV_FILE'])delete process.env[key];safeStorage.isEncryptionAvailable=()=>{throw Error('Dev must not access safeStorage');};
