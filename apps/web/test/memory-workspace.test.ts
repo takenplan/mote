@@ -71,3 +71,8 @@ test('a completed integration opened from Search returns to the selected Memory 
  },seen);
  await act(async()=>root.render(React.createElement(MemoryDetailPage,{api,id,onOpen:()=>{},onBack:()=>back++})));await click(d,'更多');await click(d,'从这条记忆开始整理');await click(d,'开始整理');assert.match(d.querySelector('.memory-integration-workspace')!.textContent!,/本次手动整理已完成.*零条新记忆也是有效结果/);assert.equal(seen.filter(read=>read.method==='POST').length,1);await click(d,'← 返回');assert.equal(d.querySelector('.memory-detail-heading h2')?.textContent,'Generated Memory a');assert.equal(back,0);assert.equal(window.location.hash,'#/search?q=generated');
 });
+
+test('a selected capture without a current opaque pin stays disabled and cannot admit a request',async t=>{
+ const{root,d}=await fixture(t),seen:Seen[]=[],api=owner(path=>path.startsWith('/api/capture-browser/')?{id,source:'note',windowTitle:'Generated missing pin',ocrText:'Literal generated text'}:undefined,seen);
+ await act(async()=>root.render(React.createElement(ManualMemoryWorkspace,props(api))));const button=[...d.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='开始提取')!;assert.equal(button.disabled,true);await act(async()=>button.click());assert.equal(seen.some(read=>read.method==='POST'),false);
+});
