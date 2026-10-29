@@ -69,6 +69,7 @@ import './final-web.css';
 import './feature-guide.css';
 import './library-final.css';
 import './recording-reader.css';
+import './device-workspace.css';
 import {QuickNoteDialog} from './QuickNoteDialog';
 import {QuickNoteContext} from './quick-note-context';
 import {enterGuide,guideVisit} from './feature-guide-state';

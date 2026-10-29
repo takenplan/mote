@@ -71,3 +71,12 @@ test('credential expiry removes it from effective access without inventing conne
  await act(async()=>t.mock.timers.tick(1500));assert.match(d.body.textContent!,/0 个有效授权/);assert.doesNotMatch(d.querySelector('.access-list')!.textContent!,/Generated expiring Agent/);
  await act(async()=>button(d,'全部').click());assert.match(d.querySelector('.access-list')!.textContent!,/Generated expiring Agent.*已到期/s);assert.doesNotMatch(d.querySelector('.access-list')!.textContent!,/授权有效|最近使用|已连接/);
 });
+
+test('late replacement revocation cannot erase a different owner invitation or issue another old-node invitation',async t=>{
+ const {root,d,tick}=await ui(t);let finish!:(value:unknown)=>void,oldWrites=0;const pending=new Promise(resolve=>finish=resolve),inventory={items:[],mcp:{enabled:true,writeEnabled:false,writeSourceIds:[]}};
+ const invitation=(code:string)=>({scope:'owner',invitation:{format:'mote.connection',version:1,serverUrl:'https://generated.invalid',code:code.repeat(43),expiresAt:new Date(Date.now()+600000).toISOString()},uri:'mote://generated-'+code});
+ const old={request:async(path:string,init?:RequestInit)=>{if(path.endsWith('/invitations/revoke'))return pending;if(init?.method==='POST'){oldWrites++;return invitation('a');}return path==='/api/configuration'?{groups:[]}:inventory;}} as Api;
+ const next={request:async(path:string,init?:RequestInit)=>init?.method==='POST'?invitation('b'):path==='/api/configuration'?{groups:[]}:inventory} as Api;
+ const render=(api:Api)=>act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'https://generated.invalid',devices:[],mode:'device'})));await render(old);await act(async()=>d.querySelector('form')!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));await act(async()=>button(d,'修改连接设置').click());await act(async()=>d.querySelector('form')!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));assert.equal(oldWrites,1);
+ await render(next);await act(async()=>d.querySelector('form')!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));assert.equal(JSON.parse(d.querySelector<HTMLTextAreaElement>('[aria-label="连接邀请 JSON"]')!.value).code,'b'.repeat(43));await act(async()=>finish({}));await tick();assert.equal(oldWrites,1);assert.equal(JSON.parse(d.querySelector<HTMLTextAreaElement>('[aria-label="连接邀请 JSON"]')!.value).code,'b'.repeat(43),'late old-node replacement cannot clear the current owner invitation');
+});

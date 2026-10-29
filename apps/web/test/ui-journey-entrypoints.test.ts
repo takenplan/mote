@@ -137,7 +137,7 @@ test('source device pairing and AI access use distinct routes and inventories wi
   assert.equal(readPage(location.hash), 'deviceConnections');
   assert.equal(primaryDestination('deviceConnections'), 'sources');
   await renderRoute();
-  assert.equal(d.querySelector('h2')!.textContent, '连接设备');
+  assert.equal(d.querySelector('.device-pair-workspace h1')!.textContent, '连接设备');
   assert.ok(d.querySelector('[aria-label="设备权限"]'));
   assert.equal(d.querySelector('[aria-label="MCP 访问权限"]'), null);
   assert.match(d.querySelector('.connection-list')!.textContent!, /Generated owner Mac/);
