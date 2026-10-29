@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "备份未导入": "Backup not imported",
   "已清理的本机副本不在其中。": "Copies already removed from this device are not included.",
   "备份文件为明文，仅保存在自己信任的位置。": "Backup files are unencrypted. Save them only in a location you trust.",
   "文件名暂不可读取": "The file name is currently unavailable",

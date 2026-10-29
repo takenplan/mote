@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "备份未导入": "Sauvegarde non importée",
   "已清理的本机副本不在其中。": "Les copies locales déjà supprimées de cet appareil ne sont pas incluses.",
   "备份文件为明文，仅保存在自己信任的位置。": "Les sauvegardes ne sont pas chiffrées. Enregistrez-les uniquement dans un emplacement de confiance.",
   "文件名暂不可读取": "Le nom du fichier est actuellement indisponible",

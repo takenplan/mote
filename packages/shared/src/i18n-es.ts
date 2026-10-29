@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "备份未导入": "Copia de seguridad sin importar",
   "已清理的本机副本不在其中。": "No se incluyen las copias locales ya eliminadas de este dispositivo.",
   "备份文件为明文，仅保存在自己信任的位置。": "Las copias de seguridad no están cifradas. Guárdalas solo en una ubicación de confianza.",
   "文件名暂不可读取": "El nombre del archivo no está disponible",

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "备份未导入": "バックアップはインポートされていません",
   "已清理的本机副本不在其中。": "この端末から削除済みのローカルコピーは含まれません。",
   "备份文件为明文，仅保存在自己信任的位置。": "バックアップファイルは暗号化されていません。信頼できる場所にのみ保存してください。",
   "文件名暂不可读取": "ファイル名を現在読み取れません",

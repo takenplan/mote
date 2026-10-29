@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "备份未导入": "Sicherung nicht importiert",
   "已清理的本机副本不在其中。": "Bereits von diesem Gerät entfernte lokale Kopien sind nicht enthalten.",
   "备份文件为明文，仅保存在自己信任的位置。": "Sicherungsdateien sind unverschlüsselt. Speichern Sie sie nur an einem vertrauenswürdigen Ort.",
   "文件名暂不可读取": "Dateiname derzeit nicht lesbar",
