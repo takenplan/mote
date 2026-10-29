@@ -331,11 +331,13 @@ D34 的旧调色属于实施偏差，本次按所有者要求恢复源颜色。�
 | 独立审查 | 审查者按源清单检验实现，而非按代码反推清单 | 来源、代码、运行图分别审查；发现的问题由实施者修复后复核，剩余项明确列出 |
 | 发布 | Draft PR→独立审查→最终head相关检查→合main→核远端commit | 本文不构成PR或合并完成证明；不部署/发版 |
 
-当前集成快照以 `398b1b1b` 为准：三端相关 UI 及已批准的 H01–H04/H07/H09/H10/H11 实现已汇入，§3 末列已按实际证据更新；“已集成”不等于该组全部子状态已经实现或通过。复用本轮已存在的 [Web W01–W50 摘要](/Users/utopiafar/.codex/worktrees/ui-final-web-complete/mote/.mote/web-w01-w50-acceptance-summary.json)、[Mac M01–M39 摘要](/Users/utopiafar/.codex/worktrees/ui-final-mac-complete/mote/.mote/mac-m01-m39-acceptance-summary.json)、[Android P01–P39 摘要](/Users/utopiafar/.codex/worktrees/ui-final-android-complete/mote/.mote/android-final/p01-p39-actual-acceptance-summary.json)中的逐组已操作/未证明字段和原日志、PNG、revision、dirty/APK 信息；它们是 ignored 分组交接证据，不另复制成平行验收台账。旧摘要未涵盖的后续改动由根在最终运行后补记。三个摘要均不证明全组逐状态源/产品对照完成。
+当前集成快照以 `6d73f3a0` 为准：三端相关 UI 及已批准的 H01–H04/H07/H09/H10/H11/H12 实现及本次 Q1、W05/W06、A1/P23、Memory 补齐已汇入，§3 末列已按实际证据更新；“已集成”不等于该组全部子状态已经实现或通过。复用本轮已存在的 [Web W01–W50 摘要](/Users/utopiafar/.codex/worktrees/ui-final-web-complete/mote/.mote/web-w01-w50-acceptance-summary.json)、[Mac M01–M39 摘要](/Users/utopiafar/.codex/worktrees/ui-final-mac-complete/mote/.mote/mac-m01-m39-acceptance-summary.json)、[Android P01–P39 摘要](/Users/utopiafar/.codex/worktrees/ui-final-android-complete/mote/.mote/android-final/p01-p39-actual-acceptance-summary.json)中的逐组已操作/未证明字段和原日志、PNG、revision、dirty/APK 信息；它们是 ignored 分组交接证据，不另复制成平行验收台账。旧摘要未涵盖的后续改动由根在最终运行后补记。三个摘要均不证明全组逐状态源/产品对照完成。 来源页已汇入但两个来源切换晚回执/版本隔离问题正由原开发者返修；导入页仍在原分支完成。不能把这些进行中工作写成统一最终候选已通过。
 
 Web 的 Memory 管理有 22 图分组证据；插件有 28 图及准备文案 5 图；Actions/Todos/H11 有 `5c38bd28` 的真实隔离 Central/构建后 Web 45 图，后续错误→返回的小修仅以 `45d4fd0d` 的相关 5 图重测，不将旧 45 图重新称为新 head 通过。H11 后端见已整合的 `56d9a17c`，Web 见 `4ea00dc9` 与错误修复 `dd302658`；报告中的独立工作树 SHA 保留原值，不冒充 `398b1b1b` 重跑。受控 Agent、release/worker、HTTP 设备回执与原生仪器证据各按实际边界记录，没有代替最终 Terra、真实供应商或物理日历写入。
 
-Mac 最新真实 EventKit helper 的权限为 `granted`，但 `localSourceCount=0`。按所有者本轮范围停止该外部写入子步骤；没有真实 create/write、update、cancel 或相应设备回执通过证据。旧 generated helper/日历 adapter 的成功合同不能覆盖这一限制。发现报告的默认 HTML 安全自然高度已集成；来源引用到宿主统一 reader 的只读桥接由报告模块补齐，目标是保持精确引用与原路返回，最终宿主实测由根回填，尚不记视觉或旅程通过。
+Mac 最新真实 EventKit helper 的权限为 `granted`，但 `localSourceCount=0`。按所有者本轮范围停止该外部写入子步骤；没有真实 create/write、update、cancel 或相应设备回执通过证据。旧 generated helper/日历 adapter 的成功合同不能覆盖这一限制。发现报告的安全自然高度与只读来源桥接已集成；受控真实 Central/Chromium 的 7 个宿主状态与 8 个来源徽标场景已有分组证据，维持确切 reader/原路返回、frame/token/owner 守卫及禁止模型脚本。coarse 的尺寸计算证据不冒充非零实际几何，最终真实模型宿主结果仍由统一回归记录。
+
+Q1 最终源层级 `11c13faf` 的 clean 实际构建记录 17 图、22 次受控 Agent、0 live；`ddbc0416` 仅问答引用前缀模板，另有单条 focused，不把旧图称作该 delta 重跑。Android 已独立只读复核 owned/adopted 请求恢复、同步终态守卫、独立保存/说明及原件身份，无具体阻断。Memory `5d5a37ad` 的产品差异由 Mac 只读复核；clean `90859943` 的 17 状态只覆盖既有 proposed 筛选与处理选项层级、真实取消与失败保留，不证明成功模型整理。P23 的实际 Provider 四操作、空态/503/原件修改待核实及 3 JVM 检查由 Mac 独立复核。所有证据保留各自提交和范围。
 
 ### 阶段覆盖：已有证据与剩余状态
 
