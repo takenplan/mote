@@ -188,7 +188,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             row to topicMemoryId?.let { api.get("/api/memories/" + enc(it)) }
         }) { (row, memory) ->
             if (memory != null && accept != null && !accept(memory)) return@work
-            if (row.optString("source") in setOf("screen","note","activity","ui_page","notification","media","device_event")) {
+            if (CentralCaptureReader.supports(row.optString("source"))) {
                 check(row.getString("id") == id)
                 ui.openCaptureReader(api.server,row,conversationId)
                 return@work

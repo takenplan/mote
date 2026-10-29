@@ -39,12 +39,23 @@ class CentralDeletionInstrumentedTest {
         MoteI18n.select(context,"zh-CN");return value
     }
     private fun connect(value:JSONObject):CentralClient {
-        val origin=value.getString("origin");val token=value.getString("token");ConnectionGuard.change(context,origin,bindLocal=true) { Settings(context).saveConnection(origin,token,"Generated deletion fixture",true) }
+        val origin=value.getString("origin");val token=value.getString("token");ConnectionGuard.change(context,origin,bindLocal=true) { Settings(context).let { settings -> settings.saveConnection(origin,token,"Generated deletion fixture",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true,wifiOnly=false,syncChargingOnly=false,syncBatteryNotLow=false),confirmCentralEndpoint=true) } }
         return CentralClient(origin,token)
     }
-    private fun open(api:CentralClient,id:String,conversation:String?=null):ActivityScenario<CaptureRecordsActivity> {
+    private inner class ReaderSession(val host:ActivityScenario<CentralActivity>,val reader:Activity):AutoCloseable {
+        val state get()=main { if(reader.isFinishing||reader.isDestroyed) Lifecycle.State.DESTROYED else Lifecycle.State.RESUMED }
+        override fun close() { main { if(!reader.isFinishing&&!reader.isDestroyed) reader.finish() };host.close() }
+    }
+    private fun open(api:CentralClient,id:String,conversation:String?=null):ReaderSession {
         val row=api.get("/api/capture-browser/"+id)
-        return ActivityScenario.launch(Intent(context,CaptureRecordsActivity::class.java).putExtra("recordId",id).putExtra("recordRemote",true).putExtra("recordOrigin",api.server).putExtra("recordVersion",row.getString("libraryVersion")).putExtra("recordDeviceId",row.getString("deviceId")).putExtra("recordObservationCount",LibraryCaptureProjection.observations(row)).putExtra("directReader",true).putExtra("centralReaderActions",true).apply { conversation?.let { putExtra("conversationReference",it) } })
+        require(row.getString("source")=="message" && row.getString("libraryVersion").isNotBlank())
+        val target=conversation ?: JSONObject(File(context.filesDir,"native-deletion-fixture.json").readText()).getJSONObject("conversations").getString(id)
+        val host=ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",target))
+        until("actual conversation citation action") { main { shown().any { it.contentDescription?.toString()?.startsWith("查看引用 1 ·")==true } } }
+        main { shown().single { it.contentDescription?.toString()?.startsWith("查看引用 1 ·")==true }.performClick() }
+        until("public citation route opens exact literal original") { main { ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).any { it is CaptureRecordsActivity } && shown().filterIsInstance<TextView>().any { it.text.toString()==row.getString("ocrText") } } }
+        val reader=main { ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).single { it is CaptureRecordsActivity } }
+        return ReaderSession(host,reader)
     }
     private fun screenshot(name:String) { main {
         val root=android.view.inspector.WindowInspector.getGlobalWindowViews().last { it.isShown&&it.hasWindowFocus() };val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
@@ -79,7 +90,8 @@ class CentralDeletionInstrumentedTest {
             click("capture-reader-more");click("删除记录");click("确认")
             until("unconfirmed deletion remains readable") { main { shown().filterIsInstance<TextView>().any { it.text.toString().contains(if(key=="zeroAnchor") "未能确认删除完成" else "503") } } }
             assertEquals(Lifecycle.State.RESUMED,scenario.state);screenshot(key+"-reader-retained")
-            assertEquals(value.getString(key),api.get("/api/capture-browser/"+value.getString(key)).getString("id"))
+            if(key=="zeroAnchor") assertEquals(value.getString(key),api.get("/api/capture-browser/"+value.getString(key)).getString("id"))
+            else assertEquals(404,(runCatching { api.get("/api/capture-browser/"+value.getString(key)) }.exceptionOrNull() as CentralFailure).status)
         }
         open(api,value.getString("lateAnchor")).use { scenario ->
             click("capture-reader-more");click("删除记录");click("确认")
@@ -88,6 +100,7 @@ class CentralDeletionInstrumentedTest {
             api.post("/api/native-deletion-fixture",JSONObject().put("release",true))
             until("real old-owner DELETE completed") { api.get("/api/native-deletion-fixture").optBoolean("lateCompleted") }
             instrumentation.waitForIdleSync();assertEquals(Lifecycle.State.RESUMED,scenario.state);screenshot("old-owner-late-receipt-ignored")
+            assertEquals(404,(runCatching { api.get("/api/capture-browser/"+value.getString("lateAnchor")) }.exceptionOrNull() as CentralFailure).status)
         }
         connect(value)
     }

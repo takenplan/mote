@@ -589,9 +589,9 @@ class CaptureRecordsActivity : MoteActivity() {
                             for (index in 0 until files.length()) { val attachment = files.getJSONObject(index); text(content, attachment.getString("name"), MoteTheme.fontBody.toFloat()).apply { isFocusable = true; setOnClickListener { RecordOriginalPreview.open(this@CaptureRecordsActivity, attachment) } } }
                         }
                     }
-                    if (record.optString("source") in setOf("note", "activity", "ui_page")) {
+                    if (record.optString("source") in setOf("note", "activity", "ui_page", "message")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", MoteTheme.fontSupport.toFloat()) }
-                        text(content, record.optString("ocrText").ifBlank { if (isNote) "" else MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) MoteTheme.fontSection.toFloat() else MoteTheme.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
+                        text(content, record.optString("ocrText").ifBlank { if (isNote || record.optString("source") == "message") "" else MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) MoteTheme.fontSection.toFloat() else MoteTheme.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
                         record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), MoteTheme.fontBody.toFloat()) }
                         ownerDescription(); centralActions()
                         return@runOnUiThread

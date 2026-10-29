@@ -9,6 +9,7 @@ class CentralDeletionTest {
     private val id="00000000-0000-4000-8000-000000000001"
     private fun record(kind:Any?="capture",available:Any=true)=JSONObject().put("id",id).put("deletion",JSONObject().put("available",available).put("kind",kind ?: JSONObject.NULL))
     @Test fun `readonly or malformed capabilities never become a deletion route`() {
+        assertTrue(CentralCaptureReader.supports("message"));assertFalse(CentralCaptureReader.supports("file"))
         assertNull(CentralDeletion.kind(JSONObject()))
         assertNull(CentralDeletion.kind(record(null,false)))
         assertNull(CentralDeletion.kind(record("capture","true")))
@@ -17,7 +18,7 @@ class CentralDeletionTest {
         assertEquals("file",CentralDeletion.kind(record("file")))
     }
     @Test fun `only an explicit numeric positive integer confirms deletion`() {
-        for(value in listOf<Any>(0,-1,0.5,"1",true,JSONObject.NULL)) assertThrows(IllegalStateException::class.java) { CentralDeletion.requireCompleted(JSONObject().put("deleted",value)) }
+        for(value in listOf<Any>(0,-1,0.5,1e30,"1",true,JSONObject.NULL)) assertThrows(IllegalStateException::class.java) { CentralDeletion.requireCompleted(JSONObject().put("deleted",value)) }
         assertThrows(IllegalStateException::class.java) { CentralDeletion.requireCompleted(JSONObject()) }
         assertEquals(1,CentralDeletion.requireCompleted(JSONObject().put("deleted",1)).getInt("deleted"))
         assertEquals(2,CentralDeletion.requireCompleted(JSONObject().put("deleted",2.0)).getInt("deleted"))
