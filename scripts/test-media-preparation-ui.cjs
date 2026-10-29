@@ -1,4 +1,5 @@
-require('./fixture-background.cjs');require('./fixture-language.cjs');
+require('./fixture-background.cjs');
+require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron'),{spawn,execFileSync}=require('node:child_process'),{readFileSync,writeFileSync,mkdirSync,existsSync,mkdtempSync,rmSync}=require('node:fs'),{join,resolve}=require('node:path'),{tmpdir}=require('node:os'),assert=require('node:assert/strict'),{createHash,randomUUID}=require('node:crypto');
 const repo=resolve(__dirname,'..'),out=join(repo,'.mote/media-preparation-ui'),models=process.env.MOTE_TEST_MEDIA_MODELS;if(!models)throw Error('MOTE_TEST_MEDIA_MODELS must select a prepared disposable model directory');
 const privateRoot=mkdtempSync(join(tmpdir(),'mote-media-renderer-'));mkdirSync(out,{recursive:true});app.setPath('userData',join(privateRoot,'browser'));app.on('window-all-closed',()=>{});
