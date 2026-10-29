@@ -1,5 +1,18 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "你": "You",
+  "后续活动暂不可读取，请稍后重试。": "Follow-up activity is temporarily unavailable. Try again later.",
+  "回答已记录": "Answer recorded",
+  "我也不知道": "I don’t know either",
+  "查看活动": "View Activity",
+  "正在提交，等待回执": "Submitting; waiting for receipt",
+  "补充你知道的信息": "Share what you know",
+  "这个问题已失效": "This question is no longer current",
+  "当时引用的片段": "Previously cited excerpt",
+  "相关原文": "Related originals",
+  "暂无补充问题记录": "No supplemental question records yet",
+  "没有待回答的问题": "No questions awaiting your answer",
+  "查看后续处理": "View follow-up processing",
   "此版本暂无文字正文。": "This version has no text body yet.",
   "本页暂无文字正文。": "This page has no text body.",
   "导出已取消，记录与设置保留。": "Export cancelled. Records and settings are retained.",

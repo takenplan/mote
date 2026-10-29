@@ -1,5 +1,18 @@
 /* Authored interface messages only; never translate captured content. */
 export const french: Readonly<Record<string, string>> = {
+  "你": "Vous",
+  "后续活动暂不可读取，请稍后重试。": "L’activité de suivi est temporairement indisponible. Réessayez plus tard.",
+  "回答已记录": "Réponse enregistrée",
+  "我也不知道": "Je ne sais pas non plus",
+  "查看活动": "Voir l’activité",
+  "正在提交，等待回执": "Envoi en cours ; accusé de réception attendu",
+  "补充你知道的信息": "Ajoutez ce que vous savez",
+  "这个问题已失效": "Cette question n’est plus actuelle",
+  "当时引用的片段": "Extrait cité à ce moment-là",
+  "相关原文": "Originaux associés",
+  "暂无补充问题记录": "Aucune question complémentaire pour le moment",
+  "没有待回答的问题": "Aucune question en attente de votre réponse",
+  "查看后续处理": "Voir le traitement de suivi",
   "此版本暂无文字正文。": "Cette version ne contient pas encore de texte.",
   "本页暂无文字正文。": "Cette page ne contient pas de texte.",
   "导出已取消，记录与设置保留。": "Exportation annulée. Les enregistrements et réglages sont conservés.",
