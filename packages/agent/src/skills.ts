@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 
 export const SKILL_VERSION = '1.0.3';
 const catalog = [
-  {id:'calendar-extraction',name:'calendar-extraction',description:'Propose calendar events from original evidence for human confirmation, preserving ambiguity and provenance.'},
+  {id:'calendar-extraction',name:'calendar-extraction',description:'Propose personal calendar events from original evidence for host validation and owner-scoped execution, distinguishing missing schedule values from semantic uncertainty and preserving provenance.'},
   {id:'personal-insight',name:'personal-insight',description:'Review personal context and distinguish evidence from inference, using the host-selected answer or insight-report format.'},
   {id:'coding-memory',name:'coding-memory',description:'Read agent conversations with speaker and project context; distinguish personal memories, coding experiences and task breadcrumbs.'},
   {id:'memory-strategy',name:'memory-strategy',description:'Execute a host-selected bounded Memory extraction or review policy with shared evidence guarantees.'},
