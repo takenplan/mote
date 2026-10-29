@@ -84,3 +84,17 @@ test('the fixed bridge reads its nonce and source origin while only current nume
   assert.equal(messages.length,1);const link=window.document.querySelector('a')!,event=new window.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
  }finally{window.close();}
 });
+
+
+test('a light-authored report keeps its text and layout while the dark display supplies readable ink and surfaces',()=>{
+ const dom=new JSDOM(),before=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+ const html='<style>body{line-height:1.7;color:#18242b;padding:1.2rem}h1{color:#102030}blockquote{padding:.8rem 1rem;background:#eef4f5;border-left:4px solid #376b70}</style><h1>Generated exact title</h1><blockquote><p>Generated literal body ['+citation.id+']</p></blockquote>';
+ try{
+  const dark=reportDocument(html,[citation],'dark',{token:'e'.repeat(32),parentOrigin:'http://localhost'}),light=reportDocument(html,[citation],'light',{token:'f'.repeat(32),parentOrigin:'http://localhost'});
+  assert.ok(dark.indexOf('body{line-height:1.7;color:#18242b;padding:1.2rem}')<dark.indexOf('html,body{color:'+darkTokens.ink+'!important'));
+  assert.match(dark,new RegExp('background-color:'+darkTokens.surface+'!important'));
+  assert.match(dark,/body a\{color:/);assert.match(dark,/padding:\.8rem 1rem/);assert.match(dark,/Generated literal body/);assert.ok(light.includes('color:#18242b'));
+  const view=new JSDOM(dark);assert.equal(view.window.document.querySelector('h1')!.textContent,'Generated exact title');assert.equal(view.window.document.querySelector('p')!.textContent,'Generated literal body 1');assert.equal(view.window.document.querySelectorAll('script[nonce]').length,1);view.window.close();
+  assert.equal(html,'<style>body{line-height:1.7;color:#18242b;padding:1.2rem}h1{color:#102030}blockquote{padding:.8rem 1rem;background:#eef4f5;border-left:4px solid #376b70}</style><h1>Generated exact title</h1><blockquote><p>Generated literal body ['+citation.id+']</p></blockquote>','Only the display wrapper changes, not the stored artifact bytes');
+ }finally{if(before)Object.defineProperty(globalThis,'document',before);else Reflect.deleteProperty(globalThis,'document');dom.window.close();}
+});
