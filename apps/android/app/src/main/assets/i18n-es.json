@@ -9255,5 +9255,21 @@
   "采集来源说明": "Descripciones de fuentes de captura",
   "有未保存的修改": "Cambios sin guardar",
   "编辑采集来源说明": "Editar descripciones de fuentes de captura",
-  "采集来源说明有版本冲突，请保留或更新说明后重试": "Hay un conflicto de versión en la descripción de captura. Conserva o actualiza la descripción antes de reintentar."
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "Hay un conflicto de versión en la descripción de captura. Conserva o actualiza la descripción antes de reintentar.",
+  "依据": "Fuentes",
+  "查看引用 {0}": "Ver referencia {0}",
+  "没有档案引用": "Sin referencias del archivo",
+  "{0} 份已引用资料": "{0} materiales citados",
+  "未提供估价": "Estimación no disponible",
+  "本轮详情": "Detalles de esta respuesta",
+  "使用模型": "Modelo utilizado",
+  "检索": "Búsqueda",
+  "费用": "Coste",
+  "已读取的依据": "Fuentes leídas",
+  "引用不可用": "Referencia no disponible",
+  "引用原文已删除，历史问答仍保留。": "El original citado se eliminó. Tus preguntas y respuestas anteriores se conservan.",
+  "返回原对话": "Volver a la conversación",
+  "删除这段对话": "Eliminar esta conversación",
+  "删除整段对话？": "¿Eliminar toda la conversación?",
+  "会删除这段对话的所有问答。已单独保存的记录保留。": "Se eliminarán todas las preguntas y respuestas de esta conversación. Los registros guardados por separado se conservarán."
 }

@@ -9255,5 +9255,21 @@
   "采集来源说明": "Capture source descriptions",
   "有未保存的修改": "Unsaved changes",
   "编辑采集来源说明": "Edit capture source descriptions",
-  "采集来源说明有版本冲突，请保留或更新说明后重试": "The capture description has a version conflict. Keep or update the description before retrying."
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "The capture description has a version conflict. Keep or update the description before retrying.",
+  "依据": "Evidence",
+  "查看引用 {0}": "View reference {0}",
+  "没有档案引用": "No archive references",
+  "{0} 份已引用资料": "{0} cited materials",
+  "未提供估价": "Estimate not provided",
+  "本轮详情": "Turn details",
+  "使用模型": "Model used",
+  "检索": "Retrieval",
+  "费用": "Cost",
+  "已读取的依据": "Read evidence",
+  "引用不可用": "Citation unavailable",
+  "引用原文已删除，历史问答仍保留。": "The cited original was deleted. Your past questions and answers are preserved.",
+  "返回原对话": "Back to conversation",
+  "删除这段对话": "Delete this conversation",
+  "删除整段对话？": "Delete the whole conversation?",
+  "会删除这段对话的所有问答。已单独保存的记录保留。": "All questions and answers in this conversation will be deleted. Records saved separately will remain."
 }

@@ -151,11 +151,72 @@ class HomeNavigationInstrumentedTest {
         }
     }
 
+    @Test fun turnDetailsAndCitationReturnRetainDraftAndUnavailableHistoryStaysReadable() {
+        ConversationFixture().use { fixture ->
+            fixture.includeCitations = true
+            val settings = Settings(context)
+            settings.save(settings.read().copy(server = fixture.origin, token = "generated-home-owner-token-1234567890", debugHttp = true, syncMode = "manual", syncPaused = true, authSignedOut = false), confirmCentralEndpoint = true)
+            val draftDirectory = File(context.noBackupFilesDir, "central-native/" + SourceRules.hash(fixture.origin))
+            try {
+                ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+                    waitFor(scenario,"Recent conversation is available") { shown(it).any { row -> row.tag == "home-conversation:$conversation" } }
+                    scenario.onActivity { shown(it).single { row -> row.tag == "home-conversation:$conversation" }.performClick() }
+                    waitFor(scenario,"The completed turn must show its actions") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString() == "更多" } }
+                    scenario.onActivity { activity ->
+                        shown(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated retained follow-up")
+                        shown(activity).filterIsInstance<TextView>().single { it.text.toString() == "更多" }.performClick()
+                    }
+                    instrumentation.waitForIdleSync()
+                    val dialogDrawn = java.util.concurrent.CountDownLatch(1)
+                    scenario.onActivity { activity -> activity.window.decorView.postOnAnimation { activity.window.decorView.postOnAnimation { dialogDrawn.countDown() } } }
+                    assertTrue(dialogDrawn.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                    scenario.onActivity { activity ->
+                        val overlays = android.view.inspector.WindowInspector.getGlobalWindowViews().filter { root -> views(root).any { it is TextView && it.text.toString() == "本轮详情" } }
+                        assertEquals(1,overlays.size)
+                        val labels = views(overlays.single()).filterIsInstance<TextView>().map { it.text.toString() }
+                        assertTrue(labels.contains("generated-model")); assertTrue(labels.contains("未提供估价")); assertTrue(labels.contains("1 份已引用资料"))
+                        val facts = views(overlays.single()).filterIsInstance<android.widget.LinearLayout>().filter { it.tag?.toString()?.startsWith("turn-detail:") == true }
+                        assertEquals(3,facts.size); assertEquals(1,facts.map { it.getChildAt(1).left }.distinct().size)
+                        GeneratedWindowRendering.save(activity,File(context.filesDir,"ui-final-home").apply { mkdirs() },"ask-turn-details",overlays)
+                        overlays.single().findViewById<View>(android.R.id.button1).performClick()
+                        shown(activity).single { it.contentDescription == "查看引用 1 · Generated source" }.performClick()
+                    }
+                    waitFor(scenario,"Available exact citation must load its original capture") { shown(it).filterIsInstance<TextView>().any { row -> row.text.toString() == "Generated original content" } }
+                    assertEquals(1,fixture.captureReads)
+                    scenario.onActivity { it.onBackPressed() }
+                    waitFor(scenario,"Returning from evidence retains the same draft") { shown(it).filterIsInstance<EditText>().any { field -> field.text.toString() == "Generated retained follow-up" } }
+                    fixture.referenceAvailable = false
+                    scenario.onActivity { shown(it).single { row -> row.contentDescription == "查看引用 1 · Generated source" }.performClick() }
+                    waitFor(scenario,"Unavailable reference explains that history stays") {
+                        android.view.inspector.WindowInspector.getGlobalWindowViews().any { root -> views(root).filterIsInstance<TextView>().any { row -> row.text.toString() == "引用原文已删除，历史问答仍保留。" } }
+                    }
+                    assertEquals("Unavailable references may not fall back to the owner archive",1,fixture.captureReads)
+                    scenario.onActivity { activity ->
+                        val overlay = android.view.inspector.WindowInspector.getGlobalWindowViews().single { root -> views(root).filterIsInstance<TextView>().any { row -> row.text.toString() == "引用不可用" } }
+                        overlay.findViewById<View>(android.R.id.button1).performClick()
+                        activity.onBackPressed()
+                    }
+                    fixture.failure = "all"
+                    scenario.onActivity { shown(it).single { row -> row.tag == "home-ask-action" }.performClick() }
+                    waitFor(scenario,"A failed remote read must not hide the durable local question") { shown(it).filterIsInstance<EditText>().any { field -> field.text.toString() == "Generated retained follow-up" } }
+                    scenario.onActivity { activity -> assertTrue(shown(activity).filterIsInstance<TextView>().any { row -> row.text.toString() == "这是已提交的生成回答。" }) }
+                }
+            } finally {
+                settings.save(settings.read().copy(server = "", token = "", debugHttp = false), confirmCentralEndpoint = true)
+                draftDirectory.deleteRecursively()
+            }
+        }
+    }
+
     private inner class ConversationFixture : AutoCloseable {
         private val listener = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         val origin = "http://127.0.0.1:${listener.localPort}"
         @Volatile var failure = ""
         @Volatile var openedId: String? = null
+        @Volatile var includeCitations = false
+        @Volatile var referenceAvailable = true
+        @Volatile var captureReads = 0
+        private val evidence = "3f4cf6ee-b09b-4fcf-a718-c0944f4b46cc"
         private val executor = Executors.newSingleThreadExecutor()
         init { executor.submit {
             while (!listener.isClosed) runCatching { listener.accept() }.getOrNull()?.use { socket ->
@@ -163,13 +224,15 @@ class HomeNavigationInstrumentedTest {
                 val first = input.readLine().orEmpty(); val path = first.split(' ').getOrElse(1) { "" }
                 while (!input.readLine().isNullOrBlank()) Unit
                 val isHistory = path.startsWith("/api/conversations?")
-                val isFailure = failure == "http" && isHistory
+                val isFailure = failure == "all" || failure == "http" && isHistory
                 val body = when {
                     isFailure -> JSONObject().put("error", "generated_failure")
                     isHistory && failure == "missing-items" -> JSONObject().put("unrelated", true)
                     isHistory && failure == "invalid-id" -> JSONObject().put("items", JSONArray().put(JSONObject().put("id", "not-a-conversation-id")))
                     path.startsWith("/api/conversations?") -> JSONObject().put("items", JSONArray().put(JSONObject().put("id", conversation).put("title", "周五评审需要准备什么？").put("updatedAt", "2026-10-28T10:00:00Z").put("turnCount", 1)))
-                    path.startsWith("/api/conversations/") -> { openedId = path.substringAfter("/api/conversations/").substringBefore('?'); JSONObject().put("id", conversation).put("scope", JSONObject()).put("turns", JSONArray().put(JSONObject().put("question", "周五评审需要准备什么？").put("result", JSONObject().put("answer", "这是已提交的生成回答。").put("citations", JSONArray())))) }
+                    path.contains("/references/") -> JSONObject().put("id",evidence).put("available",referenceAvailable)
+                    path.startsWith("/api/capture-browser/") -> { captureReads++; JSONObject().put("id",evidence).put("appName","Generated source").put("ocrText","Generated original content").put("capturedAt","2026-10-28T10:00:00Z").put("metadata",JSONObject()) }
+                    path.startsWith("/api/conversations/") -> { openedId = path.substringAfter("/api/conversations/").substringBefore('?'); JSONObject().put("id", conversation).put("scope", JSONObject()).put("turns", JSONArray().put(JSONObject().put("question", "周五评审需要准备什么？").put("result", JSONObject().put("answer", "这是已提交的生成回答。").put("modelSelection",JSONObject().put("model","generated-model")).put("citations", JSONArray().apply { if (includeCitations) put(JSONObject().put("id",evidence).put("appName","Generated source").put("capturedAt","2026-10-28T10:00:00Z")) })))) }
                     path.startsWith("/api/model-settings") -> JSONObject().put("profiles", JSONArray())
                     else -> JSONObject().put("items", JSONArray())
                 }.toString().toByteArray()

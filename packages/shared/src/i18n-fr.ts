@@ -9256,5 +9256,21 @@ export const french: Readonly<Record<string, string>> = {
   "采集来源说明": "Descriptions des sources de collecte",
   "有未保存的修改": "Modifications non enregistrées",
   "编辑采集来源说明": "Modifier les descriptions des sources de collecte",
-  "采集来源说明有版本冲突，请保留或更新说明后重试": "La version de la description de collecte est en conflit. Conservez ou mettez à jour la description avant de réessayer."
+  "采集来源说明有版本冲突，请保留或更新说明后重试": "La version de la description de collecte est en conflit. Conservez ou mettez à jour la description avant de réessayer.",
+  "依据": "Sources",
+  "查看引用 {0}": "Voir la référence {0}",
+  "没有档案引用": "Aucune référence des archives",
+  "{0} 份已引用资料": "{0} documents cités",
+  "未提供估价": "Estimation non fournie",
+  "本轮详情": "Détails de cette réponse",
+  "使用模型": "Modèle utilisé",
+  "检索": "Recherche",
+  "费用": "Coût",
+  "已读取的依据": "Sources consultées",
+  "引用不可用": "Référence indisponible",
+  "引用原文已删除，历史问答仍保留。": "Le document cité a été supprimé. Vos questions et réponses passées sont conservées.",
+  "返回原对话": "Revenir à la conversation",
+  "删除这段对话": "Supprimer cette conversation",
+  "删除整段对话？": "Supprimer toute la conversation ?",
+  "会删除这段对话的所有问答。已单独保存的记录保留。": "Toutes les questions et réponses de cette conversation seront supprimées. Les notes enregistrées séparément seront conservées."
 };
