@@ -46,6 +46,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var runStatus: TextView? = null
     private var send: Button? = null
     private var stop: Button? = null
+    private var checkRun: Button? = null
     private var noteText: EditText? = null
     private var noteMood: EditText? = null
     private var noteDraft = JSONObject().put("text", "").put("mood", "").put("attachments", JSONArray())
@@ -152,7 +153,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val runs = api.get("/api/query-runs").getJSONArray("items")
                 if (!state.has("runId") && !state.has("pending")) {
                     val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" }
-                    recent?.let { state.put("runId", it.getString("id")); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
+                    recent?.let { state.put("runId", it.getString("id")).put("runStatus","running"); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
                 }
                 val history = api.get("/api/conversations?limit=30").also { it.getJSONArray("items") }
                 history to api.get("/api/model-settings")
@@ -252,8 +253,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 attachments.remove(i); askState.put("attachments", attachments); persistAsk(); refresh()
             }
         }
+        checkRun = ui.button(MoteI18n.text("检查结果"), parent = compose) { pollAsk() }
         stop = ui.button(MoteI18n.text("停止回答"), parent = compose) {
-            val id = askState.optString("runId"); if (id.isBlank()) return@button
+            val id = NativeAskRunState.currentId(askState); if (id.isBlank()) return@button
             val api = client; ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
         }
         controlsAsk()
@@ -265,7 +267,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             MoteDialogBuilder(ui).setTitle(MoteI18n.text("还有未发送的内容")).setMessage(MoteI18n.text("切换对话会舍弃当前输入和图片。你也可以留在这里继续编辑。"))
                 .setNegativeButton(MoteI18n.text("继续编辑"),null).setPositiveButton(MoteI18n.text("舍弃并切换")) { _, _ -> newConversation(true) }.show(); return
         }
-        listOf("runId","conversationId","runStatus","evidenceIds","anchorEvidenceIds","scopeDirty").forEach(askState::remove)
+        listOf("runId","conversationId","runStatus","activeRequest","evidenceIds","anchorEvidenceIds","scopeDirty").forEach(askState::remove)
         askState.put("question", "").put("attachments",JSONArray()); persistAsk(); refresh()
     }
     fun showAskHistory() {
@@ -321,7 +323,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             return
         }
         askState.put("conversationId", id).put("question", "").put("attachments", JSONArray())
-        listOf("runId", "runStatus", "evidenceIds", "anchorEvidenceIds", "scopeDirty").forEach(askState::remove)
+        listOf("runId", "runStatus", "activeRequest", "evidenceIds", "anchorEvidenceIds", "scopeDirty").forEach(askState::remove)
         question?.setText(""); persistAsk(); refresh()
     }
 
@@ -331,6 +333,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         preset?.isEnabled = !busy; model?.isEnabled = !busy
         send?.isEnabled = (!busy && question?.text?.isNotBlank() == true) || askState.has("pending")
         send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else "↑"
+        checkRun?.visibility = if (busy) android.view.View.VISIBLE else android.view.View.GONE
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
     }
     private fun updateScope() {
@@ -358,14 +361,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         ui.work(MoteI18n.text("正在发送问题…"), {
             CentralDraftWrites.barrier { askStore.write(snapshot); draftFailure.set(null) }
             // Retrying preserves the admission ID even when the first response was lost.
-            api.post("/api/query-runs", request)
-        }) { run -> askState.remove("pending"); askState.remove("scopeDirty"); receiveRun(run) }
+            try { api.post("/api/query-runs", request).also { NativeAskRunState.validate(it,request.getString("id")) } }
+            catch(error:Exception) {
+                if(error is CentralFailure && error.status in setOf(401,403))throw error
+                throw IllegalStateException(MoteI18n.text("请求尚未确认，可重试同一请求。")+"\n"+error.message.orEmpty(),error)
+            }
+        }) { run -> receiveRun(run,request.getString("id"),request) }
     }
     fun pollAsk() {
         if (currentPage != "ask" || detailBack != null) return
         // Returning to a tab must not replay a completed run and clear the next unsent draft.
         if (!askState.has("pending") && askState.optString("runStatus") in setOf("completed", "cancelled", "failed")) return
-        val id = askState.optString("runId").ifBlank { askState.optJSONObject("pending")?.optString("id").orEmpty() }
+        val id = NativeAskRunState.currentId(askState)
         if (id.isBlank()) return
         val api = client
         ui.work(MoteI18n.text("正在读取回答进度…"), {
@@ -374,13 +381,16 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }
         }) { run ->
             if (run.optString("status") == "missing") {
-                if (askState.has("pending")) { controlsAsk(); ui.notice(MoteI18n.text("请求尚未确认，可重试同一请求。")) }
-                else { askState.remove("runId"); askState.remove("runStatus"); persistAsk(); controlsAsk(); ui.notice(MoteI18n.text("对话或运行记录已删除。")) }
-            } else { askState.remove("pending"); receiveRun(run) }
+                val retryable=NativeAskRunState.missing(askState)
+                persistAsk(); controlsAsk(); ui.notice(MoteI18n.text(if(retryable) "请求尚未确认，可重试同一请求。" else "请刷新检查结果，避免重复发送。"))
+            } else receiveRun(run,id,askState.optJSONObject("pending"))
         }
     }
-    private fun receiveRun(run: JSONObject) {
-        askState.remove("scopeDirty")
+    private fun receiveRun(run: JSONObject, expected: String=NativeAskRunState.currentId(askState), admitted: JSONObject?=null) {
+        NativeAskRunState.validate(run,expected)
+        admitted?.let { askState.put("activeRequest",JSONObject(it.toString())) }
+        val clearCompletedDraft=run.getString("status")=="completed" && NativeAskRunState.completesCurrentDraft(askState,expected)
+        askState.remove("pending"); askState.remove("scopeDirty")
         askState.put("runId", run.getString("id")).put("runStatus", run.getString("status"))
         run.optString("conversationId").takeIf { it.isNotBlank() }?.let { askState.put("conversationId", it) }
         val events = run.optJSONArray("events") ?: JSONArray()
@@ -392,7 +402,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             "cancelled" -> MoteI18n.text("已停止回答")
             else -> run.optJSONObject("error")?.optString("message") ?: MoteI18n.text("回答未完成")
         }
-        if (run.getString("status") == "completed") { askState.put("question", "").put("attachments", JSONArray()); question?.setText("") }
+        if (clearCompletedDraft) { askState.put("question", "").put("attachments", JSONArray()); question?.setText("") }
+        if(run.getString("status") in NativeAskRunState.terminal)askState.remove("activeRequest")
         persistAsk(); controlsAsk()
         if (run.getString("status") == "running") ui.scheduleAskPoll()
         else askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { loadConversation(it) }

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "检查结果": "Ergebnis prüfen",
   "先留下，再慢慢想。": "Jetzt festhalten, später in Ruhe nachdenken.",
   "查看 Central 的接收结果": "Empfang in Central ansehen",
   "引用原文已删除，历史问答仍保留。": "Die zitierte Quelle wurde gelöscht. Ihre bisherigen Fragen und Antworten bleiben erhalten.",

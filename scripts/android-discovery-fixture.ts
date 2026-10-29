@@ -13,6 +13,8 @@ let noteId=randomUUID(),ids:string[]=[],queryCalls=0,insightCalls=0,dropAck=fals
 let offline=false;
 let holdNext=false,releaseGeneration:(()=>void)|undefined,activeGenerations=0;
 const seenRequests:string[]=[];
+const seenAskRequests:string[]=[],askGetIds:string[]=[];
+let dropAskAck=false,hideAskRuns=false,holdNextQuery=false,activeQueries=0,releaseQuery:(()=>void)|undefined;
 function agent(reader:ContextReader):QueryAgent{return {configured:true,close:async()=>{},query:async input=>{
  const evidenceIds=input.anchorEvidenceIds??input.evidenceIds??[noteId];
  const records=await reader.evidence({ids:evidenceIds});if(records.length!==evidenceIds.length)throw Error('Generated fixture evidence is not actually readable');
@@ -24,12 +26,17 @@ function agent(reader:ContextReader):QueryAgent{return {configured:true,close:as
   return {answer:JSON.stringify({title:'Generated native report',markdown:'Generated native conclusion remains uncertain. ['+records[0].id+']',html:'<p>Generated native conclusion remains uncertain.</p>'}),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
  }
  queryCalls++;lastQuery={question:input.question,anchorEvidenceIds:input.anchorEvidenceIds??null,evidenceIds:input.evidenceIds??null};
+ activeQueries++;if(holdNextQuery){holdNextQuery=false;await new Promise<void>(resolve=>releaseQuery=resolve);}activeQueries--;
  return {answer:'Generated answer from the actual original: '+records.map(row=>row.ocrText+' ['+row.id+']').join('\n'),citations,trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:evidenceIds}};
 }};}
 const node=await buildApp({dataDir,token,tokenPath:'fixture-only',host:'127.0.0.1',port,profile:'test',maxStorageBytes:32_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'generated-fixture-key',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,createModelAgent:async(_settings,reader)=>agent(reader)});
 const restricted=await node.connections.mintMcp({serverUrl:'http://127.0.0.1:'+port,label:'Generated read-only Agent',access:'read'},{mcpEnabled:true,directory:'unused'});
 const restrictedToken=restricted.config.mcpServers.mote.headers.Authorization.slice(7);
 async function reset(){
+ for(const run of node.featureServices.queryRuns.list())if(run.status==='running')node.featureServices.queryRuns.cancel(run.id);
+ releaseQuery?.();releaseQuery=undefined;holdNextQuery=false;
+ for(let i=0;activeQueries>0&&i<100;i++)await new Promise(resolve=>setTimeout(resolve,20));
+ seenAskRequests.length=0;askGetIds.length=0;dropAskAck=false;hideAskRuns=false;
  for(const run of node.insightRuns.list())if(run.status==='running')node.insightRuns.cancel(run.id);
  releaseGeneration?.();releaseGeneration=undefined;holdNext=false;
  if(node.store.evidence([noteId]).length)node.store.delete(noteId);
@@ -48,13 +55,22 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/offline')offline=true;
    if(req.method==='POST'&&url==='/api/__fixture/online')offline=false;
    if(req.method==='POST'&&url==='/api/__fixture/drop-ack')dropAck=true;
+   if(req.method==='POST'&&url==='/api/__fixture/drop-ask-ack')dropAskAck=true;
+   if(req.method==='POST'&&url==='/api/__fixture/hide-ask')hideAskRuns=true;
+   if(req.method==='POST'&&url==='/api/__fixture/show-ask')hideAskRuns=false;
+   if(req.method==='POST'&&url==='/api/__fixture/hold-query')holdNextQuery=true;
+   if(req.method==='POST'&&url==='/api/__fixture/release-query'){releaseQuery?.();releaseQuery=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/hold-generation')holdNext=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-generation'){releaseGeneration?.();releaseGeneration=undefined;}
-   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
+   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
   }
   if(offline){req.socket.destroy();return;}
   if(req.method==='POST'&&url==='/api/insight-runs')seenRequests.push(JSON.parse(payload.toString()).requestId);
+  if(req.method==='POST'&&url==='/api/query-runs')seenAskRequests.push(payload.toString());
+  const askId=req.method==='GET'?/^\/api\/query-runs\/([a-f0-9-]{36})$/.exec(url)?.[1]:undefined;
+  if(askId){askGetIds.push(askId);if(hideAskRuns){res.writeHead(404,{'content-type':'application/json'}).end(JSON.stringify({error:'not_found'}));return;}}
   const result=await node.app.inject({method:req.method as 'GET',url,headers:req.headers,payload:payload.length?payload:undefined});
+  if(dropAskAck&&req.method==='POST'&&url==='/api/query-runs'&&result.statusCode===202){dropAskAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ask_ack_lost'}));return;}
   if(dropAck&&req.method==='POST'&&url==='/api/insight-runs'&&result.statusCode===202){dropAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ack_lost'}));return;}
   res.writeHead(result.statusCode,result.headers);res.end(result.rawPayload);
  }catch(error){res.writeHead(500,{'content-type':'application/json'}).end(JSON.stringify({error:String(error)}));}
