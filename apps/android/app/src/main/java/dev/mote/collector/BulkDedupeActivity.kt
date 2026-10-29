@@ -279,7 +279,7 @@ class BulkDedupeActivity : MoteActivity() {
             } catch (error: Exception) { runOnUiThread { if (!isDestroyed) { status.text = MoteI18n.text("提交失败：{0}", error.message); busy = false; controls.forEach { it.isEnabled = true } } } }
         }
     }
-    private fun label(parent: LinearLayout, value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(6), 0, moteDp(6)) }.also(parent::addView)
+    private fun label(parent: LinearLayout, value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(6), 0, moteDp(6)) }.also(parent::addView)
     private fun action(parent: android.view.ViewGroup, value: String, requiresIdle: Boolean = true, primary: Boolean = false, callback: () -> Unit): Button =
         SecondaryUi.action(parent, value, primary) { if (!requiresIdle || !busy) callback() }.also { if (requiresIdle) controls += it }
     override fun onSaveInstanceState(outState: Bundle) { outState.putStringArrayList("selected", ArrayList(selected)); outState.putInt("page", page); outState.putBoolean("pending", pending); super.onSaveInstanceState(outState) }

@@ -357,4 +357,37 @@ class NativeCentralInstrumentedTest {
         assertThrows(IllegalStateException::class.java) { old.get("/api/status") }
         assertNull(CentralAccess.resolve(context).client)
     }
+    @Test fun generatedCalendarProposalPermissionBoundaryIgnoreAndTodoCompletionHaveNativeVisuals() {
+        val host=InstrumentationRegistry.getArguments().getString("nativeCalendarVisualOrigin")
+        assumeTrue(host!=null);require(Regex("http://127\\.0\\.0\\.1:[0-9]+").matches(host!!))
+        val api=CentralClient(host,"generated-managed-calendar-owner")
+        fun fixtureRequest(path:String,body:JSONObject?=null):JSONObject { val (status,value)=HttpJson.request(if(body==null)"GET" else "POST",host+path,body,"generated-managed-calendar-owner");check(status in 200..299 && value!=null);return value }
+        val action=fixtureRequest("/fixture/add",JSONObject())
+        val settings=Settings(context);settings.save(settings.read().copy(server=host,token="",debugHttp=true,syncMode="manual"),confirmCentralEndpoint=true)
+        CentralSession.get(context).select(host);CentralSession.get(context).signIn(host,"generated-managed-calendar-owner")
+        fun shown()=android.view.inspector.WindowInspector.getGlobalWindowViews().filter{it.isShown && it.hasWindowFocus()}.flatMap(::views).filter{it.isShown}
+        fun until(label:String,check:()->Boolean){val end=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<end){var ok=false;instrumentation.runOnMainSync{ok=check()};if(ok)return;Thread.sleep(60)};fail(label)}
+        fun click(label:String){until(label){shown().filterIsInstance<TextView>().any{it.isEnabled && it.isClickable && it.text.toString()==label}};instrumentation.runOnMainSync{shown().filterIsInstance<TextView>().first{it.isEnabled && it.isClickable && it.text.toString()==label}.performClick()}}
+        fun capture(name:String){val before=MoteAppearance.preference();try{for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){instrumentation.runOnMainSync{MoteAppearance.select(context,theme)};instrumentation.waitForIdleSync();val latch=java.util.concurrent.CountDownLatch(1);instrumentation.runOnMainSync{shown().first().postOnAnimation{shown().first().postOnAnimation{latch.countDown()}}};assertTrue(latch.await(5,java.util.concurrent.TimeUnit.SECONDS));instrumentation.runOnMainSync{val root=android.view.inspector.WindowInspector.getGlobalWindowViews().last{it.isShown && it.hasWindowFocus()};val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);root.draw(android.graphics.Canvas(bitmap));java.io.File(context.filesDir,"calendar-todo-final").apply{mkdirs()}.resolve(name+"-"+theme.value+".png").outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}}}finally{instrumentation.runOnMainSync{MoteAppearance.select(context,before)}}}
+        val permission=context.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR)
+        require(permission!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+        ActivityScenario.launch(CalendarActionsActivity::class.java).use {
+            until("Real validated generated proposal"){shown().filterIsInstance<TextView>().any{it.text.toString()=="Generated appointment"}};capture("calendar-proposed")
+            click("查看原文依据");until("Real original evidence dialog"){shown().filterIsInstance<TextView>().any{it.text.toString().contains("Generated appointment on 18 September 2099.")}};capture("calendar-original");click("关闭")
+            click("核对并添加到日历");until("Permission boundary remains actual"){shown().filterIsInstance<TextView>().any{it.text.toString()=="请先连接本机日历"}};capture("calendar-needs-permission")
+            assertEquals("proposed",fixtureRequest("/fixture/action/"+action.getString("id")).getString("status"));click("忽略这条建议")
+            until("Actual ignored receipt"){shown().filterIsInstance<TextView>().any{it.text.toString().startsWith("已忽略")} && shown().filterIsInstance<TextView>().none{it.text.toString()=="忽略这条建议"}};capture("calendar-dismissed")
+            assertEquals("dismissed",fixtureRequest("/fixture/action/"+action.getString("id")).getString("status"))
+        }
+        val title="Generated native Todo "+java.util.UUID.randomUUID()
+        open("actions").use { scenario ->
+            waitFor(scenario,"Actual Todo page"){a->!a.isWorking && contains(a,"待办标题")}
+            scenario.onActivity { a->all(a).filterIsInstance<EditText>().single{it.contentDescription=="待办标题"}.setText(title) };click("添加待办")
+            waitFor(scenario,"Actual created Todo"){a->!a.isWorking && contains(a,title)};capture("todo-open");click("标记完成")
+            waitFor(scenario,"Actual completed Todo"){a->!a.isWorking && contains(a,title) && contains(a,"已完成")};capture("todo-completed")
+            val todos=api.get("/api/todos?limit=30").getJSONArray("items");assertEquals("completed",(0 until todos.length()).map{todos.getJSONObject(it)}.single{it.getString("title")==title}.getString("status"))
+        }
+        assertEquals(permission,context.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+    }
+
 }

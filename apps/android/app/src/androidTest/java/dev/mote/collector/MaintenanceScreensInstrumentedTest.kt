@@ -52,13 +52,23 @@ class MaintenanceScreensInstrumentedTest {
         until(value) { main { visible().any { it.tag == value && it.isEnabled } } }
         main { visible().first { it.tag == value }.apply { requestRectangleOnScreen(android.graphics.Rect(0, 0, width, height), true); performClick() } }
     }
-    private fun capture(name: String) {
+    private fun captureOne(name: String) {
         instrumentation.waitForIdleSync(); Thread.sleep(80)
         main {
+            if(name=="bulk-compare-dark") {
+                val captions=visible().filterIsInstance<TextView>().filter { it.text.toString().startsWith("保留图 ·") || it.text.toString().startsWith("候选图 ·") }
+                assertEquals(2,captions.size);captions.forEach { assertEquals(MoteUi.ink,it.currentTextColor) }
+            }
             val root = WindowInspector.getGlobalWindowViews().last { it.isShown && it.hasWindowFocus() }
             val image = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888); root.draw(Canvas(image))
             File(context.filesDir, "generated-maintenance-ui").apply { mkdirs() }.resolve("$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()
         }
+    }
+    private fun capture(name:String) {
+        val before=MoteAppearance.preference()
+        try { for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+            main { MoteAppearance.select(context,theme) };captureOne(name+if(theme==AppearancePreference.DARK)"-dark" else "")
+        } } finally { main { MoteAppearance.select(context,before) } }
     }
     private fun fixture(block: () -> Unit) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("maintenanceUiFixture") == "true")
@@ -221,7 +231,7 @@ class MaintenanceScreensInstrumentedTest {
             ActivityScenario.launch(BulkDedupeActivity::class.java).use {
                 until("empty local bulk page"){has("就绪") || has("尚无完整扫描结果") || has("扫描结果")}
                 click("扫描本机图片");until("empty real scan completes"){store.read("report").optBoolean("complete") && store.read("report").optJSONArray("pairs")?.length()==0}
-                capture("bulk-no-local-images");assertEquals(0,queue.depth())
+                until("Empty result UI finished actual scan"){has("扫描完成：0 张") && has("没有待处理图片")};capture("bulk-no-local-images");assertEquals(0,queue.depth())
             }
             ids.forEachIndexed { index, id ->
                 queue.enqueue(JSONObject().put("id", id).put("source", "screen").put("capturedAt", "2026-10-29T01:0${index}:00Z")

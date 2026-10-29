@@ -382,4 +382,27 @@ class SourcesEntryInstrumentedTest {
             }
         }
     }
+    @Test fun invalidFileAndFolderScopeSettingsStayEditableInBothAppearances() = fixture {
+        val store=context.localSources()
+        for(folder in listOf(false,true)) {
+            val source=LocalSource(name="Generated validation scope",kind="local-files",uri="content://generated/validation.txt",tree=folder,enabled=false,centralProcessingConsent=true)
+            store.save(source)
+            try { ActivityScenario.launch<FileTaskActivity>(Intent(context,FileTaskActivity::class.java).putExtra("sourceId",source.id)).use { scenario ->
+                var activity:FileTaskActivity?=null;scenario.onActivity { activity=it };awaitFileTaskReady(activity!!)
+                scenario.onActivity { a -> if(!views(a.window.decorView).single { it.tag=="file-task:maximum" }.isShown)views(a.window.decorView).single { it.tag=="file-task:advanced" }.performClick();(views(a.window.decorView).single { it.tag=="file-task:maximum" } as EditText).setText("0");views(a.window.decorView).single { it.tag=="file-task:confirm" }.performClick() }
+                instrumentation.waitForIdleSync();assertEquals(source,store.sources().single { it.id==source.id })
+                for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+                    scenario.onActivity { MoteAppearance.select(context,theme) };instrumentation.waitForIdleSync()
+                    scenario.onActivity { a -> val field=views(a.window.decorView).single { it.tag=="file-task:maximum" } as EditText;assertNotNull(field.error);field.requestRectangleOnScreen(android.graphics.Rect(0,0,field.width,field.height+80),true) }
+                    val frame=java.util.concurrent.CountDownLatch(1);scenario.onActivity { a -> a.window.decorView.postOnAnimation { a.window.decorView.postOnAnimation { frame.countDown() } } };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                    scenario.onActivity { a ->
+                        val root=a.window.decorView;val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);root.draw(android.graphics.Canvas(bitmap))
+                        java.io.File(context.filesDir,"source-scope-final").apply{mkdirs()}.resolve((if(folder)"folder" else "file")+"-invalid-"+theme.value+".png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
+                        assertEquals("0",(views(root).single { it.tag=="file-task:maximum" } as EditText).text.toString());assertTrue(views(root).single { it.tag=="file-task:confirm" }.isEnabled)
+                    }
+                }
+            } } finally { store.remove(source.id);context.fileArchives().remove(source.id);instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.LIGHT) } }
+        }
+    }
+
 }

@@ -385,7 +385,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             action("/api/todos", JSONObject().put("id", UUID.randomUUID().toString()).put("title", todo.text.toString()).put("description", "").put("dueAt", JSONObject.NULL).put("evidenceIds", JSONArray()))
         }
         library.paged("/api/todos?limit=30", ui.card()) { row, card ->
-            ui.text(row.getString("title"), NativeFontRole.SECTION, card); ui.text(row.optString("description"), parent = card); ui.text(row.optString("status"), parent = card)
+            ui.text(row.getString("title"), NativeFontRole.SECTION, card); ui.text(row.optString("description"), parent = card); ui.text(MoteI18n.text(if(row.optString("status")=="completed")"已完成" else "未完成"), parent = card)
             if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), true, parent = card) {
                 val api = client
                 ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/todos/" + enc(row.getString("id")), JSONObject().put("version", row.getInt("version")).put("status", "completed")) }) { screens.refresh() }

@@ -53,7 +53,7 @@ class BackupJourneyInstrumentedTest {
         until(value) { main { visible().any { it.tag == value && it.isEnabled } } }
         main { visible().single { it.tag == value }.performClick() }
     }
-    private fun screenshot(scenario: ActivityScenario<BackupActivity>, name: String) {
+    private fun screenshotOne(scenario: ActivityScenario<BackupActivity>, name: String) {
         instrumentation.waitForIdleSync()
         scenario.onActivity { activity ->
             assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
@@ -62,6 +62,12 @@ class BackupJourneyInstrumentedTest {
             File(context.filesDir, "generated-secondary-ui").apply { mkdirs() }.resolve("$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
             image.recycle()
         }
+    }
+    private fun screenshot(scenario:ActivityScenario<BackupActivity>,name:String) {
+        val before=MoteAppearance.preference()
+        try { for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+            main { MoteAppearance.select(context,theme) };screenshotOne(scenario,name+if(theme==AppearancePreference.DARK)"-dark" else "")
+        } } finally { main { MoteAppearance.select(context,before) } }
     }
     private fun <T> picker(action: String, file: File?, block: () -> T): T {
         val monitor = object : Instrumentation.ActivityMonitor() {
@@ -188,4 +194,32 @@ class BackupJourneyInstrumentedTest {
             screenshot(scenario, "backup-restore-retry-success")
         }
     }
+    @Test fun anotherCentralConfigurationPreviewShowsTheBoundaryAndCancelPreservesIdentity() = fixture { root ->
+        val settings=Settings(context);val before=settings.read();val device=settings.deviceId;val inventory=context.queue().inventory()
+        val next=before.copy(server="http://127.0.0.1:47999",token="",debugHttp=true)
+        val file=File(root,"generated-other-central.json").apply { writeText(ConfigurationArchive.encode(next)) }
+        ActivityScenario.launch(BackupActivity::class.java).use { scenario ->
+            tag("backup-config-tab");picker(Intent.ACTION_OPEN_DOCUMENT,file) { click("导入配置 JSON");until("Other Central explicit preview"){textVisible("中央节点将改变；未携带令牌时需重新连接")} }
+            screenshot(scenario,"backup-other-central-preview");click("取消")
+            assertEquals(before,settings.read());assertEquals(device,settings.deviceId);assertEquals(inventory,context.queue().inventory())
+        }
+    }
+
+    @Test fun actualCentralExportRemainsInProgressUntilTheRealArchiveResponseArrives() = fixture { root ->
+        assumeTrue(InstrumentationRegistry.getArguments().getString("discoveryFixture")=="true")
+        val origin="http://127.0.0.1:47886";val token="generated-native-discovery-owner-token";val api=CentralClient(origin,token)
+        api.post("/api/__fixture/reset");val settings=Settings(context);settings.save(settings.read().copy(server=origin,token="",debugHttp=true,syncMode="manual"),confirmCentralEndpoint=true)
+        CentralSession.get(context).select(origin);CentralSession.get(context).signIn(origin,token)
+        val output=File(root,"generated-actual-central.tar.gz");val before=context.queue().inventory()
+        ActivityScenario.launch(BackupActivity::class.java).use { scenario ->
+            try {
+                tag("backup-central");api.post("/api/__fixture/hold-export")
+                picker(Intent.ACTION_CREATE_DOCUMENT,output) { click("导出中央元数据");until("Actual generated archive response held"){api.get("/api/__fixture/state").getBoolean("exportHeld")} }
+                until("Native actual export in progress"){textVisible("正在导出中央资料")};assertFalse(textVisible("导出文件已生成"));screenshot(scenario,"actual-central-export-in-progress")
+                api.post("/api/__fixture/release-export");until("Actual archive saved after response"){textVisible("导出文件已生成")}
+                assertTrue(output.length()>0);java.util.zip.GZIPInputStream(output.inputStream()).use { assertTrue(it.readBytes().isNotEmpty()) };assertEquals(before,context.queue().inventory());screenshot(scenario,"actual-central-export-completed")
+            } finally { api.post("/api/__fixture/release-export") }
+        }
+    }
+
 }

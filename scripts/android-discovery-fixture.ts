@@ -21,9 +21,11 @@ const materialReads:string[]=[];
 let holdNextMaterialRead=false,materialReadHeld=false,releaseMaterialRead:(()=>void)|undefined;
 let dropAttachmentAck=false,holdAttachmentCommit=false,attachmentCommitHeld=false,releaseAttachmentCommit:(()=>void)|undefined;
 const attachmentManifests:string[]=[];
-function publishMaterial(label='Original',partial=false){
- const material=node.materials.publish({id:nativeMaterialId,kind:'mote.file',schemaVersion:1,title:'Generated exact whole Material',origin:{sourceId:'generated-native-material',externalId:'one',deviceId:'generated-discovery-phone',firstAt:'2026-10-01T00:00:00Z',lastAt:'2026-10-01T00:00:00Z'},members:[{id:noteId,kind:'capture',ref:'capture:'+noteId}],blocks:Array.from({length:partial?2:31},(_,index)=>({id:'paragraph-'+index,kind:'text' as const,format:'plain',text:label+' generated exact paragraph '+index,memberIds:[noteId]})),coverage:{state:partial?'partial':'complete',...(partial?{reason:'generated_unavailable_tail'}:{})},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:node.materials.revisionForWrite(nativeMaterialId)});
- nativeMaterialRef=material.ref;return material;
+let holdExport=false,exportHeld=false,releaseExport:(()=>void)|undefined;
+function publishMaterial(label='Original',partial=false,assetOnly=false){
+ const asset=assetOnly?node.store.assets.put(Buffer.from('Generated asset-only original bytes')):undefined;
+ const material=node.materials.publish({id:nativeMaterialId,kind:'mote.file',schemaVersion:1,title:'Generated exact whole Material',origin:{sourceId:'generated-native-material',externalId:'one',deviceId:'generated-discovery-phone',firstAt:'2026-10-01T00:00:00Z',lastAt:'2026-10-01T00:00:00Z'},members:[{id:noteId,kind:'capture',ref:'capture:'+noteId}],blocks:asset?[{id:'original-asset',kind:'asset' as const,hash:asset.hash,mimeType:'text/plain',memberIds:[noteId]}]:Array.from({length:partial?2:31},(_,index)=>({id:'paragraph-'+index,kind:'text' as const,format:'plain',text:label+' generated exact paragraph '+index,memberIds:[noteId]})),coverage:{state:partial?'partial':'complete',...(partial?{reason:'generated_unavailable_tail'}:{})},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}},{expectedRevision:node.materials.revisionForWrite(nativeMaterialId)});
+ asset?.release();nativeMaterialRef=material.ref;return material;
 }
 function agent(reader:ContextReader):QueryAgent{return {configured:true,close:async()=>{},query:async input=>{
  let evidenceIds=input.anchorEvidenceIds??input.evidenceIds??[noteId];
@@ -45,6 +47,7 @@ node.sources.register({id:'generated-native-material',name:'Generated native Mat
 const restricted=await node.connections.mintMcp({serverUrl:'http://127.0.0.1:'+port,label:'Generated read-only Agent',access:'read'},{mcpEnabled:true,directory:'unused'});
 const restrictedToken=restricted.config.mcpServers.mote.headers.Authorization.slice(7);
 async function reset(){
+ releaseExport?.();releaseExport=undefined;holdExport=false;exportHeld=false;
  releaseMaterialRead?.();releaseMaterialRead=undefined;holdNextMaterialRead=false;materialReadHeld=false;
  releaseAttachmentCommit?.();releaseAttachmentCommit=undefined;dropAttachmentAck=false;holdAttachmentCommit=false;attachmentCommitHeld=false;attachmentManifests.length=0;
  for(const run of node.featureServices.queryRuns.list())if(run.status==='running')node.featureServices.queryRuns.cancel(run.id);
@@ -77,15 +80,18 @@ const server=createServer(async(req,res)=>{
    if(req.method==='POST'&&url==='/api/__fixture/release-query'){releaseQuery?.();releaseQuery=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/material-update')publishMaterial('Updated');
    if(req.method==='POST'&&url==='/api/__fixture/material-partial')publishMaterial('Partial',true);
+   if(req.method==='POST'&&url==='/api/__fixture/material-asset-only')publishMaterial('Asset',false,true);
    if(req.method==='POST'&&url==='/api/__fixture/material-race')changeMaterialOnStart=true;
    if(req.method==='POST'&&url==='/api/__fixture/hold-material-read')holdNextMaterialRead=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-material-read'){releaseMaterialRead?.();releaseMaterialRead=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/drop-attachment-ack')dropAttachmentAck=true;
    if(req.method==='POST'&&url==='/api/__fixture/hold-attachment-commit')holdAttachmentCommit=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-attachment-commit'){releaseAttachmentCommit?.();releaseAttachmentCommit=undefined;}
+   if(req.method==='POST'&&url==='/api/__fixture/hold-export')holdExport=true;
+   if(req.method==='POST'&&url==='/api/__fixture/release-export'){releaseExport?.();releaseExport=undefined;}
    if(req.method==='POST'&&url==='/api/__fixture/hold-generation')holdNext=true;
    if(req.method==='POST'&&url==='/api/__fixture/release-generation'){releaseGeneration?.();releaseGeneration=undefined;}
-   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,attachmentManifests,attachmentCommitHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
+   res.setHeader('content-type','application/json');res.end(JSON.stringify({noteId,nativeMaterialId,nativeMaterialRef,materialReads,materialReadHeld,exportHeld,attachmentManifests,attachmentCommitHeld,latestId:ids[0],oldId:ids[66],restrictedToken,queryCalls,insightCalls,lastQuery,seenRequests,seenAskRequests,askGetIds,activeQueries,activeGenerations,savedCount:node.store.insights({limit:100}).items.length}));return;
   }
   if(offline){req.socket.destroy();return;}
   if(req.method==='POST'&&url==='/api/insight-runs')seenRequests.push(JSON.parse(payload.toString()).requestId);
@@ -102,6 +108,7 @@ const server=createServer(async(req,res)=>{
   }
   if(dropAskAck&&req.method==='POST'&&url==='/api/query-runs'&&result.statusCode===202){dropAskAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ask_ack_lost'}));return;}
   if(dropAck&&req.method==='POST'&&url==='/api/insight-runs'&&result.statusCode===202){dropAck=false;res.writeHead(502,{'content-type':'application/json'}).end(JSON.stringify({error:'generated_ack_lost'}));return;}
+  if(holdExport&&req.method==='GET'&&url.startsWith('/api/export-bundle?')){holdExport=false;exportHeld=true;await new Promise<void>(resolve=>releaseExport=resolve);exportHeld=false;}
   res.writeHead(result.statusCode,result.headers);res.end(result.rawPayload);
  }catch(error){res.writeHead(500,{'content-type':'application/json'}).end(JSON.stringify({error:String(error)}));}
 });

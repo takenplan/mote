@@ -126,4 +126,28 @@ class UploadHistoryUiInstrumentedTest {
             main { activity().finish() }
         }
     }
+    @Test fun realCrossDayBatchesFilterWithoutMixingConfirmedAndUnknownReceipts() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("secondaryUiFixture")=="true")
+        require(Build.FINGERPRINT.contains("emu64a") && context.packageName=="dev.mote.collector.dev" && !Settings(context).enabled)
+        MoteI18n.select(context,"zh-CN");val settings=Settings(context);val origin=settings.read().server;require(origin.isNotBlank())
+        val now=System.currentTimeMillis();val store=context.captureUploadHistory();val ids=mutableListOf<String>();val batches=mutableListOf<String>()
+        for((offset,confirmed) in listOf(0L to true,2L to false)) {
+            val at=now-offset*86400000;val event=JSONObject().put("id",UUID.randomUUID().toString()).put("deviceId",settings.deviceId).put("source","note").put("capturedAt",java.time.Instant.ofEpochMilli(at).toString()).put("durationMs",0).put("ocrText","Generated cross-day original "+offset).put("privacy",JSONObject().put("excluded",false))
+            context.queue().enqueue(event,null,100000);ids.add(event.getString("id"));val batch=UUID.randomUUID().toString();batches.add(batch)
+            val receipt=CaptureUploadReceipt.create(origin,settings.deviceId,event,event,batch,at,30)
+            store.saveAttempt(CaptureUploadAttempt.create(batch,receipt.scope,LoginProcess.id,listOf(event),100,at).copy(state=if(confirmed)"received" else "unknown",acknowledged=if(confirmed)1 else 0))
+            if(confirmed)CaptureReceiptFinalizer(store).received(context.queue(),receipt)
+        }
+        fun capture(name:String) {val before=MoteAppearance.preference();try{for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main{MoteAppearance.select(context,theme)};instrumentation.waitForIdleSync();main{val root=activity().window.decorView;val bitmap=Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888);root.draw(Canvas(bitmap));File(context.filesDir,"cross-day-history-final").apply{mkdirs()}.resolve(name+"-"+theme.value+".png").outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}}}finally{main{MoteAppearance.select(context,before)}}}
+        ActivityScenario.launch(SyncQueueActivity::class.java).use { scenario ->
+            click("history tab"){it.tag=="sync-history-tab"};until("Two actual local receipt days"){main{visible().count{it.tag?.toString()?.startsWith("history-date-")==true}==2}}
+            main { visible().filter{it.tag?.toString()?.startsWith("history-date-")==true}.forEach{it.performClick()} };capture("two-days-expanded")
+            assertTrue(main{batches.all{id->visible().any{it.tag=="history-batch-"+id}}})
+            main{(visible().single{it.tag=="history-result-filter"} as Spinner).setSelection(1)};until("Confirmed filter"){main{visible().any{it.tag=="history-batch-"+batches[0]} && visible().none{it.tag=="history-batch-"+batches[1]}}};capture("confirmed-day-only")
+            main{(visible().single{it.tag=="history-result-filter"} as Spinner).setSelection(2)};until("Unconfirmed filter"){main{visible().any{it.tag=="history-batch-"+batches[1]} && visible().none{it.tag=="history-batch-"+batches[0]}}};capture("unknown-day-only")
+            scenario.recreate();until("Filter restored"){main{visible().filterIsInstance<Spinner>().any{it.tag=="history-result-filter" && it.selectedItemPosition==2}}}
+            assertEquals(2,ids.count{context.queue().capture(it)!=null});assertFalse(context.queue().capture(ids[1])!!.optBoolean("uploaded"))
+        }
+    }
+
 }

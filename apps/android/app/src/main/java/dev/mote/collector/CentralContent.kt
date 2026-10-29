@@ -327,7 +327,7 @@ internal class CentralContent(
         val entries = MoteNavigation.libraryBrowsePages.mapNotNull { id -> CentralScreens.pages.find { it.first == id } }
         collectionBar.addView(Spinner(this).apply {
             contentDescription = MoteI18n.text("资料类型")
-            adapter = ArrayAdapter(this@CentralContent, android.R.layout.simple_spinner_dropdown_item, entries.map { MoteI18n.text(it.second) })
+            adapter = MoteUi.choiceAdapter(this@CentralContent, entries.map { MoteI18n.text(it.second) })
             setSelection(entries.indexOfFirst { it.first == page }.coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit

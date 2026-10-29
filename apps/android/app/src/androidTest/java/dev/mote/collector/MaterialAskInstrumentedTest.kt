@@ -40,11 +40,12 @@ class MaterialAskInstrumentedTest {
     private fun click(s:ActivityScenario<CentralActivity>,label:String,predicate:(View)->Boolean){ready(s,label){a -> !a.isWorking && shown(a).any { it.isEnabled && predicate(it) }};s.onActivity { a -> shown(a).single { it.isEnabled && predicate(it) }.apply { requestRectangleOnScreen(android.graphics.Rect(0,0,width,height),true);assertTrue(performClick()) } }}
     private fun clickText(s:ActivityScenario<CentralActivity>,text:String)=click(s,text){it is TextView && it.isClickable && it.text.toString()==text}
     private fun question(s:ActivityScenario<CentralActivity>,text:String){ready(s,"Composer ready"){a -> !a.isWorking && shown(a).filterIsInstance<EditText>().any { it.contentDescription=="你的问题" && it.isEnabled }};s.onActivity { a -> shown(a).filterIsInstance<EditText>().single { it.contentDescription=="你的问题" }.setText(text) }}
-    private fun screenshot(s:ActivityScenario<CentralActivity>,name:String){instrumentation.waitForIdleSync();s.onActivity { a -> val root=a.window.decorView;val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);try{root.draw(android.graphics.Canvas(image));File(context.filesDir,"material-ask-final").apply{mkdirs()}.resolve("$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }}finally{image.recycle()} }}
+    private fun screenshotOne(s:ActivityScenario<CentralActivity>,name:String){instrumentation.waitForIdleSync();s.onActivity { a -> if(name.endsWith("-dark"))shown(a).filterIsInstance<android.widget.Spinner>().forEach { spinner -> (spinner.selectedView as? TextView)?.let { assertEquals(MoteUi.ink,it.currentTextColor) } };val root=a.window.decorView;val image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);try{root.draw(android.graphics.Canvas(image));File(context.filesDir,"material-ask-final").apply{mkdirs()}.resolve("$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }}finally{image.recycle()} }}
+    private fun screenshot(s:ActivityScenario<CentralActivity>,name:String){val before=MoteAppearance.preference();try{for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){main { MoteAppearance.select(context,theme) };instrumentation.waitForIdleSync();screenshotOne(s,name+if(theme==AppearancePreference.DARK)"-dark" else "")}}finally{main { MoteAppearance.select(context,before) }}}
     private fun openMaterial():ActivityScenario<CentralActivity> {
         val scenario=ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","materials"))
         click(scenario,"Actual Material list row"){it.tag=="material-open:"+fixture.getString("nativeMaterialId")}
-        ready(scenario,"Pinned reader ready"){a -> !a.isWorking && shown(a).any { it.tag=="material-ask" }};return scenario
+        ready(scenario,"Pinned reader ready"){a -> !a.isWorking && shown(a).any { it.tag=="material-ask" }};screenshot(scenario,"pinned-material-reader");return scenario
     }
     private fun choose(s:ActivityScenario<CentralActivity>):String {
         val ref=control("state").getString("nativeMaterialRef")
@@ -124,4 +125,17 @@ class MaterialAskInstrumentedTest {
             assertEquals(conversation,saved().getString("conversationId"));assertEquals(ref,control("state").getJSONObject("lastQuery").getString("anchorMaterialRef"));screenshot(s,"shared-partial-material")
         }
     }
+    @Test fun readableAssetOnlyMaterialShowsItsOriginalAndKeepsExactAskScope(){
+        control("material-asset-only");val ref=control("state").getString("nativeMaterialRef")
+        val read=api.get("/api/materials/"+fixture.getString("nativeMaterialId")+"/read?revision="+ref.substringAfter('@')+"&length=12000")
+        assertEquals("asset",read.getJSONArray("spans").getJSONObject(0).getString("kind"))
+        openMaterial().use { s ->
+            screenshot(s,"asset-only-material-reader")
+            assertEquals(ref,choose(s));question(s,"Generated native question using asset-only Material")
+            screenshot(s,"asset-only-material-scope");click(s,"Send"){it.contentDescription=="发送"}
+            until("Asset-only pinned read and actual controlled answer"){saved().optString("runStatus")=="completed"}
+            assertEquals(ref,control("state").getJSONObject("lastQuery").getString("anchorMaterialRef"));assertEquals(ref,control("state").getJSONArray("materialReads").getString(0));screenshot(s,"asset-only-material-answer")
+        }
+    }
+
 }

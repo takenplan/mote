@@ -299,6 +299,7 @@ class FileTaskActivity : MoteActivity() {
                 enabled = enabled.isChecked, allowRead = if (retention.selectedItemPosition == 0) allowRead.isChecked else if (listOf("snapshot", "archive", "reference")[retention.selectedItemPosition] == source.retention) source.allowRead else false,
                 initialSync = if (source.tree && initial.selectedItemPosition == 1) "new_only" else "all", syncContinuously = if (source.tree) true else if (savedSource != null) continuous.isChecked else false,
                 intervalMinutes = interval.text.toString().toInt(), maxFileMiB = maximum.text.toString().toInt(), extensions = extensions.text.toString(), excluded = excludes.text.toString())
+            if (next.maxFileMiB !in 1..512) { advanced.visibility=View.VISIBLE;maximum.error=MoteI18n.text("单文件上限（MiB，1–512）");maximum.requestFocus();status.text=MoteI18n.text("单文件上限（MiB，1–512）");return }
             next.validate(); confirm.isEnabled = false; pickButton.isEnabled = false
             task.start(MoteI18n.text("正在保存来源设置…"), { status.text = it }, {
                 val store = localSources()

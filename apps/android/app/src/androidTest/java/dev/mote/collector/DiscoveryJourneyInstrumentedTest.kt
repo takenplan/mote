@@ -57,14 +57,22 @@ class DiscoveryJourneyInstrumentedTest {
     private fun clickTag(tag: String) { until(tag) { main { settled() && shown().any { it.tag == tag && it.isEnabled } } }; main { shown().single { it.tag == tag }.performClick() } }
     private fun back() { instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close() }
     private fun open(id: String? = null) = ActivityScenario.launch<CentralActivity>(Intent(context, CentralActivity::class.java).putExtra("page", "insights").apply { id?.let { putExtra("insightId", it) } })
-    private fun capture(name: String) = main {
+    private fun captureOne(name: String) = main {
         val root = activity().window.decorView
         val bitmap = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
         try {
             root.draw(android.graphics.Canvas(bitmap))
-            java.io.File(context.getExternalFilesDir(null), "discovery-journeys").apply { mkdirs() }.resolve("$name.png")
+            java.io.File(context.filesDir, "discovery-journeys").apply { mkdirs() }.resolve("$name.png")
                 .outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         } finally { bitmap.recycle() }
+    }
+    private fun capture(name:String) {
+        val before=MoteAppearance.preference()
+        try { for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+            main { MoteAppearance.select(context,theme) };instrumentation.waitForIdleSync()
+            val frame=java.util.concurrent.CountDownLatch(1);main { activity().window.decorView.postOnAnimation { activity().window.decorView.postOnAnimation { frame.countDown() } } };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+            captureOne(name+if(theme==AppearancePreference.DARK)"-dark" else "")
+        } } finally { main { MoteAppearance.select(context,before) } }
     }
     private fun state() = api.get("/api/__fixture/state")
 
@@ -78,7 +86,7 @@ class DiscoveryJourneyInstrumentedTest {
             clickTag("insight:" + fixture.getString("latestId"))
             until("exact native report") { main { activity() is CentralActivity && settled() && text("Generated native discovery 0") && text("查看依据") } }
             assertTrue(main { text("Generated native discovery 0") })
-            assertEquals(0, state().getInt("insightCalls")); main { activity().finish() }
+            capture("latest-report"); assertEquals(0, state().getInt("insightCalls")); main { activity().finish() }
         }
     }
     @Test fun sourceListAndDiscoveryCitationUseTheSameActualCaptureReader() {
@@ -155,10 +163,10 @@ class DiscoveryJourneyInstrumentedTest {
             click("下一页"); until("second history page") { main { settled() && text("上一页") && shown().count { it.tag?.toString()?.startsWith("insight:") == true } == 30 } }
             scenario.recreate(); until("second page restored") { main { settled() && text("上一页") } }
             click("下一页"); until("final history page") { main { settled() && shown().count { it.tag?.toString()?.startsWith("insight:") == true } == 7 } }
-            clickTag("insight:" + fixture.getString("oldId")); until("selected old report") { main { settled() && text("Generated native discovery 66") } }
+            capture("history-last-page"); clickTag("insight:" + fixture.getString("oldId")); until("selected old report") { main { settled() && text("Generated native discovery 66") } }
             api.delete("/api/notes/" + fixture.getString("noteId"), JSONObject())
             until("deleted report withdrawn without manual reload") { main { text("这份洞察当前不可用，请从历史选择其他洞察。") && !text("Generated native discovery 66") } }
-            click("发现历史"); until("old history cursor restarted") { main { settled() && text("第一份洞察会保存在这里，之后可以随时回看。") } }
+            capture("deleted-report-unavailable"); click("发现历史"); until("old history cursor restarted") { main { settled() && text("第一份洞察会保存在这里，之后可以随时回看。") } }
         }
         fixture = api.post("/api/__fixture/reset", JSONObject())
         open(fixture.getString("oldId")).use {
@@ -174,15 +182,15 @@ class DiscoveryJourneyInstrumentedTest {
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "洞察要求（可选）" }.setText("Generated original direction") }
             api.post("/api/__fixture/drop-ack", JSONObject()); click("生成洞察")
             until("lost ACK is explicit") { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString().contains("502") } } }
-            scenario.recreate(); until("same pending request restored") { main { settled() && text("重试上次提交") } }
+            capture("generation-receipt-lost"); scenario.recreate(); until("same pending request restored") { main { settled() && text("重试上次提交") } }
             main { shown().filterIsInstance<EditText>().single { it.contentDescription == "洞察要求（可选）" }.setText("Generated next draft") }; click("重试上次提交")
             until("published original request") { main { settled() && text("报告已归档") } }
-            val receipt = state(); assertEquals(1, receipt.getInt("insightCalls")); val requests = receipt.getJSONArray("seenRequests"); assertEquals(2, requests.length()); assertEquals(requests.getString(0), requests.getString(1))
+            capture("generation-completed"); val receipt = state(); assertEquals(1, receipt.getInt("insightCalls")); val requests = receipt.getJSONArray("seenRequests"); assertEquals(2, requests.length()); assertEquals(requests.getString(0), requests.getString(1))
             back(); until("history after run") { main { settled() && text("新建洞察") } }; click("新建洞察")
             until("unsent draft preserved") { main { settled() && shown().filterIsInstance<EditText>().any { it.text.toString() == "Generated next draft" } } }
             api.post("/api/__fixture/hold-generation", JSONObject()); click("生成洞察"); until("running cancellable task") { main { settled() && text("停止") } }
             click("停止"); until("cancelled receipt") { main { settled() && text("回顾已取消") } }
-            api.post("/api/__fixture/release-generation", JSONObject()); until("uncooperative model finishes") { state().getInt("activeGenerations") == 0 }
+            capture("generation-cancelled"); api.post("/api/__fixture/release-generation", JSONObject()); until("uncooperative model finishes") { state().getInt("activeGenerations") == 0 }
             assertEquals(68, state().getInt("savedCount")); assertEquals(2, state().getInt("insightCalls"))
         }
     }
@@ -194,16 +202,16 @@ class DiscoveryJourneyInstrumentedTest {
             assertEquals(0, state().getInt("insightCalls"))
         }
         open().use {
-            until("actual empty history") { main { settled() && text("第一份洞察会保存在这里，之后可以随时回看。") } }
+            until("actual empty history") { main { settled() && text("第一份洞察会保存在这里，之后可以随时回看。") } };capture("history-empty")
         }
         fixture = api.post("/api/__fixture/reset", JSONObject())
         api.post("/api/__fixture/offline", JSONObject())
         try {
             open().use {
                 until("offline history offers retry") { main { settled() && text("重试") } }
-                assertFalse(main { text("第一份洞察会保存在这里，之后可以随时回看。") })
+                capture("history-offline"); assertFalse(main { text("第一份洞察会保存在这里，之后可以随时回看。") })
                 api.post("/api/__fixture/online", JSONObject()); click("重试")
-                until("history recovers with real reports") { main { settled() && shown().count { it.tag?.toString()?.startsWith("insight:") == true } == 30 } }
+                until("history recovers with real reports") { main { settled() && shown().count { it.tag?.toString()?.startsWith("insight:") == true } == 30 } };capture("history-recovered")
             }
         } finally { api.post("/api/__fixture/online", JSONObject()) }
     }

@@ -77,7 +77,7 @@ class SecondaryScreensInstrumentedTest {
             MoteI18n.select(context, language)
         }
     }
-    private fun screenshot(activity: Activity, name: String) {
+    private fun screenshotOne(activity: Activity, name: String) {
         assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
         val root = activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
@@ -90,6 +90,14 @@ class SecondaryScreensInstrumentedTest {
         bitmap.recycle()
     }
 
+    private fun screenshots(scenario:ActivityScenario<out Activity>,name:String) {
+        val before=MoteAppearance.preference()
+        try { for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+            main { MoteAppearance.select(context,theme) };instrumentation.waitForIdleSync()
+            val frame=java.util.concurrent.CountDownLatch(1);scenario.onActivity { a -> a.window.decorView.postOnAnimation { a.window.decorView.postOnAnimation { frame.countDown() } } };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+            scenario.onActivity { screenshotOne(it,name+if(theme==AppearancePreference.DARK)"-dark" else "") }
+        } } finally { main { MoteAppearance.select(context,before) } }
+    }
     @Test fun generatedSecondaryPagesKeepSecureWindowAndExposeCurrentState() = fixture {
         val pages = listOf(
             SourcesActivity::class.java to "sources", FileTaskActivity::class.java to "file-import",
@@ -101,7 +109,7 @@ class SecondaryScreensInstrumentedTest {
             ActivityScenario.launch<Activity>(Intent(context, type)).use { scenario ->
                 until("$name ready") { main { visible().filterIsInstance<TextView>().none { it.text.toString().startsWith("正在读取") } } }
                 instrumentation.waitForIdleSync()
-                scenario.onActivity { activity -> screenshot(activity, name) }
+                screenshots(scenario,name)
                 assertFalse(Settings(context).enabled)
             }
         }
@@ -132,7 +140,7 @@ class SecondaryScreensInstrumentedTest {
             clickTag("source-remove")
             clickText(MoteI18n.text("取消"))
             assertTrue(context.localSources().sources().any { it.id == source.id })
-            scenario.onActivity { screenshot(it, "calendar-source-detail") }
+            screenshots(scenario, "calendar-source-detail")
             clickTag("source-remove"); clickDialogPositive()
             until("source removed") { context.localSources().sources().none { it.id == source.id } }
         }
@@ -150,7 +158,7 @@ class SecondaryScreensInstrumentedTest {
             scenario.recreate()
             until("config tab restored") { main { visible().any { it.tag == "backup-config-tab" && it.isSelected } } }
             assertTrue(main { visible().filterIsInstance<CheckBox>().single().isChecked })
-            scenario.onActivity { screenshot(it, "backup-config") }
+            screenshots(scenario, "backup-config")
             clickTag("backup-records-tab")
             assertFalse(main { visible().filterIsInstance<CheckBox>().any() })
             clickTag("backup-scope")
@@ -194,7 +202,7 @@ class SecondaryScreensInstrumentedTest {
             ActivityScenario.launch<SourcesActivity>(Intent(context, SourcesActivity::class.java).putExtra("detailSourceId", source.id)).use { scenario ->
                 until("visible $code") { main { visible().filterIsInstance<TextView>().any { it.tag == "source-primary-status" && it.text.toString() == MoteI18n.text(message) } } }
                 assertFalse(main { visible().any { it.tag == "source-sync-details:content" } })
-                scenario.onActivity { screenshot(it, "source-$code") }
+                screenshots(scenario, "source-$code")
             }
             assertTrue(context.localSources().sources().single { it.id == source.id }.enabled)
         }
@@ -245,7 +253,7 @@ class SecondaryScreensInstrumentedTest {
             assertFalse(main { visible().single { it.tag == "sync-send-now" }.isEnabled })
             clickTag("sync-send-pause")
             until("send paused") { settings.read().syncPaused }
-            scenario.onActivity { screenshot(it, "sync-send-paused") }
+            screenshots(scenario, "sync-send-paused")
             clickTag("sync-history-tab")
             scenario.recreate()
             until("history tab restored") { main { visible().any { it.tag == "sync-history-tab" && it.isSelected } } }
@@ -265,7 +273,7 @@ class SecondaryScreensInstrumentedTest {
         try {
             ActivityScenario.launch(SyncQueueActivity::class.java).use { scenario ->
                 until("actual pending queue") { main { visible().filterIsInstance<TextView>().any { it.text.toString().contains("Generated recovery missing") } } }
-                scenario.onActivity { screenshot(it,"sync-real-pending") }
+                screenshots(scenario,"sync-real-pending")
                 assertEquals(4,context.queue().pendingSync().count)
             }
             ActivityScenario.launch(SyncRecoveryActivity::class.java).use { scenario ->
@@ -273,16 +281,16 @@ class SecondaryScreensInstrumentedTest {
                 until("real Central reconciliation completes") { context.getSharedPreferences("sync-recovery",0).getString("message","")!!.startsWith("检查完成：中央可见 2 条，不可见 2 条") }
                 until("actual check result renders") { main { visible().filterIsInstance<TextView>().any { it.text.toString().startsWith("检查完成：中央可见 2 条，不可见 2 条") } } }
                 assertEquals("Read-only reconciliation never acknowledges local records",4,context.queue().pendingSync().count)
-                scenario.onActivity { screenshot(it,"recovery-real-check-completed") }
+                screenshots(scenario,"recovery-real-check-completed")
                 main { visible().single { it.tag=="recovery-scope" }.performClick() }
-                clickTag("recovery-replay");scenario.onActivity { screenshot(it,"recovery-real-replay-confirm") }
+                clickTag("recovery-replay");screenshots(scenario,"recovery-real-replay-confirm")
                 clickText("取消");assertEquals(4,context.queue().pendingSync().count)
                 clickTag("recovery-replay")
                 clickDialogPositive()
                 until("real replay scheduled") { context.getSharedPreferences("sync-recovery",0).getString("message","")!!.startsWith("已安排补传") }
                 until("actual conflict and deletion remain held") { context.queue().syncIssues().size==2 }
                 until("replay result reaches the actual screen") { main { visible().filterIsInstance<TextView>().any { it.text.toString().startsWith("已安排补传") } } }
-                scenario.onActivity { screenshot(it,"recovery-real-replay-result") }
+                screenshots(scenario,"recovery-real-replay-result")
                 val beforeStop=context.queue().inventory()
                 settings.save(settings.read().copy(syncPaused=true))
                 clickTag("recovery-check")
@@ -290,7 +298,7 @@ class SecondaryScreensInstrumentedTest {
                 clickTag("recovery-stop")
                 until("actual recovery job cancelled") { manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().all { it.state.isFinished } }
                 assertEquals(beforeStop,context.queue().inventory());assertTrue(settings.read().syncPaused);assertFalse(settings.enabled)
-                scenario.onActivity { screenshot(it,"recovery-real-stop-keeps-local-records") }
+                screenshots(scenario,"recovery-real-stop-keeps-local-records")
             }
             assertEquals("Generated recovery missing",api.get("/api/captures/"+missing.getString("id")).getString("ocrText"))
             assertEquals("Generated retained Central conflict original",api.get("/api/captures/"+conflict.getString("id")).getString("ocrText"))
@@ -301,8 +309,8 @@ class SecondaryScreensInstrumentedTest {
                 clickTag("sync-history-tab");until("actual upload history renders") { main { visible().any { it.tag?.toString()?.startsWith("history-date-")==true } } }
                 main { visible().single { it.tag?.toString()?.startsWith("history-date-")==true }.performClick() }
                 until("real uploaded batches expand") { main { visible().any { it.tag?.toString()?.startsWith("history-batch-")==true } } }
-                scenario.onActivity { screenshot(it,"sync-real-upload-history") }
-                MoteAppearance.select(context,AppearancePreference.DARK);instrumentation.waitForIdleSync();scenario.onActivity { screenshot(it,"sync-real-upload-history-dark") };MoteAppearance.select(context,AppearancePreference.LIGHT)
+                screenshots(scenario,"sync-real-upload-history")
+                MoteAppearance.select(context,AppearancePreference.DARK);instrumentation.waitForIdleSync();screenshots(scenario,"sync-real-upload-history-dark");MoteAppearance.select(context,AppearancePreference.LIGHT)
             }
         } finally {
             manager.cancelAllWork().result.get()
@@ -318,4 +326,19 @@ class SecondaryScreensInstrumentedTest {
         }
         assertFalse(settings.enabled)
     }
+    @Test fun realDiskDaysAndImageSettingsKeepCountsAndUnsavedChoicesSeparate() = fixture {
+        val directory=File(context.filesDir,"generated-statistics-days").apply { mkdirs() }
+        val first=File(directory,"generated-day-one.txt").apply { writeText("Generated disk bytes, not a daily saved count.");check(setLastModified(java.time.Instant.parse("2026-10-25T12:00:00Z").toEpochMilli())) }
+        val second=File(directory,"generated-day-two.txt").apply { writeText("Generated second disk day.");check(setLastModified(java.time.Instant.parse("2026-10-26T12:00:00Z").toEpochMilli())) }
+        try { ActivityScenario.launch(StorageStatisticsActivity::class.java).use { scenario ->
+            until("Actual disk statistics ready"){main{visible().any{it.tag=="statistics-refresh" && it.isEnabled}}}
+            clickTag("statistics-scope");clickTag("statistics-disk")
+            until("Two actual modification days"){main{visible().filterIsInstance<TextView>().any{it.text.toString().startsWith("2026-10-25 ·")} && visible().filterIsInstance<TextView>().any{it.text.toString().startsWith("2026-10-26 ·")}}}
+            main{assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString().contains("日期分布不是每日新增量")});assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString()=="未单独统计"});visible().filterIsInstance<TextView>().single{it.text.toString().startsWith("2026-10-25 ·")}.requestRectangleOnScreen(android.graphics.Rect(0,0,400,400),true)}
+            screenshots(scenario,"statistics-two-actual-utc-days");assertEquals(0,context.queue().inventory().records)
+        }
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","PROCESSING")).awaitMainUi().use { scenario -> screenshots(scenario,"image-quality-and-diagnostics-settings");assertFalse(Settings(context).enabled) }
+        } finally { first.delete();second.delete();directory.delete() }
+    }
+
 }
