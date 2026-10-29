@@ -1283,3 +1283,5 @@ body:has([data-page="overview"].first-use-home:not([hidden])) #note-action{displ
 .capture-context-field textarea{width:100%;min-width:0;min-height:64px;padding:9px 11px;border:1px solid var(--mote-border);border-radius:5px;background:var(--mote-surface);font-size:13px;line-height:1.65;font-weight:400;resize:vertical}.capture-context-field .helper{font-size:11px;font-weight:400}
 .capture-context-dialog>.actions{justify-content:flex-end;gap:12px;margin:0;padding:17px 25px;border-top:1px solid var(--mote-border)}.capture-context-dialog>.actions button{font-size:12px}
 @media(max-width:720px){.capture-context-dialog{width:calc(100vw - 24px)}.capture-context-header{padding:18px 20px}.capture-context-body{padding:20px}.capture-context-dialog>.actions{padding:15px 20px}}
+.capture-context-more{margin:20px 0 0;border-top:1px solid var(--mote-border);padding-top:14px;font-size:12px}.capture-context-more>summary{cursor:pointer;color:var(--mote-muted)}
+.capture-context-field .helper:empty{display:none}
