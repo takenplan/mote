@@ -3,9 +3,9 @@
 .final-search .workspace-search input{min-width:0;flex:1;border:0;outline:0;background:none;color:var(--mote-ink);font:inherit;font-size:13px;line-height:1.7}
 .final-search .workspace-search .button{min-height:34px;font-size:12px}
 .final-search .search-options{display:flex;align-items:center;justify-content:space-between;margin:20px 0 28px}
-.final-search .view-tabs{display:flex;gap:22px;border-bottom:1px solid var(--mote-divider)}
-.final-search .view-tabs button{border:0;border-radius:0;background:none;padding:10px 0;color:var(--mote-muted);font-size:12px;cursor:pointer}
-.final-search .view-tabs button[aria-pressed=true]{color:var(--mote-ink);border-bottom:2px solid var(--mote-accent)}
+.final-search .view-tabs{display:flex;gap:3px;border:0}
+.final-search .view-tabs button{border:0;border-radius:5px;background:none;padding:5px 10px;color:var(--mote-muted);font-size:12px;cursor:pointer}
+.final-search .view-tabs button[aria-pressed=true]{color:var(--mote-ink);background:var(--mote-sidebar);border:0}
 .final-search .search-result-group{margin:0 0 34px}
 .final-search .section-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 16px;gap:18px}
 .final-search .section-head h2{font-size:15px;font-weight:550;margin:0}
@@ -23,12 +23,15 @@
 @media(max-width:560px){.final-search .workspace-search{padding-left:12px}.final-search .workspace-search input{font-size:14px}.final-search .workspace-search .button{font-size:11px;padding:5px 10px}.final-search .search-filters label{width:100%}.final-search .search-record{padding:17px 0}}
 @media(pointer:coarse){.final-search .workspace-search input{font-size:16px}}
 .final-search .search-memory-section .section-head h2{font-size:13px;font-weight:500;color:var(--mote-muted)}
-.final-search .search-memory-section .library-record-copy strong{font-size:13px}
 .final-search .search-records{border-top:1px solid var(--mote-divider)}
-.final-search .search-memory-row{align-items:flex-start;gap:14px;padding:18px 0}
-.final-search .search-memory-symbol{font-size:20px;color:var(--mote-muted);width:24px;flex-shrink:0}
-.final-search .search-memory-title{display:flex;align-items:center;gap:10px}
-.final-search .search-memory-title strong{font-size:13px;line-height:1.7;font-weight:500;color:var(--mote-ink)}
-.final-search .search-memory-title .memory-status-badge{font-size:10px;background:var(--mote-tint);padding:1px 5px;border-radius:3px}
-.final-search .search-memory-row .library-record-copy>small{font-size:10px;line-height:1.7;color:var(--mote-muted)}
+.final-search .search-memory-row{display:grid;grid-template-columns:35px minmax(0,1fr) 18px;gap:15px;align-items:start;padding:19px 5px}
+.final-search .search-memory-row .library-record-copy{display:block}
+.final-search .search-memory-symbol{width:32px;height:36px;border:1px solid var(--mote-divider);border-radius:5px;background:var(--mote-surface);display:grid;place-items:center;color:var(--mote-accent);font-size:19px;margin-top:2px}
+.final-search .search-memory-title{display:flex;align-items:center;gap:8px;min-width:0}
+.final-search .search-memory-title strong{font-size:14px;line-height:1.7;font-weight:520;color:var(--mote-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.final-search .search-memory-title .memory-status-badge{font-size:9px;padding:1px 5px;color:light-dark(#956d39,#d6b07d);background:light-dark(#f0e8da,#393126);border-radius:3px;white-space:nowrap;flex-shrink:0}
+.final-search .search-memory-row .search-memory-summary{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.8;color:var(--mote-muted);margin-top:7px}
+.final-search .search-memory-row .library-record-copy>small{display:block;font-size:10px;line-height:1.7;color:var(--mote-muted);margin-top:9px}
 .final-search .search-memory-row>svg{align-self:center}
+.content[data-page=search]>.workspace-tools{display:none}
+@media(max-width:560px){.final-search .view-tabs button{font-size:11px;padding:5px 8px}.final-search .search-memory-row{grid-template-columns:28px minmax(0,1fr) 12px;gap:11px;padding:17px 0}.final-search .search-memory-symbol{width:27px;height:32px;font-size:17px}.final-search .search-memory-title strong{font-size:13px}.final-search .search-memory-row .search-memory-summary{font-size:11px;line-height:1.85}}
