@@ -179,17 +179,17 @@ for (const kind of ['anchor', 'strict', 'material'] as const) test(`a restored $
   const completed = {id: 'generated-completed', status: 'completed', conversationId, createdAt: when, updatedAt: when, events: []};
   let accept!: (value: unknown) => void;
   const admission = new Promise(resolve => { accept = resolve; });
-  const submissions: {input: Record<string, unknown>}[] = [], opened: string[] = [];
+  const submissions: {id:string;input: Record<string, unknown>}[] = [], opened: string[] = [];
   const api = apiWith((path, init) => {
     if (path === '/api/conversations?limit=30') return {items: [summary]};
     if (path === '/api/conversations/' + conversationId) return detail;
     if (path === '/api/conversations/' + conversationId + '/references/' + captureId) return {id:captureId,available:true};
     if (path === '/api/query-runs' && init?.method === 'POST') {
       submissions.push(JSON.parse(String(init.body)));
-      return submissions.length === 1 ? admission : {id: 'generated-pending', status: 'running', conversationId, createdAt: when, updatedAt: when, events: []};
+      return submissions.length === 1 ? admission : {id: submissions.at(-1)!.id, status: 'running', conversationId, createdAt: when, updatedAt: when, events: []};
     }
-    if (path === '/api/query-runs/generated-completed') return completed;
-    if (path === '/api/query-runs/generated-pending') return new Promise(() => {});
+    if (path === '/api/query-runs/'+completed.id) return completed;
+    if (path === '/api/query-runs/'+submissions.at(-1)?.id) return new Promise(() => {});
     return {items: []};
   });
   await act(async () => root.render(React.createElement(Conversations, {api, configured: true, devices: [], renderAnswer: answer => answer.answer, onOpen: ref => opened.push(ref)})));
@@ -206,7 +206,7 @@ for (const kind of ['anchor', 'strict', 'material'] as const) test(`a restored $
   assert.equal(button(d, clearLabel).disabled, true, 'a pending admitted turn keeps its reference fixed');
   await act(async () => button(d, clearLabel).click());
   assert.doesNotMatch(scopeBar().textContent!, /全部资料/);
-  await act(async () => accept(completed));
+  completed.id=submissions[0].id;await act(async () => accept(completed));
   assert.equal(button(d, clearLabel).disabled, false);
   await act(async () => button(d, clearLabel).click());
   assert.match(scopeBar().textContent!, /全部资料/);

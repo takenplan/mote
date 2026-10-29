@@ -1,3 +1,4 @@
+import {queryRecovery,type PendingQuery} from './query-recovery';
 import {unsentDrafts,type ChatAttachment} from './chat-drafts';
 import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
@@ -10,7 +11,7 @@ import {ModelSelector} from './ModelSelector';
 import { moteText } from '@mote/shared/i18n';
 import {QueryProgress,type QueryRun} from './QueryProgress';
 import {uploadChatImage} from './note-attachments';
-import React,{useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode} from 'react';
+import React,{useCallback,useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode} from 'react';
 import {AlertCircle, ArrowRight, ArrowUp, ImagePlus, LoaderCircle, MessageSquare, Monitor, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Trash2, X} from 'lucide-react';
 import {ApiError,dateTime, type Answer, type Api, type Device, type Range} from './api';
 import {ConversationHeading,ConversationComposer} from './ConversationShell';
@@ -65,6 +66,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   onOpen?: (ref:string)=>void;
 }) {
   const reference=useOriginalReference(api);
+  const referenceScope=useRef({api,key:reference.key});
+  useEffect(()=>{if(referenceScope.current.api===api&&referenceScope.current.key!==reference.key)queryRecovery.contextChanged(api);referenceScope.current={api,key:reference.key};},[api,reference.key]);
+  const recovery=useSyncExternalStore(useCallback(listener=>queryRecovery.subscribe(api,listener),[api]),useCallback(()=>queryRecovery.get(api),[api]),useCallback(()=>queryRecovery.get(api),[api]));
+  const [recheck,setRecheck]=useState(0);
   const [unavailableReference,setUnavailableReference]=useState<{opener:HTMLElement|null}|null>(null);
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
@@ -100,7 +105,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const [error, setError] = useState(''), [historyError, setHistoryError] = useState('');
   const [pendingQuestion, setPendingQuestion] = useState(''), [confirmDelete, setConfirmDelete] = useState(false);
   const operation = useRef<AbortController | null>(null), historyRequest = useRef<AbortController | null>(null);
-  const attachmentRequest=useRef<AbortController|null>(null);
+  const attachmentRequest=useRef<AbortController|null>(null),cancelRequest=useRef<AbortController|null>(null);
   const selectionMade=useRef(false),olderRequest=useRef<AbortController|null>(null);
   const history=useResource<HistoryPage>(api,'/api/conversations?limit=30'),recentRuns=useResource<{items:QueryRun[]}>(api,'/api/query-runs');
   const feedError=useOperationUpdates(api);
@@ -109,7 +114,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const loading=history.loading||loadingPage,opening=detail.loading&&!conversation||loadingOlder;
   const end = useRef<HTMLDivElement>(null);
   const [run,setRun]=useState<QueryRun|null>(null),[pollError,setPollError]=useState('');
-  const activeRun=useRef<{api:Api;id?:string}>({api});activeRun.current={api,id:run?.id};
+  const settledReceipts=useRef(new Set<string>());
+  const activeRun=useRef<{api:Api;id?:string;status?:QueryRun['status']}>({api});activeRun.current={api,id:run?.id,status:run?.status};
 
   async function loadHistory(next?: string) {
     historyRequest.current?.abort();
@@ -124,9 +130,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(conversationFailure(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
-    return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
-  useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');const incoming=draftQuery.get('questionDraft');if(incoming!==null){selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
+  useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;settledReceipts.current.clear();const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);const retained=queryRecovery.get(api);selectionMade.current=Boolean(retained);setRun(retained?.run??null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+    return()=>{operation.current?.abort();cancelRequest.current?.abort();cancelRequest.current=null;const retained=queryRecovery.get(api);if(retained)queryRecovery.set(api,{...retained,unknown:true});attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
+  useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');const incoming=draftQuery.get('questionDraft');if(incoming!==null){queryRecovery.draftEdited(api);selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){const retained=queryRecovery.get(api);if(retained&&next!==retained.conversationId&&next!==retained.run?.conversationId)queryRecovery.contextChanged(api);selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
   useLayoutEffect(()=>{
     olderRequest.current?.abort();olderRequest.current=null;setLoadingOlder(false);setOlder(null);setPageRevoked(false);
@@ -134,7 +140,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   useEffect(()=>{if(detail.data&&!detail.loading&&!detail.error)setPageRevoked(false);},[detail.data,detail.loading,detail.error]);
   useEffect(()=>{if(reference.key){selectionMade.current=true;setSelectedId(null);setRun(null);setOlder(null);setSelectedOwnerQuestion(null);}},[api,reference.key]);
   useEffect(()=>{if(history.data){setItems(history.data.items);setCursor(history.data.nextCursor??null);}else if(history.error){setItems([]);setCursor(null);}},[history.data,history.error]);
-  useEffect(()=>{if(!recentRuns.data||selectionMade.current)return;selectionMade.current=true;
+  useEffect(()=>{if(!recentRuns.data||selectionMade.current||queryRecovery.get(api))return;selectionMade.current=true;
     const recent=recentRuns.data.items.find(r=>r.status==='running')??recentRuns.data.items[0];
     if(recent){setRun(recent);setBusy(recent.status==='running');setSelectedId(recent.conversationId??null);}
   },[recentRuns.data]);
@@ -146,39 +152,85 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     else if(conversation.nextCursor)void loadOlderTurns();
   },[targetTurn,conversation?.id,conversation?.turns.length,conversation?.nextCursor,opening,detail.error,error]);
 
+  function receiveRun(current:QueryRun){
+    const retained=queryRecovery.get(api),owned=retained?.id===current.id?retained:undefined;
+    setRun(current);setPollError('');setError('');
+    if(current.status==='running'){
+      if(owned)queryRecovery.set(api,{...owned,run:current,unknown:false});
+      setBusy(true);return;
+    }
+    settledReceipts.current.add(current.id);
+    const versions=queryRecovery.versions(api),sameContext=!owned||owned.contextVersion===versions.contextVersion,sameDraft=owned&&owned.draftVersion===versions.draftVersion;
+    if((current.status==='completed'||current.status==='failed')&&current.conversationId){
+      if(sameContext){setSelectedId(current.conversationId);window.history.replaceState(null,'','#/ask?'+new URLSearchParams({conversation:current.conversationId}));window.dispatchEvent(new window.Event('mote:workspace-state'));}
+      historyRequest.current?.abort();setLoadingPage(false);setHistoryError('');resources(api).invalidate(key=>key.startsWith('/api/conversations'));
+    }
+    if(sameDraft){if(current.status==='completed'){setQuestion('');setAttachments([]);}else if(current.status==='failed')setQuestion(owned.question);}
+    if(owned)queryRecovery.set(api,undefined);
+    setBusy(false);setPendingQuestion('');operation.current=null;
+  }
+  function unconfirmed(cause:unknown){
+    const retained=queryRecovery.get(api);if(retained)queryRecovery.set(api,{...retained,unknown:true});
+    setBusy(false);setPendingQuestion('');setPollError(conversationFailure(cause));
+  }
   useEffect(()=>{
-    if(!run)return;
+    if(!run||run.status!=='running'&&settledReceipts.current.has(run.id))return;
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
     const update=async()=>{
       try{
         const current=await readResource<QueryRun>(api,`/api/query-runs/${run.id}`,controller.signal);
         if(controller.signal.aborted)return;
-        setRun(current);setPollError('');
-        if(current.status==='running'){setBusy(true);timer=setTimeout(()=>void update(),1000);return;}
-        if((current.status==='completed'||current.status==='failed')&&current.conversationId){
-          setSelectedId(current.conversationId);
-          window.history.replaceState(null,'','#/ask?'+new URLSearchParams({conversation:current.conversationId}));window.dispatchEvent(new window.Event('mote:workspace-state'));
-          historyRequest.current?.abort();setLoadingPage(false);setHistoryError('');
-          resources(api).invalidate(key=>key.startsWith('/api/conversations'));
-          if(current.status==='completed'){setQuestion('');setAttachments([]);}
-          else if(pendingQuestion)setQuestion(pendingQuestion);
-        }
-        if(current.status==='failed'&&pendingQuestion)setQuestion(pendingQuestion);
-        setBusy(false);setPendingQuestion('');operation.current=null;
-      }catch(e){if(!controller.signal.aborted){
-        if(e instanceof ApiError&&e.status===404){setRun(null);setBusy(false);setPendingQuestion('');operation.current=null;setError(moteText("对话或运行记录已删除。"));return;}
-        setPollError(conversationFailure(e));timer=setTimeout(()=>void update(),3000);
-      }}
+        if(current.id!==run.id)throw Error(moteText('中央响应格式无效，请刷新后重试。'));
+        // A late running read cannot undo an already acknowledged stop.
+        if(activeRun.current.id===current.id&&activeRun.current.status&&activeRun.current.status!=='running'&&current.status==='running')return;
+        receiveRun(current);
+        if(current.status==='running')timer=setTimeout(()=>void update(),1000);
+      }catch(e){if(!controller.signal.aborted){unconfirmed(e);timer=setTimeout(()=>void update(),3000);}}
     };
     void update();
     return()=>{controller.abort();clearTimeout(timer);};
-  },[api,run?.id]);
+  },[api,run?.id,run?.status,recheck]);
+  async function checkOriginal(){
+    const retained=queryRecovery.get(api),id=retained?.id??run?.id;if(!id||operation.current)return;
+    const controller=new AbortController();operation.current=controller;setBusy(true);setPollError('');
+    try{const current=await api.request<QueryRun>(`/api/query-runs/${id}`,{signal:controller.signal});if(controller.signal.aborted)return;if(current.id!==id)throw Error(moteText('中央响应格式无效，请刷新后重试。'));receiveRun(current);setRecheck(value=>value+1);}
+    catch(cause){if(!controller.signal.aborted)unconfirmed(cause);}
+    finally{if(operation.current===controller)operation.current=null;}
+  }
+  async function postOriginal(retained:PendingQuery,controller:AbortController){
+    let ambiguous=retained.unknown;
+    for(let attempt=0;attempt<2;attempt++)try{
+      const accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body:retained.body});
+      if(controller.signal.aborted)return;
+      if(accepted.id!==retained.id)throw Error(moteText('中央响应格式无效，请刷新后重试。'));
+      receiveRun(accepted);return;
+    }catch(cause){
+      if(controller.signal.aborted)return;
+      const definite=cause instanceof ApiError&&[400,401,403,404,409,410,413,422].includes(cause.status);
+      if(definite&&!ambiguous){queryRecovery.set(api,undefined);setBusy(false);setPendingQuestion('');setError(conversationFailure(cause));return;}
+      ambiguous=true;queryRecovery.set(api,{...retained,unknown:true});
+      if(attempt===1)unconfirmed(cause);
+    }
+  }
+  async function retryOriginal(){
+    const retained=queryRecovery.get(api);if(!retained||operation.current||uploading||opening)return;
+    const controller=new AbortController();operation.current=controller;setBusy(true);setError('');setPollError('');
+    try{await postOriginal(retained,controller);}finally{if(operation.current===controller)operation.current=null;}
+  }
+
+  async function cancelRunning(){
+    if(!run||run.status!=='running'||cancelRequest.current)return;
+    const controller=new AbortController(),id=run.id;cancelRequest.current=controller;
+    try{const value=await api.request<QueryRun>(`/api/query-runs/${id}/cancel`,{method:'POST',signal:controller.signal});if(!controller.signal.aborted&&activeRun.current.api===api&&activeRun.current.id===id){if(value.id!==id)throw Error(moteText('中央响应格式无效，请刷新后重试。'));receiveRun(value);}}
+    catch(cause){if(!controller.signal.aborted&&activeRun.current.api===api&&activeRun.current.id===id)unconfirmed(cause);}
+    finally{if(cancelRequest.current===controller)cancelRequest.current=null;}
+  }
 
   function open(id: string,force=false) {
     if (busy) return;
     if(id===selectedId){setHistoryOpen(false);return;}
-    if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length)){setPendingSwitch({owner:api,id});return;}
-    attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
+    if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id});return;}
+    queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
     setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
@@ -199,8 +251,8 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   }
   function startNew(force=false) {
     if (busy) return;
-    if(!force&&(draft.getSnapshot().trim()||attachments.length)){setPendingSwitch({owner:api,id:null});return;}
-    attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
+    if(!force&&(draft.getSnapshot().trim()||attachments.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id:null});return;}
+    queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
@@ -213,7 +265,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   async function submit(event?: {preventDefault(): void}, sample?: string) {
     event?.preventDefault();
     const text = (sample ?? draft.getSnapshot()).trim();
-    if (!text || busy || uploading || opening || operation.current || !configured || !reference.ready) return;
+    if (!text || busy || uploading || opening || operation.current || queryRecovery.get(api) || !configured || !reference.ready) return;
     selectionMade.current=true;
     const controller = new AbortController(); operation.current = controller;
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
@@ -222,25 +274,17 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       if(controller.signal.aborted)return;
       const id=crypto.randomUUID();
       const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id,...(scopeCleared?{evidenceIds:null,anchorEvidenceIds:null,anchorMaterialRef:null}:{})}:reference.origin?reference.materialRef?{anchorMaterialRef:reference.materialRef}:{anchorEvidenceIds:reference.ids}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
-      let accepted:QueryRun;
-      try{accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});}
-      catch(e){
-        if(controller.signal.aborted)throw e;
-        // Retry the identical admission ID; the server deduplicates ambiguous responses.
-        accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});
-      }
-      if(controller.signal.aborted)return;
-      // Keep the submitted draft while the composer is disabled. A failed turn
-      // can appear from conversation refresh before the run poll completes.
-      setRun(accepted);setPollError('');
+      const retained:PendingQuery={id,body,question:text,attachments:attachments.map(value=>({...value})),...queryRecovery.versions(api),conversationId:conversation?.id,unknown:false};
+      queryRecovery.set(api,retained);
+      await postOriginal(retained,controller);
     } catch (e) {
-      if (!controller.signal.aborted) {setBusy(false);setQuestion(text); setPendingQuestion(''); setError(moteText("{0} 可刷新历史检查结果后再重试。", conversationFailure(e)));}
+      if (!controller.signal.aborted) {setBusy(false);setPendingQuestion(''); setError(moteText("{0} 可刷新历史检查结果后再重试。", conversationFailure(e)));}
     } finally {if (!controller.signal.aborted) {operation.current = null;}}
   }
   async function addImages(files:FileList|null){
     if(!files?.length||uploading||busy||opening)return;
     if(attachments.length+files.length>4){setError(moteText("最多添加 4 张图片"));return;}
-    const selected=Array.from(files);
+    queryRecovery.draftEdited(api);const selected=Array.from(files);
     if(selected.some(file=>!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>8*1024*1024||file.size===0)){
       setError(moteText("聊天图片仅支持 PNG、JPEG、WebP，每张不超过 8 MiB。"));return;
     }
@@ -292,27 +336,28 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {targetTurn&&conversation&&!opening&&!conversation.nextCursor&&!conversation.turns.some(turn=>turn.id===targetTurn)&&<p role="status">{moteText('原始轮次暂不可读。')}</p>}
       <div className="conversation-messages">
       {conversation?.nextCursor&&<button className="text-button" disabled={opening} onClick={()=>void loadOlderTurns()}>{moteText("加载更早的对话")}</button>}
-      {conversation?.turns.map(turn => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}${turn.question===conversation.title?' first-question-duplicate':''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
+      {conversation?.turns.map((turn,index) => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}${index===0&&!conversation.nextCursor&&turn.question===conversation.title?' first-question-duplicate':''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
         <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}</span></div>{Boolean(turn.attachments?.length)&&<div className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</div>}
         {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,openHistoryReference)}<div className="conversation-turn-actions"><button className="text-button" aria-label={moteText('本轮详情')+' '+turn.question} onClick={()=>setMoreTurn({owner:api,conversationId:conversation.id,turnId:turn.id})}>{moteText('更多')}</button></div><ConversationTurnDetails api={api} conversationId={conversation.id} id={turn.id} question={turn.question} answer={turn.result} open={moreTurn?.owner===api&&moreTurn.conversationId===conversation.id&&moreTurn.turnId===turn.id} onClose={()=>setMoreTurn(null)} onOpen={ref=>{setMoreTurn(null);openHistoryReference(ref);}} onSavedOpen={ref=>{setMoreTurn(null);onOpen(ref);}} run={run?.turnId===turn.id?run:undefined} pollError={pollError}/></>}</>}
       </article>)}
       {busy&&!run&&pendingQuestion&&<p className="query-admission-status" role="status">{moteText('正在提交问题…')}</p>}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}
-      {run&&run.status!=='completed'&&<QueryProgress compact api={api} run={run} error={pollError}/>}
-      {run?.status==='running'&&<button className="button subtle" onClick={()=>void api.request<QueryRun>(`/api/query-runs/${run.id}/cancel`,{method:'POST'}).then(value=>{if(activeRun.current.api===api&&activeRun.current.id===run.id)setRun(value);}).catch(e=>{if(activeRun.current.api===api&&activeRun.current.id===run.id)setError(conversationFailure(e));})}>{moteText("停止生成")}</button>}
+      {(recovery?.unknown||pollError&&run?.status==='running')&&<section className="query-unconfirmed notice" aria-label={moteText('结果尚未确认，请检查或重试原请求。')}><p role="status">{moteText('上次提交结果尚未确认；先重试原要求，当前草稿会保留。')}</p>{recovery&&<p>{recovery.question}</p>}{pollError&&<p>{pollError}</p>}<div className="source-toolbar"><button className="button" disabled={busy} onClick={()=>void checkOriginal()}>{moteText('检查结果')}</button>{recovery&&<button className="button" disabled={busy||uploading||opening} onClick={()=>void retryOriginal()}>{moteText('重试同一请求')}</button>}</div></section>}
+      {run&&run.status!=='completed'&&!recovery?.unknown&&!(pollError&&run.status==='running')&&<QueryProgress compact api={api} run={run} error={pollError}/>}
+      {run?.status==='running'&&<button className="button subtle" onClick={()=>void cancelRunning()}>{moteText("停止生成")}</button>}
       <div ref={end}/>
       </div>
       {Boolean(error||detail.error||recentRuns.error||feedError)&&<p className="notice error" role="alert">{error||conversationFailure(detail.error||recentRuns.error||feedError)}</p>}
       <div className="conversation-compose">
       {!reference.origin&&!conversation&&<a className="conversation-add-reference text-button" href="#/library">＋ {moteText('参考资料')}</a>}
-      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):reference.origin.kind==='material'?moteText('参考这份资料'):reference.origin.kind==='insight'?moteText('原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{reference.error}</span>:reference.origin.kind==='material'?<button className="text-button" onClick={()=>onOpen(reference.origin!.id)}>{moteText('查看参考资料')}</button>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<a className="text-button" href={reference.origin.kind==='memory'?'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id):reference.returnRoute??'#/library?view=materials&selected='+encodeURIComponent(reference.origin.kind==='material'?reference.origin.id:'capture:'+reference.origin.id)}>{reference.origin.kind==='memory'?moteText('返回记忆'):moteText('返回资料')}</a><button className="text-button" disabled={busy||opening} onClick={reference.clear}>{moteText('清除参考记录')}</button></nav>}
-      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除范围')}</button></>}</nav>}
-      {conversation?.scope.anchorMaterialRef&&<nav className="filter-bar" aria-label={moteText('参考资料')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这份资料')}</span><button className="text-button" onClick={()=>onOpen(conversation.scope.anchorMaterialRef!)}>{moteText('查看参考资料')}</button></>}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation.id})}>{moteText('清除参考记录')}</button></nav>}
-      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>setClearedScope({owner:api,id:conversation!.id})}>{moteText('清除参考记录')}</button></>}</nav>}
-      <DraftComposer draft={draft}>{question=><ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={setQuestion} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
-        {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==attachment.id))}><X size={13}/></button></span>)}</div>}
-        <details className="chat-model-options"><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={setModelProfileId} model={modelOverride} onModelChange={setModelOverride} disabled={busy||opening} detachedFromForm/></details>
-        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
+      {!conversation&&reference.origin&&<nav className="filter-bar ask-original-reference" aria-label={moteText('参考记录')}><span>{reference.origin.kind==='memory'?moteText('这条记忆的原始依据'):reference.origin.kind==='material'?moteText('参考这份资料'):reference.origin.kind==='insight'?moteText('原始依据'):moteText('参考这条记录，自动查找相关上下文')}{reference.title?' · '+reference.title:''}</span>{reference.loading?<span role="status">{moteText('正在读取…')}</span>:reference.error?<span role="alert">{reference.error}</span>:reference.origin.kind==='material'?<button className="text-button" onClick={()=>onOpen(reference.origin!.id)}>{moteText('查看参考资料')}</button>:reference.ids.map((id,index)=><button className="text-button" key={id} onClick={()=>onOpen('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<a className="text-button" href={reference.origin.kind==='memory'?'#/library?view=memories&memory='+encodeURIComponent(reference.origin.id):reference.returnRoute??'#/library?view=materials&selected='+encodeURIComponent(reference.origin.kind==='material'?reference.origin.id:'capture:'+reference.origin.id)}>{reference.origin.kind==='memory'?moteText('返回记忆'):moteText('返回资料')}</a><button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);reference.clear();}}>{moteText('清除参考记录')}</button></nav>}
+      {Boolean(conversation?.scope.evidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('查询范围')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('{0} 条证据',conversation!.scope.evidenceIds!.length)}</span>{conversation!.scope.evidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);setClearedScope({owner:api,id:conversation!.id});}}>{moteText('清除范围')}</button></>}</nav>}
+      {conversation?.scope.anchorMaterialRef&&<nav className="filter-bar" aria-label={moteText('参考资料')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这份资料')}</span><button className="text-button" onClick={()=>onOpen(conversation.scope.anchorMaterialRef!)}>{moteText('查看参考资料')}</button></>}<button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);setClearedScope({owner:api,id:conversation.id});}}>{moteText('清除参考记录')}</button></nav>}
+      {Boolean(conversation?.scope.anchorEvidenceIds?.length)&&<nav className="filter-bar" aria-label={moteText('参考记录')}>{scopeCleared?<span>{moteText('全部资料')}</span>:<><span>{moteText('参考这条记录，自动查找相关上下文')}</span>{conversation!.scope.anchorEvidenceIds!.map((id,index)=><button className="text-button" key={id} onClick={()=>openHistoryReference('capture:'+id)}>{moteText('查看原文依据')} {index+1}</button>)}<button className="text-button" disabled={busy||opening} onClick={()=>{queryRecovery.contextChanged(api);setClearedScope({owner:api,id:conversation!.id});}}>{moteText('清除参考记录')}</button></>}</nav>}
+      <DraftComposer draft={draft}>{question=><ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={value=>{queryRecovery.draftEdited(api);setQuestion(value);}} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
+        {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>{queryRecovery.draftEdited(api);setAttachments(current=>current.filter(item=>item.id!==attachment.id));}}><X size={13}/></button></span>)}</div>}
+        <details className="chat-model-options"><summary>{moteText("本次模型")}</summary><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={value=>{queryRecovery.draftEdited(api);setModelProfileId(value);}} model={modelOverride} onModelChange={value=>{queryRecovery.draftEdited(api);setModelOverride(value);}} disabled={busy||opening} detachedFromForm/></details>
+        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || Boolean(recovery)||Boolean(pollError&&run?.status==='running') || !question.trim() || !configured || !reference.ready} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
       </ConversationComposer>}</DraftComposer>
       </div>
       {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
