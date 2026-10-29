@@ -14,7 +14,9 @@ import { AttributionEditor } from './AttributionContext';
 import { SourceContextEditor } from './SourceContextEditor';
 import { Metadata } from './Metadata';
 import { useHashChoice } from './useHashChoice';
-import { RequestedDetails } from './RequestedDetails';
+import {GoogleCalendarSettings} from './GoogleCalendarSettings';
+import {McpImportSettings} from './McpImportSettings';
+import {useSourceConnectorStyle} from './source-connectors-ui';
 import { recordingSourceStatus, recordingSyncText } from './recording-status';
 const readSource=(hash:string)=>new URLSearchParams(hash.split('?')[1]??'').get('sourceId');
 const readSetup=(hash:string)=>{const value=new URLSearchParams(hash.slice(hash.indexOf('?')+1)).get('setup');return value&&['gmail','google','mcp','reference'].includes(value)?value:null;};
@@ -33,7 +35,7 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse,
     onBrowse?: () => void;
     onAdd?: () => void;
 }) {
-    useSourceStyle();
+    useSourceStyle();useSourceConnectorStyle();
     const Heading = mode === 'library' ? 'h2' : 'h1';
     const [sourceKind,setSourceKind]=useState(''),[attentionOnly,setAttentionOnly]=useState(false),[sourceSearch,setSourceSearch]=useState('');
     const [detailChoice,setDetailChoice]=useState<{api:Api;source:string;tab:'content'|'connection'}>();
@@ -89,10 +91,11 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse,
     } }
     const filteredSources=sources.filter(source=>(!sourceSearch||(source.name+' '+(kindNames[source.kind]??source.kind)).toLocaleLowerCase().includes(sourceSearch.toLocaleLowerCase()))&&(!sourceKind||source.kind===sourceKind)&&(!attentionOnly||['error','permission_required'].includes(source.status?.state??'')));
     const sourceContent=mode==='library'?<div className="source-final-originals">{initialLoading ? <p role="status">{moteText("正在读取…")}</p> : items.length === 0 && !error ? <p className="muted">{moteText("还没有资料。连接来源或导入文件后，它们会出现在这里。")}</p> : items.map(item => <article className="source-item" key={item.captureId}><div><strong>{item.title || moteText("未命名记录")}</strong><span className="badge">{layerNames[item.layer]}</span></div><p className="muted">{moteText("采集于")}{' '}{dateTime(item.observedAt)} · {item.current ? moteText("当前版本") : moteText("历史版本")}</p>{item.calendar && <p>{moteText("日历安排：")}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay ? moteText("（全天）") : ''} · {item.calendar.status === 'cancelled' ? moteText("已取消") : moteText("计划")}{moteText("，不代表实际参加。")}</p>}<p>{item.layer === 'reference' ? moteText("原文仍在外部来源，此处没有收集正文。") : item.text.slice(0, 300)}</p>{item.uri && <details><summary>{moteText("原件位置")}</summary><code>{item.uri}</code><p className="muted">{moteText("这里只展示定位信息，不会自动读取远程地址。")}</p></details>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><div className="source-toolbar"><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{moteText("展开证据")}</button><button className="button" onClick={() => void loadHistory(item)}>{moteText("查看版本")}</button></div></article>)}{nextCursor && <button disabled={loading} className="button" onClick={() => void more()}>{moteText("更多资料")}</button>}</div>:<div className="source-final-originals">{initialLoading?<p role="status">{moteText('正在读取…')}</p>:!items.length&&!error?<p className="muted">{moteText('此列表暂无原始记录；已有资料可在资料库查看。')}</p>:items.map(item=><div className="source-final-record" key={item.captureId}><button className="source-final-record-open" onClick={()=>onOpen(formatEvidenceRef('capture',item.captureId))}><span className="source-final-symbol">{item.kind==='calendar'?<CalendarDays size={18}/>:<FileText size={18}/>}</span><span><strong>{item.title||moteText('未命名记录')}</strong><small>{item.layer==='reference'?moteText('原文仍在外部来源，此处没有收集正文。'):item.text}</small></span><time title={moteText('采集于')}>{dateTime(item.observedAt)}</time><ChevronRight size={16}/></button><details className="source-final-record-more"><summary>{moteText('更多')}</summary><p>{item.current?moteText('当前版本'):moteText('历史版本')} · {layerNames[item.layer]}</p>{item.calendar&&<p>{moteText('日历安排：')}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay?moteText('（全天）'):''} · {item.calendar.status==='cancelled'?moteText('已取消'):moteText('计划')}{moteText('，不代表实际参加。')}</p>}{item.uri&&<><code>{item.uri}</code><p>{moteText('这里只展示定位信息，不会自动读取远程地址。')}</p></>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><button className="text-button" onClick={()=>void loadHistory(item)}>{moteText('查看版本')}</button></details></div>)}{nextCursor&&<button disabled={loading} className="button" onClick={()=>void more()}>{moteText('更多资料')}</button>}</div>;
-    return <section className={"sources-page final-sources"+(selected?" source-selected":"")}>{selected&&mode==='connections'&&<button className="text-button source-list-back" onClick={()=>choose(null)}>{moteText("返回来源")}</button>}<div className="page-heading split-heading"><div><div className="eyebrow">{moteText("只连接你选择的内容")}</div><Heading>{mode==='connections'&&selected?sources.find(source=>source.id===selected)?.name??moteText("来源"):moteText(mode === 'library' ? "来源资料" : "来源")}</Heading><p>{moteText("连接文件与日历，管理保存方式和同步版本。")}</p></div><div className="source-heading-actions">{onBrowse&&!selected&&<button className="button" onClick={onBrowse}>{moteText("浏览来源资料")}</button>}<button className="button subtle" disabled={busy} onClick={() => void refresh()}><RefreshCw size={15}/>{moteText("刷新")}</button>{mode==='connections'&&!selected&&<button className="button" onClick={() => {if(onAdd&&!requestedSetup){onAdd();return;}if(adding&&requestedSetup)chooseSetup(null);else setAdding(v=>!v);}}>{adding ? <X size={16}/> : <Plus size={16}/>} {adding ? moteText("收起添加") : moteText("添加来源")}</button>}</div></div>
+    const setupTitle=requestedSetup==='gmail'?'Gmail':requestedSetup==='google'?'Google Calendar':requestedSetup==='mcp'?moteText('MCP 资料服务'):moteText('外部文件 / NAS 引用');
+    return <section className={"sources-page final-sources"+(selected?" source-selected":"")+(requestedSetup?" source-external-setup":"")}>{requestedSetup&&<button className="text-button connector-back" onClick={()=>{chooseSetup(null);setAdding(false);}}>{moteText('返回来源')}</button>}{selected&&mode==='connections'&&<button className="text-button source-list-back" onClick={()=>choose(null)}>{moteText("返回来源")}</button>}<div className="page-heading split-heading"><div><div className="eyebrow">{moteText("只连接你选择的内容")}</div><Heading>{requestedSetup?setupTitle:mode==='connections'&&selected?sources.find(source=>source.id===selected)?.name??moteText("来源"):moteText(mode === 'library' ? "来源资料" : "来源")}</Heading><p>{moteText("连接文件与日历，管理保存方式和同步版本。")}</p></div><div className="source-heading-actions">{onBrowse&&!selected&&<button className="button" onClick={onBrowse}>{moteText("浏览来源资料")}</button>}<button className="button subtle" disabled={busy} onClick={() => void refresh()}><RefreshCw size={15}/>{moteText("刷新")}</button>{mode==='connections'&&!selected&&<button className="button" onClick={() => {if(onAdd&&!requestedSetup){onAdd();return;}if(adding&&requestedSetup)chooseSetup(null);else setAdding(v=>!v);}}>{adding ? <X size={16}/> : <Plus size={16}/>} {adding ? moteText("收起添加") : moteText("添加来源")}</button>}</div></div>
  {error&&<div className="source-final-failure"><div className="error-banner" role="alert">{error}</div><details><summary>{moteText('技术详情')}</summary><pre>{technicalError}</pre></details></div>}
  <details className="source-explainer"><summary>{moteText("保留原文，或只留下引用")}</summary><p>{moteText("快照保存当次文字，引用只保存原件位置。资料后续变化会成为新版本，方便查看来处。")}</p></details>
- {mode==='connections'&&<section hidden={!adding} className="panel add-source-panel"><nav className="segmented-nav" aria-label={moteText("添加来源方式")}>{([['files', moteText("导入文件")], ['reference', moteText("添加引用")], ['connectors', moteText("连接服务")]] as const).map(([id, label]) => <button key={id} className={addKind === id ? 'active' : ''} onClick={() => setAddKind(id)}>{label}</button>)}</nav><div hidden={addKind !== 'files'}>
+ {mode==='connections'&&<section hidden={!adding} className="panel add-source-panel"><nav hidden={Boolean(requestedSetup)} className="segmented-nav" aria-label={moteText("添加来源方式")}>{([['files', moteText("导入文件")], ['reference', moteText("添加引用")], ['connectors', moteText("连接服务")]] as const).map(([id, label]) => <button key={id} className={addKind === id ? 'active' : ''} onClick={() => setAddKind(id)}>{label}</button>)}</nav><div hidden={addKind !== 'files'}>
  <div className="source-toolbar"><button className="button" onClick={onImport}><FolderInput size={16}/>{moteText("打开导入")}</button><span className="muted">{moteText("支持多个文件、文件夹和 ZIP 压缩包。")}</span></div>
  </div><div hidden={addKind !== 'reference'}><ReferenceEntry api={api} refresh={() => refresh()}/></div>
  <div hidden={addKind !== 'connectors'}><ConnectorPanel api={api} catalog={catalog} refresh={() => refresh()} requested={requestedSetup ?? ""}/></div></section>}
@@ -123,58 +126,9 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse,
  {versions.loading && history === null && <p role="status">{moteText("正在读取…")}</p>}{history && <div className="source-history"><h3>{moteText("版本记录")}</h3><button className="button" onClick={() => setHistoryKey(null)}>{moteText("关闭详情")}</button>{history.map(h => <p key={h.captureId}><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', h.captureId))}>{dateTime(h.observedAt)} · {h.deleted ? moteText("来源报告已移除") : h.current ? moteText("当前版本") : moteText("历史快照")}</button></p>)}</div>}
  </section>;
 }
-function ConnectorPanel({ api, catalog, refresh, requested }: {
-    api: Api;
-    catalog: Record<string, unknown> | null;
-    refresh: () => Promise<void>;
-    requested: string;
-}) {
-    const [chosen, setChosen] = useState<string[]>([]), [auth, setAuth] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [url, setUrl] = useState(''), [token, setToken] = useState(''), [name, setName] = useState(moteText("MCP 导入资料")), [remote, setRemote] = useState<{
-        uri: string;
-        name: string;
-    }[]>([]), [uris, setUris] = useState<string[]>([]), [message, setMessage] = useState('');
-    const status = catalog as any, calendarList = useResource<{
-        calendars: {
-            id: string;
-            summary: string;
-            selected: boolean;
-        }[];
-    }>(api, status?.google?.connected ? '/api/connectors/google/calendars' : null), calendars = calendarList.data?.calendars ?? [];
-    useEffect(() => { setChosen(calendarList.data?.calendars.filter(v => v.selected).map(v => v.id) ?? []); }, [api, calendarList.data]);
-    useEffect(() => { setAuth(''); setError(''); setToken(''); setRemote([]); setUris([]); setMessage(''); }, [api]);
-    async function load() { resources(api).invalidate(key => key === '/api/connectors/status' || key === '/api/connectors/google/calendars'); }
-    async function action(f: () => Promise<void>) { setBusy(true); setError(''); setMessage(''); try {
-        await f();
-        await refresh();
-    }
-    catch (e) {
-        setError(errorMessage(e));
-    }
-    finally {
-        setBusy(false);
-    } }
-    return <div className="source-connectors"><Gmail api={api} refresh={refresh} initiallyOpen={requested === 'gmail'}/>
- <RequestedDetails className="source-item" requested={requested === 'google'}><summary>{moteText("连接 Google Calendar")}</summary><p>{moteText("由中央节点定时同步你选定的日历，只申请读取权限。取消连接会移除本机授权，历史资料仍保留。")}</p>{!!(error || calendarList.error) && <p role="alert" className="error-banner">{error || (calendarList.error ? errorMessage(calendarList.error) : '')}</p>}
- {!status?.google?.configured ? <p className="muted">{moteText("请先在设置 → 模型与服务 → 来源与外部应用中准备 Google OAuth 客户端与回调地址，然后重启节点。")}</p> : <><p>{status.google.connected ? moteText("账户已连接") : moteText("尚未授权")} · {({ idle: moteText("等待下次同步"), syncing: moteText("同步中"), error: moteText("同步需要处理"), permission_required: moteText("需要重新授权") } as Record<string, string>)[status.google.state] ?? ''}</p><div className="source-toolbar"><button className="button primary" disabled={busy} onClick={() => void action(async () => { const r = await api.request<{
-        authorizationUrl: string;
-    }>('/api/connectors/google/start', { method: 'POST', body: '{}' }); const u = new URL(r.authorizationUrl); if (u.protocol !== 'https:' || u.hostname !== 'accounts.google.com')
-        throw Error(moteText("授权地址不符合预期。")); setAuth(u.href); })}>{moteText("开始授权")}</button><button className="button" disabled={busy} onClick={() => void action(load)}>{moteText("刷新授权状态")}</button>{status.google.connected && <><button className="button primary" disabled={busy} onClick={() => void action(async () => { const r = await api.request<{
-        imported: number;
-        duplicates: number;
-    }>('/api/connectors/google/sync', { method: 'POST', body: '{}' }); setMessage(moteText("已同步 {0} 条新版本，{1} 条已存在。", r.imported, r.duplicates)); await load(); })}>{moteText("立即同步")}</button><button className="button" disabled={busy} onClick={() => void action(async () => { await api.request('/api/connectors/google', { method: 'DELETE' }); await load(); setChosen([]); })}>{moteText("断开账户")}</button></>}</div>{auth && <p><a href={auth} target="_blank" rel="noreferrer noopener">{moteText("在系统浏览器打开 Google 授权页面")}</a>{moteText("，完成后返回此处刷新。")}</p>}{calendars.length > 0 && <fieldset><legend>{moteText("选择允许读取的日历")}</legend>{calendars.map(c => <label key={c.id} className="source-toolbar"><input type="checkbox" checked={chosen.includes(c.id)} onChange={e => setChosen(v => e.target.checked ? [...v, c.id] : v.filter(id => id !== c.id))}/>{c.summary}</label>)}<button className="button primary" disabled={busy} onClick={() => void action(async () => { await api.request('/api/connectors/google/calendars', { method: 'PUT', body: JSON.stringify({ calendarIds: chosen }) }); await load(); })}>{moteText("保存选择")}</button></fieldset>}</>}{message && <p>{message}</p>}
- </RequestedDetails>
- <RequestedDetails className="source-item" requested={requested === 'mcp'}><summary>{moteText("其他 Chatbot 与 MCP")}</summary><p>{moteText("支持自定义 Bearer 令牌的 Chatbot 可连接本节点的")}{' '}<code>/mcp</code> {' '}{moteText("地址。只读连接可检索资料；写回需单独开启写令牌和允许写入的来源。")}</p><p className="muted">{moteText("状态：")}{cjkLocale()?'':' '}{status?.mcp?.enabled ? moteText("MCP 已启用") : moteText("MCP 尚未启用")}；{cjkLocale()?'':' '}{status?.mcp?.writeEnabled ? moteText("已开放指定来源写回") : moteText("写回已关闭")}{moteText("。配置入口在“设置 → 模型与服务 → 来源与外部应用”。仅支持 OAuth 的 Chatbot 不能直接使用 Bearer 接入。")}</p>
- <h3>{moteText("从 MCP 服务导入可见资料")}</h3><p className="muted">{moteText("选择资源后执行一次导入；不会迁移其他 Chatbot 的隐藏记忆，不会自动调用外部写入工具。")}</p>
- <label>{moteText("服务地址")}<input aria-label={moteText("MCP 服务地址")} type="url" value={url} placeholder="https://example.com/mcp" onChange={e => { setUrl(e.target.value); setRemote([]); setUris([]); }}/></label><label>{moteText("来源名称")}<input aria-label={moteText("MCP 来源名称")} value={name} onChange={e => setName(e.target.value)}/></label><label>{moteText("远端 Bearer 令牌（如需）")}<input aria-label={moteText("远端 MCP 令牌")} type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)}/></label>
- <button className="button" disabled={busy || !url.trim()} onClick={() => void action(async () => { const r = await api.request<{
-        resources: typeof remote;
-    }>('/api/connectors/mcp/discover', { method: 'POST', body: JSON.stringify({ url, token: token || undefined }) }); setRemote(r.resources); setUris([]); if (!r.resources.length)
-        setMessage(moteText("这个服务没有列出可直接读取的资源。可通过支持的 Chatbot 显式写回资料。")); })}>{moteText("列出可读取资源")}</button>
- {remote.map(r => <label className="source-toolbar" key={r.uri}><input type="checkbox" checked={uris.includes(r.uri)} onChange={e => setUris(v => e.target.checked ? [...v, r.uri] : v.filter(u => u !== r.uri))}/>{r.name}</label>)}{uris.length > 0 && <button className="button primary" disabled={busy || !name.trim()} onClick={() => void action(async () => { const sourceId = 'mcp-' + crypto.randomUUID(); await api.request('/api/sources', { method: 'POST', body: JSON.stringify({ id: sourceId, name, kind: 'mcp', deviceId: 'mcp-import', platform: 'import', retention: 'snapshot', enabled: true }) }); const r = await api.request<{
-        imported: number;
-        duplicates: number;
-    }>('/api/connectors/mcp/import', { method: 'POST', body: JSON.stringify({ sourceId, url, token: token || undefined, resourceUris: uris }) }); setToken(''); setMessage(moteText("导入完成：{0} 条新资料，{1} 条已存在。", r.imported, r.duplicates)); })}>{moteText("导入选定资源")}</button>}{error && <p role="alert" className="error-banner">{error}</p>}{message && <p>{message}</p>}
- </RequestedDetails></div>;
+function ConnectorPanel({api,catalog,refresh,requested}:{api:Api;catalog:Record<string,unknown>|null;refresh:()=>Promise<void>;requested:string}){
+ const status=catalog as {google?:{configured:boolean;connected:boolean;state:string;account?:string}}|null;
+ return <div className="source-connectors">{!requested&&<div className="connector-provider-choice">{[['gmail','Gmail'],['google','Google Calendar'],['mcp',moteText('MCP 资料服务')]].map(([id,title])=><a key={id} href={'#/connections?setup='+id}>{title} →</a>)}</div>}<Gmail api={api} refresh={refresh} initiallyOpen={requested==='gmail'}/><div hidden={requested!=='google'}><GoogleCalendarSettings api={api} status={status?.google} refresh={refresh}/></div><div hidden={requested!=='mcp'}><McpImportSettings api={api} refresh={refresh}/></div></div>;
 }
 function ReferenceEntry({ api, refresh }: {
     api: Api;
