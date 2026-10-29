@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const russian: Readonly<Record<string, string>> = {
+  "开始整理": "Начать упорядочивание",
   "更新于 {0}": "Обновлено {0}",
   "需重验": "Нужна повторная проверка",
   "回顾生成中": "Подготовка обзора",

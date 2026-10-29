@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "开始整理": "Ordnen starten",
   "更新于 {0}": "Aktualisiert {0}",
   "需重验": "Erneut prüfen",
   "回顾生成中": "Rückblick wird erstellt",

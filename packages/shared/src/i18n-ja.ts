@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const japanese: Readonly<Record<string, string>> = {
+  "开始整理": "整理を開始",
   "更新于 {0}": "更新日時 {0}",
   "需重验": "再確認が必要",
   "回顾生成中": "振り返りを生成中",

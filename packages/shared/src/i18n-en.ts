@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "开始整理": "Start organizing",
   "更新于 {0}": "Updated {0}",
   "需重验": "Needs revalidation",
   "回顾生成中": "Review in progress",
