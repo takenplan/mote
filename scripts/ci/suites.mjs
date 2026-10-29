@@ -22,7 +22,9 @@ export function listTests(directory, suffix, root = '.') {
 const server = (files, ...options) => {
   if (!files.length) throw Error('An empty server partition cannot run as a successful check');
   const timeout = options.find(option => option.startsWith('--test-timeout=')) ?? '--test-timeout=120000';
-  return node('--import', 'tsx', '--test', '--test-concurrency=4', timeout, ...options.filter(option => !option.startsWith('--test-timeout=')), ...files);
+  // Keep the original case deadlines and scales. Four simultaneous archive
+  // fixtures can starve a bounded 30-second coordinator case on CI workers.
+  return node('--import', 'tsx', '--test', '--test-concurrency=2', timeout, ...options.filter(option => !option.startsWith('--test-timeout=')), ...files);
 };
 const sharedBuild = () => npm('build', '-w', '@mote/shared');
 const agentBuild = () => npm('build', '-w', '@mote/agent');

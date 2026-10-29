@@ -15,6 +15,7 @@ test('Server shards plus explicit scale cases cover the original glob once, with
   assert.ok(automatic.includes('apps/server/test/execution-recovery-window.test.ts'), 'short restart/retry coverage stays automatic');
   for (const shard of [1, 2, 3, 4]) {
     const check = taskPlan(`server-${shard}`).at(-1);
+    assert.ok(check.args.includes('--test-concurrency=2'), 'bounded archive deadlines retain a two-file resource budget without dropping coverage');
     assert.ok(check.args.includes('--test-timeout=120000'));
     assert.equal(check.args[check.args.indexOf('--test-skip-pattern') + 1], automaticSkipPattern);
   }
