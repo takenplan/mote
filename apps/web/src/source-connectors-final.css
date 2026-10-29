@@ -16,3 +16,5 @@
 .settings-surface .final-source-connector .button{min-height:34px;padding:6px 12px;line-height:1.7;border-radius:6px}.settings-surface .final-source-connector .connector-details>summary{min-height:0;padding-block:0;line-height:1.7;color:var(--mote-muted)}.settings-surface .final-source-connector .connector-context>summary{color:var(--mote-ink)}.settings-surface .final-source-connector .connector-details[open]>summary{margin-bottom:0}
 
 .mcp-import-connector{max-width:740px}.mcp-import-connector .connector-check{padding:15px 0;margin:0;border-bottom:1px solid var(--mote-border)}.mcp-import-connector .connector-check>span{min-width:0}.mcp-import-connector .connector-check strong{font-size:13px;font-weight:500;display:block}.mcp-import-connector .connector-check small{font-size:10px;color:var(--mote-muted);display:block;overflow-wrap:anywhere;margin-top:4px}
+
+.mcp-import-connector>.mcp-resource-list{margin-top:23px;padding-top:0;border-top:1px solid var(--mote-border)}.mcp-import-connector>.mcp-resource-list>.button{margin-top:23px}
